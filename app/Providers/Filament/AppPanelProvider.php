@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Domain\Tenancy\Models\Magasin;
+use App\Filament\App\Pages\Auth\RegisterMagasin;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -41,6 +42,7 @@ class AppPanelProvider extends PanelProvider
             ->id('app')
             ->path('app')
             ->login()
+            ->registration(RegisterMagasin::class)
             ->tenant(Magasin::class, slugAttribute: 'uuid')
             ->tenantMiddleware([
                 BindTenantContextFromFilamentTenant::class,

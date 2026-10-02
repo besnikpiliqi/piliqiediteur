@@ -1,0 +1,35 @@
+<?php
+
+namespace App\Policies;
+
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Models\User;
+
+class FournisseurPolicy extends MagasinPolicy
+{
+    public function viewAny(User $user): bool
+    {
+        return $user->can(PermissionRegistry::FOURNISSEUR_VIEW);
+    }
+
+    public function view(User $user, Fournisseur $fournisseur): bool
+    {
+        return $this->appartientAuMagasinActif($fournisseur) && $user->can(PermissionRegistry::FOURNISSEUR_VIEW);
+    }
+
+    public function create(User $user): bool
+    {
+        return $user->can(PermissionRegistry::FOURNISSEUR_CREATE);
+    }
+
+    public function update(User $user, Fournisseur $fournisseur): bool
+    {
+        return $this->appartientAuMagasinActif($fournisseur) && $user->can(PermissionRegistry::FOURNISSEUR_UPDATE);
+    }
+
+    public function delete(User $user, Fournisseur $fournisseur): bool
+    {
+        return $this->appartientAuMagasinActif($fournisseur) && $user->can(PermissionRegistry::FOURNISSEUR_DELETE);
+    }
+}

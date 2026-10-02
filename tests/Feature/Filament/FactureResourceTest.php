@@ -1,0 +1,151 @@
+<?php
+
+namespace Tests\Feature\Filament;
+
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
+use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Models\User;
+use Filament\Facades\Filament;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Tests\TestCase;
+
+class FactureResourceTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_creer_et_emettre_une_facture_depuis_le_panneau(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10]);
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $facture = Facture::query()->firstOrFail();
+        $this->assertSame(StatutFacture::Brouillon, $facture->statut);
+        $this->assertSame($proprietaire->id, $facture->cree_par);
+
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
+
+        $facture->refresh();
+        $this->assertSame(StatutFacture::Emise, $facture->statut);
+        $this->assertNotNull($facture->numero);
+        $this->assertSame('8.000', $produit->fresh()->stock_quantite);
+    }
+
+    public function test_annuler_une_facture_emise_depuis_le_panneau_restaure_le_stock(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10]);
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 3, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ])
+            ->call('create');
+
+        $facture = Facture::query()->firstOrFail();
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
+        $this->assertSame('7.000', $produit->fresh()->stock_quantite);
+
+        Livewire::test(ListFactures::class)->callTableAction('annuler', $facture->fresh(), data: ['motif' => 'Erreur de saisie']);
+
+        $facture->refresh();
+        $this->assertSame(StatutFacture::Annulee, $facture->statut);
+        $this->assertSame('10.000', $produit->fresh()->stock_quantite);
+    }
+
+    public function test_telecharger_le_pdf_dune_facture_emise(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+
+        $facture = Facture::query()->firstOrFail();
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
+
+        Livewire::test(ListFactures::class)
+            ->callTableAction('telecharger_pdf', $facture->fresh())
+            ->assertSuccessful();
+    }
+
+    public function test_la_liste_ne_montre_que_les_factures_du_vendeur_sans_vue_totale(): void
+    {
+        $magasin = Magasin::factory()->create();
+        app(TenantContext::class)->set($magasin);
+
+        Permission::findOrCreate(PermissionRegistry::FACTURE_VIEW, 'web');
+        Permission::findOrCreate(PermissionRegistry::FACTURE_CREATE, 'web');
+        $roleVendeur = Role::findOrCreate('employee', 'web');
+        $roleVendeur->givePermissionTo([PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
+
+        $vendeurA = User::factory()->create();
+        $vendeurB = User::factory()->create();
+        $vendeurA->assignRole($roleVendeur);
+        $vendeurB->assignRole($roleVendeur);
+        foreach ([$vendeurA, $vendeurB] as $vendeur) {
+            $magasin->utilisateurs()->attach($vendeur->id, ['role' => 'employee', 'statut' => 'active', 'joined_at' => now()]);
+        }
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 10, 'taux_tva' => 20]);
+
+        $this->actingAs($vendeurA);
+        Filament::setTenant($magasin);
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 10, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+
+        $this->actingAs($vendeurB);
+        Filament::setTenant($magasin);
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 10, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+
+        Livewire::test(ListFactures::class)
+            ->assertCanSeeTableRecords(Facture::where('cree_par', $vendeurB->id)->get())
+            ->assertCanNotSeeTableRecords(Facture::where('cree_par', $vendeurA->id)->get());
+    }
+}

@@ -2,13 +2,16 @@
 
 namespace App\Domain\Facturation\Enums;
 
+use Filament\Support\Contracts\HasColor;
+use Filament\Support\Contracts\HasLabel;
+
 /**
  * Cycle de vie COMMERCIAL interne de la facture -- à ne jamais confondre
  * avec le statut de transmission réglementaire PDP (voir TransmissionPdp),
  * qui évolue indépendamment (une facture peut être "payee" ici tout en
  * ayant une transmission PDP encore "en_attente").
  */
-enum StatutFacture: string
+enum StatutFacture: string implements HasColor, HasLabel
 {
     case Brouillon = 'brouillon';
     case Emise = 'emise';
@@ -40,5 +43,29 @@ enum StatutFacture: string
     public function estDefinitive(): bool
     {
         return in_array($this, [self::Payee, self::Annulee], true);
+    }
+
+    public function getLabel(): string
+    {
+        return match ($this) {
+            self::Brouillon => 'Brouillon',
+            self::Emise => 'Émise',
+            self::Envoyee => 'Envoyée',
+            self::PartiellementPayee => 'Partiellement payée',
+            self::Payee => 'Payée',
+            self::EnRetard => 'En retard',
+            self::Annulee => 'Annulée',
+        };
+    }
+
+    public function getColor(): string
+    {
+        return match ($this) {
+            self::Brouillon => 'gray',
+            self::Emise, self::Envoyee => 'info',
+            self::PartiellementPayee => 'warning',
+            self::Payee => 'success',
+            self::EnRetard, self::Annulee => 'danger',
+        };
     }
 }

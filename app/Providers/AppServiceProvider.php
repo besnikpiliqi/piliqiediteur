@@ -5,7 +5,11 @@ namespace App\Providers;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\Facture;
 use App\Policies\ClientPolicy;
+use App\Policies\DevisPolicy;
+use App\Policies\FacturePolicy;
 use App\Policies\FournisseurPolicy;
 use App\Policies\ProduitPolicy;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -44,5 +48,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Client::class, ClientPolicy::class);
         Gate::policy(Fournisseur::class, FournisseurPolicy::class);
         Gate::policy(Produit::class, ProduitPolicy::class);
+        Gate::policy(Devis::class, DevisPolicy::class);
+        Gate::policy(Facture::class, FacturePolicy::class);
     }
 }

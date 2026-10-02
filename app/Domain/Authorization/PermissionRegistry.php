@@ -43,7 +43,30 @@ final class PermissionRegistry
 
     public const PRODUIT_AJUSTER_STOCK = 'produit.ajuster_stock';
 
-    // Mandat PDP -- réservé au propriétaire, voir RoleSeeder
+    // Devis
+    public const DEVIS_VIEW = 'devis.view';
+
+    public const DEVIS_CREATE = 'devis.create';
+
+    public const DEVIS_UPDATE = 'devis.update';
+
+    public const DEVIS_ENVOYER = 'devis.envoyer';
+
+    // Factures
+    public const FACTURE_VIEW = 'facture.view';
+
+    // Sans cette permission, un utilisateur ne voit que les factures
+    // qu'il a lui-même créées (voir FacturePolicy) -- confidentialité du
+    // CA par vendeur, décision prise explicitement avec le client.
+    public const FACTURE_VIEW_TOUTES = 'facture.view_toutes';
+
+    public const FACTURE_CREATE = 'facture.create';
+
+    public const FACTURE_EMETTRE = 'facture.emettre';
+
+    public const FACTURE_ANNULER = 'facture.annuler';
+
+    // Mandat PDP -- réservé au propriétaire, voir SeedMagasinRolesAction
     public const MANDAT_PDP_GERER = 'mandat_pdp.gerer';
 
     /**
@@ -55,6 +78,8 @@ final class PermissionRegistry
             self::CLIENT_VIEW, self::CLIENT_CREATE, self::CLIENT_UPDATE, self::CLIENT_DELETE,
             self::FOURNISSEUR_VIEW, self::FOURNISSEUR_CREATE, self::FOURNISSEUR_UPDATE, self::FOURNISSEUR_DELETE,
             self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_DELETE, self::PRODUIT_AJUSTER_STOCK,
+            self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
+            self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ANNULER,
             self::MANDAT_PDP_GERER,
         ];
     }

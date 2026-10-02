@@ -37,6 +37,8 @@ class SeedMagasinRolesAction
             PermissionRegistry::CLIENT_VIEW,
             PermissionRegistry::FOURNISSEUR_VIEW,
             PermissionRegistry::PRODUIT_VIEW,
+            PermissionRegistry::DEVIS_VIEW,
+            PermissionRegistry::FACTURE_VIEW,
         ];
 
         $matrice = [
@@ -45,12 +47,28 @@ class SeedMagasinRolesAction
                 $toutesLesPermissions,
                 [PermissionRegistry::MANDAT_PDP_GERER]
             )),
-            RoleMagasin::Comptable->value => $permissionsLecture,
+            // Le comptable voit l'intégralité des factures du magasin
+            // (indispensable pour son travail), pas seulement les siennes.
+            RoleMagasin::Comptable->value => [
+                ...$permissionsLecture,
+                PermissionRegistry::FACTURE_VIEW_TOUTES,
+            ],
+            // Un vendeur crée/émet ses propres devis et factures, mais ne
+            // voit que celles qu'il a lui-même créées (voir FacturePolicy)
+            // et ne peut pas les annuler -- ça reste une action de
+            // supervision réservée à l'admin/propriétaire par défaut.
             RoleMagasin::Vendeur->value => [
                 PermissionRegistry::CLIENT_VIEW,
                 PermissionRegistry::CLIENT_CREATE,
                 PermissionRegistry::CLIENT_UPDATE,
                 PermissionRegistry::PRODUIT_VIEW,
+                PermissionRegistry::DEVIS_VIEW,
+                PermissionRegistry::DEVIS_CREATE,
+                PermissionRegistry::DEVIS_UPDATE,
+                PermissionRegistry::DEVIS_ENVOYER,
+                PermissionRegistry::FACTURE_VIEW,
+                PermissionRegistry::FACTURE_CREATE,
+                PermissionRegistry::FACTURE_EMETTRE,
             ],
             RoleMagasin::Observateur->value => $permissionsLecture,
         ];

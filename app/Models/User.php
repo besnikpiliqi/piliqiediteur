@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MagasinUser;
 use Database\Factories\UserFactory;
+use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasTenants;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -24,7 +25,7 @@ use Spatie\Permission\Traits\HasRoles;
 
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable implements HasTenants
+class User extends Authenticatable implements FilamentUser, HasTenants
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, Notifiable, SoftDeletes;
@@ -97,5 +98,23 @@ class User extends Authenticatable implements HasTenants
     public function canAccessTenant(Model $tenant): bool
     {
         return $tenant instanceof Magasin && $this->appartientA($tenant);
+    }
+
+    /**
+     * Sans cette implémentation explicite, Filament se rabat sur
+     * `config('app.env') === 'local'` pour autoriser l'accès à un panneau
+     * -- ce qui passe silencieusement en local mais bloque tout (y
+     * compris les tests, le staging et la production) avec un 403. On
+     * n'a jamais voulu dépendre de l'environnement pour l'autorisation.
+     */
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return match ($panel->getId()) {
+            'app' => $this->magasins()->wherePivot('statut', StatutMembreMagasin::Actif->value)->exists(),
+            // Le panneau Super Admin n'a pas encore de notion de "staff
+            // plateforme" -- personne n'y accède tant que la Phase 7
+            // (administration SaaS) ne l'aura pas modélisée explicitement.
+            default => false,
+        };
     }
 }

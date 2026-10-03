@@ -3,6 +3,7 @@
 namespace App\Policies;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Models\User;
 
@@ -55,20 +56,25 @@ class FacturePolicy extends MagasinPolicy
     }
 
     /**
-     * Toujours refusé, sans exception et sans condition de rôle ou de
-     * statut : la loi impose la conservation des factures émises, et même
-     * un brouillon ne doit pas pouvoir être supprimé pour éviter toute
-     * tentation d'en faire une habitude. Correction = avoir (voir Avoir),
-     * jamais suppression.
+     * Un brouillon n'a jamais reçu de numéro (attribué uniquement à
+     * l'émission, voir EmettreFactureAction) : il n'a donc aucune existence
+     * légale ni fiscale, le supprimer ne casse aucune continuité de
+     * numérotation. Dès que la facture quitte ce statut -- y compris après
+     * une annulation -- sa suppression redevient refusée sans exception et
+     * sans condition de rôle, y compris pour le propriétaire : la loi
+     * impose la conservation de tout document numéroté. Correction d'une
+     * facture déjà émise = avoir (voir Avoir), jamais suppression.
      */
     public function delete(User $user, Facture $facture): bool
     {
-        return false;
+        return $this->view($user, $facture)
+            && $facture->statut === StatutFacture::Brouillon
+            && $user->can(PermissionRegistry::FACTURE_CREATE);
     }
 
     public function deleteAny(User $user): bool
     {
-        return false;
+        return $user->can(PermissionRegistry::FACTURE_CREATE);
     }
 
     public function forceDelete(User $user, Facture $facture): bool

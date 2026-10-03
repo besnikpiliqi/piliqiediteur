@@ -141,6 +141,59 @@ class FactureResourceTest extends TestCase
             ->assertSuccessful();
     }
 
+    public function test_un_brouillon_est_supprimable_mais_plus_une_fois_emis(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+
+        $facture = Facture::query()->firstOrFail();
+
+        Livewire::test(ListFactures::class)->assertTableActionVisible('delete', $facture);
+
+        Livewire::test(ListFactures::class)->callTableAction('delete', $facture);
+        $this->assertModelMissing($facture);
+    }
+
+    public function test_la_suppression_en_masse_ignore_les_factures_deja_emises(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+        $factureBrouillon = Facture::query()->latest('id')->firstOrFail();
+
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+        $factureEmise = Facture::query()->latest('id')->firstOrFail();
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $factureEmise);
+
+        Livewire::test(ListFactures::class)
+            ->callTableBulkAction('delete', [$factureBrouillon->fresh(), $factureEmise->fresh()]);
+
+        $this->assertModelMissing($factureBrouillon);
+        $this->assertModelExists($factureEmise);
+    }
+
     public function test_la_liste_ne_montre_que_les_factures_du_vendeur_sans_vue_totale(): void
     {
         $magasin = Magasin::factory()->create();

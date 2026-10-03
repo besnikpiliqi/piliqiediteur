@@ -24,6 +24,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 
 class FactureResource extends Resource
 {
@@ -105,6 +106,11 @@ class FactureResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make()
+                    ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
+                // Un brouillon n'a jamais reçu de numéro légal : il peut
+                // être supprimé librement (voir FacturePolicy::delete()).
+                // Dès l'émission, cette action disparaît définitivement.
+                Tables\Actions\DeleteAction::make()
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
                 Tables\Actions\Action::make('emettre')
                     ->label('Émettre')
@@ -195,11 +201,24 @@ class FactureResource extends Resource
                         app(EmettreAvoirAction::class)->handle($avoir);
                     }),
             ])
-            // Aucune action de suppression, ni unitaire ni groupée : une
-            // facture ne se supprime jamais (voir FacturePolicy::delete()).
-            // Pour corriger une erreur déjà émise, on émet un avoir
-            // (voir l'action "avoir" ci-dessus et AvoirResource).
-            ->bulkActions([]);
+            // Pour corriger une erreur déjà émise, on émet un avoir (voir
+            // l'action "avoir" ci-dessus et AvoirResource) : la suppression
+            // en masse ne doit jamais pouvoir toucher une facture déjà
+            // numérotée. DeleteBulkAction de Filament ne revérifie PAS la
+            // policy par enregistrement sélectionné (seulement au niveau du
+            // bouton via deleteAny()) : sans ce filtre explicite, un
+            // utilisateur pourrait sélectionner un mélange de brouillons et
+            // de factures émises et supprimer ces dernières aussi.
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->action(function (Collection $records) {
+                            $records
+                                ->filter(fn (Facture $record) => auth()->user()->can('delete', $record))
+                                ->each(fn (Facture $record) => $record->delete());
+                        }),
+                ]),
+            ]);
     }
 
     public static function getPages(): array

@@ -8,13 +8,10 @@ use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
-use App\Domain\Facturation\Jobs\SubmitClotureCaisseToPdpJob;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Models\MandatPdp;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Queue;
 use LogicException;
 use Tests\TestCase;
 
@@ -101,24 +98,5 @@ class CloturerCaisseActionTest extends TestCase
         $clotureAujourdhui = app(CloturerCaisseAction::class)->handle($this->magasin, $aujourdhui);
 
         $this->assertNotSame($clotureHier->id, $clotureAujourdhui->id);
-    }
-
-    public function test_une_cloture_avec_mandat_pdp_actif_declenche_la_transmission(): void
-    {
-        Queue::fake();
-        MandatPdp::factory()->create(['magasin_id' => $this->magasin->id]);
-
-        $cloture = app(CloturerCaisseAction::class)->handle($this->magasin, now());
-
-        Queue::assertPushed(SubmitClotureCaisseToPdpJob::class, fn ($job) => $job->clotureCaisseId === $cloture->id);
-    }
-
-    public function test_une_cloture_sans_mandat_pdp_ne_declenche_rien(): void
-    {
-        Queue::fake();
-
-        app(CloturerCaisseAction::class)->handle($this->magasin, now());
-
-        Queue::assertNotPushed(SubmitClotureCaisseToPdpJob::class);
     }
 }

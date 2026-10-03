@@ -7,11 +7,11 @@ use App\Domain\Achats\Events\FactureAchatValidee;
 use App\Domain\Achats\Listeners\DecrementerStockApresEmissionAvoirFournisseur;
 use App\Domain\Achats\Listeners\IncrementerStockApresValidationFactureAchat;
 use App\Domain\Facturation\Events\AvoirEmis;
-use App\Domain\Facturation\Events\ClotureCaisseEffectuee;
 use App\Domain\Facturation\Events\FactureAnnulee;
 use App\Domain\Facturation\Events\FactureEmise;
-use App\Domain\Facturation\Listeners\DeclencherTransmissionPdpApresClotureCaisse;
+use App\Domain\Facturation\Events\SoumissionEReportingGeneree;
 use App\Domain\Facturation\Listeners\DeclencherTransmissionPdpApresEmissionFacture;
+use App\Domain\Facturation\Listeners\DeclencherTransmissionPdpApresSoumissionEReporting;
 use App\Domain\Facturation\Listeners\DecrementerStockApresEmissionFacture;
 use App\Domain\Facturation\Listeners\RestaurerStockApresAnnulationFacture;
 use App\Domain\Facturation\Listeners\RestaurerStockApresEmissionAvoir;
@@ -33,7 +33,7 @@ class EventServiceProvider extends ServiceProvider
         Event::listen(FactureEmise::class, DeclencherTransmissionPdpApresEmissionFacture::class);
         Event::listen(FactureAnnulee::class, RestaurerStockApresAnnulationFacture::class);
         Event::listen(AvoirEmis::class, RestaurerStockApresEmissionAvoir::class);
-        Event::listen(ClotureCaisseEffectuee::class, DeclencherTransmissionPdpApresClotureCaisse::class);
+        Event::listen(SoumissionEReportingGeneree::class, DeclencherTransmissionPdpApresSoumissionEReporting::class);
         Event::listen(FactureAchatValidee::class, IncrementerStockApresValidationFactureAchat::class);
         Event::listen(AvoirFournisseurEmis::class, DecrementerStockApresEmissionAvoirFournisseur::class);
     }

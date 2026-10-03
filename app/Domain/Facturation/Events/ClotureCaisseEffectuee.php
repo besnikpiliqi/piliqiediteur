@@ -6,11 +6,13 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
- * Délibérément PAS de ShouldDispatchAfterCommit : comme FactureEmise, ce
- * qui doit en découler dans la même transaction (ici : rien d'atomique
- * requis côté stock, contrairement à une facture) reste cohérent avec le
- * pattern du reste du domaine. Le listener PDP, lui, diffère SON dispatch
- * via ->afterCommit() (voir DeclencherTransmissionPdpApresClotureCaisse).
+ * Marque qu'une journée vient d'être clôturée. Ne déclenche PLUS de
+ * transmission PDP directement : l'e-reporting n'est pas une obligation
+ * journalière, cette clôture sera transmise plus tard, agrégée avec
+ * d'autres, par la commande planifiée app:soumettre-ereporting-periodique
+ * (voir SoumissionEReporting et GenererSoumissionEReportingAction).
+ * Aucun listener n'y est actuellement rattaché ; conservé comme point
+ * d'extension (notifications, etc.).
  */
 class ClotureCaisseEffectuee
 {

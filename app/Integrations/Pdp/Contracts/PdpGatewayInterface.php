@@ -2,8 +2,8 @@
 
 namespace App\Integrations\Pdp\Contracts;
 
-use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
 
@@ -25,9 +25,11 @@ interface PdpGatewayInterface
     public function soumettreFacture(Facture $facture): ResultatSoumissionPdp;
 
     /**
-     * E-reporting agrégé B2C (voir ClotureCaisse) : un envoi distinct de
-     * soumettreFacture(), qui ne concerne que l'e-invoicing individuel
-     * des clients professionnels.
+     * E-reporting agrégé B2C (voir SoumissionEReporting) : un envoi
+     * distinct de soumettreFacture(), qui ne concerne que l'e-invoicing
+     * individuel des clients professionnels. Porte sur toute une période
+     * (décade/mois/bimestre selon le régime de TVA), jamais sur une seule
+     * clôture quotidienne -- voir CalculateurPeriodeEReporting.
      */
-    public function soumettreClotureCaisse(ClotureCaisse $cloture): ResultatSoumissionPdp;
+    public function soumettreEReporting(SoumissionEReporting $soumission): ResultatSoumissionPdp;
 }

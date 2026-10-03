@@ -12,6 +12,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Tenancy\Models\MagasinUser;
 use App\Policies\AvoirFournisseurPolicy;
 use App\Policies\AvoirPolicy;
@@ -24,6 +25,7 @@ use App\Policies\FournisseurPolicy;
 use App\Policies\MembreEquipePolicy;
 use App\Policies\PaiementPolicy;
 use App\Policies\ProduitPolicy;
+use App\Policies\SoumissionEReportingPolicy;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -68,5 +70,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(ClotureCaisse::class, ClotureCaissePolicy::class);
         Gate::policy(FactureAchat::class, FactureAchatPolicy::class);
         Gate::policy(AvoirFournisseur::class, AvoirFournisseurPolicy::class);
+        Gate::policy(SoumissionEReporting::class, SoumissionEReportingPolicy::class);
     }
 }

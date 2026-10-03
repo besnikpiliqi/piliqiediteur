@@ -69,12 +69,15 @@ class ClotureCaisseResource extends Resource
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
             ])->columns(4),
 
-            InfolistSection::make('Transmission électronique')->schema([
-                TextEntry::make('transmission_pdp_statut')
-                    ->label('Statut de transmission au PDP (e-reporting)')
-                    ->state(fn (ClotureCaisse $record) => $record->transmissionsPdp->sortByDesc('soumise_le')->first()?->statut)
-                    ->badge()
-                    ->placeholder('Pas de mandat PDP actif : non transmise'),
+            InfolistSection::make('E-reporting')->schema([
+                // L'e-reporting n'est pas transmis clôture par clôture : il
+                // est agrégé par période (décade/mois/bimestre selon le
+                // régime de TVA, voir CalculateurPeriodeEReporting) puis
+                // transmis en une seule soumission (voir
+                // SoumissionEReporting et la page "Soumissions e-reporting").
+                TextEntry::make('soumissionEReporting.numero')
+                    ->label('Incluse dans la soumission')
+                    ->placeholder('Pas encore incluse (période en cours)'),
             ]),
 
             InfolistSection::make('Ventes agrégées')->schema([

@@ -12,6 +12,8 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Models\SoumissionEReporting;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Models\User;
 use Database\Factories\MagasinFactory;
@@ -50,11 +52,15 @@ class Magasin extends Model implements HasName
         'locale',
         'statut',
         'heure_cloture_automatique',
+        'regime_tva',
+        'option_debits_tva',
     ];
 
     protected $casts = [
         'statut' => StatutMagasin::class,
         'heure_cloture_automatique' => 'datetime:H:i',
+        'regime_tva' => RegimeTva::class,
+        'option_debits_tva' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -136,6 +142,11 @@ class Magasin extends Model implements HasName
     public function avoirsFournisseur(): HasMany
     {
         return $this->hasMany(AvoirFournisseur::class);
+    }
+
+    public function soumissionsEReporting(): HasMany
+    {
+        return $this->hasMany(SoumissionEReporting::class);
     }
 
     /**

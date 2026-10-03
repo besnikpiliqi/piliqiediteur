@@ -2,7 +2,7 @@
 
 namespace App\Domain\Facturation\Jobs;
 
-use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Tenancy\Concerns\WithTenantContext;
 use App\Integrations\Pdp\Contracts\PdpGatewayInterface;
 use App\Integrations\Pdp\Enums\StatutTransmissionPdp;
@@ -15,11 +15,12 @@ use Illuminate\Queue\SerializesModels;
 use Throwable;
 
 /**
- * Symétrique de SubmitFactureToPdpJob, pour l'e-reporting agrégé B2C
- * plutôt que l'e-invoicing individuel : voir ce job pour le détail du
+ * Remplace SubmitClotureCaisseToPdpJob (supprimé) : transmet une
+ * SOUMISSION agrégée sur toute une période d'e-reporting, jamais une
+ * clôture quotidienne isolée. Voir SubmitFactureToPdpJob pour le détail du
  * raisonnement (appel réseau externe jamais bloquant, idempotence).
  */
-class SubmitClotureCaisseToPdpJob implements ShouldBeUnique, ShouldQueue
+class SubmitSoumissionEReportingToPdpJob implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WithTenantContext;
 
@@ -29,25 +30,25 @@ class SubmitClotureCaisseToPdpJob implements ShouldBeUnique, ShouldQueue
 
     public function __construct(
         public readonly int $magasinId,
-        public readonly int $clotureCaisseId,
+        public readonly int $soumissionEReportingId,
     ) {}
 
     public function uniqueId(): string
     {
-        return (string) $this->clotureCaisseId;
+        return (string) $this->soumissionEReportingId;
     }
 
     public function handle(PdpGatewayInterface $gateway): void
     {
         $this->demarrerContexteTenant();
 
-        $cloture = ClotureCaisse::query()->findOrFail($this->clotureCaisseId);
+        $soumission = SoumissionEReporting::query()->findOrFail($this->soumissionEReportingId);
 
-        if ($cloture->transmissionsPdp()->where('direction', 'outbound')->exists()) {
+        if ($soumission->transmissionsPdp()->where('direction', 'outbound')->exists()) {
             return;
         }
 
-        $transmission = $cloture->transmissionsPdp()->create([
+        $transmission = $soumission->transmissionsPdp()->create([
             'direction' => 'outbound',
             'prestataire_pdp' => config('services.pdp.nom', 'fake'),
             'statut' => StatutTransmissionPdp::Soumise,
@@ -55,7 +56,7 @@ class SubmitClotureCaisseToPdpJob implements ShouldBeUnique, ShouldQueue
         ]);
 
         try {
-            $resultat = $gateway->soumettreClotureCaisse($cloture);
+            $resultat = $gateway->soumettreEReporting($soumission);
         } catch (Throwable $exception) {
             $transmission->enregistrerChangementStatut(StatutTransmissionPdp::Rejetee, [
                 'erreur' => $exception->getMessage(),

@@ -3,14 +3,12 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
-use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
 use Database\Factories\ClotureCaisseFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
  * Agrège les ventes à des clients particuliers d'une journée pour
@@ -59,8 +57,17 @@ class ClotureCaisse extends Model
         return $this->hasMany(Facture::class);
     }
 
-    public function transmissionsPdp(): MorphMany
+    /**
+     * Cette clôture n'est plus jamais transmise au PDP individuellement :
+     * voir le docblock de SoumissionEReporting, qui agrège plusieurs
+     * clôtures sur toute une période d'e-reporting avant transmission.
+     */
+    public function soumissionEReporting(): BelongsTo
     {
-        return $this->morphMany(TransmissionPdp::class, 'transmissible');
+        // Clé étrangère explicite : la convention par défaut de Laravel
+        // devinerait "soumission_e_reporting_id" (elle coupe aussi entre
+        // deux majuscules consécutives), qui ne correspond pas à la
+        // colonne réelle "soumission_ereporting_id" de la migration.
+        return $this->belongsTo(SoumissionEReporting::class, 'soumission_ereporting_id');
     }
 }

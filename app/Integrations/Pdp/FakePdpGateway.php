@@ -2,8 +2,8 @@
 
 namespace App\Integrations\Pdp;
 
-use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Tenancy\Enums\StatutMandatPdp;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
@@ -46,7 +46,7 @@ class FakePdpGateway implements PdpGatewayInterface
         );
     }
 
-    public function soumettreClotureCaisse(ClotureCaisse $cloture): ResultatSoumissionPdp
+    public function soumettreEReporting(SoumissionEReporting $soumission): ResultatSoumissionPdp
     {
         return new ResultatSoumissionPdp(
             statut: StatutTransmissionPdp::Acceptee,

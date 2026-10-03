@@ -86,6 +86,7 @@ class DocumentNumberingService
             TypeDocument::FactureAchat => 'FA',
             TypeDocument::AvoirFournisseur => 'AF',
             TypeDocument::ClotureCaisse => 'Z',
+            TypeDocument::SoumissionEReporting => 'ER',
         };
 
         return $periodKey !== '' ? "{$code}-{$periodKey}-" : "{$code}-";

@@ -11,7 +11,7 @@ use LogicException;
 /**
  * Une facture "payee" ou "partiellement_payee" ne peut PAS être annulée
  * ici (voir StatutFacture::transitionsAutorisees) : de l'argent a déjà
- * été encaissé, la correction légale passe par un avoir (Phase 4), pas
+ * été encaissé, la correction légale passe par un avoir (voir Avoir), pas
  * par une annulation qui ferait disparaître la trace comptable.
  */
 class AnnulerFactureAction

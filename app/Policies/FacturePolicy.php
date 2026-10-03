@@ -58,7 +58,7 @@ class FacturePolicy extends MagasinPolicy
      * Toujours refusé, sans exception et sans condition de rôle ou de
      * statut : la loi impose la conservation des factures émises, et même
      * un brouillon ne doit pas pouvoir être supprimé pour éviter toute
-     * tentation d'en faire une habitude. Correction = avoir (Phase 4),
+     * tentation d'en faire une habitude. Correction = avoir (voir Avoir),
      * jamais suppression.
      */
     public function delete(User $user, Facture $facture): bool

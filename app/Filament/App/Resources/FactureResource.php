@@ -4,6 +4,8 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Actions\AnnulerFactureAction;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -170,11 +172,33 @@ class FactureResource extends Resource
                     ->visible(fn (Facture $record) => $record->statut->peutTransitionnerVers(StatutFacture::Annulee)
                         && auth()->user()->can('annuler', $record))
                     ->action(fn (Facture $record, array $data) => app(AnnulerFactureAction::class)->handle($record, $data['motif'])),
+                Tables\Actions\Action::make('avoir')
+                    ->label('Avoir')
+                    ->icon('heroicon-o-receipt-refund')
+                    ->color('danger')
+                    ->form([
+                        Textarea::make('motif')->label('Motif de l\'avoir')->required(),
+                    ])
+                    ->requiresConfirmation()
+                    ->modalDescription('Un avoir total sera émis pour l\'intégralité de cette facture et son stock sera restauré. Cette action est irréversible.')
+                    ->visible(fn (Facture $record) => in_array($record->statut, [
+                        StatutFacture::Emise,
+                        StatutFacture::Envoyee,
+                        StatutFacture::PartiellementPayee,
+                        StatutFacture::Payee,
+                        StatutFacture::EnRetard,
+                    ], true)
+                        && ! $record->possedeUnAvoirEmis()
+                        && auth()->user()->can(PermissionRegistry::AVOIR_CREER))
+                    ->action(function (Facture $record, array $data) {
+                        $avoir = app(CreerAvoirAction::class)->handle($record, $data['motif']);
+                        app(EmettreAvoirAction::class)->handle($avoir);
+                    }),
             ])
             // Aucune action de suppression, ni unitaire ni groupée : une
             // facture ne se supprime jamais (voir FacturePolicy::delete()).
-            // Pour corriger une erreur, on annule (brouillon/émise) ou on
-            // émettra un avoir (Phase 4).
+            // Pour corriger une erreur déjà émise, on émet un avoir
+            // (voir l'action "avoir" ci-dessus et AvoirResource).
             ->bulkActions([]);
     }
 

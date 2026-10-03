@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\ClotureAutomatiqueCaisse;
 use App\Console\Commands\MarquerFacturesEnRetard;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
@@ -17,9 +18,11 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withSchedule(function (Schedule $schedule): void {
-        // Juste après minuit : laisse la place à une éventuelle clôture
-        // de caisse Z planifiée à minuit pile (voir le futur job
-        // d'e-reporting agrégé B2C) avant de statuer sur les retards.
+        // À minuit pile : clôture automatiquement la veille pour tout
+        // magasin qui ne l'a pas fait lui-même (e-reporting B2C, voir
+        // ClotureAutomatiqueCaisse). Puis, 15 minutes plus tard, une fois
+        // cette clôture terminée, on statue sur les factures en retard.
+        $schedule->command(ClotureAutomatiqueCaisse::class)->dailyAt('00:00');
         $schedule->command(MarquerFacturesEnRetard::class)->dailyAt('00:15');
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -85,6 +85,11 @@ final class PermissionRegistry
 
     public const PAIEMENT_CREER = 'paiement.creer';
 
+    // Avoirs
+    public const AVOIR_VIEW = 'avoir.view';
+
+    public const AVOIR_CREER = 'avoir.creer';
+
     /**
      * @return list<string>
      */
@@ -99,6 +104,7 @@ final class PermissionRegistry
             self::MANDAT_PDP_GERER,
             self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
             self::PAIEMENT_VIEW, self::PAIEMENT_CREER,
+            self::AVOIR_VIEW, self::AVOIR_CREER,
         ];
     }
 }

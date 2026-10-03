@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Integrations\Pdp\Models\TransmissionPdp;
@@ -18,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  * PAS de SoftDeletes ici, volontairement : une facture ne se supprime
  * jamais, même "doucement" (voir FacturePolicy::delete() et la migration
  * create_factures_table). La loi impose sa conservation ; une correction
- * passe par un avoir (Phase 4), jamais par une suppression.
+ * passe par un avoir, jamais par une suppression.
  */
 class Facture extends Model
 {
@@ -88,6 +89,20 @@ class Facture extends Model
     public function allocationsPaiement(): HasMany
     {
         return $this->hasMany(PaiementAllocation::class);
+    }
+
+    public function avoirs(): HasMany
+    {
+        return $this->hasMany(Avoir::class);
+    }
+
+    /**
+     * Un seul avoir total par facture (voir CreerAvoirAction) : inutile
+     * d'en émettre un second une fois la facture intégralement créditée.
+     */
+    public function possedeUnAvoirEmis(): bool
+    {
+        return $this->avoirs()->where('statut', StatutAvoir::Emise)->exists();
     }
 
     public function estModifiable(): bool

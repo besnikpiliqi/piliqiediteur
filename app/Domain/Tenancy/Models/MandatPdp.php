@@ -25,7 +25,7 @@ class MandatPdp extends Model
 
     protected $fillable = [
         'magasin_id',
-        'fournisseur_pdp',
+        'prestataire_pdp',
         'mandat_externe_id',
         'statut',
         'perimetre',

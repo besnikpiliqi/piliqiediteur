@@ -13,12 +13,17 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
+/**
+ * PAS de SoftDeletes ici, volontairement : une facture ne se supprime
+ * jamais, même "doucement" (voir FacturePolicy::delete() et la migration
+ * create_factures_table). La loi impose sa conservation ; une correction
+ * passe par un avoir (Phase 4), jamais par une suppression.
+ */
 class Facture extends Model
 {
     /** @use HasFactory<FactureFactory> */
-    use BelongsToMagasin, HasFactory, SoftDeletes;
+    use BelongsToMagasin, HasFactory;
 
     protected $table = 'factures';
 

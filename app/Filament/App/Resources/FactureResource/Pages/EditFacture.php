@@ -3,7 +3,6 @@
 namespace App\Filament\App\Resources\FactureResource\Pages;
 
 use App\Filament\App\Resources\FactureResource;
-use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 
 /**
@@ -11,17 +10,13 @@ use Filament\Resources\Pages\EditRecord;
  * (voir FactureResource::form()) -- a fortiori ici puisqu'une facture
  * n'est de toute façon éditable que tant qu'elle est en brouillon
  * (FacturePolicy::update), avant tout impact sur le stock ou le PDP.
+ *
+ * Pas de DeleteAction dans les en-têtes : une facture ne se supprime
+ * jamais (FacturePolicy::delete() renvoie toujours false).
  */
 class EditFacture extends EditRecord
 {
     protected static string $resource = FactureResource::class;
-
-    protected function getHeaderActions(): array
-    {
-        return [
-            Actions\DeleteAction::make(),
-        ];
-    }
 
     protected function mutateFormDataBeforeFill(array $data): array
     {

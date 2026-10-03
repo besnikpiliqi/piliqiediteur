@@ -32,7 +32,10 @@ return new class extends Migration
             // montantRestant()).
             $table->decimal('montant_paye', 12, 2)->default(0);
             $table->timestamps();
-            $table->softDeletes();
+            // PAS de softDeletes() ici, volontairement : une facture ne se
+            // supprime jamais (obligation légale de conservation, voir
+            // FacturePolicy). Une correction passe par un avoir, pas par
+            // une suppression, même "douce".
 
             $table->unique(['magasin_id', 'numero']);
             $table->index(['magasin_id', 'statut']);

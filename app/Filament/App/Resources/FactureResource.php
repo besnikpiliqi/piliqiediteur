@@ -129,11 +129,11 @@ class FactureResource extends Resource
                         && auth()->user()->can('annuler', $record))
                     ->action(fn (Facture $record, array $data) => app(AnnulerFactureAction::class)->handle($record, $data['motif'])),
             ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
-            ]);
+            // Aucune action de suppression, ni unitaire ni groupée : une
+            // facture ne se supprime jamais (voir FacturePolicy::delete()).
+            // Pour corriger une erreur, on annule (brouillon/émise) ou on
+            // émettra un avoir (Phase 4).
+            ->bulkActions([]);
     }
 
     public static function getPages(): array

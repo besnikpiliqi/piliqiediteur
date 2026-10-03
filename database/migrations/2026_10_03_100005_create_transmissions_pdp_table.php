@@ -16,7 +16,7 @@ return new class extends Migration
             // même mécanique de suivi/historique pour tous.
             $table->nullableMorphs('transmissible');
             $table->string('direction', 10); // outbound, inbound
-            $table->string('fournisseur_pdp', 60);
+            $table->string('prestataire_pdp', 60);
             $table->string('transmission_externe_id')->nullable();
             $table->string('format', 10)->nullable(); // facturx, ubl, cii
             $table->string('statut', 20)->default('soumise');
@@ -27,7 +27,7 @@ return new class extends Migration
             $table->timestamp('statut_maj_le')->nullable();
             $table->timestamps();
 
-            $table->unique(['fournisseur_pdp', 'transmission_externe_id']);
+            $table->unique(['prestataire_pdp', 'transmission_externe_id']);
             $table->index(['magasin_id', 'statut']);
         });
     }

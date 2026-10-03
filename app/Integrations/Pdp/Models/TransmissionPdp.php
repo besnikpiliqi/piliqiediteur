@@ -18,7 +18,7 @@ class TransmissionPdp extends Model
         'transmissible_type',
         'transmissible_id',
         'direction',
-        'fournisseur_pdp',
+        'prestataire_pdp',
         'transmission_externe_id',
         'format',
         'statut',

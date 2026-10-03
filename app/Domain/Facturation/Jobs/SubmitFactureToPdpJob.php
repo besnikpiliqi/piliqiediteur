@@ -57,7 +57,7 @@ class SubmitFactureToPdpJob implements ShouldBeUnique, ShouldQueue
 
         $transmission = $facture->transmissionsPdp()->create([
             'direction' => 'outbound',
-            'fournisseur_pdp' => config('services.pdp.nom', 'fake'),
+            'prestataire_pdp' => config('services.pdp.nom', 'fake'),
             'statut' => StatutTransmissionPdp::Soumise,
             'soumise_le' => now(),
         ]);

@@ -53,4 +53,31 @@ class FacturePolicy extends MagasinPolicy
     {
         return $this->appartientAuMagasinActif($facture) && $user->can(PermissionRegistry::FACTURE_ANNULER);
     }
+
+    /**
+     * Toujours refusé, sans exception et sans condition de rôle ou de
+     * statut : la loi impose la conservation des factures émises, et même
+     * un brouillon ne doit pas pouvoir être supprimé pour éviter toute
+     * tentation d'en faire une habitude. Correction = avoir (Phase 4),
+     * jamais suppression.
+     */
+    public function delete(User $user, Facture $facture): bool
+    {
+        return false;
+    }
+
+    public function deleteAny(User $user): bool
+    {
+        return false;
+    }
+
+    public function forceDelete(User $user, Facture $facture): bool
+    {
+        return false;
+    }
+
+    public function restore(User $user, Facture $facture): bool
+    {
+        return false;
+    }
 }

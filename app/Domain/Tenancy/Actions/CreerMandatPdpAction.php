@@ -27,7 +27,7 @@ class CreerMandatPdpAction
             $mandat = MandatPdp::updateOrCreate(
                 ['magasin_id' => $magasin->getKey()],
                 [
-                    'fournisseur_pdp' => config('services.pdp.nom', 'fake'),
+                    'prestataire_pdp' => config('services.pdp.nom', 'fake'),
                     'statut' => StatutMandatPdp::EnAttente,
                     'perimetre' => 'both',
                     'accorde_par' => $accordePar->getKey(),

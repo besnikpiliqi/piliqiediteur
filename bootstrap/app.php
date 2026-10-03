@@ -1,5 +1,7 @@
 <?php
 
+use App\Console\Commands\MarquerFacturesEnRetard;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,6 +15,12 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         //
+    })
+    ->withSchedule(function (Schedule $schedule): void {
+        // Juste après minuit : laisse la place à une éventuelle clôture
+        // de caisse Z planifiée à minuit pile (voir le futur job
+        // d'e-reporting agrégé B2C) avant de statuer sur les retards.
+        $schedule->command(MarquerFacturesEnRetard::class)->dailyAt('00:15');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

@@ -34,4 +34,23 @@ class DevisPolicy extends MagasinPolicy
     {
         return $this->appartientAuMagasinActif($devis) && $user->can(PermissionRegistry::DEVIS_ENVOYER);
     }
+
+    public function accepter(User $user, Devis $devis): bool
+    {
+        return $this->appartientAuMagasinActif($devis) && $user->can(PermissionRegistry::DEVIS_ENVOYER);
+    }
+
+    public function refuser(User $user, Devis $devis): bool
+    {
+        return $this->appartientAuMagasinActif($devis) && $user->can(PermissionRegistry::DEVIS_ENVOYER);
+    }
+
+    /**
+     * Convertir crée une Facture : on vérifie la permission de création de
+     * facture, pas seulement celle du devis.
+     */
+    public function convertir(User $user, Devis $devis): bool
+    {
+        return $this->appartientAuMagasinActif($devis) && $user->can(PermissionRegistry::FACTURE_CREATE);
+    }
 }

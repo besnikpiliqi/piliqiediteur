@@ -3,7 +3,10 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Actions\AccepterDevisAction;
+use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
+use App\Domain\Facturation\Actions\RefuserDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Filament\App\Resources\DevisResource\Pages;
@@ -132,6 +135,30 @@ class DevisResource extends Resource
                     ->requiresConfirmation()
                     ->visible(fn (Devis $record) => $record->statut === StatutDevis::Brouillon && auth()->user()->can('envoyer', $record))
                     ->action(fn (Devis $record) => app(EmettreDevisAction::class)->handle($record)),
+                Tables\Actions\Action::make('accepter')
+                    ->label('Accepter')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->requiresConfirmation()
+                    ->visible(fn (Devis $record) => $record->statut === StatutDevis::Envoye && auth()->user()->can('accepter', $record))
+                    ->action(fn (Devis $record) => app(AccepterDevisAction::class)->handle($record)),
+                Tables\Actions\Action::make('refuser')
+                    ->label('Refuser')
+                    ->icon('heroicon-o-x-circle')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->visible(fn (Devis $record) => $record->statut === StatutDevis::Envoye && auth()->user()->can('refuser', $record))
+                    ->action(fn (Devis $record) => app(RefuserDevisAction::class)->handle($record)),
+                Tables\Actions\Action::make('convertir')
+                    ->label('Convertir en facture')
+                    ->icon('heroicon-o-document-currency-euro')
+                    ->color('primary')
+                    ->requiresConfirmation()
+                    ->modalDescription('Une nouvelle facture brouillon sera créée avec les mêmes lignes que ce devis.')
+                    ->visible(fn (Devis $record) => $record->statut === StatutDevis::Accepte
+                        && $record->factures()->doesntExist()
+                        && auth()->user()->can('convertir', $record))
+                    ->action(fn (Devis $record) => app(CreerFactureDepuisDevisAction::class)->handle($record)),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

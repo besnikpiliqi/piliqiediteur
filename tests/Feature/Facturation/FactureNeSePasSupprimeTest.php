@@ -69,12 +69,15 @@ class FactureNeSePasSupprimeTest extends TestCase
     }
 
     /**
-     * Une facture ne se modifie jamais après création, même un brouillon
-     * (voir FacturePolicy::update()) : pour corriger une erreur de saisie
-     * sur un brouillon, on le supprime et on recommence (voir
-     * FactureBrouillonSuppressionTest), on ne l'édite pas en place.
+     * Un brouillon n'a aucune existence légale (voir delete() ci-dessus) :
+     * il reste librement modifiable, lignes comprises (voir
+     * ModifierFactureAction et FactureResourceTest), pour éviter d'obliger
+     * l'utilisateur à tout ressaisir pour corriger une erreur de saisie.
+     * Dès l'émission, la modification redevient interdite sans exception :
+     * une facture numérotée se corrige par un avoir, jamais en la
+     * réécrivant.
      */
-    public function test_aucune_facture_nest_modifiable_quel_que_soit_son_statut(): void
+    public function test_seul_le_brouillon_est_modifiable_pas_une_facture_emise(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
@@ -92,7 +95,7 @@ class FactureNeSePasSupprimeTest extends TestCase
 
         $this->actingAs($proprietaire);
 
-        $this->assertFalse($proprietaire->can('update', $brouillon));
+        $this->assertTrue($proprietaire->can('update', $brouillon));
         $this->assertFalse($proprietaire->can('update', $emise));
     }
 }

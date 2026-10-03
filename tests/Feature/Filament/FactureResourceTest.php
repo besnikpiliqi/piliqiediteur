@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
+use App\Filament\App\Resources\FactureResource\Pages\EditFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
@@ -165,6 +166,68 @@ class FactureResourceTest extends TestCase
 
         Livewire::test(ListFactures::class)->callTableAction('delete', $facture);
         $this->assertModelMissing($facture);
+    }
+
+    /**
+     * Un brouillon doit rester modifiable sans devoir être recréé (lignes
+     * comprises), pour ne pas obliger l'utilisateur à tout ressaisir en cas
+     * d'erreur de saisie -- voir ModifierFactureAction.
+     */
+    public function test_modifier_un_brouillon_depuis_le_panneau_remplace_les_lignes_et_recalcule_les_totaux(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $autreClient = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+
+        $facture = Facture::query()->firstOrFail();
+
+        Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
+            ->fillForm([
+                'client_id' => $autreClient->id,
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 3, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $facture->refresh();
+        $this->assertSame($autreClient->id, $facture->client_id);
+        $this->assertSame(1, $facture->lignes()->count());
+        $this->assertSame('150.00', $facture->total_ht);
+    }
+
+    public function test_laction_modifier_disparait_des_quune_facture_est_emise(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+
+        $facture = Facture::query()->firstOrFail();
+        Livewire::test(ListFactures::class)->assertTableActionVisible('edit', $facture);
+
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
+
+        Livewire::test(ListFactures::class)->assertTableActionHidden('edit', $facture->fresh());
     }
 
     public function test_la_suppression_en_masse_ignore_les_factures_deja_emises(): void

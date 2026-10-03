@@ -39,15 +39,18 @@ class FacturePolicy extends MagasinPolicy
     }
 
     /**
-     * Toujours refusé, y compris sur un brouillon : une facture se crée,
-     * s'émet, s'annule, se supprime (si jamais numérotée) ou se corrige
-     * par un avoir -- jamais en la modifiant après coup. Si une ligne est
-     * fausse sur un brouillon, on le supprime et on recommence plutôt que
-     * de l'éditer en place.
+     * Un brouillon n'a jamais reçu de numéro légal (voir delete()) : il
+     * reste librement modifiable, lignes comprises, pour éviter d'obliger
+     * l'utilisateur à tout ressaisir pour corriger une erreur de saisie.
+     * Dès que la facture quitte ce statut, la modification redevient
+     * refusée sans exception : une facture émise se corrige par un avoir
+     * (voir Avoir), jamais en la réécrivant.
      */
     public function update(User $user, Facture $facture): bool
     {
-        return false;
+        return $this->view($user, $facture)
+            && $facture->statut === StatutFacture::Brouillon
+            && $user->can(PermissionRegistry::FACTURE_CREATE);
     }
 
     public function emettre(User $user, Facture $facture): bool

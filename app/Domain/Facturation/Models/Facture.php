@@ -76,6 +76,11 @@ class Facture extends Model
         return $this->belongsTo(Devis::class, 'devis_id');
     }
 
+    public function clotureCaisse(): BelongsTo
+    {
+        return $this->belongsTo(ClotureCaisse::class);
+    }
+
     public function lignes(): HasMany
     {
         return $this->hasMany(LigneFacture::class)->orderBy('ordre');

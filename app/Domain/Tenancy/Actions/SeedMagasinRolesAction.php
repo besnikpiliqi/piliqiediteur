@@ -52,6 +52,8 @@ class SeedMagasinRolesAction
             RoleMagasin::Comptable->value => [
                 ...$permissionsLecture,
                 PermissionRegistry::FACTURE_VIEW_TOUTES,
+                PermissionRegistry::PAIEMENT_VIEW,
+                PermissionRegistry::PAIEMENT_CREER,
             ],
             // Un vendeur crée/émet ses propres devis et factures, mais ne
             // voit que celles qu'il a lui-même créées (voir FacturePolicy)
@@ -69,6 +71,8 @@ class SeedMagasinRolesAction
                 PermissionRegistry::FACTURE_VIEW,
                 PermissionRegistry::FACTURE_CREATE,
                 PermissionRegistry::FACTURE_EMETTRE,
+                PermissionRegistry::PAIEMENT_VIEW,
+                PermissionRegistry::PAIEMENT_CREER,
             ],
             RoleMagasin::Observateur->value => $permissionsLecture,
         ];

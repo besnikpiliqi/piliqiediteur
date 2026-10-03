@@ -7,6 +7,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Models\User;
 use Database\Factories\MagasinFactory;
@@ -106,6 +107,11 @@ class Magasin extends Model implements HasName
     public function factures(): HasMany
     {
         return $this->hasMany(Facture::class);
+    }
+
+    public function paiements(): HasMany
+    {
+        return $this->hasMany(Paiement::class);
     }
 
     /**

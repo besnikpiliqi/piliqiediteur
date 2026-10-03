@@ -5,6 +5,8 @@ namespace App\Filament\App\Resources;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
@@ -14,6 +16,7 @@ use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -109,6 +112,41 @@ class FactureResource extends Resource
                     ->modalDescription('Un numéro définitif sera attribué et le stock sera décrémenté. Cette action est irréversible.')
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && auth()->user()->can('emettre', $record))
                     ->action(fn (Facture $record) => app(EmettreFactureAction::class)->handle($record)),
+                Tables\Actions\Action::make('encaisser')
+                    ->label('Encaisser')
+                    ->icon('heroicon-o-banknotes')
+                    ->color('success')
+                    ->form([
+                        Select::make('mode_paiement')
+                            ->label('Mode de paiement')
+                            ->options(ModePaiement::class)
+                            ->required(),
+                        TextInput::make('montant')
+                            ->label('Montant reçu')
+                            ->numeric()
+                            ->required()
+                            ->default(fn (Facture $record) => $record->montantRestant()),
+                        TextInput::make('reference')->label('Référence'),
+                        DatePicker::make('recu_le')->label('Reçu le')->required()->default(now()),
+                    ])
+                    ->requiresConfirmation()
+                    ->visible(fn (Facture $record) => $record->montantRestant() > 0
+                        && in_array($record->statut, [
+                            StatutFacture::Emise,
+                            StatutFacture::Envoyee,
+                            StatutFacture::PartiellementPayee,
+                            StatutFacture::EnRetard,
+                        ], true)
+                        && auth()->user()->can(PermissionRegistry::PAIEMENT_CREER))
+                    ->action(fn (Facture $record, array $data) => app(EnregistrerPaiementAction::class)->handle([
+                        'client_id' => $record->client_id,
+                        'mode_paiement' => $data['mode_paiement'],
+                        'montant' => $data['montant'],
+                        'reference' => $data['reference'] ?? null,
+                        'recu_le' => $data['recu_le'],
+                    ], [
+                        ['facture_id' => $record->id, 'montant' => $data['montant']],
+                    ])),
                 Tables\Actions\Action::make('telecharger_pdf')
                     ->label('PDF')
                     ->icon('heroicon-o-arrow-down-tray')

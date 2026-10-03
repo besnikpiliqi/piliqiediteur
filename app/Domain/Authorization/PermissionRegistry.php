@@ -77,6 +77,14 @@ final class PermissionRegistry
 
     public const EQUIPE_MODIFIER = 'equipe.modifier';
 
+    // Paiements -- ni modification ni suppression après coup (voir
+    // Paiement::$fillable et PaiementPolicy) : une erreur de saisie se
+    // corrige par un nouveau paiement, jamais en réécrivant l'historique
+    // d'encaissement.
+    public const PAIEMENT_VIEW = 'paiement.view';
+
+    public const PAIEMENT_CREER = 'paiement.creer';
+
     /**
      * @return list<string>
      */
@@ -90,6 +98,7 @@ final class PermissionRegistry
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ANNULER,
             self::MANDAT_PDP_GERER,
             self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
+            self::PAIEMENT_VIEW, self::PAIEMENT_CREER,
         ];
     }
 }

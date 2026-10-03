@@ -46,7 +46,7 @@ class CreerMembreMagasinAction
                 // rien à confirmer par email.
                 $utilisateur->forceFill(['email_verified_at' => now()])->save();
             } elseif ($utilisateur->appartientA($magasin)) {
-                throw new LogicException('Cette personne fait déjà partie de ce magasin.');
+                throw new LogicException('Cette personne fait déjà partie de votre équipe.');
             }
             // Si l'utilisateur existe déjà (ex: comptable qui intervient
             // déjà sur un autre magasin), on ne touche PAS à son mot de

@@ -57,6 +57,7 @@ class SeedMagasinRolesAction
                 PermissionRegistry::AVOIR_VIEW,
                 PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK,
                 PermissionRegistry::CLOTURE_CAISSE_VIEW,
+                PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES,
             ],
             // Un vendeur crée/émet ses propres devis et factures, mais ne
             // voit que celles qu'il a lui-même créées (voir FacturePolicy)
@@ -76,6 +77,13 @@ class SeedMagasinRolesAction
                 PermissionRegistry::FACTURE_EMETTRE,
                 PermissionRegistry::PAIEMENT_VIEW,
                 PermissionRegistry::PAIEMENT_CREER,
+                // Clôturer sa propre caisse en fin de service est une
+                // tâche normale de vendeur/caissier -- il ne voit que
+                // les clôtures qu'il a lui-même déclenchées (voir
+                // ClotureCaissePolicy), jamais celles du reste de
+                // l'équipe sans cloture_caisse.view_toutes.
+                PermissionRegistry::CLOTURE_CAISSE_VIEW,
+                PermissionRegistry::CLOTURE_CAISSE_GERER,
             ],
             RoleMagasin::Observateur->value => $permissionsLecture,
         ];

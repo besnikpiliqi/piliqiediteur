@@ -7,9 +7,12 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Models\User;
 
 /**
- * Pas de confidentialité par vendeur ici (contrairement à FacturePolicy) :
- * une clôture de caisse agrège TOUTES les ventes particulier de la
- * journée, ce n'est jamais le document d'un seul vendeur.
+ * Même confidentialité par vendeur que FacturePolicy : un vendeur qui
+ * clôture sa propre caisse (ex: fin de service d'un caissier) ne voit que
+ * les clôtures qu'il a lui-même déclenchées, sans
+ * cloture_caisse.view_toutes -- accordée par défaut au propriétaire, à
+ * l'administrateur et au comptable (voir SeedMagasinRolesAction), ou
+ * individuellement via les permissions supplémentaires d'un membre.
  *
  * Document fiscal au même titre qu'une facture : jamais modifiable ni
  * supprimable une fois créée (voir ClotureCaisse::class).
@@ -23,7 +26,15 @@ class ClotureCaissePolicy extends MagasinPolicy
 
     public function view(User $user, ClotureCaisse $cloture): bool
     {
-        return $this->appartientAuMagasinActif($cloture) && $user->can(PermissionRegistry::CLOTURE_CAISSE_VIEW);
+        if (! $this->appartientAuMagasinActif($cloture)) {
+            return false;
+        }
+
+        if (! $user->can(PermissionRegistry::CLOTURE_CAISSE_VIEW)) {
+            return false;
+        }
+
+        return $user->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES) || $cloture->cree_par === $user->getKey();
     }
 
     public function cloturer(User $user): bool

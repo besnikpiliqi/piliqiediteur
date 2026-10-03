@@ -19,7 +19,7 @@ class RetirerMembreMagasinAction
     public function handle(MagasinUser $membre): void
     {
         if ($membre->role === RoleMagasin::Proprietaire) {
-            throw new LogicException('Le propriétaire ne peut pas être retiré de son propre magasin.');
+            throw new LogicException("Le propriétaire ne peut pas être retiré de l'équipe.");
         }
 
         DB::transaction(function () use ($membre) {

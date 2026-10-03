@@ -29,7 +29,9 @@ class ListClotureCaisses extends ListRecords
                         ->required(),
                 ])
                 ->requiresConfirmation()
-                ->modalDescription('Agrège toutes les ventes aux clients particuliers de cette journée en un document fiscal définitif. Une journée ne peut être clôturée qu\'une seule fois.')
+                ->modalHeading('Clôturer définitivement cette journée ?')
+                ->modalDescription('Cette action est IRRÉVERSIBLE : une fois clôturée, cette journée ne pourra plus jamais être modifiée, ni clôturée à nouveau. Vérifiez bien la date choisie avant de confirmer.')
+                ->modalSubmitActionLabel('Oui, clôturer définitivement')
                 ->visible(fn () => auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_GERER))
                 ->action(fn (array $data) => app(CloturerCaisseAction::class)->handle(Filament::getTenant(), $data['date_cloture'])),
         ];

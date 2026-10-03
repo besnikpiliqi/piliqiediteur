@@ -98,4 +98,51 @@ class ClotureCaisseResourceTest extends TestCase
             ->assertSuccessful()
             ->assertSee($facture->numero);
     }
+
+    /**
+     * Un vendeur qui clôture sa propre caisse (ex: fin de service d'un
+     * caissier) ne doit voir que ses propres clôtures, pas celles
+     * déclenchées par un autre vendeur -- même confidentialité que les
+     * factures.
+     */
+    public function test_un_vendeur_ne_voit_que_les_clotures_quil_a_lui_meme_declenchees(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+
+        Permission::findOrCreate(PermissionRegistry::CLOTURE_CAISSE_VIEW, 'web');
+        Permission::findOrCreate(PermissionRegistry::CLOTURE_CAISSE_GERER, 'web');
+        $roleVendeur = Role::findOrCreate('employee', 'web');
+        $roleVendeur->givePermissionTo([PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
+
+        $vendeurA = User::factory()->create();
+        $vendeurB = User::factory()->create();
+        $vendeurA->assignRole($roleVendeur);
+        $vendeurB->assignRole($roleVendeur);
+        foreach ([$vendeurA, $vendeurB] as $vendeur) {
+            $magasin->utilisateurs()->attach($vendeur->id, ['role' => 'employee', 'statut' => 'active', 'joined_at' => now()]);
+        }
+
+        $this->actingAs($vendeurA);
+        Filament::setTenant($magasin);
+        Livewire::test(ListClotureCaisses::class)
+            ->callAction('cloturer', data: ['date_cloture' => now()->subDays(2)->toDateString()]);
+
+        $this->actingAs($vendeurB);
+        Filament::setTenant($magasin);
+        Livewire::test(ListClotureCaisses::class)
+            ->callAction('cloturer', data: ['date_cloture' => now()->subDay()->toDateString()]);
+
+        $clotureA = ClotureCaisse::where('cree_par', $vendeurA->id)->firstOrFail();
+        $clotureB = ClotureCaisse::where('cree_par', $vendeurB->id)->firstOrFail();
+
+        Livewire::test(ListClotureCaisses::class)
+            ->assertCanSeeTableRecords([$clotureB])
+            ->assertCanNotSeeTableRecords([$clotureA]);
+
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        Livewire::test(ListClotureCaisses::class)
+            ->assertCanSeeTableRecords([$clotureA, $clotureB]);
+    }
 }

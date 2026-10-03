@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -11,6 +12,7 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Lecture seule : une clôture se crée uniquement via l'action "Clôturer
@@ -33,6 +35,22 @@ class ClotureCaisseResource extends Resource
     protected static ?string $modelLabel = 'clôture de caisse';
 
     protected static ?string $pluralModelLabel = 'clôtures de caisse';
+
+    /**
+     * Confidentialité par vendeur (voir ClotureCaissePolicy) : sans
+     * cloture_caisse.view_toutes, la liste elle-même ne doit montrer que
+     * les clôtures déclenchées par l'utilisateur courant.
+     */
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        if (! auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)) {
+            $query->where('cree_par', auth()->id());
+        }
+
+        return $query;
+    }
 
     public static function infolist(Infolist $infolist): Infolist
     {

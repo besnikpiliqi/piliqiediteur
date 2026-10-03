@@ -96,10 +96,14 @@ final class PermissionRegistry
 
     public const AVOIR_CREER = 'avoir.creer';
 
-    // Clôture de caisse (e-reporting agrégé B2C) -- gérer (déclencher une
-    // clôture manuelle) réservé par défaut au propriétaire/administrateur,
-    // comme facture.annuler ; voir SeedMagasinRolesAction.
+    // Clôture de caisse (e-reporting agrégé B2C). Un vendeur qui clôture
+    // sa propre caisse ne voit que SES clôtures (celles qu'il a
+    // lui-même déclenchées, voir cree_par) sans cloture_caisse.view_toutes
+    // -- même confidentialité par vendeur que facture.view_toutes, voir
+    // ClotureCaissePolicy.
     public const CLOTURE_CAISSE_VIEW = 'cloture_caisse.view';
+
+    public const CLOTURE_CAISSE_VIEW_TOUTES = 'cloture_caisse.view_toutes';
 
     public const CLOTURE_CAISSE_GERER = 'cloture_caisse.gerer';
 
@@ -118,7 +122,7 @@ final class PermissionRegistry
             self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
             self::PAIEMENT_VIEW, self::PAIEMENT_CREER,
             self::AVOIR_VIEW, self::AVOIR_CREER,
-            self::CLOTURE_CAISSE_VIEW, self::CLOTURE_CAISSE_GERER,
+            self::CLOTURE_CAISSE_VIEW, self::CLOTURE_CAISSE_VIEW_TOUTES, self::CLOTURE_CAISSE_GERER,
         ];
     }
 
@@ -164,7 +168,8 @@ final class PermissionRegistry
             self::PAIEMENT_CREER => 'Paiements : enregistrer',
             self::AVOIR_VIEW => 'Avoirs : voir',
             self::AVOIR_CREER => 'Avoirs : créer',
-            self::CLOTURE_CAISSE_VIEW => 'Clôture de caisse : voir',
+            self::CLOTURE_CAISSE_VIEW => 'Clôture de caisse : voir (les siennes)',
+            self::CLOTURE_CAISSE_VIEW_TOUTES => 'Clôture de caisse : voir celles de toute l\'équipe',
             self::CLOTURE_CAISSE_GERER => 'Clôture de caisse : clôturer manuellement',
         ];
     }

@@ -42,7 +42,7 @@ class CloturerCaisseAction
                 ->where('magasin_id', $magasin->getKey())
                 ->whereDate('date_cloture', $dateCloture)
                 ->exists()) {
-                throw new LogicException("La journée du {$dateCloture} a déjà été clôturée pour ce magasin.");
+                throw new LogicException("La journée du {$dateCloture} a déjà été clôturée.");
             }
 
             $factures = Facture::query()

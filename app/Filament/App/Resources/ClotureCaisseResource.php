@@ -1,0 +1,104 @@
+<?php
+
+namespace App\Filament\App\Resources;
+
+use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Filament\App\Resources\ClotureCaisseResource\Pages;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
+use Filament\Resources\Resource;
+use Filament\Tables;
+use Filament\Tables\Table;
+
+/**
+ * Lecture seule : une clôture se crée uniquement via l'action "Clôturer
+ * la journée" (voir ListClotureCaisses) ou la commande planifiée
+ * app:cloturer-caisses-automatiquement, jamais via un formulaire
+ * create/edit classique. Document fiscal au même titre qu'une facture :
+ * jamais modifiable ni supprimable une fois créée (voir
+ * ClotureCaissePolicy).
+ */
+class ClotureCaisseResource extends Resource
+{
+    protected static ?string $model = ClotureCaisse::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-calculator';
+
+    protected static ?string $navigationGroup = 'Ventes';
+
+    protected static ?int $navigationSort = 6;
+
+    protected static ?string $modelLabel = 'clôture de caisse';
+
+    protected static ?string $pluralModelLabel = 'clôtures de caisse';
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            InfolistSection::make('Clôture')->schema([
+                TextEntry::make('numero')->label('Numéro'),
+                TextEntry::make('date_cloture')->label('Journée clôturée')->date('d/m/Y'),
+                TextEntry::make('cloturee_a')->label('Clôturée le')->dateTime('d/m/Y à H:i'),
+                TextEntry::make('creePar.name')->label('Déclenchée par')->placeholder('Automatique (planifiée à minuit)'),
+            ])->columns(2),
+
+            InfolistSection::make('Totaux')->schema([
+                TextEntry::make('nombre_ventes')->label('Nombre de ventes'),
+                TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
+                TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
+                TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+            ])->columns(4),
+
+            InfolistSection::make('Transmission électronique')->schema([
+                TextEntry::make('transmission_pdp_statut')
+                    ->label('Statut de transmission au PDP (e-reporting)')
+                    ->state(fn (ClotureCaisse $record) => $record->transmissionsPdp->sortByDesc('soumise_le')->first()?->statut)
+                    ->badge()
+                    ->placeholder('Pas de mandat PDP actif : non transmise'),
+            ]),
+
+            InfolistSection::make('Ventes agrégées')->schema([
+                RepeatableEntry::make('factures')
+                    ->label('')
+                    ->schema([
+                        TextEntry::make('numero')->label('Numéro'),
+                        TextEntry::make('client.nom')->label('Client'),
+                        TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+                    ])
+                    ->columns(3),
+            ]),
+        ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->defaultSort('date_cloture', 'desc')
+            ->columns([
+                Tables\Columns\TextColumn::make('numero')->label('Numéro')->searchable(),
+                Tables\Columns\TextColumn::make('date_cloture')->label('Journée')->date('d/m/Y')->sortable(),
+                Tables\Columns\TextColumn::make('nombre_ventes')->label('Ventes'),
+                Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR'),
+                Tables\Columns\TextColumn::make('cree_par')
+                    ->label('Déclenchée par')
+                    ->state(fn (ClotureCaisse $record) => $record->creePar?->name ?? 'Automatique')
+                    ->badge()
+                    ->color(fn (ClotureCaisse $record) => $record->cree_par === null ? 'gray' : 'info'),
+                Tables\Columns\TextColumn::make('cloturee_a')->label('Clôturée le')->dateTime('d/m/Y H:i'),
+            ])
+            ->actions([
+                Tables\Actions\ViewAction::make(),
+            ])
+            ->bulkActions([]);
+    }
+
+    public static function getPages(): array
+    {
+        return [
+            'index' => Pages\ListClotureCaisses::route('/'),
+            'view' => Pages\ViewClotureCaisse::route('/{record}'),
+        ];
+    }
+}

@@ -96,6 +96,13 @@ final class PermissionRegistry
 
     public const AVOIR_CREER = 'avoir.creer';
 
+    // Clôture de caisse (e-reporting agrégé B2C) -- gérer (déclencher une
+    // clôture manuelle) réservé par défaut au propriétaire/administrateur,
+    // comme facture.annuler ; voir SeedMagasinRolesAction.
+    public const CLOTURE_CAISSE_VIEW = 'cloture_caisse.view';
+
+    public const CLOTURE_CAISSE_GERER = 'cloture_caisse.gerer';
+
     /**
      * @return list<string>
      */
@@ -111,6 +118,7 @@ final class PermissionRegistry
             self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
             self::PAIEMENT_VIEW, self::PAIEMENT_CREER,
             self::AVOIR_VIEW, self::AVOIR_CREER,
+            self::CLOTURE_CAISSE_VIEW, self::CLOTURE_CAISSE_GERER,
         ];
     }
 
@@ -156,6 +164,8 @@ final class PermissionRegistry
             self::PAIEMENT_CREER => 'Paiements : enregistrer',
             self::AVOIR_VIEW => 'Avoirs : voir',
             self::AVOIR_CREER => 'Avoirs : créer',
+            self::CLOTURE_CAISSE_VIEW => 'Clôture de caisse : voir',
+            self::CLOTURE_CAISSE_GERER => 'Clôture de caisse : clôturer manuellement',
         ];
     }
 }

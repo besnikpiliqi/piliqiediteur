@@ -6,6 +6,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
@@ -118,6 +119,11 @@ class Magasin extends Model implements HasName
     public function avoirs(): HasMany
     {
         return $this->hasMany(Avoir::class);
+    }
+
+    public function cloturesCaisse(): HasMany
+    {
+        return $this->hasMany(ClotureCaisse::class);
     }
 
     /**

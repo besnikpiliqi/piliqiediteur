@@ -6,12 +6,14 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Models\MagasinUser;
 use App\Policies\AvoirPolicy;
 use App\Policies\ClientPolicy;
+use App\Policies\ClotureCaissePolicy;
 use App\Policies\DevisPolicy;
 use App\Policies\FacturePolicy;
 use App\Policies\FournisseurPolicy;
@@ -59,5 +61,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(MagasinUser::class, MembreEquipePolicy::class);
         Gate::policy(Paiement::class, PaiementPolicy::class);
         Gate::policy(Avoir::class, AvoirPolicy::class);
+        Gate::policy(ClotureCaisse::class, ClotureCaissePolicy::class);
     }
 }

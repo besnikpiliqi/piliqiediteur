@@ -55,6 +55,7 @@ class SeedMagasinRolesAction
                 PermissionRegistry::PAIEMENT_VIEW,
                 PermissionRegistry::PAIEMENT_CREER,
                 PermissionRegistry::AVOIR_VIEW,
+                PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK,
             ],
             // Un vendeur crée/émet ses propres devis et factures, mais ne
             // voit que celles qu'il a lui-même créées (voir FacturePolicy)

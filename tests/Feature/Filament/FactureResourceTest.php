@@ -286,4 +286,21 @@ class FactureResourceTest extends TestCase
             ->assertCanSeeTableRecords(Facture::where('cree_par', $vendeurB->id)->get())
             ->assertCanNotSeeTableRecords(Facture::where('cree_par', $vendeurA->id)->get());
     }
+
+    public function test_creer_un_nouveau_client_a_la_volee_depuis_le_formulaire_facture(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateFacture::class)
+            ->callFormComponentAction('client_id', 'createOption', data: [
+                'nom' => 'Client Créé En Direct',
+                'type_client' => 'professionnel',
+            ])
+            ->assertHasNoFormComponentActionErrors();
+
+        $this->assertDatabaseHas('clients', ['nom' => 'Client Créé En Direct', 'type_client' => 'professionnel']);
+    }
 }

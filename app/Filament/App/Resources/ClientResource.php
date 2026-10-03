@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Filament\App\Resources\ClientResource\Pages;
+use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -27,6 +28,33 @@ class ClientResource extends Resource
     protected static ?string $modelLabel = 'client';
 
     protected static ?string $pluralModelLabel = 'clients';
+
+    /**
+     * Formulaire allégé utilisé dans la modale "+" du Select client_id de
+     * DevisResource/FactureResource (createOptionForm) : un vendeur en
+     * train de facturer n'a besoin que de l'essentiel pour créer un
+     * nouveau client à la volée, pas de toute la fiche complète.
+     *
+     * @return array<Component>
+     */
+    public static function creationRapideSchema(): array
+    {
+        return [
+            TextInput::make('nom')->required()->maxLength(150)->columnSpanFull(),
+            Select::make('type_client')
+                ->label('Type de client')
+                ->options(TypeClient::class)
+                ->default(TypeClient::Particulier)
+                ->required()
+                ->live(),
+            TextInput::make('siret')
+                ->label('SIRET')
+                ->maxLength(14)
+                ->visible(fn (Get $get) => $get('type_client') === TypeClient::Professionnel->value),
+            TextInput::make('telephone')->tel()->maxLength(30),
+            TextInput::make('email')->email()->maxLength(150),
+        ];
+    }
 
     public static function form(Form $form): Form
     {

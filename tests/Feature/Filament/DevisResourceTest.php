@@ -203,4 +203,21 @@ class DevisResourceTest extends TestCase
 
         Livewire::test(ListDevis::class)->assertTableActionHidden('convertir', $devis->fresh());
     }
+
+    public function test_creer_un_nouveau_client_a_la_volee_depuis_le_formulaire_devis(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateDevis::class)
+            ->callFormComponentAction('client_id', 'createOption', data: [
+                'nom' => 'Nouveau Client Express',
+                'type_client' => 'particulier',
+            ])
+            ->assertHasNoFormComponentActionErrors();
+
+        $this->assertDatabaseHas('clients', ['nom' => 'Nouveau Client Express']);
+    }
 }

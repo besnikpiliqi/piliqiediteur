@@ -14,6 +14,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Filament\App\Resources\FactureResource\Pages;
+use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section as FormSection;
@@ -71,7 +72,10 @@ class FactureResource extends Resource
                     ->relationship('client', 'nom')
                     ->searchable()
                     ->preload()
-                    ->required(),
+                    ->required()
+                    ->createOptionForm(ClientResource::creationRapideSchema())
+                    ->createOptionModalHeading('Nouveau client')
+                    ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE))),
                 DatePicker::make('date_echeance')->label('Échéance'),
                 Textarea::make('conditions_paiement')->label('Conditions de paiement')->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),

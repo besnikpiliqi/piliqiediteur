@@ -2,6 +2,7 @@
 
 namespace App\Integrations\Pdp\Contracts;
 
+use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
@@ -22,4 +23,11 @@ interface PdpGatewayInterface
     public function revoquerMandat(MandatPdp $mandat): void;
 
     public function soumettreFacture(Facture $facture): ResultatSoumissionPdp;
+
+    /**
+     * E-reporting agrégé B2C (voir ClotureCaisse) : un envoi distinct de
+     * soumettreFacture(), qui ne concerne que l'e-invoicing individuel
+     * des clients professionnels.
+     */
+    public function soumettreClotureCaisse(ClotureCaisse $cloture): ResultatSoumissionPdp;
 }

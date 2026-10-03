@@ -2,6 +2,7 @@
 
 namespace App\Integrations\Pdp;
 
+use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\StatutMandatPdp;
 use App\Domain\Tenancy\Models\Magasin;
@@ -42,6 +43,15 @@ class FakePdpGateway implements PdpGatewayInterface
             statut: StatutTransmissionPdp::Acceptee,
             transmissionExterneId: 'FAKE-TRANSMISSION-'.Str::uuid(),
             format: 'facturx',
+        );
+    }
+
+    public function soumettreClotureCaisse(ClotureCaisse $cloture): ResultatSoumissionPdp
+    {
+        return new ResultatSoumissionPdp(
+            statut: StatutTransmissionPdp::Acceptee,
+            transmissionExterneId: 'FAKE-EREPORTING-'.Str::uuid(),
+            format: 'ereporting',
         );
     }
 }

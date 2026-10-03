@@ -3,8 +3,10 @@
 namespace App\Providers;
 
 use App\Domain\Facturation\Events\AvoirEmis;
+use App\Domain\Facturation\Events\ClotureCaisseEffectuee;
 use App\Domain\Facturation\Events\FactureAnnulee;
 use App\Domain\Facturation\Events\FactureEmise;
+use App\Domain\Facturation\Listeners\DeclencherTransmissionPdpApresClotureCaisse;
 use App\Domain\Facturation\Listeners\DeclencherTransmissionPdpApresEmissionFacture;
 use App\Domain\Facturation\Listeners\DecrementerStockApresEmissionFacture;
 use App\Domain\Facturation\Listeners\RestaurerStockApresAnnulationFacture;
@@ -27,5 +29,6 @@ class EventServiceProvider extends ServiceProvider
         Event::listen(FactureEmise::class, DeclencherTransmissionPdpApresEmissionFacture::class);
         Event::listen(FactureAnnulee::class, RestaurerStockApresAnnulationFacture::class);
         Event::listen(AvoirEmis::class, RestaurerStockApresEmissionAvoir::class);
+        Event::listen(ClotureCaisseEffectuee::class, DeclencherTransmissionPdpApresClotureCaisse::class);
     }
 }

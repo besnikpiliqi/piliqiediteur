@@ -4,14 +4,17 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\MandatPdp;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -192,6 +195,56 @@ class FactureResourceTest extends TestCase
 
         $this->assertModelMissing($factureBrouillon);
         $this->assertModelExists($factureEmise);
+    }
+
+    public function test_la_page_de_detail_affiche_leg_reporting_pour_un_client_particulier(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create(['type_client' => TypeClient::Particulier]);
+        $facture = $this->emettreFactureDepuisLePanneau($client);
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee($facture->numero)
+            ->assertSee('e-reporting agrégé');
+    }
+
+    public function test_la_page_de_detail_affiche_le_statut_pdp_pour_un_client_professionnel(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        MandatPdp::factory()->create(['magasin_id' => $magasin->id]);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create(['type_client' => TypeClient::Professionnel]);
+        $facture = $this->emettreFactureDepuisLePanneau($client);
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee('Acceptée par le PDP');
+    }
+
+    /**
+     * @return Facture
+     */
+    private function emettreFactureDepuisLePanneau(Client $client)
+    {
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+
+        $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
+
+        return $facture->fresh();
     }
 
     public function test_la_liste_ne_montre_que_les_factures_du_vendeur_sans_vue_totale(): void

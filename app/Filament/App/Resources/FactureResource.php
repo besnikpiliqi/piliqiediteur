@@ -9,17 +9,22 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Filament\App\Resources\FactureResource\Pages;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\Section;
+use Filament\Forms\Components\Section as FormSection;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -60,7 +65,7 @@ class FactureResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
-            Section::make('Facture')->schema([
+            FormSection::make('Facture')->schema([
                 Select::make('client_id')
                     ->label('Client')
                     ->relationship('client', 'nom')
@@ -72,7 +77,7 @@ class FactureResource extends Resource
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
 
-            Section::make('Lignes')->schema([
+            FormSection::make('Lignes')->schema([
                 Repeater::make('lignes')
                     ->label('')
                     ->schema(DevisResource::ligneSchema())
@@ -83,6 +88,84 @@ class FactureResource extends Resource
                     ->disabled(fn (string $operation) => $operation === 'edit')
                     ->dehydrated(fn (string $operation) => $operation === 'create'),
             ]),
+        ]);
+    }
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            InfolistSection::make('Facture')->schema([
+                TextEntry::make('numero')->label('Numéro')->placeholder('Brouillon (pas encore émise)'),
+                TextEntry::make('statut')->badge(),
+                TextEntry::make('client.nom')->label('Client'),
+                TextEntry::make('date_emission')->label('Émise le')->dateTime('d/m/Y')->placeholder('—'),
+                TextEntry::make('date_echeance')->label('Échéance')->date('d/m/Y')->placeholder('—'),
+                TextEntry::make('creePar.name')->label('Créée par'),
+            ])->columns(3),
+
+            InfolistSection::make('Lignes')->schema([
+                RepeatableEntry::make('lignes')
+                    ->label('')
+                    ->schema([
+                        TextEntry::make('description'),
+                        TextEntry::make('quantite'),
+                        TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
+                        TextEntry::make('taux_tva')->label('TVA')->suffix(' %'),
+                        TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
+                    ])
+                    ->columns(5),
+            ]),
+
+            InfolistSection::make('Totaux et règlement')->schema([
+                TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
+                TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
+                TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+                TextEntry::make('montant_paye')->label('Payé')->state(fn (Facture $record) => $record->montantPaye())->money('EUR'),
+                TextEntry::make('montant_restant')->label('Restant dû')->state(fn (Facture $record) => $record->montantRestant())->money('EUR'),
+            ])->columns(3),
+
+            InfolistSection::make('Paiements reçus')
+                ->visible(fn (Facture $record) => $record->allocationsPaiement()->exists())
+                ->schema([
+                    RepeatableEntry::make('allocationsPaiement')
+                        ->label('')
+                        ->schema([
+                            TextEntry::make('paiement.recu_le')->label('Reçu le')->date('d/m/Y'),
+                            TextEntry::make('paiement.mode_paiement')->label('Mode')->badge(),
+                            TextEntry::make('montant_alloue')->label('Montant alloué')->money('EUR'),
+                            TextEntry::make('paiement.reference')->label('Référence')->placeholder('—'),
+                        ])
+                        ->columns(4),
+                ]),
+
+            InfolistSection::make('Transmission électronique')->schema([
+                TextEntry::make('transmission_pdp_particulier')
+                    ->label('Circuit réglementaire')
+                    ->state("Client particulier : cette facture est incluse dans l'e-reporting agrégé de la prochaine clôture de caisse journalière, pas de transmission PDP individuelle.")
+                    ->visible(fn (Facture $record) => ! $record->relevantDeLeInvoicing()),
+                TextEntry::make('transmission_pdp_statut')
+                    ->label('Statut de transmission au PDP')
+                    ->state(fn (Facture $record) => $record->transmissionsPdp->sortByDesc('soumise_le')->first()?->statut)
+                    ->badge()
+                    ->placeholder('Pas encore transmise')
+                    ->visible(fn (Facture $record) => $record->relevantDeLeInvoicing()),
+                TextEntry::make('transmission_pdp_erreur')
+                    ->label('Détail')
+                    ->state(fn (Facture $record) => $record->transmissionsPdp->sortByDesc('soumise_le')->first()?->message_erreur)
+                    ->visible(fn (Facture $record) => filled($record->transmissionsPdp->sortByDesc('soumise_le')->first()?->message_erreur)),
+            ]),
+
+            InfolistSection::make('Avoir émis')
+                ->visible(fn (Facture $record) => $record->possedeUnAvoirEmis())
+                ->schema([
+                    TextEntry::make('avoir_numero')
+                        ->label('Numéro')
+                        ->state(fn (Facture $record) => $record->avoirs()->where('statut', StatutAvoir::Emise)->first()?->numero),
+                    TextEntry::make('avoir_motif')
+                        ->label('Motif')
+                        ->state(fn (Facture $record) => $record->avoirs()->where('statut', StatutAvoir::Emise)->first()?->motif)
+                        ->placeholder('—'),
+                ])->columns(2),
         ]);
     }
 
@@ -105,6 +188,7 @@ class FactureResource extends Resource
                 Tables\Filters\SelectFilter::make('statut')->options(StatutFacture::class),
             ])
             ->actions([
+                Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make()
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
                 // Un brouillon n'a jamais reçu de numéro légal : il peut
@@ -226,6 +310,7 @@ class FactureResource extends Resource
         return [
             'index' => Pages\ListFactures::route('/'),
             'create' => Pages\CreateFacture::route('/create'),
+            'view' => Pages\ViewFacture::route('/{record}'),
             'edit' => Pages\EditFacture::route('/{record}/edit'),
         ];
     }

@@ -11,8 +11,9 @@ use Filament\Resources\Pages\EditRecord;
  * n'est de toute façon éditable que tant qu'elle est en brouillon
  * (FacturePolicy::update), avant tout impact sur le stock ou le PDP.
  *
- * Pas de DeleteAction dans les en-têtes : une facture ne se supprime
- * jamais (FacturePolicy::delete() renvoie toujours false).
+ * Pas de DeleteAction dans les en-têtes : cette page n'est accessible que
+ * pour un brouillon (FacturePolicy::update), dont la suppression se fait
+ * déjà depuis la liste (voir FactureResource::table()).
  */
 class EditFacture extends EditRecord
 {

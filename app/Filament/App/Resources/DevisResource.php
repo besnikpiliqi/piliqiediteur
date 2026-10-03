@@ -82,9 +82,23 @@ class DevisResource extends Resource
         return [
             Select::make('produit_id')
                 ->label('Produit')
-                ->helperText('Laissez vide pour une ligne libre (main d\'œuvre, service, produit hors catalogue...)')
-                ->options(fn () => Produit::query()->where('actif', true)->pluck('nom', 'id'))
+                ->helperText('Laissez vide pour une ligne libre (main d\'œuvre, service, produit hors catalogue...). Recherchez par nom, référence, ou scannez le code-barres.')
                 ->searchable()
+                // Recherche côté serveur plutôt qu'une liste statique
+                // préchargée : inclut le code-barres, pour qu'une
+                // douchette USB (qui se contente de "taper" les chiffres
+                // scannés dans le champ actif) retrouve le produit aussi
+                // vite qu'en tapant son nom.
+                ->getSearchResultsUsing(fn (string $search) => Produit::query()
+                    ->where('actif', true)
+                    ->where(fn ($query) => $query
+                        ->where('nom', 'like', "%{$search}%")
+                        ->orWhere('reference', 'like', "%{$search}%")
+                        ->orWhere('code_barres', 'like', "%{$search}%"))
+                    ->limit(50)
+                    ->get()
+                    ->mapWithKeys(fn (Produit $produit) => [$produit->id => "{$produit->nom} ({$produit->reference})"]))
+                ->getOptionLabelUsing(fn ($value) => Produit::find($value)?->nom)
                 ->live()
                 ->columnSpan(2)
                 ->afterStateUpdated(function (?int $state, Set $set) {

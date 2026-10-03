@@ -9,10 +9,14 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
 use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -219,5 +223,26 @@ class DevisResourceTest extends TestCase
             ->assertHasNoFormComponentActionErrors();
 
         $this->assertDatabaseHas('clients', ['nom' => 'Nouveau Client Express']);
+    }
+
+    /**
+     * Une douchette USB se contente de "taper" les chiffres scannés dans
+     * le champ actif : il faut donc que la recherche du produit porte
+     * aussi sur le code-barres, pas seulement sur le nom.
+     */
+    public function test_rechercher_un_produit_par_code_barres_le_retrouve(): void
+    {
+        $magasin = Magasin::factory()->create();
+        app(TenantContext::class)->set($magasin);
+
+        $produitCible = Produit::factory()->create(['nom' => 'Chaise de bureau', 'code_barres' => '3456789012345']);
+        Produit::factory()->create(['nom' => 'Autre produit', 'code_barres' => '0000000000000']);
+
+        $selectProduit = collect(DevisResource::ligneSchema())
+            ->first(fn ($component) => $component instanceof Select && $component->getName() === 'produit_id');
+
+        $resultats = $selectProduit->getSearchResults('3456789012345');
+
+        $this->assertSame([$produitCible->id => 'Chaise de bureau ('.$produitCible->reference.')'], $resultats);
     }
 }

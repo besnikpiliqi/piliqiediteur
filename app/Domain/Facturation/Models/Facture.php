@@ -105,11 +105,6 @@ class Facture extends Model
         return $this->avoirs()->where('statut', StatutAvoir::Emise)->exists();
     }
 
-    public function estModifiable(): bool
-    {
-        return $this->statut === StatutFacture::Brouillon;
-    }
-
     public function montantPaye(): float
     {
         return round((float) $this->allocationsPaiement()->sum('montant_alloue'), 2);

@@ -82,15 +82,17 @@ class FactureResource extends Resource
             ])->columns(2),
 
             FormSection::make('Lignes')->schema([
+                // Pas de page "edit" sur cette Resource (voir le docblock
+                // de classe) : ce formulaire ne sert jamais qu'à la
+                // création, les lignes n'ont donc pas besoin d'une
+                // logique conditionnelle par opération.
                 Repeater::make('lignes')
                     ->label('')
                     ->schema(DevisResource::ligneSchema())
                     ->columns(6)
                     ->defaultItems(1)
                     ->addActionLabel('Ajouter une ligne')
-                    ->required()
-                    ->disabled(fn (string $operation) => $operation === 'edit')
-                    ->dehydrated(fn (string $operation) => $operation === 'create'),
+                    ->required(),
             ]),
         ]);
     }
@@ -193,11 +195,15 @@ class FactureResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make()
-                    ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
+                // Pas de EditAction, volontairement : une facture ne se
+                // modifie jamais après création, même en brouillon (voir
+                // FacturePolicy::update()). Pour corriger une erreur de
+                // saisie sur un brouillon, on le supprime et on recommence.
+                //
                 // Un brouillon n'a jamais reçu de numéro légal : il peut
-                // être supprimé librement (voir FacturePolicy::delete()).
-                // Dès l'émission, cette action disparaît définitivement.
+                // en revanche être supprimé librement (voir
+                // FacturePolicy::delete()). Dès l'émission, cette action
+                // disparaît définitivement.
                 Tables\Actions\DeleteAction::make()
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
                 Tables\Actions\Action::make('emettre')
@@ -315,7 +321,6 @@ class FactureResource extends Resource
             'index' => Pages\ListFactures::route('/'),
             'create' => Pages\CreateFacture::route('/create'),
             'view' => Pages\ViewFacture::route('/{record}'),
-            'edit' => Pages\EditFacture::route('/{record}/edit'),
         ];
     }
 }

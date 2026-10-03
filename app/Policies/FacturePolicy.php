@@ -38,11 +38,16 @@ class FacturePolicy extends MagasinPolicy
         return $user->can(PermissionRegistry::FACTURE_CREATE);
     }
 
+    /**
+     * Toujours refusé, y compris sur un brouillon : une facture se crée,
+     * s'émet, s'annule, se supprime (si jamais numérotée) ou se corrige
+     * par un avoir -- jamais en la modifiant après coup. Si une ligne est
+     * fausse sur un brouillon, on le supprime et on recommence plutôt que
+     * de l'éditer en place.
+     */
     public function update(User $user, Facture $facture): bool
     {
-        return $this->view($user, $facture)
-            && $facture->estModifiable()
-            && $user->can(PermissionRegistry::FACTURE_CREATE);
+        return false;
     }
 
     public function emettre(User $user, Facture $facture): bool

@@ -33,9 +33,14 @@ class CloturerCaisseAction
         $dateCloture = Carbon::parse($date)->toDateString();
 
         return DB::transaction(function () use ($magasin, $dateCloture) {
+            // whereDate() plutôt qu'une égalité directe : le cast 'date'
+            // d'Eloquent sérialise la colonne en "Y-m-d H:i:s" à l'écriture,
+            // une comparaison de chaîne stricte contre "Y-m-d" seul ne
+            // matcherait jamais (SQLite n'a pas de type DATE strict qui
+            // normaliserait ça pour nous, contrairement à MySQL/Postgres).
             if (ClotureCaisse::query()
                 ->where('magasin_id', $magasin->getKey())
-                ->where('date_cloture', $dateCloture)
+                ->whereDate('date_cloture', $dateCloture)
                 ->exists()) {
                 throw new LogicException("La journée du {$dateCloture} a déjà été clôturée pour ce magasin.");
             }

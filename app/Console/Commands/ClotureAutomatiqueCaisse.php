@@ -3,13 +3,13 @@
 namespace App\Console\Commands;
 
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
-use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use LogicException;
 
 /**
  * Filet de sécurité réglementaire : un magasin qui oublie de clôturer sa
@@ -33,17 +33,17 @@ class ClotureAutomatiqueCaisse extends Command
             ->where('statut', StatutMagasin::Active)
             ->each(function (Magasin $magasin) use ($tenantContext, $cloturerCaisse, $hier, &$totalClotures) {
                 $tenantContext->runAs($magasin, function () use ($cloturerCaisse, $magasin, $hier, &$totalClotures) {
-                    $dejaClotureeManuel = ClotureCaisse::query()
-                        ->where('magasin_id', $magasin->getKey())
-                        ->where('date_cloture', $hier)
-                        ->exists();
-
-                    if ($dejaClotureeManuel) {
-                        return;
+                    try {
+                        // CloturerCaisseAction rejette déjà une journée
+                        // déjà clôturée (voir son propre
+                        // LogicException) : pas besoin de dupliquer cette
+                        // vérification ici, un magasin fermé manuellement
+                        // pour la veille est simplement ignoré.
+                        $cloturerCaisse->handle($magasin, $hier);
+                        $totalClotures++;
+                    } catch (LogicException) {
+                        // Déjà clôturée manuellement : rien à faire.
                     }
-
-                    $cloturerCaisse->handle($magasin, $hier);
-                    $totalClotures++;
                 });
             });
 

@@ -108,6 +108,15 @@ class Magasin extends Model implements HasName
         return $this->hasMany(Facture::class);
     }
 
+    /**
+     * Même remarque que ci-dessus : sert la convention de tenancy
+     * Filament pour MembreEquipeResource (modèle = MagasinUser).
+     */
+    public function membres(): HasMany
+    {
+        return $this->hasMany(MagasinUser::class);
+    }
+
     public function getFilamentName(): string
     {
         return $this->nom;

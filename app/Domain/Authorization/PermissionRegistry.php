@@ -69,6 +69,14 @@ final class PermissionRegistry
     // Mandat PDP -- réservé au propriétaire, voir SeedMagasinRolesAction
     public const MANDAT_PDP_GERER = 'mandat_pdp.gerer';
 
+    // Équipe (membres du magasin) -- réservé au propriétaire et à
+    // l'administrateur, voir SeedMagasinRolesAction
+    public const EQUIPE_VIEW = 'equipe.view';
+
+    public const EQUIPE_CREER = 'equipe.creer';
+
+    public const EQUIPE_MODIFIER = 'equipe.modifier';
+
     /**
      * @return list<string>
      */
@@ -81,6 +89,7 @@ final class PermissionRegistry
             self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ANNULER,
             self::MANDAT_PDP_GERER,
+            self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
         ];
     }
 }

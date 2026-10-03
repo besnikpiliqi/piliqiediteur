@@ -107,6 +107,21 @@ final class PermissionRegistry
 
     public const CLOTURE_CAISSE_GERER = 'cloture_caisse.gerer';
 
+    // Achats (factures d'achat + avoirs fournisseur). Visibilité d'équipe
+    // complète par défaut, sans confidentialité par créateur : ce sont des
+    // documents de coût internes, pas des documents de vente attribués à
+    // un vendeur (voir FournisseurResource/ProduitResource, qui n'ont pas
+    // non plus cette restriction).
+    public const FACTURE_ACHAT_VIEW = 'facture_achat.view';
+
+    public const FACTURE_ACHAT_CREER = 'facture_achat.creer';
+
+    public const FACTURE_ACHAT_VALIDER = 'facture_achat.valider';
+
+    public const AVOIR_FOURNISSEUR_VIEW = 'avoir_fournisseur.view';
+
+    public const AVOIR_FOURNISSEUR_CREER = 'avoir_fournisseur.creer';
+
     /**
      * @return list<string>
      */
@@ -123,6 +138,8 @@ final class PermissionRegistry
             self::PAIEMENT_VIEW, self::PAIEMENT_CREER,
             self::AVOIR_VIEW, self::AVOIR_CREER,
             self::CLOTURE_CAISSE_VIEW, self::CLOTURE_CAISSE_VIEW_TOUTES, self::CLOTURE_CAISSE_GERER,
+            self::FACTURE_ACHAT_VIEW, self::FACTURE_ACHAT_CREER, self::FACTURE_ACHAT_VALIDER,
+            self::AVOIR_FOURNISSEUR_VIEW, self::AVOIR_FOURNISSEUR_CREER,
         ];
     }
 
@@ -171,6 +188,11 @@ final class PermissionRegistry
             self::CLOTURE_CAISSE_VIEW => 'Clôture de caisse : voir (les siennes)',
             self::CLOTURE_CAISSE_VIEW_TOUTES => 'Clôture de caisse : voir celles de toute l\'équipe',
             self::CLOTURE_CAISSE_GERER => 'Clôture de caisse : clôturer manuellement',
+            self::FACTURE_ACHAT_VIEW => 'Factures d\'achat : voir',
+            self::FACTURE_ACHAT_CREER => 'Factures d\'achat : créer',
+            self::FACTURE_ACHAT_VALIDER => 'Factures d\'achat : valider',
+            self::AVOIR_FOURNISSEUR_VIEW => 'Avoirs fournisseur : voir',
+            self::AVOIR_FOURNISSEUR_CREER => 'Avoirs fournisseur : créer',
         ];
     }
 }

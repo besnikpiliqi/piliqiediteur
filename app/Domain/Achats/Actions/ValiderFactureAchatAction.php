@@ -1,0 +1,46 @@
+<?php
+
+namespace App\Domain\Achats\Actions;
+
+use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Events\FactureAchatValidee;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Services\DocumentNumberingService;
+use Illuminate\Support\Facades\DB;
+use LogicException;
+
+/**
+ * Même logique que EmettreFactureAction côté vente : la facture d'achat ne
+ * reçoit son numéro interne qu'à la validation, moment où le stock est
+ * incrémenté (voir FactureAchatValidee/IncrementerStockApresValidationFactureAchat).
+ */
+class ValiderFactureAchatAction
+{
+    public function __construct(private readonly DocumentNumberingService $numerotation) {}
+
+    public function handle(FactureAchat $factureAchat): FactureAchat
+    {
+        return DB::transaction(function () use ($factureAchat) {
+            $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->firstOrFail();
+
+            if (! $factureAchat->statut->peutTransitionnerVers(StatutFactureAchat::Validee)) {
+                throw new LogicException("Impossible de valider une facture d'achat au statut [{$factureAchat->statut->value}].");
+            }
+
+            $numero = $this->numerotation->suivant($factureAchat->magasin, TypeDocument::FactureAchat, now()->format('Y'));
+
+            $factureAchat->forceFill([
+                'numero' => $numero,
+                'statut' => StatutFactureAchat::Validee,
+                'date_validation' => now(),
+            ])->save();
+
+            // Synchrone et dans la même transaction, voir le commentaire de
+            // FactureAchatValidee.
+            FactureAchatValidee::dispatch($factureAchat);
+
+            return $factureAchat;
+        });
+    }
+}

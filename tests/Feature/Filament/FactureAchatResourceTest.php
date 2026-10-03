@@ -1,0 +1,114 @@
+<?php
+
+namespace Tests\Feature\Filament;
+
+use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Filament\App\Resources\FactureAchatResource\Pages\CreateFactureAchat;
+use App\Filament\App\Resources\FactureAchatResource\Pages\EditFactureAchat;
+use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
+use App\Models\User;
+use Filament\Facades\Filament;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
+use Tests\TestCase;
+
+class FactureAchatResourceTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_creer_une_facture_dachat_depuis_le_panneau(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm([
+                'fournisseur_id' => $fournisseur->id,
+                'numero_fournisseur' => 'INV-2026-42',
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $factureAchat = FactureAchat::query()->firstOrFail();
+        $this->assertSame(StatutFactureAchat::Brouillon, $factureAchat->statut);
+        $this->assertSame('INV-2026-42', $factureAchat->numero_fournisseur);
+        $this->assertSame('100.00', $factureAchat->total_ht);
+    }
+
+    public function test_valider_une_facture_dachat_depuis_le_panneau_incremente_le_stock(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
+
+        Livewire::test(CreateFactureAchat::class)->fillForm([
+            'fournisseur_id' => $fournisseur->id,
+            'lignes' => [
+                ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+            ],
+        ])->call('create');
+
+        $factureAchat = FactureAchat::query()->firstOrFail();
+        Livewire::test(ListFacturesAchat::class)->callTableAction('valider', $factureAchat);
+
+        $factureAchat->refresh();
+        $this->assertSame(StatutFactureAchat::Validee, $factureAchat->statut);
+        $this->assertNotNull($factureAchat->numero);
+        $this->assertSame('5.000', $produit->fresh()->stock_quantite);
+    }
+
+    public function test_un_brouillon_reste_modifiable_et_supprimable_mais_plus_une_fois_valide(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFactureAchat::class)->fillForm([
+            'fournisseur_id' => $fournisseur->id,
+            'lignes' => [
+                ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+            ],
+        ])->call('create');
+
+        $factureAchat = FactureAchat::query()->firstOrFail();
+
+        Livewire::test(ListFacturesAchat::class)->assertTableActionVisible('edit', $factureAchat);
+        Livewire::test(ListFacturesAchat::class)->assertTableActionVisible('delete', $factureAchat);
+
+        Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
+            ->fillForm([
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('40.00', $factureAchat->fresh()->total_ht);
+
+        Livewire::test(ListFacturesAchat::class)->callTableAction('valider', $factureAchat->fresh());
+
+        Livewire::test(ListFacturesAchat::class)->assertTableActionHidden('edit', $factureAchat->fresh());
+        Livewire::test(ListFacturesAchat::class)->assertTableActionHidden('delete', $factureAchat->fresh());
+    }
+}

@@ -84,6 +84,7 @@ class DocumentNumberingService
             TypeDocument::Facture => 'FAC',
             TypeDocument::Avoir => 'AV',
             TypeDocument::FactureAchat => 'FA',
+            TypeDocument::AvoirFournisseur => 'AF',
             TypeDocument::ClotureCaisse => 'Z',
         };
 

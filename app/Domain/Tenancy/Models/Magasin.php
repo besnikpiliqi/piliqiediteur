@@ -2,6 +2,8 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -124,6 +126,16 @@ class Magasin extends Model implements HasName
     public function cloturesCaisse(): HasMany
     {
         return $this->hasMany(ClotureCaisse::class);
+    }
+
+    public function facturesAchat(): HasMany
+    {
+        return $this->hasMany(FactureAchat::class);
+    }
+
+    public function avoirsFournisseur(): HasMany
+    {
+        return $this->hasMany(AvoirFournisseur::class);
     }
 
     /**

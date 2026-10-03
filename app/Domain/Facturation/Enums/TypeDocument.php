@@ -13,5 +13,6 @@ enum TypeDocument: string
     case Facture = 'facture';
     case Avoir = 'avoir';
     case FactureAchat = 'facture_achat';
+    case AvoirFournisseur = 'avoir_fournisseur';
     case ClotureCaisse = 'cloture_caisse';
 }

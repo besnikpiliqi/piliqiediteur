@@ -2,6 +2,7 @@
 
 namespace App\Domain\Contacts\Models;
 
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\SourceFournisseur;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -40,6 +41,11 @@ class Fournisseur extends Model
     public function produits(): HasMany
     {
         return $this->hasMany(Produit::class);
+    }
+
+    public function facturesAchat(): HasMany
+    {
+        return $this->hasMany(FactureAchat::class);
     }
 
     /**

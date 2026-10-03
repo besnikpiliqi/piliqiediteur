@@ -39,6 +39,12 @@ class SeedMagasinRolesAction
             PermissionRegistry::PRODUIT_VIEW,
             PermissionRegistry::DEVIS_VIEW,
             PermissionRegistry::FACTURE_VIEW,
+            // Les achats sont des documents de coût internes, pas des
+            // documents de vente : pas de confidentialité par créateur
+            // (voir PermissionRegistry), donc une simple permission de
+            // lecture d'équipe suffit pour le comptable et l'observateur.
+            PermissionRegistry::FACTURE_ACHAT_VIEW,
+            PermissionRegistry::AVOIR_FOURNISSEUR_VIEW,
         ];
 
         $matrice = [

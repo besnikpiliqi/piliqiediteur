@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -11,10 +13,12 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Models\MagasinUser;
+use App\Policies\AvoirFournisseurPolicy;
 use App\Policies\AvoirPolicy;
 use App\Policies\ClientPolicy;
 use App\Policies\ClotureCaissePolicy;
 use App\Policies\DevisPolicy;
+use App\Policies\FactureAchatPolicy;
 use App\Policies\FacturePolicy;
 use App\Policies\FournisseurPolicy;
 use App\Policies\MembreEquipePolicy;
@@ -62,5 +66,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Paiement::class, PaiementPolicy::class);
         Gate::policy(Avoir::class, AvoirPolicy::class);
         Gate::policy(ClotureCaisse::class, ClotureCaissePolicy::class);
+        Gate::policy(FactureAchat::class, FactureAchatPolicy::class);
+        Gate::policy(AvoirFournisseur::class, AvoirFournisseurPolicy::class);
     }
 }

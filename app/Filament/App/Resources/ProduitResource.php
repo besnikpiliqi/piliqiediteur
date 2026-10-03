@@ -12,6 +12,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class ProduitResource extends Resource
 {
@@ -91,6 +92,19 @@ class ProduitResource extends Resource
                 Tables\Filters\SelectFilter::make('fournisseur_id')
                     ->label('Fournisseur')
                     ->relationship('fournisseur', 'nom'),
+                Tables\Filters\SelectFilter::make('statut_stock')
+                    ->label('Statut du stock')
+                    ->options([
+                        'en_stock' => 'En stock',
+                        'epuise' => 'Épuisé',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return match ($data['value'] ?? null) {
+                            'en_stock' => $query->where('stock_quantite', '>', 0),
+                            'epuise' => $query->where('stock_quantite', '<=', 0),
+                            default => $query,
+                        };
+                    }),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),

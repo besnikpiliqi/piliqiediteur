@@ -74,6 +74,7 @@ class DevisResource extends Resource
         return [
             Select::make('produit_id')
                 ->label('Produit')
+                ->helperText('Laissez vide pour une ligne libre (main d\'œuvre, service, produit hors catalogue...)')
                 ->options(fn () => Produit::query()->where('actif', true)->pluck('nom', 'id'))
                 ->searchable()
                 ->live()

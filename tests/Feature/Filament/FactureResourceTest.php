@@ -24,6 +24,38 @@ class FactureResourceTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Même besoin que pour les devis : un magasin de services (pas de
+     * stock) doit pouvoir facturer de la main d'œuvre ou une prestation
+     * jamais enregistrée au catalogue, en remplissant la ligne à la main.
+     */
+    public function test_creer_une_facture_avec_une_ligne_entierement_libre_sans_produit(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [
+                    ['description' => 'Main d\'œuvre - installation', 'quantite' => 2, 'prix_unitaire_ht' => 60, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $facture = Facture::query()->firstOrFail();
+        $ligne = $facture->lignes->firstOrFail();
+
+        $this->assertNull($ligne->produit_id);
+        $this->assertSame('Main d\'œuvre - installation', $ligne->description);
+        $this->assertSame('120.00', $facture->total_ht);
+    }
+
     public function test_creer_et_emettre_une_facture_depuis_le_panneau(): void
     {
         $proprietaire = User::factory()->create();

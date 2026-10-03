@@ -13,9 +13,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Lecture seule : un avoir se crée uniquement depuis l'action rapide
- * "Avoir" de FactureResource (toujours un crédit total, voir
- * CreerAvoirAction) et ne se modifie ni ne se supprime jamais une fois
- * émis (voir AvoirPolicy). Aucune page create/edit ici.
+ * "Avoir" de FactureResource (total ou partiel selon les lignes/quantités
+ * sélectionnées, voir CreerAvoirAction) et ne se modifie ni ne se supprime
+ * jamais une fois émis (voir AvoirPolicy). Aucune page create/edit ici.
  */
 class AvoirResource extends Resource
 {

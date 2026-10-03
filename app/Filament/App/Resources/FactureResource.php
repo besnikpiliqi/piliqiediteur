@@ -9,19 +9,21 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
-use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Filament\App\Resources\FactureResource\Pages;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section as FormSection;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
@@ -163,17 +165,22 @@ class FactureResource extends Resource
                     ->visible(fn (Facture $record) => filled($record->transmissionsPdp->sortByDesc('soumise_le')->first()?->message_erreur)),
             ]),
 
-            InfolistSection::make('Avoir émis')
-                ->visible(fn (Facture $record) => $record->possedeUnAvoirEmis())
+            InfolistSection::make('Avoirs émis')
+                // Un avoir peut être partiel (voir CreerAvoirAction) : une
+                // facture peut donc avoir reçu plusieurs avoirs successifs,
+                // pas seulement un unique avoir total.
+                ->visible(fn (Facture $record) => $record->avoirsEmis()->exists())
                 ->schema([
-                    TextEntry::make('avoir_numero')
-                        ->label('Numéro')
-                        ->state(fn (Facture $record) => $record->avoirs()->where('statut', StatutAvoir::Emise)->first()?->numero),
-                    TextEntry::make('avoir_motif')
-                        ->label('Motif')
-                        ->state(fn (Facture $record) => $record->avoirs()->where('statut', StatutAvoir::Emise)->first()?->motif)
-                        ->placeholder('—'),
-                ])->columns(2),
+                    RepeatableEntry::make('avoirsEmisListe')
+                        ->label('')
+                        ->state(fn (Facture $record) => $record->avoirsEmis()->get())
+                        ->schema([
+                            TextEntry::make('numero')->label('Numéro'),
+                            TextEntry::make('motif')->label('Motif')->placeholder('—'),
+                            TextEntry::make('total_ttc')->label('Total crédité TTC')->money('EUR'),
+                        ])
+                        ->columns(3),
+                ]),
         ]);
     }
 
@@ -277,11 +284,46 @@ class FactureResource extends Resource
                     ->label('Avoir')
                     ->icon('heroicon-o-receipt-refund')
                     ->color('danger')
-                    ->form([
+                    ->form(fn (Facture $record) => [
+                        // Sélection des lignes/quantités à créditer plutôt
+                        // qu'un crédit total forcé : un avoir partiel est
+                        // légal (voir le docblock de CreerAvoirAction).
+                        // Pré-rempli avec la quantité restante créditable
+                        // de chaque ligne ; retirer une ligne ou réduire sa
+                        // quantité exclut le reste du crédit.
+                        Repeater::make('lignes')
+                            ->label('Lignes à créditer')
+                            ->schema([
+                                Hidden::make('ligne_facture_id'),
+                                TextInput::make('description')
+                                    ->label('Produit / description')
+                                    ->disabled()
+                                    ->dehydrated(false),
+                                TextInput::make('quantite')
+                                    ->label('Quantité à créditer')
+                                    ->numeric()
+                                    ->required()
+                                    ->minValue(0.001)
+                                    ->maxValue(fn (Get $get) => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
+                            ])
+                            ->columns(3)
+                            ->addable(false)
+                            ->deletable(true)
+                            ->default(
+                                $record->lignes
+                                    ->map(fn (LigneFacture $ligne) => [
+                                        'ligne_facture_id' => $ligne->id,
+                                        'description' => $ligne->description,
+                                        'quantite' => $ligne->quantiteCreditableRestante(),
+                                    ])
+                                    ->filter(fn (array $ligne) => $ligne['quantite'] > 0)
+                                    ->values()
+                                    ->all()
+                            ),
                         Textarea::make('motif')->label('Motif de l\'avoir')->required(),
                     ])
                     ->requiresConfirmation()
-                    ->modalDescription('Un avoir total sera émis pour l\'intégralité de cette facture et son stock sera restauré. Cette action est irréversible.')
+                    ->modalDescription('Seules les lignes et quantités conservées ci-dessous seront créditées, et leur stock restauré. Retirez les lignes à ne pas créditer. Cette action est irréversible.')
                     ->visible(fn (Facture $record) => in_array($record->statut, [
                         StatutFacture::Emise,
                         StatutFacture::Envoyee,
@@ -289,10 +331,10 @@ class FactureResource extends Resource
                         StatutFacture::Payee,
                         StatutFacture::EnRetard,
                     ], true)
-                        && ! $record->possedeUnAvoirEmis()
+                        && $record->possedeDesLignesCreditables()
                         && auth()->user()->can(PermissionRegistry::AVOIR_CREER))
                     ->action(function (Facture $record, array $data) {
-                        $avoir = app(CreerAvoirAction::class)->handle($record, $data['motif']);
+                        $avoir = app(CreerAvoirAction::class)->handle($record, $data['lignes'], $data['motif']);
                         app(EmettreAvoirAction::class)->handle($avoir);
                     }),
             ])

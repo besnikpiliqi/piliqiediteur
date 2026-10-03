@@ -102,12 +102,19 @@ class Facture extends Model
     }
 
     /**
-     * Un seul avoir total par facture (voir CreerAvoirAction) : inutile
-     * d'en émettre un second une fois la facture intégralement créditée.
+     * Un avoir peut être partiel (voir CreerAvoirAction) : une facture peut
+     * donc faire l'objet de plusieurs avoirs successifs au fil du temps,
+     * tant qu'il reste au moins une ligne dont la quantité facturée n'a
+     * pas été intégralement créditée.
      */
-    public function possedeUnAvoirEmis(): bool
+    public function avoirsEmis(): HasMany
     {
-        return $this->avoirs()->where('statut', StatutAvoir::Emise)->exists();
+        return $this->avoirs()->where('statut', StatutAvoir::Emise);
+    }
+
+    public function possedeDesLignesCreditables(): bool
+    {
+        return $this->lignes->contains(fn (LigneFacture $ligne) => $ligne->quantiteCreditableRestante() > 0);
     }
 
     public function montantPaye(): float

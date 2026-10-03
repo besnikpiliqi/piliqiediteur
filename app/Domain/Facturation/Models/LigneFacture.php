@@ -3,9 +3,11 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class LigneFacture extends Model
 {
@@ -46,5 +48,34 @@ class LigneFacture extends Model
     public function produit(): BelongsTo
     {
         return $this->belongsTo(Produit::class);
+    }
+
+    public function lignesAvoir(): HasMany
+    {
+        return $this->hasMany(LigneAvoir::class);
+    }
+
+    /**
+     * Quantité déjà créditée par des avoirs ÉMIS référençant cette ligne.
+     * Un avoir encore brouillon n'a aucune existence légale (voir
+     * Avoir::class) : il ne doit jamais réduire la quantité restante
+     * créditable, au même titre qu'il ne bloque pas un nouvel avoir (voir
+     * CreerAvoirAction).
+     */
+    public function quantiteDejaCreditee(): float
+    {
+        return (float) $this->lignesAvoir()
+            ->whereHas('avoir', fn ($query) => $query->where('statut', StatutAvoir::Emise))
+            ->sum('quantite');
+    }
+
+    /**
+     * Permet un avoir partiel, et plusieurs avoirs successifs sur une même
+     * ligne, tant que leur somme ne dépasse jamais la quantité facturée
+     * (voir CreerAvoirAction).
+     */
+    public function quantiteCreditableRestante(): float
+    {
+        return round((float) $this->quantite - $this->quantiteDejaCreditee(), 3);
     }
 }

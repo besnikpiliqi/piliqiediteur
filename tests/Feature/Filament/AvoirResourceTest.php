@@ -59,7 +59,7 @@ class AvoirResourceTest extends TestCase
         $this->assertSame('10.000', $facture->lignes->first()->produit->fresh()->stock_quantite);
     }
 
-    public function test_laction_avoir_nest_plus_visible_une_fois_un_avoir_deja_emis(): void
+    public function test_laction_avoir_nest_plus_visible_une_fois_toutes_les_lignes_integralement_creditees(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
@@ -73,6 +73,43 @@ class AvoirResourceTest extends TestCase
 
         Livewire::test(ListFactures::class)
             ->assertTableActionHidden('avoir', $facture->fresh());
+    }
+
+    /**
+     * Un avoir partiel (voir CreerAvoirAction) laisse un reliquat
+     * créditable : l'action doit donc rester visible pour permettre un
+     * second avoir sur la quantité restante.
+     */
+    public function test_laction_avoir_reste_visible_apres_un_avoir_partiel(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client);
+        $ligneFacture = $facture->lignes->firstOrFail();
+
+        // Un remplissage complet du formulaire de l'action (plutôt qu'un
+        // "data" partiel fusionné sur l'état par défaut du Repeater, voir
+        // callTableAction) est nécessaire ici : ce dernier ajouterait un
+        // second item à côté de l'item pré-rempli par défaut au lieu de le
+        // remplacer, et créditerait donc une quantité involontairement
+        // cumulée.
+        Livewire::test(ListFactures::class)
+            ->mountTableAction('avoir', $facture)
+            ->fillForm([
+                'lignes' => [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]],
+                'motif' => 'Retour partiel',
+            ], 'mountedTableActionForm')
+            ->callMountedTableAction();
+
+        Livewire::test(ListFactures::class)
+            ->assertTableActionVisible('avoir', $facture->fresh());
+
+        $this->assertEquals(2, $ligneFacture->fresh()->quantiteCreditableRestante());
+        $this->assertSame('8.000', $facture->lignes->first()->produit->fresh()->stock_quantite);
     }
 
     public function test_telecharger_le_pdf_dun_avoir_emis(): void

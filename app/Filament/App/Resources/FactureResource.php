@@ -41,7 +41,8 @@ class FactureResource extends Resource
      */
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery();
+        // withSum évite un N+1 sur montantPaye() pour chaque ligne du tableau.
+        $query = parent::getEloquentQuery()->withSum('allocationsPaiement as montant_paye_somme', 'montant_alloue');
 
         if (! auth()->user()->can(PermissionRegistry::FACTURE_VIEW_TOUTES)) {
             $query->where('cree_par', auth()->id());
@@ -87,7 +88,10 @@ class FactureResource extends Resource
                 Tables\Columns\TextColumn::make('client.nom')->label('Client')->searchable(),
                 Tables\Columns\TextColumn::make('statut')->badge(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
-                Tables\Columns\TextColumn::make('montant_paye')->label('Payé')->money('EUR'),
+                Tables\Columns\TextColumn::make('montant_paye_somme')
+                    ->label('Payé')
+                    ->state(fn (Facture $record) => round((float) ($record->montant_paye_somme ?? 0), 2))
+                    ->money('EUR'),
                 Tables\Columns\TextColumn::make('creePar.name')->label('Créée par')->toggleable(),
                 Tables\Columns\TextColumn::make('date_echeance')->label('Échéance')->date('d/m/Y'),
             ])

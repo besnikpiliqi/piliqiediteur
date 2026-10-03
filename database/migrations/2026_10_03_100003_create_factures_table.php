@@ -27,10 +27,11 @@ return new class extends Migration
             $table->decimal('total_ht', 12, 2)->default(0);
             $table->decimal('total_tva', 12, 2)->default(0);
             $table->decimal('total_ttc', 12, 2)->default(0);
-            // montant_restant n'est PAS stocké : toujours total_ttc -
-            // montant_paye, recalculable de façon fiable (voir Facture::
-            // montantRestant()).
-            $table->decimal('montant_paye', 12, 2)->default(0);
+            // Ni montant_paye ni montant_restant ne sont stockés :
+            // toujours recalculés depuis la somme des allocations de
+            // paiement (voir Facture::montantPaye()/montantRestant()).
+            // Un stockage redondant finirait par désynchroniser l'affiché
+            // du réel si une allocation est un jour corrigée.
             $table->timestamps();
             // PAS de softDeletes() ici, volontairement : une facture ne se
             // supprime jamais (obligation légale de conservation, voir

@@ -46,7 +46,6 @@ class Facture extends Model
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
         'total_ttc' => 'decimal:2',
-        'montant_paye' => 'decimal:2',
     ];
 
     protected static function booted(): void
@@ -86,14 +85,24 @@ class Facture extends Model
         return $this->morphMany(TransmissionPdp::class, 'transmissible');
     }
 
+    public function allocationsPaiement(): HasMany
+    {
+        return $this->hasMany(PaiementAllocation::class);
+    }
+
     public function estModifiable(): bool
     {
         return $this->statut === StatutFacture::Brouillon;
     }
 
+    public function montantPaye(): float
+    {
+        return round((float) $this->allocationsPaiement()->sum('montant_alloue'), 2);
+    }
+
     public function montantRestant(): float
     {
-        return round((float) $this->total_ttc - (float) $this->montant_paye, 2);
+        return round((float) $this->total_ttc - $this->montantPaye(), 2);
     }
 
     /**

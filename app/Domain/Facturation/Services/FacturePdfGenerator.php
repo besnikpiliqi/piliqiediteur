@@ -24,7 +24,8 @@ class FacturePdfGenerator
     public function nomFichier(Facture $facture): string
     {
         $identifiant = $facture->numero ?? "brouillon-{$facture->id}";
+        $prefixe = $facture->client->estProfessionnel() ? 'facture' : 'ticket';
 
-        return "facture-{$identifiant}.pdf";
+        return "{$prefixe}-{$identifiant}.pdf";
     }
 }

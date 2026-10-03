@@ -3,6 +3,8 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Contacts\Enums\TypeClient;
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -30,6 +32,23 @@ class CreerMagasinActionTest extends TestCase
         $this->assertTrue($proprietaire->appartientA($magasin));
         $this->assertTrue($proprietaire->estProprietaireDe($magasin));
         $this->assertSame($magasin->id, $proprietaire->current_magasin_id);
+    }
+
+    /**
+     * Pour une vente au comptoir (particulier anonyme), le vendeur doit
+     * pouvoir encaisser sans saisir de coordonnées client : un client
+     * générique réutilisable existe donc dès la création du magasin.
+     */
+    public function test_un_client_comptoir_particulier_est_cree_avec_le_magasin(): void
+    {
+        $proprietaire = User::factory()->create();
+
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        app(TenantContext::class)->set($magasin);
+
+        $comptoir = Client::query()->where('nom', 'Client comptoir')->first();
+        $this->assertNotNull($comptoir);
+        $this->assertSame(TypeClient::Particulier, $comptoir->type_client);
     }
 
     public function test_les_cinq_roles_par_defaut_sont_crees_et_scopes_a_ce_magasin(): void

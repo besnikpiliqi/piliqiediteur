@@ -1,8 +1,18 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
+    {{--
+        Un particulier relève de l'e-reporting agrégé (clôture de caisse),
+        pas d'une facture transmise individuellement (voir
+        Facture::relevantDeLeInvoicing) : le document imprimé porte donc le
+        libellé usuel "Ticket" plutôt que "Facture", même s'il s'agit du
+        même enregistrement en base.
+    --}}
+    @php
+        $libelleDocument = $facture->client->estProfessionnel() ? 'Facture' : 'Ticket de caisse';
+    @endphp
     <meta charset="utf-8">
-    <title>{{ $facture->numero ?? 'Facture (brouillon)' }}</title>
+    <title>{{ $facture->numero ?? "{$libelleDocument} (brouillon)" }}</title>
     <style>
         body { font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #1f2933; }
         .en-tete { width: 100%; margin-bottom: 24px; }
@@ -43,7 +53,7 @@
                 @endif
             </td>
             <td>
-                <div class="titre-facture">Facture</div>
+                <div class="titre-facture">{{ $libelleDocument }}</div>
                 <div class="numero-facture">
                     {{ $facture->numero ?? 'Brouillon (non émise)' }}<br>
                     @if($facture->date_emission)
@@ -58,7 +68,7 @@
     </table>
 
     <div class="bloc-client">
-        <div class="titre">Facturé à</div>
+        <div class="titre">{{ $facture->client->estProfessionnel() ? 'Facturé à' : 'Client' }}</div>
         <strong>{{ $facture->client->nom }}</strong><br>
         @if($facture->client->adresse)
             {{ $facture->client->adresse }}<br>

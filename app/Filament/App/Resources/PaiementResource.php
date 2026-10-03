@@ -36,6 +36,8 @@ class PaiementResource extends Resource
 
     protected static ?string $navigationGroup = 'Ventes';
 
+    protected static ?int $navigationSort = 5;
+
     protected static ?string $modelLabel = 'paiement';
 
     protected static ?string $pluralModelLabel = 'paiements';

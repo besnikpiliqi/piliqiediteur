@@ -35,6 +35,8 @@ class DevisResource extends Resource
 
     protected static ?string $navigationGroup = 'Ventes';
 
+    protected static ?int $navigationSort = 2;
+
     protected static ?string $modelLabel = 'devis';
 
     protected static ?string $pluralModelLabel = 'devis';

@@ -36,7 +36,7 @@ class FacturePdfGeneratorTest extends TestCase
     public function test_le_nom_de_fichier_utilise_le_numero_ou_brouillon(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
-        $client = Client::factory()->create();
+        $client = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create();
         $facture = app(CreerFactureAction::class)->handle($client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
@@ -47,5 +47,33 @@ class FacturePdfGeneratorTest extends TestCase
 
         $facture = app(EmettreFactureAction::class)->handle($facture);
         $this->assertSame("facture-{$facture->numero}.pdf", $generateur->nomFichier($facture));
+    }
+
+    /**
+     * Un client particulier relève de l'e-reporting agrégé, pas d'une
+     * facture transmise individuellement (voir
+     * Facture::relevantDeLeInvoicing) : le document imprimé porte le
+     * libellé usuel "ticket" plutôt que "facture", même s'il s'agit du
+     * même enregistrement en base.
+     */
+    public function test_le_document_est_nomme_ticket_pour_un_client_particulier(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $client = Client::factory()->create(); // particulier par défaut
+        $produit = Produit::factory()->create();
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+        $facture = app(EmettreFactureAction::class)->handle($facture);
+
+        $generateur = app(FacturePdfGenerator::class);
+        $this->assertSame("ticket-{$facture->numero}.pdf", $generateur->nomFichier($facture));
+
+        // Le binaire PDF compilé n'est pas cherchable en texte brut
+        // (flux compressés) : on vérifie le libellé sur le gabarit Blade
+        // lui-même plutôt que sur la sortie de dompdf.
+        $html = view('factures.pdf', ['facture' => $facture->load('client', 'lignes', 'magasin')])->render();
+        $this->assertStringContainsString('Ticket de caisse', $html);
+        $this->assertStringNotContainsString('>Facturé à<', $html);
     }
 }

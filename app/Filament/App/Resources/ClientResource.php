@@ -25,6 +25,8 @@ class ClientResource extends Resource
 
     protected static ?string $navigationGroup = 'Ventes';
 
+    protected static ?int $navigationSort = 1;
+
     protected static ?string $modelLabel = 'client';
 
     protected static ?string $pluralModelLabel = 'clients';

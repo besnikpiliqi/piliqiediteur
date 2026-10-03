@@ -2,6 +2,8 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Contacts\Enums\TypeClient;
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
@@ -41,6 +43,17 @@ class CreerMagasinAction
             app(TenantContext::class)->set($magasin);
 
             $this->seedMagasinRoles->handle($magasin);
+
+            // Vente au comptoir (particulier anonyme, sans coordonnées
+            // saisies) : plutôt que de forcer un nom à chaque vente, un
+            // client générique réutilisable existe dès la création du
+            // magasin. Les clients particuliers nommés (fidélité, retour
+            // produit...) restent des fiches à part entière, créées au
+            // besoin via le "+" du formulaire de devis/facture.
+            Client::create([
+                'nom' => 'Client comptoir',
+                'type_client' => TypeClient::Particulier,
+            ]);
 
             $magasin->utilisateurs()->attach($proprietaire->getKey(), [
                 'role' => RoleMagasin::Proprietaire->value,

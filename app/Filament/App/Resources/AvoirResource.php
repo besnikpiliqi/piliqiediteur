@@ -25,6 +25,8 @@ class AvoirResource extends Resource
 
     protected static ?string $navigationGroup = 'Ventes';
 
+    protected static ?int $navigationSort = 4;
+
     protected static ?string $modelLabel = 'avoir';
 
     protected static ?string $pluralModelLabel = 'avoirs';

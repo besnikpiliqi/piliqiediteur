@@ -49,14 +49,42 @@ class ClotureCaisseResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create(); // particulier par défaut
-        $facture = $this->emettreFactureParticulier($client);
 
-        Livewire::test(ListClotureCaisses::class)
-            ->callAction('cloturer', data: ['date_cloture' => now()->toDateString()]);
+        // La clôture ne porte jamais sur une date choisie : uniquement sur
+        // "hier" au moment de l'action (voir
+        // ListClotureCaisses::getHeaderActions()). La facture doit donc
+        // être émise hier pour être agrégée.
+        $this->travelTo(now()->subDay());
+        $facture = $this->emettreFactureParticulier($client);
+        $this->travelBack();
+
+        Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 
         $cloture = ClotureCaisse::query()->firstOrFail();
         $this->assertSame(1, $cloture->nombre_ventes);
         $this->assertSame($cloture->id, $facture->fresh()->cloture_caisse_id);
+    }
+
+    /**
+     * Exigence explicite : aucun choix de date -- la clôture manuelle
+     * cible toujours exactement la veille, le seul jour "terminé" en
+     * attente, et redevient indisponible dès que cette journée est
+     * clôturée (ici manuellement, mais ce serait pareil si la commande
+     * automatique l'avait fait à minuit, voir ClotureAutomatiqueCaisse).
+     */
+    public function test_laction_cloturer_disparait_une_fois_la_veille_deja_cloturee(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(ListClotureCaisses::class)
+            ->assertActionVisible('cloturer')
+            ->callAction('cloturer');
+
+        Livewire::test(ListClotureCaisses::class)
+            ->assertActionHidden('cloturer');
     }
 
     public function test_laction_cloturer_nest_pas_visible_pour_un_vendeur(): void
@@ -87,10 +115,12 @@ class ClotureCaisseResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $facture = $this->emettreFactureParticulier($client);
 
-        Livewire::test(ListClotureCaisses::class)
-            ->callAction('cloturer', data: ['date_cloture' => now()->toDateString()]);
+        $this->travelTo(now()->subDay());
+        $facture = $this->emettreFactureParticulier($client);
+        $this->travelBack();
+
+        Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 
         $cloture = ClotureCaisse::query()->firstOrFail();
 
@@ -125,13 +155,19 @@ class ClotureCaisseResourceTest extends TestCase
 
         $this->actingAs($vendeurA);
         Filament::setTenant($magasin);
-        Livewire::test(ListClotureCaisses::class)
-            ->callAction('cloturer', data: ['date_cloture' => now()->subDays(2)->toDateString()]);
+        Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
+
+        // Un jour réel s'écoule entre les deux clôtures : l'action ne
+        // porte jamais sur une date choisie, seulement sur "hier" au
+        // moment où elle est déclenchée (voir
+        // ListClotureCaisses::getHeaderActions()).
+        $this->travelTo(now()->addDay());
 
         $this->actingAs($vendeurB);
         Filament::setTenant($magasin);
-        Livewire::test(ListClotureCaisses::class)
-            ->callAction('cloturer', data: ['date_cloture' => now()->subDay()->toDateString()]);
+        Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
+
+        $this->travelBack();
 
         $clotureA = ClotureCaisse::where('cree_par', $vendeurA->id)->firstOrFail();
         $clotureB = ClotureCaisse::where('cree_par', $vendeurB->id)->firstOrFail();

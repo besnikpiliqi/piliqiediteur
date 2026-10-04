@@ -79,6 +79,8 @@ class FactureResource extends Resource
                     ->searchable()
                     ->preload()
                     ->required()
+                    ->live()
+                    ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id')))
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE))),
@@ -133,6 +135,17 @@ class FactureResource extends Resource
                 TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
                 TextEntry::make('montant_paye')->label('Payé')->state(fn (Facture $record) => $record->montantPaye())->money('EUR'),
+                // Ce logiciel n'étant connecté à aucune banque, un avoir émis
+                // n'est jamais remboursé : il s'applique automatiquement à la
+                // prochaine facture du client (voir
+                // AppliquerAvoirsDisponiblesAction) -- ce montant doit être
+                // visible ici, distinct du "Payé", pour que le client comme
+                // le magasin voient exactement d'où vient le solde réglé.
+                TextEntry::make('montant_credite_par_avoir')
+                    ->label('Crédité par avoir')
+                    ->state(fn (Facture $record) => $record->montantCrediteParAvoir())
+                    ->money('EUR')
+                    ->visible(fn (Facture $record) => $record->montantCrediteParAvoir() > 0),
                 TextEntry::make('montant_restant')->label('Restant dû')->state(fn (Facture $record) => $record->montantRestant())->money('EUR'),
             ])->columns(3),
 
@@ -148,6 +161,18 @@ class FactureResource extends Resource
                             TextEntry::make('paiement.reference')->label('Référence')->placeholder('—'),
                         ])
                         ->columns(4),
+                ]),
+
+            InfolistSection::make('Crédité par avoir')
+                ->visible(fn (Facture $record) => $record->allocationsAvoir()->exists())
+                ->schema([
+                    RepeatableEntry::make('allocationsAvoir')
+                        ->label('')
+                        ->schema([
+                            TextEntry::make('avoir.numero')->label('Avoir'),
+                            TextEntry::make('montant_alloue')->label('Montant crédité')->money('EUR'),
+                        ])
+                        ->columns(2),
                 ]),
 
             InfolistSection::make('Transmission électronique')->schema([

@@ -70,6 +70,57 @@ class FactureResourceTest extends TestCase
     }
 
     /**
+     * Le crédit appliqué automatiquement sur une facture (voir
+     * AppliquerAvoirsDisponiblesAction) doit être visible et déclaré
+     * directement sur cette facture, pas seulement déductible du calcul.
+     */
+    public function test_la_facture_affiche_le_credit_applique_automatiquement_par_un_avoir(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        // Premier achat intégralement retourné : 60 € de crédit disponible.
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+
+        $premiereFacture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $premiereFacture);
+
+        $ligneFacture = $premiereFacture->fresh()->lignes->firstOrFail();
+        $avoir = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]);
+        app(EmettreAvoirAction::class)->handle($avoir);
+
+        // Nouvel achat du même montant : couvert automatiquement par le crédit.
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+
+        $nouvelleFacture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $nouvelleFacture);
+        $nouvelleFacture = $nouvelleFacture->fresh();
+
+        $this->assertSame(StatutFacture::Payee, $nouvelleFacture->statut);
+
+        Livewire::test(ViewFacture::class, ['record' => $nouvelleFacture->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee('Crédité par avoir')
+            ->assertSee($avoir->fresh()->numero)
+            // Filament insère une espace insécable (U+00A0) entre le montant
+            // et le symbole monétaire : on vérifie juste le montant.
+            ->assertSee('60,00');
+    }
+
+    /**
      * Même besoin que pour les devis : un magasin de services (pas de
      * stock) doit pouvoir facturer de la main d'œuvre ou une prestation
      * jamais enregistrée au catalogue, en remplissant la ligne à la main.

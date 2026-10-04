@@ -10,6 +10,7 @@ use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Events\FactureAnnulee;
 use App\Domain\Facturation\Events\FactureEmise;
 use App\Domain\Facturation\Events\SoumissionEReportingGeneree;
+use App\Domain\Facturation\Listeners\AppliquerAvoirDisponibleApresEmissionFacture;
 use App\Domain\Facturation\Listeners\DeclencherTransmissionPdpApresEmissionFacture;
 use App\Domain\Facturation\Listeners\DeclencherTransmissionPdpApresSoumissionEReporting;
 use App\Domain\Facturation\Listeners\DecrementerStockApresEmissionFacture;
@@ -30,6 +31,7 @@ class EventServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Event::listen(FactureEmise::class, DecrementerStockApresEmissionFacture::class);
+        Event::listen(FactureEmise::class, AppliquerAvoirDisponibleApresEmissionFacture::class);
         Event::listen(FactureEmise::class, DeclencherTransmissionPdpApresEmissionFacture::class);
         Event::listen(FactureAnnulee::class, RestaurerStockApresAnnulationFacture::class);
         Event::listen(AvoirEmis::class, RestaurerStockApresEmissionAvoir::class);

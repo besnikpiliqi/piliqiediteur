@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
@@ -88,7 +89,9 @@ class Caisse extends Page implements HasForms
             Section::make('Client')->schema([
                 Select::make('client_id')
                     ->label('Client')
-                    ->helperText('Par défaut : le client comptoir générique, pour une vente anonyme.')
+                    ->live()
+                    ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id'))
+                        ?? 'Par défaut : le client comptoir générique, pour une vente anonyme.')
                     ->searchable()
                     ->getSearchResultsUsing(fn (string $search) => Client::query()
                         ->where('nom', 'like', "%{$search}%")
@@ -174,11 +177,36 @@ class Caisse extends Page implements HasForms
 
         Notification::make()
             ->title("Vente encaissée : facture {$facture->numero}")
-            ->body($this->formaterMontant((float) $facture->total_ttc).' encaissé.')
+            ->body($this->resumeEncaissement($facture))
             ->success()
             ->send();
 
         $this->remplirFormulaireVide();
+    }
+
+    /**
+     * Le crédit disponible du client (voir AppliquerAvoirsDisponiblesAction)
+     * peut déjà avoir couvert tout ou partie de la vente au moment de
+     * l'émission, avant même que la caisse n'encaisse quoi que ce soit en
+     * espèces/CB -- le message doit refléter ce qui a RÉELLEMENT été
+     * encaissé, pas le total brut de la facture, sous peine de fausser la
+     * caisse du vendeur en fin de journée.
+     */
+    private function resumeEncaissement(Facture $facture): string
+    {
+        $credite = $facture->montantCrediteParAvoir();
+
+        if ($credite <= 0) {
+            return $this->formaterMontant((float) $facture->total_ttc).' encaissé.';
+        }
+
+        $paye = $facture->montantPaye();
+
+        if ($paye <= 0) {
+            return 'Réglée intégralement par le crédit disponible du client ('.$this->formaterMontant($credite).').';
+        }
+
+        return $this->formaterMontant($paye).' encaissé ('.$this->formaterMontant($credite).' crédité par avoir).';
     }
 
     /**

@@ -31,18 +31,30 @@ class EnregistrerVenteCaisseAction
     {
         return DB::transaction(function () use ($client, $lignes, $modePaiement, $reference) {
             $facture = $this->creerFacture->handle($client, $lignes);
-            $facture = $this->emettreFacture->handle($facture);
+            // ->fresh() : le crédit disponible du client peut déjà avoir
+            // couvert tout ou partie de la facture à l'émission (voir
+            // AppliquerAvoirsDisponiblesAction, déclenchée en synchrone sur
+            // FactureEmise) -- il faut relire montantRestant() après coup,
+            // jamais se fier à l'objet en mémoire d'avant l'émission.
+            $facture = $this->emettreFacture->handle($facture)->fresh();
 
-            $this->enregistrerPaiement->handle(
-                [
-                    'client_id' => $client->getKey(),
-                    'mode_paiement' => $modePaiement->value,
-                    'montant' => $facture->total_ttc,
-                    'reference' => $reference,
-                    'recu_le' => now()->toDateString(),
-                ],
-                [['facture_id' => $facture->id, 'montant' => $facture->total_ttc]],
-            );
+            $montantRestant = $facture->montantRestant();
+
+            // Rien à encaisser si le crédit du client a déjà tout couvert :
+            // une vente comptoir reste toujours soldée immédiatement, mais
+            // pas forcément par un encaissement en espèces/CB.
+            if ($montantRestant > 0) {
+                $this->enregistrerPaiement->handle(
+                    [
+                        'client_id' => $client->getKey(),
+                        'mode_paiement' => $modePaiement->value,
+                        'montant' => $montantRestant,
+                        'reference' => $reference,
+                        'recu_le' => now()->toDateString(),
+                    ],
+                    [['facture_id' => $facture->id, 'montant' => $montantRestant]],
+                );
+            }
 
             return $facture->fresh('lignes');
         });

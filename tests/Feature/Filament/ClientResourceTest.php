@@ -2,9 +2,16 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Filament\App\Resources\ClientResource\Pages\CreateClient;
+use App\Filament\App\Resources\ClientResource\Pages\ListClients;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -87,6 +94,36 @@ class ClientResourceTest extends TestCase
             'siret' => '12345678900012',
             'numero_tva' => 'FR12345678900',
         ]);
+    }
+
+    /**
+     * Un avoir émis n'est jamais remboursé par ce logiciel (pas
+     * d'intégration bancaire) : le crédit restant disponible du client
+     * doit rester visible en permanence sur la liste, pas seulement au
+     * moment où il est appliqué à une facture.
+     */
+    public function test_le_solde_crediteur_du_client_est_visible_dans_la_liste(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $avoir = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]);
+        app(EmettreAvoirAction::class)->handle($avoir);
+
+        Livewire::test(ListClients::class)
+            ->assertSuccessful()
+            ->assertSee('60,00');
     }
 
     public function test_un_utilisateur_dun_autre_magasin_ne_peut_pas_acceder_a_la_liste(): void

@@ -97,6 +97,11 @@ class Facture extends Model
         return $this->hasMany(PaiementAllocation::class);
     }
 
+    public function allocationsAvoir(): HasMany
+    {
+        return $this->hasMany(AvoirAllocation::class);
+    }
+
     /**
      * Un avoir n'appartient plus à une seule facture (voir le docblock de
      * CreerAvoirAction) : il référence cette facture indirectement, via
@@ -133,9 +138,20 @@ class Facture extends Model
         return round((float) $this->allocationsPaiement()->sum('montant_alloue'), 2);
     }
 
+    /**
+     * Crédit appliqué sur cette facture par un ou plusieurs avoirs
+     * disponibles du client (voir AppliquerAvoirsDisponiblesAction) --
+     * jamais un paiement réellement encaissé, mais vient réduire le solde
+     * dû exactement de la même façon.
+     */
+    public function montantCrediteParAvoir(): float
+    {
+        return round((float) $this->allocationsAvoir()->sum('montant_alloue'), 2);
+    }
+
     public function montantRestant(): float
     {
-        return round((float) $this->total_ttc - $this->montantPaye(), 2);
+        return round((float) $this->total_ttc - $this->montantPaye() - $this->montantCrediteParAvoir(), 2);
     }
 
     /**

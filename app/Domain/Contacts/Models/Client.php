@@ -3,10 +3,13 @@
 namespace App\Domain\Contacts\Models;
 
 use App\Domain\Contacts\Enums\TypeClient;
+use App\Domain\Facturation\Enums\StatutAvoir;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\ClientFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Client extends Model
@@ -42,5 +45,28 @@ class Client extends Model
     public function estProfessionnel(): bool
     {
         return $this->type_client === TypeClient::Professionnel;
+    }
+
+    public function avoirs(): HasMany
+    {
+        return $this->hasMany(Avoir::class);
+    }
+
+    /**
+     * Crédit encore disponible pour ce client, tous avoirs confondus
+     * (particulier ou professionnel : aucune intégration bancaire pour
+     * rembourser par virement/espèces, voir AppliquerAvoirsDisponiblesAction
+     * -- un avoir émis reste donc un crédit à appliquer sur une prochaine
+     * facture jusqu'à épuisement).
+     */
+    public function soldeCrediteur(): float
+    {
+        return round(
+            $this->avoirs()
+                ->where('statut', StatutAvoir::Emise)
+                ->get()
+                ->sum(fn (Avoir $avoir) => $avoir->montantNonAlloue()),
+            2,
+        );
     }
 }

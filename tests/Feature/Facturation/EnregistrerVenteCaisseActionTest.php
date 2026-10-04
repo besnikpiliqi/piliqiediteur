@@ -4,6 +4,10 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -79,6 +83,46 @@ class EnregistrerVenteCaisseActionTest extends TestCase
 
         $this->expectException(LogicException::class);
         app(EnregistrerVenteCaisseAction::class)->handle($client, [], ModePaiement::Especes);
+    }
+
+    /**
+     * Le crédit disponible du client (voir AppliquerAvoirsDisponiblesAction)
+     * peut déjà avoir couvert tout ou partie de la vente à l'émission :
+     * l'encaissement en espèces/CB ne doit jamais porter sur le total brut
+     * de la facture, seulement sur ce qui reste réellement dû -- sans quoi
+     * le client paierait deux fois la part déjà créditée.
+     */
+    public function test_le_credit_disponible_du_client_reduit_le_montant_reellement_encaisse(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        // Premier achat intégralement retourné : 60 € de crédit disponible.
+        $premiereFacture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+        $premiereFacture = app(EmettreFactureAction::class)->handle($premiereFacture);
+        $ligneFacture = $premiereFacture->lignes->firstOrFail();
+        $avoir = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]);
+        app(EmettreAvoirAction::class)->handle($avoir);
+
+        $this->assertSame(60.0, $client->soldeCrediteur());
+
+        // Nouvel achat comptoir du même montant : intégralement couvert par
+        // le crédit, sans aucun encaissement en espèces.
+        $facture = app(EnregistrerVenteCaisseAction::class)->handle(
+            $client,
+            [['produit_id' => $produit->id, 'quantite' => 1]],
+            ModePaiement::Especes,
+        );
+
+        $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
+        $this->assertSame(60.0, $facture->fresh()->montantCrediteParAvoir());
+        $this->assertSame(0.0, $facture->fresh()->montantPaye());
+        $this->assertDatabaseMissing('paiements', ['client_id' => $client->id]);
+        $this->assertSame(0.0, $client->soldeCrediteur());
     }
 
     public function test_la_reference_de_paiement_est_enregistree(): void

@@ -4,6 +4,10 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Devis;
@@ -50,6 +54,42 @@ class DevisResourceTest extends TestCase
         $this->assertSame(StatutDevis::Brouillon, $devis->statut);
         $this->assertSame('100.00', $devis->total_ht);
         $this->assertCount(1, $devis->lignes);
+    }
+
+    /**
+     * Le crédit disponible d'un client (voir Client::soldeCrediteur()) doit
+     * être visible dès sa sélection, avant même de valider -- même si le
+     * crédit sera de toute façon appliqué automatiquement à l'émission de
+     * la future facture (voir AppliquerAvoirsDisponiblesAction).
+     */
+    public function test_le_credit_disponible_du_client_est_affiche_sous_le_select(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $avoir = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]);
+        app(EmettreAvoirAction::class)->handle($avoir);
+
+        Livewire::test(CreateDevis::class)
+            ->fillForm(['client_id' => $client->id])
+            ->assertSee('Crédit disponible pour ce client : 60,00');
+
+        $autreClient = Client::factory()->create();
+
+        Livewire::test(CreateDevis::class)
+            ->fillForm(['client_id' => $autreClient->id])
+            ->assertDontSee('Crédit disponible');
     }
 
     /**

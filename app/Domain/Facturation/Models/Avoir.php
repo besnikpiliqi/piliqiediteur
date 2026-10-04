@@ -86,4 +86,30 @@ class Avoir extends Model
             ->unique('id')
             ->values();
     }
+
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(AvoirAllocation::class);
+    }
+
+    public function montantAlloue(): float
+    {
+        return round((float) $this->allocations()->sum('montant_alloue'), 2);
+    }
+
+    /**
+     * Solde du crédit encore disponible pour ce client : un avoir émis
+     * n'est jamais remboursé en espèces/virement par ce logiciel (pas
+     * d'intégration bancaire) -- il s'applique automatiquement à la
+     * prochaine facture du même client (voir AppliquerAvoirsDisponiblesAction),
+     * en tout ou en partie, jusqu'à épuisement.
+     */
+    public function montantNonAlloue(): float
+    {
+        if ($this->statut !== StatutAvoir::Emise) {
+            return 0.0;
+        }
+
+        return round((float) $this->total_ttc - $this->montantAlloue(), 2);
+    }
 }

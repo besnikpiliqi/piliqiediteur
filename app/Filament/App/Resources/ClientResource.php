@@ -132,6 +132,17 @@ class ClientResource extends Resource
                 Tables\Columns\TextColumn::make('email')->searchable(),
                 Tables\Columns\TextColumn::make('telephone'),
                 Tables\Columns\TextColumn::make('ville'),
+                // Un avoir n'est jamais remboursé par ce logiciel (pas
+                // d'intégration bancaire) : il reste un crédit à appliquer
+                // automatiquement sur la prochaine facture de ce client
+                // (voir AppliquerAvoirsDisponiblesAction) -- affiché ici en
+                // permanence tant qu'il n'est pas intégralement consommé.
+                Tables\Columns\TextColumn::make('solde_crediteur')
+                    ->label('Solde créditeur')
+                    ->state(fn (Client $record) => $record->soldeCrediteur())
+                    ->money('EUR')
+                    ->color(fn (Client $record) => $record->soldeCrediteur() > 0 ? 'warning' : 'gray')
+                    ->toggleable(),
                 Tables\Columns\IconColumn::make('actif')->boolean(),
                 Tables\Columns\TextColumn::make('created_at')->label('Créé le')->dateTime('d/m/Y')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -156,5 +167,27 @@ class ClientResource extends Resource
             'create' => Pages\CreateClient::route('/create'),
             'edit' => Pages\EditClient::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * Texte d'aide affiché sous le Select client des pages de création de
+     * vente (Devis/Facture/Caisse), pour que le vendeur voie le crédit
+     * disponible avant même de valider -- même s'il sera de toute façon
+     * appliqué automatiquement à l'émission (voir
+     * AppliquerAvoirsDisponiblesAction).
+     */
+    public static function soldeCrediteurHelperText(mixed $clientId): ?string
+    {
+        if (blank($clientId)) {
+            return null;
+        }
+
+        $solde = Client::find($clientId)?->soldeCrediteur();
+
+        if (blank($solde) || $solde <= 0) {
+            return null;
+        }
+
+        return 'Crédit disponible pour ce client : '.number_format($solde, 2, ',', ' ').' € (sera appliqué automatiquement).';
     }
 }

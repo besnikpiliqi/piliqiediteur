@@ -52,6 +52,8 @@ class DevisResource extends Resource
                     ->searchable()
                     ->preload()
                     ->required()
+                    ->live()
+                    ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id')))
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE))),

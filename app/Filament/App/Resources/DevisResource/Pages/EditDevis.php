@@ -2,16 +2,16 @@
 
 namespace App\Filament\App\Resources\DevisResource\Pages;
 
+use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Filament\App\Resources\DevisResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
+use Illuminate\Database\Eloquent\Model;
 
 /**
- * Les lignes ne sont pas modifiables après création (le Repeater est
- * désactivé en édition, voir DevisResource::form()) : on affiche quand
- * même leur contenu existant pour éviter qu'un utilisateur ne croie
- * qu'elles ont disparu. Pour changer les lignes d'un devis, on en recrée
- * un -- pas de recalcul partiel des totaux pris en charge pour l'instant.
+ * Accessible tant que le devis n'a pas été transformé en facture (voir
+ * Devis::estModifiable() et DevisPolicy::update()) : lignes comprises,
+ * sans recréer le devis.
  */
 class EditDevis extends EditRecord
 {
@@ -37,5 +37,15 @@ class EditDevis extends EditRecord
         ])->all();
 
         return $data;
+    }
+
+    protected function handleRecordUpdate(Model $record, array $data): Model
+    {
+        return app(ModifierDevisAction::class)->handle($record, $data['lignes'], [
+            'client_id' => $data['client_id'],
+            'date_validite' => $data['date_validite'] ?? null,
+            'conditions_paiement' => $data['conditions_paiement'] ?? null,
+            'notes' => $data['notes'] ?? null,
+        ]);
     }
 }

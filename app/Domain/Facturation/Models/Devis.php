@@ -62,8 +62,16 @@ class Devis extends Model
         return $this->hasMany(Facture::class);
     }
 
+    /**
+     * Un devis reste modifiable quel que soit son propre statut
+     * (brouillon, envoyé, accepté, refusé...) tant qu'il n'a jamais servi
+     * à créer une facture (voir CreerFactureDepuisDevisAction) : rien
+     * n'empêche légalement de corriger ou de relancer un devis qui n'a pas
+     * encore donné lieu à une vente réelle. Une fois converti, il devient
+     * définitivement figé, "validé" par cette conversion elle-même.
+     */
     public function estModifiable(): bool
     {
-        return $this->statut === StatutDevis::Brouillon;
+        return $this->factures()->doesntExist();
     }
 }

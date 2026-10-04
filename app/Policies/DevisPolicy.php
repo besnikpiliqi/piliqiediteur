@@ -23,6 +23,10 @@ class DevisPolicy extends MagasinPolicy
         return $user->can(PermissionRegistry::DEVIS_CREATE);
     }
 
+    /**
+     * Voir Devis::estModifiable() : modifiable quel que soit son statut
+     * tant qu'aucune facture n'en a été créée, jamais après.
+     */
     public function update(User $user, Devis $devis): bool
     {
         return $this->appartientAuMagasinActif($devis)

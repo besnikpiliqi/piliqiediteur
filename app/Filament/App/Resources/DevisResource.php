@@ -60,15 +60,17 @@ class DevisResource extends Resource
             ])->columns(2),
 
             Section::make('Lignes')->schema([
+                // Modifiables même en édition (voir Devis::estModifiable())
+                // tant que le devis n'a pas encore été transformé en
+                // facture : cette page n'est de toute façon accessible que
+                // dans ce cas (voir DevisPolicy::update() et EditDevis).
                 Repeater::make('lignes')
                     ->label('')
                     ->schema(self::ligneSchema())
                     ->columns(6)
                     ->defaultItems(1)
                     ->addActionLabel('Ajouter une ligne')
-                    ->required()
-                    ->disabled(fn (string $operation) => $operation === 'edit')
-                    ->dehydrated(fn (string $operation) => $operation === 'create'),
+                    ->required(),
             ]),
         ]);
     }
@@ -148,7 +150,11 @@ class DevisResource extends Resource
                 Tables\Filters\SelectFilter::make('statut')->options(StatutDevis::class),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                // Un devis reste modifiable (lignes comprises) tant qu'il
+                // n'a pas été transformé en facture, voir
+                // Devis::estModifiable() et DevisPolicy::update().
+                Tables\Actions\EditAction::make()
+                    ->visible(fn (Devis $record) => $record->estModifiable()),
                 Tables\Actions\Action::make('envoyer')
                     ->label('Envoyer')
                     ->icon('heroicon-o-paper-airplane')

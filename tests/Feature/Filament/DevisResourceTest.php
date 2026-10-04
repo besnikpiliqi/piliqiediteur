@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
+use App\Filament\App\Resources\DevisResource\Pages\EditDevis;
 use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -206,6 +207,59 @@ class DevisResourceTest extends TestCase
         $devis = $this->envoyerDevis($client, $produit);
 
         Livewire::test(ListDevis::class)->assertTableActionHidden('convertir', $devis->fresh());
+    }
+
+    /**
+     * Un devis reste modifiable, lignes comprises, tant qu'il n'a pas été
+     * transformé en facture -- y compris une fois accepté, contrairement
+     * à l'ancien comportement qui ne l'autorisait qu'en brouillon.
+     */
+    public function test_modifier_un_devis_accepte_remplace_les_lignes_et_recalcule_les_totaux(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $autreClient = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $devis = $this->envoyerDevis($client, $produit);
+        Livewire::test(ListDevis::class)->callTableAction('accepter', $devis);
+
+        Livewire::test(EditDevis::class, ['record' => $devis->fresh()->getRouteKey()])
+            ->fillForm([
+                'client_id' => $autreClient->id,
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $devis->refresh();
+        $this->assertSame($autreClient->id, $devis->client_id);
+        $this->assertSame(1, $devis->lignes()->count());
+        $this->assertSame('250.00', $devis->total_ht);
+    }
+
+    public function test_laction_modifier_disparait_des_quun_devis_est_converti_en_facture(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $devis = $this->envoyerDevis($client, $produit);
+        Livewire::test(ListDevis::class)->callTableAction('accepter', $devis);
+
+        Livewire::test(ListDevis::class)->assertTableActionVisible('edit', $devis->fresh());
+
+        Livewire::test(ListDevis::class)->callTableAction('convertir', $devis->fresh());
+
+        Livewire::test(ListDevis::class)->assertTableActionHidden('edit', $devis->fresh());
     }
 
     public function test_creer_un_nouveau_client_a_la_volee_depuis_le_formulaire_devis(): void

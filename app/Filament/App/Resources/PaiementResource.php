@@ -117,7 +117,17 @@ class PaiementResource extends Resource
                                     $facture = $state ? Facture::find($state) : null;
                                     $set('montant', $facture?->montantRestant());
                                 }),
-                            TextInput::make('montant')->label('Montant alloué')->numeric()->required(),
+                            TextInput::make('montant')
+                                ->label('Montant alloué')
+                                ->numeric()
+                                ->required()
+                                // Une allocation ne doit jamais dépasser le
+                                // restant dû de la facture choisie : un
+                                // trop-perçu ne devient pas un crédit
+                                // (contrairement à un avoir), seule une
+                                // allocation partielle (acompte) reste
+                                // permise.
+                                ->maxValue(fn (Get $get) => Facture::find($get('facture_id'))?->montantRestant()),
                         ])
                         ->columns(2)
                         ->defaultItems(1)

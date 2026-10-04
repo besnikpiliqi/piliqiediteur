@@ -30,11 +30,13 @@ use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use LogicException;
 
 class FactureResource extends Resource
 {
@@ -290,6 +292,12 @@ class FactureResource extends Resource
                             ->label('Montant reçu')
                             ->numeric()
                             ->required()
+                            // Un encaissement ne doit jamais dépasser le
+                            // solde dû : un éventuel trop-perçu ne devient
+                            // pas un crédit (contrairement à un avoir) --
+                            // le vendeur doit saisir au plus le restant dû,
+                            // mais peut librement saisir moins (acompte).
+                            ->maxValue(fn (Facture $record) => $record->montantRestant())
                             ->default(fn (Facture $record) => $record->montantRestant()),
                         TextInput::make('reference')->label('Référence'),
                         DatePicker::make('recu_le')->label('Reçu le')->required()->default(now()),
@@ -303,15 +311,21 @@ class FactureResource extends Resource
                             StatutFacture::EnRetard,
                         ], true)
                         && auth()->user()->can(PermissionRegistry::PAIEMENT_CREER))
-                    ->action(fn (Facture $record, array $data) => app(EnregistrerPaiementAction::class)->handle([
-                        'client_id' => $record->client_id,
-                        'mode_paiement' => $data['mode_paiement'],
-                        'montant' => $data['montant'],
-                        'reference' => $data['reference'] ?? null,
-                        'recu_le' => $data['recu_le'],
-                    ], [
-                        ['facture_id' => $record->id, 'montant' => $data['montant']],
-                    ])),
+                    ->action(function (Facture $record, array $data) {
+                        try {
+                            app(EnregistrerPaiementAction::class)->handle([
+                                'client_id' => $record->client_id,
+                                'mode_paiement' => $data['mode_paiement'],
+                                'montant' => $data['montant'],
+                                'reference' => $data['reference'] ?? null,
+                                'recu_le' => $data['recu_le'],
+                            ], [
+                                ['facture_id' => $record->id, 'montant' => $data['montant']],
+                            ]);
+                        } catch (LogicException $exception) {
+                            Notification::make()->title($exception->getMessage())->danger()->send();
+                        }
+                    }),
                 Tables\Actions\Action::make('telecharger_pdf')
                     ->label('PDF')
                     ->icon('heroicon-o-arrow-down-tray')

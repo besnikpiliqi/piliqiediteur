@@ -127,6 +127,90 @@ class PaiementResourceTest extends TestCase
         $this->assertSame(1, Paiement::query()->count());
     }
 
+    public function test_laction_rapide_encaisser_accepte_un_montant_partiel(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
+
+        Livewire::test(ListFactures::class)
+            ->callTableAction('encaisser', $facture, data: [
+                'mode_paiement' => ModePaiement::Especes->value,
+                'montant' => 50,
+                'recu_le' => now()->toDateString(),
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame(StatutFacture::PartiellementPayee, $facture->fresh()->statut);
+        $this->assertSame(70.0, $facture->fresh()->montantRestant());
+    }
+
+    /**
+     * Le client a explicitement refusé qu'un trop-perçu devienne un crédit
+     * (contrairement à un avoir) : la saisie d'un montant supérieur au
+     * restant dû doit être bloquée proprement par la validation du
+     * formulaire, sans créer de paiement ni faire planter la page.
+     */
+    public function test_laction_rapide_encaisser_bloque_un_montant_superieur_au_restant_du(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
+
+        Livewire::test(ListFactures::class)
+            ->callTableAction('encaisser', $facture, data: [
+                'mode_paiement' => ModePaiement::Especes->value,
+                'montant' => 150,
+                'recu_le' => now()->toDateString(),
+            ])
+            ->assertHasTableActionErrors(['montant']);
+
+        $this->assertSame(0, Paiement::query()->count());
+        $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
+    }
+
+    /**
+     * Même garde-fou que l'action rapide "Encaisser" (voir
+     * test_laction_rapide_encaisser_bloque_un_montant_superieur_au_restant_du),
+     * appliqué cette fois au formulaire multi-factures de PaiementResource :
+     * une allocation ne doit jamais pouvoir dépasser le restant dû de la
+     * facture choisie.
+     */
+    public function test_impossible_dallouer_plus_que_le_restant_du_depuis_le_panneau(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
+
+        Livewire::test(CreatePaiement::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'mode_paiement' => ModePaiement::Virement->value,
+                'montant' => 150,
+                'recu_le' => now()->toDateString(),
+                'allocations' => [
+                    ['facture_id' => $facture->id, 'montant' => 150],
+                ],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['allocations.0.montant']);
+
+        $this->assertSame(0, Paiement::query()->count());
+        $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
+    }
+
     public function test_un_vendeur_sans_vue_totale_ne_voit_que_ses_propres_paiements(): void
     {
         $magasin = Magasin::factory()->create();

@@ -66,6 +66,41 @@ class ClotureCaisseResourceTest extends TestCase
     }
 
     /**
+     * Le gérant doit voir avant de confirmer exactement ce qui sera
+     * regroupé dans la clôture, pas seulement un avertissement générique
+     * (voir ListClotureCaisses::getHeaderActions()).
+     */
+    public function test_la_modale_de_confirmation_annonce_le_nombre_et_le_total_des_ventes(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create(); // particulier par défaut
+
+        $this->travelTo(now()->subDay());
+        $this->emettreFactureParticulier($client); // 50 € HT, TVA 20 % => 60 € TTC
+        $this->travelBack();
+
+        Livewire::test(ListClotureCaisses::class)
+            ->mountAction('cloturer')
+            ->assertSee('1 vente(s) au comptoir pour un total de 60,00 €');
+    }
+
+    public function test_la_modale_de_confirmation_previent_quand_aucune_vente_nest_en_attente(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(ListClotureCaisses::class)
+            ->mountAction('cloturer')
+            ->assertSee("Aucune vente au comptoir n'a été enregistrée ce jour-là");
+    }
+
+    /**
      * Exigence explicite : aucun choix de date -- la clôture manuelle
      * cible toujours exactement la veille, le seul jour "terminé" en
      * attente, et redevient indisponible dès que cette journée est

@@ -16,7 +16,7 @@ class FacturePdfGenerator
 {
     public function generer(Facture $facture): PdfDocument
     {
-        $facture->loadMissing(['client', 'lignes', 'magasin']);
+        $facture->loadMissing(['client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir']);
 
         return Pdf::loadView('factures.pdf', ['facture' => $facture]);
     }

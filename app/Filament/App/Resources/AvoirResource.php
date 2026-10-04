@@ -16,6 +16,10 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
+use Filament\Infolists\Components\RepeatableEntry;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -94,6 +98,61 @@ class AvoirResource extends Resource
         ])->columns(2);
     }
 
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            InfolistSection::make('Avoir')->schema([
+                TextEntry::make('numero')->label('Numéro'),
+                TextEntry::make('client.nom')->label('Client'),
+                TextEntry::make('factures_concernees')
+                    ->label('Factures créditées')
+                    ->state(fn (Avoir $record) => $record->facturesConcernees()->pluck('numero')->implode(', ')),
+                TextEntry::make('date_emission')->label('Émis le')->dateTime('d/m/Y à H:i'),
+                TextEntry::make('creePar.name')->label('Émis par'),
+                TextEntry::make('motif')->label('Motif')->columnSpanFull(),
+            ])->columns(2),
+
+            InfolistSection::make('Totaux')->schema([
+                TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
+                TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
+                TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+                // Un avoir n'est jamais remboursé par ce logiciel (pas
+                // d'intégration bancaire) : tant qu'il reste du crédit non
+                // appliqué à une facture (voir
+                // AppliquerAvoirsDisponiblesAction), ce doit être visible
+                // ici aussi, pas seulement sur la fiche du client.
+                TextEntry::make('montant_non_alloue')
+                    ->label('Crédit encore disponible')
+                    ->state(fn (Avoir $record) => $record->montantNonAlloue())
+                    ->money('EUR')
+                    ->visible(fn (Avoir $record) => $record->montantNonAlloue() > 0),
+            ])->columns(4),
+
+            InfolistSection::make('Produits retournés')->schema([
+                RepeatableEntry::make('lignes')
+                    ->label('')
+                    ->schema([
+                        TextEntry::make('description'),
+                        TextEntry::make('quantite'),
+                        TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
+                    ])
+                    ->columns(3),
+            ]),
+
+            InfolistSection::make('Crédit appliqué')
+                ->visible(fn (Avoir $record) => $record->allocations()->exists())
+                ->schema([
+                    RepeatableEntry::make('allocations')
+                        ->label('')
+                        ->schema([
+                            TextEntry::make('facture.numero')->label('Facture'),
+                            TextEntry::make('montant_alloue')->label('Montant crédité')->money('EUR'),
+                        ])
+                        ->columns(2),
+                ]),
+        ]);
+    }
+
     /**
      * @return list<array{ligne_facture_id: int, facture_numero: ?string, description: string, quantite: float}>
      */
@@ -131,6 +190,7 @@ class AvoirResource extends Resource
                 Tables\Columns\TextColumn::make('creePar.name')->label('Émis par')->toggleable(),
             ])
             ->actions([
+                Tables\Actions\ViewAction::make(),
                 Tables\Actions\Action::make('telecharger_pdf')
                     ->label('PDF')
                     ->icon('heroicon-o-arrow-down-tray')
@@ -153,6 +213,7 @@ class AvoirResource extends Resource
         return [
             'index' => Pages\ListAvoirs::route('/'),
             'create' => Pages\CreateAvoir::route('/create'),
+            'view' => Pages\ViewAvoir::route('/{record}'),
         ];
     }
 }

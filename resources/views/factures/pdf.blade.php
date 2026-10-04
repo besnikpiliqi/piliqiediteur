@@ -119,6 +119,49 @@
         </tr>
     </table>
 
+    {{--
+        Un montant déjà réglé (encaissement et/ou crédit d'avoir) doit
+        apparaître sur le document remis au client, pas seulement dans le
+        panneau d'administration -- sans ça, rien ne prouve sur le PDF
+        qu'une vente comptoir entièrement couverte par un avoir a bien été
+        soldée (voir AppliquerAvoirsDisponiblesAction).
+    --}}
+    @php
+        $montantPaye = $facture->montantPaye();
+        $montantCredite = $facture->montantCrediteParAvoir();
+        $montantRestant = $facture->montantRestant();
+    @endphp
+    @if($montantPaye > 0 || $montantCredite > 0)
+        <table class="totaux" style="margin-top: 8px;">
+            @if($montantPaye > 0)
+                <tr>
+                    <td class="libelle">Payé</td>
+                    <td class="montant">{{ number_format($montantPaye, 2, ',', ' ') }} €</td>
+                </tr>
+            @endif
+            @if($montantCredite > 0)
+                <tr>
+                    <td class="libelle">
+                        Crédité par avoir
+                        @php
+                            $numerosAvoirs = $facture->allocationsAvoir->pluck('avoir.numero')->filter()->implode(', ');
+                        @endphp
+                        @if($numerosAvoirs)
+                            ({{ $numerosAvoirs }})
+                        @endif
+                    </td>
+                    <td class="montant">{{ number_format($montantCredite, 2, ',', ' ') }} €</td>
+                </tr>
+            @endif
+            @if($montantRestant > 0)
+                <tr>
+                    <td class="libelle">Restant dû</td>
+                    <td class="montant">{{ number_format($montantRestant, 2, ',', ' ') }} €</td>
+                </tr>
+            @endif
+        </table>
+    @endif
+
     @if($facture->conditions_paiement)
         <div class="pied">{{ $facture->conditions_paiement }}</div>
     @endif

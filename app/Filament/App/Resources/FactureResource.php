@@ -211,7 +211,11 @@ class FactureResource extends Resource
                             // et renvoie toujours vide -- state() explicite,
                             // qui reçoit directement le modèle de l'item,
                             // contourne complètement ce calcul de chemin.
-                            TextEntry::make('numero')->label('Numéro')->state(fn (Avoir $record) => $record->numero),
+                            TextEntry::make('numero')
+                                ->label('Numéro')
+                                ->state(fn (Avoir $record) => $record->numero)
+                                ->url(fn (Avoir $record) => AvoirResource::getUrl('view', ['record' => $record]))
+                                ->color('primary'),
                             TextEntry::make('motif')->label('Motif')->state(fn (Avoir $record) => $record->motif)->placeholder('—'),
                             TextEntry::make('total_ttc')->label('Total crédité TTC')->state(fn (Avoir $record) => $record->total_ttc)->money('EUR'),
                             // Le résumé (numéro/motif/total) ne dit pas CE QUI

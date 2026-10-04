@@ -17,6 +17,8 @@ use Filament\Forms\Get;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 
 class ClientResource extends Resource
 {
@@ -176,7 +178,7 @@ class ClientResource extends Resource
      * appliqué automatiquement à l'émission (voir
      * AppliquerAvoirsDisponiblesAction).
      */
-    public static function soldeCrediteurHelperText(mixed $clientId): ?string
+    public static function soldeCrediteurHelperText(mixed $clientId): string|Htmlable|null
     {
         if (blank($clientId)) {
             return null;
@@ -188,6 +190,12 @@ class ClientResource extends Resource
             return null;
         }
 
-        return 'Crédit disponible pour ce client : '.number_format($solde, 2, ',', ' ').' € (sera appliqué automatiquement).';
+        $texte = 'Crédit disponible pour ce client : '.number_format($solde, 2, ',', ' ').' € (sera appliqué automatiquement).';
+
+        // Couleur directement en ligne, pas une classe Tailwind : ce
+        // message doit attirer l'œil du vendeur, pas se fondre dans le
+        // texte d'aide gris habituel -- et ne dépend ainsi jamais de ce
+        // que le build CSS a ou non conservé.
+        return new HtmlString('<span style="color: #c2410c; font-weight: 600;">'.e($texte).'</span>');
     }
 }

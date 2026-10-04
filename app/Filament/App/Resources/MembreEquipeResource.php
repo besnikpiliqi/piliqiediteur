@@ -103,7 +103,7 @@ class MembreEquipeResource extends Resource
                     ->icon('heroicon-o-user-minus')
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->modalDescription('La personne perdra immédiatement son accès. Si son compte est aussi utilisé ailleurs, il reste intact.')
+                    ->modalDescription('La personne perdra immédiatement son accès à l\'équipe.')
                     ->visible(fn (MagasinUser $record) => $record->role !== RoleMagasin::Proprietaire)
                     ->action(fn (MagasinUser $record) => app(RetirerMembreMagasinAction::class)->handle($record)),
             ])

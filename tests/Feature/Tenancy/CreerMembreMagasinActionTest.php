@@ -58,7 +58,14 @@ class CreerMembreMagasinActionTest extends TestCase
         ], RoleMagasin::Proprietaire);
     }
 
-    public function test_un_utilisateur_existant_rejoint_un_second_magasin_sans_toucher_a_son_mot_de_passe(): void
+    /**
+     * Aucun comportement visible ne doit jamais laisser deviner au second
+     * propriétaire que ce compte existe déjà ailleurs : le nom et le mot
+     * de passe qu'il saisit s'appliquent exactement comme pour une
+     * création, comme si ce compte lui était dédié (voir le docblock de
+     * CreerMembreMagasinAction).
+     */
+    public function test_un_utilisateur_existant_rejoint_un_second_magasin_avec_le_mot_de_passe_saisi_par_ce_propriétaire(): void
     {
         $proprietaireA = User::factory()->create();
         $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $proprietaireA);
@@ -72,15 +79,16 @@ class CreerMembreMagasinActionTest extends TestCase
         $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
 
         app(CreerMembreMagasinAction::class)->handle($magasinB, [
-            'name' => 'Comptable Partagé',
+            'name' => 'Nouveau Nom Depuis B',
             'email' => 'comptable@example.test',
-            'password' => 'un-autre-mot-de-passe-ignore',
+            'password' => 'mot-de-passe-choisi-par-b',
         ], RoleMagasin::Comptable);
 
         $comptable->refresh();
         $this->assertTrue($comptable->appartientA($magasinA));
         $this->assertTrue($comptable->appartientA($magasinB));
-        $this->assertTrue(Hash::check('mot-de-passe-initial', $comptable->password), 'Le mot de passe existant ne doit jamais être écrasé par un second rattachement.');
+        $this->assertSame('Nouveau Nom Depuis B', $comptable->name);
+        $this->assertTrue(Hash::check('mot-de-passe-choisi-par-b', $comptable->password));
     }
 
     public function test_changer_le_role_dun_membre_resynchronise_ses_permissions_spatie(): void

@@ -47,11 +47,20 @@ class CreerMembreMagasinAction
                 $utilisateur->forceFill(['email_verified_at' => now()])->save();
             } elseif ($utilisateur->appartientA($magasin)) {
                 throw new LogicException('Cette personne fait déjà partie de votre équipe.');
+            } else {
+                // Le compte existe déjà ailleurs (ex: un comptable qui
+                // intervient sur plusieurs magasins) : on l'attache quand
+                // même à CE magasin, mais en appliquant le nom et le mot de
+                // passe saisis ici, exactement comme pour une création --
+                // jamais de comportement silencieusement différent qui
+                // laisserait deviner au propriétaire que ce compte existe
+                // par ailleurs. Vu de ce magasin, c'est un compte qui lui
+                // est dédié.
+                $utilisateur->forceFill([
+                    'name' => $donnees['name'],
+                    'password' => $donnees['password'],
+                ])->save();
             }
-            // Si l'utilisateur existe déjà (ex: comptable qui intervient
-            // déjà sur un autre magasin), on ne touche PAS à son mot de
-            // passe existant -- le nouveau mot de passe du formulaire
-            // n'est utilisé que pour la création d'un compte inédit.
 
             $magasin->utilisateurs()->attach($utilisateur->getKey(), [
                 'role' => $role->value,

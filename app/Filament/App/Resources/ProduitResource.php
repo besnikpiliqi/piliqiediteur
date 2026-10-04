@@ -30,9 +30,11 @@ class ProduitResource extends Resource
     /**
      * Mêmes champs que form() (hors stock_quantite, propre à l'édition --
      * un produit tout juste créé n'a de toute façon jamais de stock
-     * existant), utilisés dans la modale "+" du Select produit_id d'une
-     * ligne de Facture/Devis/Facture d'achat : voir
-     * DevisResource::ligneSchema() et FactureAchatResource::form().
+     * existant -- et hors fournisseur_id, redondant sur la facture
+     * d'achat où ce Select apparaît déjà en tête de page), utilisés dans
+     * la modale "+" du Select produit_id d'une ligne de
+     * Facture/Devis/Facture d'achat : voir DevisResource::ligneSchema()
+     * et FactureAchatResource::form().
      *
      * @return array<Component>
      */
@@ -44,11 +46,6 @@ class ProduitResource extends Resource
             TextInput::make('nom')->required()->maxLength(200)->columnSpanFull(),
             TextInput::make('taille')->maxLength(20),
             TextInput::make('couleur')->maxLength(30),
-            Select::make('fournisseur_id')
-                ->label('Fournisseur')
-                ->relationship('fournisseur', 'nom')
-                ->searchable()
-                ->preload(),
             TextInput::make('prix_achat_ht')->label('Prix d\'achat HT')->numeric()->prefix('€')->required(),
             TextInput::make('prix_vente_ht')->label('Prix de vente HT')->numeric()->prefix('€')->required(),
             TextInput::make('taux_tva')->label('Taux de TVA (%)')->numeric()->default(20),

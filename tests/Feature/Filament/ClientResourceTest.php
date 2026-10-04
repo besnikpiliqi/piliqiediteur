@@ -57,6 +57,38 @@ class ClientResourceTest extends TestCase
         ]);
     }
 
+    /**
+     * Non-régression : $get('type_client') renvoie l'instance de l'enum
+     * (pas sa valeur scalaire) une fois le Select live interagi, ce qui
+     * rendait silencieusement invisibles -- et donc jamais enregistrés --
+     * les champs réservés aux professionnels (voir
+     * ClientResource::visibleSiProfessionnel()).
+     */
+    public function test_un_proprietaire_peut_creer_un_client_professionnel_avec_ses_informations_legales(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateClient::class)
+            ->fillForm([
+                'nom' => 'Acme Corp',
+                'type_client' => TypeClient::Professionnel->value,
+                'siret' => '12345678900012',
+                'numero_tva' => 'FR12345678900',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('clients', [
+            'nom' => 'Acme Corp',
+            'siret' => '12345678900012',
+            'numero_tva' => 'FR12345678900',
+        ]);
+    }
+
     public function test_un_utilisateur_dun_autre_magasin_ne_peut_pas_acceder_a_la_liste(): void
     {
         $proprietaireA = User::factory()->create();

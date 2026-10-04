@@ -280,6 +280,41 @@ class DevisResourceTest extends TestCase
     }
 
     /**
+     * Exigence explicite : dès que le type "Professionnel" est choisi
+     * dans la modale de création rapide, les champs légaux/postaux
+     * (SIRET, TVA, adresse...) doivent apparaître et être enregistrables
+     * -- un particulier n'en a pas besoin, voir le test précédent.
+     */
+    public function test_creer_un_nouveau_client_professionnel_a_la_volee_avec_ses_informations_legales(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateDevis::class)
+            ->callFormComponentAction('client_id', 'createOption', data: [
+                'nom' => 'Acme Corp',
+                'type_client' => 'professionnel',
+                'siret' => '12345678900012',
+                'numero_tva' => 'FR12345678900',
+                'adresse' => '10 rue de la Paix',
+                'code_postal' => '75002',
+                'ville' => 'Paris',
+            ])
+            ->assertHasNoFormComponentActionErrors();
+
+        $this->assertDatabaseHas('clients', [
+            'nom' => 'Acme Corp',
+            'siret' => '12345678900012',
+            'numero_tva' => 'FR12345678900',
+            'adresse' => '10 rue de la Paix',
+            'code_postal' => '75002',
+            'ville' => 'Paris',
+        ]);
+    }
+
+    /**
      * Exigence explicite : la création rapide d'un produit depuis une
      * ligne doit proposer les mêmes informations que la page dédiée
      * Produits (prix, TVA, stock...), pas un sous-ensemble réduit --

@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Filament\App\Resources\ClientResource\Pages;
+use Closure;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
@@ -32,15 +33,36 @@ class ClientResource extends Resource
     protected static ?string $pluralModelLabel = 'clients';
 
     /**
+     * $get('type_client') renvoie l'instance de l'enum (pas sa valeur
+     * scalaire) une fois le Select "type_client" live interagi -- état
+     * "live" oblige -- d'où la normalisation ici : une comparaison directe
+     * à TypeClient::Professionnel->value resterait silencieusement
+     * toujours fausse dès qu'un utilisateur change réellement la valeur.
+     */
+    private static function visibleSiProfessionnel(): Closure
+    {
+        return function (Get $get): bool {
+            $type = $get('type_client');
+            $type = $type instanceof TypeClient ? $type->value : $type;
+
+            return $type === TypeClient::Professionnel->value;
+        };
+    }
+
+    /**
      * Formulaire allégé utilisé dans la modale "+" du Select client_id de
      * DevisResource/FactureResource (createOptionForm) : un vendeur en
      * train de facturer n'a besoin que de l'essentiel pour créer un
-     * nouveau client à la volée, pas de toute la fiche complète.
+     * nouveau client à la volée, pas de toute la fiche complète -- sauf
+     * pour un professionnel, qui a besoin de ses informations
+     * légales/postales (SIRET, TVA, adresse) dès la création.
      *
      * @return array<Component>
      */
     public static function creationRapideSchema(): array
     {
+        $visibleSiProfessionnel = static::visibleSiProfessionnel();
+
         return [
             TextInput::make('nom')->required()->maxLength(150)->columnSpanFull(),
             Select::make('type_client')
@@ -49,10 +71,13 @@ class ClientResource extends Resource
                 ->default(TypeClient::Particulier)
                 ->required()
                 ->live(),
-            TextInput::make('siret')
-                ->label('SIRET')
-                ->maxLength(14)
-                ->visible(fn (Get $get) => $get('type_client') === TypeClient::Professionnel->value),
+            TextInput::make('siret')->label('SIRET')->maxLength(14)->visible($visibleSiProfessionnel),
+            TextInput::make('numero_tva')->label('N° TVA intracommunautaire')->maxLength(20)->visible($visibleSiProfessionnel),
+            TextInput::make('adresse')->maxLength(255)->columnSpanFull()->visible($visibleSiProfessionnel),
+            TextInput::make('complement_adresse')->label('Complément d\'adresse')->maxLength(255)->columnSpanFull()->visible($visibleSiProfessionnel),
+            TextInput::make('code_postal')->label('Code postal')->maxLength(10)->visible($visibleSiProfessionnel),
+            TextInput::make('ville')->maxLength(100)->visible($visibleSiProfessionnel),
+            TextInput::make('pays')->label('Pays')->maxLength(2)->default('FR')->visible($visibleSiProfessionnel),
             TextInput::make('telephone')->tel()->maxLength(30),
             TextInput::make('email')->email()->maxLength(150),
         ];
@@ -72,11 +97,11 @@ class ClientResource extends Resource
                 TextInput::make('siret')
                     ->label('SIRET')
                     ->maxLength(14)
-                    ->visible(fn (Get $get) => $get('type_client') === TypeClient::Professionnel->value),
+                    ->visible(static::visibleSiProfessionnel()),
                 TextInput::make('numero_tva')
                     ->label('N° TVA intracommunautaire')
                     ->maxLength(20)
-                    ->visible(fn (Get $get) => $get('type_client') === TypeClient::Professionnel->value),
+                    ->visible(static::visibleSiProfessionnel()),
             ])->columns(2),
 
             Section::make('Coordonnées')->schema([

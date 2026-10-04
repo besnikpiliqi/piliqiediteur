@@ -83,13 +83,15 @@ class SeedMagasinRolesAction
                 PermissionRegistry::FACTURE_EMETTRE,
                 PermissionRegistry::PAIEMENT_VIEW,
                 PermissionRegistry::PAIEMENT_CREER,
-                // Clôturer sa propre caisse en fin de service est une
-                // tâche normale de vendeur/caissier -- il ne voit que
-                // les clôtures qu'il a lui-même déclenchées (voir
-                // ClotureCaissePolicy), jamais celles du reste de
-                // l'équipe sans cloture_caisse.view_toutes.
-                PermissionRegistry::CLOTURE_CAISSE_VIEW,
-                PermissionRegistry::CLOTURE_CAISSE_GERER,
+                // Clôturer LA JOURNÉE DU MAGASIN (ClotureCaisse, le
+                // document fiscal d'e-reporting) reste une action de
+                // supervision réservée au propriétaire par défaut -- il
+                // peut la déléguer individuellement via les permissions
+                // supplémentaires d'un membre. Un vendeur garde en
+                // revanche toujours le droit de fermer SA PROPRE caisse
+                // (voir ClotureCaissePersonnelle/FermerSaCaisseAction),
+                // qui ne nécessite aucune permission dédiée puisqu'elle ne
+                // concerne que ses propres ventes.
             ],
             RoleMagasin::Observateur->value => $permissionsLecture,
         ];

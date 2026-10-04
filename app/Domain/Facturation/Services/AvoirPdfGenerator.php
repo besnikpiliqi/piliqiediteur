@@ -15,7 +15,7 @@ class AvoirPdfGenerator
 {
     public function generer(Avoir $avoir): PdfDocument
     {
-        $avoir->loadMissing(['facture.client', 'lignes', 'magasin']);
+        $avoir->loadMissing(['client', 'lignes.ligneFacture.facture', 'magasin']);
 
         return Pdf::loadView('avoirs.pdf', ['avoir' => $avoir]);
     }

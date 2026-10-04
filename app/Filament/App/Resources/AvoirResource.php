@@ -3,19 +3,31 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Filament\App\Resources\AvoirResource\Pages;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Form;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Lecture seule : un avoir se crée uniquement depuis l'action rapide
- * "Avoir" de FactureResource (total ou partiel selon les lignes/quantités
- * sélectionnées, voir CreerAvoirAction) et ne se modifie ni ne se supprime
- * jamais une fois émis (voir AvoirPolicy). Aucune page create/edit ici.
+ * Création possible de deux façons : depuis l'action rapide "Avoir" de
+ * FactureResource (pour le cas simple d'une seule facture, pré-rempli
+ * depuis celle-ci), ou depuis cette Resource (pour regrouper des lignes de
+ * plusieurs factures différentes d'un même client, voir le docblock de
+ * CreerAvoirAction). Jamais de page edit : un avoir émis ne se modifie ni
+ * ne se supprime jamais (voir AvoirPolicy).
  */
 class AvoirResource extends Resource
 {
@@ -32,18 +44,76 @@ class AvoirResource extends Resource
     protected static ?string $pluralModelLabel = 'avoirs';
 
     /**
-     * Même confidentialité par vendeur que FactureResource : voir
-     * AvoirPolicy::view.
+     * Même esprit de confidentialité que FactureResource, mais basée sur
+     * le créateur de l'avoir lui-même : voir AvoirPolicy.
      */
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->with(['facture.client']);
+        $query = parent::getEloquentQuery()->with(['client', 'lignes.ligneFacture.facture']);
 
         if (! auth()->user()->can(PermissionRegistry::FACTURE_VIEW_TOUTES)) {
-            $query->whereHas('facture', fn (Builder $q) => $q->where('cree_par', auth()->id()));
+            $query->where('cree_par', auth()->id());
         }
 
         return $query;
+    }
+
+    public static function form(Form $form): Form
+    {
+        return $form->schema([
+            Select::make('client_id')
+                ->label('Client')
+                ->relationship('client', 'nom')
+                ->searchable()
+                ->preload()
+                ->required()
+                ->live()
+                ->afterStateUpdated(fn (?int $state, Set $set) => $set('lignes', $state ? self::lignesCreditablesPourClient($state) : []))
+                ->columnSpanFull(),
+
+            Repeater::make('lignes')
+                ->label('Lignes à créditer')
+                ->helperText('Toutes les lignes encore créditables de ce client, toutes factures confondues. Retirez celles à ne pas créditer.')
+                ->schema([
+                    Hidden::make('ligne_facture_id'),
+                    TextInput::make('facture_numero')->label('Facture')->disabled()->dehydrated(false),
+                    TextInput::make('description')->label('Produit / description')->disabled()->dehydrated(false),
+                    TextInput::make('quantite')
+                        ->label('Quantité à créditer')
+                        ->numeric()
+                        ->required()
+                        ->minValue(0.001)
+                        ->maxValue(fn (Get $get) => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
+                ])
+                ->columns(4)
+                ->addable(false)
+                ->deletable(true)
+                ->columnSpanFull(),
+
+            Textarea::make('motif')->label('Motif de l\'avoir')->required()->columnSpanFull(),
+        ])->columns(2);
+    }
+
+    /**
+     * @return list<array{ligne_facture_id: int, facture_numero: ?string, description: string, quantite: float}>
+     */
+    private static function lignesCreditablesPourClient(int $clientId): array
+    {
+        return LigneFacture::query()
+            ->whereHas('facture', fn (Builder $query) => $query
+                ->where('client_id', $clientId)
+                ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee]))
+            ->with('facture')
+            ->get()
+            ->map(fn (LigneFacture $ligne) => [
+                'ligne_facture_id' => $ligne->id,
+                'facture_numero' => $ligne->facture->numero,
+                'description' => $ligne->description,
+                'quantite' => $ligne->quantiteCreditableRestante(),
+            ])
+            ->filter(fn (array $ligne) => $ligne['quantite'] > 0)
+            ->values()
+            ->all();
     }
 
     public static function table(Table $table): Table
@@ -51,8 +121,10 @@ class AvoirResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->searchable(),
-                Tables\Columns\TextColumn::make('facture.numero')->label('Facture créditée')->searchable(),
-                Tables\Columns\TextColumn::make('facture.client.nom')->label('Client')->searchable(),
+                Tables\Columns\TextColumn::make('client.nom')->label('Client')->searchable(),
+                Tables\Columns\TextColumn::make('factures_concernees')
+                    ->label('Factures créditées')
+                    ->state(fn (Avoir $record) => $record->facturesConcernees()->pluck('numero')->implode(', ')),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('motif')->limit(40)->toggleable(),
                 Tables\Columns\TextColumn::make('date_emission')->label('Émis le')->dateTime('d/m/Y')->sortable(),
@@ -80,6 +152,7 @@ class AvoirResource extends Resource
     {
         return [
             'index' => Pages\ListAvoirs::route('/'),
+            'create' => Pages\CreateAvoir::route('/create'),
         ];
     }
 }

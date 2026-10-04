@@ -24,12 +24,17 @@ class RestaurerStockApresEmissionAvoir
             $produit = $ligne->produit;
 
             if ($produit !== null && $produit->suivi_stock) {
+                // Chaque ligne peut provenir d'une facture différente (voir
+                // le docblock de CreerAvoirAction) : la note se construit
+                // ligne par ligne, pas au niveau de l'avoir.
+                $numeroFacture = $ligne->ligneFacture?->facture?->numero;
+
                 $this->stock->enregistrer(
                     produit: $produit,
                     type: TypeMouvementStock::RetourClient,
                     quantite: (float) $ligne->quantite,
                     source: $event->avoir,
-                    note: "Avoir {$event->avoir->numero} sur facture {$event->avoir->facture->numero}",
+                    note: "Avoir {$event->avoir->numero} sur facture {$numeroFacture}",
                 );
             }
         }

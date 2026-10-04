@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Avoir;
-use App\Domain\Facturation\Models\Facture;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -16,7 +16,7 @@ class AvoirFactory extends Factory
     public function definition(): array
     {
         return [
-            'facture_id' => Facture::factory(),
+            'client_id' => Client::factory(),
         ];
     }
 }

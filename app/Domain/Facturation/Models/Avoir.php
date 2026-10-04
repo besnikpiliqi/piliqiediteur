@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
@@ -10,8 +11,15 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 /**
+ * Rattaché à un CLIENT, jamais à une seule facture : un avoir peut
+ * regrouper des lignes provenant de plusieurs factures différentes du
+ * même client (voir le docblock de CreerAvoirAction), chaque ligne restant
+ * individuellement traçable jusqu'à sa facture d'origine via
+ * LigneAvoir::ligne_facture_id.
+ *
  * PAS de SoftDeletes ici, volontairement : au même titre qu'une facture,
  * un avoir est un document fiscal dont la loi impose la conservation
  * (voir AvoirPolicy et la migration create_avoirs_table).
@@ -26,7 +34,7 @@ class Avoir extends Model
     // numero, statut, date_emission, totaux : jamais en mass assignment,
     // uniquement via CreerAvoirAction/EmettreAvoirAction.
     protected $fillable = [
-        'facture_id',
+        'client_id',
         'motif',
         'devise',
     ];
@@ -48,9 +56,9 @@ class Avoir extends Model
         });
     }
 
-    public function facture(): BelongsTo
+    public function client(): BelongsTo
     {
-        return $this->belongsTo(Facture::class);
+        return $this->belongsTo(Client::class);
     }
 
     public function creePar(): BelongsTo
@@ -61,5 +69,21 @@ class Avoir extends Model
     public function lignes(): HasMany
     {
         return $this->hasMany(LigneAvoir::class)->orderBy('ordre');
+    }
+
+    /**
+     * Les factures distinctes dont proviennent les lignes de cet avoir
+     * (potentiellement plusieurs, voir le docblock de classe). Charger
+     * lignes.ligneFacture.facture au préalable pour éviter un N+1.
+     *
+     * @return Collection<int, Facture>
+     */
+    public function facturesConcernees(): Collection
+    {
+        return $this->lignes
+            ->map(fn (LigneAvoir $ligne) => $ligne->ligneFacture?->facture)
+            ->filter()
+            ->unique('id')
+            ->values();
     }
 }

@@ -2,28 +2,29 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
-use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
 
 /**
- * Un avoir peut être partiel : porter sur une sélection de lignes de la
- * facture d'origine, et sur une quantité partielle de chacune -- la loi
- * n'impose pas qu'un avoir soit un crédit total (voir BOI-TVA-DECLA-30-20-20
- * sur la facture rectificative), seulement qu'il référence la facture
- * créditée. Plusieurs avoirs successifs sur une même facture sont donc
- * possibles (ex : un client retourne un article aujourd'hui, un autre plus
- * tard), tant que la quantité cumulée créditée par ligne ne dépasse jamais
- * la quantité facturée (voir LigneFacture::quantiteCreditableRestante()).
+ * Un avoir est rattaché à un CLIENT, pas à une seule facture : il peut
+ * regrouper des lignes provenant de plusieurs factures différentes de ce
+ * même client en une seule fois (ex : un client retourne des articles
+ * achetés lors de visites différentes). La loi n'impose pas qu'une facture
+ * rectificative porte sur une seule facture d'origine, seulement qu'elle
+ * référence précisément ce qu'elle corrige -- chaque ligne garde sa trace
+ * vers sa ligne de facture d'origine (voir LigneAvoir::ligne_facture_id).
  *
- * Chaque ligne d'avoir référence sa ligne de facture d'origine
- * (ligne_facture_id) sans jamais modifier cette dernière : la facture
- * d'origine reste un document figé, l'avoir ne fait qu'y référencer un
- * retour/une correction.
+ * Il peut aussi être partiel : porter sur une sélection de lignes, et sur
+ * une quantité partielle de chacune. Plusieurs avoirs successifs restent
+ * possibles sur une même ligne de facture (ex : un second défaut découvert
+ * après un premier avoir), tant que leur somme ne dépasse jamais la
+ * quantité facturée (voir LigneFacture::quantiteCreditableRestante()).
  */
 class CreerAvoirAction
 {
@@ -32,32 +33,39 @@ class CreerAvoirAction
     /**
      * @param  list<array{ligne_facture_id: int|string, quantite: float|string}>  $lignesSelectionnees
      */
-    public function handle(Facture $facture, array $lignesSelectionnees, ?string $motif = null): Avoir
+    public function handle(Client $client, array $lignesSelectionnees, ?string $motif = null): Avoir
     {
-        return DB::transaction(function () use ($facture, $lignesSelectionnees, $motif) {
-            $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
-            $facture->load('lignes');
+        if ($lignesSelectionnees === []) {
+            throw new InvalidArgumentException('Un avoir doit porter sur au moins une ligne.');
+        }
 
-            if (in_array($facture->statut, [StatutFacture::Brouillon, StatutFacture::Annulee], true)) {
-                throw new LogicException("Impossible de créer un avoir sur une facture au statut [{$facture->statut->value}].");
-            }
-
-            if ($lignesSelectionnees === []) {
-                throw new InvalidArgumentException('Un avoir doit porter sur au moins une ligne.');
-            }
-
+        return DB::transaction(function () use ($client, $lignesSelectionnees, $motif) {
             $avoir = Avoir::create([
-                'facture_id' => $facture->id,
+                'client_id' => $client->getKey(),
                 'motif' => $motif,
             ]);
 
             $lignesConstruites = [];
 
             foreach (array_values($lignesSelectionnees) as $index => $selection) {
-                $ligneFacture = $facture->lignes->firstWhere('id', (int) $selection['ligne_facture_id']);
+                $ligneFacture = LigneFacture::query()
+                    ->with('facture')
+                    ->whereKey((int) $selection['ligne_facture_id'])
+                    ->lockForUpdate()
+                    ->first();
 
-                if ($ligneFacture === null) {
-                    throw new InvalidArgumentException("Cette ligne n'appartient pas à la facture créditée.");
+                if ($ligneFacture === null || $ligneFacture->facture === null) {
+                    throw new InvalidArgumentException('Cette ligne de facture est introuvable.');
+                }
+
+                $facture = $ligneFacture->facture;
+
+                if ((int) $facture->client_id !== $client->getKey()) {
+                    throw new InvalidArgumentException("Cette ligne appartient à une facture d'un autre client.");
+                }
+
+                if (in_array($facture->statut, [StatutFacture::Brouillon, StatutFacture::Annulee], true)) {
+                    throw new LogicException("Impossible de créditer une ligne d'une facture au statut [{$facture->statut->value}].");
                 }
 
                 $quantite = (float) $selection['quantite'];

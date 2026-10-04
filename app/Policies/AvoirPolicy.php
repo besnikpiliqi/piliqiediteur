@@ -7,9 +7,11 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Models\User;
 
 /**
- * Même confidentialité par vendeur que FacturePolicy : un avoir révèle le
- * chiffre d'affaires annulé d'une vente, donc sans FACTURE_VIEW_TOUTES un
- * utilisateur ne voit que les avoirs des factures qu'il a lui-même créées.
+ * Même esprit de confidentialité que FacturePolicy, mais basée sur le
+ * créateur de l'AVOIR LUI-MÊME plutôt que sur celui d'une facture : un
+ * avoir peut désormais regrouper des lignes de plusieurs factures de
+ * vendeurs différents (voir CreerAvoirAction), il n'y a donc plus un
+ * "créateur de la facture" unique auquel se rattacher.
  *
  * Toujours irrévocable une fois émis -- même obligation légale de
  * conservation qu'une facture, voir Avoir::class.
@@ -31,7 +33,7 @@ class AvoirPolicy extends MagasinPolicy
             return false;
         }
 
-        return $user->can(PermissionRegistry::FACTURE_VIEW_TOUTES) || $avoir->facture->cree_par === $user->getKey();
+        return $user->can(PermissionRegistry::FACTURE_VIEW_TOUTES) || $avoir->cree_par === $user->getKey();
     }
 
     public function create(User $user): bool

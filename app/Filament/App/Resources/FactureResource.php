@@ -169,11 +169,11 @@ class FactureResource extends Resource
                 // Un avoir peut être partiel (voir CreerAvoirAction) : une
                 // facture peut donc avoir reçu plusieurs avoirs successifs,
                 // pas seulement un unique avoir total.
-                ->visible(fn (Facture $record) => $record->avoirsEmis()->exists())
+                ->visible(fn (Facture $record) => $record->avoirsEmisConcernes()->exists())
                 ->schema([
                     RepeatableEntry::make('avoirsEmisListe')
                         ->label('')
-                        ->state(fn (Facture $record) => $record->avoirsEmis()->get())
+                        ->state(fn (Facture $record) => $record->avoirsEmisConcernes()->get())
                         ->schema([
                             TextEntry::make('numero')->label('Numéro'),
                             TextEntry::make('motif')->label('Motif')->placeholder('—'),
@@ -334,7 +334,7 @@ class FactureResource extends Resource
                         && $record->possedeDesLignesCreditables()
                         && auth()->user()->can(PermissionRegistry::AVOIR_CREER))
                     ->action(function (Facture $record, array $data) {
-                        $avoir = app(CreerAvoirAction::class)->handle($record, $data['lignes'], $data['motif']);
+                        $avoir = app(CreerAvoirAction::class)->handle($record->client, $data['lignes'], $data['motif']);
                         app(EmettreAvoirAction::class)->handle($avoir);
                     }),
             ])

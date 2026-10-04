@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
 use Database\Factories\FactureFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -96,9 +97,19 @@ class Facture extends Model
         return $this->hasMany(PaiementAllocation::class);
     }
 
-    public function avoirs(): HasMany
+    /**
+     * Un avoir n'appartient plus à une seule facture (voir le docblock de
+     * CreerAvoirAction) : il référence cette facture indirectement, via
+     * chacune de ses lignes (LigneAvoir::ligne_facture_id). Impossible
+     * d'utiliser une relation Eloquent classique ici, d'où une requête
+     * explicite plutôt qu'un hasMany.
+     */
+    public function avoirsConcernes(): Builder
     {
-        return $this->hasMany(Avoir::class);
+        return Avoir::query()->whereHas(
+            'lignes.ligneFacture',
+            fn (Builder $query) => $query->where('facture_id', $this->getKey()),
+        );
     }
 
     /**
@@ -107,9 +118,9 @@ class Facture extends Model
      * tant qu'il reste au moins une ligne dont la quantité facturée n'a
      * pas été intégralement créditée.
      */
-    public function avoirsEmis(): HasMany
+    public function avoirsEmisConcernes(): Builder
     {
-        return $this->avoirs()->where('statut', StatutAvoir::Emise);
+        return $this->avoirsConcernes()->where('statut', StatutAvoir::Emise);
     }
 
     public function possedeDesLignesCreditables(): bool

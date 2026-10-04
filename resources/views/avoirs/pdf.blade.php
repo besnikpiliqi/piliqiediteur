@@ -49,7 +49,7 @@
                     @if($avoir->date_emission)
                         Émis le {{ $avoir->date_emission->format('d/m/Y') }}<br>
                     @endif
-                    Sur facture {{ $avoir->facture->numero }}
+                    Sur facture{{ $avoir->facturesConcernees()->count() > 1 ? 's' : '' }} {{ $avoir->facturesConcernees()->pluck('numero')->implode(', ') }}
                 </div>
             </td>
         </tr>
@@ -57,15 +57,15 @@
 
     <div class="bloc-client">
         <div class="titre">Émis à</div>
-        <strong>{{ $avoir->facture->client->nom }}</strong><br>
-        @if($avoir->facture->client->adresse)
-            {{ $avoir->facture->client->adresse }}<br>
+        <strong>{{ $avoir->client->nom }}</strong><br>
+        @if($avoir->client->adresse)
+            {{ $avoir->client->adresse }}<br>
         @endif
-        @if($avoir->facture->client->code_postal || $avoir->facture->client->ville)
-            {{ $avoir->facture->client->code_postal }} {{ $avoir->facture->client->ville }}<br>
+        @if($avoir->client->code_postal || $avoir->client->ville)
+            {{ $avoir->client->code_postal }} {{ $avoir->client->ville }}<br>
         @endif
-        @if($avoir->facture->client->siret)
-            SIRET : {{ $avoir->facture->client->siret }}
+        @if($avoir->client->siret)
+            SIRET : {{ $avoir->client->siret }}
         @endif
     </div>
 
@@ -73,6 +73,7 @@
         <thead>
             <tr>
                 <th>Description</th>
+                <th>Facture d'origine</th>
                 <th class="montant">Qté</th>
                 <th class="montant">PU HT</th>
                 <th class="montant">TVA</th>
@@ -83,6 +84,7 @@
             @foreach($avoir->lignes as $ligne)
                 <tr>
                     <td>{{ $ligne->description }}</td>
+                    <td>{{ $ligne->ligneFacture?->facture?->numero ?? '—' }}</td>
                     <td class="montant">{{ rtrim(rtrim($ligne->quantite, '0'), '.') }}</td>
                     <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ht, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ rtrim(rtrim($ligne->taux_tva, '0'), '.') }} %</td>

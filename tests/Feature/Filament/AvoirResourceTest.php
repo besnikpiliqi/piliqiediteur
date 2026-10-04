@@ -8,6 +8,7 @@ use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Filament\App\Resources\AvoirResource\Pages\CreateAvoir;
 use App\Filament\App\Resources\AvoirResource\Pages\ListAvoirs;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
@@ -52,7 +53,7 @@ class AvoirResourceTest extends TestCase
         Livewire::test(ListFactures::class)
             ->callTableAction('avoir', $facture, data: ['motif' => 'Retour client']);
 
-        $avoir = Avoir::query()->where('facture_id', $facture->id)->firstOrFail();
+        $avoir = Avoir::query()->where('client_id', $client->id)->firstOrFail();
         $this->assertSame(StatutAvoir::Emise, $avoir->statut);
         $this->assertNotNull($avoir->numero);
         $this->assertSame($facture->total_ttc, $avoir->total_ttc);
@@ -123,10 +124,74 @@ class AvoirResourceTest extends TestCase
         $facture = $this->emettreFactureDepuisLePanneau($client);
 
         Livewire::test(ListFactures::class)->callTableAction('avoir', $facture, data: ['motif' => 'Retour client']);
-        $avoir = Avoir::query()->where('facture_id', $facture->id)->firstOrFail();
+        $avoir = Avoir::query()->where('client_id', $client->id)->firstOrFail();
 
         Livewire::test(ListAvoirs::class)
             ->callTableAction('telecharger_pdf', $avoir)
             ->assertSuccessful();
+    }
+
+    /**
+     * Exigence explicite : un avoir doit pouvoir regrouper des lignes de
+     * plusieurs factures DIFFÉRENTES du même client, pas seulement d'une
+     * seule facture -- voir le docblock de CreerAvoirAction.
+     */
+    public function test_creer_un_avoir_couvrant_deux_factures_differentes_du_meme_client(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $factureA = $this->emettreFactureDepuisLePanneau($client); // 180 TTC (3 x 50 HT, 20%)
+        $factureB = $this->emettreFactureDepuisLePanneau($client); // 180 TTC
+
+        $ligneA = $factureA->lignes->firstOrFail();
+        $ligneB = $factureB->lignes->firstOrFail();
+
+        Livewire::test(CreateAvoir::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [
+                    ['ligne_facture_id' => $ligneA->id, 'quantite' => 1],
+                    ['ligne_facture_id' => $ligneB->id, 'quantite' => 2],
+                ],
+                'motif' => 'Retour de deux achats différents',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $avoir = Avoir::query()->where('client_id', $client->id)->firstOrFail();
+        $this->assertSame(StatutAvoir::Emise, $avoir->statut);
+        $this->assertSame(2, $avoir->lignes()->count());
+        $this->assertSame('150.00', $avoir->total_ht); // 1x50 + 2x50
+        $this->assertCount(2, $avoir->facturesConcernees());
+    }
+
+    /**
+     * Défense en profondeur : même si l'UI ne propose normalement que les
+     * lignes du client sélectionné (voir AvoirResource::lignesCreditablesPourClient()),
+     * l'action elle-même doit aussi refuser toute incohérence -- voir
+     * AvoirActionsTest pour le test équivalent au niveau de l'action.
+     */
+    public function test_le_formulaire_ne_propose_que_les_lignes_du_client_selectionne(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $clientA = Client::factory()->create();
+        $clientB = Client::factory()->create();
+        $factureDeA = $this->emettreFactureDepuisLePanneau($clientA);
+        $this->emettreFactureDepuisLePanneau($clientB);
+
+        $livewire = Livewire::test(CreateAvoir::class)
+            ->fillForm(['client_id' => $clientA->id]);
+
+        $lignes = $livewire->instance()->form->getRawState()['lignes'];
+        $this->assertCount(1, $lignes, 'Seule la ligne du client sélectionné doit être proposée.');
+        $this->assertSame($factureDeA->lignes->firstOrFail()->id, $lignes[0]['ligne_facture_id']);
     }
 }

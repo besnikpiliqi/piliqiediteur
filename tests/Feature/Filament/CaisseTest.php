@@ -158,6 +158,36 @@ class CaisseTest extends TestCase
         $this->assertSame('20.00', $facture->total_ttc);
     }
 
+    /**
+     * Un vendeur pense souvent en prix affiché/TTC (ex: viser pile 12 €)
+     * plutôt qu'en HT : saisir le PU TTC doit calculer le PU HT (seul champ
+     * réellement enregistré) à sa place, sans qu'il ait à faire le calcul
+     * lui-même. Voir DevisResource::ligneSchema().
+     */
+    public function test_saisir_le_prix_ttc_dune_ligne_calcule_automatiquement_le_prix_ht(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
+
+        $component = Livewire::test(Caisse::class)
+            ->fillForm([
+                'client_id' => $clientComptoir->id,
+                'lignes' => [
+                    ['description' => 'Pose écran', 'quantite' => 1, 'prix_unitaire_ht' => 0, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ]);
+
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component->set("data.lignes.{$cle}.prix_unitaire_ttc", '12');
+
+        $this->assertSame(10.0, (float) $component->get("data.lignes.{$cle}.prix_unitaire_ht"));
+    }
+
     public function test_creer_un_nouveau_client_a_la_volee_depuis_la_caisse(): void
     {
         $proprietaire = User::factory()->create();

@@ -68,7 +68,7 @@ class DevisResource extends Resource
                 Repeater::make('lignes')
                     ->label('')
                     ->schema(self::ligneSchema())
-                    ->columns(6)
+                    ->columns(9)
                     ->defaultItems(1)
                     ->addActionLabel('Ajouter une ligne')
                     ->required(),
@@ -130,11 +130,49 @@ class DevisResource extends Resource
                     $set('reference', $produit->reference);
                     $set('prix_unitaire_ht', (string) $produit->prix_vente_ht);
                     $set('taux_tva', (string) $produit->taux_tva);
+                    $set('prix_unitaire_ttc', (string) $produit->prixVenteTtc());
                 }),
             TextInput::make('description')->required()->columnSpan(2),
             TextInput::make('quantite')->numeric()->required()->default(1)->live(onBlur: true),
-            TextInput::make('prix_unitaire_ht')->label('PU HT')->numeric()->required()->live(onBlur: true),
-            TextInput::make('taux_tva')->label('TVA %')->numeric()->required()->default(20)->live(onBlur: true),
+            TextInput::make('prix_unitaire_ht')
+                ->label('PU HT')
+                ->numeric()
+                ->required()
+                ->live(onBlur: true)
+                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
+                    $set('prix_unitaire_ttc', $state === null || $state === ''
+                        ? null
+                        : self::ttcDepuisHt((float) $state, self::tauxTvaActuel($get)));
+                }),
+            // Le vendeur pense souvent en prix affiché/TTC (ex: "10 € pile")
+            // plutôt qu'en HT : ce champ n'est qu'une façon alternative de
+            // saisir prix_unitaire_ht (seul champ réellement enregistré,
+            // voir dehydrated(false)) -- il évite au vendeur de calculer
+            // lui-même le HT correspondant au prix TTC visé.
+            TextInput::make('prix_unitaire_ttc')
+                ->label('PU TTC')
+                ->numeric()
+                ->live(onBlur: true)
+                ->dehydrated(false)
+                ->afterStateHydrated(function (TextInput $component, Get $get) {
+                    $component->state(self::ttcDepuisHt((float) ($get('prix_unitaire_ht') ?? 0), self::tauxTvaActuel($get)));
+                })
+                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
+                    if ($state === null || $state === '') {
+                        return;
+                    }
+
+                    $set('prix_unitaire_ht', self::htDepuisTtc((float) $state, self::tauxTvaActuel($get)));
+                }),
+            TextInput::make('taux_tva')
+                ->label('TVA %')
+                ->numeric()
+                ->required()
+                ->default(20)
+                ->live(onBlur: true)
+                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
+                    $set('prix_unitaire_ttc', self::ttcDepuisHt((float) ($get('prix_unitaire_ht') ?? 0), (float) ($state ?? 0)));
+                }),
             TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->live(onBlur: true),
             Placeholder::make('total_ligne')
                 ->label('Total TTC')
@@ -156,6 +194,26 @@ class DevisResource extends Resource
                     return number_format($montants['montant_ttc'], 2, ',', ' ').' €';
                 }),
         ];
+    }
+
+    /**
+     * TVA par défaut (20 %) tant que le champ taux_tva n'a pas encore été
+     * hydraté -- évite une conversion HT/TTC fausse à l'affichage initial
+     * d'une ligne vide, cohérent avec son propre ->default(20).
+     */
+    private static function tauxTvaActuel(Get $get): float
+    {
+        return (float) ($get('taux_tva') ?? 20);
+    }
+
+    private static function ttcDepuisHt(float $ht, float $tauxTva): float
+    {
+        return round($ht * (1 + $tauxTva / 100), 2);
+    }
+
+    private static function htDepuisTtc(float $ttc, float $tauxTva): float
+    {
+        return round($ttc / (1 + $tauxTva / 100), 2);
     }
 
     public static function table(Table $table): Table

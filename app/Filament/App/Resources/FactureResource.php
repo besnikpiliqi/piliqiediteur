@@ -93,7 +93,7 @@ class FactureResource extends Resource
                 Repeater::make('lignes')
                     ->label('')
                     ->schema(DevisResource::ligneSchema())
-                    ->columns(6)
+                    ->columns(9)
                     ->defaultItems(1)
                     ->addActionLabel('Ajouter une ligne')
                     ->required(),

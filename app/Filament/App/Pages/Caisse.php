@@ -111,7 +111,7 @@ class Caisse extends Page implements HasForms
                 Repeater::make('lignes')
                     ->label('')
                     ->schema(DevisResource::ligneSchema())
-                    ->columns(6)
+                    ->columns(9)
                     ->defaultItems(1)
                     ->addActionLabel('Ajouter un produit')
                     ->required(),

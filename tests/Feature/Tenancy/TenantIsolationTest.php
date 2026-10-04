@@ -42,14 +42,14 @@ class TenantIsolationTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: class-string<Model>, 1: string}>
+     * @return array<string, array{0: class-string<Model>}>
      */
     public static function modelesTenant(): array
     {
         return [
-            'Client' => [Client::class, 'factory'],
-            'Fournisseur' => [Fournisseur::class, 'factory'],
-            'Produit' => [Produit::class, 'factory'],
+            'Client' => [Client::class],
+            'Fournisseur' => [Fournisseur::class],
+            'Produit' => [Produit::class],
         ];
     }
 

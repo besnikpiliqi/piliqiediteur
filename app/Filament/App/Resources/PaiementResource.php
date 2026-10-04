@@ -73,7 +73,9 @@ class PaiementResource extends Resource
                     ->label('Mode de paiement')
                     ->options(ModePaiement::class)
                     ->required(),
-                TextInput::make('montant')->label('Montant reçu')->numeric()->required()->live(onBlur: true),
+                // live() et non live(onBlur: true) : le reste à allouer se
+                // met à jour pendant la saisie.
+                TextInput::make('montant')->label('Montant reçu')->numeric()->required()->live(),
                 TextInput::make('reference')->label('Référence'),
                 DatePicker::make('recu_le')->label('Reçu le')->required()->default(now()),
                 Textarea::make('notes')->columnSpanFull(),

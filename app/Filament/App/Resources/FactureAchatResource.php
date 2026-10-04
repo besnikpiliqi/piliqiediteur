@@ -120,10 +120,12 @@ class FactureAchatResource extends Resource
                                 $set('taux_tva', (string) $produit->taux_tva);
                             }),
                         TextInput::make('description')->required()->columnSpan(2),
-                        TextInput::make('quantite')->numeric()->required()->default(1)->live(onBlur: true),
-                        TextInput::make('prix_unitaire_ht')->label('PU HT')->numeric()->required()->live(onBlur: true),
-                        TextInput::make('taux_tva')->label('TVA %')->numeric()->required()->default(20)->live(onBlur: true),
-                        TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->live(onBlur: true),
+                        // live() et non live(onBlur: true) : le total de la
+                        // ligne se met à jour pendant la saisie.
+                        TextInput::make('quantite')->numeric()->required()->default(1)->live(),
+                        TextInput::make('prix_unitaire_ht')->label('PU HT')->numeric()->required()->live(),
+                        TextInput::make('taux_tva')->label('TVA %')->numeric()->required()->default(20)->live(),
+                        TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->live(),
                         Placeholder::make('total_ligne')
                             ->label('Total TTC')
                             ->columnSpanFull()

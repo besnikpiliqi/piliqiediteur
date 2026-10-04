@@ -133,12 +133,15 @@ class DevisResource extends Resource
                     $set('prix_unitaire_ttc', (string) $produit->prixVenteTtc());
                 }),
             TextInput::make('description')->required()->columnSpan(2),
-            TextInput::make('quantite')->numeric()->required()->default(1)->live(onBlur: true),
+            // live() et non live(onBlur: true) sur tous les champs de la
+            // ligne : le total (et, dans la Caisse, la monnaie à rendre) se
+            // met à jour pendant la saisie, pas seulement au clic ailleurs.
+            TextInput::make('quantite')->numeric()->required()->default(1)->live(),
             TextInput::make('prix_unitaire_ht')
                 ->label('PU HT')
                 ->numeric()
                 ->required()
-                ->live(onBlur: true)
+                ->live()
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
                     $set('prix_unitaire_ttc', $state === null || $state === ''
                         ? null
@@ -152,7 +155,7 @@ class DevisResource extends Resource
             TextInput::make('prix_unitaire_ttc')
                 ->label('PU TTC')
                 ->numeric()
-                ->live(onBlur: true)
+                ->live()
                 ->dehydrated(false)
                 ->afterStateHydrated(function (TextInput $component, Get $get) {
                     $component->state(self::ttcDepuisHt((float) ($get('prix_unitaire_ht') ?? 0), self::tauxTvaActuel($get)));
@@ -169,11 +172,11 @@ class DevisResource extends Resource
                 ->numeric()
                 ->required()
                 ->default(20)
-                ->live(onBlur: true)
+                ->live()
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
                     $set('prix_unitaire_ttc', self::ttcDepuisHt((float) ($get('prix_unitaire_ht') ?? 0), (float) ($state ?? 0)));
                 }),
-            TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->live(onBlur: true),
+            TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->live(),
             Placeholder::make('total_ligne')
                 ->label('Total TTC')
                 ->columnSpanFull()

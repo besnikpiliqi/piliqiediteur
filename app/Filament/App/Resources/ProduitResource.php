@@ -41,7 +41,10 @@ class ProduitResource extends Resource
     public static function creationRapideSchema(): array
     {
         return [
-            TextInput::make('reference')->label('Référence')->required()->maxLength(60),
+            TextInput::make('reference')
+                ->label('Référence')
+                ->helperText('Laissez vide pour une référence générée automatiquement.')
+                ->maxLength(60),
             TextInput::make('code_barres')->label('Code-barres')->maxLength(50),
             TextInput::make('nom')->required()->maxLength(200)->columnSpanFull(),
             TextInput::make('taille')->maxLength(20),
@@ -63,7 +66,10 @@ class ProduitResource extends Resource
     {
         return $form->schema([
             Section::make('Identification')->schema([
-                TextInput::make('reference')->label('Référence')->required()->maxLength(60),
+                TextInput::make('reference')
+                    ->label('Référence')
+                    ->helperText('Laissez vide pour une référence générée automatiquement.')
+                    ->maxLength(60),
                 TextInput::make('code_barres')->label('Code-barres')->maxLength(50),
                 TextInput::make('nom')->required()->maxLength(200)->columnSpanFull(),
                 TextInput::make('taille')->maxLength(20),

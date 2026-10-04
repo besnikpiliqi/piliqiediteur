@@ -3,8 +3,11 @@
 namespace App\Domain\Catalogue\Models;
 
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use Database\Factories\ProduitFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -36,6 +39,27 @@ class Produit extends Model
     // stock_quantite n'est volontairement PAS fillable : seul
     // StockLedgerService est autorisé à la modifier, via les mouvements de
     // stock. Toute autre écriture casserait la cohérence du ledger.
+
+    protected static function booted(): void
+    {
+        // saving() (pas creating()) : couvre aussi bien la création qu'une
+        // édition où la référence serait vidée -- la colonne reste NOT
+        // NULL en base, jamais question de la laisser vide après coup.
+        static::saving(function (Produit $produit) {
+            // La référence reste libre à la saisie (manuelle ou future
+            // intégration API) : si elle n'est pas fournie, elle est
+            // générée automatiquement, par magasin, jamais remise à zéro
+            // (pas de periodKey, contrairement aux documents fiscaux qui
+            // se réinitialisent chaque année) -- un catalogue produit n'a
+            // pas de notion d'exercice.
+            if (blank($produit->reference)) {
+                $produit->reference = app(DocumentNumberingService::class)->suivant(
+                    app(TenantContext::class)->magasin(),
+                    TypeDocument::Produit,
+                );
+            }
+        });
+    }
 
     protected $casts = [
         'prix_achat_ht' => 'decimal:2',

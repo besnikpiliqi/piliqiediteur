@@ -10,6 +10,7 @@ use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\DevisResource\Pages;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Component;
@@ -138,12 +139,21 @@ class DevisResource extends Resource
             Placeholder::make('total_ligne')
                 ->label('Total TTC')
                 ->columnSpanFull()
+                // Passe par CalculateurLigne (même service que celui qui
+                // persiste réellement la ligne via ConstructeurLigneDocument)
+                // plutôt que de recalculer la formule ici : sans ça, cet
+                // aperçu pourrait afficher un centime différent de ce qui
+                // est effectivement enregistré, selon comment l'arrondi
+                // tombe -- un écart inacceptable une fois transmis à l'état.
                 ->content(function (Get $get): string {
-                    $ht = (float) ($get('prix_unitaire_ht') ?? 0) * (float) ($get('quantite') ?? 0);
-                    $ht *= 1 - ((float) ($get('remise_pourcentage') ?? 0) / 100);
-                    $ttc = $ht * (1 + ((float) ($get('taux_tva') ?? 0) / 100));
+                    $montants = app(CalculateurLigne::class)->calculer(
+                        (float) ($get('prix_unitaire_ht') ?? 0),
+                        (float) ($get('quantite') ?? 0),
+                        (float) ($get('taux_tva') ?? 0),
+                        (float) ($get('remise_pourcentage') ?? 0),
+                    );
 
-                    return number_format($ttc, 2, ',', ' ').' €';
+                    return number_format($montants['montant_ttc'], 2, ',', ' ').' €';
                 }),
         ];
     }

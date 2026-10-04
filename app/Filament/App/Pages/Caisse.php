@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
 use Filament\Forms\Components\Actions\Action;
@@ -178,16 +179,27 @@ class Caisse extends Page implements HasForms
     }
 
     /**
+     * Passe par CalculateurLigne (même service que celui qui calcule
+     * réellement la facture persistée via EnregistrerVenteCaisseAction) :
+     * sans ça, cet aperçu -- et donc la monnaie à rendre affichée au
+     * vendeur -- pouvait afficher un total différent de quelques centimes
+     * par rapport à ce qui est effectivement encaissé, selon comment
+     * l'arrondi tombait sur chaque ligne avant d'être sommée.
+     *
      * @param  list<array<string, mixed>>  $lignes
      */
     private function totalTtc(array $lignes): float
     {
-        return collect($lignes)->sum(function (array $ligne) {
-            $ht = (float) ($ligne['prix_unitaire_ht'] ?? 0) * (float) ($ligne['quantite'] ?? 0);
-            $ht *= 1 - ((float) ($ligne['remise_pourcentage'] ?? 0) / 100);
+        $calculateur = app(CalculateurLigne::class);
 
-            return $ht * (1 + ((float) ($ligne['taux_tva'] ?? 0) / 100));
-        });
+        $montants = collect($lignes)->map(fn (array $ligne) => $calculateur->calculer(
+            (float) ($ligne['prix_unitaire_ht'] ?? 0),
+            (float) ($ligne['quantite'] ?? 0),
+            (float) ($ligne['taux_tva'] ?? 0),
+            (float) ($ligne['remise_pourcentage'] ?? 0),
+        ));
+
+        return $calculateur->totaliser($montants)['total_ttc'];
     }
 
     private function formaterMontant(float $montant): string

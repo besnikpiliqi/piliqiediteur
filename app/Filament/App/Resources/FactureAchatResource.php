@@ -11,6 +11,7 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
@@ -126,12 +127,20 @@ class FactureAchatResource extends Resource
                         Placeholder::make('total_ligne')
                             ->label('Total TTC')
                             ->columnSpanFull()
+                            // Voir le commentaire équivalent dans
+                            // DevisResource::ligneSchema() : passer par
+                            // CalculateurLigne garantit que cet aperçu
+                            // correspond exactement au montant réellement
+                            // enregistré pour la ligne.
                             ->content(function (Get $get): string {
-                                $ht = (float) ($get('prix_unitaire_ht') ?? 0) * (float) ($get('quantite') ?? 0);
-                                $ht *= 1 - ((float) ($get('remise_pourcentage') ?? 0) / 100);
-                                $ttc = $ht * (1 + ((float) ($get('taux_tva') ?? 0) / 100));
+                                $montants = app(CalculateurLigne::class)->calculer(
+                                    (float) ($get('prix_unitaire_ht') ?? 0),
+                                    (float) ($get('quantite') ?? 0),
+                                    (float) ($get('taux_tva') ?? 0),
+                                    (float) ($get('remise_pourcentage') ?? 0),
+                                );
 
-                                return number_format($ttc, 2, ',', ' ').' €';
+                                return number_format($montants['montant_ttc'], 2, ',', ' ').' €';
                             }),
                     ])
                     ->columns(6)

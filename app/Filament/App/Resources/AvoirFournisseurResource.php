@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources;
 
+use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Filament\App\Resources\AvoirFournisseurResource\Pages;
 use Filament\Resources\Resource;
@@ -43,8 +44,12 @@ class AvoirFournisseurResource extends Resource
                 Tables\Columns\TextColumn::make('factureAchat.fournisseur.nom')->label('Fournisseur')->searchable(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('motif')->limit(40)->toggleable(),
+                Tables\Columns\TextColumn::make('source')->badge()->toggleable(),
                 Tables\Columns\TextColumn::make('date_emission')->label('Émis le')->dateTime('d/m/Y')->sortable(),
                 Tables\Columns\TextColumn::make('creePar.name')->label('Émis par')->toggleable(),
+            ])
+            ->filters([
+                Tables\Filters\SelectFilter::make('source')->options(SourceAvoirFournisseur::class),
             ])
             ->actions([])
             // Aucune action de suppression, ni unitaire ni groupée : un

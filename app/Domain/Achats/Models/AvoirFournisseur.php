@@ -2,6 +2,7 @@
 
 namespace App\Domain\Achats\Models;
 
+use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
@@ -31,10 +32,12 @@ class AvoirFournisseur extends Model
         'facture_achat_id',
         'motif',
         'devise',
+        'source',
     ];
 
     protected $casts = [
         'statut' => StatutAvoirFournisseur::class,
+        'source' => SourceAvoirFournisseur::class,
         'date_emission' => 'datetime',
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',

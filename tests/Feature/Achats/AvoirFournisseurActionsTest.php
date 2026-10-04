@@ -6,6 +6,7 @@ use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -53,6 +54,7 @@ class AvoirFournisseurActionsTest extends TestCase
         $this->assertSame(StatutAvoirFournisseur::Brouillon, $avoir->statut);
         $this->assertSame('Marchandise non conforme', $avoir->motif);
         $this->assertSame($factureAchat->total_ht, $avoir->total_ht);
+        $this->assertSame(SourceAvoirFournisseur::Manuelle, $avoir->source, 'Cette action ne crée aujourd\'hui que des avoirs saisis manuellement.');
 
         $ligneAvoir = $avoir->lignes->firstOrFail();
         $this->assertSame($ligneAchat->id, $ligneAvoir->ligne_achat_id);

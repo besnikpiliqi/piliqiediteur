@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
@@ -137,6 +138,7 @@ class FactureAchatResource extends Resource
             InfolistSection::make('Facture d\'achat')->schema([
                 TextEntry::make('numero')->label('Numéro')->placeholder('Brouillon (pas encore validée)'),
                 TextEntry::make('statut')->badge(),
+                TextEntry::make('source')->badge(),
                 TextEntry::make('fournisseur.nom')->label('Fournisseur'),
                 TextEntry::make('numero_fournisseur')->label('N° facture fournisseur')->placeholder('—'),
                 TextEntry::make('date_facture')->label('Date facture')->date('d/m/Y')->placeholder('—'),
@@ -188,20 +190,24 @@ class FactureAchatResource extends Resource
                 Tables\Columns\TextColumn::make('fournisseur.nom')->label('Fournisseur')->searchable(),
                 Tables\Columns\TextColumn::make('numero_fournisseur')->label('N° fournisseur')->toggleable(),
                 Tables\Columns\TextColumn::make('statut')->badge(),
+                Tables\Columns\TextColumn::make('source')->badge()->toggleable(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('date_facture')->label('Date facture')->date('d/m/Y'),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('statut')->options(StatutFactureAchat::class),
+                Tables\Filters\SelectFilter::make('source')->options(SourceFactureAchat::class),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
-                // Même logique que FactureResource : un brouillon n'a
-                // aucune existence légale, il reste librement modifiable et
-                // supprimable. Dès la validation, ces deux actions
-                // disparaissent définitivement.
+                // Un brouillon reste toujours librement modifiable. Une
+                // fois validée, seule une facture saisie manuellement le
+                // reste (voir FactureAchat::estModifiable()) -- une
+                // récupérée par API ne l'est jamais. La suppression, elle,
+                // reste interdite sans exception dès la validation (voir
+                // FactureAchatPolicy::delete()).
                 Tables\Actions\EditAction::make()
-                    ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Brouillon),
+                    ->visible(fn (FactureAchat $record) => $record->estModifiable()),
                 Tables\Actions\DeleteAction::make()
                     ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Brouillon),
                 Tables\Actions\Action::make('valider')

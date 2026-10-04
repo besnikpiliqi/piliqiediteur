@@ -31,16 +31,16 @@ class FactureAchatPolicy extends MagasinPolicy
     }
 
     /**
-     * Un brouillon n'a jamais reçu de numéro interne ni impacté le stock
-     * (voir ValiderFactureAchatAction) : il reste librement modifiable,
-     * lignes comprises. Dès la validation, la modification redevient
-     * refusée sans exception : une correction passe par un avoir
-     * fournisseur, jamais par une réécriture.
+     * Voir FactureAchat::estModifiable() : un brouillon reste toujours
+     * librement modifiable (aucun impact sur le stock, voir
+     * ValiderFactureAchatAction). Une fois validée, seule une facture
+     * saisie manuellement reste modifiable -- une récupérée par API ne
+     * l'est jamais.
      */
     public function update(User $user, FactureAchat $factureAchat): bool
     {
         return $this->view($user, $factureAchat)
-            && $factureAchat->statut === StatutFactureAchat::Brouillon
+            && $factureAchat->estModifiable()
             && $user->can(PermissionRegistry::FACTURE_ACHAT_CREER);
     }
 

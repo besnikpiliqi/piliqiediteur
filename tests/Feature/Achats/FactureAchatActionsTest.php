@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Achats;
 
+use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
 use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -119,18 +122,73 @@ class FactureAchatActionsTest extends TestCase
         $this->assertSame('20.00', $factureAchat->total_ht);
     }
 
-    public function test_une_facture_dachat_validee_nest_plus_modifiable(): void
+    /**
+     * Exigence explicite : une facture d'achat saisie manuellement reste
+     * modifiable même après validation (la personne qui l'enregistre peut
+     * se tromper), et la modification recalcule le stock et le prix
+     * d'achat du produit plutôt que de réappliquer la réception en aveugle.
+     */
+    public function test_une_facture_dachat_validee_saisie_manuellement_reste_modifiable_et_recalcule_le_stock(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 3, 'suivi_stock' => true]);
+
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
+        ]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle($factureAchat);
+
+        $this->assertSame(SourceFactureAchat::Manuelle, $factureAchat->source);
+        $this->assertTrue($factureAchat->estModifiable());
+        $this->assertSame('8.000', $produit->fresh()->stock_quantite);
+
+        // Correction d'une erreur de saisie : 5 reçus en réalité, pas 8.
+        $factureAchat = app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+            ['produit_id' => $produit->id, 'quantite' => 8, 'prix_unitaire_ht' => 22],
+        ]);
+
+        $this->assertSame('8.000', $factureAchat->lignes->first()->quantite);
+        $this->assertSame('11.000', $produit->fresh()->stock_quantite, '3 (stock avant réception) + 8 (quantité corrigée) = 11.');
+        $this->assertSame('22.00', $produit->fresh()->prix_achat_ht);
+    }
+
+    public function test_une_facture_dachat_recuperee_par_api_nest_jamais_modifiable(): void
     {
         $fournisseur = Fournisseur::factory()->create();
         $produit = Produit::factory()->create(['suivi_stock' => false]);
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5],
-        ]);
-        $factureAchat = app(ValiderFactureAchatAction::class)->handle($factureAchat);
+        ], ['source' => SourceFactureAchat::Api]);
+
+        $this->assertFalse($factureAchat->estModifiable(), 'Même en brouillon, une facture API ne doit jamais être modifiable.');
 
         $this->expectException(LogicException::class);
         app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+    }
+
+    public function test_une_facture_dachat_deja_retournee_au_fournisseur_nest_plus_modifiable(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
+
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 5],
+        ]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle($factureAchat);
+        $ligneAchat = $factureAchat->lignes->firstOrFail();
+
+        $avoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+            ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 2],
+        ], 'Produit défectueux');
+        app(EmettreAvoirFournisseurAction::class)->handle($avoir);
+
+        $this->assertFalse($factureAchat->fresh()->estModifiable());
+
+        $this->expectException(LogicException::class);
+        app(ModifierFactureAchatAction::class)->handle($factureAchat->fresh(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
     }

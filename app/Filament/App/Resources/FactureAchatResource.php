@@ -12,6 +12,7 @@ use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
+use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
@@ -94,6 +95,15 @@ class FactureAchatResource extends Resource
                                 ->get()
                                 ->mapWithKeys(fn (Produit $produit) => [$produit->id => "{$produit->nom} ({$produit->reference})"]))
                             ->getOptionLabelUsing(fn ($value) => Produit::find($value)?->nom)
+                            // Form explicitement modelé sur Produit : voir
+                            // le commentaire équivalent dans
+                            // DevisResource::ligneSchema().
+                            ->createOptionForm(fn (Form $form): Form => $form
+                                ->model(Produit::class)
+                                ->schema(ProduitResource::creationRapideSchema()))
+                            ->createOptionModalHeading('Nouveau produit')
+                            ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::PRODUIT_CREATE)))
+                            ->createOptionUsing(fn (array $data) => Produit::create($data)->getKey())
                             ->live()
                             ->columnSpan(2)
                             ->afterStateUpdated(function (?int $state, Set $set) {

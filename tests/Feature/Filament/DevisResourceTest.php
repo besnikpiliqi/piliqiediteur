@@ -280,6 +280,38 @@ class DevisResourceTest extends TestCase
     }
 
     /**
+     * Exigence explicite : la création rapide d'un produit depuis une
+     * ligne doit proposer les mêmes informations que la page dédiée
+     * Produits (prix, TVA, stock...), pas un sous-ensemble réduit --
+     * contrairement au client, où un formulaire allégé suffit.
+     */
+    public function test_creer_un_nouveau_produit_a_la_volee_depuis_une_ligne_de_devis(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateDevis::class)
+            ->fillForm(['lignes' => [['description' => 'temp']]])
+            ->callFormComponentAction('lignes.0.produit_id', 'createOption', data: [
+                'reference' => 'ECR-IP17-PRO',
+                'nom' => 'Ecran Iphone 17 Pro',
+                'prix_achat_ht' => '80',
+                'prix_vente_ht' => '150',
+                'taux_tva' => '20',
+            ])
+            ->assertHasNoFormComponentActionErrors();
+
+        $this->assertDatabaseHas('produits', [
+            'reference' => 'ECR-IP17-PRO',
+            'nom' => 'Ecran Iphone 17 Pro',
+            'prix_achat_ht' => 80,
+            'prix_vente_ht' => 150,
+        ]);
+    }
+
+    /**
      * Une douchette USB se contente de "taper" les chiffres scannés dans
      * le champ actif : il faut donc que la recherche du produit porte
      * aussi sur le code-barres, pas seulement sur le nom.

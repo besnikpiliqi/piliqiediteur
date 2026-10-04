@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Filament\App\Resources\ProduitResource\Pages;
+use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -25,6 +26,41 @@ class ProduitResource extends Resource
     protected static ?string $modelLabel = 'produit';
 
     protected static ?string $pluralModelLabel = 'produits';
+
+    /**
+     * Mêmes champs que form() (hors stock_quantite, propre à l'édition --
+     * un produit tout juste créé n'a de toute façon jamais de stock
+     * existant), utilisés dans la modale "+" du Select produit_id d'une
+     * ligne de Facture/Devis/Facture d'achat : voir
+     * DevisResource::ligneSchema() et FactureAchatResource::form().
+     *
+     * @return array<Component>
+     */
+    public static function creationRapideSchema(): array
+    {
+        return [
+            TextInput::make('reference')->label('Référence')->required()->maxLength(60),
+            TextInput::make('code_barres')->label('Code-barres')->maxLength(50),
+            TextInput::make('nom')->required()->maxLength(200)->columnSpanFull(),
+            TextInput::make('taille')->maxLength(20),
+            TextInput::make('couleur')->maxLength(30),
+            Select::make('fournisseur_id')
+                ->label('Fournisseur')
+                ->relationship('fournisseur', 'nom')
+                ->searchable()
+                ->preload(),
+            TextInput::make('prix_achat_ht')->label('Prix d\'achat HT')->numeric()->prefix('€')->required(),
+            TextInput::make('prix_vente_ht')->label('Prix de vente HT')->numeric()->prefix('€')->required(),
+            TextInput::make('taux_tva')->label('Taux de TVA (%)')->numeric()->default(20),
+            Toggle::make('suivi_stock')->label('Suivre le stock')->default(true)->live(),
+            TextInput::make('seuil_alerte')
+                ->label('Seuil d\'alerte')
+                ->numeric()
+                ->default(0)
+                ->visible(fn ($get) => $get('suivi_stock')),
+            Toggle::make('actif')->default(true),
+        ];
+    }
 
     public static function form(Form $form): Form
     {

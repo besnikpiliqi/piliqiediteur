@@ -103,6 +103,19 @@ class DevisResource extends Resource
                     ->get()
                     ->mapWithKeys(fn (Produit $produit) => [$produit->id => "{$produit->nom} ({$produit->reference})"]))
                 ->getOptionLabelUsing(fn ($value) => Produit::find($value)?->nom)
+                // Un Form explicitement modelé sur Produit (plutôt qu'un
+                // simple tableau de schéma) : ce Select n'utilise pas
+                // relationship(), donc Filament ne peut pas déduire tout
+                // seul le modèle à utiliser pour la modale -- sans ça,
+                // le Select fournisseur_id imbriqué (qui, lui, utilise
+                // relationship()) plante en essayant de résoudre sa
+                // relation sur un modèle nul.
+                ->createOptionForm(fn (Form $form): Form => $form
+                    ->model(Produit::class)
+                    ->schema(ProduitResource::creationRapideSchema()))
+                ->createOptionModalHeading('Nouveau produit')
+                ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::PRODUIT_CREATE)))
+                ->createOptionUsing(fn (array $data) => Produit::create($data)->getKey())
                 ->live()
                 ->columnSpan(2)
                 ->afterStateUpdated(function (?int $state, Set $set) {

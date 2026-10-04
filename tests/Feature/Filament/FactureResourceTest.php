@@ -6,6 +6,8 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
@@ -27,6 +29,45 @@ use Tests\TestCase;
 class FactureResourceTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * Le résumé d'un avoir (numéro/motif/total) ne dit pas CE QUI a été
+     * retourné : le détail des lignes créditées (produit, quantité,
+     * montant) doit être visible directement sur la page de la facture
+     * créditée, pas seulement sur la page dédiée de l'avoir.
+     */
+    public function test_la_facture_affiche_le_detail_des_produits_credites_par_un_avoir(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['nom' => 'Écran iPhone 17 Pro', 'prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+
+        $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
+        $facture = $facture->fresh();
+
+        $ligneFacture = $facture->lignes->firstOrFail();
+        $avoir = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ], 'Produit défectueux');
+        app(EmettreAvoirAction::class)->handle($avoir);
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee('Avoirs émis')
+            ->assertSee($avoir->fresh()->numero)
+            ->assertSee('Produit défectueux')
+            ->assertSee('Écran iPhone 17 Pro');
+    }
 
     /**
      * Même besoin que pour les devis : un magasin de services (pas de

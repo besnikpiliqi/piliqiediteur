@@ -7,6 +7,7 @@ use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
@@ -193,9 +194,15 @@ class FactureAchatResource extends Resource
                         ->label('')
                         ->state(fn (FactureAchat $record) => $record->avoirsFournisseurEmis()->get())
                         ->schema([
-                            TextEntry::make('numero')->label('Numéro'),
-                            TextEntry::make('motif')->label('Motif')->placeholder('—'),
-                            TextEntry::make('total_ttc')->label('Total retourné TTC')->money('EUR'),
+                            // ::make('x') seul ne fonctionne pas ici : voir
+                            // le commentaire équivalent dans
+                            // FactureResource (RepeatableEntry nourri par un
+                            // state() arbitraire, pas une vraie relation du
+                            // modèle racine -- state() explicite contourne
+                            // le chemin cassé que Filament calcule sinon.
+                            TextEntry::make('numero')->label('Numéro')->state(fn (AvoirFournisseur $record) => $record->numero),
+                            TextEntry::make('motif')->label('Motif')->state(fn (AvoirFournisseur $record) => $record->motif)->placeholder('—'),
+                            TextEntry::make('total_ttc')->label('Total retourné TTC')->state(fn (AvoirFournisseur $record) => $record->total_ttc)->money('EUR'),
                         ])
                         ->columns(3),
                 ]),

@@ -2,6 +2,9 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
+use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
@@ -12,6 +15,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureAchatResource\Pages\CreateFactureAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\EditFactureAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
+use App\Filament\App\Resources\FactureAchatResource\Pages\ViewFactureAchat;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -21,6 +25,43 @@ use Tests\TestCase;
 class FactureAchatResourceTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * Même bug que sur FactureResource (voir son test équivalent) : un
+     * RepeatableEntry nourri par un state() arbitraire ne doit jamais
+     * s'appuyer sur la résolution implicite de Filament pour ses champs
+     * imbriqués -- ici pour "Avoirs fournisseur émis".
+     */
+    public function test_la_facture_dachat_affiche_le_detail_des_avoirs_fournisseur_emis(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(CreateFactureAchat::class)->fillForm([
+            'fournisseur_id' => $fournisseur->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+
+        $factureAchat = FactureAchat::query()->where('fournisseur_id', $fournisseur->id)->latest('id')->firstOrFail();
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle($factureAchat);
+
+        $ligneAchat = $factureAchat->lignes->firstOrFail();
+        $avoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+            ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 5],
+        ], 'Marchandise non conforme');
+        app(EmettreAvoirFournisseurAction::class)->handle($avoir);
+
+        Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee('Avoirs fournisseur émis')
+            ->assertSee($avoir->fresh()->numero)
+            ->assertSee('Marchandise non conforme');
+    }
 
     public function test_creer_une_facture_dachat_depuis_le_panneau(): void
     {

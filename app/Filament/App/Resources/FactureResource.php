@@ -10,7 +10,9 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Filament\App\Resources\FactureResource\Pages;
@@ -173,11 +175,35 @@ class FactureResource extends Resource
                 ->schema([
                     RepeatableEntry::make('avoirsEmisListe')
                         ->label('')
-                        ->state(fn (Facture $record) => $record->avoirsEmisConcernes()->get())
+                        ->state(fn (Facture $record) => $record->avoirsEmisConcernes()->with('lignes')->get())
                         ->schema([
-                            TextEntry::make('numero')->label('Numéro'),
-                            TextEntry::make('motif')->label('Motif')->placeholder('—'),
-                            TextEntry::make('total_ttc')->label('Total crédité TTC')->money('EUR'),
+                            // ::make('x') seul ne fonctionne pas ici : une
+                            // fois le nom imbriqué sous un RepeatableEntry
+                            // nourri par un state() arbitraire (pas une
+                            // vraie relation Eloquent du modèle racine), le
+                            // chemin résolu par Filament ("avoirsEmisListe.
+                            // {clé}.x") n'a aucun sens appliqué à un Avoir,
+                            // et renvoie toujours vide -- state() explicite,
+                            // qui reçoit directement le modèle de l'item,
+                            // contourne complètement ce calcul de chemin.
+                            TextEntry::make('numero')->label('Numéro')->state(fn (Avoir $record) => $record->numero),
+                            TextEntry::make('motif')->label('Motif')->state(fn (Avoir $record) => $record->motif)->placeholder('—'),
+                            TextEntry::make('total_ttc')->label('Total crédité TTC')->state(fn (Avoir $record) => $record->total_ttc)->money('EUR'),
+                            // Le résumé (numéro/motif/total) ne dit pas CE QUI
+                            // a été retourné : le détail des lignes créditées
+                            // (produit, quantité, montant) doit être visible
+                            // directement ici, pas seulement sur la page
+                            // dédiée de l'avoir.
+                            RepeatableEntry::make('lignes')
+                                ->label('Produits retournés')
+                                ->columnSpanFull()
+                                ->state(fn (Avoir $record) => $record->lignes)
+                                ->schema([
+                                    TextEntry::make('description')->state(fn (LigneAvoir $record) => $record->description),
+                                    TextEntry::make('quantite')->state(fn (LigneAvoir $record) => $record->quantite),
+                                    TextEntry::make('montant_ttc')->label('Total TTC')->state(fn (LigneAvoir $record) => $record->montant_ttc)->money('EUR'),
+                                ])
+                                ->columns(3),
                         ])
                         ->columns(3),
                 ]),

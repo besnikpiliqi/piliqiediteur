@@ -53,6 +53,18 @@ class DocumentNumberingServiceTest extends TestCase
         $this->assertSame('FAC-2026-000001', $numeroFacture);
     }
 
+    public function test_ticket_caisse_et_facture_ont_des_sequences_independantes_dans_le_meme_magasin(): void
+    {
+        $magasin = Magasin::factory()->create();
+        $service = app(DocumentNumberingService::class);
+
+        $numeroTicket = $service->suivant($magasin, TypeDocument::TicketCaisse, '2026');
+        $numeroFacture = $service->suivant($magasin, TypeDocument::Facture, '2026');
+
+        $this->assertSame('TK-2026-000001', $numeroTicket);
+        $this->assertSame('FAC-2026-000001', $numeroFacture);
+    }
+
     public function test_une_periode_differente_redemarre_la_sequence(): void
     {
         $magasin = Magasin::factory()->create();

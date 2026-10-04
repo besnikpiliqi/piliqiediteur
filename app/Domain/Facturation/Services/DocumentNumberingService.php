@@ -82,6 +82,7 @@ class DocumentNumberingService
         $code = match ($type) {
             TypeDocument::Devis => 'DEV',
             TypeDocument::Facture => 'FAC',
+            TypeDocument::TicketCaisse => 'TK',
             TypeDocument::Avoir => 'AV',
             TypeDocument::FactureAchat => 'FA',
             TypeDocument::AvoirFournisseur => 'AF',

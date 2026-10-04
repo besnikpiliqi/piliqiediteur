@@ -16,6 +16,13 @@ use LogicException;
  * donc aussi le seul moment où le stock est impacté et où la transmission
  * PDP peut se déclencher -- avant l'émission, une facture brouillon n'a
  * aucune existence légale ni commerciale.
+ *
+ * Une vente à un particulier pioche dans la série TicketCaisse plutôt que
+ * Facture (même critère que Facture::relevantDeLeInvoicing(), qui décide
+ * aussi du circuit PDP applicable) : un ticket de caisse et une vraie
+ * facture professionnelle ne doivent jamais se mélanger dans une même
+ * suite numérique, même s'ils restent le même enregistrement en base
+ * (voir FacturePdfGenerator pour le libellé affiché).
  */
 class EmettreFactureAction
 {
@@ -34,7 +41,8 @@ class EmettreFactureAction
                 throw new LogicException('Impossible d\'émettre une facture sans lignes.');
             }
 
-            $numero = $this->numerotation->suivant($facture->magasin, TypeDocument::Facture, now()->format('Y'));
+            $typeDocument = $facture->relevantDeLeInvoicing() ? TypeDocument::Facture : TypeDocument::TicketCaisse;
+            $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, now()->format('Y'));
 
             $facture->forceFill([
                 'numero' => $numero,

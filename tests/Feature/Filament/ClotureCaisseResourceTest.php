@@ -5,6 +5,7 @@ namespace Tests\Feature\Filament;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
@@ -58,6 +59,12 @@ class ClotureCaisseResourceTest extends TestCase
         $facture = $this->emettreFactureParticulier($client);
         $this->travelBack();
 
+        // Exigence explicite : un vendeur (ici le propriétaire lui-même, qui
+        // a créé la facture) qui n'a pas fermé sa caisse personnelle pour
+        // cette journée bloque la clôture officielle -- voir
+        // VerificateurCaissesPersonnelles.
+        app(FermerSaCaisseAction::class)->handle($proprietaire);
+
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 
         $cloture = ClotureCaisse::query()->firstOrFail();
@@ -82,10 +89,41 @@ class ClotureCaisseResourceTest extends TestCase
         $this->travelTo(now()->subDay());
         $this->emettreFactureParticulier($client); // 50 € HT, TVA 20 % => 60 € TTC
         $this->travelBack();
+        app(FermerSaCaisseAction::class)->handle($proprietaire);
 
         Livewire::test(ListClotureCaisses::class)
             ->mountAction('cloturer')
             ->assertSee('1 vente(s) au comptoir pour un total de 60,00 €');
+    }
+
+    /**
+     * Exigence explicite : un vendeur qui oublie de fermer sa caisse
+     * personnelle pour la journée à clôturer doit bloquer la clôture
+     * manuelle -- jamais se fermer tout seul (voir
+     * VerificateurCaissesPersonnelles) -- et redevient possible dès qu'il
+     * la ferme.
+     */
+    public function test_laction_cloturer_est_desactivee_tant_quun_vendeur_na_pas_ferme_sa_caisse(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+
+        $this->travelTo(now()->subDay());
+        $this->emettreFactureParticulier($client);
+        $this->travelBack();
+
+        Livewire::test(ListClotureCaisses::class)
+            ->assertActionDisabled('cloturer')
+            ->assertSee('Caisses personnelles non fermées');
+
+        app(FermerSaCaisseAction::class)->handle($proprietaire);
+
+        Livewire::test(ListClotureCaisses::class)
+            ->assertActionEnabled('cloturer');
     }
 
     public function test_la_modale_de_confirmation_previent_quand_aucune_vente_nest_en_attente(): void
@@ -154,6 +192,7 @@ class ClotureCaisseResourceTest extends TestCase
         $this->travelTo(now()->subDay());
         $facture = $this->emettreFactureParticulier($client);
         $this->travelBack();
+        app(FermerSaCaisseAction::class)->handle($proprietaire);
 
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 

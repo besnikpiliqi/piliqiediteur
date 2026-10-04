@@ -9,9 +9,11 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -41,6 +43,43 @@ class ClotureAutomatiqueCaisseTest extends TestCase
     {
         $magasin = Magasin::factory()->create();
         $facture = $this->emettreFactureHier($magasin);
+
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+
+        app(TenantContext::class)->set($magasin);
+        $this->assertSame(1, ClotureCaisse::query()->count());
+        $this->assertNotNull($facture->fresh()->cloture_caisse_id);
+    }
+
+    /**
+     * Exigence explicite : contrairement à la clôture MANUELLE (voir
+     * ListClotureCaisses, bloquée tant qu'un vendeur n'a pas fermé sa
+     * caisse personnelle, voir VerificateurCaissesPersonnelles), la
+     * commande automatique de minuit doit toujours clôturer -- elle est le
+     * filet de sécurité si personne n'intervient, jamais un chemin qui peut
+     * rester bloqué.
+     */
+    public function test_cloture_meme_si_le_vendeur_na_pas_ferme_sa_caisse_personnelle(): void
+    {
+        $magasin = Magasin::factory()->create();
+        app(TenantContext::class)->set($magasin);
+
+        $vendeur = User::factory()->create();
+        $this->actingAs($vendeur);
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $facture->forceFill(['date_emission' => now()->subDay()])->save();
+
+        // Le vendeur n'a jamais fermé sa caisse personnelle : il apparaîtrait
+        // comme "en attente" si on le vérifiait (voir
+        // VerificateurCaissesPersonnelles), mais ça ne doit rien changer ici.
+        $this->assertTrue(
+            app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(now()->subDay())->contains('id', $vendeur->id)
+        );
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 

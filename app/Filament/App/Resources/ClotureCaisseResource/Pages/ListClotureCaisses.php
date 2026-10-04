@@ -8,7 +8,9 @@ use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Filament\App\Resources\ClotureCaisseResource;
+use App\Filament\App\Resources\ClotureCaisseResource\Widgets\CaissesPersonnellesOuvertesApercu;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\VentesEnAttenteApercu;
 use Filament\Actions;
 use Filament\Facades\Filament;
@@ -52,6 +54,16 @@ class ListClotureCaisses extends ListRecords
                 $avertissement,
             );
 
+        // Un vendeur qui oublie de fermer sa caisse personnelle ne bloque
+        // jamais la clôture officielle (qui agrège directement les
+        // factures, voir CloturerCaisseAction) -- mais le propriétaire doit
+        // le savoir et pouvoir le relancer avant de clôturer manuellement,
+        // sous peine qu'un relevé personnel parte en retard (voir
+        // VerificateurCaissesPersonnelles). Volontairement absent de la
+        // commande automatique de minuit : elle doit toujours clôturer, pas
+        // se bloquer dessus.
+        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte($veille);
+
         return [
             Actions\Action::make('cloturer')
                 ->label('Clôturer une journée')
@@ -63,6 +75,10 @@ class ListClotureCaisses extends ListRecords
                 ->modalSubmitActionLabel('Oui, clôturer définitivement')
                 ->visible(fn () => auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_GERER)
                     && ClotureCaisse::query()->whereDate('date_cloture', $veille)->doesntExist())
+                ->disabled($vendeursEnAttente->isNotEmpty())
+                ->tooltip($vendeursEnAttente->isNotEmpty()
+                    ? 'Caisses personnelles non fermées : '.$vendeursEnAttente->pluck('name')->implode(', ')
+                    : null)
                 ->action(fn () => app(CloturerCaisseAction::class)->handle(Filament::getTenant(), $veille)),
         ];
     }
@@ -71,6 +87,7 @@ class ListClotureCaisses extends ListRecords
     {
         return [
             VentesEnAttenteApercu::class,
+            CaissesPersonnellesOuvertesApercu::class,
         ];
     }
 }

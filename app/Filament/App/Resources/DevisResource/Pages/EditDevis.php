@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\DevisResource\Pages;
 
 use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Filament\App\Resources\DevisResource;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class EditDevis extends EditRecord
 {
+    use GereLesExceptionsMetier;
+
     protected static string $resource = DevisResource::class;
 
     protected function getHeaderActions(): array
@@ -41,11 +44,11 @@ class EditDevis extends EditRecord
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        return app(ModifierDevisAction::class)->handle($record, $data['lignes'], [
+        return static::executerOuInterrompre(fn () => app(ModifierDevisAction::class)->handle($record, $data['lignes'], [
             'client_id' => $data['client_id'],
             'date_validite' => $data['date_validite'] ?? null,
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,
-        ]);
+        ]));
     }
 }

@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\FactureAchatResource\Pages;
 
 use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 use App\Filament\App\Resources\FactureAchatResource;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -15,6 +16,8 @@ use Illuminate\Database\Eloquent\Model;
  */
 class EditFactureAchat extends EditRecord
 {
+    use GereLesExceptionsMetier;
+
     protected static string $resource = FactureAchatResource::class;
 
     protected function getHeaderActions(): array
@@ -41,11 +44,11 @@ class EditFactureAchat extends EditRecord
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        return app(ModifierFactureAchatAction::class)->handle($record, $data['lignes'], [
+        return static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle($record, $data['lignes'], [
             'fournisseur_id' => $data['fournisseur_id'],
             'numero_fournisseur' => $data['numero_fournisseur'] ?? null,
             'date_facture' => $data['date_facture'] ?? null,
             'notes' => $data['notes'] ?? null,
-        ]);
+        ]));
     }
 }

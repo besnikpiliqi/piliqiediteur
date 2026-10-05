@@ -12,12 +12,15 @@ use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\CaissesPersonnellesOuvertesApercu;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\VentesEnAttenteApercu;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\ListRecords;
 
 class ListClotureCaisses extends ListRecords
 {
+    use GereLesExceptionsMetier;
+
     protected static string $resource = ClotureCaisseResource::class;
 
     /**
@@ -79,7 +82,7 @@ class ListClotureCaisses extends ListRecords
                 ->tooltip($vendeursEnAttente->isNotEmpty()
                     ? 'Caisses personnelles non fermées : '.$vendeursEnAttente->pluck('name')->implode(', ')
                     : null)
-                ->action(fn () => app(CloturerCaisseAction::class)->handle(Filament::getTenant(), $veille)),
+                ->action(fn () => static::executerSansCasser(fn () => app(CloturerCaisseAction::class)->handle(Filament::getTenant(), $veille))),
         ];
     }
 

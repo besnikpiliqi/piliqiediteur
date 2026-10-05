@@ -5,6 +5,7 @@ namespace Tests\Feature\Filament;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutAvoir;
+use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
@@ -111,6 +112,50 @@ class AvoirResourceTest extends TestCase
 
         $this->assertEquals(2, $ligneFacture->fresh()->quantiteCreditableRestante());
         $this->assertSame('8.000', $facture->lignes->first()->produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * CreerAvoirAction refuse de créditer une ligne d'une facture encore en
+     * brouillon (voir son docblock) : avant la correction, cette
+     * LogicException remontait telle quelle jusqu'à une page d'erreur brute
+     * au lieu d'une notification -- inacceptable pour un magasin en
+     * production (voir CreateAvoir::handleRecordCreation()).
+     */
+    public function test_creer_un_avoir_sur_une_ligne_dune_facture_brouillon_affiche_une_notification(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+
+        $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        $this->assertSame(StatutFacture::Brouillon, $facture->statut);
+        $ligneFacture = $facture->lignes->firstOrFail();
+
+        // lignesCreditablesPourClient() exclut déjà les brouillons du champ
+        // par défaut : cette ligne ne pourrait normalement jamais être
+        // sélectionnée depuis l'UI -- on simule ici une soumission avec un
+        // identifiant resté en mémoire sur une page restée ouverte.
+        Livewire::test(CreateAvoir::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [
+                    ['ligne_facture_id' => $ligneFacture->id, 'facture_numero' => $facture->numero, 'description' => $ligneFacture->description, 'quantite' => 1],
+                ],
+                'motif' => 'Tentative sur brouillon',
+            ])
+            ->call('create')
+            ->assertNotified("Impossible de créditer une ligne d'une facture au statut [brouillon].");
+
+        $this->assertSame(0, Avoir::query()->count());
     }
 
     public function test_telecharger_le_pdf_dun_avoir_emis(): void

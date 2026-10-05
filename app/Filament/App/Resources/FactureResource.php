@@ -16,6 +16,7 @@ use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Filament\App\Resources\FactureResource\Pages;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -30,16 +31,16 @@ use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
-use LogicException;
 
 class FactureResource extends Resource
 {
+    use GereLesExceptionsMetier;
+
     protected static ?string $model = Facture::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-document-currency-euro';
@@ -278,7 +279,7 @@ class FactureResource extends Resource
                     ->requiresConfirmation()
                     ->modalDescription('Un numéro définitif sera attribué et le stock sera décrémenté. Cette action est irréversible.')
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && auth()->user()->can('emettre', $record))
-                    ->action(fn (Facture $record) => app(EmettreFactureAction::class)->handle($record)),
+                    ->action(fn (Facture $record) => static::executerSansCasser(fn () => app(EmettreFactureAction::class)->handle($record))),
                 Tables\Actions\Action::make('encaisser')
                     ->label('Encaisser')
                     ->icon('heroicon-o-banknotes')
@@ -311,21 +312,15 @@ class FactureResource extends Resource
                             StatutFacture::EnRetard,
                         ], true)
                         && auth()->user()->can(PermissionRegistry::PAIEMENT_CREER))
-                    ->action(function (Facture $record, array $data) {
-                        try {
-                            app(EnregistrerPaiementAction::class)->handle([
-                                'client_id' => $record->client_id,
-                                'mode_paiement' => $data['mode_paiement'],
-                                'montant' => $data['montant'],
-                                'reference' => $data['reference'] ?? null,
-                                'recu_le' => $data['recu_le'],
-                            ], [
-                                ['facture_id' => $record->id, 'montant' => $data['montant']],
-                            ]);
-                        } catch (LogicException $exception) {
-                            Notification::make()->title($exception->getMessage())->danger()->send();
-                        }
-                    }),
+                    ->action(fn (Facture $record, array $data) => static::executerSansCasser(fn () => app(EnregistrerPaiementAction::class)->handle([
+                        'client_id' => $record->client_id,
+                        'mode_paiement' => $data['mode_paiement'],
+                        'montant' => $data['montant'],
+                        'reference' => $data['reference'] ?? null,
+                        'recu_le' => $data['recu_le'],
+                    ], [
+                        ['facture_id' => $record->id, 'montant' => $data['montant']],
+                    ]))),
                 Tables\Actions\Action::make('telecharger_pdf')
                     ->label('PDF')
                     ->icon('heroicon-o-arrow-down-tray')
@@ -348,7 +343,7 @@ class FactureResource extends Resource
                     ->requiresConfirmation()
                     ->visible(fn (Facture $record) => $record->statut->peutTransitionnerVers(StatutFacture::Annulee)
                         && auth()->user()->can('annuler', $record))
-                    ->action(fn (Facture $record, array $data) => app(AnnulerFactureAction::class)->handle($record, $data['motif'])),
+                    ->action(fn (Facture $record, array $data) => static::executerSansCasser(fn () => app(AnnulerFactureAction::class)->handle($record, $data['motif']))),
                 Tables\Actions\Action::make('avoir')
                     ->label('Avoir')
                     ->icon('heroicon-o-receipt-refund')
@@ -402,10 +397,10 @@ class FactureResource extends Resource
                     ], true)
                         && $record->possedeDesLignesCreditables()
                         && auth()->user()->can(PermissionRegistry::AVOIR_CREER))
-                    ->action(function (Facture $record, array $data) {
+                    ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
                         $avoir = app(CreerAvoirAction::class)->handle($record->client, $data['lignes'], $data['motif']);
                         app(EmettreAvoirAction::class)->handle($avoir);
-                    }),
+                    })),
             ])
             // Pour corriger une erreur déjà émise, on émet un avoir (voir
             // l'action "avoir" ci-dessus et AvoirResource) : la suppression

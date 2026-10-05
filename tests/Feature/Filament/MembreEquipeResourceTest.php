@@ -41,6 +41,36 @@ class MembreEquipeResourceTest extends TestCase
         $this->assertTrue($vendeur->appartientA($magasin));
     }
 
+    /**
+     * CreerMembreMagasinAction refuse d'attribuer le rôle propriétaire
+     * depuis la gestion d'équipe (voir son docblock) : le Select de ce
+     * formulaire n'offre déjà que les rôles assignables, mais cette
+     * exception est le seul rempart si un client contourne ce filtrage
+     * (page restée ouverte, requête modifiée) -- avant la correction, elle
+     * remontait telle quelle jusqu'à une page d'erreur brute au lieu d'une
+     * notification (voir CreateMembreEquipe::handleRecordCreation()).
+     */
+    public function test_attribuer_le_role_proprietaire_via_creation_membre_affiche_une_notification(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateMembreEquipe::class)
+            ->fillForm([
+                'name' => 'Usurpateur',
+                'email' => 'usurpateur@example.test',
+                'password' => 'mot-de-passe-sur',
+                'role' => RoleMagasin::Vendeur->value,
+            ])
+            ->set('data.role', RoleMagasin::Proprietaire->value)
+            ->call('create')
+            ->assertNotified('Le rôle propriétaire ne peut pas être attribué via la gestion d\'équipe.');
+
+        $this->assertSame(1, $magasin->membres()->count()); // uniquement le propriétaire d'origine
+    }
+
     public function test_un_vendeur_sans_permission_ne_peut_pas_acceder_a_la_gestion_dequipe(): void
     {
         $proprietaire = User::factory()->create();

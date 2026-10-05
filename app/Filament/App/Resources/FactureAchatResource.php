@@ -14,6 +14,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -44,6 +45,8 @@ use Illuminate\Database\Eloquent\Collection;
  */
 class FactureAchatResource extends Resource
 {
+    use GereLesExceptionsMetier;
+
     protected static ?string $model = FactureAchat::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
@@ -245,7 +248,7 @@ class FactureAchatResource extends Resource
                     ->requiresConfirmation()
                     ->modalDescription('Un numéro définitif sera attribué et le stock des produits sera incrémenté. Cette action est irréversible.')
                     ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Brouillon && auth()->user()->can('valider', $record))
-                    ->action(fn (FactureAchat $record) => app(ValiderFactureAchatAction::class)->handle($record)),
+                    ->action(fn (FactureAchat $record) => static::executerSansCasser(fn () => app(ValiderFactureAchatAction::class)->handle($record))),
                 Tables\Actions\Action::make('avoir_fournisseur')
                     ->label('Avoir fournisseur')
                     ->icon('heroicon-o-arrow-uturn-left')
@@ -290,10 +293,10 @@ class FactureAchatResource extends Resource
                     ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Validee
                         && $record->possedeDesLignesRetournables()
                         && auth()->user()->can(PermissionRegistry::AVOIR_FOURNISSEUR_CREER))
-                    ->action(function (FactureAchat $record, array $data) {
+                    ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
                         $avoir = app(CreerAvoirFournisseurAction::class)->handle($record, $data['lignes'], $data['motif']);
                         app(EmettreAvoirFournisseurAction::class)->handle($avoir);
-                    }),
+                    })),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

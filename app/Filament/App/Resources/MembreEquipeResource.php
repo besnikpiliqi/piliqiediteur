@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\MagasinUser;
 use App\Filament\App\Resources\MembreEquipeResource\Pages;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -26,6 +27,8 @@ use Filament\Tables\Table;
  */
 class MembreEquipeResource extends Resource
 {
+    use GereLesExceptionsMetier;
+
     protected static ?string $model = MagasinUser::class;
 
     // Contrairement à la convention par défaut de Filament (devinée côté
@@ -105,7 +108,7 @@ class MembreEquipeResource extends Resource
                     ->requiresConfirmation()
                     ->modalDescription('La personne perdra immédiatement son accès à l\'équipe.')
                     ->visible(fn (MagasinUser $record) => $record->role !== RoleMagasin::Proprietaire)
-                    ->action(fn (MagasinUser $record) => app(RetirerMembreMagasinAction::class)->handle($record)),
+                    ->action(fn (MagasinUser $record) => static::executerSansCasser(fn () => app(RetirerMembreMagasinAction::class)->handle($record))),
             ])
             ->bulkActions([]);
     }

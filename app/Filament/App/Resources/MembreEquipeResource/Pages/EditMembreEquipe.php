@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\MagasinUser;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\MembreEquipeResource;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Form;
@@ -18,6 +19,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class EditMembreEquipe extends EditRecord
 {
+    use GereLesExceptionsMetier;
+
     protected static string $resource = MembreEquipeResource::class;
 
     /**
@@ -66,18 +69,20 @@ class EditMembreEquipe extends EditRecord
         /** @var MagasinUser $record */
         $permissionsSupplementaires = $data['permissions_supplementaires'] ?? null;
 
-        $record = app(MettreAJourMembreMagasinAction::class)->handle(
-            $record,
-            RoleMagasin::from($data['role']),
-            StatutMembreMagasin::from($data['statut']),
-        );
+        return static::executerOuInterrompre(function () use ($record, $data, $permissionsSupplementaires) {
+            $record = app(MettreAJourMembreMagasinAction::class)->handle(
+                $record,
+                RoleMagasin::from($data['role']),
+                StatutMembreMagasin::from($data['statut']),
+            );
 
-        // null (pas propriétaire, champ non déshydraté) : on ne touche
-        // surtout pas aux permissions directes existantes du membre.
-        if ($permissionsSupplementaires !== null) {
-            app(DefinirPermissionsSupplementairesMembreAction::class)->handle($record, $permissionsSupplementaires);
-        }
+            // null (pas propriétaire, champ non déshydraté) : on ne touche
+            // surtout pas aux permissions directes existantes du membre.
+            if ($permissionsSupplementaires !== null) {
+                app(DefinirPermissionsSupplementairesMembreAction::class)->handle($record, $permissionsSupplementaires);
+            }
 
-        return $record;
+            return $record;
+        });
     }
 }

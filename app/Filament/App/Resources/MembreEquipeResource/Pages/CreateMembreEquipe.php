@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\MembreEquipeResource;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Facades\Filament;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -19,19 +20,23 @@ use Illuminate\Database\Eloquent\Model;
  */
 class CreateMembreEquipe extends CreateRecord
 {
+    use GereLesExceptionsMetier;
+
     protected static string $resource = MembreEquipeResource::class;
 
     protected function handleRecordCreation(array $data): Model
     {
-        /** @var Magasin $magasin */
-        $magasin = Filament::getTenant();
+        return static::executerOuInterrompre(function () use ($data) {
+            /** @var Magasin $magasin */
+            $magasin = Filament::getTenant();
 
-        $utilisateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => $data['password'],
-        ], RoleMagasin::from($data['role']));
+            $utilisateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'password' => $data['password'],
+            ], RoleMagasin::from($data['role']));
 
-        return $magasin->membres()->where('user_id', $utilisateur->getKey())->firstOrFail();
+            return $magasin->membres()->where('user_id', $utilisateur->getKey())->firstOrFail();
+        });
     }
 }

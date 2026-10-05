@@ -187,6 +187,45 @@ class FactureResourceTest extends TestCase
         $this->assertSame('120.00', $facture->total_ht);
     }
 
+    public function test_lecheance_est_prereplie_a_aujourdhui_par_defaut(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateFacture::class)
+            ->assertFormSet(['date_echeance' => now()->toDateString()]);
+    }
+
+    /**
+     * Une échéance dans le passé n'a pas de sens pour un document qui vient
+     * d'être créé : seule une date à partir d'aujourd'hui est acceptée.
+     */
+    public function test_impossible_de_choisir_une_echeance_dans_le_passe(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'date_echeance' => now()->subDay()->toDateString(),
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['date_echeance']);
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
     public function test_creer_et_emettre_une_facture_depuis_le_panneau(): void
     {
         $proprietaire = User::factory()->create();

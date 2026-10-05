@@ -87,7 +87,14 @@ class FactureResource extends Resource
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE))),
-                DatePicker::make('date_echeance')->label('Échéance'),
+                DatePicker::make('date_echeance')
+                    ->label('Échéance')
+                    // today() et non now() : minDate compare au jour, pas à
+                    // l'heure courante -- avec now(), toute heure passée
+                    // minuit aurait rendu invalide la valeur par défaut du
+                    // jour même (minuit < l'heure actuelle).
+                    ->default(today())
+                    ->minDate(today()),
                 Textarea::make('conditions_paiement')->label('Conditions de paiement')->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),

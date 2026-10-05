@@ -11,6 +11,7 @@ use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -43,6 +44,37 @@ class FactureAchatActionsTest extends TestCase
         $this->assertSame('100.00', $factureAchat->total_ht);
         $this->assertSame('120.00', $factureAchat->total_ttc);
         $this->assertSame('0.000', $produit->fresh()->stock_quantite, 'Un brouillon ne doit avoir aucun impact sur le stock.');
+    }
+
+    /**
+     * Un fournisseur facture le plus souvent en HT, mais un ticket de
+     * magasin se saisit en TTC : chaque ligne est calculée depuis le prix
+     * réellement saisi (8,33 € HT x 3 = 24,99 € HT ; 12 € TTC x 3 = 36,00 €
+     * TTC), jamais en reconvertissant l'un dans l'autre avant de multiplier.
+     */
+    public function test_chaque_ligne_dachat_est_calculee_depuis_le_prix_reellement_saisi(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 5, 'taux_tva' => 20]);
+
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 8.33],
+            ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ttc' => 12],
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+
+        [$ligneHt, $ligneTtc, $ligneCatalogue] = $factureAchat->lignes->sortBy('ordre')->values()->all();
+
+        $this->assertSame(PrixReference::Ht, $ligneHt->prix_reference);
+        $this->assertSame(['24.99', '5.00', '29.99'], [$ligneHt->montant_ht, $ligneHt->montant_tva, $ligneHt->montant_ttc]);
+
+        $this->assertSame(PrixReference::Ttc, $ligneTtc->prix_reference);
+        $this->assertSame(['30.00', '6.00', '36.00'], [$ligneTtc->montant_ht, $ligneTtc->montant_tva, $ligneTtc->montant_ttc]);
+        $this->assertSame('10.00', $ligneTtc->prix_unitaire_ht);
+
+        $this->assertSame(PrixReference::Ht, $ligneCatalogue->prix_reference);
+        $this->assertSame('5.00', $ligneCatalogue->prix_unitaire_ht);
+        $this->assertSame('6.00', $ligneCatalogue->prix_unitaire_ttc);
     }
 
     public function test_une_ligne_sans_produit_est_refusee(): void

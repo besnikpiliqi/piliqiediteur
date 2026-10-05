@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Catalogue;
 
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\LigneFacture;
@@ -42,7 +44,7 @@ class AncrerPrixDeVenteSurLeTtcMigrationTest extends TestCase
         $ligne = $facture->lignes()->firstOrFail();
         $mouvementsAvant = DB::table('mouvements_stock')->count();
 
-        $this->artisan('migrate:rollback', ['--step' => 1])->assertSuccessful();
+        $this->revenirAvantLePassageAuTtc();
 
         DB::table('produits')->whereKey($produit->id)->update(['prix_vente_ht' => 33.33]);
         DB::table('lignes_facture')->whereKey($ligne->id)->update(['prix_unitaire_ht' => 33.3333]);
@@ -72,9 +74,45 @@ class AncrerPrixDeVenteSurLeTtcMigrationTest extends TestCase
 
         $produit = Produit::factory()->create(['prix_vente_ht' => 1, 'taux_tva' => 5.5]);
 
-        $this->artisan('migrate:rollback', ['--step' => 1])->assertSuccessful();
+        $this->revenirAvantLePassageAuTtc();
         $this->artisan('migrate')->assertSuccessful();
 
         $this->assertSame('1.06', Produit::query()->findOrFail($produit->id)->prix_vente_ttc);
+    }
+
+    /**
+     * Les lignes d'achat existantes, saisies en HT, reçoivent leur PU TTC au
+     * centime et gardent le HT comme prix de référence ; les lignes de vente
+     * gardent le TTC.
+     */
+    public function test_les_lignes_existantes_recoivent_leur_prix_de_reference(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+
+        $produit = Produit::factory()->create(['prix_achat_ht' => 8.33, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 3],
+        ]);
+        $facture = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+
+        $this->artisan('migrate:rollback', ['--step' => 1])->assertSuccessful();
+        $this->artisan('migrate')->assertSuccessful();
+
+        $ligneAchat = DB::table('lignes_achat')->where('facture_achat_id', $factureAchat->id)->first();
+        $this->assertSame('ht', $ligneAchat->prix_reference);
+        $this->assertEquals(10.0, (float) $ligneAchat->prix_unitaire_ttc);
+
+        $this->assertSame('ttc', DB::table('lignes_facture')->where('facture_id', $facture->id)->value('prix_reference'));
+    }
+
+    /**
+     * Revient juste avant ancrer_prix_de_vente_sur_le_ttc, en défaisant
+     * aussi ajouter_prix_reference_aux_lignes qui la suit.
+     */
+    private function revenirAvantLePassageAuTtc(): void
+    {
+        $this->artisan('migrate:rollback', ['--step' => 2])->assertSuccessful();
     }
 }

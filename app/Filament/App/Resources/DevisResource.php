@@ -8,15 +8,15 @@ use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
+use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\DevisResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\SaisitLesPrixDeLigne;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
@@ -32,6 +32,7 @@ use Filament\Tables\Table;
 class DevisResource extends Resource
 {
     use GereLesExceptionsMetier;
+    use SaisitLesPrixDeLigne;
 
     protected static ?string $model = Devis::class;
 
@@ -135,6 +136,7 @@ class DevisResource extends Resource
                     $set('reference', $produit->reference);
                     $set('prix_unitaire_ht', (string) $produit->prix_vente_ht);
                     $set('prix_unitaire_ttc', (string) $produit->prix_vente_ttc);
+                    $set('prix_reference', PrixReference::Ttc->value);
                     $set('taux_tva', (string) $produit->taux_tva);
                 }),
             TextInput::make('description')->required()->columnSpan(2),
@@ -142,79 +144,10 @@ class DevisResource extends Resource
             // ligne : le total (et, dans la Caisse, la monnaie à rendre) se
             // met à jour pendant la saisie, pas seulement au clic ailleurs.
             TextInput::make('quantite')->numeric()->required()->default(1)->live(),
-            // PU HT et PU TTC sont tous deux visibles et saisissables, mais
-            // c'est le PU TTC qui fait référence pour le calcul de la ligne
-            // (voir CalculateurLigne::calculerDepuisTtc()) : saisir un HT ne
-            // fait que recalculer le TTC correspondant, au centime.
-            TextInput::make('prix_unitaire_ht')
-                ->label('PU HT')
-                ->numeric()
-                ->live()
-                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
-                    if (blank($state)) {
-                        return;
-                    }
-
-                    $set('prix_unitaire_ttc', app(CalculateurLigne::class)->prixUnitaireTtcDepuisHt((float) $state, self::tauxTvaActuel($get)));
-                }),
-            TextInput::make('prix_unitaire_ttc')
-                ->label('PU TTC')
-                ->numeric()
-                ->required()
-                ->live()
-                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
-                    if (blank($state)) {
-                        return;
-                    }
-
-                    $set('prix_unitaire_ht', app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $state, self::tauxTvaActuel($get)));
-                }),
-            TextInput::make('taux_tva')
-                ->label('TVA %')
-                ->numeric()
-                ->required()
-                ->default(20)
-                ->live()
-                // Le TTC fait référence : changer de taux recalcule le HT,
-                // jamais le prix TTC visé par le vendeur.
-                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
-                    if (blank($get('prix_unitaire_ttc'))) {
-                        return;
-                    }
-
-                    $set('prix_unitaire_ht', app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $get('prix_unitaire_ttc'), (float) ($state ?? 0)));
-                }),
+            ...self::champsPrixDeLigne(PrixReference::Ttc),
             TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->live(),
-            Placeholder::make('total_ligne')
-                ->label('Total TTC')
-                ->columnSpanFull()
-                // Passe par CalculateurLigne (même service que celui qui
-                // persiste réellement la ligne via ConstructeurLigneDocument)
-                // plutôt que de recalculer la formule ici : sans ça, cet
-                // aperçu pourrait afficher un centime différent de ce qui
-                // est effectivement enregistré, selon comment l'arrondi
-                // tombe -- un écart inacceptable une fois transmis à l'état.
-                ->content(function (Get $get): string {
-                    $montants = app(CalculateurLigne::class)->calculerDepuisTtc(
-                        (float) ($get('prix_unitaire_ttc') ?? 0),
-                        (float) ($get('quantite') ?? 0),
-                        (float) ($get('taux_tva') ?? 0),
-                        (float) ($get('remise_pourcentage') ?? 0),
-                    );
-
-                    return number_format($montants['montant_ttc'], 2, ',', ' ').' €';
-                }),
+            self::totalDeLigne(PrixReference::Ttc),
         ];
-    }
-
-    /**
-     * TVA par défaut (20 %) tant que le champ taux_tva n'a pas encore été
-     * hydraté -- évite une conversion HT/TTC fausse à l'affichage initial
-     * d'une ligne vide, cohérent avec son propre ->default(20).
-     */
-    private static function tauxTvaActuel(Get $get): float
-    {
-        return (float) ($get('taux_tva') ?? 20);
     }
 
     public static function table(Table $table): Table

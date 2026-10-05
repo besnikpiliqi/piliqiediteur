@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use Tests\TestCase;
 
@@ -17,6 +18,45 @@ class CalculateurLigneTest extends TestCase
     private function calculateur(): CalculateurLigne
     {
         return new CalculateurLigne;
+    }
+
+    /**
+     * Le prix réellement saisi fait foi, quel que soit le client : un PU TTC
+     * saisi donne un TTC exact, un PU HT saisi donne un HT exact (et la TVA
+     * exacte qu'un professionnel récupère).
+     */
+    public function test_calculer_part_toujours_du_prix_saisi(): void
+    {
+        $depuisTtc = $this->calculateur()->calculer(PrixReference::Ttc, prixUnitaireHt: 33.33, prixUnitaireTtc: 40, quantite: 2, tauxTva: 20);
+        $depuisHt = $this->calculateur()->calculer(PrixReference::Ht, prixUnitaireHt: 8.33, prixUnitaireTtc: 10, quantite: 3, tauxTva: 20);
+
+        $this->assertSame(['montant_ht' => 66.67, 'montant_tva' => 13.33, 'montant_ttc' => 80.0], $depuisTtc);
+        $this->assertSame(['montant_ht' => 24.99, 'montant_tva' => 5.0, 'montant_ttc' => 29.99], $depuisHt);
+    }
+
+    public function test_prix_unitaires_garde_le_prix_saisi_et_convertit_lautre(): void
+    {
+        $this->assertSame(['prix_unitaire_ht' => 33.33, 'prix_unitaire_ttc' => 40.0], $this->calculateur()->prixUnitaires(PrixReference::Ttc, 40, 20));
+        $this->assertSame(['prix_unitaire_ht' => 8.33, 'prix_unitaire_ttc' => 10.0], $this->calculateur()->prixUnitaires(PrixReference::Ht, 8.33, 20));
+    }
+
+    /**
+     * Deux retours d'un article sur une ligne de 2 à 40 € TTC : recalculés
+     * chacun, ils créditeraient 66,66 € HT et 13,34 € de TVA au lieu des
+     * 66,67 € / 13,33 € facturés. Le dernier retour prend donc le solde.
+     */
+    public function test_le_solde_dune_ligne_retombe_exactement_sur_la_ligne_facturee(): void
+    {
+        $ligne = $this->calculateur()->calculerDepuisTtc(prixUnitaireTtc: 40, quantite: 2, tauxTva: 20);
+        $premierRetour = $this->calculateur()->calculerDepuisTtc(prixUnitaireTtc: 40, quantite: 1, tauxTva: 20);
+
+        $solde = $this->calculateur()->solder($ligne, [$premierRetour]);
+
+        $this->assertSame(['montant_ht' => 33.34, 'montant_tva' => 6.66, 'montant_ttc' => 40.0], $solde);
+        $this->assertSame(
+            ['total_ht' => 66.67, 'total_tva' => 13.33, 'total_ttc' => 80.0],
+            $this->calculateur()->totaliser([$premierRetour, $solde]),
+        );
     }
 
     /**

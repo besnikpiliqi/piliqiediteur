@@ -351,12 +351,49 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * Reproduit le cas signalé par un magasin : un produit visé à 40 € TTC
-     * (champ "PU TTC", voir DevisResource::ligneSchema()) donne un prix HT
-     * de 40 / 1,20 = 33,3333... €. Avant la correction, ce prix n'était
-     * stocké qu'à 2 décimales (33,33 €) : à quantité 2, le total affiché
-     * dérivait à 79,99 € TTC au lieu des 80,00 € attendus (voir le docblock
-     * de CalculateurLigne).
+     * Le prix réellement saisi fait foi, quel que soit le client : un PU HT
+     * tapé (8,33 € x 3) donne exactement 24,99 € HT, là où passer par un PU
+     * TTC arrondi (10,00 €) donnait 25,00 € HT. Retaper ensuite un PU TTC
+     * fait de nouveau foi au TTC.
+     */
+    public function test_le_dernier_prix_saisi_sur_une_ligne_fait_foi_pour_son_calcul(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+
+        $component = Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => $client->id]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.description", 'Prestation')
+            ->set("data.lignes.{$cle}.quantite", '3')
+            ->set("data.lignes.{$cle}.prix_unitaire_ht", '8.33')
+            ->assertSet("data.lignes.{$cle}.prix_reference", 'ht')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", 10.0)
+            ->assertSee('29,99 €')
+            ->assertSee('Calculé à partir du PU HT saisi.');
+
+        $component
+            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '10')
+            ->assertSet("data.lignes.{$cle}.prix_reference", 'ttc')
+            ->assertSee('30,00 €')
+            ->set("data.lignes.{$cle}.prix_unitaire_ht", '8.33')
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        $this->assertSame(['24.99', '5.00', '29.99'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+    }
+
+    /**
+     * Reproduit le cas signalé par un magasin : un produit visé à 40 € TTC,
+     * vendu par 2, affichait 79,99 € (33,33 € HT x 2 x 1,20). Le PU TTC de
+     * la ligne fait foi : 40 x 2 = 80,00 €.
      */
     public function test_un_produit_vise_a_un_prix_ttc_rond_totalise_exactement_a_quantite_2(): void
     {
@@ -366,16 +403,13 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        // Même valeur que ce que DevisResource::htDepuisTtc(40, 20)
-        // calcule réellement pour un produit visé à 40 € TTC.
-        $prixUnitaireHt = round(40 / 1.2, 4);
-        $produit = Produit::factory()->create(['prix_vente_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)
             ->fillForm([
                 'client_id' => $client->id,
                 'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
             ])
             ->call('create')

@@ -2,18 +2,22 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Facturation\Enums\PrixReference;
+
 /**
- * Calcul HT/TVA/TTC d'une ligne de document, selon le prix qui fait
- * référence -- jamais en reconstruisant l'un à partir de l'autre puis en le
+ * Calcul HT/TVA/TTC d'une ligne de document, à partir du prix réellement
+ * saisi sur la ligne (voir PrixReference), quel que soit le document ou le
+ * client -- jamais en reconstruisant ce prix à partir de l'autre puis en le
  * multipliant par la quantité :
  *
- * - Vente (devis, facture, caisse, avoir client) : le prix TTC saisi fait
- *   référence, voir calculerDepuisTtc(). Total TTC = PU TTC x quantité,
- *   puis le HT est déduit UNE seule fois de ce total. 40 € TTC x 2 donne
- *   donc toujours 80,00 €, alors que passer par un PU HT (33,33 € x 2 x
- *   1,20) donnait 79,99 €.
- * - Achat (facture/avoir fournisseur) : un fournisseur facture en HT, son
- *   prix HT fait donc référence, voir calculerDepuisHt().
+ * - PU TTC saisi : total TTC = PU TTC x quantité, puis le HT est déduit
+ *   UNE seule fois de ce total (calculerDepuisTtc()). 40 € TTC x 2 donne
+ *   toujours 80,00 €, là où passer par 33,33 € HT x 2 x 1,20 donnait
+ *   79,99 €.
+ * - PU HT saisi : total HT = PU HT x quantité, puis la TVA est calculée sur
+ *   ce total (calculerDepuisHt()). 8,33 € HT x 3 donne toujours 24,99 € HT
+ *   et la TVA exacte qu'un professionnel récupère, là où passer par un PU
+ *   TTC arrondi (10,00 €) donnait 25,00 € HT.
  *
  * Méthode "ligne à ligne" : chaque ligne est arrondie au centime, puis les
  * totaux du document somment les lignes déjà arrondies (le total d'une
@@ -27,6 +31,67 @@ namespace App\Domain\Facturation\Services;
  */
 class CalculateurLigne
 {
+    /**
+     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     */
+    public function calculer(
+        PrixReference $reference,
+        float $prixUnitaireHt,
+        float $prixUnitaireTtc,
+        float $quantite,
+        float $tauxTva,
+        float $remisePourcentage = 0.0,
+    ): array {
+        return match ($reference) {
+            PrixReference::Ttc => $this->calculerDepuisTtc($prixUnitaireTtc, $quantite, $tauxTva, $remisePourcentage),
+            PrixReference::Ht => $this->calculerDepuisHt($prixUnitaireHt, $quantite, $tauxTva, $remisePourcentage),
+        };
+    }
+
+    /**
+     * Le prix de référence au centime, et l'autre prix qui en découle.
+     *
+     * @return array{prix_unitaire_ht: float, prix_unitaire_ttc: float}
+     */
+    public function prixUnitaires(PrixReference $reference, float $prixDeReference, float $tauxTva): array
+    {
+        $prixDeReference = $this->arrondirAuCentime($prixDeReference);
+
+        return match ($reference) {
+            PrixReference::Ttc => [
+                'prix_unitaire_ht' => $this->prixUnitaireHtDepuisTtc($prixDeReference, $tauxTva),
+                'prix_unitaire_ttc' => $prixDeReference,
+            ],
+            PrixReference::Ht => [
+                'prix_unitaire_ht' => $prixDeReference,
+                'prix_unitaire_ttc' => $this->prixUnitaireTtcDepuisHt($prixDeReference, $tauxTva),
+            ],
+        };
+    }
+
+    /**
+     * Montants du dernier retour d'une ligne : ce qui reste de la ligne une
+     * fois déduits les retours déjà émis, plutôt qu'un recalcul de la
+     * quantité restante. Chaque retour partiel est arrondi au centime, donc
+     * les recalculer tous ferait créditer au total un centime de HT ou de
+     * TVA de plus ou de moins que la ligne facturée ; le solde garantit que
+     * HT, TVA et TTC crédités retombent exactement sur la ligne.
+     *
+     * @param  array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}  $montantsLigne
+     * @param  iterable<array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}>  $montantsDejaCredites
+     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     */
+    public function solder(array $montantsLigne, iterable $montantsDejaCredites): array
+    {
+        $dejaCredite = $this->totaliser($montantsDejaCredites);
+
+        return [
+            'montant_ht' => $this->centimesVersMontant($this->versUnites((float) $montantsLigne['montant_ht'], 100) - $this->versUnites($dejaCredite['total_ht'], 100)),
+            'montant_tva' => $this->centimesVersMontant($this->versUnites((float) $montantsLigne['montant_tva'], 100) - $this->versUnites($dejaCredite['total_tva'], 100)),
+            'montant_ttc' => $this->centimesVersMontant($this->versUnites((float) $montantsLigne['montant_ttc'], 100) - $this->versUnites($dejaCredite['total_ttc'], 100)),
+        ];
+    }
+
     /**
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
      */

@@ -5,6 +5,7 @@ namespace Tests\Feature\Facturation;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -100,5 +101,56 @@ class CreerFactureActionTest extends TestCase
         $ligne = $facture->lignes->first()->fresh();
         $this->assertSame('100.00', $ligne->prix_unitaire_ht);
         $this->assertSame('20.00', $ligne->taux_tva);
+    }
+
+    /**
+     * Le prix réellement saisi sur chaque ligne fait foi, quel que soit le
+     * client : un PU HT saisi (8,33 € x 3) donne exactement 24,99 € HT et la
+     * TVA qu'un professionnel récupère ; un PU TTC saisi (40 € x 2) donne
+     * exactement 80,00 € TTC -- même au sein d'un même document.
+     */
+    public function test_chaque_ligne_est_calculee_depuis_le_prix_reellement_saisi(): void
+    {
+        $client = Client::factory()->create();
+
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['description' => 'Prestation pro', 'quantite' => 3, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20],
+            ['description' => 'Article vitrine', 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20],
+        ]);
+
+        [$ligneHt, $ligneTtc] = $facture->lignes->sortBy('ordre')->values()->all();
+
+        $this->assertSame(PrixReference::Ht, $ligneHt->prix_reference);
+        $this->assertSame('24.99', $ligneHt->montant_ht);
+        $this->assertSame('5.00', $ligneHt->montant_tva);
+        $this->assertSame('29.99', $ligneHt->montant_ttc);
+        $this->assertSame('10.00', $ligneHt->prix_unitaire_ttc);
+
+        $this->assertSame(PrixReference::Ttc, $ligneTtc->prix_reference);
+        $this->assertSame('80.00', $ligneTtc->montant_ttc);
+        $this->assertSame('66.67', $ligneTtc->montant_ht);
+        $this->assertSame('33.33', $ligneTtc->prix_unitaire_ht);
+
+        $this->assertSame('91.66', $facture->total_ht);
+        $this->assertSame('18.33', $facture->total_tva);
+        $this->assertSame('109.99', $facture->total_ttc);
+    }
+
+    /**
+     * Sans prix saisi, la ligne reprend le prix de vente TTC du produit
+     * catalogue (celui affiché en magasin).
+     */
+    public function test_sans_prix_saisi_la_ligne_reprend_le_prix_ttc_du_produit(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 2],
+        ]);
+
+        $ligne = $facture->lignes->firstOrFail();
+        $this->assertSame(PrixReference::Ttc, $ligne->prix_reference);
+        $this->assertSame('80.00', $facture->total_ttc);
     }
 }

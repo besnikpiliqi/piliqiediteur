@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Enums\PrixReference;
 use InvalidArgumentException;
 
 /**
@@ -17,14 +18,17 @@ use InvalidArgumentException;
  */
 class ConstructeurLigneDocument
 {
-    public function __construct(private readonly CalculateurLigne $calculateur) {}
+    public function __construct(
+        private readonly CalculateurLigne $calculateur,
+        private readonly ResolveurPrixLigne $resolveurPrix,
+    ) {}
 
     /**
-     * Le PU TTC fait référence (voir CalculateurLigne::calculerDepuisTtc()) :
-     * fourni tel quel, sinon déduit d'un PU HT fourni, sinon repris du
-     * produit catalogue.
+     * Le prix saisi (HT ou TTC, voir PrixReference) fait foi pour le calcul
+     * de la ligne ; sans prix saisi, c'est le prix de vente TTC du produit
+     * catalogue.
      *
-     * @param  array{produit_id?: int, description?: string, reference?: string, quantite: float|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, taux_tva?: float|string, remise_pourcentage?: float|string}  $donnees
+     * @param  array{produit_id?: int, description?: string, reference?: string, quantite: float|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|PrixReference|null, taux_tva?: float|string, remise_pourcentage?: float|string}  $donnees
      * @return array<string, mixed>
      */
     public function construire(array $donnees, int $ordre): array
@@ -39,49 +43,41 @@ class ConstructeurLigneDocument
         $tauxTva = (float) ($donnees['taux_tva'] ?? $produit?->taux_tva
             ?? throw new InvalidArgumentException('Une ligne sans produit_id doit fournir taux_tva.'));
 
-        $prixUnitaireTtc = $this->prixUnitaireTtc($donnees, $produit, $tauxTva);
-
         if (! isset($donnees['quantite'])) {
             throw new InvalidArgumentException('Chaque ligne doit fournir une quantite.');
         }
 
+        $prix = $this->resolveurPrix->resoudre(
+            $donnees,
+            PrixReference::Ttc,
+            $tauxTva,
+            $produit === null ? null : (float) $produit->prix_vente_ht,
+            $produit === null ? null : (float) $produit->prix_vente_ttc,
+        );
+
         $quantite = (float) $donnees['quantite'];
         $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
 
-        $montants = $this->calculateur->calculerDepuisTtc($prixUnitaireTtc, $quantite, $tauxTva, $remise);
+        $montants = $this->calculateur->calculer(
+            $prix['prix_reference'],
+            $prix['prix_unitaire_ht'],
+            $prix['prix_unitaire_ttc'],
+            $quantite,
+            $tauxTva,
+            $remise,
+        );
 
         return [
             'produit_id' => $produit?->id,
             'description' => $description,
             'reference' => $donnees['reference'] ?? $produit?->reference,
             'quantite' => $quantite,
-            'prix_unitaire_ht' => $this->calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, $tauxTva),
-            'prix_unitaire_ttc' => $prixUnitaireTtc,
+            ...$prix,
             'taux_tva' => $tauxTva,
             'remise_pourcentage' => $remise,
             'ordre' => $ordre,
             ...$montants,
         ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $donnees
-     */
-    private function prixUnitaireTtc(array $donnees, ?Produit $produit, float $tauxTva): float
-    {
-        if (filled($donnees['prix_unitaire_ttc'] ?? null)) {
-            return $this->calculateur->arrondirAuCentime((float) $donnees['prix_unitaire_ttc']);
-        }
-
-        if (filled($donnees['prix_unitaire_ht'] ?? null)) {
-            return $this->calculateur->prixUnitaireTtcDepuisHt((float) $donnees['prix_unitaire_ht'], $tauxTva);
-        }
-
-        if ($produit !== null) {
-            return (float) $produit->prix_vente_ttc;
-        }
-
-        throw new InvalidArgumentException('Une ligne sans produit_id doit fournir prix_unitaire_ttc ou prix_unitaire_ht.');
     }
 
     /**

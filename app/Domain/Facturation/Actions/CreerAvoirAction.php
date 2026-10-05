@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\LigneFacture;
@@ -80,15 +81,25 @@ class CreerAvoirAction
                     throw new LogicException("La ligne \"{$ligneFacture->description}\" ne peut pas être créditée au-delà de la quantité restante ({$restante}).");
                 }
 
-                // Même référence TTC que la ligne de facture créditée : un
-                // retour partiel (ex. 1 article sur 2 à 40 € TTC) crédite
-                // exactement 40,00 €, jamais un centime de plus ou de moins.
-                $montants = $this->calculateurLigne->calculerDepuisTtc(
-                    (float) $ligneFacture->prix_unitaire_ttc,
-                    $quantite,
-                    (float) $ligneFacture->taux_tva,
-                    (float) $ligneFacture->remise_pourcentage,
-                );
+                // Le dernier retour d'une ligne en prend le solde exact ; un
+                // retour partiel est calculé depuis le même prix de
+                // référence que la ligne facturée (voir PrixReference).
+                $montants = abs($quantite - $restante) < 0.0005
+                    ? $this->calculateurLigne->solder(
+                        $ligneFacture->only(['montant_ht', 'montant_tva', 'montant_ttc']),
+                        $ligneFacture->lignesAvoir()
+                            ->whereHas('avoir', fn ($query) => $query->where('statut', StatutAvoir::Emise))
+                            ->get(['montant_ht', 'montant_tva', 'montant_ttc'])
+                            ->toArray(),
+                    )
+                    : $this->calculateurLigne->calculer(
+                        $ligneFacture->prix_reference,
+                        (float) $ligneFacture->prix_unitaire_ht,
+                        (float) $ligneFacture->prix_unitaire_ttc,
+                        $quantite,
+                        (float) $ligneFacture->taux_tva,
+                        (float) $ligneFacture->remise_pourcentage,
+                    );
 
                 $avoir->lignes()->create([
                     'ligne_facture_id' => $ligneFacture->id,
@@ -98,6 +109,7 @@ class CreerAvoirAction
                     'quantite' => $quantite,
                     'prix_unitaire_ht' => $ligneFacture->prix_unitaire_ht,
                     'prix_unitaire_ttc' => $ligneFacture->prix_unitaire_ttc,
+                    'prix_reference' => $ligneFacture->prix_reference,
                     'taux_tva' => $ligneFacture->taux_tva,
                     'remise_pourcentage' => $ligneFacture->remise_pourcentage,
                     'ordre' => $index,

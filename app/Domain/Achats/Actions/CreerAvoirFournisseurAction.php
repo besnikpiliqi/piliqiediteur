@@ -2,6 +2,7 @@
 
 namespace App\Domain\Achats\Actions;
 
+use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
@@ -69,12 +70,27 @@ class CreerAvoirFournisseurAction
                     throw new LogicException("La ligne \"{$ligneAchat->description}\" ne peut pas être retournée au-delà de la quantité disponible ({$restante}) : elle a déjà été vendue ou déjà retournée.");
                 }
 
-                $montants = $this->calculateurLigne->calculerDepuisHt(
-                    (float) $ligneAchat->prix_unitaire_ht,
-                    $quantite,
-                    (float) $ligneAchat->taux_tva,
-                    (float) $ligneAchat->remise_pourcentage,
-                );
+                // Le dernier retour d'une ligne en prend le solde exact ; un
+                // retour partiel est calculé depuis le même prix de
+                // référence que la ligne achetée (voir PrixReference).
+                $resteSurLaLigne = round((float) $ligneAchat->quantite - $ligneAchat->quantiteDejaRetournee(), 3);
+
+                $montants = abs($quantite - $resteSurLaLigne) < 0.0005
+                    ? $this->calculateurLigne->solder(
+                        $ligneAchat->only(['montant_ht', 'montant_tva', 'montant_ttc']),
+                        $ligneAchat->lignesAvoirFournisseur()
+                            ->whereHas('avoirFournisseur', fn ($query) => $query->where('statut', StatutAvoirFournisseur::Emise))
+                            ->get(['montant_ht', 'montant_tva', 'montant_ttc'])
+                            ->toArray(),
+                    )
+                    : $this->calculateurLigne->calculer(
+                        $ligneAchat->prix_reference,
+                        (float) $ligneAchat->prix_unitaire_ht,
+                        (float) $ligneAchat->prix_unitaire_ttc,
+                        $quantite,
+                        (float) $ligneAchat->taux_tva,
+                        (float) $ligneAchat->remise_pourcentage,
+                    );
 
                 $avoir->lignes()->create([
                     'ligne_achat_id' => $ligneAchat->id,
@@ -83,6 +99,8 @@ class CreerAvoirFournisseurAction
                     'reference' => $ligneAchat->reference,
                     'quantite' => $quantite,
                     'prix_unitaire_ht' => $ligneAchat->prix_unitaire_ht,
+                    'prix_unitaire_ttc' => $ligneAchat->prix_unitaire_ttc,
+                    'prix_reference' => $ligneAchat->prix_reference,
                     'taux_tva' => $ligneAchat->taux_tva,
                     'remise_pourcentage' => $ligneAchat->remise_pourcentage,
                     'ordre' => $index,

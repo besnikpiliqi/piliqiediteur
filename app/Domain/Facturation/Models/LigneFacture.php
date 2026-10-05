@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Illuminate\Database\Eloquent\Model;
@@ -23,6 +24,7 @@ class LigneFacture extends Model
         'quantite',
         'prix_unitaire_ht',
         'prix_unitaire_ttc',
+        'prix_reference',
         'taux_tva',
         'remise_pourcentage',
         'montant_ht',
@@ -35,6 +37,7 @@ class LigneFacture extends Model
         'quantite' => 'decimal:3',
         'prix_unitaire_ht' => 'decimal:2',
         'prix_unitaire_ttc' => 'decimal:2',
+        'prix_reference' => PrixReference::class,
         'taux_tva' => 'decimal:2',
         'remise_pourcentage' => 'decimal:2',
         'montant_ht' => 'decimal:2',

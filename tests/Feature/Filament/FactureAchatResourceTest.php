@@ -97,6 +97,43 @@ class FactureAchatResourceTest extends TestCase
         $this->assertSame(0, AvoirFournisseur::query()->count());
     }
 
+    /**
+     * Un ticket d'achat (magasin, grande surface) affiche des prix TTC : le
+     * PU TTC saisi fait foi pour la ligne, le PU HT n'en est que la
+     * conversion -- même principe que sur une facture de vente.
+     */
+    public function test_saisir_le_pu_ttc_dune_ligne_dachat_fait_foi_pour_son_calcul(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+
+        $component = Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => $fournisseur->id]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.produit_id", $produit->id)
+            ->assertSet("data.lignes.{$cle}.prix_reference", 'ht')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '24.00')
+            ->set("data.lignes.{$cle}.quantite", '2')
+            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '40')
+            ->assertSet("data.lignes.{$cle}.prix_reference", 'ttc')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", 33.33)
+            ->assertSee('80,00 €')
+            ->assertSee('Calculé à partir du PU TTC saisi.')
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $factureAchat = FactureAchat::query()->firstOrFail();
+        $this->assertSame('80.00', $factureAchat->total_ttc);
+        $this->assertSame('66.67', $factureAchat->total_ht);
+    }
+
     public function test_creer_une_facture_dachat_depuis_le_panneau(): void
     {
         $proprietaire = User::factory()->create();

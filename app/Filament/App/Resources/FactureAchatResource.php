@@ -12,13 +12,14 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\SaisitLesPrixDeLigne;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section as FormSection;
 use Filament\Forms\Components\Select;
@@ -46,6 +47,7 @@ use Illuminate\Database\Eloquent\Collection;
 class FactureAchatResource extends Resource
 {
     use GereLesExceptionsMetier;
+    use SaisitLesPrixDeLigne;
 
     protected static ?string $model = FactureAchat::class;
 
@@ -121,35 +123,19 @@ class FactureAchatResource extends Resource
                                 $set('description', $produit->nom);
                                 $set('reference', $produit->reference);
                                 $set('prix_unitaire_ht', (string) $produit->prix_achat_ht);
+                                $set('prix_unitaire_ttc', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireTtcDepuisHt((float) $produit->prix_achat_ht, (float) $produit->taux_tva)));
+                                $set('prix_reference', PrixReference::Ht->value);
                                 $set('taux_tva', (string) $produit->taux_tva);
                             }),
                         TextInput::make('description')->required()->columnSpan(2),
                         // live() et non live(onBlur: true) : le total de la
                         // ligne se met à jour pendant la saisie.
                         TextInput::make('quantite')->numeric()->required()->default(1)->live(),
-                        TextInput::make('prix_unitaire_ht')->label('PU HT')->numeric()->required()->live(),
-                        TextInput::make('taux_tva')->label('TVA %')->numeric()->required()->default(20)->live(),
+                        ...self::champsPrixDeLigne(PrixReference::Ht),
                         TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->live(),
-                        Placeholder::make('total_ligne')
-                            ->label('Total TTC')
-                            ->columnSpanFull()
-                            // Voir le commentaire équivalent dans
-                            // DevisResource::ligneSchema() : passer par
-                            // CalculateurLigne garantit que cet aperçu
-                            // correspond exactement au montant réellement
-                            // enregistré pour la ligne.
-                            ->content(function (Get $get): string {
-                                $montants = app(CalculateurLigne::class)->calculerDepuisHt(
-                                    (float) ($get('prix_unitaire_ht') ?? 0),
-                                    (float) ($get('quantite') ?? 0),
-                                    (float) ($get('taux_tva') ?? 0),
-                                    (float) ($get('remise_pourcentage') ?? 0),
-                                );
-
-                                return number_format($montants['montant_ttc'], 2, ',', ' ').' €';
-                            }),
+                        self::totalDeLigne(PrixReference::Ht),
                     ])
-                    ->columns(6)
+                    ->columns(9)
                     ->defaultItems(1)
                     ->addActionLabel('Ajouter une ligne')
                     ->required(),
@@ -178,10 +164,11 @@ class FactureAchatResource extends Resource
                         TextEntry::make('description'),
                         TextEntry::make('quantite'),
                         TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
+                        TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
                         TextEntry::make('taux_tva')->label('TVA')->suffix(' %'),
                         TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
                     ])
-                    ->columns(5),
+                    ->columns(6),
             ]),
 
             InfolistSection::make('Totaux')->schema([

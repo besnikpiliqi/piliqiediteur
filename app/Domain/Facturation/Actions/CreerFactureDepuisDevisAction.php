@@ -46,6 +46,7 @@ class CreerFactureDepuisDevisAction
                     'quantite' => $ligne->quantite,
                     'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
                     'prix_unitaire_ttc' => $ligne->prix_unitaire_ttc,
+                    'prix_reference' => $ligne->prix_reference,
                     'taux_tva' => $ligne->taux_tva,
                     'remise_pourcentage' => $ligne->remise_pourcentage,
                     'montant_ht' => $ligne->montant_ht,

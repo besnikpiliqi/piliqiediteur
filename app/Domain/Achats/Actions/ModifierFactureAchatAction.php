@@ -6,7 +6,9 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\ResolveurPrixLigne;
 use App\Domain\Stock\Services\StockLedgerService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -32,11 +34,12 @@ class ModifierFactureAchatAction
 {
     public function __construct(
         private readonly CalculateurLigne $calculateurLigne,
+        private readonly ResolveurPrixLigne $resolveurPrix,
         private readonly StockLedgerService $stockLedger,
     ) {}
 
     /**
-     * @param  list<array{produit_id: int|string, quantite: float|string, prix_unitaire_ht?: float|string, taux_tva?: float|string, remise_pourcentage?: float|string, description?: string, reference?: string}>  $lignes
+     * @param  list<array{produit_id: int|string, quantite: float|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|null, taux_tva?: float|string, remise_pourcentage?: float|string, description?: string, reference?: string}>  $lignes
      * @param  array<string, mixed>  $attributs
      */
     public function handle(FactureAchat $factureAchat, array $lignes, array $attributs = []): FactureAchat
@@ -66,18 +69,28 @@ class ModifierFactureAchatAction
 
                 $produit = Produit::query()->findOrFail($donnees['produit_id']);
                 $quantite = (float) ($donnees['quantite'] ?? throw new InvalidArgumentException('Chaque ligne doit fournir une quantite.'));
-                $prixUnitaireHt = $this->calculateurLigne->arrondirAuCentime((float) ($donnees['prix_unitaire_ht'] ?? $produit->prix_achat_ht));
                 $tauxTva = (float) ($donnees['taux_tva'] ?? $produit->taux_tva);
                 $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
+                // Un fournisseur facture le plus souvent en HT (prix d'achat
+                // catalogue), mais un ticket de magasin se saisit en TTC :
+                // le prix saisi fait foi, voir PrixReference.
+                $prix = $this->resolveurPrix->resoudre($donnees, PrixReference::Ht, $tauxTva, (float) $produit->prix_achat_ht);
 
-                $montants = $this->calculateurLigne->calculerDepuisHt($prixUnitaireHt, $quantite, $tauxTva, $remise);
+                $montants = $this->calculateurLigne->calculer(
+                    $prix['prix_reference'],
+                    $prix['prix_unitaire_ht'],
+                    $prix['prix_unitaire_ttc'],
+                    $quantite,
+                    $tauxTva,
+                    $remise,
+                );
 
                 $ligneCreee = $factureAchat->lignes()->create([
                     'produit_id' => $produit->id,
                     'description' => $donnees['description'] ?? $produit->nom,
                     'reference' => $donnees['reference'] ?? $produit->reference,
                     'quantite' => $quantite,
-                    'prix_unitaire_ht' => $prixUnitaireHt,
+                    ...$prix,
                     'taux_tva' => $tauxTva,
                     'remise_pourcentage' => $remise,
                     'ordre' => $index,

@@ -329,6 +329,57 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
+     * Chaque retour est arrondi au centime : recalculer le second retour
+     * d'une ligne de 2 x 40 € TTC créditerait au total 66,66 € HT et 13,34 €
+     * de TVA, au lieu des 66,67 € / 13,33 € facturés. Le dernier retour d'une
+     * ligne en prend donc le solde exact.
+     */
+    public function test_le_dernier_retour_dune_ligne_ttc_en_credite_le_solde_exact(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = $this->emettreFacture($client, $produit, 2);
+        $ligneFacture = $facture->lignes->firstOrFail();
+
+        $premier = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]));
+        $dernier = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]);
+
+        $this->assertSame(['33.33', '6.67', '40.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
+        $this->assertSame(['33.34', '6.66', '40.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+        $this->assertSame('66.67', number_format((float) $premier->total_ht + (float) $dernier->total_ht, 2, '.', ''));
+        $this->assertSame('13.33', number_format((float) $premier->total_tva + (float) $dernier->total_tva, 2, '.', ''));
+    }
+
+    /**
+     * Même exigence pour une ligne saisie en HT (8,33 € HT x 2 = 16,66 € HT,
+     * 3,33 € de TVA) : TVA créditée = TVA facturée, au centime près.
+     */
+    public function test_le_dernier_retour_dune_ligne_ht_en_credite_le_solde_exact(): void
+    {
+        $client = Client::factory()->create();
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+            ['description' => 'Prestation', 'quantite' => 2, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20],
+        ]));
+        $ligneFacture = $facture->lignes->firstOrFail();
+
+        $this->assertSame(['16.66', '3.33', '19.99'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+
+        $premier = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]));
+        $dernier = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]);
+
+        $this->assertSame(['8.33', '1.67', '10.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
+        $this->assertSame(['8.33', '1.66', '9.99'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+    }
+
+    /**
      * @return list<array{ligne_facture_id: int, quantite: float}>
      */
     private function toutesLesLignes(Facture $facture): array

@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\ClientResource;
@@ -221,16 +222,9 @@ class Caisse extends Page implements HasForms
      */
     private function totalTtc(array $lignes): float
     {
-        $calculateur = app(CalculateurLigne::class);
+        $montants = collect($lignes)->map(fn (array $ligne) => DevisResource::montantsDeLigneSaisie($ligne, PrixReference::Ttc));
 
-        $montants = collect($lignes)->map(fn (array $ligne) => $calculateur->calculerDepuisTtc(
-            (float) ($ligne['prix_unitaire_ttc'] ?? 0),
-            (float) ($ligne['quantite'] ?? 0),
-            (float) ($ligne['taux_tva'] ?? 0),
-            (float) ($ligne['remise_pourcentage'] ?? 0),
-        ));
-
-        return $calculateur->totaliser($montants)['total_ttc'];
+        return app(CalculateurLigne::class)->totaliser($montants)['total_ttc'];
     }
 
     private function formaterMontant(float $montant): string

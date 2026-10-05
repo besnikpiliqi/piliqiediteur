@@ -9,6 +9,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
@@ -67,6 +68,39 @@ class FactureResourceTest extends TestCase
             ->assertSee($avoir->fresh()->numero)
             ->assertSee('Produit défectueux')
             ->assertSee('Écran iPhone 17 Pro');
+    }
+
+    /**
+     * Le Repeater de lignes à créditer de l'action "Avoir" est
+     * volontairement "deletable(true)" (voir son docblock) pour permettre
+     * de retirer une ligne à ne pas rembourser : un vendeur peut donc, par
+     * erreur, les retirer toutes avant de valider. CreerAvoirAction refuse
+     * alors de créer un avoir sans aucune ligne -- avant la correction,
+     * cette LogicException remontait telle quelle jusqu'à une page
+     * d'erreur brute au lieu d'une notification.
+     */
+    public function test_laction_avoir_sans_aucune_ligne_affiche_une_notification(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+        $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
+
+        Livewire::test(ListFactures::class)
+            ->callTableAction('avoir', $facture->fresh(), data: ['lignes' => [], 'motif' => 'Oups'])
+            ->assertNotified('Un avoir doit porter sur au moins une ligne.');
+
+        $this->assertSame(0, Avoir::query()->count());
     }
 
     /**

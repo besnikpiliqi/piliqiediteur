@@ -71,6 +71,37 @@ class MembreEquipeResourceTest extends TestCase
         $this->assertSame(1, $magasin->membres()->count()); // uniquement le propriétaire d'origine
     }
 
+    /**
+     * Même garde-fou que CreerMembreMagasinAction côté création (voir le
+     * test ci-dessus), mais côté modification : MettreAJourMembreMagasinAction
+     * refuse de faire passer un membre au rôle propriétaire. Le Select de
+     * ce formulaire n'offre déjà que les rôles assignables, mais cette
+     * exception est le seul rempart si un client contourne ce filtrage --
+     * avant la correction, elle remontait telle quelle jusqu'à une page
+     * d'erreur brute (voir EditMembreEquipe::handleRecordUpdate()).
+     */
+    public function test_modifier_le_role_dun_membre_en_proprietaire_affiche_une_notification(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateMembreEquipe::class)->fillForm([
+            'name' => 'Vendeur', 'email' => 'vendeur@example.test', 'password' => 'mot-de-passe-sur', 'role' => RoleMagasin::Vendeur->value,
+        ])->call('create');
+        $vendeur = User::where('email', 'vendeur@example.test')->firstOrFail();
+        $membre = $magasin->membres()->where('user_id', $vendeur->id)->firstOrFail();
+
+        Livewire::test(EditMembreEquipe::class, ['record' => $membre->getRouteKey()])
+            ->fillForm(['role' => RoleMagasin::Vendeur->value, 'statut' => 'active'])
+            ->set('data.role', RoleMagasin::Proprietaire->value)
+            ->call('save')
+            ->assertNotified('Le rôle propriétaire ne se modifie pas via la gestion d\'équipe.');
+
+        $this->assertSame(RoleMagasin::Vendeur, $membre->fresh()->role);
+    }
+
     public function test_un_vendeur_sans_permission_ne_peut_pas_acceder_a_la_gestion_dequipe(): void
     {
         $proprietaire = User::factory()->create();

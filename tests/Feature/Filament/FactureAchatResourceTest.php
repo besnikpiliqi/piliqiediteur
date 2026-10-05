@@ -7,6 +7,7 @@ use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -61,6 +62,38 @@ class FactureAchatResourceTest extends TestCase
             ->assertSee('Avoirs fournisseur émis')
             ->assertSee($avoir->fresh()->numero)
             ->assertSee('Marchandise non conforme');
+    }
+
+    /**
+     * Même raisonnement que le test équivalent sur FactureResource ("avoir"
+     * sans aucune ligne) : le Repeater de lignes à retourner est
+     * "deletable(true)", un vendeur peut donc les retirer toutes avant de
+     * valider. CreerAvoirFournisseurAction refuse alors de créer un avoir
+     * sans aucune ligne -- avant la correction, cette LogicException
+     * remontait telle quelle jusqu'à une page d'erreur brute.
+     */
+    public function test_laction_avoir_fournisseur_sans_aucune_ligne_affiche_une_notification(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(CreateFactureAchat::class)->fillForm([
+            'fournisseur_id' => $fournisseur->id,
+            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => 10, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+        $factureAchat = FactureAchat::query()->where('fournisseur_id', $fournisseur->id)->latest('id')->firstOrFail();
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle($factureAchat);
+
+        Livewire::test(ListFacturesAchat::class)
+            ->callTableAction('avoir_fournisseur', $factureAchat->fresh(), data: ['lignes' => [], 'motif' => 'Oups'])
+            ->assertNotified('Un avoir fournisseur doit porter sur au moins une ligne.');
+
+        $this->assertSame(0, AvoirFournisseur::query()->count());
     }
 
     public function test_creer_une_facture_dachat_depuis_le_panneau(): void

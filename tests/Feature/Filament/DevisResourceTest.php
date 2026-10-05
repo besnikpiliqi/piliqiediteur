@@ -21,6 +21,7 @@ use App\Filament\App\Resources\DevisResource\Pages\EditDevis;
 use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -110,7 +111,10 @@ class DevisResourceTest extends TestCase
             ->fillForm([
                 'client_id' => $client->id,
                 'lignes' => [
-                    ['description' => 'Main d\'œuvre - pose', 'quantite' => 3, 'prix_unitaire_ht' => 45, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                    // PU TTC, pas HT : seul champ de prix désormais saisi
+                    // sur une ligne (voir DevisResource::ligneSchema()). 54 €
+                    // TTC à 20 % de TVA = 45 € HT.
+                    ['description' => 'Main d\'œuvre - pose', 'quantite' => 3, 'prix_unitaire_ttc' => 54, 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
             ])
             ->call('create')
@@ -391,6 +395,76 @@ class DevisResourceTest extends TestCase
             'prix_achat_ht' => 80,
             'prix_vente_ht' => 150,
         ]);
+    }
+
+    /**
+     * Le vendeur pense en prix affiché/TTC, pas en HT : c'est donc "PU TTC"
+     * qui est le champ réellement saisi et visible sur une ligne, jamais
+     * "PU HT" (voir DevisResource::ligneSchema()) -- sans quoi le vendeur
+     * verrait un nombre à 4 décimales (ex. 33,3333 €) dès que le TTC visé
+     * ne se divise pas rond par 1 + le taux de TVA.
+     */
+    public function test_le_prix_unitaire_ht_dune_ligne_nest_jamais_un_champ_visible(): void
+    {
+        $champHt = collect(DevisResource::ligneSchema())
+            ->first(fn ($component) => $component->getName() === 'prix_unitaire_ht');
+
+        $this->assertInstanceOf(Hidden::class, $champHt);
+    }
+
+    /**
+     * Saisir le PU TTC d'une ligne doit calculer le PU HT caché à sa place
+     * -- même principe que pour Caisse (voir CaisseTest), partagé via
+     * DevisResource::ligneSchema() et donc valable aussi pour Devis/Facture.
+     */
+    public function test_saisir_le_prix_ttc_dune_ligne_calcule_le_prix_ht_cache(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+
+        $component = Livewire::test(CreateDevis::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [['description' => 'Pose', 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+            ]);
+
+        $cle = array_key_first($component->get('data.lignes'));
+        $component->set("data.lignes.{$cle}.prix_unitaire_ttc", '12');
+
+        $this->assertSame(10.0, (float) $component->get("data.lignes.{$cle}.prix_unitaire_ht"));
+    }
+
+    /**
+     * Changer le taux de TVA d'une ligne doit recalculer le HT caché à
+     * partir du TTC affiché (l'ancre du point de vue du vendeur), jamais
+     * l'inverse -- sans quoi le prix TTC visé changerait sous ses yeux au
+     * seul changement de taux.
+     */
+    public function test_changer_le_taux_de_tva_dune_ligne_recalcule_le_ht_sans_changer_le_ttc_affiche(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+
+        $component = Livewire::test(CreateDevis::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [['description' => 'Pose', 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+            ]);
+
+        $cle = array_key_first($component->get('data.lignes'));
+        $component->set("data.lignes.{$cle}.prix_unitaire_ttc", '12');
+        $component->set("data.lignes.{$cle}.taux_tva", '5.5');
+
+        $this->assertSame(12.0, (float) $component->get("data.lignes.{$cle}.prix_unitaire_ttc"));
+        $this->assertSame(round(12 / 1.055, 4), (float) $component->get("data.lignes.{$cle}.prix_unitaire_ht"));
     }
 
     /**

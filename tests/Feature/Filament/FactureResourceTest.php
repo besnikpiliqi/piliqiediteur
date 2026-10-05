@@ -299,7 +299,10 @@ class FactureResourceTest extends TestCase
             ->fillForm([
                 'client_id' => $client->id,
                 'lignes' => [
-                    ['description' => 'Main d\'œuvre - installation', 'quantite' => 2, 'prix_unitaire_ht' => 60, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                    // PU TTC, pas HT : seul champ de prix désormais saisi
+                    // sur une ligne (voir DevisResource::ligneSchema()). 72 €
+                    // TTC à 20 % de TVA = 60 € HT.
+                    ['description' => 'Main d\'œuvre - installation', 'quantite' => 2, 'prix_unitaire_ttc' => 72, 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
             ])
             ->call('create')
@@ -311,6 +314,39 @@ class FactureResourceTest extends TestCase
         $this->assertNull($ligne->produit_id);
         $this->assertSame('Main d\'œuvre - installation', $ligne->description);
         $this->assertSame('120.00', $facture->total_ht);
+    }
+
+    /**
+     * Ferme la boucle du cas signalé par un magasin en passant par le vrai
+     * champ "PU TTC" tapé en direct (comme un vendeur), pas par une valeur
+     * HT précalculée dans le test : 40 € TTC à 20 % de TVA et quantité 2
+     * doit totaliser exactement 80,00 € TTC, jamais 79,99 €.
+     */
+    public function test_saisir_le_prix_ttc_dune_ligne_sans_produit_totalise_exactement_a_quantite_2(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+
+        $component = Livewire::test(CreateFacture::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [['description' => 'Prestation', 'quantite' => 2, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+            ]);
+
+        $cle = array_key_first($component->get('data.lignes'));
+        $component->set("data.lignes.{$cle}.prix_unitaire_ttc", '40');
+
+        $component->call('create')->assertHasNoFormErrors();
+
+        $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        $ligne = $facture->lignes->firstOrFail();
+
+        $this->assertSame('80.00', $ligne->montant_ttc);
+        $this->assertSame('80.00', $facture->total_ttc);
     }
 
     /**

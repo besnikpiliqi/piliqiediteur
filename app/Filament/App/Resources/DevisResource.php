@@ -16,6 +16,7 @@ use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
@@ -142,24 +143,21 @@ class DevisResource extends Resource
             // ligne : le total (et, dans la Caisse, la monnaie à rendre) se
             // met à jour pendant la saisie, pas seulement au clic ailleurs.
             TextInput::make('quantite')->numeric()->required()->default(1)->live(),
-            TextInput::make('prix_unitaire_ht')
-                ->label('PU HT')
-                ->numeric()
-                ->required()
-                ->live()
-                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
-                    $set('prix_unitaire_ttc', $state === null || $state === ''
-                        ? null
-                        : self::ttcDepuisHt((float) $state, self::tauxTvaActuel($get)));
-                }),
-            // Le vendeur pense souvent en prix affiché/TTC (ex: "10 € pile")
-            // plutôt qu'en HT : ce champ n'est qu'une façon alternative de
-            // saisir prix_unitaire_ht (seul champ réellement enregistré,
-            // voir dehydrated(false)) -- il évite au vendeur de calculer
-            // lui-même le HT correspondant au prix TTC visé.
+            // Seul prix_unitaire_ht est réellement enregistré (colonne de
+            // lignes_facture/lignes_devis), mais jamais affiché tel quel :
+            // dérivé d'un prix TTC rond, il peut porter 4 décimales (ex.
+            // 33,3333 € pour un article visé à 40 € TTC) -- un nombre qui
+            // semble "faux" aux yeux du vendeur alors qu'il est juste plus
+            // précis. Même principe que ProduitResource::prixVenteTtcSchema().
+            Hidden::make('prix_unitaire_ht'),
+            // Le vendeur pense en prix affiché/TTC (ex: "10 € pile"), pas en
+            // HT : c'est donc ce champ, pas prix_unitaire_ht, qui est saisi
+            // et visible. Il n'est jamais enregistré tel quel (dehydrated
+            // (false)) -- il ne sert qu'à calculer prix_unitaire_ht.
             TextInput::make('prix_unitaire_ttc')
                 ->label('PU TTC')
                 ->numeric()
+                ->required()
                 ->live()
                 ->dehydrated(false)
                 ->afterStateHydrated(function (TextInput $component, Get $get) {
@@ -178,8 +176,12 @@ class DevisResource extends Resource
                 ->required()
                 ->default(20)
                 ->live()
+                // Recalcule le HT caché à partir du TTC affiché (l'ancre du
+                // point de vue du vendeur), jamais l'inverse -- sans quoi le
+                // prix TTC visé changerait sous ses yeux au seul changement
+                // de taux.
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
-                    $set('prix_unitaire_ttc', self::ttcDepuisHt((float) ($get('prix_unitaire_ht') ?? 0), (float) ($state ?? 0)));
+                    $set('prix_unitaire_ht', self::htDepuisTtc((float) ($get('prix_unitaire_ttc') ?? 0), (float) ($state ?? 0)));
                 }),
             TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->live(),
             Placeholder::make('total_ligne')

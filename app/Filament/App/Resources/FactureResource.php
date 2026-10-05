@@ -62,8 +62,11 @@ class FactureResource extends Resource
      */
     public static function getEloquentQuery(): Builder
     {
-        // withSum évite un N+1 sur montantPaye() pour chaque ligne du tableau.
-        $query = parent::getEloquentQuery()->withSum('allocationsPaiement as montant_paye_somme', 'montant_alloue');
+        // withSum évite un N+1 sur montantPaye()/montantCrediteParAvoir()
+        // pour chaque ligne du tableau.
+        $query = parent::getEloquentQuery()
+            ->withSum('allocationsPaiement as montant_paye_somme', 'montant_alloue')
+            ->withSum('allocationsAvoir as montant_credite_somme', 'montant_alloue');
 
         if (! auth()->user()->can(PermissionRegistry::FACTURE_VIEW_TOUTES)) {
             $query->where('cree_par', auth()->id());
@@ -257,9 +260,19 @@ class FactureResource extends Resource
                 Tables\Columns\TextColumn::make('client.nom')->label('Client')->searchable(),
                 Tables\Columns\TextColumn::make('statut')->badge(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
+                // Un avoir n'est jamais remboursé par ce logiciel : son
+                // crédit réduit le solde dû exactement comme un encaissement
+                // (voir Facture::montantRestant()), c'est d'ailleurs lui qui
+                // explique le statut "Partiellement payée"/"Payée" d'une
+                // facture jamais réellement encaissée. Le séparer du "Payé"
+                // ici donnerait l'impression contradictoire d'une facture
+                // "partiellement payée" à 0 € payé.
                 Tables\Columns\TextColumn::make('montant_paye_somme')
                     ->label('Payé')
-                    ->state(fn (Facture $record) => round((float) ($record->montant_paye_somme ?? 0), 2))
+                    ->state(fn (Facture $record) => round(
+                        (float) ($record->montant_paye_somme ?? 0) + (float) ($record->montant_credite_somme ?? 0),
+                        2,
+                    ))
                     ->money('EUR'),
                 Tables\Columns\TextColumn::make('creePar.name')->label('Créée par')->toggleable(),
                 Tables\Columns\TextColumn::make('date_echeance')->label('Échéance')->date('d/m/Y'),

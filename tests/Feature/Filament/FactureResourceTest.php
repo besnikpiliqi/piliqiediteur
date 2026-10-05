@@ -156,6 +156,63 @@ class FactureResourceTest extends TestCase
     }
 
     /**
+     * Un avoir n'est jamais remboursé par ce logiciel : son crédit réduit le
+     * solde dû exactement comme un encaissement, et c'est lui qui explique
+     * le statut "Partiellement payée" d'une facture jamais réellement
+     * encaissée. La colonne "Payé" de la liste doit donc refléter ce
+     * crédit -- sans quoi elle affiche "0,00 €" à côté d'un statut
+     * "Partiellement payée", un résultat qui se lit comme une
+     * contradiction/un bug plutôt que comme un règlement par avoir.
+     */
+    public function test_la_colonne_paye_de_la_liste_inclut_le_credit_applique_par_avoir(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produitRembourse = Produit::factory()->create(['prix_vente_ht' => 8.33, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produitFacture = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        // Premier achat intégralement retourné : 10 € de crédit disponible.
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produitRembourse->id, 'description' => $produitRembourse->nom, 'quantite' => 1, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+        $premiereFacture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $premiereFacture);
+
+        $ligneFacture = $premiereFacture->fresh()->lignes->firstOrFail();
+        $avoir = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]);
+        app(EmettreAvoirAction::class)->handle($avoir);
+
+        // Nouvel achat d'un montant supérieur : seulement couvert en partie
+        // par le crédit, aucun encaissement réel.
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produitFacture->id, 'description' => $produitFacture->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+        $nouvelleFacture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $nouvelleFacture);
+        $nouvelleFacture = $nouvelleFacture->fresh();
+
+        $this->assertSame(StatutFacture::PartiellementPayee, $nouvelleFacture->statut);
+        $this->assertSame(0.0, $nouvelleFacture->montantPaye());
+        $this->assertSame(10.0, $nouvelleFacture->montantCrediteParAvoir());
+
+        // On passe la clé, pas le modèle déjà chargé : assertTableColumnStateSet
+        // ne re-résout la ligne via la requête de la table (et donc ses
+        // withSum) que si on lui laisse le faire elle-même -- un modèle
+        // déjà en main (même fresh()) n'aurait pas ces agrégats et
+        // fausserait le test.
+        Livewire::test(ListFactures::class)
+            ->assertTableColumnStateSet('montant_paye_somme', 10.0, $nouvelleFacture->getKey());
+    }
+
+    /**
      * Même besoin que pour les devis : un magasin de services (pas de
      * stock) doit pouvoir facturer de la main d'œuvre ou une prestation
      * jamais enregistrée au catalogue, en remplissant la ligne à la main.

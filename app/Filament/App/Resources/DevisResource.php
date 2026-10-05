@@ -219,9 +219,17 @@ class DevisResource extends Resource
         return round($ht * (1 + $tauxTva / 100), 2);
     }
 
+    /**
+     * Arrondi à 4 décimales, pas 2 : c'est ce prix HT qui est réellement
+     * enregistré (voir dehydrated(false) sur le champ "PU TTC"). Un prix
+     * TTC rond ne se divise pas toujours exactement par 1 + taux de TVA
+     * (ex: 40 € / 1,20 = 33,3333...) -- l'arrondir à 2 décimales dès ici
+     * ferait dériver le total TTC de la ligne dès que la quantité dépasse 1
+     * (voir le docblock de CalculateurLigne).
+     */
     private static function htDepuisTtc(float $ttc, float $tauxTva): float
     {
-        return round($ttc / (1 + $tauxTva / 100), 2);
+        return round($ttc / (1 + $tauxTva / 100), 4);
     }
 
     public static function table(Table $table): Table

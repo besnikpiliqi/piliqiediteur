@@ -62,8 +62,9 @@ class Produit extends Model
     }
 
     protected $casts = [
-        'prix_achat_ht' => 'decimal:2',
-        'prix_vente_ht' => 'decimal:2',
+        // 4 décimales, pas 2 : voir le docblock de CalculateurLigne.
+        'prix_achat_ht' => 'decimal:4',
+        'prix_vente_ht' => 'decimal:4',
         'taux_tva' => 'decimal:2',
         'stock_quantite' => 'decimal:3',
         'seuil_alerte' => 'decimal:3',

@@ -250,6 +250,44 @@ class FactureResourceTest extends TestCase
         $this->assertSame('120.00', $facture->total_ht);
     }
 
+    /**
+     * Reproduit le cas signalé par un magasin : un produit visé à 40 € TTC
+     * (champ "PU TTC", voir DevisResource::ligneSchema()) donne un prix HT
+     * de 40 / 1,20 = 33,3333... €. Avant la correction, ce prix n'était
+     * stocké qu'à 2 décimales (33,33 €) : à quantité 2, le total affiché
+     * dérivait à 79,99 € TTC au lieu des 80,00 € attendus (voir le docblock
+     * de CalculateurLigne).
+     */
+    public function test_un_produit_vise_a_un_prix_ttc_rond_totalise_exactement_a_quantite_2(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        // Même valeur que ce que DevisResource::htDepuisTtc(40, 20)
+        // calcule réellement pour un produit visé à 40 € TTC.
+        $prixUnitaireHt = round(40 / 1.2, 4);
+        $produit = Produit::factory()->create(['prix_vente_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        $ligne = $facture->lignes->firstOrFail();
+
+        $this->assertSame('80.00', $ligne->montant_ttc);
+        $this->assertSame('80.00', $facture->total_ttc);
+    }
+
     public function test_lecheance_est_prereplie_a_aujourdhui_par_defaut(): void
     {
         $proprietaire = User::factory()->create();

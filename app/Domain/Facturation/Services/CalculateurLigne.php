@@ -14,16 +14,27 @@ namespace App\Domain\Facturation\Services;
  * mais n'est pas implémentée ici -- à ajouter si un client l'exige
  * explicitement pour des raisons de rapprochement comptable.
  *
- * Tout le calcul se fait en centimes ENTIERS, jamais en flottant
- * intermédiaire : un flottant comme 8.325 n'a pas de représentation binaire
- * exacte (il vaut réellement ~8.32499999999999982...), donc round(8.325, 2)
- * peut arrondir vers le mauvais côté selon la valeur exacte représentée.
- * En décimal/finance, ce risque est inacceptable : une différence d'un seul
+ * Tout le calcul se fait en entiers, jamais en flottant intermédiaire : un
+ * flottant comme 8.325 n'a pas de représentation binaire exacte (il vaut
+ * réellement ~8.32499999999999982...), donc round(8.325, 2) peut arrondir
+ * vers le mauvais côté selon la valeur exacte représentée. En
+ * décimal/finance, ce risque est inacceptable : une différence d'un seul
  * centime entre le montant affiché/stocké et celui réellement transmis à
- * l'administration (API PDP) suffit à faire rejeter la facture. On convertit
- * donc le prix unitaire en centimes dès l'entrée, on arrondit à chaque étape
- * sur des entiers (jamais de perte "silencieuse" accumulée), et on ne
- * reconvertit en flottant qu'à la toute fin, pour le stockage/affichage.
+ * l'administration (API PDP) suffit à faire rejeter la facture.
+ *
+ * Le prix unitaire HT est stocké avec 4 décimales, pas 2 (voir la migration
+ * augmenter_precision_prix_unitaire_ht) : un prix saisi via "PU TTC" (voir
+ * DevisResource::htDepuisTtc()) ne se divise pas toujours exactement par
+ * 1 + taux de TVA (ex: 40 € / 1,20 = 33,3333...). Arrondir ce prix unitaire
+ * à 2 décimales dès l'entrée ferait dériver le total TTC d'une ligne dès
+ * que la quantité dépasse 1 (33,33 x 2 = 66,66 -> 79,99 € TTC au lieu des
+ * 80,00 € attendus). On convertit donc le prix unitaire en dix-millièmes
+ * (4 décimales) et la quantité en millièmes (3 décimales, voir la colonne
+ * "quantite") : leur produit est un entier EXACT, sans aucun arrondi
+ * intermédiaire, et ne se convertit en centimes qu'une fois le montant brut
+ * de la ligne obtenu -- la même règle "jamais de perte silencieuse
+ * accumulée" que pour les étapes suivantes (remise, TVA), jusqu'à la
+ * reconversion finale en flottant pour le stockage/affichage.
  */
 class CalculateurLigne
 {
@@ -36,9 +47,14 @@ class CalculateurLigne
         float $tauxTva,
         float $remisePourcentage = 0.0,
     ): array {
-        $prixUnitaireCentimes = (int) round($prixUnitaireHt * 100);
+        $prixUnitaireDixMilliemes = (int) round($prixUnitaireHt * 10000);
+        $quantiteMilliemes = (int) round($quantite * 1000);
 
-        $montantBrutCentimes = (int) round($prixUnitaireCentimes * $quantite);
+        // Produit exact (dix-millièmes x millièmes = dix-millionièmes),
+        // reconverti en centimes en un seul arrondi.
+        $montantBrutDixMillioniemes = $prixUnitaireDixMilliemes * $quantiteMilliemes;
+        $montantBrutCentimes = (int) round($montantBrutDixMillioniemes / 100000);
+
         $remiseCentimes = (int) round($montantBrutCentimes * ($remisePourcentage / 100));
         $montantHtCentimes = $montantBrutCentimes - $remiseCentimes;
         $montantTvaCentimes = (int) round($montantHtCentimes * ($tauxTva / 100));

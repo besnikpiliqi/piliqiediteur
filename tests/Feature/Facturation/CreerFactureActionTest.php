@@ -98,7 +98,7 @@ class CreerFactureActionTest extends TestCase
         $produit->update(['prix_vente_ht' => 500, 'taux_tva' => 5]);
 
         $ligne = $facture->lignes->first()->fresh();
-        $this->assertSame('100.00', $ligne->prix_unitaire_ht);
+        $this->assertSame('100.0000', $ligne->prix_unitaire_ht);
         $this->assertSame('20.00', $ligne->taux_tva);
     }
 }

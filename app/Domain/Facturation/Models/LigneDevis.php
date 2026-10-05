@@ -25,6 +25,7 @@ class LigneDevis extends Model
         'reference',
         'quantite',
         'prix_unitaire_ht',
+        'prix_unitaire_ttc',
         'taux_tva',
         'remise_pourcentage',
         'montant_ht',
@@ -35,8 +36,8 @@ class LigneDevis extends Model
 
     protected $casts = [
         'quantite' => 'decimal:3',
-        // 4 décimales, pas 2 : voir le docblock de CalculateurLigne.
-        'prix_unitaire_ht' => 'decimal:4',
+        'prix_unitaire_ht' => 'decimal:2',
+        'prix_unitaire_ttc' => 'decimal:2',
         'taux_tva' => 'decimal:2',
         'remise_pourcentage' => 'decimal:2',
         'montant_ht' => 'decimal:2',

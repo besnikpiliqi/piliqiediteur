@@ -223,8 +223,8 @@ class Caisse extends Page implements HasForms
     {
         $calculateur = app(CalculateurLigne::class);
 
-        $montants = collect($lignes)->map(fn (array $ligne) => $calculateur->calculer(
-            (float) ($ligne['prix_unitaire_ht'] ?? 0),
+        $montants = collect($lignes)->map(fn (array $ligne) => $calculateur->calculerDepuisTtc(
+            (float) ($ligne['prix_unitaire_ttc'] ?? 0),
             (float) ($ligne['quantite'] ?? 0),
             (float) ($ligne['taux_tva'] ?? 0),
             (float) ($ligne['remise_pourcentage'] ?? 0),

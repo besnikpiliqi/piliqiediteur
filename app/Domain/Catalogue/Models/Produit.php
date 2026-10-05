@@ -4,6 +4,7 @@ namespace App\Domain\Catalogue\Models;
 
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -30,6 +31,7 @@ class Produit extends Model
         'couleur',
         'prix_achat_ht',
         'prix_vente_ht',
+        'prix_vente_ttc',
         'taux_tva',
         'suivi_stock',
         'seuil_alerte',
@@ -58,13 +60,15 @@ class Produit extends Model
                     TypeDocument::Produit,
                 );
             }
+
+            $produit->synchroniserPrixDeVente();
         });
     }
 
     protected $casts = [
-        // 4 décimales, pas 2 : voir le docblock de CalculateurLigne.
-        'prix_achat_ht' => 'decimal:4',
-        'prix_vente_ht' => 'decimal:4',
+        'prix_achat_ht' => 'decimal:2',
+        'prix_vente_ht' => 'decimal:2',
+        'prix_vente_ttc' => 'decimal:2',
         'taux_tva' => 'decimal:2',
         'stock_quantite' => 'decimal:3',
         'seuil_alerte' => 'decimal:3',
@@ -92,9 +96,29 @@ class Produit extends Model
         return $this->hasMany(MouvementStock::class);
     }
 
-    public function prixVenteTtc(): float
+    /**
+     * Le prix de vente TTC fait référence (c'est lui qu'une ligne de vente
+     * reprend, voir ConstructeurLigneDocument) : le HT n'en est que la
+     * conversion au centime, pour l'affichage. Quelle que soit la façon dont
+     * le produit est enregistré (formulaire TTC, saisie HT d'une fabrique ou
+     * d'une API, changement de taux), les deux restent toujours cohérents.
+     */
+    private function synchroniserPrixDeVente(): void
     {
-        return round((float) $this->prix_vente_ht * (1 + (float) $this->taux_tva / 100), 2);
+        $calculateur = app(CalculateurLigne::class);
+        $tauxTva = (float) $this->taux_tva;
+
+        if ($this->isDirty('prix_vente_ttc') || ($this->isDirty('taux_tva') && ! $this->isDirty('prix_vente_ht'))) {
+            $this->prix_vente_ttc = $calculateur->arrondirAuCentime((float) $this->prix_vente_ttc);
+            $this->prix_vente_ht = $calculateur->prixUnitaireHtDepuisTtc((float) $this->prix_vente_ttc, $tauxTva);
+
+            return;
+        }
+
+        if ($this->isDirty('prix_vente_ht')) {
+            $this->prix_vente_ht = $calculateur->arrondirAuCentime((float) $this->prix_vente_ht);
+            $this->prix_vente_ttc = $calculateur->prixUnitaireTtcDepuisHt((float) $this->prix_vente_ht, $tauxTva);
+        }
     }
 
     public function enAlerteStock(): bool

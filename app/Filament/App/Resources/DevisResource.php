@@ -16,7 +16,6 @@ use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
@@ -135,40 +134,40 @@ class DevisResource extends Resource
                     $set('description', $produit->nom);
                     $set('reference', $produit->reference);
                     $set('prix_unitaire_ht', (string) $produit->prix_vente_ht);
+                    $set('prix_unitaire_ttc', (string) $produit->prix_vente_ttc);
                     $set('taux_tva', (string) $produit->taux_tva);
-                    $set('prix_unitaire_ttc', (string) $produit->prixVenteTtc());
                 }),
             TextInput::make('description')->required()->columnSpan(2),
             // live() et non live(onBlur: true) sur tous les champs de la
             // ligne : le total (et, dans la Caisse, la monnaie à rendre) se
             // met à jour pendant la saisie, pas seulement au clic ailleurs.
             TextInput::make('quantite')->numeric()->required()->default(1)->live(),
-            // Seul prix_unitaire_ht est réellement enregistré (colonne de
-            // lignes_facture/lignes_devis), mais jamais affiché tel quel :
-            // dérivé d'un prix TTC rond, il peut porter 4 décimales (ex.
-            // 33,3333 € pour un article visé à 40 € TTC) -- un nombre qui
-            // semble "faux" aux yeux du vendeur alors qu'il est juste plus
-            // précis. Même principe que ProduitResource::prixVenteTtcSchema().
-            Hidden::make('prix_unitaire_ht'),
-            // Le vendeur pense en prix affiché/TTC (ex: "10 € pile"), pas en
-            // HT : c'est donc ce champ, pas prix_unitaire_ht, qui est saisi
-            // et visible. Il n'est jamais enregistré tel quel (dehydrated
-            // (false)) -- il ne sert qu'à calculer prix_unitaire_ht.
+            // PU HT et PU TTC sont tous deux visibles et saisissables, mais
+            // c'est le PU TTC qui fait référence pour le calcul de la ligne
+            // (voir CalculateurLigne::calculerDepuisTtc()) : saisir un HT ne
+            // fait que recalculer le TTC correspondant, au centime.
+            TextInput::make('prix_unitaire_ht')
+                ->label('PU HT')
+                ->numeric()
+                ->live()
+                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
+                    if (blank($state)) {
+                        return;
+                    }
+
+                    $set('prix_unitaire_ttc', app(CalculateurLigne::class)->prixUnitaireTtcDepuisHt((float) $state, self::tauxTvaActuel($get)));
+                }),
             TextInput::make('prix_unitaire_ttc')
                 ->label('PU TTC')
                 ->numeric()
                 ->required()
                 ->live()
-                ->dehydrated(false)
-                ->afterStateHydrated(function (TextInput $component, Get $get) {
-                    $component->state(self::ttcDepuisHt((float) ($get('prix_unitaire_ht') ?? 0), self::tauxTvaActuel($get)));
-                })
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
-                    if ($state === null || $state === '') {
+                    if (blank($state)) {
                         return;
                     }
 
-                    $set('prix_unitaire_ht', self::htDepuisTtc((float) $state, self::tauxTvaActuel($get)));
+                    $set('prix_unitaire_ht', app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $state, self::tauxTvaActuel($get)));
                 }),
             TextInput::make('taux_tva')
                 ->label('TVA %')
@@ -176,12 +175,14 @@ class DevisResource extends Resource
                 ->required()
                 ->default(20)
                 ->live()
-                // Recalcule le HT caché à partir du TTC affiché (l'ancre du
-                // point de vue du vendeur), jamais l'inverse -- sans quoi le
-                // prix TTC visé changerait sous ses yeux au seul changement
-                // de taux.
+                // Le TTC fait référence : changer de taux recalcule le HT,
+                // jamais le prix TTC visé par le vendeur.
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
-                    $set('prix_unitaire_ht', self::htDepuisTtc((float) ($get('prix_unitaire_ttc') ?? 0), (float) ($state ?? 0)));
+                    if (blank($get('prix_unitaire_ttc'))) {
+                        return;
+                    }
+
+                    $set('prix_unitaire_ht', app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $get('prix_unitaire_ttc'), (float) ($state ?? 0)));
                 }),
             TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->live(),
             Placeholder::make('total_ligne')
@@ -194,8 +195,8 @@ class DevisResource extends Resource
                 // est effectivement enregistré, selon comment l'arrondi
                 // tombe -- un écart inacceptable une fois transmis à l'état.
                 ->content(function (Get $get): string {
-                    $montants = app(CalculateurLigne::class)->calculer(
-                        (float) ($get('prix_unitaire_ht') ?? 0),
+                    $montants = app(CalculateurLigne::class)->calculerDepuisTtc(
+                        (float) ($get('prix_unitaire_ttc') ?? 0),
                         (float) ($get('quantite') ?? 0),
                         (float) ($get('taux_tva') ?? 0),
                         (float) ($get('remise_pourcentage') ?? 0),
@@ -214,24 +215,6 @@ class DevisResource extends Resource
     private static function tauxTvaActuel(Get $get): float
     {
         return (float) ($get('taux_tva') ?? 20);
-    }
-
-    private static function ttcDepuisHt(float $ht, float $tauxTva): float
-    {
-        return round($ht * (1 + $tauxTva / 100), 2);
-    }
-
-    /**
-     * Arrondi à 4 décimales, pas 2 : c'est ce prix HT qui est réellement
-     * enregistré (voir dehydrated(false) sur le champ "PU TTC"). Un prix
-     * TTC rond ne se divise pas toujours exactement par 1 + taux de TVA
-     * (ex: 40 € / 1,20 = 33,3333...) -- l'arrondir à 2 décimales dès ici
-     * ferait dériver le total TTC de la ligne dès que la quantité dépasse 1
-     * (voir le docblock de CalculateurLigne).
-     */
-    private static function htDepuisTtc(float $ttc, float $tauxTva): float
-    {
-        return round($ttc / (1 + $tauxTva / 100), 4);
     }
 
     public static function table(Table $table): Table

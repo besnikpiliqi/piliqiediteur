@@ -7,6 +7,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
@@ -575,6 +576,39 @@ class FactureResourceTest extends TestCase
         $this->assertSame($autreClient->id, $facture->client_id);
         $this->assertSame(1, $facture->lignes()->count());
         $this->assertSame('150.00', $facture->total_ht);
+    }
+
+    /**
+     * Rouvrir un brouillon puis l'enregistrer sans rien toucher ne doit
+     * jamais faire bouger son total : le PU TTC enregistré (qui fait
+     * référence) est rechargé tel quel dans le formulaire, pas reconstruit
+     * à partir du HT.
+     */
+    public function test_reenregistrer_un_brouillon_sans_modification_garde_exactement_son_total(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 2],
+        ]);
+
+        $this->assertSame('80.00', $facture->total_ttc);
+
+        $component = Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '40.00')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '33.33')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('80.00', $facture->fresh()->total_ttc);
     }
 
     public function test_laction_modifier_disparait_des_quune_facture_est_emise(): void

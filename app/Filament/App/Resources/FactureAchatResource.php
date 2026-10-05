@@ -139,7 +139,7 @@ class FactureAchatResource extends Resource
                             // correspond exactement au montant réellement
                             // enregistré pour la ligne.
                             ->content(function (Get $get): string {
-                                $montants = app(CalculateurLigne::class)->calculer(
+                                $montants = app(CalculateurLigne::class)->calculerDepuisHt(
                                     (float) ($get('prix_unitaire_ht') ?? 0),
                                     (float) ($get('quantite') ?? 0),
                                     (float) ($get('taux_tva') ?? 0),

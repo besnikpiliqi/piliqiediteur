@@ -300,6 +300,35 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
+     * Un retour partiel reprend le PU TTC de la ligne vendue (qui fait
+     * référence) : rendre 1 article sur 2 vendus à 40 € TTC crédite
+     * exactement 40,00 €, et le second retour retombe pile sur les 80,00 €
+     * facturés -- jamais 79,99 € ni 80,01 € au total.
+     */
+    public function test_les_retours_partiels_dun_article_a_40_euros_ttc_creditent_exactement_la_ligne_vendue(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = $this->emettreFacture($client, $produit, 2);
+        $ligneFacture = $facture->lignes->firstOrFail();
+
+        $this->assertSame('80.00', $facture->total_ttc);
+
+        $premierRetour = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]);
+        $secondRetour = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]);
+
+        $this->assertSame('40.00', $premierRetour->total_ttc);
+        $this->assertSame('33.33', $premierRetour->total_ht);
+        $this->assertSame('6.67', $premierRetour->total_tva);
+        $this->assertSame('40.00', $premierRetour->lignes->firstOrFail()->prix_unitaire_ttc);
+        $this->assertSame(80.0, (float) $premierRetour->total_ttc + (float) $secondRetour->total_ttc);
+    }
+
+    /**
      * @return list<array{ligne_facture_id: int, quantite: float}>
      */
     private function toutesLesLignes(Facture $facture): array

@@ -3,16 +3,15 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\ProduitResource\Pages;
 use Filament\Forms\Components\Component;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
-use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -65,67 +64,35 @@ class ProduitResource extends Resource
     }
 
     /**
-     * Prix de vente exprimé en TTC, pas HT (contrairement au prix
-     * d'achat) : c'est le prix affiché au client qui compte pour un
-     * vendeur qui fixe un tarif, pas le détail HT/TVA. Seul prix_vente_ht
-     * est réellement enregistré (voir dehydrated(false) ci-dessous),
-     * calculé à partir du TTC saisi ici -- même principe que le couple
-     * PU HT/PU TTC d'une ligne de devis ou facture, voir
-     * DevisResource::ligneSchema().
+     * Prix de vente saisi et enregistré en TTC, pas HT (contrairement au
+     * prix d'achat) : c'est le prix affiché au client qui compte pour un
+     * vendeur qui fixe un tarif, et c'est lui qu'une ligne de vente reprend
+     * tel quel. Le HT correspondant est déduit par le modèle à
+     * l'enregistrement (voir Produit::synchroniserPrixDeVente()).
      *
      * @return array<Component>
      */
     private static function prixVenteTtcSchema(): array
     {
         return [
-            Hidden::make('prix_vente_ht'),
             TextInput::make('prix_vente_ttc')
                 ->label('Prix de vente TTC')
                 ->numeric()
                 ->prefix('€')
                 ->required()
                 ->live()
-                ->dehydrated(false)
-                ->afterStateHydrated(function (TextInput $component, Get $get) {
-                    $component->state(self::ttcDepuisHt(
-                        (float) ($get('prix_vente_ht') ?? 0),
+                ->helperText(fn (Get $get) => blank($get('prix_vente_ttc'))
+                    ? null
+                    : 'Soit '.number_format(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc(
+                        (float) $get('prix_vente_ttc'),
                         (float) ($get('taux_tva') ?? 20),
-                    ));
-                })
-                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
-                    if ($state === null || $state === '') {
-                        return;
-                    }
-
-                    $set('prix_vente_ht', self::htDepuisTtc((float) $state, (float) ($get('taux_tva') ?? 20)));
-                }),
+                    ), 2, ',', ' ').' € HT'),
             TextInput::make('taux_tva')
                 ->label('Taux de TVA (%)')
                 ->numeric()
                 ->default(20)
-                ->live()
-                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
-                    $set('prix_vente_ht', self::htDepuisTtc((float) ($get('prix_vente_ttc') ?? 0), (float) ($state ?? 0)));
-                }),
+                ->live(),
         ];
-    }
-
-    private static function ttcDepuisHt(float $ht, float $tauxTva): float
-    {
-        return round($ht * (1 + $tauxTva / 100), 2);
-    }
-
-    /**
-     * Arrondi à 4 décimales, pas 2 : c'est ce prix HT qui est réellement
-     * enregistré. Un prix TTC rond ne se divise pas toujours exactement
-     * par 1 + taux de TVA (ex: 40 € / 1,20 = 33,3333...) -- l'arrondir à 2
-     * décimales dès ici ferait dériver le total TTC d'une ligne dès que
-     * la quantité dépasse 1 une fois ce produit vendu (voir le docblock
-     * de CalculateurLigne).
-     */
-    private static function htDepuisTtc(float $ttc, float $tauxTva): float
-    {
-        return round($ttc / (1 + $tauxTva / 100), 4);
     }
 
     public static function form(Form $form): Form
@@ -177,7 +144,7 @@ class ProduitResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('reference')->label('Référence')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('nom')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('prix_vente_ht')->label('PV HT')->money('EUR')->sortable(),
+                Tables\Columns\TextColumn::make('prix_vente_ttc')->label('PV TTC')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('taux_tva')->label('TVA')->suffix(' %'),
                 Tables\Columns\TextColumn::make('stock_quantite')
                     ->label('Stock')

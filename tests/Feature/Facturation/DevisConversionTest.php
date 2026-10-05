@@ -92,6 +92,8 @@ class DevisConversionTest extends TestCase
         $this->assertSame($ligneDevis->produit_id, $ligneFacture->produit_id);
         $this->assertSame($ligneDevis->quantite, $ligneFacture->quantite);
         $this->assertSame($ligneDevis->montant_ttc, $ligneFacture->montant_ttc);
+        $this->assertSame($ligneDevis->prix_unitaire_ttc, $ligneFacture->prix_unitaire_ttc);
+        $this->assertSame('60.00', $ligneFacture->prix_unitaire_ttc);
     }
 
     public function test_impossible_de_convertir_un_devis_pas_encore_accepte(): void

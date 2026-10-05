@@ -87,8 +87,10 @@
                 <th>Description</th>
                 <th class="montant">Qté</th>
                 <th class="montant">PU HT</th>
+                <th class="montant">PU TTC</th>
                 <th class="montant">TVA</th>
                 <th class="montant">Total HT</th>
+                <th class="montant">Total TTC</th>
             </tr>
         </thead>
         <tbody>
@@ -97,8 +99,10 @@
                     <td>{{ $ligne->description }}</td>
                     <td class="montant">{{ rtrim(rtrim($ligne->quantite, '0'), '.') }}</td>
                     <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ht, 2, ',', ' ') }} €</td>
+                    <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ttc, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ rtrim(rtrim($ligne->taux_tva, '0'), '.') }} %</td>
                     <td class="montant">{{ number_format((float) $ligne->montant_ht, 2, ',', ' ') }} €</td>
+                    <td class="montant">{{ number_format((float) $ligne->montant_ttc, 2, ',', ' ') }} €</td>
                 </tr>
             @endforeach
         </tbody>

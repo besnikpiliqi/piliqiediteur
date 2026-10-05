@@ -159,10 +159,41 @@ class CaisseTest extends TestCase
     }
 
     /**
+     * Même cas que la capture d'écran du magasin, côté caisse : un article
+     * à 40 € TTC vendu par 2 doit faire payer exactement 80,00 €.
+     */
+    public function test_un_article_a_40_euros_ttc_vendu_par_2_encaisse_exactement_80_euros(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $clientComptoir = Client::query()->where('nom', Client::NOM_COMPTOIR)->firstOrFail();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $component = Livewire::test(Caisse::class);
+        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.produit_id", $produit->id)
+            ->set("data.lignes.{$cle}.quantite", '2')
+            ->set('data.montant_recu', '100')
+            ->assertSeeHtml('80,00 €')
+            ->assertSeeHtml('20,00 €')
+            ->assertDontSeeHtml('79,99 €')
+            ->call('encaisser');
+
+        $facture = Facture::query()->where('client_id', $clientComptoir->id)->latest('id')->firstOrFail();
+        $this->assertSame('80.00', $facture->total_ttc);
+    }
+
+    /**
      * Un vendeur pense souvent en prix affiché/TTC (ex: viser pile 12 €)
-     * plutôt qu'en HT : saisir le PU TTC doit calculer le PU HT (seul champ
-     * réellement enregistré) à sa place, sans qu'il ait à faire le calcul
-     * lui-même. Voir DevisResource::ligneSchema().
+     * plutôt qu'en HT : saisir le PU TTC (qui fait référence pour le calcul)
+     * doit afficher le PU HT correspondant à sa place, sans qu'il ait à
+     * faire le calcul lui-même. Voir DevisResource::ligneSchema().
      */
     public function test_saisir_le_prix_ttc_dune_ligne_calcule_automatiquement_le_prix_ht(): void
     {

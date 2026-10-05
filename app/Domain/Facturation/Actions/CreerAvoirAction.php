@@ -80,8 +80,11 @@ class CreerAvoirAction
                     throw new LogicException("La ligne \"{$ligneFacture->description}\" ne peut pas être créditée au-delà de la quantité restante ({$restante}).");
                 }
 
-                $montants = $this->calculateurLigne->calculer(
-                    (float) $ligneFacture->prix_unitaire_ht,
+                // Même référence TTC que la ligne de facture créditée : un
+                // retour partiel (ex. 1 article sur 2 à 40 € TTC) crédite
+                // exactement 40,00 €, jamais un centime de plus ou de moins.
+                $montants = $this->calculateurLigne->calculerDepuisTtc(
+                    (float) $ligneFacture->prix_unitaire_ttc,
                     $quantite,
                     (float) $ligneFacture->taux_tva,
                     (float) $ligneFacture->remise_pourcentage,
@@ -94,6 +97,7 @@ class CreerAvoirAction
                     'reference' => $ligneFacture->reference,
                     'quantite' => $quantite,
                     'prix_unitaire_ht' => $ligneFacture->prix_unitaire_ht,
+                    'prix_unitaire_ttc' => $ligneFacture->prix_unitaire_ttc,
                     'taux_tva' => $ligneFacture->taux_tva,
                     'remise_pourcentage' => $ligneFacture->remise_pourcentage,
                     'ordre' => $index,

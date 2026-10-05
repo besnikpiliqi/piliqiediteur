@@ -16,104 +16,109 @@ use Livewire\Livewire;
 use Tests\TestCase;
 
 /**
- * Le prix de vente d'un produit se saisit en TTC (voir
- * ProduitResource::prixVenteTtcSchema()), pas en HT : c'est le prix
- * affiché au client qui compte pour un vendeur qui fixe un tarif. Seul
- * prix_vente_ht est réellement enregistré, dérivé du TTC saisi.
+ * Le prix de vente d'un produit se saisit et s'enregistre en TTC (voir
+ * ProduitResource::prixVenteTtcSchema()) : c'est le prix affiché au client,
+ * et c'est lui qu'une ligne de vente reprend. Le HT n'en est que la
+ * conversion au centime (voir Produit::synchroniserPrixDeVente()).
  */
 class ProduitResourceTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_le_prix_de_vente_ttc_est_converti_et_enregistre_en_ht_a_la_creation(): void
+    private function connecterProprietaire(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-
-        $component = Livewire::test(CreateProduit::class)
-            ->fillForm([
-                'nom' => 'Ecran Iphone 17 Pro',
-                'prix_achat_ht' => 80,
-                'taux_tva' => 20,
-            ]);
-
-        // 180 € TTC à 20 % de TVA = 150 € HT : seul ce prix HT est
-        // réellement enregistré (voir Hidden::make('prix_vente_ht')).
-        $component->set('data.prix_vente_ttc', '180');
-        $this->assertSame(150.0, (float) $component->get('data.prix_vente_ht'));
-
-        $component->call('create')->assertHasNoFormErrors();
-
-        $this->assertDatabaseHas('produits', [
-            'nom' => 'Ecran Iphone 17 Pro',
-            'prix_achat_ht' => 80,
-            'prix_vente_ht' => 150,
-        ]);
     }
 
-    public function test_modifier_le_prix_de_vente_ttc_recalcule_et_enregistre_le_nouveau_ht(): void
+    public function test_le_prix_de_vente_ttc_saisi_est_enregistre_tel_quel_avec_son_ht(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
+        $this->connecterProprietaire();
 
-        $produit = Produit::factory()->create([
-            'prix_vente_ht' => 100,
-            'taux_tva' => 20,
-        ]);
+        Livewire::test(CreateProduit::class)
+            ->fillForm([
+                'nom' => 'Ecran Iphone 18 Pro',
+                'prix_achat_ht' => 25,
+                'prix_vente_ttc' => 40,
+                'taux_tva' => 20,
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
 
-        // À l'ouverture du formulaire, le TTC affiché doit refléter le HT
-        // déjà enregistré (120 € TTC pour 100 € HT à 20 % de TVA).
+        $produit = Produit::query()->where('nom', 'Ecran Iphone 18 Pro')->firstOrFail();
+
+        $this->assertSame('40.00', $produit->prix_vente_ttc);
+        $this->assertSame('33.33', $produit->prix_vente_ht);
+    }
+
+    public function test_modifier_le_prix_de_vente_ttc_recalcule_le_ht(): void
+    {
+        $this->connecterProprietaire();
+
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20]);
+
         Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
-            ->assertFormSet(['prix_vente_ttc' => 120.0]);
+            ->assertFormSet(['prix_vente_ttc' => '120.00'])
+            ->fillForm(['prix_vente_ttc' => 144])
+            ->call('save')
+            ->assertHasNoFormErrors();
 
-        $component = Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()]);
-        $component->set('data.prix_vente_ttc', '144');
-        $this->assertSame(120.0, (float) $component->get('data.prix_vente_ht'));
-
-        $component->call('save')->assertHasNoFormErrors();
-
-        $this->assertSame('120.0000', $produit->fresh()->prix_vente_ht);
+        $this->assertSame('144.00', $produit->fresh()->prix_vente_ttc);
+        $this->assertSame('120.00', $produit->fresh()->prix_vente_ht);
     }
 
     /**
-     * Reproduit le cas signalé par un magasin : un produit visé à 40 € TTC
-     * (via le vrai formulaire "Prix de vente TTC", pas une valeur HT
-     * précalculée directement en base) doit totaliser exactement 80,00 €
-     * TTC à quantité 2 -- sans la précision à 4 décimales de prix_vente_ht,
-     * ce total dérivait à 79,99 € (voir le docblock de CalculateurLigne).
+     * Un produit enregistré avec un HT (fabrique de test, future API,
+     * produit créé avant le passage au TTC) obtient son TTC au centime :
+     * 33,33 € HT donne bien 40,00 € TTC, jamais 39,996 €.
      */
-    public function test_un_produit_cree_via_le_prix_ttc_totalise_exactement_a_quantite_2(): void
+    public function test_un_produit_enregistre_en_ht_obtient_son_ttc_au_centime(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
+        $this->connecterProprietaire();
 
-        $component = Livewire::test(CreateProduit::class)
-            ->fillForm([
-                'nom' => 'Produit à 40 € TTC',
-                'prix_achat_ht' => 10,
-                'taux_tva' => 20,
-                'suivi_stock' => false,
-            ]);
-        $component->set('data.prix_vente_ttc', '40');
-        $component->call('create')->assertHasNoFormErrors();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 33.33, 'taux_tva' => 20]);
 
-        $produit = Produit::query()->where('nom', 'Produit à 40 € TTC')->firstOrFail();
+        $this->assertSame('40.00', $produit->fresh()->prix_vente_ttc);
+    }
 
+    public function test_changer_le_taux_de_tva_garde_le_prix_ttc_et_recalcule_le_ht(): void
+    {
+        $this->connecterProprietaire();
+
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
+
+        $produit->update(['taux_tva' => 5.5]);
+
+        $this->assertSame('12.00', $produit->fresh()->prix_vente_ttc);
+        $this->assertSame('11.37', $produit->fresh()->prix_vente_ht);
+    }
+
+    /**
+     * Reproduit exactement la capture d'écran du magasin : un produit à
+     * 40 € TTC choisi sur une ligne de facture, quantité 2, affichait
+     * "Total TTC 79,99 €". Le total doit être 80,00 €, à l'écran comme une
+     * fois la facture enregistrée.
+     */
+    public function test_un_produit_a_40_euros_ttc_vendu_par_2_totalise_80_euros_a_lecran_et_en_base(): void
+    {
+        $this->connecterProprietaire();
+
+        $produit = Produit::factory()->create(['nom' => 'Ecran Iphone 18 Pro', 'prix_vente_ht' => 33.33, 'taux_tva' => 20, 'suivi_stock' => false]);
         $client = Client::factory()->create();
 
-        Livewire::test(CreateFacture::class)
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ht' => (float) $produit->prix_vente_ht, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
-            ])
+        $component = Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => $client->id]);
+
+        $cle = array_key_first($component->get('data.lignes'));
+        $component
+            ->set("data.lignes.{$cle}.produit_id", $produit->id)
+            ->set("data.lignes.{$cle}.quantite", '2')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '40.00')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '33.33')
+            ->assertSee('80,00 €')
+            ->assertDontSee('79,99 €')
             ->call('create')
             ->assertHasNoFormErrors();
 
@@ -121,6 +126,10 @@ class ProduitResourceTest extends TestCase
         $ligne = $facture->lignes->firstOrFail();
 
         $this->assertSame('80.00', $ligne->montant_ttc);
+        $this->assertSame('40.00', $ligne->prix_unitaire_ttc);
+        $this->assertSame('33.33', $ligne->prix_unitaire_ht);
         $this->assertSame('80.00', $facture->total_ttc);
+        $this->assertSame('66.67', $facture->total_ht);
+        $this->assertSame('13.33', $facture->total_tva);
     }
 }

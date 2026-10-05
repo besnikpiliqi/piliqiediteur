@@ -86,7 +86,7 @@ class FactureAchatActionsTest extends TestCase
         ]);
         app(ValiderFactureAchatAction::class)->handle($factureAchat);
 
-        $this->assertSame('25.0000', $produit->fresh()->prix_achat_ht);
+        $this->assertSame('25.00', $produit->fresh()->prix_achat_ht);
     }
 
     public function test_impossible_de_valider_deux_fois_la_meme_facture_dachat(): void
@@ -149,7 +149,7 @@ class FactureAchatActionsTest extends TestCase
 
         $this->assertSame('8.000', $factureAchat->lignes->first()->quantite);
         $this->assertSame('11.000', $produit->fresh()->stock_quantite, '3 (stock avant réception) + 8 (quantité corrigée) = 11.');
-        $this->assertSame('22.0000', $produit->fresh()->prix_achat_ht);
+        $this->assertSame('22.00', $produit->fresh()->prix_achat_ht);
     }
 
     public function test_une_facture_dachat_recuperee_par_api_nest_jamais_modifiable(): void

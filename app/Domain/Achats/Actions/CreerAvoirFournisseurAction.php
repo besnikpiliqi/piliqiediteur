@@ -69,7 +69,7 @@ class CreerAvoirFournisseurAction
                     throw new LogicException("La ligne \"{$ligneAchat->description}\" ne peut pas être retournée au-delà de la quantité disponible ({$restante}) : elle a déjà été vendue ou déjà retournée.");
                 }
 
-                $montants = $this->calculateurLigne->calculer(
+                $montants = $this->calculateurLigne->calculerDepuisHt(
                     (float) $ligneAchat->prix_unitaire_ht,
                     $quantite,
                     (float) $ligneAchat->taux_tva,

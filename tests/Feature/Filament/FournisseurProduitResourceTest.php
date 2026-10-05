@@ -57,12 +57,12 @@ class FournisseurProduitResourceTest extends TestCase
                 'reference' => 'REF-001',
                 'nom' => 'T-shirt blanc',
                 'prix_achat_ht' => 5,
-                'prix_vente_ht' => 15,
+                'prix_vente_ttc' => 18,
                 'taux_tva' => 20,
             ])
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $this->assertDatabaseHas('produits', ['reference' => 'REF-001', 'magasin_id' => $magasin->id]);
+        $this->assertDatabaseHas('produits', ['reference' => 'REF-001', 'magasin_id' => $magasin->id, 'prix_vente_ttc' => 18, 'prix_vente_ht' => 15]);
     }
 }

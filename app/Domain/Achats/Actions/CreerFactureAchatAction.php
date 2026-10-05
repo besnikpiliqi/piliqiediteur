@@ -41,11 +41,11 @@ class CreerFactureAchatAction
 
                 $produit = Produit::query()->findOrFail($donnees['produit_id']);
                 $quantite = (float) ($donnees['quantite'] ?? throw new InvalidArgumentException('Chaque ligne doit fournir une quantite.'));
-                $prixUnitaireHt = (float) ($donnees['prix_unitaire_ht'] ?? $produit->prix_achat_ht);
+                $prixUnitaireHt = $this->calculateurLigne->arrondirAuCentime((float) ($donnees['prix_unitaire_ht'] ?? $produit->prix_achat_ht));
                 $tauxTva = (float) ($donnees['taux_tva'] ?? $produit->taux_tva);
                 $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
 
-                $montants = $this->calculateurLigne->calculer($prixUnitaireHt, $quantite, $tauxTva, $remise);
+                $montants = $this->calculateurLigne->calculerDepuisHt($prixUnitaireHt, $quantite, $tauxTva, $remise);
 
                 $ligne = [
                     'produit_id' => $produit->id,

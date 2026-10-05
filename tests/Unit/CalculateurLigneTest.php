@@ -20,6 +20,75 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
+     * Cas réel signalé par un magasin : un article à 40 € TTC vendu par 2
+     * affichait 79,99 € (33,33 € HT x 2 x 1,20). Le TTC faisant référence,
+     * le total est 40 x 2 = 80,00 €, le HT n'étant déduit qu'une fois, du
+     * total de la ligne.
+     */
+    public function test_40_euros_ttc_vendus_par_2_totalisent_exactement_80_euros(): void
+    {
+        $ligne = $this->calculateur()->calculerDepuisTtc(prixUnitaireTtc: 40, quantite: 2, tauxTva: 20);
+
+        $this->assertSame(80.0, $ligne['montant_ttc']);
+        $this->assertSame(66.67, $ligne['montant_ht']);
+        $this->assertSame(13.33, $ligne['montant_tva']);
+    }
+
+    /**
+     * Un retour partiel (1 article sur 2) crédite exactement la moitié de
+     * la ligne d'origine : deux retours successifs d'un article retombent
+     * pile sur les 80,00 € vendus, jamais sur 79,99 € ou 80,01 €.
+     */
+    public function test_deux_retours_partiels_retombent_exactement_sur_la_ligne_vendue(): void
+    {
+        $retour = $this->calculateur()->calculerDepuisTtc(prixUnitaireTtc: 40, quantite: 1, tauxTva: 20);
+
+        $this->assertSame(40.0, $retour['montant_ttc']);
+        $this->assertSame(80.0, $this->calculateur()->totaliser([$retour, $retour])['total_ttc']);
+    }
+
+    public function test_remise_et_quantite_fractionnaire_en_ttc_restent_exactes_au_centime(): void
+    {
+        $ligne = $this->calculateur()->calculerDepuisTtc(
+            prixUnitaireTtc: 9.99,
+            quantite: 1.5,
+            tauxTva: 20,
+            remisePourcentage: 10,
+        );
+
+        // 9,99 x 1,5 = 14,985 -> 14,99 ; remise 10 % = 1,50 -> 13,49 TTC ;
+        // HT = 13,49 / 1,20 = 11,2416... -> 11,24 ; TVA = 13,49 - 11,24.
+        $this->assertSame(13.49, $ligne['montant_ttc']);
+        $this->assertSame(11.24, $ligne['montant_ht']);
+        $this->assertSame(2.25, $ligne['montant_tva']);
+    }
+
+    public function test_un_taux_reduit_decimal_reste_exact(): void
+    {
+        $ligne = $this->calculateur()->calculerDepuisTtc(prixUnitaireTtc: 10, quantite: 1, tauxTva: 5.5);
+
+        // 10,00 / 1,055 = 9,4786... -> 9,48 HT.
+        $this->assertSame(10.0, $ligne['montant_ttc']);
+        $this->assertSame(9.48, $ligne['montant_ht']);
+        $this->assertSame(0.52, $ligne['montant_tva']);
+    }
+
+    public function test_le_pu_ht_affiche_est_la_conversion_au_centime_du_pu_ttc(): void
+    {
+        $this->assertSame(33.33, $this->calculateur()->prixUnitaireHtDepuisTtc(40, 20));
+        $this->assertSame(40.0, $this->calculateur()->prixUnitaireTtcDepuisHt(33.33, 20));
+    }
+
+    /**
+     * 8.325 vaut réellement 8.32499999... en binaire : un arrondi naïf
+     * donnerait 8,32 au lieu de 8,33.
+     */
+    public function test_arrondir_au_centime_ne_tombe_pas_dans_le_piege_du_flottant(): void
+    {
+        $this->assertSame(8.33, $this->calculateur()->arrondirAuCentime(8.325));
+    }
+
+    /**
      * Cas réel ayant révélé le bug : deux lignes à 8,33 € HT (TVA 20 %)
      * affichent chacune 10,00 € TTC, donc un total de 20,00 €. Avant la
      * correction, un calcul en flottant non arrondi par ligne (8.33 * 1.2 =
@@ -28,7 +97,7 @@ class CalculateurLigneTest extends TestCase
      */
     public function test_deux_lignes_a_8_33_ht_totalisent_exactement_20_euros(): void
     {
-        $ligne = $this->calculateur()->calculer(prixUnitaireHt: 8.33, quantite: 1, tauxTva: 20);
+        $ligne = $this->calculateur()->calculerDepuisHt(prixUnitaireHt: 8.33, quantite: 1, tauxTva: 20);
 
         $this->assertSame(10.0, $ligne['montant_ttc']);
 
@@ -39,7 +108,7 @@ class CalculateurLigneTest extends TestCase
 
     public function test_une_remise_en_pourcentage_est_appliquee_avant_la_tva(): void
     {
-        $ligne = $this->calculateur()->calculer(
+        $ligne = $this->calculateur()->calculerDepuisHt(
             prixUnitaireHt: 100,
             quantite: 1,
             tauxTva: 20,
@@ -53,35 +122,18 @@ class CalculateurLigneTest extends TestCase
 
     public function test_une_quantite_fractionnaire_reste_exacte_au_centime(): void
     {
-        $ligne = $this->calculateur()->calculer(prixUnitaireHt: 4.99, quantite: 1.5, tauxTva: 20);
+        $ligne = $this->calculateur()->calculerDepuisHt(prixUnitaireHt: 4.99, quantite: 1.5, tauxTva: 20);
 
         // 4.99 * 1.5 = 7.485 -> arrondi en centimes entiers à 7.49 (jamais
         // de round() sur un flottant intermédiaire non garanti exact).
         $this->assertSame(7.49, $ligne['montant_ht']);
-    }
-
-    /**
-     * Cas réel signalé par un magasin : un produit visé à 40 € TTC (TVA
-     * 20 %) donne un prix HT de 40 / 1,20 = 33,3333... €. Arrondi à 2
-     * décimales dès le stockage (33,33 €), ce prix unitaire multiplié par
-     * une quantité de 2 donnait 79,99 € TTC au lieu des 80,00 € attendus --
-     * un centime manquant, visible dès que la quantité dépasse 1. Stocker
-     * le prix unitaire avec 4 décimales (voir le docblock de la classe)
-     * corrige ce cas précis sans rien changer pour un prix HT saisi
-     * directement (déjà couvert par les autres tests de cette classe).
-     */
-    public function test_un_prix_derive_dun_ttc_rond_reste_exact_a_quantite_superieure_a_1(): void
-    {
-        $prixUnitaireHt = round(40 / 1.2, 4); // 33.3333
-
-        $ligne = $this->calculateur()->calculer(prixUnitaireHt: $prixUnitaireHt, quantite: 2, tauxTva: 20);
-
-        $this->assertSame(80.0, $ligne['montant_ttc']);
+        $this->assertSame(1.5, $ligne['montant_tva']);
+        $this->assertSame(8.99, $ligne['montant_ttc']);
     }
 
     public function test_totaliser_ne_derive_jamais_meme_sur_un_grand_nombre_de_lignes(): void
     {
-        $ligne = $this->calculateur()->calculer(prixUnitaireHt: 0.1, quantite: 1, tauxTva: 0);
+        $ligne = $this->calculateur()->calculerDepuisHt(prixUnitaireHt: 0.1, quantite: 1, tauxTva: 0);
 
         $total = $this->calculateur()->totaliser(array_fill(0, 1000, $ligne));
 

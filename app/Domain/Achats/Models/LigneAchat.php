@@ -32,8 +32,7 @@ class LigneAchat extends Model
 
     protected $casts = [
         'quantite' => 'decimal:3',
-        // 4 décimales, pas 2 : voir le docblock de CalculateurLigne.
-        'prix_unitaire_ht' => 'decimal:4',
+        'prix_unitaire_ht' => 'decimal:2',
         'taux_tva' => 'decimal:2',
         'remise_pourcentage' => 'decimal:2',
         'montant_ht' => 'decimal:2',

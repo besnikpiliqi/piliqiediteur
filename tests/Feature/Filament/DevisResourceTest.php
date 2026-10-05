@@ -21,8 +21,8 @@ use App\Filament\App\Resources\DevisResource\Pages\EditDevis;
 use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
 use App\Models\User;
 use Filament\Facades\Filament;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -398,26 +398,25 @@ class DevisResourceTest extends TestCase
     }
 
     /**
-     * Le vendeur pense en prix affiché/TTC, pas en HT : c'est donc "PU TTC"
-     * qui est le champ réellement saisi et visible sur une ligne, jamais
-     * "PU HT" (voir DevisResource::ligneSchema()) -- sans quoi le vendeur
-     * verrait un nombre à 4 décimales (ex. 33,3333 €) dès que le TTC visé
-     * ne se divise pas rond par 1 + le taux de TVA.
+     * Exigence explicite : le PU HT reste visible et saisissable sur une
+     * ligne (mention nécessaire), à côté du PU TTC qui, lui, fait référence
+     * pour le calcul (voir CalculateurLigne::calculerDepuisTtc()).
      */
-    public function test_le_prix_unitaire_ht_dune_ligne_nest_jamais_un_champ_visible(): void
+    public function test_le_pu_ht_et_le_pu_ttc_dune_ligne_restent_tous_deux_visibles(): void
     {
-        $champHt = collect(DevisResource::ligneSchema())
-            ->first(fn ($component) => $component->getName() === 'prix_unitaire_ht');
+        $champs = collect(DevisResource::ligneSchema())
+            ->filter(fn ($component) => in_array($component->getName(), ['prix_unitaire_ht', 'prix_unitaire_ttc'], true));
 
-        $this->assertInstanceOf(Hidden::class, $champHt);
+        $this->assertCount(2, $champs);
+        $champs->each(fn ($champ) => $this->assertInstanceOf(TextInput::class, $champ));
     }
 
     /**
-     * Saisir le PU TTC d'une ligne doit calculer le PU HT caché à sa place
-     * -- même principe que pour Caisse (voir CaisseTest), partagé via
-     * DevisResource::ligneSchema() et donc valable aussi pour Devis/Facture.
+     * Saisir le PU TTC d'une ligne doit calculer le PU HT à sa place, au
+     * centime -- même principe que pour Caisse (voir CaisseTest), partagé
+     * via DevisResource::ligneSchema() et donc valable aussi pour Facture.
      */
-    public function test_saisir_le_prix_ttc_dune_ligne_calcule_le_prix_ht_cache(): void
+    public function test_saisir_le_prix_ttc_dune_ligne_calcule_le_prix_ht(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
@@ -439,10 +438,9 @@ class DevisResourceTest extends TestCase
     }
 
     /**
-     * Changer le taux de TVA d'une ligne doit recalculer le HT caché à
-     * partir du TTC affiché (l'ancre du point de vue du vendeur), jamais
-     * l'inverse -- sans quoi le prix TTC visé changerait sous ses yeux au
-     * seul changement de taux.
+     * Changer le taux de TVA d'une ligne doit recalculer le HT à partir du
+     * TTC (qui fait référence), jamais l'inverse -- sans quoi le prix TTC
+     * visé changerait sous les yeux du vendeur au seul changement de taux.
      */
     public function test_changer_le_taux_de_tva_dune_ligne_recalcule_le_ht_sans_changer_le_ttc_affiche(): void
     {
@@ -464,7 +462,8 @@ class DevisResourceTest extends TestCase
         $component->set("data.lignes.{$cle}.taux_tva", '5.5');
 
         $this->assertSame(12.0, (float) $component->get("data.lignes.{$cle}.prix_unitaire_ttc"));
-        $this->assertSame(round(12 / 1.055, 4), (float) $component->get("data.lignes.{$cle}.prix_unitaire_ht"));
+        // 12,00 / 1,055 = 11,374... -> 11,37 € HT, au centime.
+        $this->assertSame(11.37, (float) $component->get("data.lignes.{$cle}.prix_unitaire_ht"));
     }
 
     /**

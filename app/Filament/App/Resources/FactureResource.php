@@ -11,6 +11,7 @@ use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
@@ -182,7 +183,10 @@ class FactureResource extends Resource
                     RepeatableEntry::make('allocationsAvoir')
                         ->label('')
                         ->schema([
-                            TextEntry::make('avoir.numero')->label('Avoir'),
+                            TextEntry::make('avoir.numero')
+                                ->label('Avoir')
+                                ->url(fn (AvoirAllocation $record) => AvoirResource::getUrl('view', ['record' => $record->avoir]))
+                                ->color('primary'),
                             TextEntry::make('montant_alloue')->label('Montant crédité')->money('EUR'),
                         ])
                         ->columns(2),
@@ -321,7 +325,11 @@ class FactureResource extends Resource
                             ->maxValue(fn (Facture $record) => $record->montantRestant())
                             ->default(fn (Facture $record) => $record->montantRestant()),
                         TextInput::make('reference')->label('Référence'),
-                        DatePicker::make('recu_le')->label('Reçu le')->required()->default(now()),
+                        DatePicker::make('recu_le')
+                            ->label('Reçu le')
+                            ->required()
+                            ->default(today())
+                            ->minDate(today()),
                     ])
                     ->requiresConfirmation()
                     ->visible(fn (Facture $record) => $record->montantRestant() > 0

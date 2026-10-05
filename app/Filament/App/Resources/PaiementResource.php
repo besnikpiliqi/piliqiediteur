@@ -77,7 +77,11 @@ class PaiementResource extends Resource
                 // met à jour pendant la saisie.
                 TextInput::make('montant')->label('Montant reçu')->numeric()->required()->live(),
                 TextInput::make('reference')->label('Référence'),
-                DatePicker::make('recu_le')->label('Reçu le')->required()->default(now()),
+                DatePicker::make('recu_le')
+                    ->label('Reçu le')
+                    ->required()
+                    ->default(today())
+                    ->minDate(today()),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
 

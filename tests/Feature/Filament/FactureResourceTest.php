@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\EditFacture;
@@ -153,6 +154,11 @@ class FactureResourceTest extends TestCase
             // Filament insère une espace insécable (U+00A0) entre le montant
             // et le symbole monétaire : on vérifie juste le montant.
             ->assertSee('60,00');
+
+        // Le numéro d'avoir doit permettre d'ouvrir sa fiche (date, motif,
+        // produits retournés), pas rester un simple texte.
+        $html = Livewire::test(ViewFacture::class, ['record' => $nouvelleFacture->getRouteKey()])->html();
+        $this->assertStringContainsString(AvoirResource::getUrl('view', ['record' => $avoir->fresh()]), $html);
     }
 
     /**

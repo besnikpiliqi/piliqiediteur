@@ -178,6 +178,32 @@ class PaiementResourceTest extends TestCase
     }
 
     /**
+     * Une date de réception dans le passé n'a pas de sens pour un
+     * encaissement qui vient d'être saisi : seule une date à partir
+     * d'aujourd'hui est acceptée, comme pour l'échéance d'une facture.
+     */
+    public function test_laction_rapide_encaisser_refuse_une_date_de_reception_dans_le_passe(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
+
+        Livewire::test(ListFactures::class)
+            ->callTableAction('encaisser', $facture, data: [
+                'mode_paiement' => ModePaiement::Especes->value,
+                'montant' => 120,
+                'recu_le' => now()->subDay()->toDateString(),
+            ])
+            ->assertHasTableActionErrors(['recu_le']);
+
+        $this->assertSame(0, Paiement::query()->count());
+    }
+
+    /**
      * Même garde-fou que l'action rapide "Encaisser" (voir
      * test_laction_rapide_encaisser_bloque_un_montant_superieur_au_restant_du),
      * appliqué cette fois au formulaire multi-factures de PaiementResource :
@@ -209,6 +235,37 @@ class PaiementResourceTest extends TestCase
 
         $this->assertSame(0, Paiement::query()->count());
         $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
+    }
+
+    /**
+     * Même garde-fou que l'action rapide "Encaisser" (voir
+     * test_laction_rapide_encaisser_refuse_une_date_de_reception_dans_le_passe),
+     * appliqué cette fois au formulaire multi-factures de PaiementResource.
+     */
+    public function test_impossible_denregistrer_un_paiement_avec_une_date_de_reception_dans_le_passe(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
+
+        Livewire::test(CreatePaiement::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'mode_paiement' => ModePaiement::Virement->value,
+                'montant' => 120,
+                'recu_le' => now()->subDay()->toDateString(),
+                'allocations' => [
+                    ['facture_id' => $facture->id, 'montant' => 120],
+                ],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['recu_le']);
+
+        $this->assertSame(0, Paiement::query()->count());
     }
 
     public function test_un_vendeur_sans_vue_totale_ne_voit_que_ses_propres_paiements(): void

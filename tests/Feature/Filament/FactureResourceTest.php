@@ -351,6 +351,64 @@ class FactureResourceTest extends TestCase
     }
 
     /**
+     * Bug rapporté par un magasin : en tapant "5.5" dans le taux de TVA (ou
+     * "12.5" dans un prix), le champ redevenait "5" -- une réponse du
+     * serveur arrivée en pleine frappe réécrivait la case. Les champs
+     * calculés en direct ne doivent jamais être réécrits tant qu'ils ont le
+     * focus (modificateur "unintrusive"), et le script du panneau renvoie
+     * ce qu'ils affichent si une réponse l'a fait diverger. Vérifié aussi
+     * dans un vrai navigateur, serveur ralenti : voir le message de commit.
+     */
+    public function test_les_champs_calcules_en_direct_ne_sont_jamais_reecrits_pendant_la_frappe(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $html = Livewire::test(CreateFacture::class)->html();
+
+        foreach (['quantite', 'prix_unitaire_ht', 'prix_unitaire_ttc', 'taux_tva', 'remise_pourcentage'] as $champ) {
+            $this->assertMatchesRegularExpression(
+                '/wire:model\.live\.unintrusive="data\.lignes\.[^"]+\.'.$champ.'"/',
+                $html,
+                "Le champ {$champ} doit rester tel que tapé pendant la frappe.",
+            );
+        }
+
+        $this->get(FactureResource::getUrl('create'))
+            ->assertSuccessful()
+            ->assertSee("Livewire.hook('commit'", false)
+            ->assertSee("includes('unintrusive')", false);
+    }
+
+    /**
+     * "5," ou "5." en route vers "5,5" n'est pas encore un nombre : le
+     * navigateur l'envoie vide. Un taux vide ne doit rien recalculer, sans
+     * quoi le PU HT sautait à la valeur du TTC (TVA à 0 %) en pleine frappe.
+     */
+    public function test_un_taux_de_tva_en_cours_de_frappe_ne_recalcule_rien(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $component = Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => Client::factory()->create()->id]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '12')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '10.00')
+            ->set("data.lignes.{$cle}.taux_tva", '')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '10.00')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '12')
+            ->set("data.lignes.{$cle}.taux_tva", '5.5')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '11.37');
+    }
+
+    /**
      * Le prix réellement saisi fait foi, quel que soit le client : un PU HT
      * tapé (8,33 € x 3) donne exactement 24,99 € HT, là où passer par un PU
      * TTC arrondi (10,00 €) donnait 25,00 € HT. Retaper ensuite un PU TTC

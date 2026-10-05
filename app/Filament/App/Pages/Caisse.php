@@ -135,10 +135,10 @@ class Caisse extends Page implements HasForms
                     ->label('Montant reçu')
                     ->numeric()
                     ->prefix('€')
-                    // live() et non live(onBlur: true) : la monnaie à rendre
-                    // doit se mettre à jour pendant la saisie, pas seulement
-                    // quand le vendeur clique ailleurs.
-                    ->live()
+                    // Et non live(onBlur: true) : la monnaie à rendre doit se
+                    // mettre à jour pendant la saisie, pas seulement quand le
+                    // vendeur clique ailleurs.
+                    ->saisieEnDirect()
                     ->visible(fn (Get $get) => $this->modePaiementSelectionne($get) === ModePaiement::Especes),
                 Placeholder::make('monnaie_a_rendre')
                     ->label('Monnaie à rendre')

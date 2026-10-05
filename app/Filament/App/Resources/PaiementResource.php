@@ -75,7 +75,7 @@ class PaiementResource extends Resource
                     ->required(),
                 // live() et non live(onBlur: true) : le reste à allouer se
                 // met à jour pendant la saisie.
-                TextInput::make('montant')->label('Montant reçu')->numeric()->required()->live(),
+                TextInput::make('montant')->label('Montant reçu')->numeric()->required()->saisieEnDirect(),
                 TextInput::make('reference')->label('Référence'),
                 DatePicker::make('recu_le')
                     ->label('Reçu le')

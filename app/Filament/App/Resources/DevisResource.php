@@ -143,9 +143,9 @@ class DevisResource extends Resource
             // live() et non live(onBlur: true) sur tous les champs de la
             // ligne : le total (et, dans la Caisse, la monnaie à rendre) se
             // met à jour pendant la saisie, pas seulement au clic ailleurs.
-            TextInput::make('quantite')->numeric()->required()->default(1)->live(),
+            TextInput::make('quantite')->numeric()->required()->default(1)->saisieEnDirect(),
             ...self::champsPrixDeLigne(PrixReference::Ttc),
-            TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->live(),
+            TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->saisieEnDirect(),
             self::totalDeLigne(PrixReference::Ttc),
         ];
     }

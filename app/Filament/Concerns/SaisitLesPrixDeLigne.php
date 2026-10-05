@@ -31,7 +31,7 @@ trait SaisitLesPrixDeLigne
             TextInput::make('prix_unitaire_ht')
                 ->label('PU HT')
                 ->numeric()
-                ->live()
+                ->saisieEnDirect()
                 ->required(fn (Get $get) => self::referenceDeLigne($get, $referenceParDefaut) === PrixReference::Ht)
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
                     if (blank($state)) {
@@ -44,7 +44,7 @@ trait SaisitLesPrixDeLigne
             TextInput::make('prix_unitaire_ttc')
                 ->label('PU TTC')
                 ->numeric()
-                ->live()
+                ->saisieEnDirect()
                 ->required(fn (Get $get) => self::referenceDeLigne($get, $referenceParDefaut) === PrixReference::Ttc)
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
                     if (blank($state)) {
@@ -59,12 +59,18 @@ trait SaisitLesPrixDeLigne
                 ->numeric()
                 ->required()
                 ->default(20)
-                ->live()
+                ->saisieEnDirect()
                 // Le prix qui fait foi ne bouge jamais au changement de taux :
                 // seul l'autre prix est recalculé.
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) use ($referenceParDefaut) {
+                    // Saisie incomplète en cours ("5," en route vers "5,5") :
+                    // rien à recalculer tant que le taux n'est pas un nombre.
+                    if (blank($state)) {
+                        return;
+                    }
+
                     $calculateur = app(CalculateurLigne::class);
-                    $tauxTva = (float) ($state ?? 0);
+                    $tauxTva = (float) $state;
 
                     if (self::referenceDeLigne($get, $referenceParDefaut) === PrixReference::Ht) {
                         if (filled($get('prix_unitaire_ht'))) {

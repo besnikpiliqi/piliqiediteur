@@ -130,9 +130,9 @@ class FactureAchatResource extends Resource
                         TextInput::make('description')->required()->columnSpan(2),
                         // live() et non live(onBlur: true) : le total de la
                         // ligne se met à jour pendant la saisie.
-                        TextInput::make('quantite')->numeric()->required()->default(1)->live(),
+                        TextInput::make('quantite')->numeric()->required()->default(1)->saisieEnDirect(),
                         ...self::champsPrixDeLigne(PrixReference::Ht),
-                        TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->live(),
+                        TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->saisieEnDirect(),
                         self::totalDeLigne(PrixReference::Ht),
                     ])
                     ->columns(9)

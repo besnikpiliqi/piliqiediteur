@@ -28,6 +28,7 @@ use App\Policies\MembreEquipePolicy;
 use App\Policies\PaiementPolicy;
 use App\Policies\ProduitPolicy;
 use App\Policies\SoumissionEReportingPolicy;
+use Filament\Forms\Components\TextInput;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -74,5 +75,24 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(FactureAchat::class, FactureAchatPolicy::class);
         Gate::policy(AvoirFournisseur::class, AvoirFournisseurPolicy::class);
         Gate::policy(SoumissionEReporting::class, SoumissionEReportingPolicy::class);
+
+        $this->declarerLaSaisieEnDirect();
+    }
+
+    /**
+     * Champ calculé en direct pendant la frappe (montant, quantité, taux) :
+     * chaque frappe recalcule le reste du formulaire, mais le champ lui-même
+     * n'est jamais réécrit par le serveur tant qu'il a le focus
+     * (modificateur Livewire/Alpine "unintrusive") -- sinon une réponse
+     * arrivée en pleine frappe effaçait la virgule de "12,5" et laissait
+     * "125". Voir aussi resources/views/filament/app/saisie-protegee.blade.php,
+     * qui renvoie la valeur affichée si une réponse l'a fait diverger.
+     */
+    private function declarerLaSaisieEnDirect(): void
+    {
+        TextInput::macro('saisieEnDirect', function (): TextInput {
+            /** @var TextInput $this */
+            return $this->live()->stateBindingModifiers(['live', 'unintrusive']);
+        });
     }
 }

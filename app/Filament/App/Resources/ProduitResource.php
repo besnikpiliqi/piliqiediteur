@@ -80,7 +80,7 @@ class ProduitResource extends Resource
                 ->numeric()
                 ->prefix('€')
                 ->required()
-                ->live()
+                ->saisieEnDirect()
                 ->helperText(fn (Get $get) => blank($get('prix_vente_ttc'))
                     ? null
                     : 'Soit '.number_format(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc(
@@ -91,7 +91,7 @@ class ProduitResource extends Resource
                 ->label('Taux de TVA (%)')
                 ->numeric()
                 ->default(20)
-                ->live(),
+                ->saisieEnDirect(),
         ];
     }
 

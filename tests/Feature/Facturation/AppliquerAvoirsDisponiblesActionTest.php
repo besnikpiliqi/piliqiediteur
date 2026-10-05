@@ -13,8 +13,10 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -184,5 +186,41 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $this->assertSame(StatutFacture::Emise, $factureB->statut);
         $this->assertSame(0.0, $factureB->montantCrediteParAvoir());
         $this->assertSame(60.0, $clientA->soldeCrediteur());
+    }
+
+    /**
+     * Le client comptoir (vente anonyme, voir Client::estComptoir()) est
+     * partagé par toutes les ventes au comptoir d'un magasin : un avoir émis
+     * "pour lui" n'a aucune personne identifiable à qui l'appliquer plus
+     * tard, et l'appliquer au hasard sur la prochaine vente comptoir
+     * reviendrait à donner le remboursement d'une personne à une autre. Il
+     * ne doit donc jamais afficher ni accumuler de solde créditeur.
+     */
+    public function test_le_client_comptoir_naccumule_et_napplique_jamais_de_credit(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        app(TenantContext::class)->set($magasin);
+
+        $clientComptoir = Client::query()->where('nom', Client::NOM_COMPTOIR)->firstOrFail();
+        $this->assertTrue($clientComptoir->estComptoir());
+
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        // Premier achat comptoir intégralement retourné : aurait généré 60 €
+        // de crédit disponible pour un client nommé.
+        $premiereFacture = $this->emettreFacture($clientComptoir, $produit, 1);
+        $this->emettreAvoirPourClient($clientComptoir, $premiereFacture, 1);
+
+        $this->assertSame(0.0, $clientComptoir->soldeCrediteur());
+
+        // Nouvel achat comptoir du même montant : ne doit JAMAIS être couvert
+        // automatiquement par ce crédit, le client suivant au comptoir
+        // n'étant pas la même personne que celle ayant retourné le produit.
+        $nouvelleFacture = $this->emettreFacture($clientComptoir, $produit, 1);
+
+        $this->assertSame(StatutFacture::Emise, $nouvelleFacture->statut);
+        $this->assertSame(0.0, $nouvelleFacture->montantCrediteParAvoir());
+        $this->assertSame(0.0, $clientComptoir->soldeCrediteur());
     }
 }

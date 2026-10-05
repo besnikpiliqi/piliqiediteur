@@ -51,7 +51,7 @@ class CreerMagasinAction
             // produit...) restent des fiches à part entière, créées au
             // besoin via le "+" du formulaire de devis/facture.
             Client::create([
-                'nom' => 'Client comptoir',
+                'nom' => Client::NOM_COMPTOIR,
                 'type_client' => TypeClient::Particulier,
             ]);
 

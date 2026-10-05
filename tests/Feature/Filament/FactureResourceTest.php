@@ -219,6 +219,69 @@ class FactureResourceTest extends TestCase
     }
 
     /**
+     * Même exigence que pour la colonne "Payé" de la liste
+     * (test_la_colonne_paye_de_la_liste_inclut_le_credit_applique_par_avoir),
+     * mais pour le champ "Payé" de la fiche détail : il doit lui aussi
+     * inclure le crédit appliqué par avoir, sans quoi il affiche "0,00 €"
+     * à côté d'un statut "Partiellement payée" -- une contradiction.
+     */
+    public function test_la_fiche_facture_affiche_le_paye_incluant_le_credit_applique_par_avoir(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        // Montants choisis pour qu'aucun total légitime de la page ne se
+        // termine par "0,00" (voir plus bas pourquoi) : 10,83 € HT + 20 %
+        // de TVA = 13,00 € TTC de crédit disponible.
+        $produitRembourse = Produit::factory()->create(['prix_vente_ht' => 10.83, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produitFacture = Produit::factory()->create(['prix_vente_ht' => 51, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        // Premier achat intégralement retourné : 13 € de crédit disponible.
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produitRembourse->id, 'description' => $produitRembourse->nom, 'quantite' => 1, 'prix_unitaire_ht' => 10.83, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+        $premiereFacture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $premiereFacture);
+
+        $ligneFacture = $premiereFacture->fresh()->lignes->firstOrFail();
+        $avoir = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]);
+        app(EmettreAvoirAction::class)->handle($avoir);
+
+        // Nouvel achat d'un montant supérieur (61,20 € TTC) : seulement
+        // couvert en partie par le crédit, aucun encaissement réel.
+        Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => $client->id,
+            'lignes' => [['produit_id' => $produitFacture->id, 'description' => $produitFacture->nom, 'quantite' => 1, 'prix_unitaire_ht' => 51, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+        ])->call('create');
+        $nouvelleFacture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $nouvelleFacture);
+        $nouvelleFacture = $nouvelleFacture->fresh();
+
+        $this->assertSame(StatutFacture::PartiellementPayee, $nouvelleFacture->statut);
+        $this->assertSame(0.0, $nouvelleFacture->montantPaye());
+        $this->assertSame(13.0, $nouvelleFacture->montantCrediteParAvoir());
+        $this->assertSame(48.2, $nouvelleFacture->montantRestant());
+
+        // "0,00 €" ne doit apparaître nulle part sur la fiche : avant la
+        // correction, c'est précisément la valeur affichée par le champ
+        // "Payé" (montantPaye() seul, sans le crédit), alors que le statut
+        // "Partiellement payée" prouve qu'une partie du montant est bien
+        // réglée. Aucun des autres montants de cette fiche (13,00 / 10,83 /
+        // 2,17 / 51,00 / 10,20 / 61,20 / 48,20) ne se termine par "0,00",
+        // ce qui permet de n'assertDontSee que la vraie valeur à exclure.
+        Livewire::test(ViewFacture::class, ['record' => $nouvelleFacture->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee('13,00')
+            ->assertDontSee('0,00');
+    }
+
+    /**
      * Même besoin que pour les devis : un magasin de services (pas de
      * stock) doit pouvoir facturer de la main d'œuvre ou une prestation
      * jamais enregistrée au catalogue, en remplissant la ligne à la main.

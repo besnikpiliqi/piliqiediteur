@@ -75,7 +75,7 @@ class Caisse extends Page implements HasForms
     private function remplirFormulaireVide(): void
     {
         $this->form->fill([
-            'client_id' => Client::query()->where('nom', 'Client comptoir')->value('id'),
+            'client_id' => Client::query()->where('nom', Client::NOM_COMPTOIR)->value('id'),
             'lignes' => [],
             'mode_paiement' => ModePaiement::Especes->value,
             'montant_recu' => null,

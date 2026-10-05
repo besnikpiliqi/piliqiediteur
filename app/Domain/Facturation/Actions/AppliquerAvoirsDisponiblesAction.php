@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
@@ -33,6 +34,19 @@ class AppliquerAvoirsDisponiblesAction
             $montantRestant = $facture->montantRestant();
 
             if ($montantRestant <= 0) {
+                return;
+            }
+
+            /** @var Client $client */
+            $client = $facture->client;
+
+            // Le client comptoir générique (voir Client::estComptoir()) n'a
+            // jamais de solde créditeur : un avoir émis "pour lui" n'a
+            // aucune personne identifiable à qui l'appliquer plus tard, et
+            // l'appliquer au hasard sur la prochaine vente comptoir
+            // reviendrait à donner le remboursement d'une personne à une
+            // autre.
+            if ($client->estComptoir()) {
                 return;
             }
 

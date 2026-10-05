@@ -265,7 +265,10 @@ class FactureAchatResourceTest extends TestCase
                 'reference' => 'ECR-IP17-PRO',
                 'nom' => 'Ecran Iphone 17 Pro',
                 'prix_achat_ht' => '80',
-                'prix_vente_ht' => '150',
+                // 180 € TTC à 20 % de TVA = 150 € HT (voir
+                // ProduitResource::prixVenteTtcSchema() : seul le TTC est
+                // saisi, le HT en est dérivé).
+                'prix_vente_ttc' => '180',
                 'taux_tva' => '20',
             ])
             ->assertHasNoFormComponentActionErrors();

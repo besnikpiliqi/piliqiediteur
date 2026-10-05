@@ -5,11 +5,14 @@ namespace App\Filament\App\Resources;
 use App\Domain\Catalogue\Models\Produit;
 use App\Filament\App\Resources\ProduitResource\Pages;
 use Filament\Forms\Components\Component;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -50,8 +53,7 @@ class ProduitResource extends Resource
             TextInput::make('taille')->maxLength(20),
             TextInput::make('couleur')->maxLength(30),
             TextInput::make('prix_achat_ht')->label('Prix d\'achat HT')->numeric()->prefix('€')->required(),
-            TextInput::make('prix_vente_ht')->label('Prix de vente HT')->numeric()->prefix('€')->required(),
-            TextInput::make('taux_tva')->label('Taux de TVA (%)')->numeric()->default(20),
+            ...self::prixVenteTtcSchema(),
             Toggle::make('suivi_stock')->label('Suivre le stock')->default(true)->live(),
             TextInput::make('seuil_alerte')
                 ->label('Seuil d\'alerte')
@@ -60,6 +62,70 @@ class ProduitResource extends Resource
                 ->visible(fn ($get) => $get('suivi_stock')),
             Toggle::make('actif')->default(true),
         ];
+    }
+
+    /**
+     * Prix de vente exprimé en TTC, pas HT (contrairement au prix
+     * d'achat) : c'est le prix affiché au client qui compte pour un
+     * vendeur qui fixe un tarif, pas le détail HT/TVA. Seul prix_vente_ht
+     * est réellement enregistré (voir dehydrated(false) ci-dessous),
+     * calculé à partir du TTC saisi ici -- même principe que le couple
+     * PU HT/PU TTC d'une ligne de devis ou facture, voir
+     * DevisResource::ligneSchema().
+     *
+     * @return array<Component>
+     */
+    private static function prixVenteTtcSchema(): array
+    {
+        return [
+            Hidden::make('prix_vente_ht'),
+            TextInput::make('prix_vente_ttc')
+                ->label('Prix de vente TTC')
+                ->numeric()
+                ->prefix('€')
+                ->required()
+                ->live()
+                ->dehydrated(false)
+                ->afterStateHydrated(function (TextInput $component, Get $get) {
+                    $component->state(self::ttcDepuisHt(
+                        (float) ($get('prix_vente_ht') ?? 0),
+                        (float) ($get('taux_tva') ?? 20),
+                    ));
+                })
+                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
+                    if ($state === null || $state === '') {
+                        return;
+                    }
+
+                    $set('prix_vente_ht', self::htDepuisTtc((float) $state, (float) ($get('taux_tva') ?? 20)));
+                }),
+            TextInput::make('taux_tva')
+                ->label('Taux de TVA (%)')
+                ->numeric()
+                ->default(20)
+                ->live()
+                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
+                    $set('prix_vente_ht', self::htDepuisTtc((float) ($get('prix_vente_ttc') ?? 0), (float) ($state ?? 0)));
+                }),
+        ];
+    }
+
+    private static function ttcDepuisHt(float $ht, float $tauxTva): float
+    {
+        return round($ht * (1 + $tauxTva / 100), 2);
+    }
+
+    /**
+     * Arrondi à 4 décimales, pas 2 : c'est ce prix HT qui est réellement
+     * enregistré. Un prix TTC rond ne se divise pas toujours exactement
+     * par 1 + taux de TVA (ex: 40 € / 1,20 = 33,3333...) -- l'arrondir à 2
+     * décimales dès ici ferait dériver le total TTC d'une ligne dès que
+     * la quantité dépasse 1 une fois ce produit vendu (voir le docblock
+     * de CalculateurLigne).
+     */
+    private static function htDepuisTtc(float $ttc, float $tauxTva): float
+    {
+        return round($ttc / (1 + $tauxTva / 100), 4);
     }
 
     public static function form(Form $form): Form
@@ -83,8 +149,7 @@ class ProduitResource extends Resource
 
             Section::make('Prix et TVA')->schema([
                 TextInput::make('prix_achat_ht')->label('Prix d\'achat HT')->numeric()->prefix('€')->required(),
-                TextInput::make('prix_vente_ht')->label('Prix de vente HT')->numeric()->prefix('€')->required(),
-                TextInput::make('taux_tva')->label('Taux de TVA (%)')->numeric()->default(20),
+                ...self::prixVenteTtcSchema(),
             ])->columns(3),
 
             Section::make('Stock')->schema([

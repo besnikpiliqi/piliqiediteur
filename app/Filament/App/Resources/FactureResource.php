@@ -148,13 +148,20 @@ class FactureResource extends Resource
                 TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
                 TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
-                TextEntry::make('montant_paye')->label('Payé')->state(fn (Facture $record) => $record->montantPaye())->money('EUR'),
-                // Ce logiciel n'étant connecté à aucune banque, un avoir émis
-                // n'est jamais remboursé : il s'applique automatiquement à la
-                // prochaine facture du client (voir
-                // AppliquerAvoirsDisponiblesAction) -- ce montant doit être
-                // visible ici, distinct du "Payé", pour que le client comme
-                // le magasin voient exactement d'où vient le solde réglé.
+                // Un avoir n'est jamais remboursé par ce logiciel : son
+                // crédit réduit le solde dû exactement comme un
+                // encaissement (voir Facture::montantRestant()), c'est
+                // d'ailleurs lui qui explique le statut "Partiellement
+                // payée"/"Payée" d'une facture jamais réellement encaissée.
+                // Le séparer du "Payé" donnerait l'impression contradictoire
+                // d'une facture "partiellement payée" à 0 € payé (même
+                // raisonnement que la colonne "Payé" de la liste) ; le détail
+                // "Crédité par avoir" ci-dessous garde la traçabilité de la
+                // part qui vient spécifiquement d'un avoir.
+                TextEntry::make('montant_paye')
+                    ->label('Payé')
+                    ->state(fn (Facture $record) => $record->montantPaye() + $record->montantCrediteParAvoir())
+                    ->money('EUR'),
                 TextEntry::make('montant_credite_par_avoir')
                     ->label('Crédité par avoir')
                     ->state(fn (Facture $record) => $record->montantCrediteParAvoir())

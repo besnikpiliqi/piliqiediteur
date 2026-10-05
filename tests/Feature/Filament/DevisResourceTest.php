@@ -275,7 +275,11 @@ class DevisResourceTest extends TestCase
                 ],
             ])
             ->call('save')
-            ->assertHasNoFormErrors();
+            ->assertHasNoFormErrors()
+            // Filament reste par défaut sur le formulaire après sauvegarde :
+            // une fois le devis corrigé, le vendeur doit revenir directement
+            // à la liste.
+            ->assertRedirect(DevisResource::getUrl('index'));
 
         $devis->refresh();
         $this->assertSame($autreClient->id, $devis->client_id);

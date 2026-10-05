@@ -27,6 +27,14 @@ class EditDevis extends EditRecord
         ];
     }
 
+    // Par défaut, Filament reste sur le formulaire d'édition après
+    // sauvegarde : une fois le devis corrigé, le vendeur n'a plus rien à y
+    // faire et doit pouvoir revenir directement à la liste.
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('index');
+    }
+
     protected function mutateFormDataBeforeFill(array $data): array
     {
         $data['lignes'] = $this->record->lignes->map(fn ($ligne) => [

@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\EditFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
@@ -325,7 +326,11 @@ class FactureResourceTest extends TestCase
                 ],
             ])
             ->call('save')
-            ->assertHasNoFormErrors();
+            ->assertHasNoFormErrors()
+            // Filament reste par défaut sur le formulaire après sauvegarde :
+            // une fois le brouillon corrigé, le vendeur n'a plus rien à y
+            // faire et doit revenir directement à la liste.
+            ->assertRedirect(FactureResource::getUrl('index'));
 
         $facture->refresh();
         $this->assertSame($autreClient->id, $facture->client_id);

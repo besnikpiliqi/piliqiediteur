@@ -13,6 +13,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\App\Resources\FactureAchatResource\Pages\CreateFactureAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\EditFactureAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
@@ -178,7 +179,11 @@ class FactureAchatResourceTest extends TestCase
                 ],
             ])
             ->call('save')
-            ->assertHasNoFormErrors();
+            ->assertHasNoFormErrors()
+            // Filament reste par défaut sur le formulaire après sauvegarde :
+            // une fois la facture d'achat corrigée, le vendeur doit revenir
+            // directement à la liste.
+            ->assertRedirect(FactureAchatResource::getUrl('index'));
 
         $this->assertSame('40.00', $factureAchat->fresh()->total_ht);
     }

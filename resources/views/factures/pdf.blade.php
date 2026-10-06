@@ -98,10 +98,10 @@
             @foreach($facture->lignes as $ligne)
                 <tr>
                     <td>{{ $ligne->description }}</td>
-                    <td class="montant">{{ rtrim(rtrim($ligne->quantite, '0'), '.') }}</td>
+                    <td class="montant">{{ $ligne->quantite }}</td>
                     <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ht, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ttc, 2, ',', ' ') }} €</td>
-                    <td class="montant">{{ rtrim(rtrim($ligne->taux_tva, '0'), '.') }} %</td>
+                    <td class="montant">{{ \Illuminate\Support\Number::format((float) $ligne->taux_tva, maxPrecision: 2, locale: 'fr') }} %</td>
                     <td class="montant">{{ number_format((float) $ligne->montant_ht, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ number_format((float) $ligne->montant_tva, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ number_format((float) $ligne->montant_ttc, 2, ',', ' ') }} €</td>
@@ -124,7 +124,7 @@
         <tbody>
             @foreach($facture->ventilation_tva as $taux)
                 <tr>
-                    <td>{{ rtrim(rtrim($taux['taux_tva'], '0'), '.') }} %</td>
+                    <td>{{ \Illuminate\Support\Number::format((float) $taux['taux_tva'], maxPrecision: 2, locale: 'fr') }} %</td>
                     <td class="montant">{{ number_format($taux['montant_ht'], 2, ',', ' ') }} €</td>
                     <td class="montant">{{ number_format($taux['montant_tva'], 2, ',', ' ') }} €</td>
                     <td class="montant">{{ number_format($taux['montant_ttc'], 2, ',', ' ') }} €</td>

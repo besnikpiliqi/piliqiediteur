@@ -4,6 +4,8 @@ namespace App\Filament\App\Resources\ProduitResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Enums\PrixReference;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -15,8 +17,13 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  *
  * Valorisation du stock au prix d'ACHAT HT (valeur comptable classique
  * d'un inventaire, pas le chiffre d'affaires potentiel à la vente), avec
- * sa TVA. Information sensible (elle révèle la trésorerie immobilisée en
- * stock) : réservée par défaut au propriétaire/administrateur/comptable
+ * sa TVA -- calculée article par article comme une ligne de facture (voir
+ * CalculateurLigne) : PU HT et PU TTC de chaque produit au centime, x sa
+ * quantité en stock, puis sommes séparées. 3 articles à 33,33 € HT valent
+ * donc 99,99 € HT + 20,01 € de TVA = 120,00 € TTC, jamais 119,99 €.
+ *
+ * Information sensible (elle révèle la trésorerie immobilisée en stock) :
+ * réservée par défaut au propriétaire/administrateur/comptable
  * via produit.voir_valeur_stock (voir SeedMagasinRolesAction), un vendeur
  * continue de voir le prix et la quantité de chaque produit dans le
  * tableau, juste pas ce total agrégé.
@@ -38,20 +45,23 @@ class ValeurStockApercu extends BaseWidget
     protected function getStats(): array
     {
         $produitsSuivis = Produit::query()->where('suivi_stock', true)->get();
-        $produitsEnStock = $produitsSuivis->filter(fn (Produit $produit) => (float) $produit->stock_quantite > 0);
+        $produitsEnStock = $produitsSuivis->filter(fn (Produit $produit) => $produit->stock_quantite > 0);
         $nombreEpuises = $produitsSuivis->count() - $produitsEnStock->count();
 
-        $quantiteTotale = $produitsEnStock->sum(fn (Produit $produit) => (float) $produit->stock_quantite);
-        $valeurHt = $produitsEnStock->sum(fn (Produit $produit) => (float) $produit->stock_quantite * (float) $produit->prix_achat_ht);
-        $tva = $produitsEnStock->sum(fn (Produit $produit) => (float) $produit->stock_quantite * (float) $produit->prix_achat_ht * ((float) $produit->taux_tva / 100));
+        $calculateur = app(CalculateurLigne::class);
+        $valeur = $calculateur->totaliser($produitsEnStock->map(function (Produit $produit) use ($calculateur): array {
+            $prix = $calculateur->prixUnitaires(PrixReference::Ht, (float) $produit->prix_achat_ht, (float) $produit->taux_tva);
+
+            return $calculateur->calculer($prix['prix_unitaire_ht'], $prix['prix_unitaire_ttc'], $produit->stock_quantite);
+        }));
 
         return [
-            Stat::make('Valeur du stock', number_format($valeurHt + $tva, 2, ',', ' ').' € TTC')
+            Stat::make('Valeur du stock', number_format($valeur['total_ttc'], 2, ',', ' ').' € TTC')
                 ->description(sprintf(
                     '%s unités en stock · %s € HT · %s € TVA',
-                    rtrim(rtrim(number_format($quantiteTotale, 3, ',', ' '), '0'), ','),
-                    number_format($valeurHt, 2, ',', ' '),
-                    number_format($tva, 2, ',', ' '),
+                    number_format($produitsEnStock->sum('stock_quantite'), 0, ',', ' '),
+                    number_format($valeur['total_ht'], 2, ',', ' '),
+                    number_format($valeur['total_tva'], 2, ',', ' '),
                 ))
                 ->color('success'),
             Stat::make('Références épuisées', (string) $nombreEpuises)

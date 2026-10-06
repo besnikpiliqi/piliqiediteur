@@ -43,6 +43,27 @@ class ValeurStockWidgetTest extends TestCase
             ->assertSee('1');
     }
 
+    /**
+     * Article par article, comme une ligne de facture : 33,33 € HT donne
+     * un PU TTC de 40,00 € ; 3 articles valent donc 99,99 € HT + 20,01 € de
+     * TVA = 120,00 € TTC -- jamais 20,00 € de TVA et 119,99 € TTC, ce que
+     * donnait une TVA calculée sur le total.
+     */
+    public function test_la_valeur_du_stock_se_calcule_article_par_article(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Produit::factory()->create(['prix_achat_ht' => 33.33, 'taux_tva' => 20, 'stock_quantite' => 3, 'suivi_stock' => true]);
+
+        Livewire::test(ValeurStockApercu::class)
+            ->assertSee('120,00 € TTC')
+            ->assertSee('3 unités en stock · 99,99 € HT · 20,01 € TVA')
+            ->assertDontSee('119,99');
+    }
+
     public function test_un_vendeur_sans_la_permission_ne_voit_pas_le_widget(): void
     {
         $magasin = Magasin::factory()->create();

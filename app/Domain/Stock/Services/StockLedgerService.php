@@ -27,13 +27,13 @@ class StockLedgerService
     public function enregistrer(
         Produit $produit,
         TypeMouvementStock $type,
-        float $quantite,
+        int $quantite,
         ?Model $source = null,
         ?string $note = null,
         ?int $creeParUserId = null,
     ): MouvementStock {
-        if ($quantite <= 0) {
-            throw new InvalidArgumentException("La quantité d'un mouvement de stock doit être strictement positive.");
+        if ($quantite < 1) {
+            throw new InvalidArgumentException("La quantité d'un mouvement de stock doit être un nombre entier d'articles, au moins 1.");
         }
 
         if (! $produit->suivi_stock) {
@@ -50,15 +50,15 @@ class StockLedgerService
      * quantité cible plutôt que d'un delta, pour coller à l'usage ("j'ai
      * compté 42 articles") plutôt qu'à une mécanique interne.
      */
-    public function ajuster(Produit $produit, float $quantiteCible, string $note, ?int $creeParUserId = null): MouvementStock
+    public function ajuster(Produit $produit, int $quantiteCible, string $note, ?int $creeParUserId = null): MouvementStock
     {
-        $delta = $quantiteCible - (float) $produit->stock_quantite;
+        $delta = $quantiteCible - $produit->stock_quantite;
 
-        if (abs($delta) < 0.001) {
+        if ($delta === 0) {
             throw new InvalidArgumentException('Aucun écart à ajuster.');
         }
 
-        $noteComplete = sprintf('%s (%s%.3f)', $note, $delta >= 0 ? '+' : '', $delta);
+        $noteComplete = sprintf('%s (%+d)', $note, $delta);
 
         return $this->appliquer($produit, TypeMouvementStock::Ajustement, abs($delta), $delta, null, $noteComplete, $creeParUserId);
     }
@@ -66,8 +66,8 @@ class StockLedgerService
     private function appliquer(
         Produit $produit,
         TypeMouvementStock $type,
-        float $quantiteMouvement,
-        float $delta,
+        int $quantiteMouvement,
+        int $delta,
         ?Model $source,
         ?string $note,
         ?int $creeParUserId,
@@ -78,7 +78,7 @@ class StockLedgerService
             // en stock) pour empêcher toute race condition.
             $produitVerrouille = Produit::query()->whereKey($produit->getKey())->lockForUpdate()->firstOrFail();
 
-            $nouvelleQuantite = round((float) $produitVerrouille->stock_quantite + $delta, 3);
+            $nouvelleQuantite = $produitVerrouille->stock_quantite + $delta;
 
             $mouvement = MouvementStock::create([
                 'produit_id' => $produitVerrouille->id,

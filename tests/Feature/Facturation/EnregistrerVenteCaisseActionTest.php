@@ -60,7 +60,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
             ModePaiement::CarteBancaire,
         );
 
-        $this->assertSame('2.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(2, $produit->fresh()->stock_quantite);
     }
 
     public function test_encaisser_une_vente_avec_une_ligne_libre_sans_produit(): void

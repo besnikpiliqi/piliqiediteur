@@ -125,12 +125,12 @@ class FactureAchatResource extends Resource
                                 $set('prix_unitaire_ht', (string) $produit->prix_achat_ht);
                                 $set('prix_unitaire_ttc', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireTtcDepuisHt((float) $produit->prix_achat_ht, (float) $produit->taux_tva)));
                                 $set('prix_reference', PrixReference::Ht->value);
-                                $set('taux_tva', (string) $produit->taux_tva);
+                                $set('taux_tva', self::pourcentageEnTexte($produit->taux_tva));
                             }),
                         TextInput::make('description')->required()->columnSpan(2),
                         // live() et non live(onBlur: true) : le total de la
                         // ligne se met à jour pendant la saisie.
-                        TextInput::make('quantite')->numeric()->required()->default(1)->saisieEnDirect(),
+                        TextInput::make('quantite')->integer()->minValue(1)->required()->default(1)->saisieEnDirect(),
                         ...self::champsPrixDeLigne(PrixReference::Ht),
                         TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->saisieEnDirect(),
                         self::totalDeLigne(PrixReference::Ht),
@@ -165,7 +165,7 @@ class FactureAchatResource extends Resource
                         TextEntry::make('quantite'),
                         TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
                         TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
-                        TextEntry::make('taux_tva')->label('Taux TVA')->suffix(' %'),
+                        TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
                         TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
                         TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
                         TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
@@ -257,9 +257,9 @@ class FactureAchatResource extends Resource
                                     ->dehydrated(false),
                                 TextInput::make('quantite')
                                     ->label('Quantité à retourner')
-                                    ->numeric()
+                                    ->integer()
                                     ->required()
-                                    ->minValue(0.001)
+                                    ->minValue(1)
                                     ->maxValue(fn (Get $get) => LigneAchat::find($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0),
                             ])
                             ->columns(3)

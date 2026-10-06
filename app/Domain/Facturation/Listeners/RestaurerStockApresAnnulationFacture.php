@@ -26,7 +26,7 @@ class RestaurerStockApresAnnulationFacture
                 $this->stock->enregistrer(
                     produit: $produit,
                     type: TypeMouvementStock::RetourClient,
-                    quantite: (float) $ligne->quantite,
+                    quantite: $ligne->quantite,
                     source: $event->facture,
                     note: "Annulation facture {$event->facture->numero}",
                 );

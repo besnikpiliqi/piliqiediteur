@@ -26,7 +26,7 @@ class DecrementerStockApresEmissionFacture
                 $this->stock->enregistrer(
                     produit: $produit,
                     type: TypeMouvementStock::Vente,
-                    quantite: (float) $ligne->quantite,
+                    quantite: $ligne->quantite,
                     source: $event->facture,
                     note: "Vente facture {$event->facture->numero}",
                 );

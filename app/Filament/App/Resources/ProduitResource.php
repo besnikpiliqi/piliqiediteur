@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\ProduitResource\Pages;
 use Filament\Forms\Components\Component;
@@ -56,7 +57,8 @@ class ProduitResource extends Resource
             Toggle::make('suivi_stock')->label('Suivre le stock')->default(true)->live(),
             TextInput::make('seuil_alerte')
                 ->label('Seuil d\'alerte')
-                ->numeric()
+                ->integer()
+                ->minValue(0)
                 ->default(0)
                 ->visible(fn ($get) => $get('suivi_stock')),
             Toggle::make('actif')->default(true),
@@ -86,6 +88,7 @@ class ProduitResource extends Resource
                 ->label('Taux de TVA (%)')
                 ->numeric()
                 ->default(20)
+                ->formatStateUsing(fn (mixed $state): mixed => blank($state) ? $state : DevisResource::pourcentageEnTexte($state))
                 ->saisieEnDirect(),
         ];
     }
@@ -100,10 +103,11 @@ class ProduitResource extends Resource
             return null;
         }
 
-        $prixTtc = (float) $get('prix_vente_ttc');
-        $prixHt = app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc($prixTtc, (float) ($get('taux_tva') ?? 20));
+        $calculateur = app(CalculateurLigne::class);
+        $prix = $calculateur->prixUnitaires(PrixReference::Ttc, (float) $get('prix_vente_ttc'), (float) ($get('taux_tva') ?? 20));
 
-        return 'Soit '.number_format($prixHt, 2, ',', ' ').' € HT + '.number_format($prixTtc - $prixHt, 2, ',', ' ').' € de TVA';
+        return 'Soit '.number_format($prix['prix_unitaire_ht'], 2, ',', ' ').' € HT + '
+            .number_format($calculateur->soustraire($prix['prix_unitaire_ttc'], $prix['prix_unitaire_ht']), 2, ',', ' ').' € de TVA';
     }
 
     public static function form(Form $form): Form
@@ -134,7 +138,8 @@ class ProduitResource extends Resource
                 Toggle::make('suivi_stock')->label('Suivre le stock')->default(true)->live(),
                 TextInput::make('seuil_alerte')
                     ->label('Seuil d\'alerte')
-                    ->numeric()
+                    ->integer()
+                    ->minValue(0)
                     ->default(0)
                     ->visible(fn ($get) => $get('suivi_stock')),
                 TextInput::make('stock_quantite')
@@ -156,11 +161,11 @@ class ProduitResource extends Resource
                 Tables\Columns\TextColumn::make('reference')->label('Référence')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('nom')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('prix_vente_ttc')->label('PV TTC')->money('EUR')->sortable(),
-                Tables\Columns\TextColumn::make('taux_tva')->label('TVA')->suffix(' %'),
+                Tables\Columns\TextColumn::make('taux_tva')->label('TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
                 Tables\Columns\TextColumn::make('stock_quantite')
                     ->label('Stock')
                     ->formatStateUsing(fn (Produit $record) => $record->suivi_stock
-                        ? rtrim(rtrim((string) $record->stock_quantite, '0'), '.')
+                        ? (string) $record->stock_quantite
                         : '—')
                     ->badge()
                     ->color(fn (Produit $record) => ! $record->suivi_stock

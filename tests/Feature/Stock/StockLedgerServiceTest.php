@@ -27,7 +27,7 @@ class StockLedgerServiceTest extends TestCase
 
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 10);
 
-        $this->assertSame('10.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(10, $produit->fresh()->stock_quantite);
     }
 
     public function test_une_vente_diminue_le_stock(): void
@@ -36,7 +36,7 @@ class StockLedgerServiceTest extends TestCase
 
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 3);
 
-        $this->assertSame('7.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(7, $produit->fresh()->stock_quantite);
     }
 
     public function test_un_retour_fournisseur_diminue_le_stock(): void
@@ -45,7 +45,7 @@ class StockLedgerServiceTest extends TestCase
 
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::RetourFournisseur, 4);
 
-        $this->assertSame('6.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(6, $produit->fresh()->stock_quantite);
     }
 
     public function test_un_retour_client_augmente_le_stock(): void
@@ -54,7 +54,7 @@ class StockLedgerServiceTest extends TestCase
 
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::RetourClient, 2);
 
-        $this->assertSame('7.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(7, $produit->fresh()->stock_quantite);
     }
 
     public function test_chaque_mouvement_est_trace_dans_le_ledger(): void
@@ -73,7 +73,7 @@ class StockLedgerServiceTest extends TestCase
 
         app(StockLedgerService::class)->ajuster($produit, 7, 'Inventaire physique');
 
-        $this->assertSame('7.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(7, $produit->fresh()->stock_quantite);
     }
 
     public function test_une_quantite_negative_ou_nulle_est_refusee(): void

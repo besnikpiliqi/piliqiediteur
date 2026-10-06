@@ -8,6 +8,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -26,6 +27,8 @@ use LogicException;
  */
 class AppliquerAvoirsDisponiblesAction
 {
+    public function __construct(private readonly CalculateurLigne $calculateur) {}
+
     public function handle(Facture $facture): void
     {
         DB::transaction(function () use ($facture) {
@@ -73,8 +76,8 @@ class AppliquerAvoirsDisponiblesAction
                     'montant_alloue' => $montantApplique,
                 ]);
 
-                $montantRestant = round($montantRestant - $montantApplique, 2);
-                $montantTotalApplique = round($montantTotalApplique + $montantApplique, 2);
+                $montantRestant = $this->calculateur->soustraire($montantRestant, $montantApplique);
+                $montantTotalApplique = $this->calculateur->sommer([$montantTotalApplique, $montantApplique]);
             }
 
             // Rien n'a été crédité (aucun avoir disponible pour ce client) :

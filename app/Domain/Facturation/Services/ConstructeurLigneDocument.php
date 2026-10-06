@@ -28,7 +28,7 @@ class ConstructeurLigneDocument
      * de la ligne ; sans prix saisi, c'est le prix de vente TTC du produit
      * catalogue.
      *
-     * @param  array{produit_id?: int, description?: string, reference?: string, quantite: float|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|PrixReference|null, taux_tva?: float|string, remise_pourcentage?: float|string}  $donnees
+     * @param  array{produit_id?: int, description?: string, reference?: string, quantite: int|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|PrixReference|null, taux_tva?: float|string, remise_pourcentage?: float|string}  $donnees
      * @return array<string, mixed>
      */
     public function construire(array $donnees, int $ordre): array
@@ -43,9 +43,7 @@ class ConstructeurLigneDocument
         $tauxTva = (float) ($donnees['taux_tva'] ?? $produit?->taux_tva
             ?? throw new InvalidArgumentException('Une ligne sans produit_id doit fournir taux_tva.'));
 
-        if (! isset($donnees['quantite'])) {
-            throw new InvalidArgumentException('Chaque ligne doit fournir une quantite.');
-        }
+        $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
 
         $prix = $this->resolveurPrix->resoudre(
             $donnees,
@@ -55,7 +53,6 @@ class ConstructeurLigneDocument
             $produit === null ? null : (float) $produit->prix_vente_ttc,
         );
 
-        $quantite = (float) $donnees['quantite'];
         $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
 
         $montants = $this->calculateur->calculer(

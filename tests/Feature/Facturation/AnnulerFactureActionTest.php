@@ -33,12 +33,12 @@ class AnnulerFactureActionTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 4],
         ]);
         $facture = app(EmettreFactureAction::class)->handle($facture);
-        $this->assertSame('6.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(6, $produit->fresh()->stock_quantite);
 
         $facture = app(AnnulerFactureAction::class)->handle($facture, 'Erreur de saisie');
 
         $this->assertSame(StatutFacture::Annulee, $facture->statut);
-        $this->assertSame('10.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(10, $produit->fresh()->stock_quantite);
     }
 
     public function test_annuler_un_brouillon_ne_touche_pas_au_stock(): void
@@ -51,7 +51,7 @@ class AnnulerFactureActionTest extends TestCase
 
         app(AnnulerFactureAction::class)->handle($facture);
 
-        $this->assertSame('10.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(10, $produit->fresh()->stock_quantite);
     }
 
     public function test_impossible_dannuler_une_facture_deja_annulee(): void

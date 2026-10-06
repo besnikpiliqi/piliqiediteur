@@ -137,13 +137,13 @@ class DevisResource extends Resource
                     $set('prix_unitaire_ht', (string) $produit->prix_vente_ht);
                     $set('prix_unitaire_ttc', (string) $produit->prix_vente_ttc);
                     $set('prix_reference', PrixReference::Ttc->value);
-                    $set('taux_tva', (string) $produit->taux_tva);
+                    $set('taux_tva', self::pourcentageEnTexte($produit->taux_tva));
                 }),
             TextInput::make('description')->required()->columnSpan(2),
             // live() et non live(onBlur: true) sur tous les champs de la
             // ligne : le total (et, dans la Caisse, la monnaie à rendre) se
             // met à jour pendant la saisie, pas seulement au clic ailleurs.
-            TextInput::make('quantite')->numeric()->required()->default(1)->saisieEnDirect(),
+            TextInput::make('quantite')->integer()->minValue(1)->required()->default(1)->saisieEnDirect(),
             ...self::champsPrixDeLigne(PrixReference::Ttc),
             TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->saisieEnDirect(),
             self::totalDeLigne(PrixReference::Ttc),

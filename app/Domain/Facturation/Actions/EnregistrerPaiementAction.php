@@ -6,6 +6,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -21,6 +22,8 @@ use LogicException;
  */
 class EnregistrerPaiementAction
 {
+    public function __construct(private readonly CalculateurLigne $calculateur) {}
+
     /**
      * @param  array{client_id: int, mode_paiement: string, montant: float, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement
      * @param  array<int, array{facture_id: int, montant: float}>  $allocations
@@ -28,12 +31,15 @@ class EnregistrerPaiementAction
     public function handle(array $donneesPaiement, array $allocations): Paiement
     {
         return DB::transaction(function () use ($donneesPaiement, $allocations) {
-            $paiement = Paiement::create($donneesPaiement);
+            $paiement = Paiement::create([
+                ...$donneesPaiement,
+                'montant' => $this->calculateur->arrondirAuCentime((float) $donneesPaiement['montant']),
+            ]);
 
             $totalAlloue = 0.0;
 
             foreach ($allocations as $allocation) {
-                $montantAlloue = round((float) $allocation['montant'], 2);
+                $montantAlloue = $this->calculateur->arrondirAuCentime((float) $allocation['montant']);
 
                 if ($montantAlloue <= 0) {
                     throw new LogicException('Le montant alloué à une facture doit être strictement positif.');
@@ -60,7 +66,7 @@ class EnregistrerPaiementAction
                     throw new LogicException("Le montant alloué ({$montantAlloue}) dépasse le solde restant dû ({$montantRestantAvant}) de la facture {$facture->numero}.");
                 }
 
-                $totalAlloue = round($totalAlloue + $montantAlloue, 2);
+                $totalAlloue = $this->calculateur->sommer([$totalAlloue, $montantAlloue]);
 
                 if ($totalAlloue > (float) $paiement->montant) {
                     throw new LogicException('La somme des allocations dépasse le montant du paiement.');
@@ -72,7 +78,7 @@ class EnregistrerPaiementAction
                     'montant_alloue' => $montantAlloue,
                 ]);
 
-                $nouveauStatut = $montantRestantAvant - $montantAlloue <= 0.0
+                $nouveauStatut = $this->calculateur->soustraire($montantRestantAvant, $montantAlloue) <= 0.0
                     ? StatutFacture::Payee
                     : StatutFacture::PartiellementPayee;
 

@@ -8,6 +8,7 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\ClotureCaisseEffectuee;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Tenancy\Models\Magasin;
 use Carbon\CarbonInterface;
@@ -26,7 +27,10 @@ use LogicException;
  */
 class CloturerCaisseAction
 {
-    public function __construct(private readonly DocumentNumberingService $numerotation) {}
+    public function __construct(
+        private readonly DocumentNumberingService $numerotation,
+        private readonly CalculateurLigne $calculateur,
+    ) {}
 
     public function handle(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
     {
@@ -60,9 +64,7 @@ class CloturerCaisseAction
             $cloture->forceFill([
                 'numero' => $numero,
                 'nombre_ventes' => $factures->count(),
-                'total_ht' => $factures->sum(fn (Facture $facture) => (float) $facture->total_ht),
-                'total_tva' => $factures->sum(fn (Facture $facture) => (float) $facture->total_tva),
-                'total_ttc' => $factures->sum(fn (Facture $facture) => (float) $facture->total_ttc),
+                ...$this->calculateur->cumuler($factures),
                 'cloturee_a' => now(),
             ])->save();
 

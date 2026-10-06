@@ -5,6 +5,7 @@ namespace App\Domain\Facturation\Models;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Enums\StatutAvoir;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
 use Database\Factories\AvoirFactory;
@@ -95,7 +96,7 @@ class Avoir extends Model
 
     public function montantAlloue(): float
     {
-        return round((float) $this->allocations()->sum('montant_alloue'), 2);
+        return app(CalculateurLigne::class)->sommer($this->allocations()->pluck('montant_alloue'));
     }
 
     /**
@@ -111,6 +112,6 @@ class Avoir extends Model
             return 0.0;
         }
 
-        return round((float) $this->total_ttc - $this->montantAlloue(), 2);
+        return app(CalculateurLigne::class)->soustraire($this->total_ttc, $this->montantAlloue());
     }
 }

@@ -19,8 +19,9 @@ use App\Domain\Facturation\Enums\PrixReference;
  * 3. Les totaux du document somment séparément les HT, les TVA et les TTC
  *    des lignes (totaliser()).
  *
- * Tout le calcul se fait en entiers (centimes, millièmes de quantité,
- * centièmes de point de taux), jamais en flottant intermédiaire : un
+ * Tout le calcul se fait en entiers (centimes, quantité en nombre entier
+ * d'articles, centièmes de point de taux), jamais en flottant
+ * intermédiaire : un
  * flottant comme 8.325 vaut réellement ~8.32499999999999982..., et un seul
  * centime d'écart avec le montant transmis à l'administration (API PDP)
  * suffit à faire rejeter une facture.
@@ -33,14 +34,13 @@ class CalculateurLigne
     public function calculer(
         float $prixUnitaireHt,
         float $prixUnitaireTtc,
-        float $quantite,
+        int $quantite,
         float $remisePourcentage = 0.0,
     ): array {
-        $quantiteMilliemes = $this->versUnites($quantite, 1000);
         $remiseCentiemes = $this->versUnites($remisePourcentage, 100);
 
-        $montantHtCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireHt, 100), $quantiteMilliemes, $remiseCentiemes);
-        $montantTtcCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireTtc, 100), $quantiteMilliemes, $remiseCentiemes);
+        $montantHtCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireHt, 100), $quantite, $remiseCentiemes);
+        $montantTtcCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireTtc, 100), $quantite, $remiseCentiemes);
 
         return [
             'montant_ht' => $this->centimesVersMontant($montantHtCentimes),
@@ -99,10 +99,11 @@ class CalculateurLigne
     /**
      * Montants du dernier retour d'une ligne : ce qui reste de la ligne une
      * fois déduits les retours déjà émis, plutôt qu'un recalcul de la
-     * quantité restante. Avec une quantité fractionnaire (1,5 kg rendu sur
-     * 2,5 kg), recalculer chaque retour pourrait créditer au total un
-     * centime de plus ou de moins que la ligne facturée ; le solde garantit
-     * que HT, TVA et TTC crédités retombent exactement sur la ligne.
+     * quantité restante. Avec une remise, recalculer chaque retour pourrait
+     * créditer au total un centime de plus ou de moins que la ligne
+     * facturée (2 x 8,33 € HT remisés de 10 % = 14,99 € HT, mais chaque
+     * article rendu seul vaut 7,50 € HT) ; le solde garantit que HT, TVA et
+     * TTC crédités retombent exactement sur la ligne (7,50 € puis 7,49 €).
      *
      * @param  array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}  $montantsLigne
      * @param  iterable<array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}>  $montantsDejaCredites
@@ -143,11 +144,64 @@ class CalculateurLigne
     }
 
     /**
-     * Prix unitaire x quantité, remise déduite, en centimes.
+     * Cumul de documents déjà totalisés (factures d'une clôture de caisse,
+     * clôtures d'une période d'e-reporting) : les mêmes sommes séparées des
+     * HT, des TVA et des TTC qu'entre les lignes d'un document.
+     *
+     * @param  iterable<array{total_ht: float|string, total_tva: float|string, total_ttc: float|string}|ArrayAccess<string, mixed>>  $documents
+     * @return array{total_ht: float, total_tva: float, total_ttc: float}
      */
-    private function montantNetCentimes(int $prixUnitaireCentimes, int $quantiteMilliemes, int $remiseCentiemes): int
+    public function cumuler(iterable $documents): array
     {
-        $montantBrutCentimes = $this->diviserArrondi($prixUnitaireCentimes * $quantiteMilliemes, 1000);
+        $totaux = [];
+
+        foreach ($documents as $document) {
+            $totaux[] = [
+                'montant_ht' => $document['total_ht'],
+                'montant_tva' => $document['total_tva'],
+                'montant_ttc' => $document['total_ttc'],
+            ];
+        }
+
+        return $this->totaliser($totaux);
+    }
+
+    /**
+     * Somme exacte de montants au centime (paiements, crédits d'avoir...),
+     * en centimes -- jamais une somme de flottants.
+     *
+     * @param  iterable<float|int|string|null>  $montants
+     */
+    public function sommer(iterable $montants): float
+    {
+        $totalCentimes = 0;
+
+        foreach ($montants as $montant) {
+            $totalCentimes += $this->versUnites((float) $montant, 100);
+        }
+
+        return $this->centimesVersMontant($totalCentimes);
+    }
+
+    /**
+     * Un montant moins ceux qui en sont déduits, au centime exact (reste à
+     * payer, crédit encore disponible, monnaie à rendre).
+     */
+    public function soustraire(float|int|string|null $montant, float|int|string|null ...$montantsDeduits): float
+    {
+        return $this->centimesVersMontant(
+            $this->versUnites((float) $montant, 100) - $this->versUnites($this->sommer($montantsDeduits), 100),
+        );
+    }
+
+    /**
+     * Prix unitaire x quantité, remise déduite, en centimes. La quantité
+     * étant un nombre entier d'articles, le montant brut tombe toujours
+     * pile au centime : seule la remise s'arrondit.
+     */
+    private function montantNetCentimes(int $prixUnitaireCentimes, int $quantite, int $remiseCentiemes): int
+    {
+        $montantBrutCentimes = $prixUnitaireCentimes * $quantite;
 
         return $montantBrutCentimes - $this->diviserArrondi($montantBrutCentimes * $remiseCentiemes, 10000);
     }

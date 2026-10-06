@@ -184,7 +184,7 @@ class FactureAchatResourceTest extends TestCase
         $factureAchat->refresh();
         $this->assertSame(StatutFactureAchat::Validee, $factureAchat->statut);
         $this->assertNotNull($factureAchat->numero);
-        $this->assertSame('5.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(5, $produit->fresh()->stock_quantite);
     }
 
     public function test_un_brouillon_reste_modifiable_et_supprimable(): void
@@ -262,7 +262,7 @@ class FactureAchatResourceTest extends TestCase
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertSame('8.000', $produit->fresh()->stock_quantite, 'La correction doit recalculer le stock déjà incrémenté à la validation.');
+        $this->assertSame(8, $produit->fresh()->stock_quantite, 'La correction doit recalculer le stock déjà incrémenté à la validation.');
     }
 
     public function test_une_facture_dachat_recuperee_par_api_nest_jamais_modifiable(): void

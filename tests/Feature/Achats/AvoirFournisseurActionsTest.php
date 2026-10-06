@@ -8,6 +8,7 @@ use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -31,7 +32,7 @@ class AvoirFournisseurActionsTest extends TestCase
         app(TenantContext::class)->set(Magasin::factory()->create());
     }
 
-    private function receptionnerAchat(Fournisseur $fournisseur, Produit $produit, float $quantite)
+    private function receptionnerAchat(Fournisseur $fournisseur, Produit $produit, int $quantite): FactureAchat
     {
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => 20],
@@ -66,7 +67,7 @@ class AvoirFournisseurActionsTest extends TestCase
         $fournisseur = Fournisseur::factory()->create();
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->receptionnerAchat($fournisseur, $produit, 5);
-        $this->assertSame('5.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(5, $produit->fresh()->stock_quantite);
         $ligneAchat = $factureAchat->lignes->firstOrFail();
 
         $avoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
@@ -76,7 +77,7 @@ class AvoirFournisseurActionsTest extends TestCase
 
         $this->assertSame(StatutAvoirFournisseur::Emise, $avoir->statut);
         $this->assertNotNull($avoir->numero);
-        $this->assertSame('3.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(3, $produit->fresh()->stock_quantite);
     }
 
     public function test_impossible_de_creer_un_avoir_fournisseur_sur_une_facture_dachat_en_brouillon(): void
@@ -119,7 +120,7 @@ class AvoirFournisseurActionsTest extends TestCase
         ]);
         app(EmettreFactureAction::class)->handle($facture);
 
-        $this->assertSame('2.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(2, $produit->fresh()->stock_quantite);
         $this->assertEquals(2, $ligneAchat->fresh()->quantiteRetournableRestante());
 
         // Tenter de retourner les 5 unités d'origine (dont 3 déjà vendues)
@@ -139,7 +140,7 @@ class AvoirFournisseurActionsTest extends TestCase
         ]);
         app(EmettreAvoirFournisseurAction::class)->handle($avoir);
 
-        $this->assertSame('0.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(0, $produit->fresh()->stock_quantite);
     }
 
     public function test_impossible_de_retourner_plus_que_la_quantite_recue(): void
@@ -215,5 +216,46 @@ class AvoirFournisseurActionsTest extends TestCase
 
         $this->assertSame(['33.33', '6.67', '40.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
         $this->assertSame(['33.33', '6.67', '40.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+    }
+
+    /**
+     * Même règle côté fournisseur : 2 x 40 € TTC remisés de 10 % = 59,99 €
+     * HT ; le premier article rendu vaut 30,00 € HT, le dernier en prend
+     * le solde (29,99 € HT, 6,01 € de TVA).
+     */
+    public function test_le_dernier_retour_fournisseur_dune_ligne_remisee_en_credite_le_solde_exact(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20, 'remise_pourcentage' => 10],
+        ]));
+        $ligneAchat = $factureAchat->lignes->firstOrFail();
+
+        $this->assertSame(['59.99', '12.01', '72.00'], [$factureAchat->total_ht, $factureAchat->total_tva, $factureAchat->total_ttc]);
+
+        $premier = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+            ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1],
+        ]));
+        $dernier = app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
+            ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1],
+        ]);
+
+        $this->assertSame(['30.00', '6.00', '36.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
+        $this->assertSame(['29.99', '6.01', '36.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+    }
+
+    public function test_une_quantite_a_retourner_non_entiere_est_refusee(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
+        $factureAchat = $this->receptionnerAchat($fournisseur, $produit, 3);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("La quantité à retourner doit être un nombre entier d'articles, au moins 1.");
+
+        app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+            ['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => '1.5'],
+        ]);
     }
 }

@@ -32,7 +32,7 @@ class RestaurerStockApresEmissionAvoir
                 $this->stock->enregistrer(
                     produit: $produit,
                     type: TypeMouvementStock::RetourClient,
-                    quantite: (float) $ligne->quantite,
+                    quantite: $ligne->quantite,
                     source: $event->avoir,
                     note: "Avoir {$event->avoir->numero} sur facture {$numeroFacture}",
                 );

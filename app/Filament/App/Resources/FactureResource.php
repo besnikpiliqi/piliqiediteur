@@ -15,6 +15,7 @@ use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Filament\App\Resources\FactureResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -139,7 +140,7 @@ class FactureResource extends Resource
                         TextEntry::make('quantite'),
                         TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
                         TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
-                        TextEntry::make('taux_tva')->label('Taux TVA')->suffix(' %'),
+                        TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
                         TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
                         TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
                         TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
@@ -164,7 +165,7 @@ class FactureResource extends Resource
                 // part qui vient spécifiquement d'un avoir.
                 TextEntry::make('montant_paye')
                     ->label('Payé')
-                    ->state(fn (Facture $record) => $record->montantPaye() + $record->montantCrediteParAvoir())
+                    ->state(fn (Facture $record) => app(CalculateurLigne::class)->sommer([$record->montantPaye(), $record->montantCrediteParAvoir()]))
                     ->money('EUR'),
                 TextEntry::make('montant_credite_par_avoir')
                     ->label('Crédité par avoir')
@@ -277,7 +278,7 @@ class FactureResource extends Resource
             ->label('TVA par taux')
             ->columnSpanFull()
             ->schema([
-                TextEntry::make('taux_tva')->label('Taux')->suffix(' %'),
+                TextEntry::make('taux_tva')->label('Taux')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
                 TextEntry::make('montant_ht')->label('Base HT')->money('EUR'),
                 TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
                 TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
@@ -302,10 +303,7 @@ class FactureResource extends Resource
                 // "partiellement payée" à 0 € payé.
                 Tables\Columns\TextColumn::make('montant_paye_somme')
                     ->label('Payé')
-                    ->state(fn (Facture $record) => round(
-                        (float) ($record->montant_paye_somme ?? 0) + (float) ($record->montant_credite_somme ?? 0),
-                        2,
-                    ))
+                    ->state(fn (Facture $record) => app(CalculateurLigne::class)->sommer([$record->montant_paye_somme, $record->montant_credite_somme]))
                     ->money('EUR'),
                 Tables\Columns\TextColumn::make('creePar.name')->label('Créée par')->toggleable(),
                 Tables\Columns\TextColumn::make('date_echeance')->label('Échéance')->date('d/m/Y'),
@@ -422,9 +420,9 @@ class FactureResource extends Resource
                                     ->dehydrated(false),
                                 TextInput::make('quantite')
                                     ->label('Quantité à créditer')
-                                    ->numeric()
+                                    ->integer()
                                     ->required()
-                                    ->minValue(0.001)
+                                    ->minValue(1)
                                     ->maxValue(fn (Get $get) => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
                             ])
                             ->columns(3)

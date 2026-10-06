@@ -4,6 +4,7 @@ namespace App\Filament\Concerns;
 
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\ResolveurPrixLigne;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Hidden;
@@ -115,7 +116,10 @@ trait SaisitLesPrixDeLigne
         $calculateur = app(CalculateurLigne::class);
         $tauxTva = (float) ($ligne['taux_tva'] ?? 0);
 
+        // Une quantité pas encore saisie, ou pas entière, ne donne aucun
+        // montant plutôt qu'un montant tronqué (1,5 compté comme 1).
         try {
+            $quantite = QuantiteEntiere::depuisSaisie($ligne['quantite'] ?? null);
             $prix = app(ResolveurPrixLigne::class)->resoudre($ligne, $referenceParDefaut, $tauxTva);
         } catch (InvalidArgumentException) {
             return ['montant_ht' => 0.0, 'montant_tva' => 0.0, 'montant_ttc' => 0.0];
@@ -124,7 +128,7 @@ trait SaisitLesPrixDeLigne
         return $calculateur->calculer(
             $prix['prix_unitaire_ht'],
             $prix['prix_unitaire_ttc'],
-            (float) ($ligne['quantite'] ?? 0),
+            $quantite,
             (float) ($ligne['remise_pourcentage'] ?? 0),
         );
     }
@@ -156,6 +160,15 @@ trait SaisitLesPrixDeLigne
     protected static function prixEnTexte(float $prix): string
     {
         return number_format($prix, 2, '.', '');
+    }
+
+    /**
+     * Un taux de TVA ou une remise tel qu'on l'écrit dans le champ : "20",
+     * "5.5", "0" -- jamais "20.00" comme le relit le cast decimal:2.
+     */
+    public static function pourcentageEnTexte(float|string|null $pourcentage): string
+    {
+        return (string) (float) $pourcentage;
     }
 
     /**

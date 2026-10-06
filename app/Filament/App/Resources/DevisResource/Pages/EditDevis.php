@@ -45,8 +45,8 @@ class EditDevis extends EditRecord
             'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
             'prix_unitaire_ttc' => $ligne->prix_unitaire_ttc,
             'prix_reference' => $ligne->prix_reference?->value,
-            'taux_tva' => $ligne->taux_tva,
-            'remise_pourcentage' => $ligne->remise_pourcentage,
+            'taux_tva' => DevisResource::pourcentageEnTexte($ligne->taux_tva),
+            'remise_pourcentage' => DevisResource::pourcentageEnTexte($ligne->remise_pourcentage),
         ])->all();
 
         return $data;

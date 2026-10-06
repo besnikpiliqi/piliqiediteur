@@ -37,7 +37,7 @@ class LigneDevis extends Model
     ];
 
     protected $casts = [
-        'quantite' => 'decimal:3',
+        'quantite' => 'integer',
         'prix_unitaire_ht' => 'decimal:2',
         'prix_unitaire_ttc' => 'decimal:2',
         'prix_reference' => PrixReference::class,

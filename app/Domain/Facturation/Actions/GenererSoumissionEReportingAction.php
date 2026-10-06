@@ -6,6 +6,7 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\SoumissionEReportingGeneree;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\SoumissionEReporting;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Integrations\Pdp\Contracts\PeriodeEReporting;
@@ -25,7 +26,10 @@ use Illuminate\Support\Facades\DB;
  */
 class GenererSoumissionEReportingAction
 {
-    public function __construct(private readonly DocumentNumberingService $numerotation) {}
+    public function __construct(
+        private readonly DocumentNumberingService $numerotation,
+        private readonly CalculateurLigne $calculateur,
+    ) {}
 
     public function handle(Magasin $magasin, PeriodeEReporting $periode): ?SoumissionEReporting
     {
@@ -57,9 +61,7 @@ class GenererSoumissionEReportingAction
             $soumission->forceFill([
                 'numero' => $numero,
                 'nombre_clotures' => $clotures->count(),
-                'total_ht' => $clotures->sum(fn (ClotureCaisse $cloture) => (float) $cloture->total_ht),
-                'total_tva' => $clotures->sum(fn (ClotureCaisse $cloture) => (float) $cloture->total_tva),
-                'total_ttc' => $clotures->sum(fn (ClotureCaisse $cloture) => (float) $cloture->total_ttc),
+                ...$this->calculateur->cumuler($clotures),
                 'generee_le' => now(),
             ])->save();
 

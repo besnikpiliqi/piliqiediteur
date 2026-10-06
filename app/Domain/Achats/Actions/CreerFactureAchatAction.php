@@ -7,6 +7,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\ResolveurPrixLigne;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -25,7 +26,7 @@ class CreerFactureAchatAction
     ) {}
 
     /**
-     * @param  list<array{produit_id: int|string, quantite: float|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|null, taux_tva?: float|string, remise_pourcentage?: float|string, description?: string, reference?: string}>  $lignes
+     * @param  list<array{produit_id: int|string, quantite: int|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|null, taux_tva?: float|string, remise_pourcentage?: float|string, description?: string, reference?: string}>  $lignes
      * @param  array<string, mixed>  $attributs
      */
     public function handle(Fournisseur $fournisseur, array $lignes, array $attributs = []): FactureAchat
@@ -45,7 +46,7 @@ class CreerFactureAchatAction
                 }
 
                 $produit = Produit::query()->findOrFail($donnees['produit_id']);
-                $quantite = (float) ($donnees['quantite'] ?? throw new InvalidArgumentException('Chaque ligne doit fournir une quantite.'));
+                $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
                 $tauxTva = (float) ($donnees['taux_tva'] ?? $produit->taux_tva);
                 $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
                 // Un fournisseur facture le plus souvent en HT (prix d'achat

@@ -459,6 +459,75 @@ class FactureResourceTest extends TestCase
     }
 
     /**
+     * Capture d'écran du magasin : une quantité s'écrit "2", jamais
+     * "2.000", et un taux "20 %" ou "0 %", jamais "20.00 %" -- sur la
+     * fiche, sur le PDF remis au client, et dans le formulaire quand on
+     * rouvre le brouillon.
+     */
+    public function test_quantites_et_taux_saffichent_sans_zeros_inutiles_partout(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $ecran = Produit::factory()->create(['nom' => 'Ecran Iphone 18 Pro Max', 'prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['nom' => 'Cable ip 17', 'prix_vente_ttc' => 10, 'taux_tva' => 0, 'suivi_stock' => false]);
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $ecran->id, 'quantite' => 2],
+            ['produit_id' => $cable->id, 'quantite' => 1],
+        ]);
+
+        $this->assertSame(2, $facture->lignes->firstOrFail()->quantite);
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee('20 %')
+            ->assertSee('0 %')
+            ->assertDontSee('2.000')
+            ->assertDontSee('1.000')
+            ->assertDontSee('20.00 %')
+            ->assertDontSee('0.00 %');
+
+        $pdf = view('factures.pdf', ['facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir')])->render();
+        $this->assertStringContainsString('<td class="montant">2</td>', $pdf);
+        $this->assertStringContainsString('<td class="montant">20 %</td>', $pdf);
+        $this->assertStringContainsString('<td class="montant">0 %</td>', $pdf);
+        $this->assertStringNotContainsString('2.000', $pdf);
+
+        $component = Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->assertSet("data.lignes.{$cle}.quantite", 2)
+            ->assertSet("data.lignes.{$cle}.taux_tva", '20')
+            ->assertSet("data.lignes.{$cle}.remise_pourcentage", '0');
+    }
+
+    public function test_une_quantite_non_entiere_est_refusee_par_le_formulaire(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $component = Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.produit_id", $produit->id)
+            ->set("data.lignes.{$cle}.quantite", '1.5')
+            ->call('create')
+            ->assertHasFormErrors(["lignes.{$cle}.quantite" => 'integer']);
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
      * Le prix tapé (HT ou TTC) est gardé tel quel, l'autre en est la
      * conversion au centime, et la ligne multiplie séparément HT et TTC par
      * la quantité -- quel que soit le client. Retaper l'autre prix le fait
@@ -599,7 +668,7 @@ class FactureResourceTest extends TestCase
         $facture->refresh();
         $this->assertSame(StatutFacture::Emise, $facture->statut);
         $this->assertNotNull($facture->numero);
-        $this->assertSame('8.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(8, $produit->fresh()->stock_quantite);
     }
 
     public function test_annuler_une_facture_emise_depuis_le_panneau_restaure_le_stock(): void
@@ -623,13 +692,13 @@ class FactureResourceTest extends TestCase
 
         $facture = Facture::query()->firstOrFail();
         Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
-        $this->assertSame('7.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(7, $produit->fresh()->stock_quantite);
 
         Livewire::test(ListFactures::class)->callTableAction('annuler', $facture->fresh(), data: ['motif' => 'Erreur de saisie']);
 
         $facture->refresh();
         $this->assertSame(StatutFacture::Annulee, $facture->statut);
-        $this->assertSame('10.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(10, $produit->fresh()->stock_quantite);
     }
 
     public function test_telecharger_le_pdf_dune_facture_emise(): void

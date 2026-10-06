@@ -97,7 +97,7 @@ class AncrerPrixDeVenteSurLeTtcMigrationTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        $this->artisan('migrate:rollback', ['--step' => 1])->assertSuccessful();
+        $this->revenirAvant('2026_10_13_100002_ajouter_prix_reference_aux_lignes');
         $this->artisan('migrate')->assertSuccessful();
 
         $ligneAchat = DB::table('lignes_achat')->where('facture_achat_id', $factureAchat->id)->first();
@@ -107,12 +107,20 @@ class AncrerPrixDeVenteSurLeTtcMigrationTest extends TestCase
         $this->assertSame('ttc', DB::table('lignes_facture')->where('facture_id', $facture->id)->value('prix_reference'));
     }
 
-    /**
-     * Revient juste avant ancrer_prix_de_vente_sur_le_ttc, en défaisant
-     * aussi ajouter_prix_reference_aux_lignes qui la suit.
-     */
     private function revenirAvantLePassageAuTtc(): void
     {
-        $this->artisan('migrate:rollback', ['--step' => 2])->assertSuccessful();
+        $this->revenirAvant('2026_10_13_100001_ancrer_prix_de_vente_sur_le_ttc');
+    }
+
+    /**
+     * Défait cette migration et toutes celles qui la suivent, quel que soit
+     * leur nombre -- un nombre d'étapes fixe défairait d'autres migrations
+     * dès qu'une nouvelle s'ajoute.
+     */
+    private function revenirAvant(string $migration): void
+    {
+        $etapes = DB::table('migrations')->where('migration', '>=', $migration)->count();
+
+        $this->artisan('migrate:rollback', ['--step' => $etapes])->assertSuccessful();
     }
 }

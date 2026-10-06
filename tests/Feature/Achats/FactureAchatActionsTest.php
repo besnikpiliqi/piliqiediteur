@@ -43,7 +43,7 @@ class FactureAchatActionsTest extends TestCase
         $this->assertNull($factureAchat->numero);
         $this->assertSame('100.00', $factureAchat->total_ht);
         $this->assertSame('120.00', $factureAchat->total_ttc);
-        $this->assertSame('0.000', $produit->fresh()->stock_quantite, 'Un brouillon ne doit avoir aucun impact sur le stock.');
+        $this->assertSame(0, $produit->fresh()->stock_quantite, 'Un brouillon ne doit avoir aucun impact sur le stock.');
     }
 
     /**
@@ -87,6 +87,19 @@ class FactureAchatActionsTest extends TestCase
         ]);
     }
 
+    public function test_une_quantite_achetee_non_entiere_est_refusee(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 10, 'taux_tva' => 20]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("La quantité doit être un nombre entier d'articles, au moins 1.");
+
+        app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => '2.5'],
+        ]);
+    }
+
     public function test_valider_une_facture_dachat_lui_attribue_un_numero_et_incremente_le_stock(): void
     {
         $fournisseur = Fournisseur::factory()->create();
@@ -100,7 +113,7 @@ class FactureAchatActionsTest extends TestCase
         $this->assertSame(StatutFactureAchat::Validee, $factureAchat->statut);
         $this->assertNotNull($factureAchat->numero);
         $this->assertNotNull($factureAchat->date_validation);
-        $this->assertSame('8.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(8, $produit->fresh()->stock_quantite);
     }
 
     /**
@@ -172,15 +185,15 @@ class FactureAchatActionsTest extends TestCase
 
         $this->assertSame(SourceFactureAchat::Manuelle, $factureAchat->source);
         $this->assertTrue($factureAchat->estModifiable());
-        $this->assertSame('8.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(8, $produit->fresh()->stock_quantite);
 
         // Correction d'une erreur de saisie : 5 reçus en réalité, pas 8.
         $factureAchat = app(ModifierFactureAchatAction::class)->handle($factureAchat, [
             ['produit_id' => $produit->id, 'quantite' => 8, 'prix_unitaire_ht' => 22],
         ]);
 
-        $this->assertSame('8.000', $factureAchat->lignes->first()->quantite);
-        $this->assertSame('11.000', $produit->fresh()->stock_quantite, '3 (stock avant réception) + 8 (quantité corrigée) = 11.');
+        $this->assertSame(8, $factureAchat->lignes->first()->quantite);
+        $this->assertSame(11, $produit->fresh()->stock_quantite, '3 (stock avant réception) + 8 (quantité corrigée) = 11.');
         $this->assertSame('22.00', $produit->fresh()->prix_achat_ht);
     }
 

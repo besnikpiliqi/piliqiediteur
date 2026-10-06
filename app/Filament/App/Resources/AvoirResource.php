@@ -84,9 +84,9 @@ class AvoirResource extends Resource
                     TextInput::make('description')->label('Produit / description')->disabled()->dehydrated(false),
                     TextInput::make('quantite')
                         ->label('Quantité à créditer')
-                        ->numeric()
+                        ->integer()
                         ->required()
-                        ->minValue(0.001)
+                        ->minValue(1)
                         ->maxValue(fn (Get $get) => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
                 ])
                 ->columns(4)
@@ -137,11 +137,12 @@ class AvoirResource extends Resource
                         TextEntry::make('quantite'),
                         TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
                         TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
+                        TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
                         TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
                         TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
                         TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
                     ])
-                    ->columns(7),
+                    ->columns(8),
             ]),
 
             InfolistSection::make('Crédit appliqué')
@@ -159,7 +160,7 @@ class AvoirResource extends Resource
     }
 
     /**
-     * @return list<array{ligne_facture_id: int, facture_numero: ?string, description: string, quantite: float}>
+     * @return list<array{ligne_facture_id: int, facture_numero: ?string, description: string, quantite: int}>
      */
     private static function lignesCreditablesPourClient(int $clientId): array
     {

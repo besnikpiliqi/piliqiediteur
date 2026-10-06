@@ -94,29 +94,30 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * Quantité fractionnaire : 3 x 3,33 € HT = 9,99 €, mais 1,5 x 3,33 € =
-     * 4,995 -> 5,00 € ; recalculer deux retours de 1,5 créditerait 10,00 €
+     * Remise : 2 x 8,33 € HT remisés de 10 % = 14,99 € HT (1,666 € de
+     * remise -> 1,67 €), mais un article seul vaut 7,50 € HT (0,833 € ->
+     * 0,83 €) ; recalculer deux retours d'un article créditerait 15,00 €
      * HT. Le dernier retour prend donc le solde exact de la ligne.
      */
     public function test_le_solde_dune_ligne_retombe_exactement_sur_la_ligne_facturee(): void
     {
-        $ligne = $this->calculateur()->calculer(3.33, 4, 3);
-        $premierRetour = $this->calculateur()->calculer(3.33, 4, 1.5);
+        $ligne = $this->calculateur()->calculer(8.33, 10, 2, 10);
+        $premierRetour = $this->calculateur()->calculer(8.33, 10, 1, 10);
 
         $solde = $this->calculateur()->solder($ligne, [$premierRetour]);
 
-        $this->assertSame(['montant_ht' => 9.99, 'montant_tva' => 2.01, 'montant_ttc' => 12.0], $ligne);
-        $this->assertSame(['montant_ht' => 5.0, 'montant_tva' => 1.0, 'montant_ttc' => 6.0], $premierRetour);
-        $this->assertSame(['montant_ht' => 4.99, 'montant_tva' => 1.01, 'montant_ttc' => 6.0], $solde);
+        $this->assertSame(['montant_ht' => 14.99, 'montant_tva' => 3.01, 'montant_ttc' => 18.0], $ligne);
+        $this->assertSame(['montant_ht' => 7.5, 'montant_tva' => 1.5, 'montant_ttc' => 9.0], $premierRetour);
+        $this->assertSame(['montant_ht' => 7.49, 'montant_tva' => 1.51, 'montant_ttc' => 9.0], $solde);
     }
 
-    public function test_remise_et_quantite_fractionnaire_restent_exactes_au_centime(): void
+    public function test_une_remise_sur_plusieurs_articles_reste_exacte_au_centime(): void
     {
-        $ligne = $this->calculateur()->calculer(8.33, 9.99, quantite: 1.5, remisePourcentage: 10);
+        $ligne = $this->calculateur()->calculer(8.33, 9.99, quantite: 5, remisePourcentage: 10);
 
-        // HT : 8,33 x 1,5 = 12,495 -> 12,50, remise 1,25 -> 11,25 ;
-        // TTC : 9,99 x 1,5 = 14,985 -> 14,99, remise 1,50 -> 13,49.
-        $this->assertSame(['montant_ht' => 11.25, 'montant_tva' => 2.24, 'montant_ttc' => 13.49], $ligne);
+        // HT : 8,33 x 5 = 41,65, remise 4,165 -> 4,17 -> 37,48 ;
+        // TTC : 9,99 x 5 = 49,95, remise 4,995 -> 5,00 -> 44,95.
+        $this->assertSame(['montant_ht' => 37.48, 'montant_tva' => 7.47, 'montant_ttc' => 44.95], $ligne);
     }
 
     public function test_un_taux_reduit_decimal_reste_exact(): void
@@ -152,13 +153,13 @@ class CalculateurLigneTest extends TestCase
         $this->assertSame(['montant_ht' => 90.0, 'montant_tva' => 18.0, 'montant_ttc' => 108.0], $ligne);
     }
 
-    public function test_une_quantite_fractionnaire_reste_exacte_au_centime(): void
+    public function test_la_quantite_multiplie_exactement_les_prix_unitaires(): void
     {
         $prix = $this->calculateur()->prixUnitaires(PrixReference::Ht, 4.99, 20);
-        $ligne = $this->calculateur()->calculer($prix['prix_unitaire_ht'], $prix['prix_unitaire_ttc'], 1.5);
+        $ligne = $this->calculateur()->calculer($prix['prix_unitaire_ht'], $prix['prix_unitaire_ttc'], 3);
 
-        // 4,99 x 1,5 = 7,485 -> 7,49 HT ; 5,99 x 1,5 = 8,985 -> 8,99 TTC.
-        $this->assertSame(['montant_ht' => 7.49, 'montant_tva' => 1.5, 'montant_ttc' => 8.99], $ligne);
+        // 4,99 € HT -> 5,99 € TTC ; x 3 = 14,97 € HT + 3,00 € de TVA = 17,97 € TTC.
+        $this->assertSame(['montant_ht' => 14.97, 'montant_tva' => 3.0, 'montant_ttc' => 17.97], $ligne);
     }
 
     public function test_totaliser_ne_derive_jamais_meme_sur_un_grand_nombre_de_lignes(): void
@@ -239,10 +240,10 @@ class CalculateurLigneTest extends TestCase
 
     /**
      * 10 000 lignes tirées au hasard (prix de 0,01 € à 9 999,99 €, saisi en
-     * HT ou en TTC, quantité entière ou au millième, avec ou sans remise,
-     * tous les taux) : HT, TVA et TTC égalent la référence exacte, HT + TVA
-     * = TTC, et pour une quantité entière sans remise chaque montant est
-     * exactement le montant unitaire x quantité.
+     * HT ou en TTC, de 1 à 999 articles, avec ou sans remise, tous les
+     * taux) : HT, TVA et TTC égalent la référence exacte, HT + TVA = TTC,
+     * et sans remise chaque montant est exactement le montant unitaire x
+     * quantité.
      */
     public function test_10000_lignes_aleatoires_egalent_le_calcul_exact(): void
     {
@@ -250,7 +251,7 @@ class CalculateurLigneTest extends TestCase
 
         for ($i = 0; $i < 10000; $i++) {
             $ligne = $this->ligneAleatoire($hasard);
-            $montants = $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $ligne['quantite'] / 1000, $ligne['remise'] / 100);
+            $montants = $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $ligne['quantite'], $ligne['remise'] / 100);
             $attendus = $this->montantsAttendus($ligne);
             $cas = $this->decrire($ligne);
 
@@ -258,8 +259,8 @@ class CalculateurLigneTest extends TestCase
             $this->assertSame($attendus['ttc'], $this->enCentimes($montants['montant_ttc']), "TTC : {$cas}");
             $this->assertSame($attendus['ttc'] - $attendus['ht'], $this->enCentimes($montants['montant_tva']), "TVA : {$cas}");
 
-            if ($ligne['quantite'] % 1000 === 0 && $ligne['remise'] === 0) {
-                $quantite = intdiv($ligne['quantite'], 1000);
+            if ($ligne['remise'] === 0) {
+                $quantite = $ligne['quantite'];
 
                 $this->assertSame($ligne['ht'] * $quantite, $this->enCentimes($montants['montant_ht']), "HT x quantité : {$cas}");
                 $this->assertSame(($ligne['ttc'] - $ligne['ht']) * $quantite, $this->enCentimes($montants['montant_tva']), "TVA x quantité : {$cas}");
@@ -282,7 +283,7 @@ class CalculateurLigneTest extends TestCase
 
             for ($n = $hasard->getInt(1, 20); $n > 0; $n--) {
                 $ligne = $this->ligneAleatoire($hasard);
-                $lignes[] = $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $ligne['quantite'] / 1000, $ligne['remise'] / 100);
+                $lignes[] = $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $ligne['quantite'], $ligne['remise'] / 100);
                 $montants = $this->montantsAttendus($ligne);
                 $attendu['ht'] += $montants['ht'];
                 $attendu['ttc'] += $montants['ttc'];
@@ -300,18 +301,21 @@ class CalculateurLigneTest extends TestCase
 
     /**
      * 2 000 lignes rendues en 2 à 5 retours successifs de quantités tirées
-     * au hasard (au millième) : chaque retour partiel égale la référence
-     * exacte pour sa quantité, et le dernier retour (le solde) fait
-     * retomber HT, TVA et TTC crédités exactement sur la ligne vendue.
+     * au hasard : chaque retour partiel égale la référence exacte pour sa
+     * quantité, et le dernier retour (le solde) fait retomber HT, TVA et
+     * TTC crédités exactement sur la ligne vendue -- y compris quand une
+     * remise fait que recalculer ce dernier retour aurait donné un centime
+     * d'écart (cas comptés, pour que le test ne devienne jamais trivial).
      */
     public function test_2000_series_de_retours_creditent_exactement_la_ligne_vendue(): void
     {
         $hasard = new Randomizer(new Mt19937(self::GRAINE + 2));
+        $soldesDifferentsDUnRecalcul = 0;
 
         for ($i = 0; $i < 2000; $i++) {
             $ligne = $this->ligneAleatoire($hasard);
-            $ligne['quantite'] = max($ligne['quantite'], 5);
-            $vendu = $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $ligne['quantite'] / 1000, $ligne['remise'] / 100);
+            $ligne['quantite'] = max($ligne['quantite'], 2);
+            $vendu = $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $ligne['quantite'], $ligne['remise'] / 100);
             $cas = $this->decrire($ligne);
 
             $retours = [];
@@ -321,20 +325,28 @@ class CalculateurLigneTest extends TestCase
                 $quantiteRendue = $hasard->getInt(1, $restant - 1);
                 $restant -= $quantiteRendue;
 
-                $retour = $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $quantiteRendue / 1000, $ligne['remise'] / 100);
+                $retour = $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $quantiteRendue, $ligne['remise'] / 100);
                 $attendu = $this->montantsAttendus([...$ligne, 'quantite' => $quantiteRendue]);
                 $this->assertSame($attendu['ht'], $this->enCentimes($retour['montant_ht']), "retour partiel : {$cas}");
                 $this->assertSame($attendu['ttc'], $this->enCentimes($retour['montant_ttc']), "retour partiel : {$cas}");
                 $retours[] = $retour;
             }
 
-            $retours[] = $this->calculateur()->solder($vendu, $retours);
+            $solde = $this->calculateur()->solder($vendu, $retours);
+
+            if ($solde !== $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $restant, $ligne['remise'] / 100)) {
+                $soldesDifferentsDUnRecalcul++;
+            }
+
+            $retours[] = $solde;
             $credite = $this->calculateur()->totaliser($retours);
 
             $this->assertSame($this->enCentimes($vendu['montant_ht']), $this->enCentimes($credite['total_ht']), "solde HT : {$cas}");
             $this->assertSame($this->enCentimes($vendu['montant_tva']), $this->enCentimes($credite['total_tva']), "solde TVA : {$cas}");
             $this->assertSame($this->enCentimes($vendu['montant_ttc']), $this->enCentimes($credite['total_ttc']), "solde TTC : {$cas}");
         }
+
+        $this->assertGreaterThan(0, $soldesDifferentsDUnRecalcul);
     }
 
     /**
@@ -375,8 +387,8 @@ class CalculateurLigneTest extends TestCase
     /**
      * Ligne tirée au hasard, en unités entières : prix en centimes (saisi
      * en HT ou en TTC, l'autre étant sa conversion de référence), quantité
-     * en millièmes (entière une fois sur deux), remise en centièmes de
-     * point (nulle sept fois sur dix).
+     * de 1 à 999 articles, remise en centièmes de point (nulle sept fois
+     * sur dix).
      *
      * @return array{ht: int, ttc: int, quantite: int, remise: int, taux: string, reference: PrixReference}
      */
@@ -389,7 +401,7 @@ class CalculateurLigneTest extends TestCase
         return [
             'ht' => $reference === PrixReference::Ht ? $prixCentimes : $this->htDepuisTtcAttendu($prixCentimes, $taux),
             'ttc' => $reference === PrixReference::Ttc ? $prixCentimes : $this->ttcDepuisHtAttendu($prixCentimes, $taux),
-            'quantite' => $hasard->getInt(0, 1) === 0 ? 1000 * $hasard->getInt(1, 100) : $hasard->getInt(1, 100000),
+            'quantite' => $hasard->getInt(1, 999),
             'remise' => $hasard->getInt(1, 10) <= 7 ? 0 : $hasard->getInt(0, 10000),
             'taux' => $taux,
             'reference' => $reference,
@@ -406,7 +418,7 @@ class CalculateurLigneTest extends TestCase
     private function montantsAttendus(array $ligne): array
     {
         $net = function (int $prixCentimes) use ($ligne): int {
-            $brut = $this->auCentime(BigDecimal::ofUnscaledValue($prixCentimes, 2)->multipliedBy(BigDecimal::ofUnscaledValue($ligne['quantite'], 3)));
+            $brut = $this->auCentime(BigDecimal::ofUnscaledValue($prixCentimes, 2)->multipliedBy($ligne['quantite']));
             $remise = $this->auCentime(BigDecimal::ofUnscaledValue($brut, 2)->multipliedBy(BigDecimal::ofUnscaledValue($ligne['remise'], 2))->dividedBy(100, 6));
 
             return $brut - $remise;
@@ -449,12 +461,12 @@ class CalculateurLigneTest extends TestCase
     private function decrire(array $ligne): string
     {
         return sprintf(
-            'PU HT %s / PU TTC %s (%s saisi, TVA %s %%), quantité %s, remise %s %%',
+            'PU HT %s / PU TTC %s (%s saisi, TVA %s %%), quantité %d, remise %s %%',
             $this->texte($ligne['ht']),
             $this->texte($ligne['ttc']),
             $ligne['reference']->getLabel(),
             $ligne['taux'],
-            BigDecimal::ofUnscaledValue($ligne['quantite'], 3),
+            $ligne['quantite'],
             $this->texte($ligne['remise']),
         );
     }

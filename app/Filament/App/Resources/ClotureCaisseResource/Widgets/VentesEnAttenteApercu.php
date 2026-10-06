@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -44,7 +45,7 @@ class VentesEnAttenteApercu extends BaseWidget
                 ->description(sprintf(
                     'Journée du %s · %s € au total',
                     $veille->translatedFormat('d/m/Y'),
-                    number_format($ventes->sum(fn (Facture $facture) => (float) $facture->total_ttc), 2, ',', ' '),
+                    number_format(app(CalculateurLigne::class)->sommer($ventes->pluck('total_ttc')), 2, ',', ' '),
                 ))
                 ->color($ventes->isEmpty() ? 'gray' : 'warning'),
         ];

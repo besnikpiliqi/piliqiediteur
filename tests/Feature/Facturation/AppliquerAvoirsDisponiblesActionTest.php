@@ -39,7 +39,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         app(TenantContext::class)->set(Magasin::factory()->create());
     }
 
-    private function emettreFacture(Client $client, Produit $produit, float $quantite = 1): Facture
+    private function emettreFacture(Client $client, Produit $produit, int $quantite = 1): Facture
     {
         $facture = app(CreerFactureAction::class)->handle($client, [
             ['produit_id' => $produit->id, 'quantite' => $quantite],
@@ -53,7 +53,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         return app(EmettreFactureAction::class)->handle($facture)->fresh();
     }
 
-    private function emettreAvoirPourClient(Client $client, Facture $factureOrigine, float $quantite): Avoir
+    private function emettreAvoirPourClient(Client $client, Facture $factureOrigine, int $quantite): Avoir
     {
         $ligneFacture = $factureOrigine->lignes->firstOrFail();
 
@@ -144,7 +144,8 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
 
         // Nouvel achat de 18 € : l'avoir le plus ancien (12 €) est consommé
         // intégralement, puis 6 € du plus récent -- jamais l'inverse.
-        $nouvelleFacture = $this->emettreFacture($client, $produitRetourne, 1.5);
+        $produitNouvelAchat = Produit::factory()->create(['prix_vente_ht' => 15, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $nouvelleFacture = $this->emettreFacture($client, $produitNouvelAchat, 1);
 
         $this->assertSame(StatutFacture::Payee, $nouvelleFacture->statut);
         $this->assertSame(18.0, $nouvelleFacture->montantCrediteParAvoir());

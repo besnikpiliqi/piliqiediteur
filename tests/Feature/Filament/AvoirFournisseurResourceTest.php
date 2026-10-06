@@ -25,7 +25,7 @@ class AvoirFournisseurResourceTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function receptionnerAchatDepuisLePanneau(Fournisseur $fournisseur, Produit $produit, float $quantite): FactureAchat
+    private function receptionnerAchatDepuisLePanneau(Fournisseur $fournisseur, Produit $produit, int $quantite): FactureAchat
     {
         Livewire::test(CreateFactureAchat::class)->fillForm([
             'fournisseur_id' => $fournisseur->id,
@@ -50,7 +50,7 @@ class AvoirFournisseurResourceTest extends TestCase
         $fournisseur = Fournisseur::factory()->create();
         $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->receptionnerAchatDepuisLePanneau($fournisseur, $produit, 5);
-        $this->assertSame('5.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(5, $produit->fresh()->stock_quantite);
 
         Livewire::test(ListFacturesAchat::class)
             ->callTableAction('avoir_fournisseur', $factureAchat, data: ['motif' => 'Marchandise non conforme']);
@@ -58,7 +58,7 @@ class AvoirFournisseurResourceTest extends TestCase
         $avoir = AvoirFournisseur::query()->where('facture_achat_id', $factureAchat->id)->firstOrFail();
         $this->assertNotNull($avoir->numero);
         $this->assertSame($factureAchat->total_ttc, $avoir->total_ttc);
-        $this->assertSame('0.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(0, $produit->fresh()->stock_quantite);
 
         Livewire::test(ListAvoirsFournisseur::class)->assertCanSeeTableRecords([$avoir]);
     }
@@ -92,7 +92,7 @@ class AvoirFournisseurResourceTest extends TestCase
         Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
         $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
 
-        $this->assertSame('2.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(2, $produit->fresh()->stock_quantite);
 
         // Remplissage complet du formulaire de l'action (voir
         // AvoirResourceTest pour l'explication du pourquoi un "data" partiel
@@ -106,7 +106,7 @@ class AvoirFournisseurResourceTest extends TestCase
             ->callMountedTableAction();
 
         $avoir = AvoirFournisseur::query()->where('facture_achat_id', $factureAchat->id)->firstOrFail();
-        $this->assertSame('0.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(0, $produit->fresh()->stock_quantite);
         $this->assertEquals(0, $ligneAchat->fresh()->quantiteRetournableRestante());
     }
 }

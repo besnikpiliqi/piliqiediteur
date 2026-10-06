@@ -4,6 +4,10 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
@@ -56,7 +60,7 @@ class CaisseTest extends TestCase
         $facture = Facture::query()->where('client_id', $clientComptoir->id)->latest('id')->firstOrFail();
         $this->assertSame(StatutFacture::Payee, $facture->statut);
         $this->assertSame('48.00', $facture->total_ttc); // 2 x 20 HT, TVA 20%
-        $this->assertSame('8.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(8, $produit->fresh()->stock_quantite);
 
         $this->assertDatabaseHas('paiements', [
             'client_id' => $clientComptoir->id,
@@ -187,6 +191,48 @@ class CaisseTest extends TestCase
 
         $facture = Facture::query()->where('client_id', $clientComptoir->id)->latest('id')->firstOrFail();
         $this->assertSame('80.00', $facture->total_ttc);
+    }
+
+    /**
+     * Le crédit d'avoir du client est déduit automatiquement à l'émission
+     * (voir AppliquerAvoirsDisponiblesAction) : la caisse doit donc
+     * annoncer ce qui reste vraiment à payer, et rendre la monnaie sur ce
+     * reste -- 50 € moins 10 € de crédit = 40 € ; 60 € reçus, 20 € rendus
+     * (et non 10 €, ce qui laisserait la caisse avec 10 € de trop).
+     */
+    public function test_la_caisse_deduit_le_credit_davoir_du_client_du_total_et_de_la_monnaie_a_rendre(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create(['nom' => 'Mme Martin']);
+        $produitRendu = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $venteInitiale = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $produitRendu->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $venteInitiale->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]));
+        $this->assertSame(10.0, $client->soldeCrediteur());
+
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class)->set('data.client_id', $client->id);
+        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.produit_id", $produit->id)
+            ->set('data.montant_recu', '60')
+            ->assertSeeHtml('40,00 €')
+            ->assertSeeHtml('Total 50,00 € moins 10,00 € de crédit d&#039;avoir du client.')
+            ->assertSeeHtml('20,00 €')
+            ->call('encaisser');
+
+        $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
+        $this->assertSame(StatutFacture::Payee, $facture->statut);
+        $this->assertSame(10.0, $facture->montantCrediteParAvoir());
+        $this->assertSame(40.0, $facture->montantPaye());
+        $this->assertSame(0.0, $client->soldeCrediteur());
     }
 
     /**

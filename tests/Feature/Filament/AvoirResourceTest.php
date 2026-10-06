@@ -49,7 +49,7 @@ class AvoirResourceTest extends TestCase
 
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client);
-        $this->assertSame('7.000', $facture->lignes->first()->produit->fresh()->stock_quantite);
+        $this->assertSame(7, $facture->lignes->first()->produit->fresh()->stock_quantite);
 
         Livewire::test(ListFactures::class)
             ->callTableAction('avoir', $facture, data: ['motif' => 'Retour client']);
@@ -58,7 +58,7 @@ class AvoirResourceTest extends TestCase
         $this->assertSame(StatutAvoir::Emise, $avoir->statut);
         $this->assertNotNull($avoir->numero);
         $this->assertSame($facture->total_ttc, $avoir->total_ttc);
-        $this->assertSame('10.000', $facture->lignes->first()->produit->fresh()->stock_quantite);
+        $this->assertSame(10, $facture->lignes->first()->produit->fresh()->stock_quantite);
     }
 
     public function test_laction_avoir_nest_plus_visible_une_fois_toutes_les_lignes_integralement_creditees(): void
@@ -111,7 +111,7 @@ class AvoirResourceTest extends TestCase
             ->assertTableActionVisible('avoir', $facture->fresh());
 
         $this->assertEquals(2, $ligneFacture->fresh()->quantiteCreditableRestante());
-        $this->assertSame('8.000', $facture->lignes->first()->produit->fresh()->stock_quantite);
+        $this->assertSame(8, $facture->lignes->first()->produit->fresh()->stock_quantite);
     }
 
     /**

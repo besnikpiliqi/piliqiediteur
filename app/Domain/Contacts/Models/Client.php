@@ -5,6 +5,7 @@ namespace App\Domain\Contacts\Models;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\ClientFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -84,12 +85,11 @@ class Client extends Model
             return 0.0;
         }
 
-        return round(
+        return app(CalculateurLigne::class)->sommer(
             $this->avoirs()
                 ->where('statut', StatutAvoir::Emise)
                 ->get()
-                ->sum(fn (Avoir $avoir) => $avoir->montantNonAlloue()),
-            2,
+                ->map(fn (Avoir $avoir) => $avoir->montantNonAlloue()),
         );
     }
 }

@@ -6,6 +6,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
@@ -136,7 +137,7 @@ class Facture extends Model
 
     public function montantPaye(): float
     {
-        return round((float) $this->allocationsPaiement()->sum('montant_alloue'), 2);
+        return app(CalculateurLigne::class)->sommer($this->allocationsPaiement()->pluck('montant_alloue'));
     }
 
     /**
@@ -147,12 +148,12 @@ class Facture extends Model
      */
     public function montantCrediteParAvoir(): float
     {
-        return round((float) $this->allocationsAvoir()->sum('montant_alloue'), 2);
+        return app(CalculateurLigne::class)->sommer($this->allocationsAvoir()->pluck('montant_alloue'));
     }
 
     public function montantRestant(): float
     {
-        return round((float) $this->total_ttc - $this->montantPaye() - $this->montantCrediteParAvoir(), 2);
+        return app(CalculateurLigne::class)->soustraire($this->total_ttc, $this->montantPaye(), $this->montantCrediteParAvoir());
     }
 
     /**

@@ -64,6 +64,36 @@ class CreerFactureActionTest extends TestCase
         ]);
     }
 
+    /**
+     * Une quantité est toujours un nombre entier d'articles : 1,5 est
+     * refusé, jamais tronqué en 1 (ce qui fausserait la facture en
+     * silence).
+     */
+    public function test_une_quantite_non_entiere_est_refusee(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20]);
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("La quantité doit être un nombre entier d'articles, au moins 1.");
+
+        app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1.5],
+        ]);
+    }
+
+    public function test_une_quantite_nulle_est_refusee(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20]);
+
+        $this->expectException(InvalidArgumentException::class);
+
+        app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 0],
+        ]);
+    }
+
     public function test_une_facture_sans_lignes_leve_une_exception(): void
     {
         $client = Client::factory()->create();

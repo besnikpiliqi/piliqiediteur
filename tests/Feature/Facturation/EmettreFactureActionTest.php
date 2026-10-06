@@ -51,7 +51,7 @@ class EmettreFactureActionTest extends TestCase
 
         app(EmettreFactureAction::class)->handle($facture);
 
-        $this->assertSame('7.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(7, $produit->fresh()->stock_quantite);
     }
 
     public function test_emettre_ne_touche_pas_au_stock_dun_produit_sans_suivi(): void
@@ -64,7 +64,7 @@ class EmettreFactureActionTest extends TestCase
 
         app(EmettreFactureAction::class)->handle($facture);
 
-        $this->assertSame('10.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(10, $produit->fresh()->stock_quantite);
     }
 
     /**

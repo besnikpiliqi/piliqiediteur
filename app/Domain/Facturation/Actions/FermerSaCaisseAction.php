@@ -5,6 +5,7 @@ namespace App\Domain\Facturation\Actions;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,8 @@ use Illuminate\Support\Facades\DB;
  */
 class FermerSaCaisseAction
 {
+    public function __construct(private readonly CalculateurLigne $calculateur) {}
+
     public function handle(User $vendeur): ClotureCaissePersonnelle
     {
         return DB::transaction(function () use ($vendeur) {
@@ -63,9 +66,7 @@ class FermerSaCaisseAction
                 'periode_debut' => $depuis,
                 'cloturee_a' => now(),
                 'nombre_ventes' => $factures->count(),
-                'total_ht' => $factures->sum(fn (Facture $facture) => (float) $facture->total_ht),
-                'total_tva' => $factures->sum(fn (Facture $facture) => (float) $facture->total_tva),
-                'total_ttc' => $factures->sum(fn (Facture $facture) => (float) $facture->total_ttc),
+                ...$this->calculateur->cumuler($factures),
             ])->save();
 
             return $cloture;

@@ -24,7 +24,7 @@ class DecrementerStockApresEmissionAvoirFournisseur
                 $this->stock->enregistrer(
                     produit: $produit,
                     type: TypeMouvementStock::RetourFournisseur,
-                    quantite: (float) $ligne->quantite,
+                    quantite: $ligne->quantite,
                     source: $event->avoirFournisseur,
                     note: "Avoir fournisseur {$event->avoirFournisseur->numero} sur facture d'achat {$event->avoirFournisseur->factureAchat->numero}",
                 );

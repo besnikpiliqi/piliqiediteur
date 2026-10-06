@@ -34,7 +34,7 @@ class LigneAchat extends Model
     ];
 
     protected $casts = [
-        'quantite' => 'decimal:3',
+        'quantite' => 'integer',
         'prix_unitaire_ht' => 'decimal:2',
         'prix_unitaire_ttc' => 'decimal:2',
         'prix_reference' => PrixReference::class,
@@ -66,9 +66,9 @@ class LigneAchat extends Model
      * existence légale : il ne doit jamais réduire la quantité restante
      * retournable (même logique que LigneFacture::quantiteDejaCreditee()).
      */
-    public function quantiteDejaRetournee(): float
+    public function quantiteDejaRetournee(): int
     {
-        return (float) $this->lignesAvoirFournisseur()
+        return (int) $this->lignesAvoirFournisseur()
             ->whereHas('avoirFournisseur', fn ($query) => $query->where('statut', StatutAvoirFournisseur::Emise))
             ->sum('quantite');
     }
@@ -85,18 +85,18 @@ class LigneAchat extends Model
      * mécaniquement plus être compté dans ce qui reste disponible au
      * retour.
      */
-    public function quantiteRetournableRestante(): float
+    public function quantiteRetournableRestante(): int
     {
-        $resteSurLaLigne = round((float) $this->quantite - $this->quantiteDejaRetournee(), 3);
+        $resteSurLaLigne = $this->quantite - $this->quantiteDejaRetournee();
 
         // Le plafond par stock disponible n'a de sens que pour un produit
         // dont le stock est effectivement suivi (voir StockLedgerService) :
         // pour les autres, stock_quantite reste figé à 0 et ne reflète
         // rien, on se fie alors uniquement au reliquat de la ligne.
         if ($this->produit === null || ! $this->produit->suivi_stock) {
-            return max(0.0, $resteSurLaLigne);
+            return max(0, $resteSurLaLigne);
         }
 
-        return max(0.0, min($resteSurLaLigne, (float) $this->produit->stock_quantite));
+        return max(0, min($resteSurLaLigne, $this->produit->stock_quantite));
     }
 }

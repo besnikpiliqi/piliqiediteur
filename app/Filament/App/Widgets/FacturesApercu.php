@@ -4,6 +4,7 @@ namespace App\Filament\App\Widgets;
 
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use Carbon\Carbon;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -33,7 +34,7 @@ class FacturesApercu extends BaseWidget
             ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee])
             ->whereBetween('date_emission', [$debut, $fin]);
 
-        $totalTtc = (float) (clone $facturesDeLaPeriode)->sum('total_ttc');
+        $totalTtc = app(CalculateurLigne::class)->sommer((clone $facturesDeLaPeriode)->pluck('total_ttc'));
         $nombreFactures = (clone $facturesDeLaPeriode)->count();
 
         return Stat::make($label, number_format($totalTtc, 2, ',', ' ').' €')

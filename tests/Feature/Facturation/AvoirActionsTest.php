@@ -29,7 +29,7 @@ class AvoirActionsTest extends TestCase
         app(TenantContext::class)->set(Magasin::factory()->create());
     }
 
-    private function emettreFacture(Client $client, Produit $produit, float $quantite = 1): Facture
+    private function emettreFacture(Client $client, Produit $produit, int $quantite = 1): Facture
     {
         $facture = app(CreerFactureAction::class)->handle($client, [
             ['produit_id' => $produit->id, 'quantite' => $quantite],
@@ -139,11 +139,11 @@ class AvoirActionsTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 3);
-        $this->assertSame('7.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(7, $produit->fresh()->stock_quantite);
 
         app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
 
-        $this->assertSame('7.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(7, $produit->fresh()->stock_quantite);
     }
 
     public function test_emettre_un_avoir_lui_attribue_un_numero_et_restaure_le_stock(): void
@@ -158,7 +158,7 @@ class AvoirActionsTest extends TestCase
         $this->assertSame(StatutAvoir::Emise, $avoir->statut);
         $this->assertNotNull($avoir->numero);
         $this->assertNotNull($avoir->date_emission);
-        $this->assertSame('10.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(10, $produit->fresh()->stock_quantite);
     }
 
     /**
@@ -177,7 +177,7 @@ class AvoirActionsTest extends TestCase
         ]);
         app(EmettreAvoirAction::class)->handle($avoir);
 
-        $this->assertSame('8.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(8, $produit->fresh()->stock_quantite);
     }
 
     public function test_emettre_un_avoir_ne_touche_pas_au_stock_dun_produit_sans_suivi(): void
@@ -189,7 +189,7 @@ class AvoirActionsTest extends TestCase
         $avoir = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
         app(EmettreAvoirAction::class)->handle($avoir);
 
-        $this->assertSame('10.000', $produit->fresh()->stock_quantite);
+        $this->assertSame(10, $produit->fresh()->stock_quantite);
     }
 
     public function test_impossible_de_creer_un_avoir_sur_une_facture_en_brouillon(): void
@@ -379,13 +379,56 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
-     * @return list<array{ligne_facture_id: int, quantite: float}>
+     * Avec une remise, un article rendu seul ne vaut pas la moitié de la
+     * ligne : 2 x 40 € TTC remisés de 10 % = 59,99 € HT (6,666 € de remise
+     * -> 6,67 €), mais un article seul vaut 30,00 € HT. Le dernier retour
+     * crédite donc le solde (29,99 € HT, 6,01 € de TVA), jamais un second
+     * recalcul qui créditerait 60,00 € HT au total.
+     */
+    public function test_le_dernier_retour_dune_ligne_remisee_en_credite_le_solde_exact(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 2, 'remise_pourcentage' => 10],
+        ]));
+        $ligneFacture = $facture->lignes->firstOrFail();
+
+        $this->assertSame(['59.99', '12.01', '72.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+
+        $premier = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]));
+        $dernier = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]);
+
+        $this->assertSame(['30.00', '6.00', '36.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
+        $this->assertSame(['29.99', '6.01', '36.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+    }
+
+    public function test_une_quantite_a_crediter_non_entiere_est_refusee(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ligneFacture = $this->emettreFacture($client, $produit, 3)->lignes->firstOrFail();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("La quantité à créditer doit être un nombre entier d'articles, au moins 1.");
+
+        app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1.5],
+        ]);
+    }
+
+    /**
+     * @return list<array{ligne_facture_id: int, quantite: int}>
      */
     private function toutesLesLignes(Facture $facture): array
     {
         return $facture->lignes->map(fn ($ligne) => [
             'ligne_facture_id' => $ligne->id,
-            'quantite' => (float) $ligne->quantite,
+            'quantite' => $ligne->quantite,
         ])->all();
     }
 }

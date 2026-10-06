@@ -8,6 +8,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\QuantiteEntiere;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
@@ -32,7 +33,7 @@ class CreerAvoirAction
     public function __construct(private readonly CalculateurLigne $calculateurLigne) {}
 
     /**
-     * @param  list<array{ligne_facture_id: int|string, quantite: float|string}>  $lignesSelectionnees
+     * @param  list<array{ligne_facture_id: int|string, quantite: int|string}>  $lignesSelectionnees
      */
     public function handle(Client $client, array $lignesSelectionnees, ?string $motif = null): Avoir
     {
@@ -69,11 +70,7 @@ class CreerAvoirAction
                     throw new LogicException("Impossible de créditer une ligne d'une facture au statut [{$facture->statut->value}].");
                 }
 
-                $quantite = (float) $selection['quantite'];
-
-                if ($quantite <= 0) {
-                    throw new InvalidArgumentException('La quantité à créditer doit être supérieure à zéro.');
-                }
+                $quantite = QuantiteEntiere::depuisSaisie($selection['quantite'] ?? null, 'La quantité à créditer');
 
                 $restante = $ligneFacture->quantiteCreditableRestante();
 
@@ -84,7 +81,7 @@ class CreerAvoirAction
                 // Un retour partiel reprend les PU HT/TTC de la ligne facturée
                 // (article par article, voir CalculateurLigne) ; le dernier
                 // retour en prend le solde exact.
-                $montants = abs($quantite - $restante) < 0.0005
+                $montants = $quantite === $restante
                     ? $this->calculateurLigne->solder(
                         $ligneFacture->only(['montant_ht', 'montant_tva', 'montant_ttc']),
                         $ligneFacture->lignesAvoir()

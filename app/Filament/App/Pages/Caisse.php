@@ -124,7 +124,8 @@ class Caisse extends Page implements HasForms
             Section::make('Paiement')->schema([
                 Placeholder::make('total_a_payer')
                     ->label('Total à payer')
-                    ->content(fn (Get $get) => $this->formaterMontant($this->totalTtc($get('lignes') ?? []))),
+                    ->content(fn (Get $get) => $this->formaterMontant($this->resteAPayer($get)))
+                    ->helperText(fn (Get $get) => $this->detailCreditApplique($get)),
                 Select::make('mode_paiement')
                     ->label('Mode de paiement')
                     ->options(ModePaiement::class)
@@ -144,7 +145,7 @@ class Caisse extends Page implements HasForms
                     ->label('Monnaie à rendre')
                     ->visible(fn (Get $get) => $this->modePaiementSelectionne($get) === ModePaiement::Especes)
                     ->content(function (Get $get) {
-                        $rendu = (float) ($get('montant_recu') ?? 0) - $this->totalTtc($get('lignes') ?? []);
+                        $rendu = app(CalculateurLigne::class)->soustraire($get('montant_recu'), $this->resteAPayer($get));
 
                         return $this->formaterMontant(max(0, $rendu));
                     }),
@@ -225,6 +226,43 @@ class Caisse extends Page implements HasForms
         $montants = collect($lignes)->map(fn (array $ligne) => DevisResource::montantsDeLigneSaisie($ligne, PrixReference::Ttc));
 
         return app(CalculateurLigne::class)->totaliser($montants)['total_ttc'];
+    }
+
+    /**
+     * Ce que la caisse encaisse vraiment : le total moins le crédit d'avoir
+     * du client, que l'émission de la facture déduit automatiquement (voir
+     * AppliquerAvoirsDisponiblesAction) -- sans quoi la monnaie à rendre
+     * serait fausse du montant de ce crédit.
+     */
+    private function resteAPayer(Get $get): float
+    {
+        $totalTtc = $this->totalTtc($get('lignes') ?? []);
+
+        return app(CalculateurLigne::class)->soustraire($totalTtc, $this->creditApplique($get, $totalTtc));
+    }
+
+    /**
+     * Même montant que celui qu'appliquera AppliquerAvoirsDisponiblesAction :
+     * tout le crédit disponible du client, dans la limite du total (jamais
+     * pour le client comptoir, voir Client::soldeCrediteur()).
+     */
+    private function creditApplique(Get $get, float $totalTtc): float
+    {
+        $soldeCrediteur = Client::query()->find($get('client_id'))?->soldeCrediteur() ?? 0.0;
+
+        return min($soldeCrediteur, $totalTtc);
+    }
+
+    private function detailCreditApplique(Get $get): ?string
+    {
+        $totalTtc = $this->totalTtc($get('lignes') ?? []);
+        $credit = $this->creditApplique($get, $totalTtc);
+
+        if ($credit <= 0) {
+            return null;
+        }
+
+        return 'Total '.$this->formaterMontant($totalTtc).' moins '.$this->formaterMontant($credit).' de crédit d\'avoir du client.';
     }
 
     private function formaterMontant(float $montant): string

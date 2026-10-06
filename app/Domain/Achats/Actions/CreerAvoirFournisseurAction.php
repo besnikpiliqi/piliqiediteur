@@ -7,6 +7,7 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\QuantiteEntiere;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
@@ -28,7 +29,7 @@ class CreerAvoirFournisseurAction
     public function __construct(private readonly CalculateurLigne $calculateurLigne) {}
 
     /**
-     * @param  list<array{ligne_achat_id: int|string, quantite: float|string}>  $lignesSelectionnees
+     * @param  list<array{ligne_achat_id: int|string, quantite: int|string}>  $lignesSelectionnees
      */
     public function handle(FactureAchat $factureAchat, array $lignesSelectionnees, ?string $motif = null): AvoirFournisseur
     {
@@ -58,11 +59,7 @@ class CreerAvoirFournisseurAction
                     throw new InvalidArgumentException("Cette ligne n'appartient pas à la facture d'achat créditée.");
                 }
 
-                $quantite = (float) $selection['quantite'];
-
-                if ($quantite <= 0) {
-                    throw new InvalidArgumentException('La quantité à retourner doit être supérieure à zéro.');
-                }
+                $quantite = QuantiteEntiere::depuisSaisie($selection['quantite'] ?? null, 'La quantité à retourner');
 
                 $restante = $ligneAchat->quantiteRetournableRestante();
 
@@ -73,9 +70,9 @@ class CreerAvoirFournisseurAction
                 // Un retour partiel reprend les PU HT/TTC de la ligne achetée
                 // (article par article, voir CalculateurLigne) ; le dernier
                 // retour en prend le solde exact.
-                $resteSurLaLigne = round((float) $ligneAchat->quantite - $ligneAchat->quantiteDejaRetournee(), 3);
+                $resteSurLaLigne = $ligneAchat->quantite - $ligneAchat->quantiteDejaRetournee();
 
-                $montants = abs($quantite - $resteSurLaLigne) < 0.0005
+                $montants = $quantite === $resteSurLaLigne
                     ? $this->calculateurLigne->solder(
                         $ligneAchat->only(['montant_ht', 'montant_tva', 'montant_ttc']),
                         $ligneAchat->lignesAvoirFournisseur()

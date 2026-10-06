@@ -36,7 +36,7 @@ class IncrementerStockApresValidationFactureAchat
                 $this->stock->enregistrer(
                     produit: $produit,
                     type: TypeMouvementStock::ReceptionAchat,
-                    quantite: (float) $ligne->quantite,
+                    quantite: $ligne->quantite,
                     source: $event->factureAchat,
                     note: "Réception facture d'achat {$event->factureAchat->numero}",
                 );

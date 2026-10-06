@@ -34,7 +34,7 @@ class LigneFacture extends Model
     ];
 
     protected $casts = [
-        'quantite' => 'decimal:3',
+        'quantite' => 'integer',
         'prix_unitaire_ht' => 'decimal:2',
         'prix_unitaire_ttc' => 'decimal:2',
         'prix_reference' => PrixReference::class,
@@ -67,9 +67,9 @@ class LigneFacture extends Model
      * créditable, au même titre qu'il ne bloque pas un nouvel avoir (voir
      * CreerAvoirAction).
      */
-    public function quantiteDejaCreditee(): float
+    public function quantiteDejaCreditee(): int
     {
-        return (float) $this->lignesAvoir()
+        return (int) $this->lignesAvoir()
             ->whereHas('avoir', fn ($query) => $query->where('statut', StatutAvoir::Emise))
             ->sum('quantite');
     }
@@ -79,8 +79,8 @@ class LigneFacture extends Model
      * ligne, tant que leur somme ne dépasse jamais la quantité facturée
      * (voir CreerAvoirAction).
      */
-    public function quantiteCreditableRestante(): float
+    public function quantiteCreditableRestante(): int
     {
-        return round((float) $this->quantite - $this->quantiteDejaCreditee(), 3);
+        return $this->quantite - $this->quantiteDejaCreditee();
     }
 }

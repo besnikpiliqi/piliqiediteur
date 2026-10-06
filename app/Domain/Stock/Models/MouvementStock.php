@@ -37,7 +37,7 @@ class MouvementStock extends Model
 
     protected $casts = [
         'type' => TypeMouvementStock::class,
-        'quantite' => 'decimal:3',
+        'quantite' => 'integer',
         'survenu_le' => 'datetime',
     ];
 

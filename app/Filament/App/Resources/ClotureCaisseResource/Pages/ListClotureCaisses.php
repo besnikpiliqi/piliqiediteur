@@ -8,6 +8,7 @@ use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\CaissesPersonnellesOuvertesApercu;
@@ -53,7 +54,7 @@ class ListClotureCaisses extends ListRecords
             : sprintf(
                 '%d vente(s) au comptoir pour un total de %s € seront regroupées dans cette clôture. %s',
                 $ventesAClore->count(),
-                number_format($ventesAClore->sum(fn (Facture $facture) => (float) $facture->total_ttc), 2, ',', ' '),
+                number_format(app(CalculateurLigne::class)->sommer($ventesAClore->pluck('total_ttc')), 2, ',', ' '),
                 $avertissement,
             );
 

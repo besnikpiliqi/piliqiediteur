@@ -21,9 +21,14 @@ return new class extends Migration
         });
     }
 
+    /**
+     * L'index d'abord : SQLite refuse de supprimer une colonne qu'un index
+     * utilise encore.
+     */
     public function down(): void
     {
         Schema::table('factures', function (Blueprint $table) {
+            $table->dropIndex(['magasin_id', 'cloture_caisse_id']);
             $table->dropConstrainedForeignId('cloture_caisse_id');
         });
     }

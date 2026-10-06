@@ -16,10 +16,15 @@ return new class extends Migration
         });
     }
 
+    /**
+     * L'index unique d'abord : SQLite refuse de supprimer une colonne qu'un
+     * index utilise encore.
+     */
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
             $table->dropConstrainedForeignId('current_magasin_id');
+            $table->dropUnique(['uuid']);
             $table->dropColumn('uuid');
             $table->dropSoftDeletes();
         });

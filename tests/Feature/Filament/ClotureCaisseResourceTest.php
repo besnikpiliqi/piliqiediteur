@@ -5,6 +5,9 @@ namespace Tests\Feature\Filament;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
@@ -254,5 +257,40 @@ class ClotureCaisseResourceTest extends TestCase
         Filament::setTenant($magasin);
         Livewire::test(ListClotureCaisses::class)
             ->assertCanSeeTableRecords([$clotureA, $clotureB]);
+    }
+
+    /**
+     * L'e-reporting déclare les ventes par taux de TVA : la clôture montre
+     * donc la ventilation des lignes de ses ventes, et chaque vente avec
+     * son HT et sa TVA.
+     */
+    public function test_la_cloture_ventile_ses_ventes_par_taux_de_tva(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 0, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $ecran->id, 'quantite' => 2],
+            ['produit_id' => $cable->id, 'quantite' => 1],
+        ]));
+
+        $cloture = app(CloturerCaisseAction::class)->handle($magasin, $facture->date_emission);
+
+        $this->assertSame(['76.66', '13.34', '90.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
+        $this->assertSame([
+            ['taux_tva' => '20.00', 'montant_ht' => 66.66, 'montant_tva' => 13.34, 'montant_ttc' => 80.0],
+            ['taux_tva' => '0.00', 'montant_ht' => 10.0, 'montant_tva' => 0.0, 'montant_ttc' => 10.0],
+        ], $cloture->ventilation_tva);
+
+        Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee('TVA par taux')
+            ->assertSee('66,66')
+            ->assertSee('76,66');
     }
 }

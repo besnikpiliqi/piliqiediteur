@@ -17,6 +17,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use InvalidArgumentException;
 
 class ProduitResource extends Resource
 {
@@ -87,6 +88,8 @@ class ProduitResource extends Resource
             TextInput::make('taux_tva')
                 ->label('Taux de TVA (%)')
                 ->numeric()
+                ->minValue(0)
+                ->maxValue(100)
                 ->default(20)
                 ->formatStateUsing(fn (mixed $state): mixed => blank($state) ? $state : DevisResource::pourcentageEnTexte($state))
                 ->saisieEnDirect(),
@@ -104,7 +107,12 @@ class ProduitResource extends Resource
         }
 
         $calculateur = app(CalculateurLigne::class);
-        $prix = $calculateur->prixUnitaires(PrixReference::Ttc, (float) $get('prix_vente_ttc'), (float) ($get('taux_tva') ?? 20));
+
+        try {
+            $prix = $calculateur->prixUnitaires(PrixReference::Ttc, (float) $get('prix_vente_ttc'), (float) ($get('taux_tva') ?? 20));
+        } catch (InvalidArgumentException) {
+            return null;
+        }
 
         return 'Soit '.number_format($prix['prix_unitaire_ht'], 2, ',', ' ').' € HT + '
             .number_format($calculateur->soustraire($prix['prix_unitaire_ttc'], $prix['prix_unitaire_ht']), 2, ',', ' ').' € de TVA';

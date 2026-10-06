@@ -62,6 +62,7 @@ class Produit extends Model
             }
 
             $produit->synchroniserPrixDeVente();
+            $produit->arrondirPrixDAchat();
         });
     }
 
@@ -118,6 +119,17 @@ class Produit extends Model
         if ($this->isDirty('prix_vente_ht')) {
             $this->prix_vente_ht = $calculateur->arrondirAuCentime((float) $this->prix_vente_ht);
             $this->prix_vente_ttc = $calculateur->prixUnitaireTtcDepuisHt((float) $this->prix_vente_ht, $tauxTva);
+        }
+    }
+
+    /**
+     * Le prix d'achat est enregistré au centime, comme il sera relu (cast
+     * decimal:2) : jamais 8,335 € en base derrière un 8,34 € affiché.
+     */
+    private function arrondirPrixDAchat(): void
+    {
+        if ($this->isDirty('prix_achat_ht')) {
+            $this->prix_achat_ht = app(CalculateurLigne::class)->arrondirAuCentime((float) $this->prix_achat_ht);
         }
     }
 

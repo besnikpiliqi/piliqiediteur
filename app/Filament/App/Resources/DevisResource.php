@@ -25,6 +25,9 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
+use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -78,6 +81,7 @@ class DevisResource extends Resource
                     ->defaultItems(1)
                     ->addActionLabel('Ajouter une ligne')
                     ->required(),
+                self::totauxDuDocument(PrixReference::Ttc),
             ]),
         ]);
     }
@@ -145,9 +149,38 @@ class DevisResource extends Resource
             // met à jour pendant la saisie, pas seulement au clic ailleurs.
             TextInput::make('quantite')->integer()->minValue(1)->required()->default(1)->saisieEnDirect(),
             ...self::champsPrixDeLigne(PrixReference::Ttc),
-            TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->saisieEnDirect(),
+            TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->minValue(0)->maxValue(100)->default(0)->saisieEnDirect(),
             self::totalDeLigne(PrixReference::Ttc),
         ];
+    }
+
+    /**
+     * Un devis transformé en facture n'est plus modifiable : sans cette
+     * fiche, ses lignes et ses totaux ne seraient plus visibles nulle part.
+     * Mêmes colonnes que la facture (voir FactureResource::lignesEntry()).
+     */
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist->schema([
+            InfolistSection::make('Devis')->schema([
+                TextEntry::make('numero')->label('Numéro')->placeholder('Brouillon (pas encore envoyé)'),
+                TextEntry::make('statut')->badge(),
+                TextEntry::make('client.nom')->label('Client'),
+                TextEntry::make('date_emission')->label('Envoyé le')->dateTime('d/m/Y')->placeholder('—'),
+                TextEntry::make('date_validite')->label('Valide jusqu\'au')->date('d/m/Y')->placeholder('—'),
+            ])->columns(3),
+
+            InfolistSection::make('Lignes')->schema([
+                FactureResource::lignesEntry($infolist->getRecord()),
+            ]),
+
+            InfolistSection::make('Totaux')->schema([
+                TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
+                TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
+                TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+                FactureResource::ventilationTvaEntry(),
+            ])->columns(3),
+        ]);
     }
 
     public static function table(Table $table): Table
@@ -165,6 +198,7 @@ class DevisResource extends Resource
                 Tables\Filters\SelectFilter::make('statut')->options(StatutDevis::class),
             ])
             ->actions([
+                Tables\Actions\ViewAction::make(),
                 // Un devis reste modifiable (lignes comprises) tant qu'il
                 // n'a pas été transformé en facture, voir
                 // Devis::estModifiable() et DevisPolicy::update().
@@ -214,6 +248,7 @@ class DevisResource extends Resource
         return [
             'index' => Pages\ListDevis::route('/'),
             'create' => Pages\CreateDevis::route('/create'),
+            'view' => Pages\ViewDevis::route('/{record}'),
             'edit' => Pages\EditDevis::route('/{record}/edit'),
         ];
     }

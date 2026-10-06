@@ -12,6 +12,7 @@ use App\Filament\App\Resources\ProduitResource\Pages\EditProduit;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -131,5 +132,14 @@ class ProduitResourceTest extends TestCase
         $this->assertSame('80.00', $facture->total_ttc);
         $this->assertSame('66.66', $facture->total_ht);
         $this->assertSame('13.34', $facture->total_tva);
+    }
+
+    public function test_le_prix_dachat_est_enregistre_au_centime(): void
+    {
+        $this->connecterProprietaire();
+
+        $produit = Produit::factory()->create(['prix_achat_ht' => 8.335]);
+
+        $this->assertEquals(8.34, DB::table('produits')->where('id', $produit->id)->value('prix_achat_ht'));
     }
 }

@@ -84,4 +84,22 @@ class SoumissionEReportingResourceTest extends TestCase
 
         $this->assertFalse($vendeur->can('viewAny', SoumissionEReporting::class));
     }
+
+    public function test_la_soumission_ventile_les_ventes_de_ses_clotures_par_taux_de_tva(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $soumission = $this->genererUneSoumission($magasin);
+
+        $this->assertSame([
+            ['taux_tva' => '20.00', 'montant_ht' => 100.0, 'montant_tva' => 20.0, 'montant_ttc' => 120.0],
+        ], $soumission->ventilation_tva);
+
+        Livewire::test(ViewSoumissionEReporting::class, ['record' => $soumission->getRouteKey()])
+            ->assertSee('TVA par taux')
+            ->assertSee('20 %');
+    }
 }

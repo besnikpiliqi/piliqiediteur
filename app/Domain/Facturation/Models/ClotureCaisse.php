@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
 use Database\Factories\ClotureCaisseFactory;
@@ -9,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 /**
  * Agrège les ventes à des clients particuliers d'une journée pour
@@ -22,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class ClotureCaisse extends Model
 {
     /** @use HasFactory<ClotureCaisseFactory> */
-    use BelongsToMagasin, HasFactory;
+    use BelongsToMagasin, HasFactory, VentileLaTvaParTaux;
 
     protected $table = 'clotures_caisse';
 
@@ -55,6 +57,15 @@ class ClotureCaisse extends Model
     public function factures(): HasMany
     {
         return $this->hasMany(Facture::class);
+    }
+
+    /**
+     * Les lignes de toutes les ventes de la journée, pour la ventilation
+     * par taux de TVA (voir VentileLaTvaParTaux).
+     */
+    public function lignes(): HasManyThrough
+    {
+        return $this->hasManyThrough(LigneFacture::class, Facture::class);
     }
 
     /**

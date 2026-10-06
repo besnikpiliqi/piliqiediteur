@@ -2,6 +2,10 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
@@ -11,6 +15,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Filament\App\Resources\AvoirFournisseurResource\Pages\ListAvoirsFournisseur;
+use App\Filament\App\Resources\AvoirFournisseurResource\Pages\ViewAvoirFournisseur;
 use App\Filament\App\Resources\FactureAchatResource\Pages\CreateFactureAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -108,5 +113,37 @@ class AvoirFournisseurResourceTest extends TestCase
         $avoir = AvoirFournisseur::query()->where('facture_achat_id', $factureAchat->id)->firstOrFail();
         $this->assertSame(0, $produit->fresh()->stock_quantite);
         $this->assertEquals(0, $ligneAchat->fresh()->quantiteRetournableRestante());
+    }
+
+    /**
+     * L'avoir fournisseur a sa fiche, comme l'avoir client : chaque article
+     * retourné avec son PU HT, son PU TTC, son HT, sa TVA et son TTC, et le
+     * récapitulatif par taux.
+     */
+    public function test_la_fiche_de_lavoir_fournisseur_montre_chaque_ligne_et_la_tva_par_taux(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $produit = Produit::factory()->create(['nom' => 'Ecran Iphone 18', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20],
+        ]));
+        $avoir = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+            ['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => 1],
+        ], 'Écran fêlé'));
+
+        Livewire::test(ListAvoirsFournisseur::class)->assertTableActionVisible('view', $avoir);
+
+        Livewire::test(ViewAvoirFournisseur::class, ['record' => $avoir->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee('Ecran Iphone 18')
+            ->assertSee('33,33')
+            ->assertSee('6,67')
+            ->assertSee('40,00')
+            ->assertSee('TVA par taux')
+            ->assertSee('20 %');
     }
 }

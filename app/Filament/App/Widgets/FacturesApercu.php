@@ -37,7 +37,7 @@ class FacturesApercu extends BaseWidget
         $totalTtc = app(CalculateurLigne::class)->sommer((clone $facturesDeLaPeriode)->pluck('total_ttc'));
         $nombreFactures = (clone $facturesDeLaPeriode)->count();
 
-        return Stat::make($label, number_format($totalTtc, 2, ',', ' ').' €')
+        return Stat::make($label, number_format($totalTtc, 2, ',', ' ').' € TTC')
             ->description($nombreFactures > 1 ? "{$nombreFactures} factures émises" : "{$nombreFactures} facture émise")
             ->descriptionIcon('heroicon-m-document-currency-euro')
             ->color('success');

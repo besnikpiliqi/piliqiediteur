@@ -5,6 +5,7 @@ namespace Tests\Feature\Filament;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
@@ -19,6 +20,7 @@ use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
 use App\Filament\App\Resources\DevisResource\Pages\EditDevis;
 use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
+use App\Filament\App\Resources\DevisResource\Pages\ViewDevis;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
@@ -485,5 +487,37 @@ class DevisResourceTest extends TestCase
         $resultats = $selectProduit->getSearchResults('3456789012345');
 
         $this->assertSame([$produitCible->id => 'Chaise de bureau ('.$produitCible->reference.')'], $resultats);
+    }
+
+    /**
+     * Un devis converti en facture n'est plus modifiable : sa fiche reste
+     * le seul endroit où voir ses lignes, avec le HT, la TVA et le TTC de
+     * chacune et le récapitulatif par taux, comme sur la facture.
+     */
+    public function test_la_fiche_du_devis_montre_chaque_ligne_et_la_tva_par_taux(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 0, 'suivi_stock' => false]);
+        $devis = app(CreerDevisAction::class)->handle($client, [
+            ['produit_id' => $ecran->id, 'quantite' => 2],
+            ['produit_id' => $cable->id, 'quantite' => 1],
+        ]);
+
+        $this->assertSame(['76.66', '13.34', '90.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
+
+        Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee('66,66')
+            ->assertSee('13,34')
+            ->assertSee('76,66')
+            ->assertSee('TVA par taux')
+            ->assertSee('20 %')
+            ->assertSee('0 %');
     }
 }

@@ -119,6 +119,7 @@ class Caisse extends Page implements HasForms
                     ->defaultItems(1)
                     ->addActionLabel('Ajouter un produit')
                     ->required(),
+                DevisResource::totauxDuDocument(PrixReference::Ttc),
             ]),
 
             Section::make('Paiement')->schema([
@@ -136,6 +137,12 @@ class Caisse extends Page implements HasForms
                     ->label('Montant reçu')
                     ->numeric()
                     ->prefix('€')
+                    // Facultatif (sert à calculer la monnaie), mais s'il est
+                    // saisi il doit couvrir ce qui reste à payer : sinon la
+                    // vente serait enregistrée payée avec un tiroir-caisse
+                    // en manque.
+                    ->minValue(fn (Get $get): float => $this->resteAPayer($get))
+                    ->validationMessages(['min' => 'Le montant reçu ne couvre pas le reste à payer.'])
                     // Et non live(onBlur: true) : la monnaie à rendre doit se
                     // mettre à jour pendant la saisie, pas seulement quand le
                     // vendeur clique ailleurs.

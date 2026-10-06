@@ -45,6 +45,13 @@ class CreerAvoirFournisseurAction
                 throw new InvalidArgumentException('Un avoir fournisseur doit porter sur au moins une ligne.');
             }
 
+            // Même règle que CreerAvoirAction : une ligne une seule fois.
+            $identifiantsLignes = array_map(fn (array $selection): int => (int) $selection['ligne_achat_id'], $lignesSelectionnees);
+
+            if (count($identifiantsLignes) !== count(array_unique($identifiantsLignes))) {
+                throw new InvalidArgumentException('Une même ligne de facture d\'achat ne peut apparaître qu\'une fois dans un avoir fournisseur.');
+            }
+
             $avoir = AvoirFournisseur::create([
                 'facture_achat_id' => $factureAchat->id,
                 'motif' => $motif,

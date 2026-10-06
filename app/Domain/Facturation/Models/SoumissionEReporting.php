@@ -2,11 +2,14 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Integrations\Pdp\Models\TransmissionPdp;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Collection;
 
 /**
  * Agrège toutes les clôtures de caisse (voir ClotureCaisse) d'une période
@@ -20,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
  */
 class SoumissionEReporting extends Model
 {
-    use BelongsToMagasin;
+    use BelongsToMagasin, VentileLaTvaParTaux;
 
     protected $table = 'soumissions_ereporting';
 
@@ -49,6 +52,19 @@ class SoumissionEReporting extends Model
         // ("soumission_e_reporting_id") ne correspond pas à la colonne
         // réelle de la migration.
         return $this->hasMany(ClotureCaisse::class, 'soumission_ereporting_id');
+    }
+
+    /**
+     * Les lignes des ventes de toutes les clôtures de la période, pour la
+     * ventilation par taux de TVA que l'e-reporting déclare.
+     *
+     * @return Collection<int, LigneFacture>
+     */
+    protected function lignesAVentiler(): Collection
+    {
+        return LigneFacture::query()
+            ->whereHas('facture', fn (Builder $query) => $query->whereIn('cloture_caisse_id', $this->clotures()->select('id')))
+            ->get();
     }
 
     public function transmissionsPdp(): MorphMany

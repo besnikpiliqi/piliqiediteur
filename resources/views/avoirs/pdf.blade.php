@@ -69,6 +69,12 @@
         @endif
     </div>
 
+    {{-- La remise n'apparaît que si une ligne en a une : elle explique
+         alors pourquoi PU x quantité diffère du total de la ligne. --}}
+    @php
+        $avecRemise = $avoir->lignes->contains(fn ($ligne) => (float) $ligne->remise_pourcentage > 0);
+    @endphp
+
     <table class="lignes">
         <thead>
             <tr>
@@ -78,6 +84,9 @@
                 <th class="montant">PU HT</th>
                 <th class="montant">PU TTC</th>
                 <th class="montant">Taux TVA</th>
+                @if($avecRemise)
+                    <th class="montant">Remise</th>
+                @endif
                 <th class="montant">Total HT</th>
                 <th class="montant">TVA</th>
                 <th class="montant">Total TTC</th>
@@ -92,6 +101,9 @@
                     <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ht, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ttc, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ \Illuminate\Support\Number::format((float) $ligne->taux_tva, maxPrecision: 2, locale: 'fr') }} %</td>
+                    @if($avecRemise)
+                        <td class="montant">{{ \Illuminate\Support\Number::format((float) $ligne->remise_pourcentage, maxPrecision: 2, locale: 'fr') }} %</td>
+                    @endif
                     <td class="montant">{{ number_format((float) $ligne->montant_ht, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ number_format((float) $ligne->montant_tva, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ number_format((float) $ligne->montant_ttc, 2, ',', ' ') }} €</td>

@@ -14,7 +14,10 @@ use Illuminate\Support\Collection;
  * en sont donc toujours la somme visible.
  *
  * Exposé comme attribut (ventilation_tva) pour que les fiches Filament et
- * les PDF le lisent comme n'importe quelle autre donnée du document.
+ * les PDF le lisent comme n'importe quelle autre donnée du document. Les
+ * totaux d'une clôture de caisse ou d'une soumission d'e-reporting sont
+ * ceux de leurs factures, donc leur ventilation est celle des lignes de
+ * ces factures.
  */
 trait VentileLaTvaParTaux
 {
@@ -23,7 +26,7 @@ trait VentileLaTvaParTaux
      */
     protected function ventilationTva(): Attribute
     {
-        return Attribute::get(fn (): array => $this->lignes
+        return Attribute::get(fn (): array => $this->lignesAVentiler()
             ->groupBy(fn (Model $ligne): string => number_format((float) $ligne->taux_tva, 2, '.', ''))
             ->sortKeysUsing(fn (string $a, string $b): int => (float) $b <=> (float) $a)
             ->map(function (Collection $lignes, string $tauxTva): array {
@@ -40,5 +43,17 @@ trait VentileLaTvaParTaux
             })
             ->values()
             ->all());
+    }
+
+    /**
+     * Les lignes du document lui-même ; un document qui en regroupe
+     * d'autres (clôture de caisse, soumission d'e-reporting) ventile les
+     * lignes de ses factures.
+     *
+     * @return Collection<int, Model>
+     */
+    protected function lignesAVentiler(): Collection
+    {
+        return $this->lignes;
     }
 }

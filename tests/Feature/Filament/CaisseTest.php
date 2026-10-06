@@ -281,4 +281,53 @@ class CaisseTest extends TestCase
 
         $this->assertDatabaseHas('clients', ['nom' => 'Client fidèle']);
     }
+
+    /**
+     * En espèces, un montant reçu saisi qui ne couvre pas ce qui reste à
+     * payer est refusé : sinon la vente serait enregistrée payée avec un
+     * tiroir-caisse en manque.
+     */
+    public function test_un_montant_recu_insuffisant_est_refuse(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class);
+        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.produit_id", $produit->id)
+            ->set('data.montant_recu', '30')
+            ->call('encaisser')
+            ->assertHasFormErrors(['montant_recu' => 'min']);
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * Le formulaire montre le HT et la TVA de chaque ligne et les totaux de
+     * la vente, calculés comme la facture qui sera enregistrée.
+     */
+    public function test_la_caisse_montre_le_ht_et_la_tva_de_chaque_ligne_et_les_totaux(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class);
+        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.produit_id", $produit->id)
+            ->set("data.lignes.{$cle}.quantite", '2')
+            ->assertSee('66,66 € HT + 13,34 € de TVA')
+            ->assertSee('Total HT 66,66 € · TVA 13,34 € · Total TTC 80,00 €');
+    }
 }

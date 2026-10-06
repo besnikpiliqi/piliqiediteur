@@ -130,19 +130,7 @@ class AvoirResource extends Resource
             ])->columns(4),
 
             InfolistSection::make('Produits retournés')->schema([
-                RepeatableEntry::make('lignes')
-                    ->label('')
-                    ->schema([
-                        TextEntry::make('description'),
-                        TextEntry::make('quantite'),
-                        TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
-                        TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
-                        TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
-                        TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
-                        TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
-                        TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
-                    ])
-                    ->columns(8),
+                FactureResource::lignesEntry($infolist->getRecord()),
             ]),
 
             InfolistSection::make('Crédit appliqué')

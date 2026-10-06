@@ -51,6 +51,7 @@ class SoumissionEReportingResource extends Resource
                 TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
                 TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+                FactureResource::ventilationTvaEntry(),
             ])->columns(4),
 
             InfolistSection::make('Transmission électronique')->schema([
@@ -67,9 +68,11 @@ class SoumissionEReportingResource extends Resource
                     ->schema([
                         TextEntry::make('numero')->label('Numéro'),
                         TextEntry::make('date_cloture')->label('Journée')->date('d/m/Y'),
+                        TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
+                        TextEntry::make('total_tva')->label('TVA')->money('EUR'),
                         TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
                     ])
-                    ->columns(3),
+                    ->columns(5),
             ]),
         ]);
     }

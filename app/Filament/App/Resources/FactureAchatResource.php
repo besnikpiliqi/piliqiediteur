@@ -132,13 +132,14 @@ class FactureAchatResource extends Resource
                         // ligne se met à jour pendant la saisie.
                         TextInput::make('quantite')->integer()->minValue(1)->required()->default(1)->saisieEnDirect(),
                         ...self::champsPrixDeLigne(PrixReference::Ht),
-                        TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->default(0)->saisieEnDirect(),
+                        TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->minValue(0)->maxValue(100)->default(0)->saisieEnDirect(),
                         self::totalDeLigne(PrixReference::Ht),
                     ])
                     ->columns(9)
                     ->defaultItems(1)
                     ->addActionLabel('Ajouter une ligne')
                     ->required(),
+                self::totauxDuDocument(PrixReference::Ht),
             ]),
         ]);
     }
@@ -158,19 +159,7 @@ class FactureAchatResource extends Resource
             ])->columns(3),
 
             InfolistSection::make('Lignes')->schema([
-                RepeatableEntry::make('lignes')
-                    ->label('')
-                    ->schema([
-                        TextEntry::make('description'),
-                        TextEntry::make('quantite'),
-                        TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
-                        TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
-                        TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
-                        TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
-                        TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
-                        TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
-                    ])
-                    ->columns(8),
+                FactureResource::lignesEntry($infolist->getRecord()),
             ]),
 
             InfolistSection::make('Totaux')->schema([
@@ -193,7 +182,11 @@ class FactureAchatResource extends Resource
                             // state() arbitraire, pas une vraie relation du
                             // modèle racine -- state() explicite contourne
                             // le chemin cassé que Filament calcule sinon.
-                            TextEntry::make('numero')->label('Numéro')->state(fn (AvoirFournisseur $record) => $record->numero),
+                            TextEntry::make('numero')
+                                ->label('Numéro')
+                                ->state(fn (AvoirFournisseur $record) => $record->numero)
+                                ->url(fn (AvoirFournisseur $record) => AvoirFournisseurResource::getUrl('view', ['record' => $record]))
+                                ->color('primary'),
                             TextEntry::make('motif')->label('Motif')->state(fn (AvoirFournisseur $record) => $record->motif)->placeholder('—'),
                             TextEntry::make('total_ttc')->label('Total retourné TTC')->state(fn (AvoirFournisseur $record) => $record->total_ttc)->money('EUR'),
                         ])

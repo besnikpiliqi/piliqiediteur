@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Facturation\Enums\PrixReference;
+use InvalidArgumentException;
 
 /**
  * Calcul HT/TVA/TTC d'une ligne de document, article par article :
@@ -37,6 +38,10 @@ class CalculateurLigne
         int $quantite,
         float $remisePourcentage = 0.0,
     ): array {
+        if ($remisePourcentage < 0 || $remisePourcentage > 100) {
+            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
+        }
+
         $remiseCentiemes = $this->versUnites($remisePourcentage, 100);
 
         $montantHtCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireHt, 100), $quantite, $remiseCentiemes);
@@ -73,6 +78,8 @@ class CalculateurLigne
 
     public function prixUnitaireHtDepuisTtc(float $prixUnitaireTtc, float $tauxTva): float
     {
+        $this->verifierTauxTva($tauxTva);
+
         return $this->centimesVersMontant($this->diviserArrondi(
             $this->versUnites($prixUnitaireTtc, 100) * 10000,
             10000 + $this->versUnites($tauxTva, 100),
@@ -81,6 +88,8 @@ class CalculateurLigne
 
     public function prixUnitaireTtcDepuisHt(float $prixUnitaireHt, float $tauxTva): float
     {
+        $this->verifierTauxTva($tauxTva);
+
         $htCentimes = $this->versUnites($prixUnitaireHt, 100);
 
         return $this->centimesVersMontant($htCentimes + $this->diviserArrondi($htCentimes * $this->versUnites($tauxTva, 100), 10000));
@@ -192,6 +201,17 @@ class CalculateurLigne
         return $this->centimesVersMontant(
             $this->versUnites((float) $montant, 100) - $this->versUnites($this->sommer($montantsDeduits), 100),
         );
+    }
+
+    /**
+     * Un taux hors de 0-100 % n'existe pas -- et -100 % diviserait par
+     * zéro en passant du TTC au HT.
+     */
+    private function verifierTauxTva(float $tauxTva): void
+    {
+        if ($tauxTva < 0 || $tauxTva > 100) {
+            throw new InvalidArgumentException('Le taux de TVA doit être compris entre 0 et 100 %.');
+        }
     }
 
     /**

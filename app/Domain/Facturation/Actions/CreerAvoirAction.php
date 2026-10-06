@@ -41,6 +41,15 @@ class CreerAvoirAction
             throw new InvalidArgumentException('Un avoir doit porter sur au moins une ligne.');
         }
 
+        // Une même ligne deux fois dans un avoir échapperait au plafond de
+        // la quantité restante (calculé sur les avoirs déjà émis) et au
+        // solde exact du dernier retour.
+        $identifiantsLignes = array_map(fn (array $selection): int => (int) $selection['ligne_facture_id'], $lignesSelectionnees);
+
+        if (count($identifiantsLignes) !== count(array_unique($identifiantsLignes))) {
+            throw new InvalidArgumentException('Une même ligne de facture ne peut apparaître qu\'une fois dans un avoir.');
+        }
+
         return DB::transaction(function () use ($client, $lignesSelectionnees, $motif) {
             $avoir = Avoir::create([
                 'client_id' => $client->getKey(),

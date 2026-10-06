@@ -9,6 +9,7 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
@@ -38,6 +39,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 
 class FactureResource extends Resource
 {
@@ -116,6 +118,7 @@ class FactureResource extends Resource
                     ->defaultItems(1)
                     ->addActionLabel('Ajouter une ligne')
                     ->required(),
+                DevisResource::totauxDuDocument(PrixReference::Ttc),
             ]),
         ]);
     }
@@ -133,19 +136,7 @@ class FactureResource extends Resource
             ])->columns(3),
 
             InfolistSection::make('Lignes')->schema([
-                RepeatableEntry::make('lignes')
-                    ->label('')
-                    ->schema([
-                        TextEntry::make('description'),
-                        TextEntry::make('quantite'),
-                        TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
-                        TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
-                        TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
-                        TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
-                        TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
-                        TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
-                    ])
-                    ->columns(8),
+                self::lignesEntry($infolist->getRecord()),
             ]),
 
             InfolistSection::make('Totaux et règlement')->schema([
@@ -229,7 +220,15 @@ class FactureResource extends Resource
                 ->schema([
                     RepeatableEntry::make('avoirsEmisListe')
                         ->label('')
-                        ->state(fn (Facture $record) => $record->avoirsEmisConcernes()->with('lignes')->get())
+                        // Un avoir peut couvrir plusieurs factures (voir
+                        // CreerAvoirAction) : seules ses lignes qui
+                        // créditent CETTE facture -- et leur total -- ont
+                        // leur place ici.
+                        ->state(fn (Facture $record) => $record->avoirsEmisConcernes()->get()->each(
+                            fn (Avoir $avoir) => $avoir->setRelation('lignes', $avoir->lignes()
+                                ->whereHas('ligneFacture', fn ($query) => $query->where('facture_id', $record->id))
+                                ->get()),
+                        ))
                         ->schema([
                             // ::make('x') seul ne fonctionne pas ici : une
                             // fois le nom imbriqué sous un RepeatableEntry
@@ -246,7 +245,10 @@ class FactureResource extends Resource
                                 ->url(fn (Avoir $record) => AvoirResource::getUrl('view', ['record' => $record]))
                                 ->color('primary'),
                             TextEntry::make('motif')->label('Motif')->state(fn (Avoir $record) => $record->motif)->placeholder('—'),
-                            TextEntry::make('total_ttc')->label('Total crédité TTC')->state(fn (Avoir $record) => $record->total_ttc)->money('EUR'),
+                            TextEntry::make('total_ttc')
+                                ->label('Crédité sur cette facture (TTC)')
+                                ->state(fn (Avoir $record) => app(CalculateurLigne::class)->sommer($record->lignes->pluck('montant_ttc')))
+                                ->money('EUR'),
                             // Le résumé (numéro/motif/total) ne dit pas CE QUI
                             // a été retourné : le détail des lignes créditées
                             // (produit, quantité, montant) doit être visible
@@ -258,10 +260,12 @@ class FactureResource extends Resource
                                 ->state(fn (Avoir $record) => $record->lignes)
                                 ->schema([
                                     TextEntry::make('description')->state(fn (LigneAvoir $record) => $record->description),
-                                    TextEntry::make('quantite')->state(fn (LigneAvoir $record) => $record->quantite),
+                                    TextEntry::make('quantite')->label('Quantité')->state(fn (LigneAvoir $record) => $record->quantite),
+                                    TextEntry::make('montant_ht')->label('Total HT')->state(fn (LigneAvoir $record) => $record->montant_ht)->money('EUR'),
+                                    TextEntry::make('montant_tva')->label('TVA')->state(fn (LigneAvoir $record) => $record->montant_tva)->money('EUR'),
                                     TextEntry::make('montant_ttc')->label('Total TTC')->state(fn (LigneAvoir $record) => $record->montant_ttc)->money('EUR'),
                                 ])
-                                ->columns(3),
+                                ->columns(5),
                         ])
                         ->columns(3),
                 ]),
@@ -269,8 +273,35 @@ class FactureResource extends Resource
     }
 
     /**
+     * Lignes d'un document (facture, avoir, devis, facture d'achat, avoir
+     * fournisseur) : pour chaque article son PU HT, son PU TTC et son taux,
+     * puis le HT, la TVA et le TTC de la ligne (voir CalculateurLigne). La
+     * remise n'apparaît que si une ligne du document en a une : c'est elle
+     * qui explique alors que PU x quantité diffère du total.
+     */
+    public static function lignesEntry(?Model $document): RepeatableEntry
+    {
+        $avecRemise = $document?->lignes->contains(fn (Model $ligne): bool => (float) $ligne->remise_pourcentage > 0) ?? false;
+
+        return RepeatableEntry::make('lignes')
+            ->label('')
+            ->schema([
+                TextEntry::make('description'),
+                TextEntry::make('quantite')->label('Quantité'),
+                TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
+                TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
+                TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
+                TextEntry::make('remise_pourcentage')->label('Remise')->numeric(maxDecimalPlaces: 2)->suffix(' %')->visible($avecRemise),
+                TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
+                TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
+                TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
+            ])
+            ->columns($avecRemise ? 9 : 8);
+    }
+
+    /**
      * Récapitulatif par taux (voir VentileLaTvaParTaux), partagé par les
-     * fiches facture, avoir et facture d'achat.
+     * fiches de tous les documents à lignes.
      */
     public static function ventilationTvaEntry(): RepeatableEntry
     {

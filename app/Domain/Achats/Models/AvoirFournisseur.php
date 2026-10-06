@@ -4,6 +4,7 @@ namespace App\Domain\Achats\Models;
 
 use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
+use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
 use Database\Factories\AvoirFournisseurFactory;
@@ -22,7 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class AvoirFournisseur extends Model
 {
     /** @use HasFactory<AvoirFournisseurFactory> */
-    use BelongsToMagasin, HasFactory;
+    use BelongsToMagasin, HasFactory, VentileLaTvaParTaux;
 
     protected $table = 'avoirs_fournisseur';
 

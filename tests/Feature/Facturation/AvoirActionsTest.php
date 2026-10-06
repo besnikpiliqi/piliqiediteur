@@ -431,4 +431,23 @@ class AvoirActionsTest extends TestCase
             'quantite' => $ligne->quantite,
         ])->all();
     }
+
+    /**
+     * La même ligne deux fois dans un avoir échapperait au plafond de la
+     * quantité restante (2 articles vendus, 4 crédités).
+     */
+    public function test_une_meme_ligne_deux_fois_dans_un_avoir_est_refusee(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ligneFacture = $this->emettreFacture($client, $produit, 2)->lignes->firstOrFail();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage("Une même ligne de facture ne peut apparaître qu'une fois dans un avoir.");
+
+        app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 2],
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 2],
+        ]);
+    }
 }

@@ -67,6 +67,7 @@ class ClotureCaisseResource extends Resource
                 TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
                 TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+                FactureResource::ventilationTvaEntry(),
             ])->columns(4),
 
             InfolistSection::make('E-reporting')->schema([
@@ -86,9 +87,11 @@ class ClotureCaisseResource extends Resource
                     ->schema([
                         TextEntry::make('numero')->label('Numéro'),
                         TextEntry::make('client.nom')->label('Client'),
+                        TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
+                        TextEntry::make('total_tva')->label('TVA')->money('EUR'),
                         TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
                     ])
-                    ->columns(3),
+                    ->columns(5),
             ]),
         ]);
     }

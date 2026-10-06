@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\DevisFactory;
@@ -15,7 +16,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Devis extends Model
 {
     /** @use HasFactory<DevisFactory> */
-    use BelongsToMagasin, HasFactory, SoftDeletes;
+    use BelongsToMagasin, HasFactory, SoftDeletes, VentileLaTvaParTaux;
 
     protected $table = 'devis';
 

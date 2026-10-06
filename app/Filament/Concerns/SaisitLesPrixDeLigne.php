@@ -40,7 +40,12 @@ trait SaisitLesPrixDeLigne
                     }
 
                     $set('prix_reference', PrixReference::Ht->value);
-                    $set('prix_unitaire_ttc', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireTtcDepuisHt((float) $state, self::tauxTvaDeLigne($get))));
+
+                    try {
+                        $set('prix_unitaire_ttc', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireTtcDepuisHt((float) $state, self::tauxTvaDeLigne($get))));
+                    } catch (InvalidArgumentException) {
+                        // Taux de TVA invalide (voir sa validation) : rien à convertir.
+                    }
                 }),
             TextInput::make('prix_unitaire_ttc')
                 ->label('PU TTC')
@@ -53,11 +58,18 @@ trait SaisitLesPrixDeLigne
                     }
 
                     $set('prix_reference', PrixReference::Ttc->value);
-                    $set('prix_unitaire_ht', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $state, self::tauxTvaDeLigne($get))));
+
+                    try {
+                        $set('prix_unitaire_ht', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $state, self::tauxTvaDeLigne($get))));
+                    } catch (InvalidArgumentException) {
+                        // Taux de TVA invalide (voir sa validation) : rien à convertir.
+                    }
                 }),
             TextInput::make('taux_tva')
                 ->label('TVA %')
                 ->numeric()
+                ->minValue(0)
+                ->maxValue(100)
                 ->required()
                 ->default(20)
                 ->saisieEnDirect()
@@ -65,8 +77,9 @@ trait SaisitLesPrixDeLigne
                 // seul l'autre prix est recalculé.
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) use ($referenceParDefaut) {
                     // Saisie incomplète en cours ("5," en route vers "5,5") :
-                    // rien à recalculer tant que le taux n'est pas un nombre.
-                    if (blank($state)) {
+                    // rien à recalculer tant que le taux n'est pas un nombre
+                    // entre 0 et 100.
+                    if (blank($state) || (float) $state < 0 || (float) $state > 100) {
                         return;
                     }
 
@@ -91,20 +104,47 @@ trait SaisitLesPrixDeLigne
     /**
      * Passe par le même résolveur et le même calculateur que
      * l'enregistrement réel de la ligne : l'aperçu ne peut jamais afficher
-     * un centime différent de ce qui sera enregistré.
+     * un centime différent de ce qui sera enregistré. Montre le HT et la
+     * TVA de la ligne à côté de son TTC, comme la facture.
      */
     protected static function totalDeLigne(PrixReference $referenceParDefaut): Placeholder
     {
         return Placeholder::make('total_ligne')
             ->label('Total TTC')
             ->columnSpanFull()
-            ->content(fn (Get $get): string => number_format(
+            ->content(fn (Get $get): string => self::montantEnTexte(
                 self::montantsDeLigneSaisie(self::ligneSaisie($get), $referenceParDefaut)['montant_ttc'],
-                2,
-                ',',
-                ' ',
-            ).' €')
-            ->helperText(fn (Get $get): string => 'Calculé à partir du '.self::referenceDeLigne($get, $referenceParDefaut)->getLabel().' saisi.');
+            ))
+            ->helperText(function (Get $get) use ($referenceParDefaut): string {
+                $montants = self::montantsDeLigneSaisie(self::ligneSaisie($get), $referenceParDefaut);
+
+                return self::montantEnTexte($montants['montant_ht']).' HT + '.self::montantEnTexte($montants['montant_tva']).' de TVA · '
+                    .'calculé à partir du '.self::referenceDeLigne($get, $referenceParDefaut)->getLabel().' saisi.';
+            });
+    }
+
+    /**
+     * Totaux du document en cours de saisie, sommés séparément comme à
+     * l'enregistrement (voir CalculateurLigne::totaliser()).
+     */
+    public static function totauxDuDocument(PrixReference $referenceParDefaut): Placeholder
+    {
+        return Placeholder::make('totaux_document')
+            ->label('Totaux')
+            ->columnSpanFull()
+            ->content(function (Get $get) use ($referenceParDefaut): string {
+                $totaux = app(CalculateurLigne::class)->totaliser(collect($get('lignes') ?? [])
+                    ->map(fn (array $ligne): array => self::montantsDeLigneSaisie($ligne, $referenceParDefaut)));
+
+                return 'Total HT '.self::montantEnTexte($totaux['total_ht'])
+                    .' · TVA '.self::montantEnTexte($totaux['total_tva'])
+                    .' · Total TTC '.self::montantEnTexte($totaux['total_ttc']);
+            });
+    }
+
+    private static function montantEnTexte(float $montant): string
+    {
+        return number_format($montant, 2, ',', ' ').' €';
     }
 
     /**
@@ -116,21 +156,22 @@ trait SaisitLesPrixDeLigne
         $calculateur = app(CalculateurLigne::class);
         $tauxTva = (float) ($ligne['taux_tva'] ?? 0);
 
-        // Une quantité pas encore saisie, ou pas entière, ne donne aucun
-        // montant plutôt qu'un montant tronqué (1,5 compté comme 1).
+        // Une saisie pas encore valable (quantité vide ou à virgule, taux ou
+        // remise hors de 0-100 %) ne donne aucun montant, plutôt qu'un
+        // montant faux (1,5 compté comme 1).
         try {
             $quantite = QuantiteEntiere::depuisSaisie($ligne['quantite'] ?? null);
             $prix = app(ResolveurPrixLigne::class)->resoudre($ligne, $referenceParDefaut, $tauxTva);
+
+            return $calculateur->calculer(
+                $prix['prix_unitaire_ht'],
+                $prix['prix_unitaire_ttc'],
+                $quantite,
+                (float) ($ligne['remise_pourcentage'] ?? 0),
+            );
         } catch (InvalidArgumentException) {
             return ['montant_ht' => 0.0, 'montant_tva' => 0.0, 'montant_ttc' => 0.0];
         }
-
-        return $calculateur->calculer(
-            $prix['prix_unitaire_ht'],
-            $prix['prix_unitaire_ttc'],
-            $quantite,
-            (float) ($ligne['remise_pourcentage'] ?? 0),
-        );
     }
 
     /**

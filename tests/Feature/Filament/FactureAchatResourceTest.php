@@ -125,7 +125,7 @@ class FactureAchatResourceTest extends TestCase
             ->assertSet("data.lignes.{$cle}.prix_reference", 'ttc')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", 33.33)
             ->assertSee('80,00 €')
-            ->assertSee('Calculé à partir du PU TTC saisi.')
+            ->assertSee('calculé à partir du PU TTC saisi.')
             ->call('create')
             ->assertHasNoFormErrors();
 

@@ -258,4 +258,19 @@ class AvoirFournisseurActionsTest extends TestCase
             ['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => '1.5'],
         ]);
     }
+
+    public function test_une_meme_ligne_deux_fois_dans_un_avoir_fournisseur_est_refusee(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
+        $factureAchat = $this->receptionnerAchat($fournisseur, $produit, 2);
+        $ligneAchatId = $factureAchat->lignes->firstOrFail()->id;
+
+        $this->expectException(InvalidArgumentException::class);
+
+        app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+            ['ligne_achat_id' => $ligneAchatId, 'quantite' => 2],
+            ['ligne_achat_id' => $ligneAchatId, 'quantite' => 2],
+        ]);
+    }
 }

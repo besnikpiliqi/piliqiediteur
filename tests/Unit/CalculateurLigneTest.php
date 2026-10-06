@@ -7,6 +7,9 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ResolveurPrixLigne;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
+use Closure;
+use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Random\Engine\Mt19937;
 use Random\Randomizer;
 use Tests\TestCase;
@@ -469,5 +472,46 @@ class CalculateurLigneTest extends TestCase
             $ligne['quantite'],
             $this->texte($ligne['remise']),
         );
+    }
+
+    /**
+     * -100 % diviserait par zéro en passant du TTC au HT ; un taux ou une
+     * remise hors de 0-100 % n'existe pas.
+     *
+     * @return array<string, array{Closure(CalculateurLigne): mixed, string}>
+     */
+    public static function saisiesHorsBornes(): array
+    {
+        return [
+            'taux négatif (TTC vers HT)' => [fn (CalculateurLigne $c) => $c->prixUnitaireHtDepuisTtc(10, -100), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
+            'taux négatif (HT vers TTC)' => [fn (CalculateurLigne $c) => $c->prixUnitaireTtcDepuisHt(10, -5), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
+            'taux au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->prixUnitaires(PrixReference::Ttc, 10, 150), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
+            'remise négative' => [fn (CalculateurLigne $c) => $c->calculer(10, 12, 1, -10), 'La remise doit être comprise entre 0 et 100 %.'],
+            'remise au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->calculer(10, 12, 1, 150), 'La remise doit être comprise entre 0 et 100 %.'],
+        ];
+    }
+
+    #[DataProvider('saisiesHorsBornes')]
+    public function test_un_taux_ou_une_remise_hors_bornes_est_refuse(Closure $calcul, string $message): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage($message);
+
+        $calcul($this->calculateur());
+    }
+
+    public function test_les_bornes_0_et_100_restent_acceptees(): void
+    {
+        $this->assertSame(['prix_unitaire_ht' => 10.0, 'prix_unitaire_ttc' => 10.0], $this->calculateur()->prixUnitaires(PrixReference::Ht, 10, 0));
+        $this->assertSame(['montant_ht' => 0.0, 'montant_tva' => 0.0, 'montant_ttc' => 0.0], $this->calculateur()->calculer(10, 12, 3, 100));
+    }
+
+    public function test_sommer_et_soustraire_comptent_au_centime_exact(): void
+    {
+        $this->assertSame(0.3, $this->calculateur()->sommer([0.1, 0.2]));
+        $this->assertSame(100.0, $this->calculateur()->sommer(array_fill(0, 1000, '0.10')));
+        $this->assertSame(16.67, $this->calculateur()->soustraire(50, 33.33));
+        $this->assertSame(-10.0, $this->calculateur()->soustraire('40.00', '30.00', 20));
+        $this->assertSame(0.0, $this->calculateur()->sommer([null, '']));
     }
 }

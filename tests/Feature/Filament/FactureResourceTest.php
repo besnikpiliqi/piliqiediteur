@@ -9,6 +9,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
@@ -553,7 +554,7 @@ class FactureResourceTest extends TestCase
             ->assertSet("data.lignes.{$cle}.prix_reference", 'ht')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '10.00')
             ->assertSee('30,00 €')
-            ->assertSee('Calculé à partir du PU HT saisi.');
+            ->assertSee('calculé à partir du PU HT saisi.');
 
         // 10,05 € TTC / 1,20 = 8,375 -> 8,38 € HT.
         $component
@@ -981,5 +982,94 @@ class FactureResourceTest extends TestCase
             ->assertHasNoFormComponentActionErrors();
 
         $this->assertDatabaseHas('clients', ['nom' => 'Client Créé En Direct', 'type_client' => 'professionnel']);
+    }
+
+    /**
+     * Un avoir peut couvrir plusieurs factures : la fiche d'une facture ne
+     * montre que ce qu'il crédite sur elle (30,00 €), jamais le total de
+     * l'avoir (100,00 €) ni les produits d'une autre facture.
+     */
+    public function test_un_avoir_sur_plusieurs_factures_ne_montre_que_ce_qui_credite_cette_facture(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $coque = Produit::factory()->create(['nom' => 'Coque bleue', 'prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $casque = Produit::factory()->create(['nom' => 'Casque sans fil', 'prix_vente_ttc' => 70, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $premiere = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $coque->id, 'quantite' => 1]]));
+        $seconde = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $casque->id, 'quantite' => 1]]));
+
+        $avoir = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $premiere->lignes->firstOrFail()->id, 'quantite' => 1],
+            ['ligne_facture_id' => $seconde->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]));
+        $this->assertSame('100.00', $avoir->total_ttc);
+
+        Livewire::test(ViewFacture::class, ['record' => $premiere->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee('Crédité sur cette facture (TTC)')
+            ->assertSee('Coque bleue')
+            ->assertDontSee('Casque sans fil')
+            ->assertDontSee('100,00');
+    }
+
+    /**
+     * Un taux de TVA de -100 % diviserait par zéro en passant du TTC au
+     * HT : pendant la frappe rien ne plante, et le formulaire le refuse.
+     */
+    public function test_un_taux_de_tva_hors_bornes_ne_fait_rien_planter_et_est_refuse(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $component = Livewire::test(CreateFacture::class)->fillForm(['client_id' => Client::factory()->create()->id]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.description", 'Réparation')
+            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '12')
+            ->set("data.lignes.{$cle}.taux_tva", '-100')
+            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '15')
+            ->set("data.lignes.{$cle}.remise_pourcentage", '150')
+            ->assertSuccessful()
+            ->call('create')
+            ->assertHasFormErrors([
+                "lignes.{$cle}.taux_tva" => 'min',
+                "lignes.{$cle}.remise_pourcentage" => 'max',
+            ]);
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * La remise est une mention obligatoire et explique pourquoi PU x
+     * quantité diffère du total : elle apparaît sur le PDF dès qu'une ligne
+     * en a une, et seulement dans ce cas.
+     */
+    public function test_la_remise_apparait_sur_le_pdf_seulement_si_une_ligne_en_a_une(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $avecRemise = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 2, 'remise_pourcentage' => 12.5]]);
+        $sansRemise = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 2]]);
+
+        $rendre = fn (Facture $facture): string => view('factures.pdf', ['facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir')])->render();
+
+        $pdf = $rendre($avecRemise);
+        $this->assertStringContainsString('<th class="montant">Remise</th>', $pdf);
+        $this->assertStringContainsString('<td class="montant">12,5 %</td>', $pdf);
+        $this->assertStringNotContainsString('<th class="montant">Remise</th>', $rendre($sansRemise));
+
+        Livewire::test(ViewFacture::class, ['record' => $avecRemise->getRouteKey()])->assertSee('12,5 %');
     }
 }

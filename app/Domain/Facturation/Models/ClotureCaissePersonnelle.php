@@ -8,6 +8,7 @@ use Database\Factories\ClotureCaissePersonnelleFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * Relevé personnel des ventes d'UN vendeur sur une fenêtre de temps (depuis
@@ -20,9 +21,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * N'agrège PAS que les ventes aux particuliers (contrairement à
  * ClotureCaisse) : toutes les factures du vendeur comptent, l'objectif
- * étant de vérifier sa propre caisse, pas l'e-reporting. Ne touche jamais
- * aux factures elles-mêmes (pas de FK inverse) : une facture déjà incluse
- * ici reste pleinement éligible à la clôture officielle de la journée.
+ * étant de vérifier sa propre caisse, pas l'e-reporting. Les ventes
+ * comptées sont notées dans une table à part (voir factures()), jamais sur
+ * la facture elle-même : une facture déjà incluse ici reste pleinement
+ * éligible à la clôture officielle de la journée.
  */
 class ClotureCaissePersonnelle extends Model
 {
@@ -55,8 +57,12 @@ class ClotureCaissePersonnelle extends Model
         return $this->belongsTo(User::class, 'cree_par');
     }
 
-    public function derniereFacture(): BelongsTo
+    /**
+     * Les ventes comptées par cette fermeture -- chacune ne l'est jamais
+     * que par une seule (voir Facture::scopeNonFermeesParLeVendeur()).
+     */
+    public function factures(): BelongsToMany
     {
-        return $this->belongsTo(Facture::class, 'dernier_facture_id');
+        return $this->belongsToMany(Facture::class, 'clotures_caisse_personnelles_factures');
     }
 }

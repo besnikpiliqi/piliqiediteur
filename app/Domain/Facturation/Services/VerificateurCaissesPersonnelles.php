@@ -2,7 +2,6 @@
 
 namespace App\Domain\Facturation\Services;
 
-use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -43,19 +42,16 @@ class VerificateurCaissesPersonnelles
             ->values();
     }
 
+    /**
+     * Même règle que FermerSaCaisseAction : une vente annulée ne compte
+     * pas (elle ne bloque donc jamais la clôture), et une vente émise après
+     * une fermeture reste ouverte tant qu'une fermeture ne l'a pas comptée.
+     */
     private function aUneVenteNonFermee(User $vendeur, CarbonInterface $date): bool
     {
-        $derniereFermeture = ClotureCaissePersonnelle::query()
-            ->where('cree_par', $vendeur->id)
-            ->orderByDesc('id')
-            ->first();
-
-        $dernierIdInclus = $derniereFermeture?->dernier_facture_id ?? 0;
-
         return Facture::query()
-            ->where('cree_par', $vendeur->id)
+            ->nonFermeesParLeVendeur($vendeur->id)
             ->whereDate('date_emission', $date)
-            ->where('id', '>', $dernierIdInclus)
             ->exists();
     }
 }

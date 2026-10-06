@@ -2,7 +2,6 @@
 
 namespace App\Domain\Facturation\Actions;
 
-use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -35,17 +34,14 @@ class FermerSaCaisseAction
                 ->lockForUpdate()
                 ->first();
 
-            // Curseur par ID de facture, jamais par horodatage : deux
-            // fermetures peuvent tomber sur la même seconde (notamment en
-            // tests), un ID est lui strictement croissant et sans égalité
-            // possible, voir le docblock de la migration.
-            $dernierIdInclus = $derniere?->dernier_facture_id ?? 0;
             $depuis = $derniere?->cloturee_a ?? Carbon::now()->startOfDay();
 
+            // Les ventes jamais encore comptées, plutôt qu'un curseur sur
+            // l'ID de la dernière facture incluse : l'ID est attribué à la
+            // création du brouillon, et un brouillon créé avant une vente
+            // mais émis après la fermeture aurait été sauté pour toujours.
             $factures = Facture::query()
-                ->where('cree_par', $vendeur->getKey())
-                ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee])
-                ->where('id', '>', $dernierIdInclus)
+                ->nonFermeesParLeVendeur($vendeur->getKey())
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
@@ -57,17 +53,13 @@ class FermerSaCaisseAction
                 // fait foi, pas nécessairement l'utilisateur authentifié
                 // courant.
                 'cree_par' => $vendeur->getKey(),
-                // Avance le curseur jusqu'à la dernière facture trouvée,
-                // ou le conserve tel quel (potentiellement null, si
-                // jamais aucune facture n'a encore été émise) si rien de
-                // nouveau n'a été trouvé -- ne jamais écrire 0, qui
-                // violerait la contrainte de clé étrangère.
-                'dernier_facture_id' => $factures->isNotEmpty() ? $factures->last()->id : $derniere?->dernier_facture_id,
                 'periode_debut' => $depuis,
                 'cloturee_a' => now(),
                 'nombre_ventes' => $factures->count(),
                 ...$this->calculateur->cumuler($factures),
             ])->save();
+
+            $cloture->factures()->attach($factures->modelKeys());
 
             return $cloture;
         });

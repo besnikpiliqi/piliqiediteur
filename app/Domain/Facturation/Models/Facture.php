@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
@@ -72,6 +73,29 @@ class Facture extends Model
     public function creePar(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cree_par');
+    }
+
+    /**
+     * Fermetures de caisse personnelles qui ont compté cette vente (une
+     * seule au plus, voir ClotureCaissePersonnelle::factures()).
+     */
+    public function cloturesCaissePersonnelles(): BelongsToMany
+    {
+        return $this->belongsToMany(ClotureCaissePersonnelle::class, 'clotures_caisse_personnelles_factures');
+    }
+
+    /**
+     * Les ventes d'un vendeur pas encore comptées dans une fermeture de sa
+     * caisse : émises (ni brouillon, ni annulée) et jamais notées par une
+     * fermeture précédente -- quel que soit le moment où le brouillon a été
+     * créé, et donc son ID.
+     */
+    public function scopeNonFermeesParLeVendeur(Builder $query, int $vendeurId): Builder
+    {
+        return $query
+            ->where('cree_par', $vendeurId)
+            ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee])
+            ->whereDoesntHave('cloturesCaissePersonnelles');
     }
 
     public function devisOrigine(): BelongsTo

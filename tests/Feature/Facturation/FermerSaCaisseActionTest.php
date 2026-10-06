@@ -4,6 +4,7 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
@@ -103,5 +104,49 @@ class FermerSaCaisseActionTest extends TestCase
 
         $facture = Facture::query()->firstOrFail();
         $this->assertNull($facture->cloture_caisse_id, 'Un relevé personnel ne doit jamais marquer une facture comme déjà agrégée pour la clôture officielle.');
+    }
+
+    /**
+     * Le brouillon F1 est créé AVANT la vente F2 (donc un ID plus petit),
+     * mais émis APRÈS la fermeture qui a compté F2 : la fermeture suivante
+     * doit le compter -- l'ancien curseur sur l'ID le sautait pour toujours.
+     */
+    public function test_un_brouillon_emis_apres_une_fermeture_est_compte_par_la_suivante(): void
+    {
+        $vendeur = User::factory()->create();
+        $client = Client::factory()->create();
+        $this->actingAs($vendeur);
+
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $this->emettreFacturePour($vendeur, $client, 100);
+
+        $premiere = app(FermerSaCaisseAction::class)->handle($vendeur);
+        $this->assertSame(1, $premiere->nombre_ventes);
+        $this->assertSame('120.00', $premiere->total_ttc);
+
+        app(EmettreFactureAction::class)->handle($brouillon);
+
+        $seconde = app(FermerSaCaisseAction::class)->handle($vendeur);
+        $this->assertSame(1, $seconde->nombre_ventes);
+        $this->assertSame('60.00', $seconde->total_ttc);
+        $this->assertSame([$brouillon->id], $seconde->factures()->pluck('factures.id')->all());
+
+        $troisieme = app(FermerSaCaisseAction::class)->handle($vendeur);
+        $this->assertSame(0, $troisieme->nombre_ventes, 'Une vente déjà comptée ne doit jamais l\'être une seconde fois.');
+    }
+
+    public function test_une_vente_annulee_avant_la_fermeture_nest_pas_comptee(): void
+    {
+        $vendeur = User::factory()->create();
+        $client = Client::factory()->create();
+        $this->emettreFacturePour($vendeur, $client, 100);
+        app(AnnulerFactureAction::class)->handle(Facture::query()->firstOrFail(), 'Erreur de saisie');
+        $this->emettreFacturePour($vendeur, $client, 50);
+
+        $cloture = app(FermerSaCaisseAction::class)->handle($vendeur);
+
+        $this->assertSame(1, $cloture->nombre_ventes);
+        $this->assertSame('60.00', $cloture->total_ttc);
     }
 }

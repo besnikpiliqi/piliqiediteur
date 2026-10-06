@@ -260,7 +260,7 @@ class FactureResource extends Resource
                                 ->state(fn (Avoir $record) => $record->lignes)
                                 ->schema([
                                     TextEntry::make('description')->state(fn (LigneAvoir $record) => $record->description),
-                                    TextEntry::make('quantite')->label('Quantité')->state(fn (LigneAvoir $record) => $record->quantite),
+                                    TextEntry::make('quantite')->label('Quantité')->state(fn (LigneAvoir $record) => $record->quantite)->numeric(maxDecimalPlaces: 3),
                                     TextEntry::make('montant_ht')->label('Total HT')->state(fn (LigneAvoir $record) => $record->montant_ht)->money('EUR'),
                                     TextEntry::make('montant_tva')->label('TVA')->state(fn (LigneAvoir $record) => $record->montant_tva)->money('EUR'),
                                     TextEntry::make('montant_ttc')->label('Total TTC')->state(fn (LigneAvoir $record) => $record->montant_ttc)->money('EUR'),
@@ -287,7 +287,9 @@ class FactureResource extends Resource
             ->label('')
             ->schema([
                 TextEntry::make('description'),
-                TextEntry::make('quantite')->label('Quantité'),
+                // Entière ("2") ; seule une ancienne quantité à virgule
+                // (voir QuantiteArticles) garde ses décimales ("1,5").
+                TextEntry::make('quantite')->label('Quantité')->numeric(maxDecimalPlaces: 3),
                 TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
                 TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
                 TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),

@@ -3,6 +3,7 @@
 namespace App\Domain\Catalogue\Models;
 
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Casts\QuantiteArticles;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
@@ -71,8 +72,8 @@ class Produit extends Model
         'prix_vente_ht' => 'decimal:2',
         'prix_vente_ttc' => 'decimal:2',
         'taux_tva' => 'decimal:2',
-        'stock_quantite' => 'integer',
-        'seuil_alerte' => 'integer',
+        'stock_quantite' => QuantiteArticles::class,
+        'seuil_alerte' => QuantiteArticles::class,
         'suivi_stock' => 'boolean',
         'actif' => 'boolean',
     ];

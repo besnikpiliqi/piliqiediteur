@@ -6,6 +6,7 @@ use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Facturation\Casts\QuantiteArticles;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use Illuminate\Support\Facades\DB;
@@ -77,7 +78,7 @@ class CreerAvoirFournisseurAction
                 // Un retour partiel reprend les PU HT/TTC de la ligne achetée
                 // (article par article, voir CalculateurLigne) ; le dernier
                 // retour en prend le solde exact.
-                $resteSurLaLigne = $ligneAchat->quantite - $ligneAchat->quantiteDejaRetournee();
+                $resteSurLaLigne = QuantiteArticles::normaliser($ligneAchat->quantite - $ligneAchat->quantiteDejaRetournee());
 
                 $montants = $quantite === $resteSurLaLigne
                     ? $this->calculateurLigne->solder(

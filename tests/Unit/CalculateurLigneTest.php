@@ -488,6 +488,9 @@ class CalculateurLigneTest extends TestCase
             'taux au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->prixUnitaires(PrixReference::Ttc, 10, 150), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
             'remise négative' => [fn (CalculateurLigne $c) => $c->calculer(10, 12, 1, -10), 'La remise doit être comprise entre 0 et 100 %.'],
             'remise au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->calculer(10, 12, 1, 150), 'La remise doit être comprise entre 0 et 100 %.'],
+            'montant reçu absurde' => [fn (CalculateurLigne $c) => $c->soustraire('100000000000000000', 40), 'Montant hors limites.'],
+            'paiement absurde' => [fn (CalculateurLigne $c) => $c->arrondirAuCentime(1e17), 'Montant hors limites.'],
+            'prix x quantité qui déborde' => [fn (CalculateurLigne $c) => $c->calculer(9999999999.99, 9999999999.99, 999999), 'Montant hors limites.'],
         ];
     }
 

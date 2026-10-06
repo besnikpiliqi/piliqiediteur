@@ -7,6 +7,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\PaiementResource\Pages;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
@@ -75,7 +76,7 @@ class PaiementResource extends Resource
                     ->required(),
                 // live() et non live(onBlur: true) : le reste à allouer se
                 // met à jour pendant la saisie.
-                TextInput::make('montant')->label('Montant reçu')->numeric()->required()->saisieEnDirect(),
+                TextInput::make('montant')->label('Montant reçu')->numeric()->required()->maxValue(Caisse::MONTANT_MAXIMUM)->saisieEnDirect(),
                 TextInput::make('reference')->label('Référence'),
                 DatePicker::make('recu_le')
                     ->label('Reçu le')

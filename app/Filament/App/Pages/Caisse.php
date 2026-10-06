@@ -23,6 +23,7 @@ use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use InvalidArgumentException;
 use LogicException;
 
 /**
@@ -57,6 +58,11 @@ class Caisse extends Page implements HasForms
     protected static ?string $title = 'Caisse';
 
     protected static string $view = 'filament.app.pages.caisse';
+
+    /**
+     * Plus grand montant que les colonnes decimal(12,2) peuvent enregistrer.
+     */
+    public const MONTANT_MAXIMUM = 9999999999.99;
 
     /**
      * @var array<string, mixed>
@@ -142,6 +148,7 @@ class Caisse extends Page implements HasForms
                     // vente serait enregistrée payée avec un tiroir-caisse
                     // en manque.
                     ->minValue(fn (Get $get): float => $this->resteAPayer($get))
+                    ->maxValue(self::MONTANT_MAXIMUM)
                     ->validationMessages(['min' => 'Le montant reçu ne couvre pas le reste à payer.'])
                     // Et non live(onBlur: true) : la monnaie à rendre doit se
                     // mettre à jour pendant la saisie, pas seulement quand le
@@ -152,7 +159,11 @@ class Caisse extends Page implements HasForms
                     ->label('Monnaie à rendre')
                     ->visible(fn (Get $get) => $this->modePaiementSelectionne($get) === ModePaiement::Especes)
                     ->content(function (Get $get) {
-                        $rendu = app(CalculateurLigne::class)->soustraire($get('montant_recu'), $this->resteAPayer($get));
+                        try {
+                            $rendu = app(CalculateurLigne::class)->soustraire($get('montant_recu'), $this->resteAPayer($get));
+                        } catch (InvalidArgumentException) {
+                            return '—';
+                        }
 
                         return $this->formaterMontant(max(0, $rendu));
                     }),

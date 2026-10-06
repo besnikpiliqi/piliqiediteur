@@ -4,6 +4,7 @@ namespace App\Domain\Achats\Models;
 
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Casts\QuantiteArticles;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Illuminate\Database\Eloquent\Model;
@@ -34,7 +35,7 @@ class LigneAchat extends Model
     ];
 
     protected $casts = [
-        'quantite' => 'integer',
+        'quantite' => QuantiteArticles::class,
         'prix_unitaire_ht' => 'decimal:2',
         'prix_unitaire_ttc' => 'decimal:2',
         'prix_reference' => PrixReference::class,
@@ -66,11 +67,11 @@ class LigneAchat extends Model
      * existence légale : il ne doit jamais réduire la quantité restante
      * retournable (même logique que LigneFacture::quantiteDejaCreditee()).
      */
-    public function quantiteDejaRetournee(): int
+    public function quantiteDejaRetournee(): int|float
     {
-        return (int) $this->lignesAvoirFournisseur()
+        return QuantiteArticles::normaliser($this->lignesAvoirFournisseur()
             ->whereHas('avoirFournisseur', fn ($query) => $query->where('statut', StatutAvoirFournisseur::Emise))
-            ->sum('quantite');
+            ->sum('quantite'));
     }
 
     /**
@@ -85,9 +86,9 @@ class LigneAchat extends Model
      * mécaniquement plus être compté dans ce qui reste disponible au
      * retour.
      */
-    public function quantiteRetournableRestante(): int
+    public function quantiteRetournableRestante(): int|float
     {
-        $resteSurLaLigne = $this->quantite - $this->quantiteDejaRetournee();
+        $resteSurLaLigne = QuantiteArticles::normaliser($this->quantite - $this->quantiteDejaRetournee());
 
         // Le plafond par stock disponible n'a de sens que pour un produit
         // dont le stock est effectivement suivi (voir StockLedgerService) :

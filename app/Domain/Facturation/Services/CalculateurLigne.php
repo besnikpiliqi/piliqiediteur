@@ -20,9 +20,11 @@ use InvalidArgumentException;
  * 3. Les totaux du document somment séparément les HT, les TVA et les TTC
  *    des lignes (totaliser()).
  *
- * Tout le calcul se fait en entiers (centimes, quantité en nombre entier
- * d'articles, centièmes de point de taux), jamais en flottant
- * intermédiaire : un
+ * Tout le calcul se fait en entiers (centimes, millièmes de quantité,
+ * centièmes de point de taux), jamais en flottant intermédiaire. Une
+ * quantité est un nombre entier d'articles ; seule une ancienne quantité à
+ * virgule, enregistrée avant le passage aux entiers (voir
+ * QuantiteArticles), a des millièmes -- et reste calculée exactement. Un
  * flottant comme 8.325 vaut réellement ~8.32499999999999982..., et un seul
  * centime d'écart avec le montant transmis à l'administration (API PDP)
  * suffit à faire rejeter une facture.
@@ -30,22 +32,30 @@ use InvalidArgumentException;
 class CalculateurLigne
 {
     /**
+     * Bien au-delà de tout montant réel (les colonnes s'arrêtent à
+     * 9 999 999 999,99 €), mais assez bas pour que ni la conversion en
+     * centimes ni le produit prix x quantité ne débordent jamais.
+     */
+    private const UNITES_MAXIMUM = 1e15;
+
+    /**
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
      */
     public function calculer(
         float $prixUnitaireHt,
         float $prixUnitaireTtc,
-        int $quantite,
+        int|float $quantite,
         float $remisePourcentage = 0.0,
     ): array {
         if ($remisePourcentage < 0 || $remisePourcentage > 100) {
             throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
         }
 
+        $quantiteMilliemes = $this->versUnites($quantite, 1000);
         $remiseCentiemes = $this->versUnites($remisePourcentage, 100);
 
-        $montantHtCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireHt, 100), $quantite, $remiseCentiemes);
-        $montantTtcCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireTtc, 100), $quantite, $remiseCentiemes);
+        $montantHtCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireHt, 100), $quantiteMilliemes, $remiseCentiemes);
+        $montantTtcCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireTtc, 100), $quantiteMilliemes, $remiseCentiemes);
 
         return [
             'montant_ht' => $this->centimesVersMontant($montantHtCentimes),
@@ -215,13 +225,20 @@ class CalculateurLigne
     }
 
     /**
-     * Prix unitaire x quantité, remise déduite, en centimes. La quantité
-     * étant un nombre entier d'articles, le montant brut tombe toujours
-     * pile au centime : seule la remise s'arrondit.
+     * Prix unitaire x quantité, remise déduite, en centimes. Pour un nombre
+     * entier d'articles, le montant brut tombe toujours pile au centime :
+     * seule la remise s'arrondit.
      */
-    private function montantNetCentimes(int $prixUnitaireCentimes, int $quantite, int $remiseCentiemes): int
+    private function montantNetCentimes(int $prixUnitaireCentimes, int $quantiteMilliemes, int $remiseCentiemes): int
     {
-        $montantBrutCentimes = $prixUnitaireCentimes * $quantite;
+        $montantBrutMilliemes = $prixUnitaireCentimes * $quantiteMilliemes;
+
+        // Une multiplication d'entiers qui déborde devient un flottant.
+        if (! is_int($montantBrutMilliemes)) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        $montantBrutCentimes = $this->diviserArrondi($montantBrutMilliemes, 1000);
 
         return $montantBrutCentimes - $this->diviserArrondi($montantBrutCentimes * $remiseCentiemes, 10000);
     }
@@ -230,10 +247,20 @@ class CalculateurLigne
      * Le pré-arrondi à 6 décimales efface le bruit binaire du flottant
      * (8.325 * 100 = 832.4999999999999) avant l'arrondi final, sans
      * dépendre de la façon dont round() traite lui-même ce cas limite.
+     *
+     * Un montant absurde (des milliards de milliards) est refusé plutôt
+     * que converti : au-delà, l'entier déborderait en silence (PHP 8.3) ou
+     * lèverait une erreur (PHP 8.5).
      */
     private function versUnites(float $valeur, int $facteur): int
     {
-        return (int) round(round($valeur * $facteur, 6));
+        $unites = round(round($valeur * $facteur, 6));
+
+        if (! is_finite($unites) || abs($unites) >= self::UNITES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return (int) $unites;
     }
 
     /**

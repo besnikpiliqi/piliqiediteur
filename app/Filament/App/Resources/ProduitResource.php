@@ -17,6 +17,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Number;
 use InvalidArgumentException;
 
 class ProduitResource extends Resource
@@ -173,7 +174,7 @@ class ProduitResource extends Resource
                 Tables\Columns\TextColumn::make('stock_quantite')
                     ->label('Stock')
                     ->formatStateUsing(fn (Produit $record) => $record->suivi_stock
-                        ? (string) $record->stock_quantite
+                        ? Number::format($record->stock_quantite, maxPrecision: 3)
                         : '—')
                     ->badge()
                     ->color(fn (Produit $record) => ! $record->suivi_stock

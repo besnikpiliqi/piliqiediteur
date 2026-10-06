@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -12,9 +13,13 @@ use Illuminate\Support\Facades\Schema;
  * passer 1,5 article.
  *
  * Aucune quantité n'est jamais arrondie ici : une ligne de facture émise
- * est un document légal, la modifier en silence fausserait son montant.
- * S'il en existe une à virgule, la migration s'arrête AVANT toute
- * modification et dit laquelle.
+ * est un document légal, la modifier fausserait son montant. Une colonne
+ * qui contient une ancienne quantité à virgule (permise avant ce
+ * changement) reste donc en décimal, et se relit exactement (voir
+ * QuantiteArticles) -- sans jamais bloquer cette migration ni les
+ * suivantes : il n'existe aucun moyen légal de "corriger" une facture
+ * émise. Les nouvelles quantités, elles, sont toujours entières (voir
+ * QuantiteEntiere).
  *
  * Jamais dans une transaction : sous SQLite, changer le type d'une colonne
  * reconstruit la table, et Laravel ne coupe les clés étrangères pendant
@@ -26,9 +31,17 @@ return new class extends Migration
 {
     public function up(): void
     {
-        $this->verifierQueToutesLesQuantitesSontEntieres();
-
         foreach ($this->colonnes() as $table => $colonnes) {
+            $colonnes = array_filter(
+                $colonnes,
+                fn (string $colonne): bool => $this->neContientQueDesEntiers($table, $colonne),
+                ARRAY_FILTER_USE_KEY,
+            );
+
+            if ($colonnes === []) {
+                continue;
+            }
+
             Schema::table($table, function (Blueprint $blueprint) use ($colonnes) {
                 foreach ($colonnes as $colonne => $parDefaut) {
                     $definition = $blueprint->integer($colonne);
@@ -60,30 +73,20 @@ return new class extends Migration
         }
     }
 
-    private function verifierQueToutesLesQuantitesSontEntieres(): void
+    private function neContientQueDesEntiers(string $table, string $colonne): bool
     {
-        $quantitesAVirgule = [];
+        $identifiantsAVirgule = DB::table($table)
+            ->whereRaw("{$colonne} <> ROUND({$colonne})")
+            ->orderBy('id')
+            ->pluck('id');
 
-        foreach ($this->colonnes() as $table => $colonnes) {
-            foreach (array_keys($colonnes) as $colonne) {
-                $identifiants = DB::table($table)
-                    ->whereRaw("{$colonne} <> ROUND({$colonne})")
-                    ->orderBy('id')
-                    ->pluck('id');
-
-                if ($identifiants->isNotEmpty()) {
-                    $quantitesAVirgule[] = "{$table}.{$colonne} (id {$identifiants->implode(', ')})";
-                }
-            }
+        if ($identifiantsAVirgule->isEmpty()) {
+            return true;
         }
 
-        if ($quantitesAVirgule !== []) {
-            throw new RuntimeException(
-                'Une quantité doit être un nombre entier d\'articles, mais ces lignes ont une quantité à virgule : '
-                .implode(' ; ', $quantitesAVirgule)
-                .'. Rien n\'a été modifié : corrigez ces quantités puis relancez la migration.'
-            );
-        }
+        Log::warning("{$table}.{$colonne} reste en décimal : des quantités à virgule y sont déjà enregistrées (id {$identifiantsAVirgule->implode(', ')}). Elles sont conservées telles quelles ; toute nouvelle quantité sera entière.");
+
+        return false;
     }
 
     /**

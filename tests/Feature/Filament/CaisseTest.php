@@ -330,4 +330,30 @@ class CaisseTest extends TestCase
             ->assertSee('66,66 € HT + 13,34 € de TVA')
             ->assertSee('Total HT 66,66 € · TVA 13,34 € · Total TTC 80,00 €');
     }
+
+    /**
+     * Un montant reçu absurde (des milliards de milliards) ne fait jamais
+     * planter la caisse pendant la frappe, et il est refusé à l'encaissement.
+     */
+    public function test_un_montant_recu_absurde_ne_fait_pas_planter_la_caisse(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class);
+        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.produit_id", $produit->id)
+            ->set('data.montant_recu', '100000000000000000')
+            ->assertSuccessful()
+            ->call('encaisser')
+            ->assertHasFormErrors(['montant_recu' => 'max']);
+
+        $this->assertSame(0, Facture::query()->count());
+    }
 }

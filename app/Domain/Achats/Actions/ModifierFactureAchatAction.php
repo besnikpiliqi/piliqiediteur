@@ -77,11 +77,9 @@ class ModifierFactureAchatAction
                 $prix = $this->resolveurPrix->resoudre($donnees, PrixReference::Ht, $tauxTva, (float) $produit->prix_achat_ht);
 
                 $montants = $this->calculateurLigne->calculer(
-                    $prix['prix_reference'],
                     $prix['prix_unitaire_ht'],
                     $prix['prix_unitaire_ttc'],
                     $quantite,
-                    $tauxTva,
                     $remise,
                 );
 

@@ -81,18 +81,29 @@ class ProduitResource extends Resource
                 ->prefix('€')
                 ->required()
                 ->saisieEnDirect()
-                ->helperText(fn (Get $get) => blank($get('prix_vente_ttc'))
-                    ? null
-                    : 'Soit '.number_format(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc(
-                        (float) $get('prix_vente_ttc'),
-                        (float) ($get('taux_tva') ?? 20),
-                    ), 2, ',', ' ').' € HT'),
+                ->helperText(fn (Get $get) => self::detailPrixDeVente($get)),
             TextInput::make('taux_tva')
                 ->label('Taux de TVA (%)')
                 ->numeric()
                 ->default(20)
                 ->saisieEnDirect(),
         ];
+    }
+
+    /**
+     * "Soit 33,33 € HT + 6,67 € de TVA" : le détail exact qu'une ligne de
+     * vente reprendra pour cet article (voir CalculateurLigne).
+     */
+    private static function detailPrixDeVente(Get $get): ?string
+    {
+        if (blank($get('prix_vente_ttc'))) {
+            return null;
+        }
+
+        $prixTtc = (float) $get('prix_vente_ttc');
+        $prixHt = app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc($prixTtc, (float) ($get('taux_tva') ?? 20));
+
+        return 'Soit '.number_format($prixHt, 2, ',', ' ').' € HT + '.number_format($prixTtc - $prixHt, 2, ',', ' ').' € de TVA';
     }
 
     public static function form(Form $form): Form

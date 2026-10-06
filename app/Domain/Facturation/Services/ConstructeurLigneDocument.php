@@ -59,11 +59,9 @@ class ConstructeurLigneDocument
         $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
 
         $montants = $this->calculateur->calculer(
-            $prix['prix_reference'],
             $prix['prix_unitaire_ht'],
             $prix['prix_unitaire_ttc'],
             $quantite,
-            $tauxTva,
             $remise,
         );
 

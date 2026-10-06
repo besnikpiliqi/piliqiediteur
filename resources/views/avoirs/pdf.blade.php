@@ -77,8 +77,9 @@
                 <th class="montant">Qté</th>
                 <th class="montant">PU HT</th>
                 <th class="montant">PU TTC</th>
-                <th class="montant">TVA</th>
+                <th class="montant">Taux TVA</th>
                 <th class="montant">Total HT</th>
+                <th class="montant">TVA</th>
                 <th class="montant">Total TTC</th>
             </tr>
         </thead>
@@ -92,7 +93,31 @@
                     <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ttc, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ rtrim(rtrim($ligne->taux_tva, '0'), '.') }} %</td>
                     <td class="montant">{{ number_format((float) $ligne->montant_ht, 2, ',', ' ') }} €</td>
+                    <td class="montant">{{ number_format((float) $ligne->montant_tva, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ number_format((float) $ligne->montant_ttc, 2, ',', ' ') }} €</td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+
+    {{-- Récapitulatif par taux : mention obligatoire dès qu'un document
+         mélange plusieurs taux de TVA (voir VentileLaTvaParTaux). --}}
+    <table class="lignes">
+        <thead>
+            <tr>
+                <th>Taux TVA</th>
+                <th class="montant">Base HT</th>
+                <th class="montant">TVA</th>
+                <th class="montant">Total TTC</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($avoir->ventilation_tva as $taux)
+                <tr>
+                    <td>{{ rtrim(rtrim($taux['taux_tva'], '0'), '.') }} %</td>
+                    <td class="montant">{{ number_format($taux['montant_ht'], 2, ',', ' ') }} €</td>
+                    <td class="montant">{{ number_format($taux['montant_tva'], 2, ',', ' ') }} €</td>
+                    <td class="montant">{{ number_format($taux['montant_ttc'], 2, ',', ' ') }} €</td>
                 </tr>
             @endforeach
         </tbody>

@@ -122,11 +122,9 @@ trait SaisitLesPrixDeLigne
         }
 
         return $calculateur->calculer(
-            $prix['prix_reference'],
             $prix['prix_unitaire_ht'],
             $prix['prix_unitaire_ttc'],
             (float) ($ligne['quantite'] ?? 0),
-            $tauxTva,
             (float) ($ligne['remise_pourcentage'] ?? 0),
         );
     }

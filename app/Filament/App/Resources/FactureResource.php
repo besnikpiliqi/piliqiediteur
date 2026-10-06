@@ -139,16 +139,19 @@ class FactureResource extends Resource
                         TextEntry::make('quantite'),
                         TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
                         TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
-                        TextEntry::make('taux_tva')->label('TVA')->suffix(' %'),
+                        TextEntry::make('taux_tva')->label('Taux TVA')->suffix(' %'),
+                        TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
+                        TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
                         TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
                     ])
-                    ->columns(6),
+                    ->columns(8),
             ]),
 
             InfolistSection::make('Totaux et règlement')->schema([
                 TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
                 TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+                self::ventilationTvaEntry(),
                 // Un avoir n'est jamais remboursé par ce logiciel : son
                 // crédit réduit le solde dû exactement comme un
                 // encaissement (voir Facture::montantRestant()), c'est
@@ -262,6 +265,24 @@ class FactureResource extends Resource
                         ->columns(3),
                 ]),
         ]);
+    }
+
+    /**
+     * Récapitulatif par taux (voir VentileLaTvaParTaux), partagé par les
+     * fiches facture, avoir et facture d'achat.
+     */
+    public static function ventilationTvaEntry(): RepeatableEntry
+    {
+        return RepeatableEntry::make('ventilation_tva')
+            ->label('TVA par taux')
+            ->columnSpanFull()
+            ->schema([
+                TextEntry::make('taux_tva')->label('Taux')->suffix(' %'),
+                TextEntry::make('montant_ht')->label('Base HT')->money('EUR'),
+                TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
+                TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
+            ])
+            ->columns(4);
     }
 
     public static function table(Table $table): Table

@@ -7,11 +7,10 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use Tests\TestCase;
 
 /**
- * Tout le calcul se fait en centimes entiers (voir le commentaire de classe
- * de CalculateurLigne) : un flottant comme 8.33 n'a pas de représentation
- * binaire exacte, donc une somme de lignes arrondies en flottant peut
- * dériver d'un centime par rapport à la somme réellement affichée ligne par
- * ligne -- inacceptable une fois transmis à l'administration (API PDP).
+ * Calcul article par article (voir le commentaire de classe de
+ * CalculateurLigne) : chaque article a son PU HT, sa TVA et son PU TTC au
+ * centime, et chaque ligne multiplie séparément le HT et le TTC par la
+ * quantité. Tout se fait en centimes entiers, jamais en flottant.
  */
 class CalculateurLigneTest extends TestCase
 {
@@ -21,102 +20,92 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * Le prix réellement saisi fait foi, quel que soit le client : un PU TTC
-     * saisi donne un TTC exact, un PU HT saisi donne un HT exact (et la TVA
-     * exacte qu'un professionnel récupère).
+     * 40,00 € TTC = 33,33 € HT + 6,67 € de TVA ; 8,33 € HT = 8,33 € HT +
+     * 1,67 € de TVA = 10,00 € TTC. Le prix saisi reste tel quel.
      */
-    public function test_calculer_part_toujours_du_prix_saisi(): void
-    {
-        $depuisTtc = $this->calculateur()->calculer(PrixReference::Ttc, prixUnitaireHt: 33.33, prixUnitaireTtc: 40, quantite: 2, tauxTva: 20);
-        $depuisHt = $this->calculateur()->calculer(PrixReference::Ht, prixUnitaireHt: 8.33, prixUnitaireTtc: 10, quantite: 3, tauxTva: 20);
-
-        $this->assertSame(['montant_ht' => 66.67, 'montant_tva' => 13.33, 'montant_ttc' => 80.0], $depuisTtc);
-        $this->assertSame(['montant_ht' => 24.99, 'montant_tva' => 5.0, 'montant_ttc' => 29.99], $depuisHt);
-    }
-
-    public function test_prix_unitaires_garde_le_prix_saisi_et_convertit_lautre(): void
+    public function test_un_article_porte_son_ht_sa_tva_et_son_ttc_au_centime(): void
     {
         $this->assertSame(['prix_unitaire_ht' => 33.33, 'prix_unitaire_ttc' => 40.0], $this->calculateur()->prixUnitaires(PrixReference::Ttc, 40, 20));
         $this->assertSame(['prix_unitaire_ht' => 8.33, 'prix_unitaire_ttc' => 10.0], $this->calculateur()->prixUnitaires(PrixReference::Ht, 8.33, 20));
     }
 
     /**
-     * Deux retours d'un article sur une ligne de 2 à 40 € TTC : recalculés
-     * chacun, ils créditeraient 66,66 € HT et 13,34 € de TVA au lieu des
-     * 66,67 € / 13,33 € facturés. Le dernier retour prend donc le solde.
+     * Chaque montant de la ligne se vérifie à la main : PU x quantité, et
+     * HT + TVA = TTC.
+     */
+    public function test_une_ligne_multiplie_separement_le_ht_et_le_ttc_par_la_quantite(): void
+    {
+        $this->assertSame(['montant_ht' => 66.66, 'montant_tva' => 13.34, 'montant_ttc' => 80.0], $this->calculateur()->calculer(33.33, 40, quantite: 2));
+        $this->assertSame(['montant_ht' => 24.99, 'montant_tva' => 5.01, 'montant_ttc' => 30.0], $this->calculateur()->calculer(8.33, 10, quantite: 3));
+    }
+
+    /**
+     * Facture signalée par le magasin : 2 x 40 € TTC (20 %), 10 € sans TVA
+     * et 10 € TTC (20 %). Le total HT est la somme visible des PU HT x
+     * quantité (84,99 €), et HT + TVA = TTC.
+     */
+    public function test_la_facture_du_magasin_totalise_84_99_ht_15_01_tva_100_ttc(): void
+    {
+        $calculateur = $this->calculateur();
+
+        $totaux = $calculateur->totaliser([
+            $calculateur->calculer(33.33, 40, 2),
+            $calculateur->calculer(10, 10, 1),
+            $calculateur->calculer(8.33, 10, 1),
+        ]);
+
+        $this->assertSame(['total_ht' => 84.99, 'total_tva' => 15.01, 'total_ttc' => 100.0], $totaux);
+    }
+
+    /**
+     * Rendre 1 article puis le second d'une ligne de 2 crédite exactement
+     * la ligne vendue, HT, TVA et TTC compris.
+     */
+    public function test_deux_retours_dun_article_retombent_exactement_sur_la_ligne_vendue(): void
+    {
+        $ligne = $this->calculateur()->calculer(33.33, 40, 2);
+        $retour = $this->calculateur()->calculer(33.33, 40, 1);
+
+        $this->assertSame(['montant_ht' => 33.33, 'montant_tva' => 6.67, 'montant_ttc' => 40.0], $retour);
+        $this->assertSame(
+            ['total_ht' => $ligne['montant_ht'], 'total_tva' => $ligne['montant_tva'], 'total_ttc' => $ligne['montant_ttc']],
+            $this->calculateur()->totaliser([$retour, $retour]),
+        );
+    }
+
+    /**
+     * Quantité fractionnaire : 3 x 3,33 € HT = 9,99 €, mais 1,5 x 3,33 € =
+     * 4,995 -> 5,00 € ; recalculer deux retours de 1,5 créditerait 10,00 €
+     * HT. Le dernier retour prend donc le solde exact de la ligne.
      */
     public function test_le_solde_dune_ligne_retombe_exactement_sur_la_ligne_facturee(): void
     {
-        $ligne = $this->calculateur()->calculerDepuisTtc(prixUnitaireTtc: 40, quantite: 2, tauxTva: 20);
-        $premierRetour = $this->calculateur()->calculerDepuisTtc(prixUnitaireTtc: 40, quantite: 1, tauxTva: 20);
+        $ligne = $this->calculateur()->calculer(3.33, 4, 3);
+        $premierRetour = $this->calculateur()->calculer(3.33, 4, 1.5);
 
         $solde = $this->calculateur()->solder($ligne, [$premierRetour]);
 
-        $this->assertSame(['montant_ht' => 33.34, 'montant_tva' => 6.66, 'montant_ttc' => 40.0], $solde);
-        $this->assertSame(
-            ['total_ht' => 66.67, 'total_tva' => 13.33, 'total_ttc' => 80.0],
-            $this->calculateur()->totaliser([$premierRetour, $solde]),
-        );
+        $this->assertSame(['montant_ht' => 9.99, 'montant_tva' => 2.01, 'montant_ttc' => 12.0], $ligne);
+        $this->assertSame(['montant_ht' => 5.0, 'montant_tva' => 1.0, 'montant_ttc' => 6.0], $premierRetour);
+        $this->assertSame(['montant_ht' => 4.99, 'montant_tva' => 1.01, 'montant_ttc' => 6.0], $solde);
     }
 
-    /**
-     * Cas réel signalé par un magasin : un article à 40 € TTC vendu par 2
-     * affichait 79,99 € (33,33 € HT x 2 x 1,20). Le TTC faisant référence,
-     * le total est 40 x 2 = 80,00 €, le HT n'étant déduit qu'une fois, du
-     * total de la ligne.
-     */
-    public function test_40_euros_ttc_vendus_par_2_totalisent_exactement_80_euros(): void
+    public function test_remise_et_quantite_fractionnaire_restent_exactes_au_centime(): void
     {
-        $ligne = $this->calculateur()->calculerDepuisTtc(prixUnitaireTtc: 40, quantite: 2, tauxTva: 20);
+        $ligne = $this->calculateur()->calculer(8.33, 9.99, quantite: 1.5, remisePourcentage: 10);
 
-        $this->assertSame(80.0, $ligne['montant_ttc']);
-        $this->assertSame(66.67, $ligne['montant_ht']);
-        $this->assertSame(13.33, $ligne['montant_tva']);
-    }
-
-    /**
-     * Un retour partiel (1 article sur 2) crédite exactement la moitié de
-     * la ligne d'origine : deux retours successifs d'un article retombent
-     * pile sur les 80,00 € vendus, jamais sur 79,99 € ou 80,01 €.
-     */
-    public function test_deux_retours_partiels_retombent_exactement_sur_la_ligne_vendue(): void
-    {
-        $retour = $this->calculateur()->calculerDepuisTtc(prixUnitaireTtc: 40, quantite: 1, tauxTva: 20);
-
-        $this->assertSame(40.0, $retour['montant_ttc']);
-        $this->assertSame(80.0, $this->calculateur()->totaliser([$retour, $retour])['total_ttc']);
-    }
-
-    public function test_remise_et_quantite_fractionnaire_en_ttc_restent_exactes_au_centime(): void
-    {
-        $ligne = $this->calculateur()->calculerDepuisTtc(
-            prixUnitaireTtc: 9.99,
-            quantite: 1.5,
-            tauxTva: 20,
-            remisePourcentage: 10,
-        );
-
-        // 9,99 x 1,5 = 14,985 -> 14,99 ; remise 10 % = 1,50 -> 13,49 TTC ;
-        // HT = 13,49 / 1,20 = 11,2416... -> 11,24 ; TVA = 13,49 - 11,24.
-        $this->assertSame(13.49, $ligne['montant_ttc']);
-        $this->assertSame(11.24, $ligne['montant_ht']);
-        $this->assertSame(2.25, $ligne['montant_tva']);
+        // HT : 8,33 x 1,5 = 12,495 -> 12,50, remise 1,25 -> 11,25 ;
+        // TTC : 9,99 x 1,5 = 14,985 -> 14,99, remise 1,50 -> 13,49.
+        $this->assertSame(['montant_ht' => 11.25, 'montant_tva' => 2.24, 'montant_ttc' => 13.49], $ligne);
     }
 
     public function test_un_taux_reduit_decimal_reste_exact(): void
     {
-        $ligne = $this->calculateur()->calculerDepuisTtc(prixUnitaireTtc: 10, quantite: 1, tauxTva: 5.5);
+        $prix = $this->calculateur()->prixUnitaires(PrixReference::Ttc, 10, 5.5);
 
         // 10,00 / 1,055 = 9,4786... -> 9,48 HT.
-        $this->assertSame(10.0, $ligne['montant_ttc']);
-        $this->assertSame(9.48, $ligne['montant_ht']);
-        $this->assertSame(0.52, $ligne['montant_tva']);
-    }
-
-    public function test_le_pu_ht_affiche_est_la_conversion_au_centime_du_pu_ttc(): void
-    {
-        $this->assertSame(33.33, $this->calculateur()->prixUnitaireHtDepuisTtc(40, 20));
-        $this->assertSame(40.0, $this->calculateur()->prixUnitaireTtcDepuisHt(33.33, 20));
+        $this->assertSame(['prix_unitaire_ht' => 9.48, 'prix_unitaire_ttc' => 10.0], $prix);
+        $this->assertSame(['montant_ht' => 9.48, 'montant_tva' => 0.52, 'montant_ttc' => 10.0], $this->calculateur()->calculer(9.48, 10, 1));
     }
 
     /**
@@ -128,52 +117,33 @@ class CalculateurLigneTest extends TestCase
         $this->assertSame(8.33, $this->calculateur()->arrondirAuCentime(8.325));
     }
 
-    /**
-     * Cas réel ayant révélé le bug : deux lignes à 8,33 € HT (TVA 20 %)
-     * affichent chacune 10,00 € TTC, donc un total de 20,00 €. Avant la
-     * correction, un calcul en flottant non arrondi par ligne (8.33 * 1.2 =
-     * 9.996 pour chaque ligne) sommait à 19,992 €, affiché "19,99 €" --
-     * un centime de moins que la somme visible des deux lignes.
-     */
     public function test_deux_lignes_a_8_33_ht_totalisent_exactement_20_euros(): void
     {
-        $ligne = $this->calculateur()->calculerDepuisHt(prixUnitaireHt: 8.33, quantite: 1, tauxTva: 20);
+        $ligne = $this->calculateur()->calculer(8.33, 10, 1);
 
-        $this->assertSame(10.0, $ligne['montant_ttc']);
-
-        $total = $this->calculateur()->totaliser([$ligne, $ligne]);
-
-        $this->assertSame(20.0, $total['total_ttc']);
+        $this->assertSame(['montant_ht' => 8.33, 'montant_tva' => 1.67, 'montant_ttc' => 10.0], $ligne);
+        $this->assertSame(20.0, $this->calculateur()->totaliser([$ligne, $ligne])['total_ttc']);
     }
 
-    public function test_une_remise_en_pourcentage_est_appliquee_avant_la_tva(): void
+    public function test_une_remise_en_pourcentage_sapplique_au_ht_comme_au_ttc(): void
     {
-        $ligne = $this->calculateur()->calculerDepuisHt(
-            prixUnitaireHt: 100,
-            quantite: 1,
-            tauxTva: 20,
-            remisePourcentage: 10,
-        );
+        $ligne = $this->calculateur()->calculer(100, 120, quantite: 1, remisePourcentage: 10);
 
-        $this->assertSame(90.0, $ligne['montant_ht']);
-        $this->assertSame(18.0, $ligne['montant_tva']);
-        $this->assertSame(108.0, $ligne['montant_ttc']);
+        $this->assertSame(['montant_ht' => 90.0, 'montant_tva' => 18.0, 'montant_ttc' => 108.0], $ligne);
     }
 
     public function test_une_quantite_fractionnaire_reste_exacte_au_centime(): void
     {
-        $ligne = $this->calculateur()->calculerDepuisHt(prixUnitaireHt: 4.99, quantite: 1.5, tauxTva: 20);
+        $prix = $this->calculateur()->prixUnitaires(PrixReference::Ht, 4.99, 20);
+        $ligne = $this->calculateur()->calculer($prix['prix_unitaire_ht'], $prix['prix_unitaire_ttc'], 1.5);
 
-        // 4.99 * 1.5 = 7.485 -> arrondi en centimes entiers à 7.49 (jamais
-        // de round() sur un flottant intermédiaire non garanti exact).
-        $this->assertSame(7.49, $ligne['montant_ht']);
-        $this->assertSame(1.5, $ligne['montant_tva']);
-        $this->assertSame(8.99, $ligne['montant_ttc']);
+        // 4,99 x 1,5 = 7,485 -> 7,49 HT ; 5,99 x 1,5 = 8,985 -> 8,99 TTC.
+        $this->assertSame(['montant_ht' => 7.49, 'montant_tva' => 1.5, 'montant_ttc' => 8.99], $ligne);
     }
 
     public function test_totaliser_ne_derive_jamais_meme_sur_un_grand_nombre_de_lignes(): void
     {
-        $ligne = $this->calculateur()->calculerDepuisHt(prixUnitaireHt: 0.1, quantite: 1, tauxTva: 0);
+        $ligne = $this->calculateur()->calculer(0.1, 0.1, 1);
 
         $total = $this->calculateur()->totaliser(array_fill(0, 1000, $ligne));
 

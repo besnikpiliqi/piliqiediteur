@@ -191,9 +191,9 @@ class AvoirFournisseurActionsTest extends TestCase
     }
 
     /**
-     * Ticket d'achat saisi en TTC (2 x 40 € TTC = 80,00 €) : le dernier
-     * retour en prend le solde exact, pour que HT, TVA et TTC retournés
-     * retombent pile sur la ligne achetée (66,67 € / 13,33 € / 80,00 €).
+     * Ticket d'achat saisi en TTC (2 x 40 € TTC = 80,00 €) : HT, TVA et TTC
+     * retournés retombent pile sur la ligne achetée (66,66 € / 13,34 € /
+     * 80,00 €), le dernier retour en prenant le solde exact.
      */
     public function test_le_dernier_retour_fournisseur_dune_ligne_en_credite_le_solde_exact(): void
     {
@@ -204,7 +204,7 @@ class AvoirFournisseurActionsTest extends TestCase
         ]));
         $ligneAchat = $factureAchat->lignes->firstOrFail();
 
-        $this->assertSame(['66.67', '13.33', '80.00'], [$factureAchat->total_ht, $factureAchat->total_tva, $factureAchat->total_ttc]);
+        $this->assertSame(['66.66', '13.34', '80.00'], [$factureAchat->total_ht, $factureAchat->total_tva, $factureAchat->total_ttc]);
 
         $premier = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
             ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1],
@@ -214,6 +214,6 @@ class AvoirFournisseurActionsTest extends TestCase
         ]);
 
         $this->assertSame(['33.33', '6.67', '40.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
-        $this->assertSame(['33.34', '6.66', '40.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+        $this->assertSame(['33.33', '6.67', '40.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
     }
 }

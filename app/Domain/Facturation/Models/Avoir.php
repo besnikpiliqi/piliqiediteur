@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
@@ -27,7 +28,7 @@ use Illuminate\Support\Collection;
 class Avoir extends Model
 {
     /** @use HasFactory<AvoirFactory> */
-    use BelongsToMagasin, HasFactory;
+    use BelongsToMagasin, HasFactory, VentileLaTvaParTaux;
 
     protected $table = 'avoirs';
 

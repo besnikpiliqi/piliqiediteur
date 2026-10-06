@@ -129,7 +129,7 @@ class ProduitResourceTest extends TestCase
         $this->assertSame('40.00', $ligne->prix_unitaire_ttc);
         $this->assertSame('33.33', $ligne->prix_unitaire_ht);
         $this->assertSame('80.00', $facture->total_ttc);
-        $this->assertSame('66.67', $facture->total_ht);
-        $this->assertSame('13.33', $facture->total_tva);
+        $this->assertSame('66.66', $facture->total_ht);
+        $this->assertSame('13.34', $facture->total_tva);
     }
 }

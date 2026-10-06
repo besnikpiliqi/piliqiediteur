@@ -409,12 +409,62 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * Le prix réellement saisi fait foi, quel que soit le client : un PU HT
-     * tapé (8,33 € x 3) donne exactement 24,99 € HT, là où passer par un PU
-     * TTC arrondi (10,00 €) donnait 25,00 € HT. Retaper ensuite un PU TTC
-     * fait de nouveau foi au TTC.
+     * Facture signalée par le magasin : 2 écrans à 40 € TTC (20 %), un câble
+     * à 10 € sans TVA, une coque à 10 € TTC (20 %). Chaque article a son HT,
+     * sa TVA et son TTC, et chaque ligne les multiplie par la quantité : le
+     * total HT est la somme visible des lignes (84,99 €, pas 85,00 €), la
+     * TVA la somme des TVA des lignes (15,01 €), et HT + TVA = TTC. La fiche
+     * et le PDF montrent le HT et la TVA de chaque ligne, et le récapitulatif
+     * par taux.
      */
-    public function test_le_dernier_prix_saisi_sur_une_ligne_fait_foi_pour_son_calcul(): void
+    public function test_la_facture_du_magasin_totalise_84_99_ht_et_le_montre_ligne_par_ligne(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $client = Client::factory()->create();
+        $ecran = Produit::factory()->create(['nom' => 'Ecran Iphone 18 Pro Max', 'prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['nom' => 'Cable ip 17', 'prix_vente_ttc' => 10, 'taux_tva' => 0, 'suivi_stock' => false]);
+        $coque = Produit::factory()->create(['nom' => 'Coque ip 17', 'prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $ecran->id, 'quantite' => 2],
+            ['produit_id' => $cable->id, 'quantite' => 1],
+            ['produit_id' => $coque->id, 'quantite' => 1],
+        ]);
+
+        $this->assertSame(['84.99', '15.01', '100.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame([
+            ['taux_tva' => '20.00', 'montant_ht' => 74.99, 'montant_tva' => 15.01, 'montant_ttc' => 90.0],
+            ['taux_tva' => '0.00', 'montant_ht' => 10.0, 'montant_tva' => 0.0, 'montant_ttc' => 10.0],
+        ], $facture->ventilation_tva);
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSuccessful()
+            ->assertSee('66,66')
+            ->assertSee('13,34')
+            ->assertSee('84,99')
+            ->assertSee('15,01')
+            ->assertSee('TVA par taux')
+            ->assertSee('74,99')
+            ->assertDontSee('85,00');
+
+        $pdf = view('factures.pdf', ['facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir')])->render();
+        $this->assertStringContainsString('66,66', $pdf);
+        $this->assertStringContainsString('74,99', $pdf);
+        $this->assertStringContainsString('84,99', $pdf);
+        $this->assertStringNotContainsString('85,00', $pdf);
+    }
+
+    /**
+     * Le prix tapé (HT ou TTC) est gardé tel quel, l'autre en est la
+     * conversion au centime, et la ligne multiplie séparément HT et TTC par
+     * la quantité -- quel que soit le client. Retaper l'autre prix le fait
+     * à son tour garder tel quel.
+     */
+    public function test_le_dernier_prix_saisi_sur_une_ligne_est_garde_tel_quel(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
@@ -432,20 +482,21 @@ class FactureResourceTest extends TestCase
             ->set("data.lignes.{$cle}.quantite", '3')
             ->set("data.lignes.{$cle}.prix_unitaire_ht", '8.33')
             ->assertSet("data.lignes.{$cle}.prix_reference", 'ht')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", 10.0)
-            ->assertSee('29,99 €')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '10.00')
+            ->assertSee('30,00 €')
             ->assertSee('Calculé à partir du PU HT saisi.');
 
+        // 10,05 € TTC / 1,20 = 8,375 -> 8,38 € HT.
         $component
-            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '10')
+            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '10.05')
             ->assertSet("data.lignes.{$cle}.prix_reference", 'ttc')
-            ->assertSee('30,00 €')
-            ->set("data.lignes.{$cle}.prix_unitaire_ht", '8.33')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '8.38')
+            ->assertSee('30,15 €')
             ->call('create')
             ->assertHasNoFormErrors();
 
         $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
-        $this->assertSame(['24.99', '5.00', '29.99'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(['25.14', '5.01', '30.15'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 
     /**

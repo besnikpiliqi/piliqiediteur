@@ -6,6 +6,7 @@ use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
 use Database\Factories\FactureAchatFactory;
@@ -25,7 +26,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class FactureAchat extends Model
 {
     /** @use HasFactory<FactureAchatFactory> */
-    use BelongsToMagasin, HasFactory;
+    use BelongsToMagasin, HasFactory, VentileLaTvaParTaux;
 
     protected $table = 'factures_achat';
 

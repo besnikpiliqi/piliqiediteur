@@ -131,7 +131,7 @@ class FactureAchatResourceTest extends TestCase
 
         $factureAchat = FactureAchat::query()->firstOrFail();
         $this->assertSame('80.00', $factureAchat->total_ttc);
-        $this->assertSame('66.67', $factureAchat->total_ht);
+        $this->assertSame('66.66', $factureAchat->total_ht);
     }
 
     public function test_creer_une_facture_dachat_depuis_le_panneau(): void

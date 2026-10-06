@@ -70,9 +70,9 @@ class CreerAvoirFournisseurAction
                     throw new LogicException("La ligne \"{$ligneAchat->description}\" ne peut pas être retournée au-delà de la quantité disponible ({$restante}) : elle a déjà été vendue ou déjà retournée.");
                 }
 
-                // Le dernier retour d'une ligne en prend le solde exact ; un
-                // retour partiel est calculé depuis le même prix de
-                // référence que la ligne achetée (voir PrixReference).
+                // Un retour partiel reprend les PU HT/TTC de la ligne achetée
+                // (article par article, voir CalculateurLigne) ; le dernier
+                // retour en prend le solde exact.
                 $resteSurLaLigne = round((float) $ligneAchat->quantite - $ligneAchat->quantiteDejaRetournee(), 3);
 
                 $montants = abs($quantite - $resteSurLaLigne) < 0.0005
@@ -84,11 +84,9 @@ class CreerAvoirFournisseurAction
                             ->toArray(),
                     )
                     : $this->calculateurLigne->calculer(
-                        $ligneAchat->prix_reference,
                         (float) $ligneAchat->prix_unitaire_ht,
                         (float) $ligneAchat->prix_unitaire_ttc,
                         $quantite,
-                        (float) $ligneAchat->taux_tva,
                         (float) $ligneAchat->remise_pourcentage,
                     );
 

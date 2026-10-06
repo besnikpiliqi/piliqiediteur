@@ -104,10 +104,10 @@ class CreerFactureActionTest extends TestCase
     }
 
     /**
-     * Le prix réellement saisi sur chaque ligne fait foi, quel que soit le
-     * client : un PU HT saisi (8,33 € x 3) donne exactement 24,99 € HT et la
-     * TVA qu'un professionnel récupère ; un PU TTC saisi (40 € x 2) donne
-     * exactement 80,00 € TTC -- même au sein d'un même document.
+     * Le prix réellement saisi sur chaque ligne est gardé tel quel, quel que
+     * soit le client, et chaque ligne multiplie séparément son HT et son TTC
+     * par la quantité : 8,33 € HT x 3 = 24,99 € HT ; 40 € TTC x 2 = 80,00 €
+     * TTC -- même au sein d'un même document.
      */
     public function test_chaque_ligne_est_calculee_depuis_le_prix_reellement_saisi(): void
     {
@@ -122,18 +122,18 @@ class CreerFactureActionTest extends TestCase
 
         $this->assertSame(PrixReference::Ht, $ligneHt->prix_reference);
         $this->assertSame('24.99', $ligneHt->montant_ht);
-        $this->assertSame('5.00', $ligneHt->montant_tva);
-        $this->assertSame('29.99', $ligneHt->montant_ttc);
+        $this->assertSame('5.01', $ligneHt->montant_tva);
+        $this->assertSame('30.00', $ligneHt->montant_ttc);
         $this->assertSame('10.00', $ligneHt->prix_unitaire_ttc);
 
         $this->assertSame(PrixReference::Ttc, $ligneTtc->prix_reference);
         $this->assertSame('80.00', $ligneTtc->montant_ttc);
-        $this->assertSame('66.67', $ligneTtc->montant_ht);
+        $this->assertSame('66.66', $ligneTtc->montant_ht);
         $this->assertSame('33.33', $ligneTtc->prix_unitaire_ht);
 
-        $this->assertSame('91.66', $facture->total_ht);
-        $this->assertSame('18.33', $facture->total_tva);
-        $this->assertSame('109.99', $facture->total_ttc);
+        $this->assertSame('91.65', $facture->total_ht);
+        $this->assertSame('18.35', $facture->total_tva);
+        $this->assertSame('110.00', $facture->total_ttc);
     }
 
     /**

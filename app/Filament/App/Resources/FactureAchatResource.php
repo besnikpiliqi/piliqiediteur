@@ -165,16 +165,19 @@ class FactureAchatResource extends Resource
                         TextEntry::make('quantite'),
                         TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
                         TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
-                        TextEntry::make('taux_tva')->label('TVA')->suffix(' %'),
+                        TextEntry::make('taux_tva')->label('Taux TVA')->suffix(' %'),
+                        TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
+                        TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
                         TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
                     ])
-                    ->columns(6),
+                    ->columns(8),
             ]),
 
             InfolistSection::make('Totaux')->schema([
                 TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
                 TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+                FactureResource::ventilationTvaEntry(),
             ])->columns(3),
 
             InfolistSection::make('Avoirs fournisseur émis')

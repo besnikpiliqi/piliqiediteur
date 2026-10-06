@@ -116,6 +116,7 @@ class AvoirResource extends Resource
                 TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
                 TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+                FactureResource::ventilationTvaEntry(),
                 // Un avoir n'est jamais remboursé par ce logiciel (pas
                 // d'intégration bancaire) : tant qu'il reste du crédit non
                 // appliqué à une facture (voir
@@ -134,9 +135,13 @@ class AvoirResource extends Resource
                     ->schema([
                         TextEntry::make('description'),
                         TextEntry::make('quantite'),
+                        TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
+                        TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
+                        TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
+                        TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
                         TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
                     ])
-                    ->columns(3),
+                    ->columns(7),
             ]),
 
             InfolistSection::make('Crédit appliqué')

@@ -81,9 +81,9 @@ class CreerAvoirAction
                     throw new LogicException("La ligne \"{$ligneFacture->description}\" ne peut pas être créditée au-delà de la quantité restante ({$restante}).");
                 }
 
-                // Le dernier retour d'une ligne en prend le solde exact ; un
-                // retour partiel est calculé depuis le même prix de
-                // référence que la ligne facturée (voir PrixReference).
+                // Un retour partiel reprend les PU HT/TTC de la ligne facturée
+                // (article par article, voir CalculateurLigne) ; le dernier
+                // retour en prend le solde exact.
                 $montants = abs($quantite - $restante) < 0.0005
                     ? $this->calculateurLigne->solder(
                         $ligneFacture->only(['montant_ht', 'montant_tva', 'montant_ttc']),
@@ -93,11 +93,9 @@ class CreerAvoirAction
                             ->toArray(),
                     )
                     : $this->calculateurLigne->calculer(
-                        $ligneFacture->prix_reference,
                         (float) $ligneFacture->prix_unitaire_ht,
                         (float) $ligneFacture->prix_unitaire_ttc,
                         $quantite,
-                        (float) $ligneFacture->taux_tva,
                         (float) $ligneFacture->remise_pourcentage,
                     );
 

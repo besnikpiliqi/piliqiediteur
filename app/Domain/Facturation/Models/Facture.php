@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -25,7 +26,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 class Facture extends Model
 {
     /** @use HasFactory<FactureFactory> */
-    use BelongsToMagasin, HasFactory;
+    use BelongsToMagasin, HasFactory, VentileLaTvaParTaux;
 
     protected $table = 'factures';
 

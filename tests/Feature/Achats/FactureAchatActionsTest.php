@@ -66,7 +66,7 @@ class FactureAchatActionsTest extends TestCase
         [$ligneHt, $ligneTtc, $ligneCatalogue] = $factureAchat->lignes->sortBy('ordre')->values()->all();
 
         $this->assertSame(PrixReference::Ht, $ligneHt->prix_reference);
-        $this->assertSame(['24.99', '5.00', '29.99'], [$ligneHt->montant_ht, $ligneHt->montant_tva, $ligneHt->montant_ttc]);
+        $this->assertSame(['24.99', '5.01', '30.00'], [$ligneHt->montant_ht, $ligneHt->montant_tva, $ligneHt->montant_ttc]);
 
         $this->assertSame(PrixReference::Ttc, $ligneTtc->prix_reference);
         $this->assertSame(['30.00', '6.00', '36.00'], [$ligneTtc->montant_ht, $ligneTtc->montant_tva, $ligneTtc->montant_ttc]);

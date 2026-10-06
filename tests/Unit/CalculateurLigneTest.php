@@ -4,6 +4,11 @@ namespace Tests\Unit;
 
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\ResolveurPrixLigne;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
+use Random\Engine\Mt19937;
+use Random\Randomizer;
 use Tests\TestCase;
 
 /**
@@ -11,9 +16,24 @@ use Tests\TestCase;
  * CalculateurLigne) : chaque article a son PU HT, sa TVA et son PU TTC au
  * centime, et chaque ligne multiplie séparément le HT et le TTC par la
  * quantité. Tout se fait en centimes entiers, jamais en flottant.
+ *
+ * Au-delà des exemples nommés (cas réels signalés par un magasin), les tests
+ * "sur_tous_les" et "aleatoires" comparent le calculateur, sur des dizaines
+ * de milliers de cas, à une référence indépendante : l'arithmétique
+ * décimale exacte de brick/math, arrondie au centime au demi supérieur. Le
+ * hasard est tiré d'une graine fixe (GRAINE) : un échec se rejoue toujours
+ * à l'identique, et son message donne le cas fautif.
  */
 class CalculateurLigneTest extends TestCase
 {
+    private const GRAINE = 20261006;
+
+    /**
+     * Taux de TVA français : normal, intermédiaire, réduits, et ceux des
+     * DOM et de la Corse.
+     */
+    private const TAUX = ['0', '2.1', '5.5', '8.5', '10', '13', '20'];
+
     private function calculateur(): CalculateurLigne
     {
         return new CalculateurLigne;
@@ -148,5 +168,294 @@ class CalculateurLigneTest extends TestCase
         $total = $this->calculateur()->totaliser(array_fill(0, 1000, $ligne));
 
         $this->assertSame(100.0, $total['total_ttc']);
+    }
+
+    /**
+     * Les 10 000 prix TTC de 0,01 € à 100,00 €, pour chaque taux : le TTC
+     * saisi reste tel quel, et le HT est exactement TTC / (1 + taux),
+     * arrondi au centime.
+     */
+    public function test_la_conversion_ttc_vers_ht_est_exacte_sur_tous_les_prix_de_0_01_a_100_euros(): void
+    {
+        $verifications = 0;
+
+        foreach (self::TAUX as $taux) {
+            for ($ttcCentimes = 1; $ttcCentimes <= 10000; $ttcCentimes++) {
+                $prix = $this->calculateur()->prixUnitaires(PrixReference::Ttc, $ttcCentimes / 100, (float) $taux);
+                $cas = "TTC {$this->texte($ttcCentimes)} à {$taux} %";
+
+                $this->assertSame($ttcCentimes, $this->enCentimes($prix['prix_unitaire_ttc']), $cas);
+                $this->assertSame($this->htDepuisTtcAttendu($ttcCentimes, $taux), $this->enCentimes($prix['prix_unitaire_ht']), $cas);
+                $verifications++;
+            }
+        }
+
+        $this->assertSame(70000, $verifications);
+    }
+
+    /**
+     * Les 10 000 prix HT de 0,01 € à 100,00 €, pour chaque taux : le HT
+     * saisi reste tel quel, et le TTC est exactement HT + HT x taux, la TVA
+     * arrondie au centime.
+     */
+    public function test_la_conversion_ht_vers_ttc_est_exacte_sur_tous_les_prix_de_0_01_a_100_euros(): void
+    {
+        $verifications = 0;
+
+        foreach (self::TAUX as $taux) {
+            for ($htCentimes = 1; $htCentimes <= 10000; $htCentimes++) {
+                $prix = $this->calculateur()->prixUnitaires(PrixReference::Ht, $htCentimes / 100, (float) $taux);
+                $cas = "HT {$this->texte($htCentimes)} à {$taux} %";
+
+                $this->assertSame($htCentimes, $this->enCentimes($prix['prix_unitaire_ht']), $cas);
+                $this->assertSame($this->ttcDepuisHtAttendu($htCentimes, $taux), $this->enCentimes($prix['prix_unitaire_ttc']), $cas);
+                $verifications++;
+            }
+        }
+
+        $this->assertSame(70000, $verifications);
+    }
+
+    /**
+     * Tous les montants à demi-centime de 0,005 € à 100,005 € (le piège du
+     * flottant : 8.325 vaut 8.32499999... en binaire), ainsi que leurs
+     * voisins juste en dessous et au-dessus.
+     */
+    public function test_larrondi_au_centime_est_exact_sur_tous_les_demi_centimes_jusqua_100_euros(): void
+    {
+        $verifications = 0;
+
+        for ($centimes = 0; $centimes <= 10000; $centimes++) {
+            foreach ([4 => $centimes, 5 => $centimes + 1, 6 => $centimes + 1] as $milliemeFinal => $attendu) {
+                $texte = sprintf('%d.%02d%d', intdiv($centimes, 100), $centimes % 100, $milliemeFinal);
+
+                $this->assertSame($attendu, $this->enCentimes($this->calculateur()->arrondirAuCentime((float) $texte)), $texte);
+                $verifications++;
+            }
+        }
+
+        $this->assertSame(30003, $verifications);
+    }
+
+    /**
+     * 10 000 lignes tirées au hasard (prix de 0,01 € à 9 999,99 €, saisi en
+     * HT ou en TTC, quantité entière ou au millième, avec ou sans remise,
+     * tous les taux) : HT, TVA et TTC égalent la référence exacte, HT + TVA
+     * = TTC, et pour une quantité entière sans remise chaque montant est
+     * exactement le montant unitaire x quantité.
+     */
+    public function test_10000_lignes_aleatoires_egalent_le_calcul_exact(): void
+    {
+        $hasard = new Randomizer(new Mt19937(self::GRAINE));
+
+        for ($i = 0; $i < 10000; $i++) {
+            $ligne = $this->ligneAleatoire($hasard);
+            $montants = $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $ligne['quantite'] / 1000, $ligne['remise'] / 100);
+            $attendus = $this->montantsAttendus($ligne);
+            $cas = $this->decrire($ligne);
+
+            $this->assertSame($attendus['ht'], $this->enCentimes($montants['montant_ht']), "HT : {$cas}");
+            $this->assertSame($attendus['ttc'], $this->enCentimes($montants['montant_ttc']), "TTC : {$cas}");
+            $this->assertSame($attendus['ttc'] - $attendus['ht'], $this->enCentimes($montants['montant_tva']), "TVA : {$cas}");
+
+            if ($ligne['quantite'] % 1000 === 0 && $ligne['remise'] === 0) {
+                $quantite = intdiv($ligne['quantite'], 1000);
+
+                $this->assertSame($ligne['ht'] * $quantite, $this->enCentimes($montants['montant_ht']), "HT x quantité : {$cas}");
+                $this->assertSame(($ligne['ttc'] - $ligne['ht']) * $quantite, $this->enCentimes($montants['montant_tva']), "TVA x quantité : {$cas}");
+                $this->assertSame($ligne['ttc'] * $quantite, $this->enCentimes($montants['montant_ttc']), "TTC x quantité : {$cas}");
+            }
+        }
+    }
+
+    /**
+     * 2 000 factures de 1 à 20 lignes tirées au hasard : chaque total est la
+     * somme exacte des lignes, et total HT + total TVA = total TTC.
+     */
+    public function test_2000_factures_aleatoires_totalisent_exactement_leurs_lignes(): void
+    {
+        $hasard = new Randomizer(new Mt19937(self::GRAINE + 1));
+
+        for ($i = 0; $i < 2000; $i++) {
+            $lignes = [];
+            $attendu = ['ht' => 0, 'tva' => 0, 'ttc' => 0];
+
+            for ($n = $hasard->getInt(1, 20); $n > 0; $n--) {
+                $ligne = $this->ligneAleatoire($hasard);
+                $lignes[] = $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $ligne['quantite'] / 1000, $ligne['remise'] / 100);
+                $montants = $this->montantsAttendus($ligne);
+                $attendu['ht'] += $montants['ht'];
+                $attendu['ttc'] += $montants['ttc'];
+                $attendu['tva'] += $montants['ttc'] - $montants['ht'];
+            }
+
+            $totaux = $this->calculateur()->totaliser($lignes);
+
+            $this->assertSame($attendu['ht'], $this->enCentimes($totaux['total_ht']), "facture n° {$i}");
+            $this->assertSame($attendu['tva'], $this->enCentimes($totaux['total_tva']), "facture n° {$i}");
+            $this->assertSame($attendu['ttc'], $this->enCentimes($totaux['total_ttc']), "facture n° {$i}");
+            $this->assertSame($this->enCentimes($totaux['total_ttc']), $this->enCentimes($totaux['total_ht']) + $this->enCentimes($totaux['total_tva']), "facture n° {$i}");
+        }
+    }
+
+    /**
+     * 2 000 lignes rendues en 2 à 5 retours successifs de quantités tirées
+     * au hasard (au millième) : chaque retour partiel égale la référence
+     * exacte pour sa quantité, et le dernier retour (le solde) fait
+     * retomber HT, TVA et TTC crédités exactement sur la ligne vendue.
+     */
+    public function test_2000_series_de_retours_creditent_exactement_la_ligne_vendue(): void
+    {
+        $hasard = new Randomizer(new Mt19937(self::GRAINE + 2));
+
+        for ($i = 0; $i < 2000; $i++) {
+            $ligne = $this->ligneAleatoire($hasard);
+            $ligne['quantite'] = max($ligne['quantite'], 5);
+            $vendu = $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $ligne['quantite'] / 1000, $ligne['remise'] / 100);
+            $cas = $this->decrire($ligne);
+
+            $retours = [];
+            $restant = $ligne['quantite'];
+
+            for ($k = $hasard->getInt(2, 5); $k > 1 && $restant > 1; $k--) {
+                $quantiteRendue = $hasard->getInt(1, $restant - 1);
+                $restant -= $quantiteRendue;
+
+                $retour = $this->calculateur()->calculer($ligne['ht'] / 100, $ligne['ttc'] / 100, $quantiteRendue / 1000, $ligne['remise'] / 100);
+                $attendu = $this->montantsAttendus([...$ligne, 'quantite' => $quantiteRendue]);
+                $this->assertSame($attendu['ht'], $this->enCentimes($retour['montant_ht']), "retour partiel : {$cas}");
+                $this->assertSame($attendu['ttc'], $this->enCentimes($retour['montant_ttc']), "retour partiel : {$cas}");
+                $retours[] = $retour;
+            }
+
+            $retours[] = $this->calculateur()->solder($vendu, $retours);
+            $credite = $this->calculateur()->totaliser($retours);
+
+            $this->assertSame($this->enCentimes($vendu['montant_ht']), $this->enCentimes($credite['total_ht']), "solde HT : {$cas}");
+            $this->assertSame($this->enCentimes($vendu['montant_tva']), $this->enCentimes($credite['total_tva']), "solde TVA : {$cas}");
+            $this->assertSame($this->enCentimes($vendu['montant_ttc']), $this->enCentimes($credite['total_ttc']), "solde TTC : {$cas}");
+        }
+    }
+
+    /**
+     * 5 000 saisies tirées au hasard, telles qu'elles arrivent du
+     * formulaire ou d'une API (un seul prix fourni, ou les deux avec le
+     * prix de référence) : le prix saisi est toujours gardé au centime, et
+     * l'autre est exactement sa conversion.
+     */
+    public function test_5000_saisies_aleatoires_gardent_le_prix_saisi_et_convertissent_lautre(): void
+    {
+        $hasard = new Randomizer(new Mt19937(self::GRAINE + 3));
+        $resolveur = new ResolveurPrixLigne($this->calculateur());
+
+        for ($i = 0; $i < 5000; $i++) {
+            $taux = self::TAUX[$hasard->getInt(0, count(self::TAUX) - 1)];
+            $prixCentimes = $hasard->getInt(1, 999999);
+            $reference = $hasard->getInt(0, 1) === 0 ? PrixReference::Ht : PrixReference::Ttc;
+            $champ = $reference === PrixReference::Ht ? 'prix_unitaire_ht' : 'prix_unitaire_ttc';
+            $donnees = $hasard->getInt(0, 1) === 0
+                ? [$champ => $this->texte($prixCentimes)]
+                : ['prix_reference' => $reference->value, 'prix_unitaire_ht' => '1.23', 'prix_unitaire_ttc' => '4.56', $champ => $this->texte($prixCentimes)];
+            $cas = "{$reference->getLabel()} {$this->texte($prixCentimes)} à {$taux} %";
+
+            $prix = $resolveur->resoudre($donnees, PrixReference::Ttc, (float) $taux);
+
+            $this->assertSame($reference, $prix['prix_reference'], $cas);
+
+            if ($reference === PrixReference::Ttc) {
+                $this->assertSame($prixCentimes, $this->enCentimes($prix['prix_unitaire_ttc']), $cas);
+                $this->assertSame($this->htDepuisTtcAttendu($prixCentimes, $taux), $this->enCentimes($prix['prix_unitaire_ht']), $cas);
+            } else {
+                $this->assertSame($prixCentimes, $this->enCentimes($prix['prix_unitaire_ht']), $cas);
+                $this->assertSame($this->ttcDepuisHtAttendu($prixCentimes, $taux), $this->enCentimes($prix['prix_unitaire_ttc']), $cas);
+            }
+        }
+    }
+
+    /**
+     * Ligne tirée au hasard, en unités entières : prix en centimes (saisi
+     * en HT ou en TTC, l'autre étant sa conversion de référence), quantité
+     * en millièmes (entière une fois sur deux), remise en centièmes de
+     * point (nulle sept fois sur dix).
+     *
+     * @return array{ht: int, ttc: int, quantite: int, remise: int, taux: string, reference: PrixReference}
+     */
+    private function ligneAleatoire(Randomizer $hasard): array
+    {
+        $taux = self::TAUX[$hasard->getInt(0, count(self::TAUX) - 1)];
+        $prixCentimes = $hasard->getInt(1, 999999);
+        $reference = $hasard->getInt(0, 1) === 0 ? PrixReference::Ht : PrixReference::Ttc;
+
+        return [
+            'ht' => $reference === PrixReference::Ht ? $prixCentimes : $this->htDepuisTtcAttendu($prixCentimes, $taux),
+            'ttc' => $reference === PrixReference::Ttc ? $prixCentimes : $this->ttcDepuisHtAttendu($prixCentimes, $taux),
+            'quantite' => $hasard->getInt(0, 1) === 0 ? 1000 * $hasard->getInt(1, 100) : $hasard->getInt(1, 100000),
+            'remise' => $hasard->getInt(1, 10) <= 7 ? 0 : $hasard->getInt(0, 10000),
+            'taux' => $taux,
+            'reference' => $reference,
+        ];
+    }
+
+    /**
+     * Référence exacte d'une ligne : PU x quantité arrondi au centime, puis
+     * remise arrondie au centime, séparément pour le HT et le TTC.
+     *
+     * @param  array{ht: int, ttc: int, quantite: int, remise: int}  $ligne
+     * @return array{ht: int, ttc: int}
+     */
+    private function montantsAttendus(array $ligne): array
+    {
+        $net = function (int $prixCentimes) use ($ligne): int {
+            $brut = $this->auCentime(BigDecimal::ofUnscaledValue($prixCentimes, 2)->multipliedBy(BigDecimal::ofUnscaledValue($ligne['quantite'], 3)));
+            $remise = $this->auCentime(BigDecimal::ofUnscaledValue($brut, 2)->multipliedBy(BigDecimal::ofUnscaledValue($ligne['remise'], 2))->dividedBy(100, 6));
+
+            return $brut - $remise;
+        };
+
+        return ['ht' => $net($ligne['ht']), 'ttc' => $net($ligne['ttc'])];
+    }
+
+    private function htDepuisTtcAttendu(int $ttcCentimes, string $taux): int
+    {
+        return BigDecimal::ofUnscaledValue($ttcCentimes, 2)
+            ->dividedBy(BigDecimal::one()->plus(BigDecimal::of($taux)->dividedBy(100, 4)), 2, RoundingMode::HalfUp)
+            ->getUnscaledValue()
+            ->toInt();
+    }
+
+    private function ttcDepuisHtAttendu(int $htCentimes, string $taux): int
+    {
+        return $htCentimes + $this->auCentime(BigDecimal::ofUnscaledValue($htCentimes, 2)->multipliedBy(BigDecimal::of($taux))->dividedBy(100, 6));
+    }
+
+    private function auCentime(BigDecimal $montant): int
+    {
+        return $montant->toScale(2, RoundingMode::HalfUp)->getUnscaledValue()->toInt();
+    }
+
+    private function enCentimes(float $montant): int
+    {
+        return (int) round($montant * 100);
+    }
+
+    private function texte(int $centimes): string
+    {
+        return (string) BigDecimal::ofUnscaledValue($centimes, 2);
+    }
+
+    /**
+     * @param  array{ht: int, ttc: int, quantite: int, remise: int, taux: string, reference: PrixReference}  $ligne
+     */
+    private function decrire(array $ligne): string
+    {
+        return sprintf(
+            'PU HT %s / PU TTC %s (%s saisi, TVA %s %%), quantité %s, remise %s %%',
+            $this->texte($ligne['ht']),
+            $this->texte($ligne['ttc']),
+            $ligne['reference']->getLabel(),
+            $ligne['taux'],
+            BigDecimal::ofUnscaledValue($ligne['quantite'], 3),
+            $this->texte($ligne['remise']),
+        );
     }
 }

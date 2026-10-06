@@ -79,9 +79,8 @@ class CreerAvoirAction
                     throw new LogicException("Impossible de créditer une ligne d'une facture au statut [{$facture->statut->value}].");
                 }
 
-                $quantite = QuantiteEntiere::depuisSaisie($selection['quantite'] ?? null, 'La quantité à créditer');
-
                 $restante = $ligneFacture->quantiteCreditableRestante();
+                $quantite = QuantiteEntiere::depuisSaisieOuReliquat($selection['quantite'] ?? null, $restante, 'La quantité à créditer');
 
                 if ($quantite > $restante) {
                     throw new LogicException("La ligne \"{$ligneFacture->description}\" ne peut pas être créditée au-delà de la quantité restante ({$restante}).");

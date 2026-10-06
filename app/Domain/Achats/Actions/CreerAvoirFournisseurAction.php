@@ -67,9 +67,8 @@ class CreerAvoirFournisseurAction
                     throw new InvalidArgumentException("Cette ligne n'appartient pas à la facture d'achat créditée.");
                 }
 
-                $quantite = QuantiteEntiere::depuisSaisie($selection['quantite'] ?? null, 'La quantité à retourner');
-
                 $restante = $ligneAchat->quantiteRetournableRestante();
+                $quantite = QuantiteEntiere::depuisSaisieOuReliquat($selection['quantite'] ?? null, $restante, 'La quantité à retourner');
 
                 if ($quantite > $restante) {
                     throw new LogicException("La ligne \"{$ligneAchat->description}\" ne peut pas être retournée au-delà de la quantité disponible ({$restante}) : elle a déjà été vendue ou déjà retournée.");

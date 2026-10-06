@@ -61,7 +61,7 @@ class ValeurStockApercu extends BaseWidget
             Stat::make('Valeur du stock', number_format($valeur['total_ttc'], 2, ',', ' ').' € TTC')
                 ->description(sprintf(
                     '%s unités en stock · %s € HT · %s € TVA',
-                    Number::format(QuantiteArticles::normaliser($produitsEnStock->sum('stock_quantite')), maxPrecision: 3),
+                    Number::format(QuantiteArticles::normaliser($produitsEnStock->sum('stock_quantite')), maxPrecision: 3, locale: config('app.locale')),
                     number_format($valeur['total_ht'], 2, ',', ' '),
                     number_format($valeur['total_tva'], 2, ',', ' '),
                 ))

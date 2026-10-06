@@ -8,6 +8,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Filament\App\Resources\AvoirResource\Pages;
+use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -35,6 +36,8 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class AvoirResource extends Resource
 {
+    use SaisitUneQuantiteRetournee;
+
     protected static ?string $model = Avoir::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-receipt-refund';
@@ -82,12 +85,7 @@ class AvoirResource extends Resource
                     Hidden::make('ligne_facture_id'),
                     TextInput::make('facture_numero')->label('Facture')->disabled()->dehydrated(false),
                     TextInput::make('description')->label('Produit / description')->disabled()->dehydrated(false),
-                    TextInput::make('quantite')
-                        ->label('Quantité à créditer')
-                        ->integer()
-                        ->required()
-                        ->minValue(1)
-                        ->maxValue(fn (Get $get) => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
+                    self::champQuantiteRetournee('Quantité à créditer', fn (Get $get): int|float => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
                 ])
                 ->columns(4)
                 ->addable(false)

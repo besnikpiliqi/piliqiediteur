@@ -13,13 +13,15 @@ use Illuminate\Support\Facades\Schema;
  * passer 1,5 article.
  *
  * Aucune quantité n'est jamais arrondie ici : une ligne de facture émise
- * est un document légal, la modifier fausserait son montant. Une colonne
- * qui contient une ancienne quantité à virgule (permise avant ce
- * changement) reste donc en décimal, et se relit exactement (voir
- * QuantiteArticles) -- sans jamais bloquer cette migration ni les
- * suivantes : il n'existe aucun moyen légal de "corriger" une facture
- * émise. Les nouvelles quantités, elles, sont toujours entières (voir
- * QuantiteEntiere).
+ * est un document légal, la modifier fausserait son montant. S'il existe
+ * ne serait-ce qu'une ancienne quantité à virgule (permise avant ce
+ * changement), AUCUNE colonne n'est convertie : une fraction d'une ligne se
+ * propage au stock, aux mouvements et aux avoirs qui la créditent, qui
+ * doivent donc tous pouvoir la garder. Les colonnes restent alors en
+ * décimal et se relisent exactement (voir QuantiteArticles), sans jamais
+ * bloquer cette migration ni les suivantes -- il n'existe aucun moyen
+ * légal de "corriger" une facture émise. Les nouvelles quantités, elles,
+ * sont toujours entières (voir QuantiteEntiere).
  *
  * Jamais dans une transaction : sous SQLite, changer le type d'une colonne
  * reconstruit la table, et Laravel ne coupe les clés étrangères pendant
@@ -31,17 +33,15 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $quantitesAVirgule = $this->quantitesAVirgule();
+
+        if ($quantitesAVirgule !== []) {
+            Log::warning('Les quantités restent en décimal : des quantités à virgule sont déjà enregistrées ('.implode(' ; ', $quantitesAVirgule).'). Elles sont conservées telles quelles ; toute nouvelle quantité sera entière.');
+
+            return;
+        }
+
         foreach ($this->colonnes() as $table => $colonnes) {
-            $colonnes = array_filter(
-                $colonnes,
-                fn (string $colonne): bool => $this->neContientQueDesEntiers($table, $colonne),
-                ARRAY_FILTER_USE_KEY,
-            );
-
-            if ($colonnes === []) {
-                continue;
-            }
-
             Schema::table($table, function (Blueprint $blueprint) use ($colonnes) {
                 foreach ($colonnes as $colonne => $parDefaut) {
                     $definition = $blueprint->integer($colonne);
@@ -73,20 +73,28 @@ return new class extends Migration
         }
     }
 
-    private function neContientQueDesEntiers(string $table, string $colonne): bool
+    /**
+     * @return list<string> "table.colonne (id ...)" pour chaque colonne qui
+     *                      contient une quantité à virgule
+     */
+    private function quantitesAVirgule(): array
     {
-        $identifiantsAVirgule = DB::table($table)
-            ->whereRaw("{$colonne} <> ROUND({$colonne})")
-            ->orderBy('id')
-            ->pluck('id');
+        $quantitesAVirgule = [];
 
-        if ($identifiantsAVirgule->isEmpty()) {
-            return true;
+        foreach ($this->colonnes() as $table => $colonnes) {
+            foreach (array_keys($colonnes) as $colonne) {
+                $identifiants = DB::table($table)
+                    ->whereRaw("{$colonne} <> ROUND({$colonne})")
+                    ->orderBy('id')
+                    ->pluck('id');
+
+                if ($identifiants->isNotEmpty()) {
+                    $quantitesAVirgule[] = "{$table}.{$colonne} (id {$identifiants->implode(', ')})";
+                }
+            }
         }
 
-        Log::warning("{$table}.{$colonne} reste en décimal : des quantités à virgule y sont déjà enregistrées (id {$identifiantsAVirgule->implode(', ')}). Elles sont conservées telles quelles ; toute nouvelle quantité sera entière.");
-
-        return false;
+        return $quantitesAVirgule;
     }
 
     /**

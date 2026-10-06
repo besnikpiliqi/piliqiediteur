@@ -33,10 +33,10 @@ class CalculateurLigne
 {
     /**
      * Bien au-delà de tout montant réel (les colonnes s'arrêtent à
-     * 9 999 999 999,99 €), mais assez bas pour que ni la conversion en
-     * centimes ni le produit prix x quantité ne débordent jamais.
+     * 9 999 999 999,99 €, soit 1e12 centimes) : un montant absurde est
+     * refusé plutôt que converti.
      */
-    private const UNITES_MAXIMUM = 1e15;
+    private const UNITES_MAXIMUM = 1e14;
 
     /**
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
@@ -47,10 +47,6 @@ class CalculateurLigne
         int|float $quantite,
         float $remisePourcentage = 0.0,
     ): array {
-        if ($remisePourcentage < 0 || $remisePourcentage > 100) {
-            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
-        }
-
         $quantiteMilliemes = $this->versUnites($quantite, 1000);
         $remiseCentiemes = $this->versUnites($remisePourcentage, 100);
 
@@ -91,7 +87,7 @@ class CalculateurLigne
         $this->verifierTauxTva($tauxTva);
 
         return $this->centimesVersMontant($this->diviserArrondi(
-            $this->versUnites($prixUnitaireTtc, 100) * 10000,
+            $this->multiplier($this->versUnites($prixUnitaireTtc, 100), 10000),
             10000 + $this->versUnites($tauxTva, 100),
         ));
     }
@@ -102,7 +98,7 @@ class CalculateurLigne
 
         $htCentimes = $this->versUnites($prixUnitaireHt, 100);
 
-        return $this->centimesVersMontant($htCentimes + $this->diviserArrondi($htCentimes * $this->versUnites($tauxTva, 100), 10000));
+        return $this->centimesVersMontant($htCentimes + $this->diviserArrondi($this->multiplier($htCentimes, $this->versUnites($tauxTva, 100)), 10000));
     }
 
     /**
@@ -214,6 +210,23 @@ class CalculateurLigne
     }
 
     /**
+     * Une remise saisie est comprise entre 0 et 100 %. Vérifiée là où elle
+     * est saisie, pas dans calculer() : une ancienne ligne déjà émise avec
+     * une remise hors de ces bornes (permise auparavant) doit toujours
+     * pouvoir être créditée.
+     *
+     * @throws InvalidArgumentException
+     */
+    public function remiseSaisie(float $remisePourcentage): float
+    {
+        if ($remisePourcentage < 0 || $remisePourcentage > 100) {
+            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
+        }
+
+        return $remisePourcentage;
+    }
+
+    /**
      * Un taux hors de 0-100 % n'existe pas -- et -100 % diviserait par
      * zéro en passant du TTC au HT.
      */
@@ -231,16 +244,28 @@ class CalculateurLigne
      */
     private function montantNetCentimes(int $prixUnitaireCentimes, int $quantiteMilliemes, int $remiseCentiemes): int
     {
-        $montantBrutMilliemes = $prixUnitaireCentimes * $quantiteMilliemes;
+        $montantBrutCentimes = $this->diviserArrondi($this->multiplier($prixUnitaireCentimes, $quantiteMilliemes), 1000);
 
-        // Une multiplication d'entiers qui déborde devient un flottant.
-        if (! is_int($montantBrutMilliemes)) {
+        if (abs($montantBrutCentimes) >= self::UNITES_MAXIMUM) {
             throw new InvalidArgumentException('Montant hors limites.');
         }
 
-        $montantBrutCentimes = $this->diviserArrondi($montantBrutMilliemes, 1000);
+        return $montantBrutCentimes - $this->diviserArrondi($this->multiplier($montantBrutCentimes, $remiseCentiemes), 10000);
+    }
 
-        return $montantBrutCentimes - $this->diviserArrondi($montantBrutCentimes * $remiseCentiemes, 10000);
+    /**
+     * Produit d'entiers : en PHP, un produit qui déborde devient un
+     * flottant (approché) au lieu d'échouer -- il est refusé.
+     */
+    private function multiplier(int $a, int $b): int
+    {
+        $produit = $a * $b;
+
+        if (! is_int($produit)) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return $produit;
     }
 
     /**

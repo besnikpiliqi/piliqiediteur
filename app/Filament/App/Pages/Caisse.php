@@ -243,7 +243,12 @@ class Caisse extends Page implements HasForms
     {
         $montants = collect($lignes)->map(fn (array $ligne) => DevisResource::montantsDeLigneSaisie($ligne, PrixReference::Ttc));
 
-        return app(CalculateurLigne::class)->totaliser($montants)['total_ttc'];
+        try {
+            return app(CalculateurLigne::class)->totaliser($montants)['total_ttc'];
+        } catch (InvalidArgumentException) {
+            // Montant absurde en cours de frappe : la validation le refusera.
+            return 0.0;
+        }
     }
 
     /**
@@ -256,7 +261,11 @@ class Caisse extends Page implements HasForms
     {
         $totalTtc = $this->totalTtc($get('lignes') ?? []);
 
-        return app(CalculateurLigne::class)->soustraire($totalTtc, $this->creditApplique($get, $totalTtc));
+        try {
+            return app(CalculateurLigne::class)->soustraire($totalTtc, $this->creditApplique($get, $totalTtc));
+        } catch (InvalidArgumentException) {
+            return 0.0;
+        }
     }
 
     /**

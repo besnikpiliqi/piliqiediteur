@@ -17,6 +17,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitLesPrixDeLigne;
+use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -48,6 +49,7 @@ class FactureAchatResource extends Resource
 {
     use GereLesExceptionsMetier;
     use SaisitLesPrixDeLigne;
+    use SaisitUneQuantiteRetournee;
 
     protected static ?string $model = FactureAchat::class;
 
@@ -248,12 +250,7 @@ class FactureAchatResource extends Resource
                                     ->label('Produit / description')
                                     ->disabled()
                                     ->dehydrated(false),
-                                TextInput::make('quantite')
-                                    ->label('Quantité à retourner')
-                                    ->integer()
-                                    ->required()
-                                    ->minValue(1)
-                                    ->maxValue(fn (Get $get) => LigneAchat::find($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0),
+                                self::champQuantiteRetournee('Quantité à retourner', fn (Get $get): int|float => LigneAchat::find($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0),
                             ])
                             ->columns(3)
                             ->addable(false)

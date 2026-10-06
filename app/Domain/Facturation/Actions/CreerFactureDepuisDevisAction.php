@@ -5,6 +5,7 @@ namespace App\Domain\Facturation\Actions;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\QuantiteEntiere;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -30,6 +31,8 @@ class CreerFactureDepuisDevisAction
             if ($devis->factures()->exists()) {
                 throw new LogicException('Ce devis a déjà été converti en facture.');
             }
+
+            QuantiteEntiere::verifierLignes($devis->lignes);
 
             $facture = Facture::create([
                 'client_id' => $devis->client_id,

@@ -86,16 +86,20 @@ trait SaisitLesPrixDeLigne
                     $calculateur = app(CalculateurLigne::class);
                     $tauxTva = (float) $state;
 
-                    if (self::referenceDeLigne($get, $referenceParDefaut) === PrixReference::Ht) {
-                        if (filled($get('prix_unitaire_ht'))) {
-                            $set('prix_unitaire_ttc', self::prixEnTexte($calculateur->prixUnitaireTtcDepuisHt((float) $get('prix_unitaire_ht'), $tauxTva)));
+                    try {
+                        if (self::referenceDeLigne($get, $referenceParDefaut) === PrixReference::Ht) {
+                            if (filled($get('prix_unitaire_ht'))) {
+                                $set('prix_unitaire_ttc', self::prixEnTexte($calculateur->prixUnitaireTtcDepuisHt((float) $get('prix_unitaire_ht'), $tauxTva)));
+                            }
+
+                            return;
                         }
 
-                        return;
-                    }
-
-                    if (filled($get('prix_unitaire_ttc'))) {
-                        $set('prix_unitaire_ht', self::prixEnTexte($calculateur->prixUnitaireHtDepuisTtc((float) $get('prix_unitaire_ttc'), $tauxTva)));
+                        if (filled($get('prix_unitaire_ttc'))) {
+                            $set('prix_unitaire_ht', self::prixEnTexte($calculateur->prixUnitaireHtDepuisTtc((float) $get('prix_unitaire_ttc'), $tauxTva)));
+                        }
+                    } catch (InvalidArgumentException) {
+                        // Prix hors limites (voir sa validation) : rien à convertir.
                     }
                 }),
         ];
@@ -133,8 +137,12 @@ trait SaisitLesPrixDeLigne
             ->label('Totaux')
             ->columnSpanFull()
             ->content(function (Get $get) use ($referenceParDefaut): string {
-                $totaux = app(CalculateurLigne::class)->totaliser(collect($get('lignes') ?? [])
-                    ->map(fn (array $ligne): array => self::montantsDeLigneSaisie($ligne, $referenceParDefaut)));
+                try {
+                    $totaux = app(CalculateurLigne::class)->totaliser(collect($get('lignes') ?? [])
+                        ->map(fn (array $ligne): array => self::montantsDeLigneSaisie($ligne, $referenceParDefaut)));
+                } catch (InvalidArgumentException) {
+                    return '—';
+                }
 
                 return 'Total HT '.self::montantEnTexte($totaux['total_ht'])
                     .' · TVA '.self::montantEnTexte($totaux['total_tva'])
@@ -167,7 +175,7 @@ trait SaisitLesPrixDeLigne
                 $prix['prix_unitaire_ht'],
                 $prix['prix_unitaire_ttc'],
                 $quantite,
-                (float) ($ligne['remise_pourcentage'] ?? 0),
+                $calculateur->remiseSaisie((float) ($ligne['remise_pourcentage'] ?? 0)),
             );
         } catch (InvalidArgumentException) {
             return ['montant_ht' => 0.0, 'montant_tva' => 0.0, 'montant_ttc' => 0.0];

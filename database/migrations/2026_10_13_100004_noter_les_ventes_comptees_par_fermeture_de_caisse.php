@@ -26,9 +26,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('clotures_caisse_personnelles_factures', function (Blueprint $table) {
-            $table->foreignId('cloture_caisse_personnelle_id')->constrained('clotures_caisse_personnelles')->cascadeOnDelete();
-            // Unique : une vente n'est comptée que dans une seule fermeture.
-            $table->foreignId('facture_id')->unique()->constrained('factures')->cascadeOnDelete();
+            // Clé primaire : une vente n'est comptée que dans une seule
+            // fermeture. Noms de contraintes explicites : ceux que Laravel
+            // dériverait dépassent les 64 caractères qu'accepte MySQL.
+            $table->foreignId('facture_id')->primary()->constrained('factures', 'id', 'ccp_factures_facture_foreign')->cascadeOnDelete();
+            $table->foreignId('cloture_caisse_personnelle_id')->constrained('clotures_caisse_personnelles', 'id', 'ccp_factures_cloture_foreign')->cascadeOnDelete();
         });
 
         $this->reprendreLesFermeturesExistantes();

@@ -174,7 +174,7 @@ class ProduitResource extends Resource
                 Tables\Columns\TextColumn::make('stock_quantite')
                     ->label('Stock')
                     ->formatStateUsing(fn (Produit $record) => $record->suivi_stock
-                        ? Number::format($record->stock_quantite, maxPrecision: 3)
+                        ? Number::format($record->stock_quantite, maxPrecision: 3, locale: config('app.locale'))
                         : '—')
                     ->badge()
                     ->color(fn (Produit $record) => ! $record->suivi_stock

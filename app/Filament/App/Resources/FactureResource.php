@@ -20,6 +20,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Filament\App\Resources\FactureResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -44,6 +45,7 @@ use Illuminate\Database\Eloquent\Model;
 class FactureResource extends Resource
 {
     use GereLesExceptionsMetier;
+    use SaisitUneQuantiteRetournee;
 
     protected static ?string $model = Facture::class;
 
@@ -281,7 +283,7 @@ class FactureResource extends Resource
      */
     public static function lignesEntry(?Model $document): RepeatableEntry
     {
-        $avecRemise = $document?->lignes->contains(fn (Model $ligne): bool => (float) $ligne->remise_pourcentage > 0) ?? false;
+        $avecRemise = $document?->lignes->contains(fn (Model $ligne): bool => (float) $ligne->remise_pourcentage != 0) ?? false;
 
         return RepeatableEntry::make('lignes')
             ->label('')
@@ -451,12 +453,7 @@ class FactureResource extends Resource
                                     ->label('Produit / description')
                                     ->disabled()
                                     ->dehydrated(false),
-                                TextInput::make('quantite')
-                                    ->label('Quantité à créditer')
-                                    ->integer()
-                                    ->required()
-                                    ->minValue(1)
-                                    ->maxValue(fn (Get $get) => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
+                                self::champQuantiteRetournee('Quantité à créditer', fn (Get $get): int|float => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
                             ])
                             ->columns(3)
                             ->addable(false)

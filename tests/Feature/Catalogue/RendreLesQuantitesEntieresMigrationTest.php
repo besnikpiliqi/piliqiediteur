@@ -18,6 +18,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use InvalidArgumentException;
 use Tests\TestCase;
 
 /**
@@ -113,10 +114,12 @@ class RendreLesQuantitesEntieresMigrationTest extends TestCase
 
         $this->artisan('migrate')->assertSuccessful();
 
-        $this->assertNotSame('integer', Schema::getColumnType('lignes_facture', 'quantite'));
+        // Une fraction se propage au stock, aux mouvements et aux avoirs :
+        // aucune colonne de quantité n'est convertie.
+        foreach (['lignes_devis', 'lignes_facture', 'lignes_avoir', 'lignes_achat', 'lignes_avoir_fournisseur', 'mouvements_stock'] as $table) {
+            $this->assertNotSame('integer', Schema::getColumnType($table, 'quantite'), $table);
+        }
         $this->assertNotSame('integer', Schema::getColumnType('produits', 'stock_quantite'));
-        $this->assertSame('integer', Schema::getColumnType('lignes_devis', 'quantite'));
-        $this->assertSame('integer', Schema::getColumnType('produits', 'seuil_alerte'));
 
         $ligne = LigneFacture::query()->findOrFail($ligne->id);
         $this->assertSame(1.5, $ligne->quantite);
@@ -133,6 +136,40 @@ class RendreLesQuantitesEntieresMigrationTest extends TestCase
         $this->assertSame(['33.33', '6.67', '40.00'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
         $this->assertSame(0.5, $ligne->fresh()->quantiteCreditableRestante());
         $this->assertSame(9.5, $produit->fresh()->stock_quantite);
+
+        // Le reliquat exact de 0,5 solde la ligne : 60,00 € crédités au
+        // total, ni plus ni moins, et plus rien à créditer.
+        $solde = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligne->id, 'quantite' => '0.5'],
+        ]));
+        $this->assertSame(0.5, $solde->lignes->firstOrFail()->quantite);
+        $this->assertSame(['16.67', '3.33', '20.00'], [$solde->total_ht, $solde->total_tva, $solde->total_ttc]);
+        $this->assertSame(0, $ligne->fresh()->quantiteCreditableRestante());
+        $this->assertFalse($facture->fresh()->possedeDesLignesCreditables());
+        $this->assertSame(10, $produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * Un ancien brouillon à virgule ne devient jamais une facture émise
+     * aujourd'hui : il faut d'abord le corriger.
+     */
+    public function test_un_ancien_brouillon_a_virgule_doit_etre_corrige_avant_emission(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 2],
+        ]);
+
+        $this->revenirAvantLaMigration();
+        DB::table('lignes_facture')->where('facture_id', $brouillon->id)->update(['quantite' => 1.5]);
+        $this->artisan('migrate')->assertSuccessful();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('a une quantité à virgule (1.5)');
+
+        app(EmettreFactureAction::class)->handle($brouillon);
     }
 
     private function revenirAvantLaMigration(): void

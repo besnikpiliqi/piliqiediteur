@@ -84,7 +84,7 @@
     {{-- La remise n'apparaît que si une ligne en a une : elle explique
          alors pourquoi PU x quantité diffère du total de la ligne. --}}
     @php
-        $avecRemise = $facture->lignes->contains(fn ($ligne) => (float) $ligne->remise_pourcentage > 0);
+        $avecRemise = $facture->lignes->contains(fn ($ligne) => (float) $ligne->remise_pourcentage != 0);
     @endphp
 
     <table class="lignes">

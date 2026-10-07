@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Facturation\Casts\QuantiteArticles;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutAvoir;
@@ -20,6 +21,7 @@ class LigneFacture extends Model
     protected $fillable = [
         'facture_id',
         'produit_id',
+        'service_id',
         'description',
         'reference',
         'quantite',
@@ -54,6 +56,15 @@ class LigneFacture extends Model
     public function produit(): BelongsTo
     {
         return $this->belongsTo(Produit::class);
+    }
+
+    /**
+     * Le service du catalogue dont vient la ligne (voir Service), jamais en
+     * même temps qu'un produit.
+     */
+    public function service(): BelongsTo
+    {
+        return $this->belongsTo(Service::class);
     }
 
     public function lignesAvoir(): HasMany

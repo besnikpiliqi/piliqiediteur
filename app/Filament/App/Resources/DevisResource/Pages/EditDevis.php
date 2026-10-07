@@ -39,6 +39,7 @@ class EditDevis extends EditRecord
     {
         $data['lignes'] = $this->record->lignes->map(fn ($ligne) => [
             'produit_id' => $ligne->produit_id,
+            'service_id' => $ligne->service_id,
             'description' => $ligne->description,
             'reference' => $ligne->reference,
             'quantite' => $ligne->quantite,

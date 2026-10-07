@@ -32,7 +32,7 @@ final class PermissionRegistry
 
     public const FOURNISSEUR_DELETE = 'fournisseur.delete';
 
-    // Produits
+    // Produits -- et services (voir ServicePolicy) : tout le catalogue
     public const PRODUIT_VIEW = 'produit.view';
 
     public const PRODUIT_CREATE = 'produit.create';
@@ -162,9 +162,9 @@ final class PermissionRegistry
             self::FOURNISSEUR_CREATE => 'Fournisseurs : créer',
             self::FOURNISSEUR_UPDATE => 'Fournisseurs : modifier',
             self::FOURNISSEUR_DELETE => 'Fournisseurs : supprimer',
-            self::PRODUIT_VIEW => 'Produits : voir',
-            self::PRODUIT_CREATE => 'Produits : créer',
-            self::PRODUIT_UPDATE => 'Produits : modifier',
+            self::PRODUIT_VIEW => 'Produits et services : voir',
+            self::PRODUIT_CREATE => 'Produits et services : créer',
+            self::PRODUIT_UPDATE => 'Produits et services : modifier',
             self::PRODUIT_DELETE => 'Produits : supprimer',
             self::PRODUIT_AJUSTER_STOCK => 'Produits : ajuster le stock',
             self::PRODUIT_VOIR_VALEUR_STOCK => 'Produits : voir la valeur totale du stock',

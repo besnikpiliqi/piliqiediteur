@@ -4,6 +4,7 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
@@ -912,6 +913,26 @@ class FactureResourceTest extends TestCase
     /**
      * @return Facture
      */
+    public function test_enregistrer_un_brouillon_garde_le_service_de_ses_lignes_de_service(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $service = Service::factory()->create(['nom' => 'Remplacement écran']);
+        $facture = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+            ['service_id' => $service->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
+        ]);
+
+        Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $ligne = $facture->fresh()->lignes->sole();
+        $this->assertSame($service->id, $ligne->service_id);
+        $this->assertSame('15.00', $ligne->montant_ttc);
+    }
+
     private function emettreFactureDepuisLePanneau(Client $client)
     {
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);

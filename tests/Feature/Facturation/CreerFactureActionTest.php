@@ -3,12 +3,15 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use Tests\TestCase;
@@ -182,5 +185,66 @@ class CreerFactureActionTest extends TestCase
         $ligne = $facture->lignes->firstOrFail();
         $this->assertSame(PrixReference::Ttc, $ligne->prix_reference);
         $this->assertSame('80.00', $facture->total_ttc);
+    }
+
+    public function test_une_ligne_de_service_reprend_le_nom_du_service_et_se_calcule_depuis_le_ttc_saisi(): void
+    {
+        $client = Client::factory()->create();
+        $service = Service::factory()->create(['nom' => 'Main-d\'œuvre']);
+
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['service_id' => $service->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
+        ]);
+
+        $ligne = $facture->lignes->sole();
+        $this->assertSame($service->id, $ligne->service_id);
+        $this->assertNull($ligne->produit_id);
+        $this->assertSame('Main-d\'œuvre', $ligne->description);
+        $this->assertSame('12.50', $ligne->montant_ht);
+        $this->assertSame('2.50', $ligne->montant_tva);
+        $this->assertSame('15.00', $ligne->montant_ttc);
+    }
+
+    public function test_une_ligne_de_service_sans_prix_saisi_est_refusee(): void
+    {
+        $client = Client::factory()->create();
+        $service = Service::factory()->create();
+
+        $this->expectException(InvalidArgumentException::class);
+
+        app(CreerFactureAction::class)->handle($client, [
+            ['service_id' => $service->id, 'taux_tva' => 20, 'quantite' => 1],
+        ]);
+    }
+
+    public function test_une_ligne_a_la_fois_produit_et_service_est_refusee(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create();
+        $service = Service::factory()->create();
+
+        try {
+            app(CreerFactureAction::class)->handle($client, [
+                ['produit_id' => $produit->id, 'service_id' => $service->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
+            ]);
+            $this->fail('La ligne aurait dû être refusée.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertSame('Une ligne est un produit ou un service, jamais les deux.', $exception->getMessage());
+        }
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
+    public function test_un_service_d_un_autre_magasin_est_introuvable(): void
+    {
+        $serviceAutreMagasin = Service::factory()->create();
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $client = Client::factory()->create();
+
+        $this->expectException(ModelNotFoundException::class);
+
+        app(CreerFactureAction::class)->handle($client, [
+            ['service_id' => $serviceAutreMagasin->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
+        ]);
     }
 }

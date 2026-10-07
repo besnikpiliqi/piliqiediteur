@@ -17,6 +17,7 @@ use App\Filament\Concerns\SaisitLesPrixDeLigne;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
@@ -90,11 +91,17 @@ class DevisResource extends Resource
      * Partagé avec FactureResource : même structure de ligne (snapshot
      * produit + description/prix/TVA/remise librement modifiables).
      *
+     * Une ligne de service (service_id, ajoutée par le bouton « Ajouter un
+     * service » de la Caisse) n'a ni produit à chercher ni PU HT : le
+     * vendeur n'y saisit que le TTC, la TVA en est déduite comme pour
+     * toute ligne.
+     *
      * @return array<Component>
      */
     public static function ligneSchema(): array
     {
         return [
+            Hidden::make('service_id'),
             Select::make('produit_id')
                 ->label('Produit')
                 ->helperText('Laissez vide pour une ligne libre (main d\'œuvre, service, produit hors catalogue...). Recherchez par nom, référence, ou scannez le code-barres.')
@@ -129,6 +136,7 @@ class DevisResource extends Resource
                 ->createOptionUsing(fn (array $data) => Produit::create($data)->getKey())
                 ->live()
                 ->columnSpan(2)
+                ->visible(fn (Get $get): bool => ! self::estUneLigneDeService($get))
                 ->afterStateUpdated(function (?int $state, Set $set) {
                     $produit = $state ? Produit::find($state) : null;
 
@@ -143,7 +151,12 @@ class DevisResource extends Resource
                     $set('prix_reference', PrixReference::Ttc->value);
                     $set('taux_tva', self::pourcentageEnTexte($produit->taux_tva));
                 }),
-            TextInput::make('description')->required()->columnSpan(2),
+            TextInput::make('description')
+                ->label(fn (Get $get): string => self::estUneLigneDeService($get) ? 'Service' : 'Description')
+                ->required()
+                // Reprend la place du produit et du PU HT, absents d'une
+                // ligne de service.
+                ->columnSpan(fn (Get $get): int => self::estUneLigneDeService($get) ? 5 : 2),
             // live() et non live(onBlur: true) sur tous les champs de la
             // ligne : le total (et, dans la Caisse, la monnaie à rendre) se
             // met à jour pendant la saisie, pas seulement au clic ailleurs.
@@ -152,6 +165,11 @@ class DevisResource extends Resource
             TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->minValue(0)->maxValue(100)->default(0)->saisieEnDirect(),
             self::totalDeLigne(PrixReference::Ttc),
         ];
+    }
+
+    public static function estUneLigneDeService(Get $get): bool
+    {
+        return filled($get('service_id'));
     }
 
     /**

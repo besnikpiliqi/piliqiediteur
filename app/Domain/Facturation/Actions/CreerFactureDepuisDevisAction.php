@@ -44,6 +44,7 @@ class CreerFactureDepuisDevisAction
             foreach ($devis->lignes as $ligne) {
                 $facture->lignes()->create([
                     'produit_id' => $ligne->produit_id,
+                    'service_id' => $ligne->service_id,
                     'description' => $ligne->description,
                     'reference' => $ligne->reference,
                     'quantite' => $ligne->quantite,

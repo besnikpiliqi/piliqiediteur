@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
@@ -291,6 +292,26 @@ class DevisResourceTest extends TestCase
         $this->assertSame($autreClient->id, $devis->client_id);
         $this->assertSame(1, $devis->lignes()->count());
         $this->assertSame('250.00', $devis->total_ht);
+    }
+
+    public function test_enregistrer_un_devis_garde_le_service_de_ses_lignes_de_service(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $service = Service::factory()->create(['nom' => 'Remplacement écran']);
+        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [
+            ['service_id' => $service->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
+        ]);
+
+        Livewire::test(EditDevis::class, ['record' => $devis->getRouteKey()])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $ligne = $devis->fresh()->lignes->sole();
+        $this->assertSame($service->id, $ligne->service_id);
+        $this->assertSame('15.00', $ligne->montant_ttc);
     }
 
     public function test_laction_modifier_disparait_des_quun_devis_est_converti_en_facture(): void

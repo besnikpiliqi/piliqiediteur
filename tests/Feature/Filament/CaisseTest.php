@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
@@ -13,10 +14,12 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\Caisse;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -355,5 +358,224 @@ class CaisseTest extends TestCase
             ->assertHasFormErrors(['montant_recu' => 'max']);
 
         $this->assertSame(0, Facture::query()->count());
+    }
+
+    public function test_ajouter_un_produit_ajoute_une_ligne_vide_avec_les_valeurs_par_defaut(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+
+        $component = Livewire::test(Caisse::class)
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit');
+
+        $ligne = $this->seuleLigne($component);
+        $this->assertNull($ligne['service_id']);
+        $this->assertNull($ligne['produit_id']);
+        $this->assertSame(1, $ligne['quantite']);
+        $this->assertSame(20, $ligne['taux_tva']);
+        $this->assertSame('ttc', $ligne['prix_reference']);
+        $component->assertFormFieldIsVisible('lignes.'.array_key_first($component->get('data.lignes')).'.produit_id');
+    }
+
+    public function test_un_service_coche_devient_une_ligne_de_service_sans_produit_ni_pu_ht(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $service = Service::factory()->create(['nom' => 'Remplacement écran']);
+
+        $component = Livewire::test(Caisse::class)
+            ->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['services' => [$service->id]])
+            ->assertHasNoFormComponentActionErrors();
+
+        $ligne = $this->seuleLigne($component);
+        $this->assertSame($service->id, $ligne['service_id']);
+        $this->assertSame('Remplacement écran', $ligne['description']);
+        $this->assertSame(1, $ligne['quantite']);
+        $this->assertNull($ligne['prix_unitaire_ttc']);
+        $cle = array_key_first($component->get('data.lignes'));
+        $component
+            ->assertFormFieldIsHidden("lignes.{$cle}.produit_id")
+            ->assertFormFieldIsHidden("lignes.{$cle}.prix_unitaire_ht")
+            ->assertFormFieldIsVisible("lignes.{$cle}.prix_unitaire_ttc")
+            ->assertFormFieldIsVisible("lignes.{$cle}.taux_tva");
+    }
+
+    /**
+     * L'exemple du magasin : écran 50 € + main-d'œuvre 15 € = 65 € TTC,
+     * payés ensemble. La TVA du service se déduit du TTC saisi, comme pour
+     * un produit.
+     */
+    public function test_une_vente_avec_un_service_enregistre_sa_ligne_depuis_le_ttc_saisi(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 3]);
+        $mainDOeuvre = Service::factory()->create(['nom' => 'Main-d\'œuvre']);
+        $component = Livewire::test(Caisse::class)
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit');
+        $component->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['services' => [$mainDOeuvre->id]]);
+        [$cleProduit, $cleService] = array_keys($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cleProduit}.produit_id", $ecran->id)
+            ->set("data.lignes.{$cleService}.prix_unitaire_ttc", '15')
+            ->assertSee('12,50 € HT + 2,50 € de TVA')
+            ->assertSee('Total HT 54,17 € · TVA 10,83 € · Total TTC 65,00 €')
+            ->call('encaisser')
+            ->assertHasNoFormErrors();
+
+        $facture = Facture::query()->where('client_id', $clientComptoir->id)->latest('id')->firstOrFail();
+        $this->assertSame(StatutFacture::Payee, $facture->statut);
+        $this->assertSame('65.00', $facture->total_ttc);
+        $ligneService = $facture->lignes->firstWhere('service_id', $mainDOeuvre->id);
+        $this->assertNull($ligneService->produit_id);
+        $this->assertSame('Main-d\'œuvre', $ligneService->description);
+        $this->assertSame('12.50', $ligneService->montant_ht);
+        $this->assertSame('2.50', $ligneService->montant_tva);
+        $this->assertSame('15.00', $ligneService->montant_ttc);
+        $this->assertSame(2, $ecran->fresh()->stock_quantite);
+        $this->assertSame($magasin->id, $ligneService->magasin_id);
+    }
+
+    public function test_un_service_absent_de_la_liste_est_cree_et_propose_en_case_a_cocher_la_fois_suivante(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+
+        $component = Livewire::test(Caisse::class)
+            ->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['nouveau_service' => '  Remplacement   batterie '])
+            ->assertHasNoFormComponentActionErrors()
+            ->assertNotified('Service « Remplacement batterie » ajouté à la liste');
+
+        $service = Service::query()->sole();
+        $this->assertSame('Remplacement batterie', $service->nom);
+        $this->assertTrue($service->actif);
+        $ligne = $this->seuleLigne($component);
+        $this->assertSame($service->id, $ligne['service_id']);
+        $this->assertSame('Remplacement batterie', $ligne['description']);
+
+        Livewire::test(Caisse::class)
+            ->mountFormComponentAction('ajouterUnServiceAction', 'ajouterUnService')
+            ->assertSee('Remplacement batterie');
+    }
+
+    public function test_un_service_deja_cree_sous_une_autre_ecriture_n_est_pas_cree_en_double(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $service = Service::factory()->create(['nom' => 'Main d\'œuvre']);
+
+        $component = Livewire::test(Caisse::class)
+            ->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: [
+                'services' => [$service->id],
+                'nouveau_service' => ' MAIN  d’œuvre',
+            ]);
+
+        $this->assertSame(1, Service::query()->count());
+        $ligne = $this->seuleLigne($component);
+        $this->assertSame($service->id, $ligne['service_id']);
+        $this->assertSame('Main d\'œuvre', $ligne['description']);
+    }
+
+    public function test_chaque_service_coche_devient_une_ligne_dans_l_ordre_des_cases_cochees(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $nettoyage = Service::factory()->create(['nom' => 'Nettoyage']);
+        $diagnostic = Service::factory()->create(['nom' => 'Diagnostic']);
+
+        $component = Livewire::test(Caisse::class)
+            ->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['services' => [$nettoyage->id, $diagnostic->id]]);
+
+        $this->assertSame(
+            ['Nettoyage', 'Diagnostic'],
+            array_values(array_column($component->get('data.lignes'), 'description')),
+        );
+    }
+
+    public function test_la_fenetre_refuse_de_valider_sans_service_coche_ni_nouveau_nom(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        Service::factory()->create(['nom' => 'Diagnostic']);
+
+        $component = Livewire::test(Caisse::class)
+            ->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['services' => [], 'nouveau_service' => ''])
+            ->assertHasFormComponentActionErrors(['services' => ['Cochez au moins un service, ou écrivez le nom d\'un nouveau service.']]);
+
+        $this->assertSame([], $component->get('data.lignes'));
+    }
+
+    public function test_sans_aucun_service_cree_le_nom_du_premier_service_est_demande(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+
+        $component = Livewire::test(Caisse::class)
+            ->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['nouveau_service' => ''])
+            ->assertHasFormComponentActionErrors(['nouveau_service' => 'required']);
+
+        $this->assertSame(0, Service::query()->count());
+        $this->assertSame([], $component->get('data.lignes'));
+    }
+
+    public function test_un_service_archive_n_est_plus_propose_a_la_caisse(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        Service::factory()->create(['nom' => 'Désoxydation']);
+        Service::factory()->archive()->create(['nom' => 'Flashage ancien modèle']);
+
+        Livewire::test(Caisse::class)
+            ->mountFormComponentAction('ajouterUnServiceAction', 'ajouterUnService')
+            ->assertSee('Désoxydation')
+            ->assertDontSee('Flashage ancien modèle');
+    }
+
+    public function test_les_services_d_un_autre_magasin_ne_sont_jamais_proposes(): void
+    {
+        $autreProprietaire = User::factory()->create();
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre Boutique'], $autreProprietaire);
+        Service::factory()->create(['nom' => 'Service de la concurrence']);
+        $this->ouvrirLaCaisseDUnMagasin();
+
+        Livewire::test(Caisse::class)
+            ->mountFormComponentAction('ajouterUnServiceAction', 'ajouterUnService')
+            ->assertDontSee('Service de la concurrence')
+            ->assertSee('Nom du service');
+    }
+
+    /**
+     * Le vendeur au comptoir doit pouvoir facturer une réparation qui n'est
+     * pas encore dans la liste, sans permission de catalogue.
+     */
+    public function test_un_vendeur_avec_les_permissions_par_defaut_cree_un_service_depuis_la_caisse(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        Filament::setTenant($magasin);
+
+        Livewire::test(Caisse::class)
+            ->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['nouveau_service' => 'Pose de verre trempé'])
+            ->assertHasNoFormComponentActionErrors();
+
+        $this->assertSame('Pose de verre trempé', Service::query()->sole()->nom);
+    }
+
+    private function ouvrirLaCaisseDUnMagasin(): Magasin
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        return $magasin;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function seuleLigne(Testable $component): array
+    {
+        $lignes = $component->get('data.lignes');
+        $this->assertCount(1, $lignes);
+
+        return array_values($lignes)[0];
     }
 }

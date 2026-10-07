@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Facturation\Enums\PrixReference;
 use InvalidArgumentException;
 
@@ -26,9 +27,10 @@ class ConstructeurLigneDocument
     /**
      * Le prix saisi (HT ou TTC, voir PrixReference) fait foi pour le calcul
      * de la ligne ; sans prix saisi, c'est le prix de vente TTC du produit
-     * catalogue.
+     * catalogue. Une ligne de service (voir Service) n'a pas de prix
+     * catalogue : son prix est toujours saisi.
      *
-     * @param  array{produit_id?: int, description?: string, reference?: string, quantite: int|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|PrixReference|null, taux_tva?: float|string, remise_pourcentage?: float|string}  $donnees
+     * @param  array{produit_id?: int, service_id?: int, description?: string, reference?: string, quantite: int|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|PrixReference|null, taux_tva?: float|string, remise_pourcentage?: float|string}  $donnees
      * @return array<string, mixed>
      */
     public function construire(array $donnees, int $ordre): array
@@ -37,7 +39,15 @@ class ConstructeurLigneDocument
             ? Produit::query()->findOrFail($donnees['produit_id'])
             : null;
 
-        $description = $donnees['description'] ?? $produit?->nom
+        $service = isset($donnees['service_id'])
+            ? Service::query()->findOrFail($donnees['service_id'])
+            : null;
+
+        if ($produit !== null && $service !== null) {
+            throw new InvalidArgumentException('Une ligne est un produit ou un service, jamais les deux.');
+        }
+
+        $description = $donnees['description'] ?? $produit?->nom ?? $service?->nom
             ?? throw new InvalidArgumentException('Une ligne sans produit_id doit fournir une description.');
 
         $tauxTva = (float) ($donnees['taux_tva'] ?? $produit?->taux_tva
@@ -64,6 +74,7 @@ class ConstructeurLigneDocument
 
         return [
             'produit_id' => $produit?->id,
+            'service_id' => $service?->id,
             'description' => $description,
             'reference' => $donnees['reference'] ?? $produit?->reference,
             'quantite' => $quantite,

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
@@ -94,6 +95,23 @@ class DevisConversionTest extends TestCase
         $this->assertSame($ligneDevis->montant_ttc, $ligneFacture->montant_ttc);
         $this->assertSame($ligneDevis->prix_unitaire_ttc, $ligneFacture->prix_unitaire_ttc);
         $this->assertSame('60.00', $ligneFacture->prix_unitaire_ttc);
+    }
+
+    public function test_convertir_un_devis_garde_le_service_de_chaque_ligne_de_service(): void
+    {
+        $client = Client::factory()->create();
+        $service = Service::factory()->create(['nom' => 'Remplacement écran']);
+        $devis = app(CreerDevisAction::class)->handle($client, [
+            ['service_id' => $service->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
+        ]);
+        $devis = app(AccepterDevisAction::class)->handle(app(EmettreDevisAction::class)->handle($devis));
+
+        $facture = app(CreerFactureDepuisDevisAction::class)->handle($devis);
+
+        $ligne = $facture->lignes->sole();
+        $this->assertSame($service->id, $ligne->service_id);
+        $this->assertNull($ligne->produit_id);
+        $this->assertSame('Remplacement écran', $ligne->description);
     }
 
     public function test_impossible_de_convertir_un_devis_pas_encore_accepte(): void

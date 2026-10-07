@@ -33,6 +33,9 @@ trait SaisitLesPrixDeLigne
                 ->label('PU HT')
                 ->numeric()
                 ->saisieEnDirect()
+                // Une ligne de service (voir DevisResource::ligneSchema()) se
+                // saisit uniquement en TTC.
+                ->visible(fn (Get $get): bool => blank($get('service_id')))
                 ->required(fn (Get $get) => self::referenceDeLigne($get, $referenceParDefaut) === PrixReference::Ht)
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
                     if (blank($state)) {

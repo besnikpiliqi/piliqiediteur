@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Models;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Avoir;
@@ -107,6 +108,11 @@ class Magasin extends Model implements HasName
     public function produits(): HasMany
     {
         return $this->hasMany(Produit::class);
+    }
+
+    public function services(): HasMany
+    {
+        return $this->hasMany(Service::class);
     }
 
     public function devis(): HasMany

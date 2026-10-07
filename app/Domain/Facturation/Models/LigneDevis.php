@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Facturation\Casts\QuantiteArticles;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -23,6 +24,7 @@ class LigneDevis extends Model
     protected $fillable = [
         'devis_id',
         'produit_id',
+        'service_id',
         'description',
         'reference',
         'quantite',
@@ -57,5 +59,14 @@ class LigneDevis extends Model
     public function produit(): BelongsTo
     {
         return $this->belongsTo(Produit::class);
+    }
+
+    /**
+     * Le service du catalogue dont vient la ligne (voir Service), jamais en
+     * même temps qu'un produit.
+     */
+    public function service(): BelongsTo
+    {
+        return $this->belongsTo(Service::class);
     }
 }

@@ -36,8 +36,6 @@ class NoterLesVentesCompteesParFermetureMigrationTest extends TestCase
      */
     public function test_les_fermetures_existantes_sont_reprises_et_la_vente_sautee_est_rattrapee(): void
     {
-        $this->revenirAvantLaMigration();
-
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
         $vendeur = User::factory()->create();
@@ -45,15 +43,19 @@ class NoterLesVentesCompteesParFermetureMigrationTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
 
+        // Les ventes sont faites avec le schéma complet (les actions d'aujourd'hui
+        // écrivent des colonnes ajoutées après cette migration), les fermetures
+        // à l'ancien curseur une fois revenu avant elle.
         $debut = now()->startOfHour();
         $this->travelTo($debut);
         $brouillon = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
         $venteComptee = $this->emettreUneVente($client, $produit);
-        $premiereFermeture = $this->fermetureAvecCurseur($magasin, $vendeur, $venteComptee, $debut->copy()->addMinute());
-
         $this->travelTo($debut->copy()->addMinutes(10));
         app(EmettreFactureAction::class)->handle($brouillon);
         $venteSuivante = $this->emettreUneVente($client, $produit);
+
+        $this->revenirAvantLaMigration();
+        $premiereFermeture = $this->fermetureAvecCurseur($magasin, $vendeur, $venteComptee, $debut->copy()->addMinute());
         $secondeFermeture = $this->fermetureAvecCurseur($magasin, $vendeur, $venteSuivante, $debut->copy()->addMinutes(20));
         $this->travelTo($debut->copy()->addMinutes(30));
 

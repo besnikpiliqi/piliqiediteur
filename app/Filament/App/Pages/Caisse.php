@@ -3,6 +3,8 @@
 namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -11,7 +13,9 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
+use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Actions\Action;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
@@ -23,6 +27,8 @@ use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Support\Enums\ActionSize;
+use Filament\Support\Enums\MaxWidth;
 use InvalidArgumentException;
 use LogicException;
 
@@ -117,14 +123,20 @@ class Caisse extends Page implements HasForms
                     ->required(),
             ]),
 
-            Section::make('Produits')->schema([
+            Section::make('Produits et services')->schema([
                 Repeater::make('lignes')
                     ->label('')
                     ->schema(DevisResource::ligneSchema())
                     ->columns(9)
                     ->defaultItems(1)
-                    ->addActionLabel('Ajouter un produit')
+                    ->itemLabel(fn (array $state): string => filled($state['service_id'] ?? null) ? 'Service' : 'Produit')
+                    // Remplacé par les deux boutons côte à côte ci-dessous.
+                    ->addable(false)
                     ->required(),
+                Actions::make([
+                    $this->actionAjouterUnProduit(),
+                    $this->actionAjouterUnService(),
+                ])->alignCenter(),
                 DevisResource::totauxDuDocument(PrixReference::Ttc),
             ]),
 
@@ -173,6 +185,124 @@ class Caisse extends Page implements HasForms
                     ->maxLength(100),
             ])->columns(2),
         ])->statePath('data');
+    }
+
+    private function actionAjouterUnProduit(): Action
+    {
+        return Action::make('ajouterUnProduit')
+            ->label('Ajouter un produit')
+            ->color('gray')
+            ->size(ActionSize::Small)
+            ->action(fn () => $this->ajouterUneLigne());
+    }
+
+    /**
+     * Cases à cocher des services que le magasin a déjà créés ; un service
+     * qui n'y est pas encore se crée ici et y sera proposé la prochaine
+     * fois (voir TrouverOuCreerServiceAction). Chaque service coché devient
+     * une ligne dont le vendeur saisit le prix TTC.
+     *
+     * Ouvert à quiconque peut encaisser (voir canAccess()), création
+     * comprise : un service n'est qu'un nom, sans prix ni stock, et le
+     * vendeur doit pouvoir facturer une réparation qui n'est pas encore
+     * dans la liste.
+     */
+    private function actionAjouterUnService(): Action
+    {
+        return Action::make('ajouterUnService')
+            ->label('Ajouter un service')
+            ->color('gray')
+            ->size(ActionSize::Small)
+            ->modalHeading('Ajouter un service')
+            ->modalDescription('Cochez les services réalisés : chacun devient une ligne dont vous saisissez le prix TTC.')
+            ->modalSubmitActionLabel('Ajouter')
+            ->modalWidth(MaxWidth::Large)
+            ->form([
+                CheckboxList::make('services')
+                    ->label('Services du magasin')
+                    ->options(fn (): array => Service::query()->actifs()->orderBy('nom')->pluck('nom', 'id')->all())
+                    ->searchable()
+                    ->noSearchResultsMessage('Aucun service ne correspond.')
+                    ->visible(fn (): bool => Service::query()->actifs()->exists())
+                    ->required(fn (Get $get): bool => blank($get('nouveau_service')))
+                    // Pas d'astérisque : un nouveau service tapé plus bas
+                    // dispense de cocher.
+                    ->markAsRequired(false)
+                    ->validationMessages(['required' => 'Cochez au moins un service, ou écrivez le nom d\'un nouveau service.']),
+                TextInput::make('nouveau_service')
+                    ->label(fn (): string => Service::query()->actifs()->exists() ? 'Le service n\'est pas dans la liste ?' : 'Nom du service')
+                    ->placeholder('Ex. : Remplacement écran')
+                    ->helperText('Il sera ajouté à la liste : la prochaine fois, il suffira de le cocher.')
+                    ->maxLength(Service::LONGUEUR_MAXIMALE_NOM)
+                    ->required(fn (): bool => ! Service::query()->actifs()->exists()),
+            ])
+            ->action(fn (array $data) => $this->ajouterLesServices($data));
+    }
+
+    /**
+     * @param  array{services?: list<int|string>|null, nouveau_service?: string|null}  $data
+     */
+    private function ajouterLesServices(array $data): void
+    {
+        $identifiants = array_map('intval', $data['services'] ?? []);
+
+        if (filled($data['nouveau_service'] ?? null)) {
+            try {
+                $nouveau = app(TrouverOuCreerServiceAction::class)->handle($data['nouveau_service']);
+            } catch (InvalidArgumentException $exception) {
+                Notification::make()->title($exception->getMessage())->danger()->send();
+
+                return;
+            }
+
+            if ($nouveau->wasRecentlyCreated) {
+                Notification::make()
+                    ->title("Service « {$nouveau->nom} » ajouté à la liste")
+                    ->body('La prochaine fois, il suffira de le cocher.')
+                    ->success()
+                    ->send();
+            }
+
+            $identifiants[] = $nouveau->id;
+        }
+
+        $services = Service::query()->whereKey($identifiants)->get()->keyBy('id');
+
+        // Dans l'ordre où le vendeur les a cochés ; le nouveau service en
+        // dernier, une seule fois même s'il était déjà coché.
+        foreach (array_unique($identifiants) as $identifiant) {
+            $service = $services->get($identifiant);
+
+            if ($service !== null) {
+                $this->ajouterUneLigne(['service_id' => $service->id, 'description' => $service->nom]);
+            }
+        }
+    }
+
+    /**
+     * Comme le bouton natif du Repeater : la nouvelle ligne reçoit les
+     * valeurs par défaut de ses champs (quantité 1, TVA 20 %...), puis
+     * celles données ici.
+     *
+     * @param  array<string, mixed>  $valeurs
+     */
+    private function ajouterUneLigne(array $valeurs = []): void
+    {
+        /** @var Repeater $lignes */
+        $lignes = $this->form->getComponent('data.lignes');
+
+        $uuid = $lignes->generateUuid();
+
+        $lignes->state([...($lignes->getState() ?? []), $uuid => []]);
+        $lignes->getChildComponentContainer($uuid)->fill();
+
+        if ($valeurs !== []) {
+            $etat = $lignes->getState();
+            $etat[$uuid] = [...$etat[$uuid], ...$valeurs];
+            $lignes->state($etat);
+        }
+
+        $lignes->callAfterStateUpdated();
     }
 
     public function encaisser(): void

@@ -215,9 +215,8 @@ class FactureResource extends Resource
             ]),
 
             InfolistSection::make('Avoirs émis')
-                // Un avoir peut être partiel (voir CreerAvoirAction) : une
-                // facture peut donc avoir reçu plusieurs avoirs successifs,
-                // pas seulement un unique avoir total.
+                // Une facture peut recevoir plusieurs avoirs successifs,
+                // chacun partiel (voir CreerAvoirAction).
                 ->visible(fn (Facture $record) => $record->avoirsEmisConcernes()->exists())
                 ->schema([
                     RepeatableEntry::make('avoirsEmisListe')
@@ -262,7 +261,7 @@ class FactureResource extends Resource
                                 ->state(fn (Avoir $record) => $record->lignes)
                                 ->schema([
                                     TextEntry::make('description')->state(fn (LigneAvoir $record) => $record->description),
-                                    TextEntry::make('quantite')->label('Quantité')->state(fn (LigneAvoir $record) => $record->quantite)->numeric(maxDecimalPlaces: 3),
+                                    TextEntry::make('quantite')->label('Quantité')->state(fn (LigneAvoir $record) => $record->quantite)->numeric(),
                                     TextEntry::make('montant_ht')->label('Total HT')->state(fn (LigneAvoir $record) => $record->montant_ht)->money('EUR'),
                                     TextEntry::make('montant_tva')->label('TVA')->state(fn (LigneAvoir $record) => $record->montant_tva)->money('EUR'),
                                     TextEntry::make('montant_ttc')->label('Total TTC')->state(fn (LigneAvoir $record) => $record->montant_ttc)->money('EUR'),

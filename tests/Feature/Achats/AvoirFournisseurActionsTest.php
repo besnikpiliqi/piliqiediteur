@@ -121,7 +121,7 @@ class AvoirFournisseurActionsTest extends TestCase
         app(EmettreFactureAction::class)->handle($facture);
 
         $this->assertSame(2, $produit->fresh()->stock_quantite);
-        $this->assertEquals(2, $ligneAchat->fresh()->quantiteRetournableRestante());
+        $this->assertSame(2, $ligneAchat->fresh()->quantiteRetournableRestante());
 
         // Tenter de retourner les 5 unités d'origine (dont 3 déjà vendues)
         // doit échouer.
@@ -181,14 +181,14 @@ class AvoirFournisseurActionsTest extends TestCase
         ]);
         app(EmettreAvoirFournisseurAction::class)->handle($premierAvoir);
 
-        $this->assertEquals(3, $ligneAchat->fresh()->quantiteRetournableRestante());
+        $this->assertSame(3, $ligneAchat->fresh()->quantiteRetournableRestante());
 
         $secondAvoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
             ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 3],
         ]);
         app(EmettreAvoirFournisseurAction::class)->handle($secondAvoir);
 
-        $this->assertEquals(0, $ligneAchat->fresh()->quantiteRetournableRestante());
+        $this->assertSame(0, $ligneAchat->fresh()->quantiteRetournableRestante());
     }
 
     /**

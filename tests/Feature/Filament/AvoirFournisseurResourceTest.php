@@ -112,7 +112,7 @@ class AvoirFournisseurResourceTest extends TestCase
 
         $avoir = AvoirFournisseur::query()->where('facture_achat_id', $factureAchat->id)->firstOrFail();
         $this->assertSame(0, $produit->fresh()->stock_quantite);
-        $this->assertEquals(0, $ligneAchat->fresh()->quantiteRetournableRestante());
+        $this->assertSame(0, $ligneAchat->fresh()->quantiteRetournableRestante());
     }
 
     /**

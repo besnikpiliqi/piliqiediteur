@@ -122,16 +122,16 @@ class AvoirActionsTest extends TestCase
         ], 'Retour partiel');
 
         $ligneAvoir = $avoir->lignes->firstOrFail();
-        $this->assertEquals(1, $ligneAvoir->quantite);
+        $this->assertSame(1, $ligneAvoir->quantite);
         $this->assertSame('50.00', $ligneAvoir->montant_ht);
         $this->assertSame('50.00', $avoir->total_ht);
 
         // Tant que l'avoir n'est pas ÉMIS, il n'a aucune existence légale
         // et ne réduit pas encore la quantité restante créditable (voir
         // LigneFacture::quantiteDejaCreditee).
-        $this->assertEquals(3, $ligneFacture->quantiteCreditableRestante());
+        $this->assertSame(3, $ligneFacture->quantiteCreditableRestante());
         app(EmettreAvoirAction::class)->handle($avoir);
-        $this->assertEquals(2, $ligneFacture->fresh()->quantiteCreditableRestante());
+        $this->assertSame(2, $ligneFacture->fresh()->quantiteCreditableRestante());
     }
 
     public function test_creer_un_avoir_ne_touche_pas_encore_au_stock(): void
@@ -234,9 +234,9 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
-     * Après un premier avoir partiel émis, un second avoir peut créditer le
-     * reliquat restant de la même ligne -- un avoir n'est donc plus limité
-     * à un seul par facture.
+     * Après un premier avoir partiel émis, un second avoir peut créditer ce
+     * qui reste sur la même ligne : une facture peut recevoir plusieurs
+     * avoirs.
      */
     public function test_un_second_avoir_peut_crediter_le_reliquat_dune_ligne_deja_partiellement_creditee(): void
     {
@@ -250,7 +250,7 @@ class AvoirActionsTest extends TestCase
         ]);
         app(EmettreAvoirAction::class)->handle($premierAvoir);
 
-        $this->assertEquals(2, $ligneFacture->fresh()->quantiteCreditableRestante());
+        $this->assertSame(2, $ligneFacture->fresh()->quantiteCreditableRestante());
 
         // Tenter de créditer plus que le reliquat (2) échoue toujours.
         try {
@@ -267,7 +267,7 @@ class AvoirActionsTest extends TestCase
         ]);
         app(EmettreAvoirAction::class)->handle($secondAvoir);
 
-        $this->assertEquals(0, $ligneFacture->fresh()->quantiteCreditableRestante());
+        $this->assertSame(0, $ligneFacture->fresh()->quantiteCreditableRestante());
     }
 
     public function test_un_avoir_encore_en_brouillon_nempeche_pas_den_creer_un_nouveau(): void

@@ -114,7 +114,7 @@ class DevisResourceTest extends TestCase
             ->fillForm([
                 'client_id' => $client->id,
                 'lignes' => [
-                    // PU TTC, pas HT : seul champ de prix désormais saisi
+                    // PU TTC saisi : c'est lui qui fait foi pour une vente
                     // sur une ligne (voir DevisResource::ligneSchema()). 54 €
                     // TTC à 20 % de TVA = 45 € HT.
                     ['description' => 'Main d\'œuvre - pose', 'quantite' => 3, 'prix_unitaire_ttc' => 54, 'taux_tva' => 20, 'remise_pourcentage' => 0],

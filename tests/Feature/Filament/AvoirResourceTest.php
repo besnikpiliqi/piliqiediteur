@@ -110,7 +110,7 @@ class AvoirResourceTest extends TestCase
         Livewire::test(ListFactures::class)
             ->assertTableActionVisible('avoir', $facture->fresh());
 
-        $this->assertEquals(2, $ligneFacture->fresh()->quantiteCreditableRestante());
+        $this->assertSame(2, $ligneFacture->fresh()->quantiteCreditableRestante());
         $this->assertSame(8, $facture->lignes->first()->produit->fresh()->stock_quantite);
     }
 

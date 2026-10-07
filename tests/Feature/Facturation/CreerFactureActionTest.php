@@ -193,16 +193,16 @@ class CreerFactureActionTest extends TestCase
         $service = Service::factory()->create(['nom' => 'Main-d\'œuvre']);
 
         $facture = app(CreerFactureAction::class)->handle($client, [
-            ['service_id' => $service->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
+            ['service_id' => $service->id, 'prix_unitaire_ttc' => '15.03', 'taux_tva' => 20, 'quantite' => 1],
         ]);
 
         $ligne = $facture->lignes->sole();
         $this->assertSame($service->id, $ligne->service_id);
         $this->assertNull($ligne->produit_id);
         $this->assertSame('Main-d\'œuvre', $ligne->description);
-        $this->assertSame('12.50', $ligne->montant_ht);
+        $this->assertSame('12.53', $ligne->montant_ht);
         $this->assertSame('2.50', $ligne->montant_tva);
-        $this->assertSame('15.00', $ligne->montant_ttc);
+        $this->assertSame('15.03', $ligne->montant_ttc);
     }
 
     public function test_une_ligne_de_service_sans_prix_saisi_est_refusee(): void

@@ -7,6 +7,7 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -41,6 +42,9 @@ class TrouverOuCreerServiceActionTest extends TestCase
             'majuscules' => ["MAIN D'ŒUVRE"],
             'espaces en trop' => ["  Main   d'œuvre "],
             'apostrophe typographique' => ['Main d’œuvre'],
+            'oe tapé sur un clavier de PC' => ["Main d'oeuvre"],
+            'majuscules sans accent ni ligature' => ["MAIN D'OEUVRE"],
+            'trait d’union' => ["Main-d'œuvre"],
         ];
     }
 
@@ -53,6 +57,56 @@ class TrouverOuCreerServiceActionTest extends TestCase
 
         $this->assertTrue($service->is($existant));
         $this->assertSame('Main d\'œuvre', $service->nom);
+        $this->assertSame(1, Service::query()->count());
+    }
+
+    public function test_un_nom_sans_accent_reprend_le_service_accentue(): void
+    {
+        $existant = Service::factory()->create(['nom' => 'Remplacement écran']);
+
+        $service = app(TrouverOuCreerServiceAction::class)->handle('REMPLACEMENT ECRAN');
+
+        $this->assertTrue($service->is($existant));
+        $this->assertSame(1, Service::query()->count());
+    }
+
+    public function test_deux_noms_faits_seulement_d_emojis_differents_restent_deux_services(): void
+    {
+        $telephone = app(TrouverOuCreerServiceAction::class)->handle('📱');
+
+        $deuxTelephones = app(TrouverOuCreerServiceAction::class)->handle('📱📱');
+
+        $this->assertFalse($deuxTelephones->is($telephone));
+        $this->assertSame(2, Service::query()->count());
+    }
+
+    /**
+     * Deux caisses du même magasin créent le même service au même instant :
+     * l'autre caisse a inséré le sien entre la recherche et la création.
+     */
+    public function test_un_service_cree_entre_temps_par_une_autre_caisse_est_repris_et_reactive(): void
+    {
+        $magasinId = app(TenantContext::class)->id();
+        $insere = false;
+        Service::creating(function () use (&$insere, $magasinId): void {
+            if (! $insere) {
+                $insere = true;
+                DB::table('services')->insert([
+                    'magasin_id' => $magasinId,
+                    'nom' => 'Diagnostic',
+                    'nom_normalise' => 'diagnostic',
+                    'actif' => false,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        });
+
+        $service = app(TrouverOuCreerServiceAction::class)->handle('diagnostic');
+
+        $this->assertTrue($insere);
+        $this->assertSame('Diagnostic', $service->nom);
+        $this->assertTrue($service->fresh()->actif);
         $this->assertSame(1, Service::query()->count());
     }
 

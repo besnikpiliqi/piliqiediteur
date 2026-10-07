@@ -36,6 +36,7 @@ class ServiceResource extends Resource
             TextInput::make('nom')
                 ->required()
                 ->maxLength(Service::LONGUEUR_MAXIMALE_NOM)
+                ->rule(fn (): Closure => self::regleNomRempli())
                 ->rule(fn (?Service $record): Closure => self::regleNomUnique($record))
                 ->columnSpanFull(),
             Toggle::make('actif')
@@ -44,6 +45,20 @@ class ServiceResource extends Resource
                 ->default(true)
                 ->columnSpanFull(),
         ]);
+    }
+
+    /**
+     * « required » laisse passer un nom fait seulement d'espaces insécables
+     * (fréquents sur un clavier de téléphone), qui serait vide une fois
+     * nettoyé (voir Service::nettoyerNom()). Partagée avec la caisse.
+     */
+    public static function regleNomRempli(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail): void {
+            if (filled($value) && Service::nettoyerNom((string) $value) === '') {
+                $fail('Le nom du service ne peut pas être fait seulement d\'espaces.');
+            }
+        };
     }
 
     /**

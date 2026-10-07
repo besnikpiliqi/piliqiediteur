@@ -93,6 +93,17 @@ class ServiceResourceTest extends TestCase
         $this->assertSame(1, Service::query()->count());
     }
 
+    public function test_un_nom_fait_seulement_d_espaces_insecables_est_refuse(): void
+    {
+        $this->connecterProprietaire();
+
+        Livewire::test(ManageServices::class)
+            ->callAction('create', data: ['nom' => "\u{00A0}", 'actif' => true])
+            ->assertHasActionErrors(['nom' => ['Le nom du service ne peut pas être fait seulement d\'espaces.']]);
+
+        $this->assertSame(0, Service::query()->count());
+    }
+
     public function test_archiver_un_service_le_retire_de_la_caisse(): void
     {
         $this->connecterProprietaire();

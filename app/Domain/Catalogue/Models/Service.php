@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 /**
  * Un service que le magasin réalise (remplacement d'écran, main-d'œuvre,
@@ -25,6 +27,12 @@ class Service extends Model
 
     public const LONGUEUR_MAXIMALE_NOM = 150;
 
+    /**
+     * Longueur de la clé de doublon : la translittération peut allonger un
+     * nom (« œ » devient « oe », « … » devient « ... »).
+     */
+    public const LONGUEUR_MAXIMALE_CLE = 255;
+
     protected $fillable = [
         'nom',
         'actif',
@@ -38,12 +46,18 @@ class Service extends Model
     {
         static::saving(function (Service $service) {
             $service->nom = self::nettoyerNom((string) $service->nom);
+
+            if ($service->nom === '') {
+                throw new InvalidArgumentException('Le nom du service est obligatoire.');
+            }
+
             $service->nom_normalise = self::normaliserNom($service->nom);
         });
     }
 
     /**
-     * Le nom tel qu'il s'affiche : sans espaces autour, ni espaces répétés.
+     * Le nom tel qu'il s'affiche : sans espaces autour, ni espaces répétés
+     * (espaces insécables compris).
      */
     public static function nettoyerNom(string $nom): string
     {
@@ -51,13 +65,20 @@ class Service extends Model
     }
 
     /**
-     * Clé de doublon : "Main d'œuvre", "main d’œuvre" et " MAIN  D'ŒUVRE "
-     * désignent le même service. L'apostrophe typographique (’) qu'insèrent
-     * les claviers de téléphone vaut l'apostrophe droite.
+     * Clé de doublon : « Main d'œuvre », « main d’oeuvre », « Main-d'œuvre »
+     * et « MAIN D'OEUVRE » désignent le même service, comme « Remplacement
+     * écran » et « REMPLACEMENT ECRAN ». Accents, ligatures, majuscules,
+     * tirets et apostrophes typographiques des claviers de téléphone sont
+     * ignorés, en PHP et non par la collation de la base : SQLite et MySQL
+     * décident pareil. Un nom sans aucune lettre latine (que des emojis)
+     * garde sa propre écriture plutôt que de devenir une clé vide.
      */
     public static function normaliserNom(string $nom): string
     {
-        return mb_strtolower(str_replace(['’', '‘', 'ʼ', '`'], "'", self::nettoyerNom($nom)));
+        $nom = self::nettoyerNom((string) preg_replace('/\p{Pd}/u', ' ', str_replace(['’', '‘', 'ʼ', '`'], "'", $nom)));
+        $sansAccents = self::nettoyerNom(Str::ascii($nom, 'fr'));
+
+        return mb_substr(mb_strtolower($sansAccents !== '' ? $sansAccents : $nom), 0, self::LONGUEUR_MAXIMALE_CLE);
     }
 
     /**

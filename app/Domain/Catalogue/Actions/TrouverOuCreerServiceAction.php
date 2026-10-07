@@ -36,8 +36,10 @@ class TrouverOuCreerServiceAction
         try {
             $service = Service::query()->where($cle)->first() ?? Service::create(['nom' => $nom]);
         } catch (UniqueConstraintViolationException) {
-            // Un autre vendeur vient de créer le même service : la
-            // contrainte d'unicité a tranché, on reprend le sien.
+            // Deux caisses DU MÊME MAGASIN viennent de créer le même service
+            // au même instant : l'unicité (magasin_id, nom_normalise) a
+            // tranché, on reprend celui de l'autre caisse. Les services d'un
+            // autre magasin ne sont jamais vus ici (MagasinScope).
             $service = Service::query()->where($cle)->firstOrFail();
         }
 

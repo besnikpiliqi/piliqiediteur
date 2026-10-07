@@ -57,6 +57,13 @@ trait SaisitLesPrixDeLigne
                 ->required(fn (Get $get) => self::referenceDeLigne($get, $referenceParDefaut) === PrixReference::Ttc)
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
                     if (blank($state)) {
+                        // Sur une ligne de service, le PU HT est caché : s'il
+                        // gardait sa valeur, l'aperçu afficherait encore
+                        // l'ancien total alors que le TTC a été effacé.
+                        if (filled($get('service_id'))) {
+                            $set('prix_unitaire_ht', null);
+                        }
+
                         return;
                     }
 

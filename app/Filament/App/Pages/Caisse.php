@@ -13,6 +13,8 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
+use App\Filament\App\Resources\ServiceResource;
+use Closure;
 use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
@@ -234,6 +236,7 @@ class Caisse extends Page implements HasForms
                     ->placeholder('Ex. : Remplacement écran')
                     ->helperText('Il sera ajouté à la liste : la prochaine fois, il suffira de le cocher.')
                     ->maxLength(Service::LONGUEUR_MAXIMALE_NOM)
+                    ->rule(fn (): Closure => ServiceResource::regleNomRempli())
                     ->required(fn (): bool => ! Service::query()->actifs()->exists()),
             ])
             ->action(fn (array $data) => $this->ajouterLesServices($data));
@@ -245,10 +248,11 @@ class Caisse extends Page implements HasForms
     private function ajouterLesServices(array $data): void
     {
         $identifiants = array_map('intval', $data['services'] ?? []);
+        $nouveauService = Service::nettoyerNom((string) ($data['nouveau_service'] ?? ''));
 
-        if (filled($data['nouveau_service'] ?? null)) {
+        if ($nouveauService !== '') {
             try {
-                $nouveau = app(TrouverOuCreerServiceAction::class)->handle($data['nouveau_service']);
+                $nouveau = app(TrouverOuCreerServiceAction::class)->handle($nouveauService);
             } catch (InvalidArgumentException $exception) {
                 Notification::make()->title($exception->getMessage())->danger()->send();
 
@@ -259,6 +263,11 @@ class Caisse extends Page implements HasForms
                 Notification::make()
                     ->title("Service « {$nouveau->nom} » ajouté à la liste")
                     ->body('La prochaine fois, il suffira de le cocher.')
+                    ->success()
+                    ->send();
+            } elseif ($nouveau->wasChanged('actif')) {
+                Notification::make()
+                    ->title("Service « {$nouveau->nom} » de nouveau proposé à la caisse")
                     ->success()
                     ->send();
             }

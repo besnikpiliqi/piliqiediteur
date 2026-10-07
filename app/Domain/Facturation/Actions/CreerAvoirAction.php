@@ -3,7 +3,6 @@
 namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\LigneFacture;
@@ -86,23 +85,7 @@ class CreerAvoirAction
                     throw new LogicException("La ligne \"{$ligneFacture->description}\" ne peut pas être créditée au-delà de la quantité restante ({$restante}).");
                 }
 
-                // Un retour partiel reprend les PU HT/TTC de la ligne facturée
-                // (article par article, voir CalculateurLigne) ; le dernier
-                // retour en prend le solde exact.
-                $montants = $quantite === $restante
-                    ? $this->calculateurLigne->solder(
-                        $ligneFacture->only(['montant_ht', 'montant_tva', 'montant_ttc']),
-                        $ligneFacture->lignesAvoir()
-                            ->whereHas('avoir', fn ($query) => $query->where('statut', StatutAvoir::Emise))
-                            ->get(['montant_ht', 'montant_tva', 'montant_ttc'])
-                            ->toArray(),
-                    )
-                    : $this->calculateurLigne->calculer(
-                        (float) $ligneFacture->prix_unitaire_ht,
-                        (float) $ligneFacture->prix_unitaire_ttc,
-                        $quantite,
-                        (float) $ligneFacture->remise_pourcentage,
-                    );
+                $montants = $ligneFacture->montantsDuRetour($quantite);
 
                 $avoir->lignes()->create([
                     'ligne_facture_id' => $ligneFacture->id,

@@ -300,6 +300,78 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
+     * Deux retours du même article saisis en même temps : le second
+     * brouillon a été créé avant l'émission du premier, mais au moment
+     * d'être émis il ne trouve plus rien à créditer.
+     */
+    public function test_un_avoir_ne_credite_jamais_une_ligne_creditee_entre_temps_par_un_autre(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $facture = $this->emettreFacture($client, $produit, 1);
+        $premier = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
+        $second = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
+        app(EmettreAvoirAction::class)->handle($premier);
+
+        $this->expectExceptionObject(new LogicException("La ligne \"{$produit->nom}\" a été créditée entre-temps par un autre avoir : il ne reste que 0 article(s) à créditer."));
+
+        try {
+            app(EmettreAvoirAction::class)->handle($second);
+        } finally {
+            $this->assertSame(StatutAvoir::Brouillon, $second->fresh()->statut);
+            $this->assertSame(10, $produit->fresh()->stock_quantite);
+        }
+    }
+
+    /**
+     * Les deux retours d'une ligne remisée sont saisis avant toute
+     * émission : chacun vaut alors 30,00 € HT, mais celui qui est émis en
+     * dernier finit de créditer la ligne et en prend le solde exact
+     * (29,99 € HT), comme s'il avait été saisi après le premier.
+     */
+    public function test_le_dernier_avoir_emis_sur_une_ligne_en_credite_le_solde_exact_meme_saisi_avant(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 2, 'remise_pourcentage' => 10],
+        ]));
+        $ligneFacture = $facture->lignes->firstOrFail();
+        $premier = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]);
+        $dernier = app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
+        ]);
+        app(EmettreAvoirAction::class)->handle($premier);
+
+        app(EmettreAvoirAction::class)->handle($dernier);
+
+        $dernier = $dernier->fresh('lignes');
+        $ligneAvoir = $dernier->lignes->firstOrFail();
+        $this->assertSame(['29.99', '6.01', '36.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+        $this->assertSame(['29.99', '6.01', '36.00'], [$ligneAvoir->montant_ht, $ligneAvoir->montant_tva, $ligneAvoir->montant_ttc]);
+    }
+
+    public function test_un_avoir_ne_s_emet_pas_sur_une_facture_annulee_depuis_sa_saisie(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $facture = $this->emettreFacture($client, $produit, 1);
+        $avoir = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
+        app(AnnulerFactureAction::class)->handle($facture, 'Erreur de saisie');
+
+        $this->expectExceptionObject(new LogicException("Impossible d'émettre cet avoir : la facture {$facture->numero} a été annulée."));
+
+        try {
+            app(EmettreAvoirAction::class)->handle($avoir);
+        } finally {
+            $this->assertSame(StatutAvoir::Brouillon, $avoir->fresh()->statut);
+            $this->assertSame(10, $produit->fresh()->stock_quantite);
+        }
+    }
+
+    /**
      * Un retour partiel reprend le PU TTC de la ligne vendue (qui fait
      * référence) : rendre 1 article sur 2 vendus à 40 € TTC crédite
      * exactement 40,00 €, et le second retour retombe pile sur les 80,00 €

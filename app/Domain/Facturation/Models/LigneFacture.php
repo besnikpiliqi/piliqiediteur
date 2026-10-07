@@ -6,6 +6,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutAvoir;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -93,5 +94,36 @@ class LigneFacture extends Model
     public function quantiteCreditableRestante(): int
     {
         return $this->quantite - $this->quantiteDejaCreditee();
+    }
+
+    /**
+     * Montants d'un retour de $quantite articles de cette ligne : ses PU,
+     * article par article (voir CalculateurLigne), et pour le retour qui
+     * finit de la créditer, son solde exact une fois déduits les avoirs
+     * déjà émis -- jamais un centime de plus ou de moins que la ligne
+     * vendue (voir CalculateurLigne::solder()).
+     *
+     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     */
+    public function montantsDuRetour(int $quantite): array
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        if ($quantite === $this->quantiteCreditableRestante()) {
+            return $calculateur->solder(
+                $this->only(['montant_ht', 'montant_tva', 'montant_ttc']),
+                $this->lignesAvoir()
+                    ->whereHas('avoir', fn ($query) => $query->where('statut', StatutAvoir::Emise))
+                    ->get(['montant_ht', 'montant_tva', 'montant_ttc'])
+                    ->toArray(),
+            );
+        }
+
+        return $calculateur->calculer(
+            (float) $this->prix_unitaire_ht,
+            (float) $this->prix_unitaire_ttc,
+            $quantite,
+            (float) $this->remise_pourcentage,
+        );
     }
 }

@@ -12,6 +12,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use LogicException;
 use Tests\TestCase;
 
@@ -117,6 +118,25 @@ class EmettreFactureActionTest extends TestCase
         $this->assertSame("TK-{$annee}-000001", $ticket1->numero);
         $this->assertSame("FAC-{$annee}-000001", $facture1->numero);
         $this->assertSame("TK-{$annee}-000002", $ticket2->numero);
+    }
+
+    /**
+     * 23 h 30 UTC le 31 décembre, c'est déjà 0 h 30 le 1er janvier à Paris
+     * (heure d'hiver) : la vente appartient à la nouvelle année.
+     */
+    public function test_une_vente_a_0_h_30_le_1er_janvier_a_paris_est_datee_et_numerotee_sur_la_nouvelle_annee(): void
+    {
+        $this->travelTo(Carbon::parse('2026-12-31 23:30:00', 'UTC'));
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+
+        $facture = app(EmettreFactureAction::class)->handle($facture);
+
+        $this->assertSame('TK-2027-000001', $facture->numero);
+        $this->assertSame('2027-01-01 00:30', $facture->fresh()->date_emission->format('Y-m-d H:i'));
     }
 
     public function test_impossible_demettre_une_facture_sans_lignes(): void

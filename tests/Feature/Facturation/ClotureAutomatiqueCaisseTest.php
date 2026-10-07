@@ -14,7 +14,10 @@ use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Illuminate\Console\Scheduling\Event;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class ClotureAutomatiqueCaisseTest extends TestCase
@@ -118,6 +121,44 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         app(TenantContext::class)->set($magasin);
         $cloture = ClotureCaisse::query()->first();
         $this->assertSame(0, $cloture->nombre_ventes, 'La vente du jour même ne doit pas être incluse dans la clôture de la veille.');
+    }
+
+    /**
+     * Minuit à Paris en été, c'est 22 h UTC la veille : la commande clôture
+     * la journée parisienne qui vient de finir, avec la vente de 23 h 30,
+     * et non l'avant-veille.
+     */
+    public function test_a_minuit_heure_de_paris_cloture_la_journee_qui_vient_de_finir(): void
+    {
+        $magasin = Magasin::factory()->create();
+        app(TenantContext::class)->set($magasin);
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+        $this->travelTo(Carbon::parse('2026-07-14 21:30:00', 'UTC'));
+        app(EmettreFactureAction::class)->handle($facture);
+        $this->travelTo(Carbon::parse('2026-07-14 22:00:30', 'UTC'));
+
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+
+        app(TenantContext::class)->set($magasin);
+        $cloture = ClotureCaisse::query()->sole();
+        $this->assertSame('2026-07-14', $cloture->date_cloture->toDateString());
+        $this->assertSame($cloture->id, $facture->fresh()->cloture_caisse_id);
+    }
+
+    public function test_la_cloture_automatique_part_a_minuit_heure_de_paris(): void
+    {
+        // Le planning de bootstrap/app.php s'enregistre au démarrage
+        // d'Artisan, comme sur le serveur avant schedule:run.
+        $this->artisan('schedule:list')->assertSuccessful();
+        $this->travelTo(Carbon::parse('2026-07-14 22:00:00', 'UTC'));
+
+        $evenementsDus = app(Schedule::class)->dueEvents($this->app);
+
+        $this->assertTrue($evenementsDus->contains(fn (Event $evenement): bool => str_contains((string) $evenement->command, 'app:cloturer-caisses-automatiquement')));
     }
 
     public function test_un_magasin_suspendu_nest_pas_traite(): void

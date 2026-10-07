@@ -59,13 +59,15 @@ return [
     | Application Timezone
     |--------------------------------------------------------------------------
     |
-    | Here you may specify the default timezone for your application, which
-    | will be used by the PHP date and date-time functions. The timezone
-    | is set to "UTC" by default as it is suitable for most use cases.
+    | L'heure légale française, été comme hiver : c'est elle qui donne la
+    | date d'une facture, la journée de caisse à laquelle appartient une
+    | vente, l'année de sa numérotation et l'heure des tâches planifiées
+    | (clôture de minuit). En UTC, une vente faite à 0 h 30 le 1er janvier
+    | serait datée et numérotée sur l'année d'avant.
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => 'Europe/Paris',
 
     /*
     |--------------------------------------------------------------------------

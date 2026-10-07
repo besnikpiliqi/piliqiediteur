@@ -19,7 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     })
     ->withSchedule(function (Schedule $schedule): void {
-        // À minuit pile : clôture automatiquement la veille pour tout
+        // À minuit pile, heure de Paris comme tous les horaires ci-dessous
+        // (voir config/app.php) : clôture automatiquement la veille pour tout
         // magasin qui ne l'a pas fait lui-même (e-reporting B2C, voir
         // ClotureAutomatiqueCaisse). Puis, 15 minutes plus tard, une fois
         // cette clôture terminée, on statue sur les factures en retard.

@@ -90,6 +90,7 @@ class CreerAvoirAction
                 $avoir->lignes()->create([
                     'ligne_facture_id' => $ligneFacture->id,
                     'produit_id' => $ligneFacture->produit_id,
+                    'nature' => $ligneFacture->nature,
                     'description' => $ligneFacture->description,
                     'reference' => $ligneFacture->reference,
                     'quantite' => $quantite,

@@ -20,6 +20,9 @@ return new class extends Migration
             // Service) ou une ligne libre -- jamais un produit et un service
             // à la fois (voir ConstructeurLigneDocument).
             $table->foreignId('service_id')->nullable()->constrained('services')->nullOnDelete();
+            // Bien ou service (voir NatureLigne) : la catégorie d'opération de
+            // la facture et l'e-reporting en dépendent.
+            $table->string('nature', 10);
             $table->string('description', 255);
             $table->string('reference', 60)->nullable();
             // Nombre entier d'articles (voir QuantiteEntiere).

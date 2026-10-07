@@ -163,6 +163,25 @@ class FactureResourceTest extends TestCase
         $this->assertStringContainsString(AvoirResource::getUrl('view', ['record' => $avoir->fresh()]), $html);
     }
 
+    public function test_une_ligne_libre_doit_dire_si_elle_vend_un_bien_ou_un_service(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [['description' => 'Coque', 'quantite' => 1, 'prix_unitaire_ttc' => 10, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['lignes.0.nature' => 'required']);
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
     /**
      * Un avoir n'est jamais remboursé par ce logiciel : son crédit réduit le
      * solde dû exactement comme un encaissement, et c'est lui qui explique
@@ -300,7 +319,7 @@ class FactureResourceTest extends TestCase
                     // PU TTC saisi : c'est lui qui fait foi pour une vente
                     // sur une ligne (voir DevisResource::ligneSchema()). 72 €
                     // TTC à 20 % de TVA = 60 € HT.
-                    ['description' => 'Main d\'œuvre - installation', 'quantite' => 2, 'prix_unitaire_ttc' => 72, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                    ['description' => 'Main d\'œuvre - installation', 'nature' => 'service', 'quantite' => 2, 'prix_unitaire_ttc' => 72, 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
             ])
             ->call('create')
@@ -332,7 +351,7 @@ class FactureResourceTest extends TestCase
         $component = Livewire::test(CreateFacture::class)
             ->fillForm([
                 'client_id' => $client->id,
-                'lignes' => [['description' => 'Prestation', 'quantite' => 2, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+                'lignes' => [['description' => 'Prestation', 'nature' => 'service', 'quantite' => 2, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
             ]);
 
         $cle = array_key_first($component->get('data.lignes'));
@@ -545,6 +564,7 @@ class FactureResourceTest extends TestCase
 
         $component
             ->set("data.lignes.{$cle}.description", 'Prestation')
+            ->set("data.lignes.{$cle}.nature", 'service')
             ->set("data.lignes.{$cle}.quantite", '3')
             ->set("data.lignes.{$cle}.prix_unitaire_ht", '8.33')
             ->assertSet("data.lignes.{$cle}.prix_reference", 'ht')

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Concerns;
 
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
@@ -26,19 +27,26 @@ trait VentileLaTvaParTaux
      */
     protected function ventilationTva(): Attribute
     {
-        return Attribute::get(fn (): array => $this->lignesAVentiler()
-            ->groupBy(fn (array $ligne): string => number_format((float) $ligne['taux_tva'], 2, '.', ''))
-            ->sortKeysUsing(fn (string $a, string $b): int => (float) $b <=> (float) $a)
-            ->map(function (Collection $lignes, string $tauxTva): array {
-                $totaux = app(CalculateurLigne::class)->totaliser($lignes);
+        return Attribute::get(fn (): array => self::ventilerParTaux($this->lignesAVentiler()));
+    }
 
-                return [
-                    'taux_tva' => $tauxTva,
-                    'montant_ht' => $totaux['total_ht'],
-                    'montant_tva' => $totaux['total_tva'],
-                    'montant_ttc' => $totaux['total_ttc'],
-                ];
-            })
+    /**
+     * Les mêmes montants séparés entre biens et services (voir
+     * NatureLigne), puis par taux : la déclaration des ventes aux
+     * particuliers (e-reporting) les distingue. Documents de vente
+     * seulement : une ligne d'achat n'a pas de nature.
+     *
+     * @return Attribute<list<array{nature: NatureLigne, taux_tva: string, montant_ht: float, montant_tva: float, montant_ttc: float}>, never>
+     */
+    protected function ventilationParNature(): Attribute
+    {
+        return Attribute::get(fn (): array => $this->lignesAVentiler()
+            ->groupBy(fn (array $ligne): string => $ligne['nature']->value)
+            ->sortKeys()
+            ->flatMap(fn (Collection $lignes, string $nature): array => array_map(
+                fn (array $parTaux): array => ['nature' => NatureLigne::from($nature), ...$parTaux],
+                self::ventilerParTaux($lignes),
+            ))
             ->values()
             ->all());
     }
@@ -48,7 +56,7 @@ trait VentileLaTvaParTaux
      * d'autres (clôture de caisse, soumission d'e-reporting) ventile les
      * lignes de ses factures, et en négatif celles de ses avoirs.
      *
-     * @return Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
+     * @return Collection<int, array{nature: ?NatureLigne, taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
      */
     protected function lignesAVentiler(): Collection
     {
@@ -57,26 +65,50 @@ trait VentileLaTvaParTaux
 
     /**
      * @param  Collection<int, Model>  $lignes
-     * @return Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
+     * @return Collection<int, array{nature: ?NatureLigne, taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
      */
     protected static function montantsDesLignes(Collection $lignes): Collection
     {
-        return $lignes->map(fn (Model $ligne): array => $ligne->only(['taux_tva', 'montant_ht', 'montant_tva', 'montant_ttc']))->toBase();
+        return $lignes->map(fn (Model $ligne): array => $ligne->only(['nature', 'taux_tva', 'montant_ht', 'montant_tva', 'montant_ttc']))->toBase();
     }
 
     /**
      * Les lignes d'avoirs, qui se déduisent des ventes.
      *
      * @param  Collection<int, Model>  $lignes
-     * @return Collection<int, array{taux_tva: mixed, montant_ht: float, montant_tva: float, montant_ttc: float}>
+     * @return Collection<int, array{nature: NatureLigne, taux_tva: mixed, montant_ht: float, montant_tva: float, montant_ttc: float}>
      */
     protected static function montantsDeduits(Collection $lignes): Collection
     {
         return $lignes->map(fn (Model $ligne): array => [
+            'nature' => $ligne->nature,
             'taux_tva' => $ligne->taux_tva,
             'montant_ht' => -(float) $ligne->montant_ht,
             'montant_tva' => -(float) $ligne->montant_tva,
             'montant_ttc' => -(float) $ligne->montant_ttc,
         ])->toBase();
+    }
+
+    /**
+     * @param  Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>  $lignes
+     * @return list<array{taux_tva: string, montant_ht: float, montant_tva: float, montant_ttc: float}>
+     */
+    private static function ventilerParTaux(Collection $lignes): array
+    {
+        return $lignes
+            ->groupBy(fn (array $ligne): string => number_format((float) $ligne['taux_tva'], 2, '.', ''))
+            ->sortKeysUsing(fn (string $a, string $b): int => (float) $b <=> (float) $a)
+            ->map(function (Collection $lignesDuTaux, string $tauxTva): array {
+                $totaux = app(CalculateurLigne::class)->totaliser($lignesDuTaux);
+
+                return [
+                    'taux_tva' => $tauxTva,
+                    'montant_ht' => $totaux['total_ht'],
+                    'montant_tva' => $totaux['total_tva'],
+                    'montant_ttc' => $totaux['total_ttc'],
+                ];
+            })
+            ->values()
+            ->all();
     }
 }

@@ -339,6 +339,7 @@ class ClotureCaisseResourceTest extends TestCase
         Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])
             ->assertSuccessful()
             ->assertSee('TVA par taux')
+            ->assertSee('Biens et services')
             ->assertSee('66,66')
             ->assertSee('76,66');
     }

@@ -318,6 +318,26 @@ class FactureResource extends Resource
             ->columns(4);
     }
 
+    /**
+     * Biens et services séparés, puis par taux : ce que la déclaration des
+     * ventes aux particuliers (e-reporting) distingue (voir
+     * VentileLaTvaParTaux::ventilationParNature()).
+     */
+    public static function ventilationParNatureEntry(): RepeatableEntry
+    {
+        return RepeatableEntry::make('ventilation_par_nature')
+            ->label('Biens et services')
+            ->columnSpanFull()
+            ->schema([
+                TextEntry::make('nature')->label('Nature'),
+                TextEntry::make('taux_tva')->label('Taux')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
+                TextEntry::make('montant_ht')->label('Base HT')->money('EUR'),
+                TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
+                TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
+            ])
+            ->columns(5);
+    }
+
     public static function table(Table $table): Table
     {
         return $table

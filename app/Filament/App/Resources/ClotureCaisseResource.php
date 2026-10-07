@@ -71,6 +71,7 @@ class ClotureCaisseResource extends Resource
                 TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
                 FactureResource::ventilationTvaEntry(),
+                FactureResource::ventilationParNatureEntry(),
             ])->columns(4),
 
             InfolistSection::make('E-reporting')->schema([

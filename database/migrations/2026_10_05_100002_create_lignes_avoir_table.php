@@ -17,6 +17,8 @@ return new class extends Migration
             // snapshot figé au moment de la création de l'avoir.
             $table->foreignId('ligne_facture_id')->nullable()->constrained('lignes_facture')->nullOnDelete();
             $table->foreignId('produit_id')->nullable()->constrained('produits')->nullOnDelete();
+            // Reprise de la ligne de facture créditée (voir NatureLigne).
+            $table->string('nature', 10);
             $table->string('description', 255);
             $table->string('reference', 60)->nullable();
             // Nombre entier d'articles (voir QuantiteEntiere).

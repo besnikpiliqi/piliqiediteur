@@ -6,6 +6,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
@@ -49,11 +50,48 @@ class CreerFactureActionTest extends TestCase
         $client = Client::factory()->create();
 
         $facture = app(CreerFactureAction::class)->handle($client, [
-            ['description' => 'Prestation sur mesure', 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'quantite' => 1],
+            ['description' => 'Prestation sur mesure', 'nature' => 'service', 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'quantite' => 1],
         ]);
 
         $this->assertSame('Prestation sur mesure', $facture->lignes->first()->description);
         $this->assertNull($facture->lignes->first()->produit_id);
+    }
+
+    /**
+     * Un produit est un bien, même si autre chose est envoyé ; un service du
+     * catalogue est un service ; une ligne libre garde ce qu'elle a choisi.
+     */
+    public function test_chaque_ligne_sait_si_elle_vend_un_bien_ou_un_service(): void
+    {
+        $client = Client::factory()->create();
+        $ecran = Produit::factory()->create();
+        $mainDOeuvre = Service::factory()->create();
+
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $ecran->id, 'nature' => 'service', 'quantite' => 1],
+            ['service_id' => $mainDOeuvre->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
+            ['description' => 'Déplacement', 'nature' => 'service', 'prix_unitaire_ttc' => 10, 'taux_tva' => 20, 'quantite' => 1],
+        ]);
+
+        $this->assertSame(
+            [NatureLigne::Bien, NatureLigne::Service, NatureLigne::Service],
+            $facture->lignes->pluck('nature')->all(),
+        );
+    }
+
+    public function test_une_ligne_libre_qui_ne_dit_pas_si_elle_vend_un_bien_ou_un_service_est_refusee(): void
+    {
+        $client = Client::factory()->create();
+
+        $this->expectExceptionObject(new InvalidArgumentException('Une ligne sans produit ni service doit préciser si elle vend un bien ou un service.'));
+
+        try {
+            app(CreerFactureAction::class)->handle($client, [
+                ['description' => 'Coque', 'prix_unitaire_ttc' => 10, 'taux_tva' => 20, 'quantite' => 1],
+            ]);
+        } finally {
+            $this->assertSame(0, Facture::query()->count());
+        }
     }
 
     public function test_une_ligne_sans_produit_ni_description_leve_une_exception(): void
@@ -147,8 +185,8 @@ class CreerFactureActionTest extends TestCase
         $client = Client::factory()->create();
 
         $facture = app(CreerFactureAction::class)->handle($client, [
-            ['description' => 'Prestation pro', 'quantite' => 3, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20],
-            ['description' => 'Article vitrine', 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20],
+            ['description' => 'Prestation pro', 'nature' => 'service', 'quantite' => 3, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20],
+            ['description' => 'Article vitrine', 'nature' => 'bien', 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20],
         ]);
 
         [$ligneHt, $ligneTtc] = $facture->lignes->sortBy('ordre')->values()->all();

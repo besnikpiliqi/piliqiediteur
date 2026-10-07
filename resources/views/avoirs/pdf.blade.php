@@ -154,6 +154,8 @@
         <div class="pied">Motif : {{ $avoir->motif }}</div>
     @endif
 
+    <div class="pied">Catégorie de l'opération : {{ \App\Domain\Facturation\Enums\CategorieOperation::depuisNatures($avoir->lignes->pluck('nature'))->getLabel() }}</div>
+
     {{-- Un avoir rectifie une facture : il en reprend les mentions
          obligatoires, dont celle-ci (voir factures/pdf.blade.php). --}}
     @if($avoir->magasin->option_debits_tva)

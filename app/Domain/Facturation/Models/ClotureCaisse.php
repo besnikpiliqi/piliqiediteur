@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
 use Database\Factories\ClotureCaisseFactory;
@@ -85,7 +86,7 @@ class ClotureCaisse extends Model
     }
 
     /**
-     * @return Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
+     * @return Collection<int, array{nature: ?NatureLigne, taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
      */
     protected function lignesAVentiler(): Collection
     {

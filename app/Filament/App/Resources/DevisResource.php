@@ -8,6 +8,7 @@ use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
@@ -163,6 +164,16 @@ class DevisResource extends Resource
             TextInput::make('quantite')->integer()->minValue(1)->required()->default(1)->saisieEnDirect(),
             ...self::champsPrixDeLigne(PrixReference::Ttc),
             TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->minValue(0)->maxValue(100)->default(0)->saisieEnDirect(),
+            // Un produit est un bien, un service du catalogue un service :
+            // seule une ligne libre doit dire ce qu'elle vend (voir
+            // NatureLigne). Placé en dernier, il passe sur sa propre ligne.
+            Select::make('nature')
+                ->label('Nature')
+                ->options(NatureLigne::class)
+                ->helperText('Bien : pièce, accessoire. Service : main-d\'œuvre, réparation.')
+                ->required()
+                ->visible(fn (Get $get): bool => self::estUneLigneLibre($get))
+                ->columnSpan(2),
             self::totalDeLigne(PrixReference::Ttc),
         ];
     }
@@ -170,6 +181,11 @@ class DevisResource extends Resource
     public static function estUneLigneDeService(Get $get): bool
     {
         return filled($get('service_id'));
+    }
+
+    public static function estUneLigneLibre(Get $get): bool
+    {
+        return blank($get('produit_id')) && blank($get('service_id'));
     }
 
     /**

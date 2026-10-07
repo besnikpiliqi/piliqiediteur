@@ -8,6 +8,7 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -195,7 +196,9 @@ class Caisse extends Page implements HasForms
             ->label('Ajouter un produit')
             ->color('gray')
             ->size(ActionSize::Small)
-            ->action(fn () => $this->ajouterUneLigne());
+            // Une ligne ajoutée comme produit vend un bien, même hors
+            // catalogue (voir NatureLigne).
+            ->action(fn () => $this->ajouterUneLigne(['nature' => NatureLigne::Bien->value]));
     }
 
     /**

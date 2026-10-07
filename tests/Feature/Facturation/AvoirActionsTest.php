@@ -433,7 +433,7 @@ class AvoirActionsTest extends TestCase
     {
         $client = Client::factory()->create();
         $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
-            ['description' => 'Prestation', 'quantite' => 2, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20],
+            ['description' => 'Prestation', 'nature' => 'service', 'quantite' => 2, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20],
         ]));
         $ligneFacture = $facture->lignes->firstOrFail();
 

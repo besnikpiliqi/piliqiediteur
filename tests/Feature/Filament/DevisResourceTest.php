@@ -10,6 +10,7 @@ use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Devis;
@@ -116,7 +117,7 @@ class DevisResourceTest extends TestCase
                     // PU TTC saisi : c'est lui qui fait foi pour une vente
                     // sur une ligne (voir DevisResource::ligneSchema()). 54 €
                     // TTC à 20 % de TVA = 45 € HT.
-                    ['description' => 'Main d\'œuvre - pose', 'quantite' => 3, 'prix_unitaire_ttc' => 54, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                    ['description' => 'Main d\'œuvre - pose', 'nature' => 'service', 'quantite' => 3, 'prix_unitaire_ttc' => 54, 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
             ])
             ->call('create')
@@ -127,6 +128,7 @@ class DevisResourceTest extends TestCase
 
         $this->assertNull($ligne->produit_id);
         $this->assertSame('Main d\'œuvre - pose', $ligne->description);
+        $this->assertSame(NatureLigne::Service, $ligne->nature);
         $this->assertSame('135.00', $devis->total_ht);
     }
 

@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use Illuminate\Database\Eloquent\Builder;
@@ -59,7 +60,7 @@ class SoumissionEReporting extends Model
      * celles de leurs avoirs, pour la ventilation par taux de TVA que
      * l'e-reporting déclare.
      *
-     * @return Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
+     * @return Collection<int, array{nature: ?NatureLigne, taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
      */
     protected function lignesAVentiler(): Collection
     {

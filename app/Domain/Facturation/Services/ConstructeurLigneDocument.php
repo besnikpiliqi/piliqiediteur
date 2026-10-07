@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Services;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\PrixReference;
 use InvalidArgumentException;
 
@@ -30,7 +31,10 @@ class ConstructeurLigneDocument
      * catalogue. Une ligne de service (voir Service) n'a pas de prix
      * catalogue : son prix est toujours saisi.
      *
-     * @param  array{produit_id?: int, service_id?: int, description?: string, reference?: string, quantite: int|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|PrixReference|null, taux_tva?: float|string, remise_pourcentage?: float|string}  $donnees
+     * Un produit est un bien, un service du catalogue un service ; une
+     * ligne libre précise elle-même ce qu'elle vend (voir NatureLigne).
+     *
+     * @param  array{produit_id?: int, service_id?: int, nature?: string|NatureLigne, description?: string, reference?: string, quantite: int|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|PrixReference|null, taux_tva?: float|string, remise_pourcentage?: float|string}  $donnees
      * @return array<string, mixed>
      */
     public function construire(array $donnees, int $ordre): array
@@ -46,6 +50,14 @@ class ConstructeurLigneDocument
         if ($produit !== null && $service !== null) {
             throw new InvalidArgumentException('Une ligne est un produit ou un service, jamais les deux.');
         }
+
+        $nature = match (true) {
+            $produit !== null => NatureLigne::Bien,
+            $service !== null => NatureLigne::Service,
+            ($donnees['nature'] ?? null) instanceof NatureLigne => $donnees['nature'],
+            default => NatureLigne::tryFrom((string) ($donnees['nature'] ?? ''))
+                ?? throw new InvalidArgumentException('Une ligne sans produit ni service doit préciser si elle vend un bien ou un service.'),
+        };
 
         $description = $donnees['description'] ?? $produit?->nom ?? $service?->nom
             ?? throw new InvalidArgumentException('Une ligne sans produit_id doit fournir une description.');
@@ -75,6 +87,7 @@ class ConstructeurLigneDocument
         return [
             'produit_id' => $produit?->id,
             'service_id' => $service?->id,
+            'nature' => $nature,
             'description' => $description,
             'reference' => $donnees['reference'] ?? $produit?->reference,
             'quantite' => $quantite,

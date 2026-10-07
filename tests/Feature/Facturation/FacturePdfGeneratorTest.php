@@ -66,6 +66,38 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertSame($optionDebits, str_contains($html, "Option pour le paiement de la taxe d'après les débits"));
     }
 
+    /**
+     * @return array<string, array{list<string>, string}>
+     */
+    public static function naturesDesLignes(): array
+    {
+        return [
+            'un écran seul' => [['bien'], 'Livraison de biens'],
+            'une main-d\'œuvre seule' => [['service'], 'Prestation de services'],
+            'un écran et sa pose' => [['bien', 'service'], 'Livraison de biens et prestation de services'],
+        ];
+    }
+
+    /**
+     * @param  list<string>  $natures
+     */
+    #[DataProvider('naturesDesLignes')]
+    public function test_la_facture_indique_la_categorie_de_l_operation(array $natures, string $categorie): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $client = Client::factory()->professionnel()->create();
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, array_map(
+            fn (string $nature): array => ['description' => 'Ligne', 'nature' => $nature, 'prix_unitaire_ttc' => 60, 'taux_tva' => 20, 'quantite' => 1],
+            $natures,
+        )));
+
+        $html = view('factures.pdf', [
+            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
+        ])->render();
+
+        $this->assertStringContainsString("Catégorie de l'opération : {$categorie}</div>", $html);
+    }
+
     public function test_le_nom_de_fichier_utilise_le_numero_ou_brouillon(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create());

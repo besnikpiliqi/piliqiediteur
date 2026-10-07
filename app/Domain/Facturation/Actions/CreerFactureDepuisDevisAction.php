@@ -42,6 +42,7 @@ class CreerFactureDepuisDevisAction
                 $facture->lignes()->create([
                     'produit_id' => $ligne->produit_id,
                     'service_id' => $ligne->service_id,
+                    'nature' => $ligne->nature,
                     'description' => $ligne->description,
                     'reference' => $ligne->reference,
                     'quantite' => $ligne->quantite,

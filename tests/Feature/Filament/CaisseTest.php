@@ -9,6 +9,7 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
@@ -373,6 +374,7 @@ class CaisseTest extends TestCase
         $this->assertSame(1, $ligne['quantite']);
         $this->assertSame(20, $ligne['taux_tva']);
         $this->assertSame('ttc', $ligne['prix_reference']);
+        $this->assertSame('bien', $ligne['nature']);
         $component->assertFormFieldIsVisible('lignes.'.array_key_first($component->get('data.lignes')).'.produit_id');
     }
 
@@ -427,6 +429,8 @@ class CaisseTest extends TestCase
         $this->assertSame(StatutFacture::Payee, $facture->statut);
         $this->assertSame('65.03', $facture->total_ttc);
         $ligneService = $facture->lignes->firstWhere('service_id', $mainDOeuvre->id);
+        $this->assertSame(NatureLigne::Bien, $facture->lignes->firstWhere('produit_id', $ecran->id)->nature);
+        $this->assertSame(NatureLigne::Service, $ligneService->nature);
         $this->assertNull($ligneService->produit_id);
         $this->assertSame('Main-d\'œuvre', $ligneService->description);
         $this->assertSame('12.53', $ligneService->montant_ht);

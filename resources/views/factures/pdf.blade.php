@@ -203,6 +203,10 @@
         </table>
     @endif
 
+    {{-- Mention obligatoire (art. 242 nonies A de l'annexe II au CGI) :
+         tirée de la nature des lignes, voir NatureLigne. --}}
+    <div class="pied">Catégorie de l'opération : {{ \App\Domain\Facturation\Enums\CategorieOperation::depuisNatures($facture->lignes->pluck('nature'))->getLabel() }}</div>
+
     @if($facture->conditions_paiement)
         <div class="pied">{{ $facture->conditions_paiement }}</div>
     @endif

@@ -68,7 +68,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
 
         $facture = app(EnregistrerVenteCaisseAction::class)->handle(
             $client,
-            [['description' => 'Retouche', 'quantite' => 1, 'prix_unitaire_ht' => 15, 'taux_tva' => 20]],
+            [['description' => 'Retouche', 'nature' => 'service', 'quantite' => 1, 'prix_unitaire_ht' => 15, 'taux_tva' => 20]],
             ModePaiement::Especes,
         );
 

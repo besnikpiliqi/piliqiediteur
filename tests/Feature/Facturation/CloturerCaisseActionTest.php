@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
@@ -10,6 +11,7 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -101,6 +103,31 @@ class CloturerCaisseActionTest extends TestCase
             ['taux_tva' => '20.00', 'montant_ht' => 50.0, 'montant_tva' => 10.0, 'montant_ttc' => 60.0],
         ], $cloture->ventilation_tva);
         $this->assertSame($cloture->id, $avoir->fresh()->cloture_caisse_id);
+    }
+
+    /**
+     * La déclaration des ventes aux particuliers sépare les biens des
+     * services : un écran à 60 € et sa pose à 30 €, puis l'écran rendu.
+     */
+    public function test_la_cloture_separe_les_biens_et_les_services(): void
+    {
+        $client = Client::factory()->create();
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $pose = Service::factory()->create();
+        $vente = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $ecran->id, 'quantite' => 2],
+            ['service_id' => $pose->id, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20, 'quantite' => 1],
+        ]));
+        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $vente->lignes->firstWhere('produit_id', $ecran->id)->id, 'quantite' => 1],
+        ]));
+
+        $cloture = app(CloturerCaisseAction::class)->handle($this->magasin, now());
+
+        $this->assertSame([
+            ['nature' => NatureLigne::Bien, 'taux_tva' => '20.00', 'montant_ht' => 50.0, 'montant_tva' => 10.0, 'montant_ttc' => 60.0],
+            ['nature' => NatureLigne::Service, 'taux_tva' => '20.00', 'montant_ht' => 25.0, 'montant_tva' => 5.0, 'montant_ttc' => 30.0],
+        ], $cloture->ventilation_par_nature);
     }
 
     public function test_un_avoir_a_un_professionnel_nest_jamais_deduit_de_la_cloture(): void

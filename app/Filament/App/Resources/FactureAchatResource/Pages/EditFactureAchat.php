@@ -48,6 +48,7 @@ class EditFactureAchat extends EditRecord
             'taux_tva' => FactureAchatResource::pourcentageEnTexte($ligne->taux_tva),
             'remise_pourcentage' => FactureAchatResource::pourcentageEnTexte($ligne->remise_pourcentage),
         ])->all();
+        $data['escompte_pourcentage'] = FactureAchatResource::pourcentageEnTexte($this->record->escompte_pourcentage);
 
         return $data;
     }
@@ -58,6 +59,7 @@ class EditFactureAchat extends EditRecord
             'fournisseur_id' => $data['fournisseur_id'],
             'numero_fournisseur' => $data['numero_fournisseur'] ?? null,
             'date_facture' => $data['date_facture'] ?? null,
+            'escompte_pourcentage' => $data['escompte_pourcentage'] ?? 0,
             'notes' => $data['notes'] ?? null,
         ]));
     }

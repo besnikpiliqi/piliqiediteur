@@ -83,6 +83,14 @@ class FactureAchatResource extends Resource
                     ->helperText('Le numéro propre au fournisseur, pour le rapprochement -- distinct de notre numéro interne.')
                     ->maxLength(60),
                 DatePicker::make('date_facture')->label('Date de la facture'),
+                TextInput::make('escompte_pourcentage')
+                    ->label('Escompte obtenu')
+                    ->numeric()
+                    ->minValue(0)
+                    ->maxValue(100)
+                    ->suffix('%')
+                    ->default(0)
+                    ->helperText('Réduction du fournisseur pour un paiement rapide : elle baisse le coût d\'achat des produits, pas le total de la facture.'),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
 
@@ -158,6 +166,11 @@ class FactureAchatResource extends Resource
                 TextEntry::make('date_facture')->label('Date facture')->date('d/m/Y')->placeholder('—'),
                 TextEntry::make('date_validation')->label('Validée le')->dateTime('d/m/Y')->placeholder('—'),
                 TextEntry::make('creePar.name')->label('Créée par'),
+                TextEntry::make('escompte_pourcentage')
+                    ->label('Escompte obtenu')
+                    ->numeric(maxDecimalPlaces: 2)
+                    ->suffix(' %')
+                    ->visible(fn (FactureAchat $record) => (float) $record->escompte_pourcentage > 0),
             ])->columns(3),
 
             InfolistSection::make('Lignes')->schema([

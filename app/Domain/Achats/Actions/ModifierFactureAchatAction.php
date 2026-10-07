@@ -156,7 +156,7 @@ class ModifierFactureAchatAction
 
         foreach ($lignesCreees as $ligne) {
             if ($ligne->produit !== null) {
-                $ligne->produit->forceFill(['prix_achat_ht' => $ligne->prix_unitaire_ht])->save();
+                $ligne->produit->forceFill(['prix_achat_ht' => $ligne->coutUnitaireHt()])->save();
             }
         }
     }

@@ -488,6 +488,7 @@ class CalculateurLigneTest extends TestCase
             'taux au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->prixUnitaires(PrixReference::Ttc, 10, 150), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
             'remise négative' => [fn (CalculateurLigne $c) => $c->calculer(10, 12, 1, -10), 'La remise doit être comprise entre 0 et 100 %.'],
             'remise au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->calculer(10, 12, 1, 150), 'La remise doit être comprise entre 0 et 100 %.'],
+            'escompte au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->appliquerRemise(10, 150), 'La remise doit être comprise entre 0 et 100 %.'],
             'montant reçu absurde' => [fn (CalculateurLigne $c) => $c->soustraire('100000000000000000', 40), 'Montant hors limites.'],
             'paiement absurde' => [fn (CalculateurLigne $c) => $c->arrondirAuCentime(1e17), 'Montant hors limites.'],
             'prix x quantité qui déborde' => [fn (CalculateurLigne $c) => $c->calculer(9999999999.99, 9999999999.99, 999999), 'Montant hors limites.'],
@@ -507,6 +508,16 @@ class CalculateurLigneTest extends TestCase
     {
         $this->assertSame(['prix_unitaire_ht' => 10.0, 'prix_unitaire_ttc' => 10.0], $this->calculateur()->prixUnitaires(PrixReference::Ht, 10, 0));
         $this->assertSame(['montant_ht' => 0.0, 'montant_tva' => 0.0, 'montant_ttc' => 0.0], $this->calculateur()->calculer(10, 12, 3, 100));
+    }
+
+    /**
+     * Comme sur une ligne, seule la remise s'arrondit : 10 % de 8,33 € font
+     * 0,833 €, arrondis à 0,83 €.
+     */
+    public function test_une_remise_appliquee_a_un_prix_sarrondit_au_centime(): void
+    {
+        $this->assertSame(7.5, $this->calculateur()->appliquerRemise(8.33, 10));
+        $this->assertSame(88.2, $this->calculateur()->appliquerRemise(90, 2));
     }
 
     public function test_sommer_et_soustraire_comptent_au_centime_exact(): void

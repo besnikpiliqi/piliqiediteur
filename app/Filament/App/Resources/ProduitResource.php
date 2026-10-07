@@ -33,6 +33,13 @@ class ProduitResource extends Resource
     protected static ?string $pluralModelLabel = 'produits';
 
     /**
+     * Le coût d'achat suivi est celui réellement payé (voir
+     * LigneAchat::coutUnitaireHt()) : il est remplacé à chaque facture
+     * d'achat validée.
+     */
+    private const AIDE_PRIX_ACHAT = 'Mis à jour à chaque facture d\'achat validée : le prix réellement payé, remise et escompte déduits.';
+
+    /**
      * Mêmes champs que form() (hors stock_quantite, propre à l'édition --
      * un produit tout juste créé n'a de toute façon jamais de stock
      * existant -- et hors fournisseur_id, redondant sur la facture
@@ -54,7 +61,7 @@ class ProduitResource extends Resource
             TextInput::make('nom')->required()->maxLength(200)->columnSpanFull(),
             TextInput::make('taille')->maxLength(20),
             TextInput::make('couleur')->maxLength(30),
-            TextInput::make('prix_achat_ht')->label('Prix d\'achat HT')->numeric()->prefix('€')->required(),
+            TextInput::make('prix_achat_ht')->label('Prix d\'achat HT')->numeric()->prefix('€')->required()->helperText(self::AIDE_PRIX_ACHAT),
             ...self::prixVenteTtcSchema(),
             Toggle::make('suivi_stock')->label('Suivre le stock')->default(true)->live(),
             TextInput::make('seuil_alerte')
@@ -139,7 +146,7 @@ class ProduitResource extends Resource
             ])->columns(2),
 
             Section::make('Prix et TVA')->schema([
-                TextInput::make('prix_achat_ht')->label('Prix d\'achat HT')->numeric()->prefix('€')->required(),
+                TextInput::make('prix_achat_ht')->label('Prix d\'achat HT')->numeric()->prefix('€')->required()->helperText(self::AIDE_PRIX_ACHAT),
                 ...self::prixVenteTtcSchema(),
             ])->columns(3),
 

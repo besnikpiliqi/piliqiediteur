@@ -9,6 +9,7 @@ use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\PrixReference;
@@ -134,6 +135,58 @@ class FactureAchatActionsTest extends TestCase
         $this->assertSame('25.00', $produit->fresh()->prix_achat_ht);
     }
 
+    /**
+     * Le coût d'achat d'un stock se compte après remises et escomptes (PCG
+     * art. 213-31) : 100 € remisés de 10 % coûtent 90 €.
+     */
+    public function test_valider_une_facture_dachat_remisee_retient_le_cout_apres_remise(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 100, 'remise_pourcentage' => 10],
+        ]);
+
+        app(ValiderFactureAchatAction::class)->handle($factureAchat);
+
+        $this->assertSame('90.00', $produit->fresh()->prix_achat_ht);
+    }
+
+    /**
+     * L'escompte pour paiement rapide baisse encore le coût de chaque
+     * article (90 € moins 2 % = 88,20 €), mais pas les totaux de la
+     * facture, qui restent ceux de ses lignes.
+     */
+    public function test_lescompte_de_la_facture_baisse_le_cout_dachat_sans_changer_ses_totaux(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 100, 'remise_pourcentage' => 10],
+        ], ['escompte_pourcentage' => 2]);
+
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle($factureAchat);
+
+        $this->assertSame('88.20', $produit->fresh()->prix_achat_ht);
+        $this->assertSame('270.00', $factureAchat->fresh()->total_ht);
+    }
+
+    public function test_un_escompte_hors_de_0_a_100_pourcent_est_refuse(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+
+        $this->expectExceptionObject(new InvalidArgumentException('L\'escompte doit être compris entre 0 et 100 %.'));
+
+        try {
+            app(CreerFactureAchatAction::class)->handle($fournisseur, [
+                ['produit_id' => $produit->id, 'quantite' => 1],
+            ], ['escompte_pourcentage' => 120]);
+        } finally {
+            $this->assertSame(0, FactureAchat::query()->count());
+        }
+    }
+
     public function test_impossible_de_valider_deux_fois_la_meme_facture_dachat(): void
     {
         $fournisseur = Fournisseur::factory()->create();
@@ -195,6 +248,21 @@ class FactureAchatActionsTest extends TestCase
         $this->assertSame(8, $factureAchat->lignes->first()->quantite);
         $this->assertSame(11, $produit->fresh()->stock_quantite, '3 (stock avant réception) + 8 (quantité corrigée) = 11.');
         $this->assertSame('22.00', $produit->fresh()->prix_achat_ht);
+    }
+
+    public function test_corriger_lescompte_dune_facture_dachat_validee_recalcule_le_cout_dachat(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 50],
+        ]));
+
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+            ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 50],
+        ], ['escompte_pourcentage' => 3]);
+
+        $this->assertSame('48.50', $produit->fresh()->prix_achat_ht);
     }
 
     public function test_une_facture_dachat_recuperee_par_api_nest_jamais_modifiable(): void

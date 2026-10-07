@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use InvalidArgumentException;
 
 /**
  * Enregistre une facture reçue d'un fournisseur (réception de
@@ -39,6 +40,7 @@ class FactureAchat extends Model
         'devise',
         'notes',
         'source',
+        'escompte_pourcentage',
     ];
 
     protected $casts = [
@@ -49,6 +51,7 @@ class FactureAchat extends Model
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
         'total_ttc' => 'decimal:2',
+        'escompte_pourcentage' => 'decimal:2',
     ];
 
     protected static function booted(): void
@@ -57,6 +60,14 @@ class FactureAchat extends Model
             $factureAchat->statut ??= StatutFactureAchat::Brouillon;
             $factureAchat->devise ??= 'EUR';
             $factureAchat->cree_par ??= auth()->id();
+        });
+
+        static::saving(function (FactureAchat $factureAchat) {
+            $escompte = (float) $factureAchat->escompte_pourcentage;
+
+            if ($escompte < 0 || $escompte > 100) {
+                throw new InvalidArgumentException('L\'escompte doit être compris entre 0 et 100 %.');
+            }
         });
     }
 

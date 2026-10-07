@@ -33,6 +33,10 @@ return new class extends Migration
             $table->decimal('total_ht', 12, 2)->default(0);
             $table->decimal('total_tva', 12, 2)->default(0);
             $table->decimal('total_ttc', 12, 2)->default(0);
+            // Réduction accordée par le fournisseur pour un paiement rapide :
+            // elle baisse le coût d'achat des produits (voir
+            // LigneAchat::coutUnitaireHt()), pas les totaux de la facture.
+            $table->decimal('escompte_pourcentage', 5, 2)->default(0);
             $table->timestamps();
 
             $table->unique(['magasin_id', 'numero']);

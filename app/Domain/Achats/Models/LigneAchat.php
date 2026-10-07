@@ -5,6 +5,7 @@ namespace App\Domain\Achats\Models;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\PrixReference;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -58,6 +59,23 @@ class LigneAchat extends Model
     public function lignesAvoirFournisseur(): HasMany
     {
         return $this->hasMany(LigneAvoirFournisseur::class);
+    }
+
+    /**
+     * Ce qu'un article de cette ligne a réellement coûté : son PU HT après
+     * la remise de la ligne, puis l'escompte de la facture. Le coût d'achat
+     * d'un stock se compte après remises, rabais et escomptes (PCG art.
+     * 213-31) ; c'est lui que retient le produit (voir
+     * IncrementerStockApresValidationFactureAchat).
+     */
+    public function coutUnitaireHt(): float
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        return $calculateur->appliquerRemise(
+            $calculateur->appliquerRemise((float) $this->prix_unitaire_ht, (float) $this->remise_pourcentage),
+            (float) $this->factureAchat->escompte_pourcentage,
+        );
     }
 
     /**

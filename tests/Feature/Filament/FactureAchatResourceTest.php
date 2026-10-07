@@ -161,6 +161,29 @@ class FactureAchatResourceTest extends TestCase
         $this->assertSame('100.00', $factureAchat->total_ht);
     }
 
+    public function test_lescompte_saisi_sur_la_facture_dachat_est_enregistre(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm([
+                'fournisseur_id' => $fournisseur->id,
+                'escompte_pourcentage' => 2,
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('2.00', FactureAchat::query()->sole()->escompte_pourcentage);
+    }
+
     public function test_valider_une_facture_dachat_depuis_le_panneau_incremente_le_stock(): void
     {
         $proprietaire = User::factory()->create();

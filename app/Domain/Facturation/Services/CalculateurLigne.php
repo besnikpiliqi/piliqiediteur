@@ -186,6 +186,24 @@ class CalculateurLigne
     }
 
     /**
+     * Un montant au centime moins une remise en pourcentage (remise d'une
+     * ligne, escompte d'une facture), arrondie au centime le plus proche
+     * comme dans calculer().
+     *
+     * @throws InvalidArgumentException
+     */
+    public function appliquerRemise(float $montant, float $remisePourcentage): float
+    {
+        if ($remisePourcentage < 0 || $remisePourcentage > 100) {
+            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
+        }
+
+        return $this->centimesVersMontant(
+            $this->montantNetCentimes($this->versUnites($montant, 100), 1, $this->versUnites($remisePourcentage, 100)),
+        );
+    }
+
+    /**
      * Des totaux moins ceux des documents qui les corrigent (les ventes
      * d'une journée de caisse moins ses avoirs), au centime, séparément
      * pour les HT, les TVA et les TTC.

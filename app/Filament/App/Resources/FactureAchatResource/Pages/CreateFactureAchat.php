@@ -23,6 +23,7 @@ class CreateFactureAchat extends CreateRecord
             return app(CreerFactureAchatAction::class)->handle($fournisseur, $data['lignes'], [
                 'numero_fournisseur' => $data['numero_fournisseur'] ?? null,
                 'date_facture' => $data['date_facture'] ?? null,
+                'escompte_pourcentage' => $data['escompte_pourcentage'] ?? 0,
                 'notes' => $data['notes'] ?? null,
             ]);
         });

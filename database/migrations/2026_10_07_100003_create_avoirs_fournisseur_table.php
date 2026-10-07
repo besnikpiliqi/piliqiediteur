@@ -11,13 +11,15 @@ return new class extends Migration
         Schema::create('avoirs_fournisseur', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            // restrictOnDelete, même raisonnement que avoirs.facture_id :
-            // une facture d'achat validée n'est de toute façon jamais
-            // supprimable (voir FactureAchatPolicy), mais on ne veut
-            // surtout pas qu'une suppression quelconque efface
+            // restrictOnDelete : une facture d'achat validée n'est de toute
+            // façon jamais supprimable (voir FactureAchatPolicy), mais on ne
+            // veut surtout pas qu'une suppression quelconque efface
             // silencieusement la trace d'un avoir fournisseur.
             $table->foreignId('facture_achat_id')->constrained('factures_achat')->restrictOnDelete();
             $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
+            // Traçabilité (voir SourceAvoirFournisseur) : manuelle
+            // aujourd'hui, une future synchronisation par API viendra.
+            $table->string('source', 20)->default('manuelle');
             $table->string('numero', 40)->nullable();
             $table->string('statut', 20)->default('brouillon');
             $table->timestamp('date_emission')->nullable();

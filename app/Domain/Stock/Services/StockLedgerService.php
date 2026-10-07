@@ -3,7 +3,6 @@
 namespace App\Domain\Stock\Services;
 
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Casts\QuantiteArticles;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
 use Illuminate\Database\Eloquent\Model;
@@ -28,7 +27,7 @@ class StockLedgerService
     public function enregistrer(
         Produit $produit,
         TypeMouvementStock $type,
-        int|float $quantite,
+        int $quantite,
         ?Model $source = null,
         ?string $note = null,
         ?int $creeParUserId = null,
@@ -51,11 +50,11 @@ class StockLedgerService
      * quantité cible plutôt que d'un delta, pour coller à l'usage ("j'ai
      * compté 42 articles") plutôt qu'à une mécanique interne.
      */
-    public function ajuster(Produit $produit, int|float $quantiteCible, string $note, ?int $creeParUserId = null): MouvementStock
+    public function ajuster(Produit $produit, int $quantiteCible, string $note, ?int $creeParUserId = null): MouvementStock
     {
-        $delta = QuantiteArticles::normaliser($quantiteCible - $produit->stock_quantite);
+        $delta = $quantiteCible - $produit->stock_quantite;
 
-        if ($delta == 0) {
+        if ($delta === 0) {
             throw new InvalidArgumentException('Aucun écart à ajuster.');
         }
 
@@ -67,8 +66,8 @@ class StockLedgerService
     private function appliquer(
         Produit $produit,
         TypeMouvementStock $type,
-        int|float $quantiteMouvement,
-        int|float $delta,
+        int $quantiteMouvement,
+        int $delta,
         ?Model $source,
         ?string $note,
         ?int $creeParUserId,
@@ -79,7 +78,7 @@ class StockLedgerService
             // en stock) pour empêcher toute race condition.
             $produitVerrouille = Produit::query()->whereKey($produit->getKey())->lockForUpdate()->firstOrFail();
 
-            $nouvelleQuantite = QuantiteArticles::normaliser($produitVerrouille->stock_quantite + $delta);
+            $nouvelleQuantite = $produitVerrouille->stock_quantite + $delta;
 
             $mouvement = MouvementStock::create([
                 'produit_id' => $produitVerrouille->id,

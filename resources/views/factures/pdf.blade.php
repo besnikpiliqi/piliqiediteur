@@ -107,7 +107,7 @@
             @foreach($facture->lignes as $ligne)
                 <tr>
                     <td>{{ $ligne->description }}</td>
-                    <td class="montant">{{ \Illuminate\Support\Number::format($ligne->quantite, maxPrecision: 3, locale: 'fr') }}</td>
+                    <td class="montant">{{ \Illuminate\Support\Number::format($ligne->quantite, locale: 'fr') }}</td>
                     <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ht, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ttc, 2, ',', ' ') }} €</td>
                     <td class="montant">{{ \Illuminate\Support\Number::format((float) $ligne->taux_tva, maxPrecision: 2, locale: 'fr') }} %</td>

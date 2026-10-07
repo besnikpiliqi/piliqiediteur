@@ -80,7 +80,7 @@ class CreerAvoirAction
                 }
 
                 $restante = $ligneFacture->quantiteCreditableRestante();
-                $quantite = QuantiteEntiere::depuisSaisieOuReliquat($selection['quantite'] ?? null, $restante, 'La quantité à créditer');
+                $quantite = QuantiteEntiere::depuisSaisie($selection['quantite'] ?? null, 'La quantité à créditer');
 
                 if ($quantite > $restante) {
                     throw new LogicException("La ligne \"{$ligneFacture->description}\" ne peut pas être créditée au-delà de la quantité restante ({$restante}).");

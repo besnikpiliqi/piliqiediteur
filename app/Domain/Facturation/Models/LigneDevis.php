@@ -4,7 +4,6 @@ namespace App\Domain\Facturation\Models;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
-use App\Domain\Facturation\Casts\QuantiteArticles;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Illuminate\Database\Eloquent\Model;
@@ -40,7 +39,7 @@ class LigneDevis extends Model
     ];
 
     protected $casts = [
-        'quantite' => QuantiteArticles::class,
+        'quantite' => 'integer',
         'prix_unitaire_ht' => 'decimal:2',
         'prix_unitaire_ttc' => 'decimal:2',
         'prix_reference' => PrixReference::class,

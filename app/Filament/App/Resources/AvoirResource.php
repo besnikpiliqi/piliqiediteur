@@ -85,7 +85,7 @@ class AvoirResource extends Resource
                     Hidden::make('ligne_facture_id'),
                     TextInput::make('facture_numero')->label('Facture')->disabled()->dehydrated(false),
                     TextInput::make('description')->label('Produit / description')->disabled()->dehydrated(false),
-                    self::champQuantiteRetournee('Quantité à créditer', fn (Get $get): int|float => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
+                    self::champQuantiteRetournee('Quantité à créditer', fn (Get $get): int => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
                 ])
                 ->columns(4)
                 ->addable(false)

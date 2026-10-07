@@ -69,7 +69,7 @@ class ClotureCaisse extends Model
     }
 
     /**
-     * Cette clôture n'est plus jamais transmise au PDP individuellement :
+     * Une clôture n'est jamais transmise au PDP individuellement :
      * voir le docblock de SoumissionEReporting, qui agrège plusieurs
      * clôtures sur toute une période d'e-reporting avant transmission.
      */

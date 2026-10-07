@@ -15,9 +15,8 @@ use Illuminate\Queue\SerializesModels;
 use Throwable;
 
 /**
- * Remplace SubmitClotureCaisseToPdpJob (supprimé) : transmet une
- * SOUMISSION agrégée sur toute une période d'e-reporting, jamais une
- * clôture quotidienne isolée. Voir SubmitFactureToPdpJob pour le détail du
+ * Transmet une SOUMISSION agrégée sur toute une période d'e-reporting,
+ * jamais une clôture quotidienne isolée. Voir SubmitFactureToPdpJob pour le détail du
  * raisonnement (appel réseau externe jamais bloquant, idempotence).
  */
 class SubmitSoumissionEReportingToPdpJob implements ShouldBeUnique, ShouldQueue

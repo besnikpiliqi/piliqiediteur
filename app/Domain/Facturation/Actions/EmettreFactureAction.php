@@ -7,7 +7,6 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\FactureEmise;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\DocumentNumberingService;
-use App\Domain\Facturation\Services\QuantiteEntiere;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -41,8 +40,6 @@ class EmettreFactureAction
             if ($facture->lignes()->doesntExist()) {
                 throw new LogicException('Impossible d\'émettre une facture sans lignes.');
             }
-
-            QuantiteEntiere::verifierLignes($facture->lignes);
 
             $typeDocument = $facture->relevantDeLeInvoicing() ? TypeDocument::Facture : TypeDocument::TicketCaisse;
             $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, now()->format('Y'));

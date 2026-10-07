@@ -7,12 +7,13 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Models\User;
 
 /**
- * Même confidentialité par vendeur que FacturePolicy : un vendeur qui
- * clôture sa propre caisse (ex: fin de service d'un caissier) ne voit que
- * les clôtures qu'il a lui-même déclenchées, sans
+ * Même confidentialité par membre que FacturePolicy : un membre à qui le
+ * propriétaire a délégué la clôture de la journée (cloture_caisse.gerer)
+ * ne voit que les clôtures qu'il a lui-même déclenchées, sans
  * cloture_caisse.view_toutes -- accordée par défaut au propriétaire, à
  * l'administrateur et au comptable (voir SeedMagasinRolesAction), ou
- * individuellement via les permissions supplémentaires d'un membre.
+ * individuellement via les permissions supplémentaires d'un membre. Un
+ * vendeur ferme sa propre caisse ailleurs (voir ClotureCaissePersonnelle).
  *
  * Document fiscal au même titre qu'une facture : jamais modifiable ni
  * supprimable une fois créée (voir ClotureCaisse::class).

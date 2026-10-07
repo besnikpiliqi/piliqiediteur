@@ -250,7 +250,7 @@ class FactureAchatResource extends Resource
                                     ->label('Produit / description')
                                     ->disabled()
                                     ->dehydrated(false),
-                                self::champQuantiteRetournee('Quantité à retourner', fn (Get $get): int|float => LigneAchat::find($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0),
+                                self::champQuantiteRetournee('Quantité à retourner', fn (Get $get): int => LigneAchat::find($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0),
                             ])
                             ->columns(3)
                             ->addable(false)

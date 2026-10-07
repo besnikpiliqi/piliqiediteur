@@ -16,7 +16,6 @@ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -239,33 +238,5 @@ class AvoirResourceTest extends TestCase
         $lignes = $livewire->instance()->form->getRawState()['lignes'];
         $this->assertCount(1, $lignes, 'Seule la ligne du client sélectionné doit être proposée.');
         $this->assertSame($factureDeA->lignes->firstOrFail()->id, $lignes[0]['ligne_facture_id']);
-    }
-
-    /**
-     * Ancienne ligne de 1,5 article (enregistrée avant le passage aux
-     * quantités entières) : l'action pré-remplit le reliquat exact et
-     * l'enregistre tel quel -- toute la ligne est créditée, et l'action
-     * disparaît ensuite.
-     */
-    public function test_laction_avoir_credite_le_reliquat_exact_dune_ancienne_ligne_a_virgule(): void
-    {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
-
-        $client = Client::factory()->create();
-        $facture = $this->emettreFactureDepuisLePanneau($client);
-        DB::table('lignes_facture')->where('facture_id', $facture->id)->update(['quantite' => 1.5, 'montant_ht' => 75, 'montant_tva' => 15, 'montant_ttc' => 90]);
-
-        Livewire::test(ListFactures::class)
-            ->callTableAction('avoir', $facture, data: ['motif' => 'Retour client'])
-            ->assertHasNoTableActionErrors();
-
-        $avoir = Avoir::query()->where('client_id', $client->id)->firstOrFail();
-        $this->assertSame(1.5, $avoir->lignes->firstOrFail()->quantite);
-        $this->assertSame('90.00', $avoir->total_ttc);
-
-        Livewire::test(ListFactures::class)->assertTableActionHidden('avoir', $facture->fresh());
     }
 }

@@ -30,11 +30,9 @@ enum StatutFacture: string implements HasColor, HasLabel
             self::Brouillon => [self::Emise, self::Annulee],
             self::Emise => [self::Envoyee, self::PartiellementPayee, self::Payee, self::EnRetard, self::Annulee],
             self::Envoyee => [self::PartiellementPayee, self::Payee, self::EnRetard, self::Annulee],
-            // Bug corrigé : une facture partiellement payée doit pouvoir
-            // devenir "payee" une fois le solde réglé (un deuxième
-            // paiement par exemple), et rester détectable comme en
-            // retard si l'échéance passe entre-temps. Sans ça, une
-            // facture restait bloquée à vie sur "partiellement_payee".
+            // Une facture partiellement payée devient "payee" une fois le
+            // solde réglé (un deuxième paiement par exemple), et reste
+            // détectable comme en retard si l'échéance passe entre-temps.
             self::PartiellementPayee => [self::Payee, self::EnRetard],
             self::EnRetard => [self::PartiellementPayee, self::Payee],
             self::Payee, self::Annulee => [],

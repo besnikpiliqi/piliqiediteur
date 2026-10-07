@@ -23,6 +23,12 @@ return new class extends Migration
             $table->decimal('total_tva', 12, 2)->default(0);
             $table->decimal('total_ttc', 12, 2)->default(0);
             $table->timestamp('cloturee_a')->nullable();
+            // Soumission d'e-reporting périodique qui a déjà inclus cette
+            // clôture, pour ne jamais l'agréger deux fois (voir
+            // GenererSoumissionEReportingAction). nullOnDelete : la
+            // clôture, document fiscal, reste intacte quoi qu'il arrive à
+            // la soumission.
+            $table->foreignId('soumission_ereporting_id')->nullable()->constrained('soumissions_ereporting')->nullOnDelete();
             $table->timestamps();
             // PAS de softDeletes() ici, volontairement : une clôture de
             // caisse est un document fiscal au même titre qu'une facture

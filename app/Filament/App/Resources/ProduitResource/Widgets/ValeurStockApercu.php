@@ -4,7 +4,6 @@ namespace App\Filament\App\Resources\ProduitResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Casts\QuantiteArticles;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
@@ -61,7 +60,7 @@ class ValeurStockApercu extends BaseWidget
             Stat::make('Valeur du stock', number_format($valeur['total_ttc'], 2, ',', ' ').' € TTC')
                 ->description(sprintf(
                     '%s unités en stock · %s € HT · %s € TVA',
-                    Number::format(QuantiteArticles::normaliser($produitsEnStock->sum('stock_quantite')), maxPrecision: 3, locale: config('app.locale')),
+                    Number::format((int) $produitsEnStock->sum('stock_quantite'), locale: config('app.locale')),
                     number_format($valeur['total_ht'], 2, ',', ' '),
                     number_format($valeur['total_tva'], 2, ',', ' '),
                 ))

@@ -486,8 +486,8 @@ class CalculateurLigneTest extends TestCase
             'taux négatif (TTC vers HT)' => [fn (CalculateurLigne $c) => $c->prixUnitaireHtDepuisTtc(10, -100), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
             'taux négatif (HT vers TTC)' => [fn (CalculateurLigne $c) => $c->prixUnitaireTtcDepuisHt(10, -5), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
             'taux au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->prixUnitaires(PrixReference::Ttc, 10, 150), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
-            'remise saisie négative' => [fn (CalculateurLigne $c) => $c->remiseSaisie(-10), 'La remise doit être comprise entre 0 et 100 %.'],
-            'remise saisie au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->remiseSaisie(150), 'La remise doit être comprise entre 0 et 100 %.'],
+            'remise négative' => [fn (CalculateurLigne $c) => $c->calculer(10, 12, 1, -10), 'La remise doit être comprise entre 0 et 100 %.'],
+            'remise au-delà de 100 %' => [fn (CalculateurLigne $c) => $c->calculer(10, 12, 1, 150), 'La remise doit être comprise entre 0 et 100 %.'],
             'montant reçu absurde' => [fn (CalculateurLigne $c) => $c->soustraire('100000000000000000', 40), 'Montant hors limites.'],
             'paiement absurde' => [fn (CalculateurLigne $c) => $c->arrondirAuCentime(1e17), 'Montant hors limites.'],
             'prix x quantité qui déborde' => [fn (CalculateurLigne $c) => $c->calculer(9999999999.99, 9999999999.99, 999999), 'Montant hors limites.'],
@@ -501,16 +501,6 @@ class CalculateurLigneTest extends TestCase
         $this->expectExceptionMessage($message);
 
         $calcul($this->calculateur());
-    }
-
-    /**
-     * Une ancienne ligne déjà émise avec une remise hors de 0-100 % (une
-     * majoration de 10 %, permise auparavant) doit toujours pouvoir être
-     * recalculée pour un avoir partiel : seule la saisie est bornée.
-     */
-    public function test_une_ancienne_remise_hors_bornes_se_calcule_toujours(): void
-    {
-        $this->assertSame(['montant_ht' => 11.0, 'montant_tva' => 2.2, 'montant_ttc' => 13.2], $this->calculateur()->calculer(10, 12, 1, -10));
     }
 
     public function test_les_bornes_0_et_100_restent_acceptees(): void

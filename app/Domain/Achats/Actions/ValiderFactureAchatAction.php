@@ -7,7 +7,6 @@ use App\Domain\Achats\Events\FactureAchatValidee;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\DocumentNumberingService;
-use App\Domain\Facturation\Services\QuantiteEntiere;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -28,8 +27,6 @@ class ValiderFactureAchatAction
             if (! $factureAchat->statut->peutTransitionnerVers(StatutFactureAchat::Validee)) {
                 throw new LogicException("Impossible de valider une facture d'achat au statut [{$factureAchat->statut->value}].");
             }
-
-            QuantiteEntiere::verifierLignes($factureAchat->lignes);
 
             $numero = $this->numerotation->suivant($factureAchat->magasin, TypeDocument::FactureAchat, now()->format('Y'));
 

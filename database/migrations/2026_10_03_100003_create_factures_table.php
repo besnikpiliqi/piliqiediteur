@@ -13,6 +13,11 @@ return new class extends Migration
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
             $table->foreignId('devis_id')->nullable()->constrained('devis')->nullOnDelete();
+            // Clôture de caisse qui a agrégé cette vente à un particulier
+            // pour l'e-reporting (voir CloturerCaisseAction) -- jamais
+            // renseignée pour un client professionnel, qui relève de la
+            // facture électronique (voir Facture::relevantDeLeInvoicing).
+            $table->foreignId('cloture_caisse_id')->nullable()->constrained('clotures_caisse')->nullOnDelete();
             // Qui a créé la facture : nécessaire pour restreindre la
             // visibilité d'un vendeur à ses propres ventes par défaut
             // (voir FacturePolicy et FACTURE_VIEW_TOUTES).
@@ -41,6 +46,7 @@ return new class extends Migration
             $table->unique(['magasin_id', 'numero']);
             $table->index(['magasin_id', 'statut']);
             $table->index(['magasin_id', 'client_id']);
+            $table->index(['magasin_id', 'cloture_caisse_id']);
         });
     }
 

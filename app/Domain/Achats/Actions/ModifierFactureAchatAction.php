@@ -6,7 +6,6 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Casts\QuantiteArticles;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
@@ -72,7 +71,7 @@ class ModifierFactureAchatAction
                 $produit = Produit::query()->findOrFail($donnees['produit_id']);
                 $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
                 $tauxTva = (float) ($donnees['taux_tva'] ?? $produit->taux_tva);
-                $remise = $this->calculateurLigne->remiseSaisie((float) ($donnees['remise_pourcentage'] ?? 0));
+                $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
                 // Un fournisseur facture le plus souvent en HT (prix d'achat
                 // catalogue), mais un ticket de magasin se saisit en TTC :
                 // le prix saisi fait foi, voir PrixReference.
@@ -113,14 +112,14 @@ class ModifierFactureAchatAction
 
     /**
      * @param  Collection<int, LigneAchat>  $lignes
-     * @return Collection<int, int|float> quantité totale par produit_id
+     * @return Collection<int, int> quantité totale par produit_id
      */
     private function quantitesParProduit(Collection $lignes): Collection
     {
         return $lignes
             ->filter(fn (LigneAchat $ligne) => $ligne->produit_id !== null)
             ->groupBy('produit_id')
-            ->map(fn (Collection $lignesDuProduit) => QuantiteArticles::normaliser($lignesDuProduit->sum('quantite')));
+            ->map(fn (Collection $lignesDuProduit): int => (int) $lignesDuProduit->sum('quantite'));
     }
 
     /**
@@ -130,7 +129,7 @@ class ModifierFactureAchatAction
      * StockLedgerService::ajuster()), le même outil utilisé pour une
      * correction d'inventaire.
      *
-     * @param  Collection<int, int|float>  $quantitesAvant
+     * @param  Collection<int, int>  $quantitesAvant
      * @param  Collection<int, LigneAchat>  $lignesCreees
      */
     private function recalerStockEtPrixAchat(FactureAchat $factureAchat, Collection $quantitesAvant, Collection $lignesCreees): void
@@ -144,13 +143,13 @@ class ModifierFactureAchatAction
                 continue;
             }
 
-            $delta = QuantiteArticles::normaliser(($quantitesApres->get($produitId) ?? 0) - ($quantitesAvant->get($produitId) ?? 0));
+            $delta = ($quantitesApres->get($produitId) ?? 0) - ($quantitesAvant->get($produitId) ?? 0);
 
             if ($delta === 0) {
                 continue;
             }
 
-            $cible = QuantiteArticles::normaliser($produit->stock_quantite + $delta);
+            $cible = $produit->stock_quantite + $delta;
 
             $this->stockLedger->ajuster($produit, $cible, "Correction de la facture d'achat {$factureAchat->numero}");
         }

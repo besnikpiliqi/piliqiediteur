@@ -20,14 +20,12 @@ use InvalidArgumentException;
  * 3. Les totaux du document somment séparément les HT, les TVA et les TTC
  *    des lignes (totaliser()).
  *
- * Tout le calcul se fait en entiers (centimes, millièmes de quantité,
- * centièmes de point de taux), jamais en flottant intermédiaire. Une
- * quantité est un nombre entier d'articles ; seule une ancienne quantité à
- * virgule, enregistrée avant le passage aux entiers (voir
- * QuantiteArticles), a des millièmes -- et reste calculée exactement. Un
- * flottant comme 8.325 vaut réellement ~8.32499999999999982..., et un seul
- * centime d'écart avec le montant transmis à l'administration (API PDP)
- * suffit à faire rejeter une facture.
+ * Tout le calcul se fait en entiers (centimes, nombre d'articles,
+ * centièmes de point de taux et de remise), jamais en flottant
+ * intermédiaire. Un flottant comme 8.325 vaut réellement
+ * ~8.32499999999999982..., et un seul centime d'écart avec le montant
+ * transmis à l'administration (API PDP) suffit à faire rejeter une
+ * facture.
  */
 class CalculateurLigne
 {
@@ -39,19 +37,25 @@ class CalculateurLigne
     private const UNITES_MAXIMUM = 1e14;
 
     /**
+     * @param  int  $quantite  nombre entier d'articles (voir QuantiteEntiere)
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     *
+     * @throws InvalidArgumentException
      */
     public function calculer(
         float $prixUnitaireHt,
         float $prixUnitaireTtc,
-        int|float $quantite,
+        int $quantite,
         float $remisePourcentage = 0.0,
     ): array {
-        $quantiteMilliemes = $this->versUnites($quantite, 1000);
+        if ($remisePourcentage < 0 || $remisePourcentage > 100) {
+            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
+        }
+
         $remiseCentiemes = $this->versUnites($remisePourcentage, 100);
 
-        $montantHtCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireHt, 100), $quantiteMilliemes, $remiseCentiemes);
-        $montantTtcCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireTtc, 100), $quantiteMilliemes, $remiseCentiemes);
+        $montantHtCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireHt, 100), $quantite, $remiseCentiemes);
+        $montantTtcCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireTtc, 100), $quantite, $remiseCentiemes);
 
         return [
             'montant_ht' => $this->centimesVersMontant($montantHtCentimes),
@@ -210,23 +214,6 @@ class CalculateurLigne
     }
 
     /**
-     * Une remise saisie est comprise entre 0 et 100 %. Vérifiée là où elle
-     * est saisie, pas dans calculer() : une ancienne ligne déjà émise avec
-     * une remise hors de ces bornes (permise auparavant) doit toujours
-     * pouvoir être créditée.
-     *
-     * @throws InvalidArgumentException
-     */
-    public function remiseSaisie(float $remisePourcentage): float
-    {
-        if ($remisePourcentage < 0 || $remisePourcentage > 100) {
-            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
-        }
-
-        return $remisePourcentage;
-    }
-
-    /**
      * Un taux hors de 0-100 % n'existe pas -- et -100 % diviserait par
      * zéro en passant du TTC au HT.
      */
@@ -238,13 +225,12 @@ class CalculateurLigne
     }
 
     /**
-     * Prix unitaire x quantité, remise déduite, en centimes. Pour un nombre
-     * entier d'articles, le montant brut tombe toujours pile au centime :
-     * seule la remise s'arrondit.
+     * Prix unitaire x quantité, remise déduite, en centimes : le montant
+     * brut tombe toujours pile au centime, seule la remise s'arrondit.
      */
-    private function montantNetCentimes(int $prixUnitaireCentimes, int $quantiteMilliemes, int $remiseCentiemes): int
+    private function montantNetCentimes(int $prixUnitaireCentimes, int $quantite, int $remiseCentiemes): int
     {
-        $montantBrutCentimes = $this->diviserArrondi($this->multiplier($prixUnitaireCentimes, $quantiteMilliemes), 1000);
+        $montantBrutCentimes = $this->multiplier($prixUnitaireCentimes, $quantite);
 
         if (abs($montantBrutCentimes) >= self::UNITES_MAXIMUM) {
             throw new InvalidArgumentException('Montant hors limites.');

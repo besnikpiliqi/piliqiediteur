@@ -6,9 +6,10 @@ use App\Domain\Facturation\Models\SoumissionEReporting;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
- * Délibérément PAS de ShouldDispatchAfterCommit, même raisonnement que
- * ClotureCaisseEffectuee : le listener PDP diffère SON dispatch via
- * ->afterCommit() (voir DeclencherTransmissionPdpApresSoumissionEReporting).
+ * Délibérément PAS de ShouldDispatchAfterCommit : c'est le listener PDP qui
+ * diffère SON envoi via ->afterCommit() (voir
+ * DeclencherTransmissionPdpApresSoumissionEReporting), pour qu'un appel au
+ * prestataire ne parte jamais avant que la soumission soit enregistrée.
  */
 class SoumissionEReportingGeneree
 {

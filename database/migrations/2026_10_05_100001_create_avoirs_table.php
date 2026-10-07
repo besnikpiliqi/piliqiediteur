@@ -11,10 +11,11 @@ return new class extends Migration
         Schema::create('avoirs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            // restrictOnDelete : une facture ne se supprime de toute façon
-            // jamais, mais on ne veut surtout pas qu'une suppression
-            // quelconque efface silencieusement la trace d'un avoir.
-            $table->foreignId('facture_id')->constrained('factures')->restrictOnDelete();
+            // Un avoir appartient à un client, pas à une facture : il peut
+            // regrouper des lignes de plusieurs factures du même client
+            // (voir CreerAvoirAction). La facture d'origine de chaque ligne
+            // est connue par lignes_avoir.ligne_facture_id.
+            $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
             $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
             $table->string('numero', 40)->nullable();
             $table->string('statut', 20)->default('brouillon');
@@ -30,7 +31,7 @@ return new class extends Migration
             // impose la conservation (voir AvoirPolicy).
 
             $table->unique(['magasin_id', 'numero']);
-            $table->index(['magasin_id', 'facture_id']);
+            $table->index(['magasin_id', 'client_id']);
         });
     }
 

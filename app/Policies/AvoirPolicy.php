@@ -9,9 +9,9 @@ use App\Models\User;
 /**
  * Même esprit de confidentialité que FacturePolicy, mais basée sur le
  * créateur de l'AVOIR LUI-MÊME plutôt que sur celui d'une facture : un
- * avoir peut désormais regrouper des lignes de plusieurs factures de
- * vendeurs différents (voir CreerAvoirAction), il n'y a donc plus un
- * "créateur de la facture" unique auquel se rattacher.
+ * avoir peut regrouper des lignes de plusieurs factures de vendeurs
+ * différents (voir CreerAvoirAction), il n'y a donc pas un « créateur de
+ * la facture » unique auquel se rattacher.
  *
  * Toujours irrévocable une fois émis -- même obligation légale de
  * conservation qu'une facture, voir Avoir::class.

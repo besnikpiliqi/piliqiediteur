@@ -289,9 +289,7 @@ class FactureResource extends Resource
             ->label('')
             ->schema([
                 TextEntry::make('description'),
-                // Entière ("2") ; seule une ancienne quantité à virgule
-                // (voir QuantiteArticles) garde ses décimales ("1,5").
-                TextEntry::make('quantite')->label('Quantité')->numeric(maxDecimalPlaces: 3),
+                TextEntry::make('quantite')->label('Quantité')->numeric(),
                 TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
                 TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
                 TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
@@ -453,7 +451,7 @@ class FactureResource extends Resource
                                     ->label('Produit / description')
                                     ->disabled()
                                     ->dehydrated(false),
-                                self::champQuantiteRetournee('Quantité à créditer', fn (Get $get): int|float => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
+                                self::champQuantiteRetournee('Quantité à créditer', fn (Get $get): int => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
                             ])
                             ->columns(3)
                             ->addable(false)

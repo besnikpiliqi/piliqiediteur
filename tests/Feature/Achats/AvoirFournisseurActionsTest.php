@@ -17,7 +17,6 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
 use Tests\TestCase;
@@ -273,30 +272,5 @@ class AvoirFournisseurActionsTest extends TestCase
             ['ligne_achat_id' => $ligneAchatId, 'quantite' => 2],
             ['ligne_achat_id' => $ligneAchatId, 'quantite' => 2],
         ]);
-    }
-
-    /**
-     * Ancienne ligne d'achat de 1,5 (avant le passage aux quantités
-     * entières) : un article retourné, puis le reliquat exact de 0,5 qui
-     * solde la ligne -- toute la ligne est retournée, au centime.
-     */
-    public function test_le_reliquat_exact_dune_ancienne_ligne_a_virgule_solde_le_retour(): void
-    {
-        $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
-        $factureAchat = $this->receptionnerAchat($fournisseur, $produit, 2);
-        $ligneAchat = $factureAchat->lignes->firstOrFail();
-        DB::table('lignes_achat')->where('id', $ligneAchat->id)->update(['quantite' => 1.5, 'montant_ht' => 30, 'montant_tva' => 6, 'montant_ttc' => 36]);
-
-        $premier = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
-            ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1],
-        ]));
-        $solde = app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
-            ['ligne_achat_id' => $ligneAchat->id, 'quantite' => '0.5'],
-        ]);
-
-        $this->assertSame(['20.00', '4.00', '24.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
-        $this->assertSame(['10.00', '2.00', '12.00'], [$solde->total_ht, $solde->total_tva, $solde->total_ttc]);
-        $this->assertSame(0.5, $solde->lignes->firstOrFail()->quantite);
     }
 }

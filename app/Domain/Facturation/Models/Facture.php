@@ -129,7 +129,7 @@ class Facture extends Model
     }
 
     /**
-     * Un avoir n'appartient plus à une seule facture (voir le docblock de
+     * Un avoir n'appartient pas à une seule facture (voir le docblock de
      * CreerAvoirAction) : il référence cette facture indirectement, via
      * chacune de ses lignes (LigneAvoir::ligne_facture_id). Impossible
      * d'utiliser une relation Eloquent classique ici, d'où une requête

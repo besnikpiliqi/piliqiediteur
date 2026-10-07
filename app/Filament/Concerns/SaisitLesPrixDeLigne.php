@@ -185,7 +185,7 @@ trait SaisitLesPrixDeLigne
                 $prix['prix_unitaire_ht'],
                 $prix['prix_unitaire_ttc'],
                 $quantite,
-                $calculateur->remiseSaisie((float) ($ligne['remise_pourcentage'] ?? 0)),
+                (float) ($ligne['remise_pourcentage'] ?? 0),
             );
         } catch (InvalidArgumentException) {
             return ['montant_ht' => 0.0, 'montant_tva' => 0.0, 'montant_ttc' => 0.0];

@@ -96,11 +96,10 @@ final class PermissionRegistry
 
     public const AVOIR_CREER = 'avoir.creer';
 
-    // Clôture de caisse (e-reporting agrégé B2C). Un vendeur qui clôture
-    // sa propre caisse ne voit que SES clôtures (celles qu'il a
-    // lui-même déclenchées, voir cree_par) sans cloture_caisse.view_toutes
-    // -- même confidentialité par vendeur que facture.view_toutes, voir
-    // ClotureCaissePolicy.
+    // Clôture de la journée du magasin (e-reporting agrégé B2C). Sans
+    // cloture_caisse.view_toutes, un membre ne voit que les clôtures qu'il
+    // a lui-même déclenchées (voir cree_par et ClotureCaissePolicy) --
+    // même confidentialité que facture.view_toutes.
     public const CLOTURE_CAISSE_VIEW = 'cloture_caisse.view';
 
     public const CLOTURE_CAISSE_VIEW_TOUTES = 'cloture_caisse.view_toutes';

@@ -134,3 +134,18 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Run `vendor/bin/phpunit` to call the test runner directly. It accepts the same file path and `--filter=testName` arguments.
 
 </laravel-boost-guidelines>
+
+<projet-piliqiediteur>
+# Règles du projet
+
+## Développement : toujours repartir de zéro
+
+- Le logiciel est encore en développement et aucune donnée réelle n'existe : on ne garde aucune trace d'un état antérieur, mais on code tout comme pour la production.
+- Chaque table est définie par UNE seule migration de création qui contient directement son schéma final. Pour changer une table, on modifie sa migration de création (jamais de migration `add_x_to_y`, de renommage de colonne ni de reprise de données), puis on recrée la base avec `php artisan migrate:fresh`.
+- Aucun code, cast, règle de validation, commentaire ou test qui n'existe que pour gérer des données enregistrées avant un changement.
+
+## Produit
+
+- Logiciel indépendant (SaaS) vendu à des magasins : son créateur en est l'éditeur, il n'a pas de magasin.
+- Chaque magasin est strictement isolé (`BelongsToMagasin` + `MagasinScope`) : aucun client, produit, service, document ou réglage n'est jamais partagé ni mélangé entre magasins.
+</projet-piliqiediteur>

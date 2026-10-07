@@ -63,7 +63,7 @@ class ConstructeurLigneDocument
             $produit === null ? null : (float) $produit->prix_vente_ttc,
         );
 
-        $remise = $this->calculateur->remiseSaisie((float) ($donnees['remise_pourcentage'] ?? 0));
+        $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
 
         $montants = $this->calculateur->calculer(
             $prix['prix_unitaire_ht'],

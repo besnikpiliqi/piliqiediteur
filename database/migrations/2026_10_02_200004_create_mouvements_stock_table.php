@@ -14,10 +14,11 @@ return new class extends Migration
             $table->foreignId('produit_id')->constrained('produits')->cascadeOnDelete();
             // vente, reception_achat, retour_fournisseur, retour_client, ajustement
             $table->string('type', 30);
-            // Toujours positive : le sens (+/-) est déterminé par `type`,
-            // jamais par le signe stocké -- évite les erreurs de signe en
-            // amont et rend le ledger auto-descriptif.
-            $table->decimal('quantite', 12, 3);
+            // Nombre entier d'articles, toujours positif : le sens (+/-)
+            // est déterminé par `type`, jamais par le signe stocké -- évite
+            // les erreurs de signe en amont et rend le ledger
+            // auto-descriptif.
+            $table->unsignedInteger('quantite');
             $table->nullableMorphs('source');
             $table->timestamp('survenu_le');
             $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();

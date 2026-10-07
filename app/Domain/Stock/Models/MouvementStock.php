@@ -3,7 +3,6 @@
 namespace App\Domain\Stock\Models;
 
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Casts\QuantiteArticles;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
@@ -38,7 +37,7 @@ class MouvementStock extends Model
 
     protected $casts = [
         'type' => TypeMouvementStock::class,
-        'quantite' => QuantiteArticles::class,
+        'quantite' => 'integer',
         'survenu_le' => 'datetime',
     ];
 

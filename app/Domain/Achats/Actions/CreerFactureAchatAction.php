@@ -48,7 +48,7 @@ class CreerFactureAchatAction
                 $produit = Produit::query()->findOrFail($donnees['produit_id']);
                 $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
                 $tauxTva = (float) ($donnees['taux_tva'] ?? $produit->taux_tva);
-                $remise = $this->calculateurLigne->remiseSaisie((float) ($donnees['remise_pourcentage'] ?? 0));
+                $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
                 // Un fournisseur facture le plus souvent en HT (prix d'achat
                 // catalogue), mais un ticket de magasin se saisit en TTC :
                 // le prix saisi fait foi, voir PrixReference.

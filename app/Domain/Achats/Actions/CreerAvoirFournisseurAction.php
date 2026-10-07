@@ -6,7 +6,6 @@ use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
-use App\Domain\Facturation\Casts\QuantiteArticles;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use Illuminate\Support\Facades\DB;
@@ -68,7 +67,7 @@ class CreerAvoirFournisseurAction
                 }
 
                 $restante = $ligneAchat->quantiteRetournableRestante();
-                $quantite = QuantiteEntiere::depuisSaisieOuReliquat($selection['quantite'] ?? null, $restante, 'La quantité à retourner');
+                $quantite = QuantiteEntiere::depuisSaisie($selection['quantite'] ?? null, 'La quantité à retourner');
 
                 if ($quantite > $restante) {
                     throw new LogicException("La ligne \"{$ligneAchat->description}\" ne peut pas être retournée au-delà de la quantité disponible ({$restante}) : elle a déjà été vendue ou déjà retournée.");
@@ -77,7 +76,7 @@ class CreerAvoirFournisseurAction
                 // Un retour partiel reprend les PU HT/TTC de la ligne achetée
                 // (article par article, voir CalculateurLigne) ; le dernier
                 // retour en prend le solde exact.
-                $resteSurLaLigne = QuantiteArticles::normaliser($ligneAchat->quantite - $ligneAchat->quantiteDejaRetournee());
+                $resteSurLaLigne = $ligneAchat->quantite - $ligneAchat->quantiteDejaRetournee();
 
                 $montants = $quantite === $resteSurLaLigne
                     ? $this->calculateurLigne->solder(

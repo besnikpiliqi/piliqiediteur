@@ -109,7 +109,7 @@ class FermerSaCaisseActionTest extends TestCase
     /**
      * Le brouillon F1 est créé AVANT la vente F2 (donc un ID plus petit),
      * mais émis APRÈS la fermeture qui a compté F2 : la fermeture suivante
-     * doit le compter -- l'ancien curseur sur l'ID le sautait pour toujours.
+     * doit le compter -- un curseur sur l'ID le sauterait pour toujours.
      */
     public function test_un_brouillon_emis_apres_une_fermeture_est_compte_par_la_suivante(): void
     {

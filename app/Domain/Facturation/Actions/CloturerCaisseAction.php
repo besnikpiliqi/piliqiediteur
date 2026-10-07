@@ -5,7 +5,6 @@ namespace App\Domain\Facturation\Actions;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
-use App\Domain\Facturation\Events\ClotureCaisseEffectuee;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -73,8 +72,6 @@ class CloturerCaisseAction
                     ->whereIn('id', $factures->pluck('id'))
                     ->update(['cloture_caisse_id' => $cloture->id]);
             }
-
-            ClotureCaisseEffectuee::dispatch($cloture);
 
             return $cloture;
         });

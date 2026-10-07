@@ -4,6 +4,10 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * Créée avant users : un utilisateur retient le magasin sur lequel il
+ * travaille (users.current_magasin_id).
+ */
 return new class extends Migration
 {
     public function up(): void
@@ -26,6 +30,15 @@ return new class extends Migration
             $table->string('devise', 3)->default('EUR');
             $table->string('locale', 5)->default('fr');
             $table->string('statut', 30)->default('pending_verification');
+            // Nullable : tant que le propriétaire n'a pas configuré son
+            // régime (voir ParametresFiscaux), la soumission périodique
+            // d'e-reporting (voir SoumettreEReportingPeriodique) ignore ce
+            // magasin.
+            $table->string('regime_tva', 30)->nullable();
+            // Option pour les débits (CGI art. 269, 2-c) : ne concerne que
+            // les prestations de services, champ du flux d'e-reporting
+            // (voir CalculateurPeriodeEReporting).
+            $table->boolean('option_debits_tva')->default(false);
             $table->time('heure_cloture_automatique')->default('00:00:00');
             $table->timestamps();
             $table->softDeletes();

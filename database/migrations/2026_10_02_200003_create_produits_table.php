@@ -19,14 +19,19 @@ return new class extends Migration
             $table->string('taille', 20)->nullable();
             $table->string('couleur', 30)->nullable();
             $table->decimal('prix_achat_ht', 12, 2)->default(0);
+            // Le prix de vente est saisi et enregistré en TTC, tel que
+            // l'affiche le magasin ; le HT n'en est que la conversion au
+            // centime (voir Produit::synchroniserPrixDeVente()).
+            $table->decimal('prix_vente_ttc', 12, 2)->default(0);
             $table->decimal('prix_vente_ht', 12, 2)->default(0);
             $table->decimal('taux_tva', 5, 2)->default(20.00);
             // Cache dénormalisé : la source de vérité est le ledger
             // mouvements_stock. Ne JAMAIS écrire cette colonne ailleurs que
             // dans StockLedgerService (voir app/Domain/Stock/Services).
-            $table->decimal('stock_quantite', 12, 3)->default(0);
+            // Entier : une quantité est toujours un nombre d'articles.
+            $table->integer('stock_quantite')->default(0);
             $table->boolean('suivi_stock')->default(true);
-            $table->decimal('seuil_alerte', 12, 3)->default(0);
+            $table->unsignedInteger('seuil_alerte')->default(0);
             $table->boolean('actif')->default(true);
             $table->timestamps();
             $table->softDeletes();

@@ -13,6 +13,10 @@ return new class extends Migration
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('fournisseur_id')->constrained('fournisseurs')->restrictOnDelete();
             $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
+            // Une facture saisie à la main reste modifiable même validée
+            // (voir FactureAchat::estModifiable()), une facture récupérée
+            // par API ne l'est jamais.
+            $table->string('source', 20)->default('manuelle');
             // Notre propre référence interne, attribuée uniquement à la
             // validation (voir ValiderFactureAchatAction) -- jamais au
             // brouillon, même logique que Facture::numero.

@@ -71,8 +71,8 @@ class ProduitResourceTest extends TestCase
     }
 
     /**
-     * Un produit enregistré avec un HT (fabrique de test, future API,
-     * produit créé avant le passage au TTC) obtient son TTC au centime :
+     * Un produit enregistré avec un HT (fabrique de test, future API)
+     * obtient son TTC au centime :
      * 33,33 € HT donne bien 40,00 € TTC, jamais 39,996 €.
      */
     public function test_un_produit_enregistre_en_ht_obtient_son_ttc_au_centime(): void

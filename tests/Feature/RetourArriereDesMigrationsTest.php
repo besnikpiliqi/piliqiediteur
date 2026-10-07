@@ -8,10 +8,9 @@ use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
- * Chaque migration doit pouvoir être défaite puis rejouée : sous SQLite,
- * supprimer une colonne encore utilisée par un index échoue
- * (add_cloture_caisse_id_to_factures, add_tenancy_columns_to_users), ce
- * qui bloquait tout "php artisan migrate:rollback" au-delà.
+ * Chaque migration de création doit pouvoir être défaite puis rejouée,
+ * dans l'ordre inverse de ses dépendances (une table référencée n'est
+ * supprimée qu'après celles qui la référencent).
  *
  * DatabaseMigrations, pas RefreshDatabase : comme un vrai déploiement,
  * hors de toute transaction englobante.

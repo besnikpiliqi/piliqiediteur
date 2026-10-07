@@ -7,10 +7,9 @@ use App\Domain\Facturation\Jobs\SubmitSoumissionEReportingToPdpJob;
 use App\Domain\Tenancy\Models\MandatPdp;
 
 /**
- * Remplace DeclencherTransmissionPdpApresClotureCaisse (supprimé) : la
- * transmission se déclenche désormais après la génération d'une
- * SOUMISSION agrégée sur toute une période, jamais après chaque clôture
- * quotidienne individuelle -- voir le docblock de SoumissionEReporting.
+ * La transmission se déclenche après la génération d'une SOUMISSION
+ * agrégée sur toute une période, jamais après chaque clôture quotidienne
+ * individuelle -- voir le docblock de SoumissionEReporting.
  */
 class DeclencherTransmissionPdpApresSoumissionEReporting
 {

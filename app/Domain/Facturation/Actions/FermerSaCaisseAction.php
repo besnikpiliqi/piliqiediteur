@@ -36,10 +36,11 @@ class FermerSaCaisseAction
 
             $depuis = $derniere?->cloturee_a ?? Carbon::now()->startOfDay();
 
-            // Les ventes jamais encore comptées, plutôt qu'un curseur sur
-            // l'ID de la dernière facture incluse : l'ID est attribué à la
-            // création du brouillon, et un brouillon créé avant une vente
-            // mais émis après la fermeture aurait été sauté pour toujours.
+            // Les ventes jamais encore comptées par une fermeture, et non
+            // celles d'ID supérieur à la dernière comptée : l'ID est
+            // attribué à la création du brouillon, et un brouillon créé
+            // avant une vente mais émis après la fermeture serait sinon
+            // sauté pour toujours.
             $factures = Facture::query()
                 ->nonFermeesParLeVendeur($vendeur->getKey())
                 ->orderBy('id')

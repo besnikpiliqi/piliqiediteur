@@ -258,8 +258,7 @@ class DevisResourceTest extends TestCase
 
     /**
      * Un devis reste modifiable, lignes comprises, tant qu'il n'a pas été
-     * transformé en facture -- y compris une fois accepté, contrairement
-     * à l'ancien comportement qui ne l'autorisait qu'en brouillon.
+     * transformé en facture -- y compris une fois accepté.
      */
     public function test_modifier_un_devis_accepte_remplace_les_lignes_et_recalcule_les_totaux(): void
     {

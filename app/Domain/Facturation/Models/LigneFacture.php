@@ -4,7 +4,6 @@ namespace App\Domain\Facturation\Models;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
-use App\Domain\Facturation\Casts\QuantiteArticles;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -37,7 +36,7 @@ class LigneFacture extends Model
     ];
 
     protected $casts = [
-        'quantite' => QuantiteArticles::class,
+        'quantite' => 'integer',
         'prix_unitaire_ht' => 'decimal:2',
         'prix_unitaire_ttc' => 'decimal:2',
         'prix_reference' => PrixReference::class,
@@ -79,11 +78,11 @@ class LigneFacture extends Model
      * créditable, au même titre qu'il ne bloque pas un nouvel avoir (voir
      * CreerAvoirAction).
      */
-    public function quantiteDejaCreditee(): int|float
+    public function quantiteDejaCreditee(): int
     {
-        return QuantiteArticles::normaliser($this->lignesAvoir()
+        return (int) $this->lignesAvoir()
             ->whereHas('avoir', fn ($query) => $query->where('statut', StatutAvoir::Emise))
-            ->sum('quantite'));
+            ->sum('quantite');
     }
 
     /**
@@ -91,8 +90,8 @@ class LigneFacture extends Model
      * ligne, tant que leur somme ne dépasse jamais la quantité facturée
      * (voir CreerAvoirAction).
      */
-    public function quantiteCreditableRestante(): int|float
+    public function quantiteCreditableRestante(): int
     {
-        return QuantiteArticles::normaliser($this->quantite - $this->quantiteDejaCreditee());
+        return $this->quantite - $this->quantiteDejaCreditee();
     }
 }

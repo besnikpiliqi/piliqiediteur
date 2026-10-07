@@ -69,8 +69,9 @@ class Client extends Model
      * Crédit encore disponible pour ce client, tous avoirs confondus
      * (particulier ou professionnel : aucune intégration bancaire pour
      * rembourser par virement/espèces, voir AppliquerAvoirsDisponiblesAction
-     * -- un avoir émis reste donc un crédit à appliquer sur une prochaine
-     * facture jusqu'à épuisement).
+     * -- ce qu'un avoir n'a pas imputé sur ses propres factures, voir
+     * ImputerAvoirSurSesFacturesAction, reste un crédit à appliquer sur une
+     * prochaine facture jusqu'à épuisement).
      *
      * Exception volontaire : le client comptoir générique (voir
      * estComptoir()) n'a jamais de solde créditeur. Il est partagé par

@@ -5,12 +5,11 @@ namespace Tests\Feature\Facturation;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
-use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
-use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -97,11 +96,13 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        // Premier achat intégralement retourné : 60 € de crédit disponible.
-        $premiereFacture = app(CreerFactureAction::class)->handle($client, [
-            ['produit_id' => $produit->id, 'quantite' => 1],
-        ]);
-        $premiereFacture = app(EmettreFactureAction::class)->handle($premiereFacture);
+        // Premier achat payé puis intégralement retourné : 60 € de crédit
+        // disponible.
+        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle(
+            $client,
+            [['produit_id' => $produit->id, 'quantite' => 1]],
+            ModePaiement::Especes,
+        );
         $ligneFacture = $premiereFacture->lignes->firstOrFail();
         $avoir = app(CreerAvoirAction::class)->handle($client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
@@ -121,7 +122,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
         $this->assertSame(60.0, $facture->fresh()->montantCrediteParAvoir());
         $this->assertSame(0.0, $facture->fresh()->montantPaye());
-        $this->assertDatabaseMissing('paiements', ['client_id' => $client->id]);
+        $this->assertSame(1, Paiement::query()->where('client_id', $client->id)->count(), 'Seul le premier achat a été encaissé.');
         $this->assertSame(0.0, $client->soldeCrediteur());
     }
 

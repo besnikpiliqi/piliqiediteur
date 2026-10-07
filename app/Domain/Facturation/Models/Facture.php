@@ -18,6 +18,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use LogicException;
 
 /**
  * PAS de SoftDeletes ici, volontairement : une facture ne se supprime
@@ -178,6 +179,29 @@ class Facture extends Model
     public function montantRestant(): float
     {
         return app(CalculateurLigne::class)->soustraire($this->total_ttc, $this->montantPaye(), $this->montantCrediteParAvoir());
+    }
+
+    /**
+     * Après un paiement ou l'imputation d'un avoir : « payée » quand plus
+     * rien n'est dû, « partiellement payée » sinon.
+     *
+     * @throws LogicException
+     */
+    public function constaterUnReglement(): void
+    {
+        $nouveauStatut = $this->montantRestant() <= 0.0
+            ? StatutFacture::Payee
+            : StatutFacture::PartiellementPayee;
+
+        if ($this->statut === $nouveauStatut) {
+            return;
+        }
+
+        if (! $this->statut->peutTransitionnerVers($nouveauStatut)) {
+            throw new LogicException("Transition de statut invalide sur la facture {$this->numero} : [{$this->statut->value}] -> [{$nouveauStatut->value}].");
+        }
+
+        $this->forceFill(['statut' => $nouveauStatut])->save();
     }
 
     /**

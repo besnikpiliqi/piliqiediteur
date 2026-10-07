@@ -4,21 +4,19 @@ namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutAvoir;
-use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use Illuminate\Support\Facades\DB;
-use LogicException;
 
 /**
  * Applique automatiquement le crédit disponible du client (voir
  * Client::soldeCrediteur()) sur une facture qui vient d'être émise --
  * jamais de remboursement réel (espèces/virement), ce logiciel n'étant pas
- * connecté à une banque : un avoir émis reste un crédit en attente tant
- * qu'aucune nouvelle facture de ce client ne vient l'absorber (voir le
- * docblock de Client::soldeCrediteur()).
+ * connecté à une banque. Ce crédit est ce qui reste d'un avoir une fois
+ * imputé sur ses propres factures (voir ImputerAvoirSurSesFacturesAction) :
+ * il attend qu'une nouvelle facture de ce client vienne l'absorber.
  *
  * Les avoirs les plus anciens sont consommés en premier (FIFO), et
  * peuvent se répartir sur plusieurs factures successives comme sur
@@ -88,19 +86,7 @@ class AppliquerAvoirsDisponiblesAction
                 return;
             }
 
-            $nouveauStatut = $montantRestant <= 0.0
-                ? StatutFacture::Payee
-                : StatutFacture::PartiellementPayee;
-
-            if ($facture->statut === $nouveauStatut) {
-                return;
-            }
-
-            if (! $facture->statut->peutTransitionnerVers($nouveauStatut)) {
-                throw new LogicException("Transition de statut invalide sur la facture {$facture->numero} : [{$facture->statut->value}] -> [{$nouveauStatut->value}].");
-            }
-
-            $facture->forceFill(['statut' => $nouveauStatut])->save();
+            $facture->constaterUnReglement();
         });
     }
 }

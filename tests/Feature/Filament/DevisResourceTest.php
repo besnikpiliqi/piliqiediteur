@@ -7,9 +7,9 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
-use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
-use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Devis;
@@ -76,10 +76,9 @@ class DevisResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(EnregistrerVenteCaisseAction::class)->handle($client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
-        ]);
-        $facture = app(EmettreFactureAction::class)->handle($facture);
+        ], ModePaiement::Especes);
         $avoir = app(CreerAvoirAction::class)->handle($client, [
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]);

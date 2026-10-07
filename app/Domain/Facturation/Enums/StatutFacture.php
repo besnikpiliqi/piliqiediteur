@@ -49,6 +49,15 @@ enum StatutFacture: string implements HasColor, HasLabel
         return in_array($this, [self::Payee, self::Annulee], true);
     }
 
+    /**
+     * Une facture émise dont il reste quelque chose à régler : elle peut
+     * recevoir un paiement, ou l'imputation d'un avoir qui la corrige.
+     */
+    public function attendUnReglement(): bool
+    {
+        return in_array($this, [self::Emise, self::Envoyee, self::PartiellementPayee, self::EnRetard], true);
+    }
+
     public function getLabel(): string
     {
         return match ($this) {

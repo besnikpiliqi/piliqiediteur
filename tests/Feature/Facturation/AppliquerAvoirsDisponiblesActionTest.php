@@ -9,6 +9,7 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
@@ -22,11 +23,12 @@ use Tests\TestCase;
 
 /**
  * Ce logiciel n'étant connecté à aucune banque, un avoir émis n'est jamais
- * remboursé automatiquement : il reste un crédit disponible pour le client
- * (particulier ou professionnel, sans distinction) jusqu'à ce qu'une
- * prochaine facture vienne l'absorber -- automatiquement, à l'émission
- * (voir AppliquerAvoirDisponibleApresEmissionFacture), sans action du
- * vendeur.
+ * remboursé automatiquement : ce qu'il n'a pas pu imputer sur ses propres
+ * factures, déjà réglées (voir ImputerAvoirSurSesFacturesAction), reste un
+ * crédit disponible pour le client (particulier ou professionnel, sans
+ * distinction) jusqu'à ce qu'une prochaine facture vienne l'absorber --
+ * automatiquement, à l'émission (voir
+ * AppliquerAvoirDisponibleApresEmissionFacture), sans action du vendeur.
  */
 class AppliquerAvoirsDisponiblesActionTest extends TestCase
 {
@@ -53,6 +55,17 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         return app(EmettreFactureAction::class)->handle($facture)->fresh();
     }
 
+    /**
+     * Un achat payé en caisse : l'avoir qui le crédite ne trouve plus rien
+     * à réduire sur sa facture, il devient entièrement un crédit.
+     */
+    private function vendreEnCaisse(Client $client, Produit $produit, int $quantite = 1): Facture
+    {
+        return app(EnregistrerVenteCaisseAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => $quantite],
+        ], ModePaiement::Especes);
+    }
+
     private function emettreAvoirPourClient(Client $client, Facture $factureOrigine, int $quantite): Avoir
     {
         $ligneFacture = $factureOrigine->lignes->firstOrFail();
@@ -69,8 +82,9 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        // Premier achat intégralement retourné : 60 € de crédit disponible.
-        $premiereFacture = $this->emettreFacture($client, $produit, 1);
+        // Premier achat payé puis intégralement retourné : 60 € de crédit
+        // disponible.
+        $premiereFacture = $this->vendreEnCaisse($client, $produit, 1);
         $this->emettreAvoirPourClient($client, $premiereFacture, 1);
 
         $this->assertSame(60.0, $client->soldeCrediteur());
@@ -91,7 +105,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $produitRetourne = Produit::factory()->create(['prix_vente_ht' => 25, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         // 30 € de crédit disponible (25 € HT + 20 % TVA).
-        $premiereFacture = $this->emettreFacture($client, $produitRetourne, 1);
+        $premiereFacture = $this->vendreEnCaisse($client, $produitRetourne, 1);
         $this->emettreAvoirPourClient($client, $premiereFacture, 1);
 
         // Nouvel achat de 60 € : 30 € crédités automatiquement, 30 € restent dus.
@@ -127,11 +141,11 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         // premier avoir s'appliquerait automatiquement au second achat
         // lui-même (émission de factureB), faussant tout le scénario.
         $this->travelTo(now()->subDays(3));
-        $factureA = $this->emettreFacture($client, $produitRetourne, 1);
+        $factureA = $this->vendreEnCaisse($client, $produitRetourne, 1);
         $this->travelBack();
 
         $this->travelTo(now()->subDays(2));
-        $factureB = $this->emettreFacture($client, $produitRetourne, 1);
+        $factureB = $this->vendreEnCaisse($client, $produitRetourne, 1);
         $this->travelBack();
 
         $this->travelTo(now()->subDays(2));
@@ -177,7 +191,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $clientB = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $factureA = $this->emettreFacture($clientA, $produit, 1);
+        $factureA = $this->vendreEnCaisse($clientA, $produit, 1);
         $this->emettreAvoirPourClient($clientA, $factureA, 1);
 
         $this->assertSame(60.0, $clientA->soldeCrediteur());
@@ -208,9 +222,9 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
 
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        // Premier achat comptoir intégralement retourné : aurait généré 60 €
-        // de crédit disponible pour un client nommé.
-        $premiereFacture = $this->emettreFacture($clientComptoir, $produit, 1);
+        // Premier achat comptoir payé puis intégralement retourné : aurait
+        // généré 60 € de crédit disponible pour un client nommé.
+        $premiereFacture = $this->vendreEnCaisse($clientComptoir, $produit, 1);
         $this->emettreAvoirPourClient($clientComptoir, $premiereFacture, 1);
 
         $this->assertSame(0.0, $clientComptoir->soldeCrediteur());

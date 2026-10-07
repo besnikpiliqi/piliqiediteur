@@ -2,7 +2,6 @@
 
 namespace App\Domain\Facturation\Actions;
 
-use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
@@ -51,12 +50,7 @@ class EnregistrerPaiementAction
                     throw new LogicException("La facture {$facture->numero} n'appartient pas au client de ce paiement.");
                 }
 
-                if (! in_array($facture->statut, [
-                    StatutFacture::Emise,
-                    StatutFacture::Envoyee,
-                    StatutFacture::PartiellementPayee,
-                    StatutFacture::EnRetard,
-                ], true)) {
+                if (! $facture->statut->attendUnReglement()) {
                     throw new LogicException("Impossible d'encaisser un paiement sur une facture au statut [{$facture->statut->value}].");
                 }
 
@@ -78,17 +72,7 @@ class EnregistrerPaiementAction
                     'montant_alloue' => $montantAlloue,
                 ]);
 
-                $nouveauStatut = $this->calculateur->soustraire($montantRestantAvant, $montantAlloue) <= 0.0
-                    ? StatutFacture::Payee
-                    : StatutFacture::PartiellementPayee;
-
-                if ($facture->statut !== $nouveauStatut) {
-                    if (! $facture->statut->peutTransitionnerVers($nouveauStatut)) {
-                        throw new LogicException("Transition de statut invalide sur la facture {$facture->numero} : [{$facture->statut->value}] -> [{$nouveauStatut->value}].");
-                    }
-
-                    $facture->forceFill(['statut' => $nouveauStatut])->save();
-                }
+                $facture->constaterUnReglement();
             }
 
             return $paiement;

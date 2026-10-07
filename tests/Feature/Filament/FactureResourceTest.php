@@ -11,6 +11,8 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
@@ -123,16 +125,13 @@ class FactureResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        // Premier achat intégralement retourné : 60 € de crédit disponible.
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
+        // Premier achat payé puis intégralement retourné : 60 € de crédit
+        // disponible.
+        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ], ModePaiement::Especes);
 
-        $premiereFacture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
-        Livewire::test(ListFactures::class)->callTableAction('emettre', $premiereFacture);
-
-        $ligneFacture = $premiereFacture->fresh()->lignes->firstOrFail();
+        $ligneFacture = $premiereFacture->lignes->firstOrFail();
         $avoir = app(CreerAvoirAction::class)->handle($client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
@@ -184,15 +183,13 @@ class FactureResourceTest extends TestCase
         $produitRembourse = Produit::factory()->create(['prix_vente_ht' => 8.33, 'taux_tva' => 20, 'suivi_stock' => false]);
         $produitFacture = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        // Premier achat intégralement retourné : 10 € de crédit disponible.
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produitRembourse->id, 'description' => $produitRembourse->nom, 'quantite' => 1, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
-        $premiereFacture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
-        Livewire::test(ListFactures::class)->callTableAction('emettre', $premiereFacture);
+        // Premier achat payé puis intégralement retourné : 10 € de crédit
+        // disponible.
+        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle($client, [
+            ['produit_id' => $produitRembourse->id, 'quantite' => 1],
+        ], ModePaiement::Especes);
 
-        $ligneFacture = $premiereFacture->fresh()->lignes->firstOrFail();
+        $ligneFacture = $premiereFacture->lignes->firstOrFail();
         $avoir = app(CreerAvoirAction::class)->handle($client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
@@ -242,15 +239,13 @@ class FactureResourceTest extends TestCase
         $produitRembourse = Produit::factory()->create(['prix_vente_ht' => 10.83, 'taux_tva' => 20, 'suivi_stock' => false]);
         $produitFacture = Produit::factory()->create(['prix_vente_ht' => 51, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        // Premier achat intégralement retourné : 13 € de crédit disponible.
-        Livewire::test(CreateFacture::class)->fillForm([
-            'client_id' => $client->id,
-            'lignes' => [['produit_id' => $produitRembourse->id, 'description' => $produitRembourse->nom, 'quantite' => 1, 'prix_unitaire_ht' => 10.83, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-        ])->call('create');
-        $premiereFacture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
-        Livewire::test(ListFactures::class)->callTableAction('emettre', $premiereFacture);
+        // Premier achat payé puis intégralement retourné : 13 € de crédit
+        // disponible.
+        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle($client, [
+            ['produit_id' => $produitRembourse->id, 'quantite' => 1],
+        ], ModePaiement::Especes);
 
-        $ligneFacture = $premiereFacture->fresh()->lignes->firstOrFail();
+        $ligneFacture = $premiereFacture->lignes->firstOrFail();
         $avoir = app(CreerAvoirAction::class)->handle($client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);

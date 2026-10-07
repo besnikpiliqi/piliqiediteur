@@ -102,9 +102,10 @@ class Avoir extends Model
     /**
      * Solde du crédit encore disponible pour ce client : un avoir émis
      * n'est jamais remboursé en espèces/virement par ce logiciel (pas
-     * d'intégration bancaire) -- il s'applique automatiquement à la
-     * prochaine facture du même client (voir AppliquerAvoirsDisponiblesAction),
-     * en tout ou en partie, jusqu'à épuisement.
+     * d'intégration bancaire). Il réduit d'abord le reste dû des factures
+     * qu'il corrige (voir ImputerAvoirSurSesFacturesAction) ; l'excédent
+     * s'applique automatiquement aux prochaines factures du même client
+     * (voir AppliquerAvoirsDisponiblesAction), jusqu'à épuisement.
      */
     public function montantNonAlloue(): float
     {

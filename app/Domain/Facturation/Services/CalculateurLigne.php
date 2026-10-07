@@ -186,6 +186,24 @@ class CalculateurLigne
     }
 
     /**
+     * Des totaux moins ceux des documents qui les corrigent (les ventes
+     * d'une journée de caisse moins ses avoirs), au centime, séparément
+     * pour les HT, les TVA et les TTC.
+     *
+     * @param  array{total_ht: float, total_tva: float, total_ttc: float}  $totaux
+     * @param  array{total_ht: float, total_tva: float, total_ttc: float}  $totauxDeduits
+     * @return array{total_ht: float, total_tva: float, total_ttc: float}
+     */
+    public function deduire(array $totaux, array $totauxDeduits): array
+    {
+        return [
+            'total_ht' => $this->soustraire($totaux['total_ht'], $totauxDeduits['total_ht']),
+            'total_tva' => $this->soustraire($totaux['total_tva'], $totauxDeduits['total_tva']),
+            'total_ttc' => $this->soustraire($totaux['total_ttc'], $totauxDeduits['total_ttc']),
+        ];
+    }
+
+    /**
      * Somme exacte de montants au centime (paiements, crédits d'avoir...),
      * en centimes -- jamais une somme de flottants.
      *

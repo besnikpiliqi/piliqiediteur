@@ -5,7 +5,9 @@ namespace Tests\Feature\Facturation;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\GenererSoumissionEReportingAction;
 use App\Domain\Facturation\Events\SoumissionEReportingGeneree;
@@ -68,6 +70,34 @@ class GenererSoumissionEReportingActionTest extends TestCase
         $this->assertSame(2, $soumission->nombre_clotures);
         $this->assertSame('180.00', $soumission->total_ttc);
         $this->assertSame(2, ClotureCaisse::whereNotNull('soumission_ereporting_id')->count());
+    }
+
+    public function test_declare_les_ventes_de_la_periode_moins_ses_avoirs(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $this->travelTo('2026-10-03 10:00:00');
+        $vente = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 3],
+        ]));
+        app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-03');
+        $this->travelTo('2026-10-07 10:00:00');
+        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $vente->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]));
+        app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-07');
+        $periode = new PeriodeEReporting(
+            CarbonImmutable::parse('2026-10-01'),
+            CarbonImmutable::parse('2026-10-10'),
+            CarbonImmutable::parse('2026-10-20'),
+        );
+
+        $soumission = app(GenererSoumissionEReportingAction::class)->handle($this->magasin, $periode);
+
+        $this->assertSame(['100.00', '20.00', '120.00'], [$soumission->total_ht, $soumission->total_tva, $soumission->total_ttc]);
+        $this->assertSame([
+            ['taux_tva' => '20.00', 'montant_ht' => 100.0, 'montant_tva' => 20.0, 'montant_ttc' => 120.0],
+        ], $soumission->ventilation_tva);
     }
 
     public function test_exclut_les_clotures_hors_de_la_periode(): void

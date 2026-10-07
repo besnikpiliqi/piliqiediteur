@@ -3,9 +3,8 @@
 namespace App\Filament\App\Resources\ClotureCaisseResource\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
-use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -37,26 +36,21 @@ class ListClotureCaisses extends ListRecords
         $veille = now()->subDay();
 
         // Mêmes critères que CloturerCaisseAction (ventes au comptoir de la
-        // veille, particuliers uniquement, pas déjà clôturées) : le vendeur
-        // voit avant de confirmer exactement ce qui va être regroupé, pas
-        // seulement un avertissement générique.
-        $ventesAClore = Facture::query()
-            ->whereHas('client', fn ($query) => $query->where('type_client', TypeClient::Particulier))
-            ->whereDate('date_emission', $veille)
-            ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee])
-            ->whereNull('cloture_caisse_id')
-            ->get();
+        // veille et avoirs du même jour, particuliers uniquement, pas déjà
+        // clôturés) : le vendeur voit avant de confirmer exactement ce qui
+        // va être regroupé, pas seulement un avertissement générique.
+        $ventesAClore = Facture::query()->enAttenteDeCloture($veille)->get();
+        $avoirsAClore = Avoir::query()->enAttenteDeCloture($veille)->get();
+        $calculateur = app(CalculateurLigne::class);
+        $totalNet = number_format($calculateur->deduire($calculateur->cumuler($ventesAClore), $calculateur->cumuler($avoirsAClore))['total_ttc'], 2, ',', ' ');
 
         $avertissement = 'Cette action est IRRÉVERSIBLE : une fois clôturée, cette journée ne pourra plus jamais être modifiée, ni clôturée à nouveau.';
 
-        $modalDescription = $ventesAClore->isEmpty()
-            ? "Aucune vente au comptoir n'a été enregistrée ce jour-là : la clôture sera créée à zéro. {$avertissement}"
-            : sprintf(
-                '%d vente(s) au comptoir pour un total de %s € seront regroupées dans cette clôture. %s',
-                $ventesAClore->count(),
-                number_format(app(CalculateurLigne::class)->sommer($ventesAClore->pluck('total_ttc')), 2, ',', ' '),
-                $avertissement,
-            );
+        $modalDescription = match (true) {
+            $ventesAClore->isEmpty() && $avoirsAClore->isEmpty() => "Aucune vente au comptoir n'a été enregistrée ce jour-là : la clôture sera créée à zéro. {$avertissement}",
+            $avoirsAClore->isEmpty() => sprintf('%d vente(s) au comptoir pour un total de %s € seront regroupées dans cette clôture. %s', $ventesAClore->count(), $totalNet, $avertissement),
+            default => sprintf('%d vente(s) au comptoir et %d avoir(s) déduit(s), pour un total net de %s €, seront regroupés dans cette clôture. %s', $ventesAClore->count(), $avoirsAClore->count(), $totalNet, $avertissement),
+        };
 
         // Un vendeur qui oublie de fermer sa caisse personnelle ne bloque
         // jamais la clôture officielle (qui agrège directement les

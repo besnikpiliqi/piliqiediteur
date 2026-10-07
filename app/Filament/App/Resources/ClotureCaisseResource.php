@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -62,8 +63,10 @@ class ClotureCaisseResource extends Resource
                 TextEntry::make('creePar.name')->label('Déclenchée par')->placeholder('Automatique (planifiée à minuit)'),
             ])->columns(2),
 
+            // Ventes moins avoirs du jour (voir CloturerCaisseAction).
             InfolistSection::make('Totaux')->schema([
                 TextEntry::make('nombre_ventes')->label('Nombre de ventes'),
+                TextEntry::make('nombre_avoirs')->label('Avoirs déduits'),
                 TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
                 TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
@@ -93,6 +96,21 @@ class ClotureCaisseResource extends Resource
                     ])
                     ->columns(5),
             ]),
+
+            InfolistSection::make('Avoirs déduits')
+                ->visible(fn (ClotureCaisse $record) => $record->avoirs()->exists())
+                ->schema([
+                    RepeatableEntry::make('avoirs')
+                        ->label('')
+                        ->schema([
+                            TextEntry::make('numero')->label('Numéro'),
+                            TextEntry::make('client.nom')->label('Client'),
+                            TextEntry::make('total_ht')->label('Total HT')->state(fn (Avoir $record) => -(float) $record->total_ht)->money('EUR'),
+                            TextEntry::make('total_tva')->label('TVA')->state(fn (Avoir $record) => -(float) $record->total_tva)->money('EUR'),
+                            TextEntry::make('total_ttc')->label('Total TTC')->state(fn (Avoir $record) => -(float) $record->total_ttc)->money('EUR'),
+                        ])
+                        ->columns(5),
+                ]),
         ]);
     }
 
@@ -104,6 +122,7 @@ class ClotureCaisseResource extends Resource
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->searchable(),
                 Tables\Columns\TextColumn::make('date_cloture')->label('Journée')->date('d/m/Y')->sortable(),
                 Tables\Columns\TextColumn::make('nombre_ventes')->label('Ventes'),
+                Tables\Columns\TextColumn::make('nombre_avoirs')->label('Avoirs'),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR'),
                 Tables\Columns\TextColumn::make('cree_par')
                     ->label('Déclenchée par')

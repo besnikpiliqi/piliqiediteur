@@ -55,16 +55,22 @@ class SoumissionEReporting extends Model
     }
 
     /**
-     * Les lignes des ventes de toutes les clôtures de la période, pour la
-     * ventilation par taux de TVA que l'e-reporting déclare.
+     * Les lignes des ventes de toutes les clôtures de la période, moins
+     * celles de leurs avoirs, pour la ventilation par taux de TVA que
+     * l'e-reporting déclare.
      *
-     * @return Collection<int, LigneFacture>
+     * @return Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
      */
     protected function lignesAVentiler(): Collection
     {
-        return LigneFacture::query()
+        $lignesVentes = LigneFacture::query()
             ->whereHas('facture', fn (Builder $query) => $query->whereIn('cloture_caisse_id', $this->clotures()->select('id')))
             ->get();
+        $lignesAvoirs = LigneAvoir::query()
+            ->whereHas('avoir', fn (Builder $query) => $query->whereIn('cloture_caisse_id', $this->clotures()->select('id')))
+            ->get();
+
+        return self::montantsDesLignes($lignesVentes)->concat(self::montantsDeduits($lignesAvoirs));
     }
 
     public function transmissionsPdp(): MorphMany

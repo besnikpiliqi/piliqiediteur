@@ -5,6 +5,9 @@ namespace Tests\Feature\Filament;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
@@ -39,6 +42,13 @@ class VentesEnAttenteApercuTest extends TestCase
         return $facture->fresh();
     }
 
+    private function emettreAvoir(Client $client, Facture $facture): Avoir
+    {
+        return app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]));
+    }
+
     public function test_affiche_le_nombre_et_le_total_des_ventes_en_attente_de_cloture(): void
     {
         $proprietaire = User::factory()->create();
@@ -58,6 +68,22 @@ class VentesEnAttenteApercuTest extends TestCase
             ->assertSuccessful()
             ->assertSee('Ventes en attente de clôture')
             ->assertSee('60,00 € au total');
+    }
+
+    public function test_deduit_du_total_les_avoirs_du_jour_en_attente(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $this->travelTo(now()->subDay());
+        $this->emettreFactureParticulier($client); // 60 € TTC
+        $this->emettreAvoir($client, $this->emettreFactureParticulier($client));
+        $this->travelBack();
+
+        Livewire::test(VentesEnAttenteApercu::class)
+            ->assertSee('1 avoir(s) déduit(s) · 60,00 € au total');
     }
 
     public function test_affiche_zero_quand_aucune_vente_nest_en_attente(): void

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Enums\StatutAvoir;
@@ -10,6 +11,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Database\Factories\FactureFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -97,6 +99,21 @@ class Facture extends Model
             ->where('cree_par', $vendeurId)
             ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee])
             ->whereDoesntHave('cloturesCaissePersonnelles');
+    }
+
+    /**
+     * Les ventes à des particuliers émises tel jour qu'aucune clôture n'a
+     * encore comptées (voir CloturerCaisseAction) -- jamais un brouillon ni
+     * une facture annulée, jamais une vente à un professionnel, qui relève
+     * de la facture électronique (voir relevantDeLeInvoicing()).
+     */
+    public function scopeEnAttenteDeCloture(Builder $query, CarbonInterface|string $jour): Builder
+    {
+        return $query
+            ->whereHas('client', fn (Builder $client) => $client->where('type_client', TypeClient::Particulier))
+            ->whereDate('date_emission', $jour)
+            ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee])
+            ->whereNull('cloture_caisse_id');
     }
 
     public function devisOrigine(): BelongsTo

@@ -16,8 +16,8 @@ use Illuminate\Support\Collection;
  * Exposé comme attribut (ventilation_tva) pour que les fiches Filament et
  * les PDF le lisent comme n'importe quelle autre donnée du document. Les
  * totaux d'une clôture de caisse ou d'une soumission d'e-reporting sont
- * ceux de leurs factures, donc leur ventilation est celle des lignes de
- * ces factures.
+ * ceux de leurs factures moins ceux de leurs avoirs, donc leur ventilation
+ * est celle des lignes de ces factures moins celles de ces avoirs.
  */
 trait VentileLaTvaParTaux
 {
@@ -27,12 +27,10 @@ trait VentileLaTvaParTaux
     protected function ventilationTva(): Attribute
     {
         return Attribute::get(fn (): array => $this->lignesAVentiler()
-            ->groupBy(fn (Model $ligne): string => number_format((float) $ligne->taux_tva, 2, '.', ''))
+            ->groupBy(fn (array $ligne): string => number_format((float) $ligne['taux_tva'], 2, '.', ''))
             ->sortKeysUsing(fn (string $a, string $b): int => (float) $b <=> (float) $a)
             ->map(function (Collection $lignes, string $tauxTva): array {
-                $totaux = app(CalculateurLigne::class)->totaliser(
-                    $lignes->map(fn (Model $ligne): array => $ligne->only(['montant_ht', 'montant_tva', 'montant_ttc'])),
-                );
+                $totaux = app(CalculateurLigne::class)->totaliser($lignes);
 
                 return [
                     'taux_tva' => $tauxTva,
@@ -48,12 +46,37 @@ trait VentileLaTvaParTaux
     /**
      * Les lignes du document lui-même ; un document qui en regroupe
      * d'autres (clôture de caisse, soumission d'e-reporting) ventile les
-     * lignes de ses factures.
+     * lignes de ses factures, et en négatif celles de ses avoirs.
      *
-     * @return Collection<int, Model>
+     * @return Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
      */
     protected function lignesAVentiler(): Collection
     {
-        return $this->lignes;
+        return self::montantsDesLignes($this->lignes);
+    }
+
+    /**
+     * @param  Collection<int, Model>  $lignes
+     * @return Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
+     */
+    protected static function montantsDesLignes(Collection $lignes): Collection
+    {
+        return $lignes->map(fn (Model $ligne): array => $ligne->only(['taux_tva', 'montant_ht', 'montant_tva', 'montant_ttc']))->toBase();
+    }
+
+    /**
+     * Les lignes d'avoirs, qui se déduisent des ventes.
+     *
+     * @param  Collection<int, Model>  $lignes
+     * @return Collection<int, array{taux_tva: mixed, montant_ht: float, montant_tva: float, montant_ttc: float}>
+     */
+    protected static function montantsDeduits(Collection $lignes): Collection
+    {
+        return $lignes->map(fn (Model $ligne): array => [
+            'taux_tva' => $ligne->taux_tva,
+            'montant_ht' => -(float) $ligne->montant_ht,
+            'montant_tva' => -(float) $ligne->montant_tva,
+            'montant_ttc' => -(float) $ligne->montant_ttc,
+        ])->toBase();
     }
 }

@@ -2,9 +2,8 @@
 
 namespace App\Domain\Facturation\Actions;
 
-use App\Domain\Contacts\Enums\TypeClient;
-use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -17,12 +16,16 @@ use LogicException;
 
 /**
  * Agrège en un seul document fiscal toutes les ventes à des clients
- * PARTICULIERS d'une journée donnée -- les ventes à des professionnels
- * n'y figurent jamais, elles relèvent de l'e-invoicing individuelle (voir
- * Facture::relevantDeLeInvoicing). Une journée ne peut être clôturée
- * qu'une seule fois (contrainte unique magasin_id/date_cloture) : la
- * correction d'une vente déjà agrégée passe par un avoir sur la facture
- * d'origine, jamais par une réouverture de la clôture.
+ * PARTICULIERS d'une journée donnée, moins les avoirs qui leur ont été
+ * émis ce jour-là : la TVA d'une vente annulée se corrige le jour de
+ * l'annulation (art. 272 du CGI), et en caisse une correction est
+ * toujours une opération en négatif, jamais une modification. Les ventes
+ * et avoirs à des professionnels n'y figurent jamais, ils relèvent de
+ * l'e-invoicing individuelle (voir Facture::relevantDeLeInvoicing). Une
+ * journée ne peut être clôturée qu'une seule fois (contrainte unique
+ * magasin_id/date_cloture) : la correction d'une vente déjà agrégée passe
+ * par un avoir, compté dans la clôture du jour où il est émis, jamais par
+ * une réouverture de la clôture.
  */
 class CloturerCaisseAction
 {
@@ -48,13 +51,8 @@ class CloturerCaisseAction
                 throw new LogicException("La journée du {$dateCloture} a déjà été clôturée.");
             }
 
-            $factures = Facture::query()
-                ->whereHas('client', fn ($query) => $query->where('type_client', TypeClient::Particulier))
-                ->whereDate('date_emission', $dateCloture)
-                ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee])
-                ->whereNull('cloture_caisse_id')
-                ->lockForUpdate()
-                ->get();
+            $ventes = Facture::query()->enAttenteDeCloture($dateCloture)->lockForUpdate()->get();
+            $avoirs = Avoir::query()->enAttenteDeCloture($dateCloture)->lockForUpdate()->get();
 
             $cloture = ClotureCaisse::create(['date_cloture' => $dateCloture]);
 
@@ -62,14 +60,21 @@ class CloturerCaisseAction
 
             $cloture->forceFill([
                 'numero' => $numero,
-                'nombre_ventes' => $factures->count(),
-                ...$this->calculateur->cumuler($factures),
+                'nombre_ventes' => $ventes->count(),
+                'nombre_avoirs' => $avoirs->count(),
+                ...$this->calculateur->deduire($this->calculateur->cumuler($ventes), $this->calculateur->cumuler($avoirs)),
                 'cloturee_a' => now(),
             ])->save();
 
-            if ($factures->isNotEmpty()) {
+            if ($ventes->isNotEmpty()) {
                 Facture::query()
-                    ->whereIn('id', $factures->pluck('id'))
+                    ->whereIn('id', $ventes->pluck('id'))
+                    ->update(['cloture_caisse_id' => $cloture->id]);
+            }
+
+            if ($avoirs->isNotEmpty()) {
+                Avoir::query()
+                    ->whereIn('id', $avoirs->pluck('id'))
                     ->update(['cloture_caisse_id' => $cloture->id]);
             }
 

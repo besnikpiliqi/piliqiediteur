@@ -11,12 +11,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Support\Collection;
 
 /**
- * Agrège les ventes à des clients particuliers d'une journée pour
- * l'e-reporting (voir CloturerCaisseAction) -- jamais les ventes à des
- * clients professionnels, qui relèvent de l'e-invoicing individuelle
- * transmise facture par facture (voir Facture::relevantDeLeInvoicing).
+ * Agrège les ventes à des clients particuliers d'une journée, moins les
+ * avoirs qui leur ont été émis ce jour-là, pour l'e-reporting (voir
+ * CloturerCaisseAction) -- jamais les ventes à des clients
+ * professionnels, qui relèvent de l'e-invoicing individuelle transmise
+ * facture par facture (voir Facture::relevantDeLeInvoicing).
  *
  * PAS de SoftDeletes ici, volontairement : document fiscal au même titre
  * qu'une facture, la loi impose sa conservation.
@@ -60,12 +62,34 @@ class ClotureCaisse extends Model
     }
 
     /**
+     * Les avoirs à des particuliers émis ce jour-là, déduits des ventes
+     * (voir CloturerCaisseAction).
+     */
+    public function avoirs(): HasMany
+    {
+        return $this->hasMany(Avoir::class);
+    }
+
+    /**
      * Les lignes de toutes les ventes de la journée, pour la ventilation
      * par taux de TVA (voir VentileLaTvaParTaux).
      */
     public function lignes(): HasManyThrough
     {
         return $this->hasManyThrough(LigneFacture::class, Facture::class);
+    }
+
+    public function lignesAvoir(): HasManyThrough
+    {
+        return $this->hasManyThrough(LigneAvoir::class, Avoir::class);
+    }
+
+    /**
+     * @return Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
+     */
+    protected function lignesAVentiler(): Collection
+    {
+        return self::montantsDesLignes($this->lignes)->concat(self::montantsDeduits($this->lignesAvoir));
     }
 
     /**

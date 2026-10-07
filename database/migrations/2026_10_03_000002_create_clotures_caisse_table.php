@@ -19,6 +19,10 @@ return new class extends Migration
             // retard, ou clôture automatique planifiée à minuit).
             $table->date('date_cloture');
             $table->unsignedInteger('nombre_ventes')->default(0);
+            // Avoirs à des particuliers émis ce jour-là : les totaux
+            // ci-dessous sont les ventes MOINS ces avoirs (voir
+            // CloturerCaisseAction).
+            $table->unsignedInteger('nombre_avoirs')->default(0);
             $table->decimal('total_ht', 12, 2)->default(0);
             $table->decimal('total_tva', 12, 2)->default(0);
             $table->decimal('total_ttc', 12, 2)->default(0);

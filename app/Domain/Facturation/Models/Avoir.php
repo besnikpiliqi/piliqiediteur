@@ -2,13 +2,16 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
+use Carbon\CarbonInterface;
 use Database\Factories\AvoirFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -61,6 +64,25 @@ class Avoir extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    /**
+     * Les avoirs à des particuliers émis tel jour qu'aucune clôture n'a
+     * encore déduits de ses ventes (voir CloturerCaisseAction) : un retour
+     * se compte le jour où il a lieu, pas celui de la vente d'origine.
+     */
+    public function scopeEnAttenteDeCloture(Builder $query, CarbonInterface|string $jour): Builder
+    {
+        return $query
+            ->whereHas('client', fn (Builder $client) => $client->where('type_client', TypeClient::Particulier))
+            ->whereDate('date_emission', $jour)
+            ->where('statut', StatutAvoir::Emise)
+            ->whereNull('cloture_caisse_id');
+    }
+
+    public function clotureCaisse(): BelongsTo
+    {
+        return $this->belongsTo(ClotureCaisse::class);
     }
 
     public function creePar(): BelongsTo

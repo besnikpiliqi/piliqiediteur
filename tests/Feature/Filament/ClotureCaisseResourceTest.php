@@ -6,9 +6,12 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
@@ -43,6 +46,13 @@ class ClotureCaisseResourceTest extends TestCase
         Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
 
         return $facture->fresh();
+    }
+
+    private function emettreAvoir(Client $client, Facture $facture): Avoir
+    {
+        return app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]));
     }
 
     public function test_le_proprietaire_cloture_une_journee_depuis_le_panneau(): void
@@ -97,6 +107,24 @@ class ClotureCaisseResourceTest extends TestCase
         Livewire::test(ListClotureCaisses::class)
             ->mountAction('cloturer')
             ->assertSee('1 vente(s) au comptoir pour un total de 60,00 €');
+    }
+
+    public function test_la_modale_de_confirmation_annonce_les_avoirs_deduits_et_le_total_net(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $this->travelTo(now()->subDay());
+        $this->emettreFactureParticulier($client); // 60 € TTC
+        $this->emettreAvoir($client, $this->emettreFactureParticulier($client));
+        $this->travelBack();
+        app(FermerSaCaisseAction::class)->handle($proprietaire);
+
+        Livewire::test(ListClotureCaisses::class)
+            ->mountAction('cloturer')
+            ->assertSee('2 vente(s) au comptoir et 1 avoir(s) déduit(s), pour un total net de 60,00 €');
     }
 
     /**
@@ -204,6 +232,27 @@ class ClotureCaisseResourceTest extends TestCase
         Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])
             ->assertSuccessful()
             ->assertSee($facture->numero);
+    }
+
+    public function test_la_page_de_detail_affiche_les_avoirs_deduits(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $this->travelTo(now()->subDay());
+        $avoir = $this->emettreAvoir($client, $this->emettreFactureParticulier($client));
+        $this->travelBack();
+        app(FermerSaCaisseAction::class)->handle($proprietaire);
+        Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
+
+        $cloture = ClotureCaisse::query()->firstOrFail();
+
+        Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])
+            ->assertSee('Avoirs déduits')
+            ->assertSee($avoir->numero)
+            ->assertSee('-60,00');
     }
 
     /**

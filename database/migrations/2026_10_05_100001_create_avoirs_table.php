@@ -16,6 +16,11 @@ return new class extends Migration
             // (voir CreerAvoirAction). La facture d'origine de chaque ligne
             // est connue par lignes_avoir.ligne_facture_id.
             $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
+            // Clôture de caisse qui a déduit cet avoir à un particulier des
+            // ventes de sa journée (voir CloturerCaisseAction) -- jamais
+            // renseignée pour un client professionnel, comme pour une
+            // facture (voir factures.cloture_caisse_id).
+            $table->foreignId('cloture_caisse_id')->nullable()->constrained('clotures_caisse')->nullOnDelete();
             $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
             $table->string('numero', 40)->nullable();
             $table->string('statut', 20)->default('brouillon');
@@ -32,6 +37,7 @@ return new class extends Migration
 
             $table->unique(['magasin_id', 'numero']);
             $table->index(['magasin_id', 'client_id']);
+            $table->index(['magasin_id', 'cloture_caisse_id']);
         });
     }
 

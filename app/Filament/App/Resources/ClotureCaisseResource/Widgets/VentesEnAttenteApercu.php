@@ -3,8 +3,7 @@
 namespace App\Filament\App\Resources\ClotureCaisseResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Contacts\Enums\TypeClient;
-use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
@@ -18,9 +17,9 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  *
  * Aperçu de ce qui sera regroupé dans la PROCHAINE clôture (toujours la
  * veille -- voir ListClotureCaisses) : mêmes critères que
- * CloturerCaisseAction, pour que le gérant voie directement sur la page ce
- * qui va être clôturé, pas seulement dans la modale de confirmation au
- * moment de cliquer.
+ * CloturerCaisseAction, ventes moins avoirs du jour, pour que le gérant
+ * voie directement sur la page ce qui va être clôturé, pas seulement dans
+ * la modale de confirmation au moment de cliquer.
  */
 class VentesEnAttenteApercu extends BaseWidget
 {
@@ -33,21 +32,20 @@ class VentesEnAttenteApercu extends BaseWidget
     {
         $veille = now()->subDay();
 
-        $ventes = Facture::query()
-            ->whereHas('client', fn ($query) => $query->where('type_client', TypeClient::Particulier))
-            ->whereDate('date_emission', $veille)
-            ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee])
-            ->whereNull('cloture_caisse_id')
-            ->get();
+        $ventes = Facture::query()->enAttenteDeCloture($veille)->get();
+        $avoirs = Avoir::query()->enAttenteDeCloture($veille)->get();
+        $calculateur = app(CalculateurLigne::class);
+        $totalNet = $calculateur->deduire($calculateur->cumuler($ventes), $calculateur->cumuler($avoirs))['total_ttc'];
 
         return [
             Stat::make('Ventes en attente de clôture', (string) $ventes->count())
                 ->description(sprintf(
-                    'Journée du %s · %s € au total',
+                    'Journée du %s · %s%s € au total',
                     $veille->translatedFormat('d/m/Y'),
-                    number_format(app(CalculateurLigne::class)->sommer($ventes->pluck('total_ttc')), 2, ',', ' '),
+                    $avoirs->isEmpty() ? '' : "{$avoirs->count()} avoir(s) déduit(s) · ",
+                    number_format($totalNet, 2, ',', ' '),
                 ))
-                ->color($ventes->isEmpty() ? 'gray' : 'warning'),
+                ->color($ventes->isEmpty() && $avoirs->isEmpty() ? 'gray' : 'warning'),
         ];
     }
 }

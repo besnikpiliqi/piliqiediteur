@@ -67,7 +67,7 @@ class ParametresFiscaux extends Page implements HasForms
                 ->required(),
             Toggle::make('option_debits_tva')
                 ->label('Option pour les débits')
-                ->helperText('Ne concerne que les prestations de services normalement soumises à la TVA sur les encaissements. Laissez désactivé si vous ne savez pas, ou si votre activité est principalement de la vente de marchandises.'),
+                ->helperText('Ne concerne que les prestations de services normalement soumises à la TVA sur les encaissements. Activée, la mention « Option pour le paiement de la taxe d\'après les débits » est imprimée sur vos factures et avoirs. Laissez désactivé si vous ne savez pas, ou si votre activité est principalement de la vente de marchandises.'),
         ])->statePath('data');
     }
 

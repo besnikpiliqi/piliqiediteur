@@ -153,5 +153,11 @@
     @if($avoir->motif)
         <div class="pied">Motif : {{ $avoir->motif }}</div>
     @endif
+
+    {{-- Un avoir rectifie une facture : il en reprend les mentions
+         obligatoires, dont celle-ci (voir factures/pdf.blade.php). --}}
+    @if($avoir->magasin->option_debits_tva)
+        <div class="pied">Option pour le paiement de la taxe d'après les débits</div>
+    @endif
 </body>
 </html>

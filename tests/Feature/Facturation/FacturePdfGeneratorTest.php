@@ -14,6 +14,7 @@ use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class FacturePdfGeneratorTest extends TestCase
@@ -35,6 +36,34 @@ class FacturePdfGeneratorTest extends TestCase
 
         $this->assertStringStartsWith('%PDF', $contenu);
         $this->assertGreaterThan(500, strlen($contenu));
+    }
+
+    /**
+     * @return array<string, array{bool}>
+     */
+    public static function choixDeLoptionPourLesDebits(): array
+    {
+        return [
+            'option choisie' => [true],
+            'option non choisie' => [false],
+        ];
+    }
+
+    #[DataProvider('choixDeLoptionPourLesDebits')]
+    public function test_la_mention_de_loption_pour_les_debits_suit_le_choix_du_magasin(bool $optionDebits): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['option_debits_tva' => $optionDebits]));
+        $client = Client::factory()->professionnel()->create();
+        $produit = Produit::factory()->create();
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]));
+
+        $html = view('factures.pdf', [
+            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
+        ])->render();
+
+        $this->assertSame($optionDebits, str_contains($html, "Option pour le paiement de la taxe d'après les débits"));
     }
 
     public function test_le_nom_de_fichier_utilise_le_numero_ou_brouillon(): void

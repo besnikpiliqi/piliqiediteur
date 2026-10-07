@@ -206,5 +206,12 @@
     @if($facture->conditions_paiement)
         <div class="pied">{{ $facture->conditions_paiement }}</div>
     @endif
+
+    {{-- Mention obligatoire quand le magasin a opté pour la TVA d'après les
+         débits (art. 242 nonies A de l'annexe II au CGI, voir
+         ParametresFiscaux). --}}
+    @if($facture->magasin->option_debits_tva)
+        <div class="pied">Option pour le paiement de la taxe d'après les débits</div>
+    @endif
 </body>
 </html>

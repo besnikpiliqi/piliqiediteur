@@ -23,8 +23,8 @@ use LogicException;
  * modifiable même après validation (voir FactureAchat::estModifiable()) :
  * la personne qui l'enregistre peut se tromper, contrairement à une
  * facture récupérée automatiquement par API. Une facture déjà validée a
- * toutefois déjà impacté le stock, le prix d'achat et le fournisseur du
- * produit (voir IncrementerStockApresValidationFactureAchat) : toute modification
+ * toutefois déjà impacté le stock, le CMUP et le fournisseur du produit
+ * (voir IncrementerStockApresValidationFactureAchat) : toute modification
  * de ses lignes recalcule donc l'écart de stock produit par produit plutôt
  * que de réappliquer la réception en aveugle.
  */
@@ -51,7 +51,9 @@ class ModifierFactureAchatAction
 
         return DB::transaction(function () use ($factureAchat, $lignes, $attributs) {
             $estValidee = $factureAchat->statut === StatutFactureAchat::Validee;
-            $quantitesAvant = $estValidee ? $this->quantitesParProduit($factureAchat->lignes) : collect();
+            // Avant toute modification : le coût des anciennes lignes dépend
+            // aussi de l'ancien escompte de la facture.
+            $lotsAvant = $estValidee ? $this->lotsParProduit($factureAchat->lignes) : [];
 
             $factureAchat->update($attributs);
             $factureAchat->lignes()->delete();
@@ -59,7 +61,7 @@ class ModifierFactureAchatAction
             $lignesCreees = $this->constructeurLignes->enregistrer($factureAchat, $lignes);
 
             if ($estValidee) {
-                $this->recalerLeStockEtLesProduits($factureAchat, $quantitesAvant, collect($lignesCreees));
+                $this->corrigerLaReception($factureAchat->fresh('lignes'), $lotsAvant);
             }
 
             return $factureAchat->fresh('lignes');
@@ -67,51 +69,48 @@ class ModifierFactureAchatAction
     }
 
     /**
+     * Ce que chaque ligne a fait entrer en stock, par produit.
+     *
      * @param  Collection<int, LigneAchat>  $lignes
-     * @return Collection<int, int> quantité totale par produit_id
+     * @return array<int, list<array{quantite: int, cout_unitaire: float}>>
      */
-    private function quantitesParProduit(Collection $lignes): Collection
+    private function lotsParProduit(Collection $lignes): array
     {
         return $lignes
-            ->filter(fn (LigneAchat $ligne) => $ligne->produit_id !== null)
+            ->filter(fn (LigneAchat $ligne): bool => $ligne->produit_id !== null)
             ->groupBy('produit_id')
-            ->map(fn (Collection $lignesDuProduit): int => (int) $lignesDuProduit->sum('quantite'));
+            ->map(fn (Collection $lignesDuProduit): array => $lignesDuProduit
+                ->map(fn (LigneAchat $ligne): array => ['quantite' => $ligne->quantite, 'cout_unitaire' => $ligne->coutUnitaireHt()])
+                ->values()
+                ->all())
+            ->all();
     }
 
     /**
      * Ne rejoue PAS un nouveau mouvement de réception (qui fausserait
-     * l'historique) : seul l'écart entre l'ancienne et la nouvelle
-     * quantité par produit est appliqué, via un ajustement explicite (voir
-     * StockLedgerService::ajuster()), le même outil utilisé pour une
-     * correction d'inventaire.
+     * l'historique) : pour chaque produit, l'ancienne réception est
+     * remplacée par la nouvelle dans la valeur du stock et seul l'écart de
+     * quantité passe par un ajustement (voir
+     * StockLedgerService::corrigerUneReception()).
      *
-     * @param  Collection<int, int>  $quantitesAvant
-     * @param  Collection<int, LigneAchat>  $lignesCreees
+     * @param  array<int, list<array{quantite: int, cout_unitaire: float}>>  $lotsAvant
      */
-    private function recalerLeStockEtLesProduits(FactureAchat $factureAchat, Collection $quantitesAvant, Collection $lignesCreees): void
+    private function corrigerLaReception(FactureAchat $factureAchat, array $lotsAvant): void
     {
-        $quantitesApres = $this->quantitesParProduit($lignesCreees);
+        $lotsApres = $this->lotsParProduit($factureAchat->lignes);
 
-        foreach ($quantitesApres->keys()->merge($quantitesAvant->keys())->unique() as $produitId) {
+        foreach (array_unique([...array_keys($lotsAvant), ...array_keys($lotsApres)]) as $produitId) {
             $produit = Produit::find($produitId);
 
-            if ($produit === null || ! $produit->suivi_stock) {
+            if ($produit === null) {
                 continue;
             }
 
-            $delta = ($quantitesApres->get($produitId) ?? 0) - ($quantitesAvant->get($produitId) ?? 0);
+            $this->stockLedger->corrigerUneReception($produit, $lotsAvant[$produitId] ?? [], $lotsApres[$produitId] ?? [], "Correction de la facture d'achat {$factureAchat->numero}");
 
-            if ($delta === 0) {
-                continue;
+            if (isset($lotsApres[$produitId])) {
+                $produit->rattacherAuFournisseur($factureAchat->fournisseur_id);
             }
-
-            $cible = $produit->stock_quantite + $delta;
-
-            $this->stockLedger->ajuster($produit, $cible, "Correction de la facture d'achat {$factureAchat->numero}");
-        }
-
-        foreach ($lignesCreees as $ligne) {
-            $ligne->produit?->enregistrerUnAchat($ligne);
         }
     }
 }

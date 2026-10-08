@@ -36,11 +36,9 @@ class ProduitResource extends Resource
     protected static ?string $pluralModelLabel = 'produits';
 
     /**
-     * Le coût d'achat suivi est celui réellement payé (voir
-     * LigneAchat::coutUnitaireHt()) : il est remplacé à chaque facture
-     * d'achat validée.
+     * Voir StockLedgerService::receptionner().
      */
-    private const AIDE_PRIX_ACHAT = 'Mis à jour à chaque facture d\'achat validée : le prix réellement payé, remise et escompte déduits.';
+    private const AIDE_CMUP = 'Le coût moyen du stock, recalculé à chaque facture d\'achat validée avec le prix réellement payé, remise et escompte déduits.';
 
     /**
      * Référence, code-barres, nom, taille et couleur : la fiche produit et
@@ -167,7 +165,8 @@ class ProduitResource extends Resource
      * Un produit reçu sur une facture d'achat récupérée automatiquement
      * garde ce que son fournisseur en dit (voir
      * Produit::vientDUneFactureAchatApi()) : ces champs-là restent
-     * affichés mais ne se modifient pas.
+     * affichés mais ne se modifient pas. Son prix de vente, sa TVA et le
+     * suivi de son stock restent ceux du magasin.
      */
     public static function form(Form $form): Form
     {
@@ -176,7 +175,7 @@ class ProduitResource extends Resource
 
         return $form->schema([
             Section::make('Identification')
-                ->description($figeParSonFournisseur ? 'Reçu sur une facture d\'achat récupérée automatiquement : sa référence, son nom, son fournisseur et son prix d\'achat sont ceux du fournisseur.' : null)
+                ->description($figeParSonFournisseur ? 'Reçu sur une facture d\'achat récupérée automatiquement : sa référence, son nom et son fournisseur sont ceux du fournisseur.' : null)
                 ->schema([
                     ...array_map(
                         fn (Field $champ): Field => $champ->disabled($figeParSonFournisseur),
@@ -192,13 +191,17 @@ class ProduitResource extends Resource
                 ])->columns(2),
 
             Section::make('Prix et TVA')->schema([
-                TextInput::make('prix_achat_ht')
-                    ->label('Prix d\'achat HT')
+                // Saisi une fois, à la création ; ensuite seules les
+                // factures d'achat validées le font évoluer (voir
+                // StockLedgerService::receptionner()).
+                TextInput::make('cmup_ht')
+                    ->label(fn (string $operation): string => $operation === 'create' ? 'Prix d\'achat HT' : 'Coût moyen pondéré (CMUP) HT')
                     ->numeric()
                     ->prefix('€')
                     ->required()
-                    ->helperText(self::AIDE_PRIX_ACHAT)
-                    ->disabled($figeParSonFournisseur),
+                    ->formatStateUsing(fn (mixed $state): mixed => blank($state) ? $state : number_format((float) $state, 2, '.', ''))
+                    ->helperText(fn (string $operation): ?string => $operation === 'create' ? null : self::AIDE_CMUP)
+                    ->disabledOn('edit'),
                 ...self::prixVenteTtcSchema(),
             ])->columns(3),
 

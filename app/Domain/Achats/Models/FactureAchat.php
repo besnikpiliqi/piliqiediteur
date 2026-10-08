@@ -112,7 +112,7 @@ class FactureAchat extends Model
      * Une facture saisie manuellement reste modifiable même après
      * validation -- la personne qui l'enregistre peut se tromper, voir
      * ModifierFactureAchatAction qui recalcule alors le delta de stock et
-     * le prix d'achat courant plutôt que de les réappliquer en aveugle.
+     * le CMUP plutôt que de les réappliquer en aveugle.
      * Une facture récupérée automatiquement par API n'est en revanche
      * jamais modifiable, quel que soit son statut : une erreur ne pourrait
      * venir que de la source elle-même, jamais d'une saisie locale.

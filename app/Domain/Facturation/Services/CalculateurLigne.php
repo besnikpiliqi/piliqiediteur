@@ -116,6 +116,41 @@ class CalculateurLigne
     }
 
     /**
+     * Un coût moyen (voir coutMoyenPondere()) tel qu'il est enregistré,
+     * au dix-millième d'euro.
+     */
+    public function arrondirAuDixMillieme(float $montant): float
+    {
+        return $this->versUnites($montant, 10000) / 10000;
+    }
+
+    /**
+     * Coût unitaire moyen de lots (quantité, coût unitaire) pondéré par
+     * leurs quantités, au dix-millième d'euro : Σ(quantité x coût) /
+     * Σ quantité. Une quantité négative retire un lot (voir
+     * StockLedgerService::corrigerUneReception()). Null quand les lots ne
+     * pèsent rien : quantité totale ou valeur totale nulle ou négative.
+     *
+     * @param  iterable<array{quantite: int, cout_unitaire: float|string}>  $lots
+     */
+    public function coutMoyenPondere(iterable $lots): ?float
+    {
+        $quantiteTotale = 0;
+        $valeurTotaleDixMilliemes = 0;
+
+        foreach ($lots as $lot) {
+            $quantiteTotale += $lot['quantite'];
+            $valeurTotaleDixMilliemes += $this->multiplier($this->versUnites((float) $lot['cout_unitaire'], 10000), $lot['quantite']);
+        }
+
+        if ($quantiteTotale <= 0 || $valeurTotaleDixMilliemes <= 0) {
+            return null;
+        }
+
+        return $this->diviserArrondi($valeurTotaleDixMilliemes, $quantiteTotale) / 10000;
+    }
+
+    /**
      * Montants du dernier retour d'une ligne : ce qui reste de la ligne une
      * fois déduits les retours déjà émis, plutôt qu'un recalcul de la
      * quantité restante. Avec une remise, recalculer chaque retour pourrait

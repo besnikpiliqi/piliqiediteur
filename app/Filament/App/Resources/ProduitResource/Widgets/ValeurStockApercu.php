@@ -16,8 +16,9 @@ use Illuminate\Support\Number;
  * tableau de bord général) : ce widget n'a de sens que sur la liste des
  * produits, attaché explicitement via ListProduits::getHeaderWidgets().
  *
- * Valorisation du stock au prix d'ACHAT HT (valeur comptable classique
- * d'un inventaire, pas le chiffre d'affaires potentiel à la vente), avec
+ * Valorisation du stock à son coût d'achat, le CMUP (valeur comptable
+ * classique d'un inventaire, pas le chiffre d'affaires potentiel à la
+ * vente, voir StockLedgerService), avec
  * sa TVA -- calculée article par article comme une ligne de facture (voir
  * CalculateurLigne) : PU HT et PU TTC de chaque produit au centime, x sa
  * quantité en stock, puis sommes séparées. 3 articles à 33,33 € HT valent
@@ -51,7 +52,7 @@ class ValeurStockApercu extends BaseWidget
 
         $calculateur = app(CalculateurLigne::class);
         $valeur = $calculateur->totaliser($produitsEnStock->map(function (Produit $produit) use ($calculateur): array {
-            $prix = $calculateur->prixUnitaires(PrixReference::Ht, (float) $produit->prix_achat_ht, (float) $produit->taux_tva);
+            $prix = $calculateur->prixUnitaires(PrixReference::Ht, $calculateur->arrondirAuCentime((float) $produit->cmup_ht), (float) $produit->taux_tva);
 
             return $calculateur->calculer($prix['prix_unitaire_ht'], $prix['prix_unitaire_ttc'], $produit->stock_quantite);
         }));

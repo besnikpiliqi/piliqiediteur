@@ -34,7 +34,7 @@ class FactureAchatActionsTest extends TestCase
     public function test_creer_une_facture_dachat_calcule_les_lignes_et_les_totaux(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5],
@@ -56,12 +56,13 @@ class FactureAchatActionsTest extends TestCase
     public function test_chaque_ligne_dachat_est_calculee_depuis_le_prix_reellement_saisi(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 5, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['taux_tva' => 20]);
+        $jamaisAchete = Produit::factory()->create(['cmup_ht' => 5, 'taux_tva' => 20]);
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 8.33],
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ttc' => 12],
-            ['produit_id' => $produit->id, 'quantite' => 1],
+            ['produit_id' => $jamaisAchete->id, 'quantite' => 1],
         ]);
 
         [$ligneHt, $ligneTtc, $ligneCatalogue] = $factureAchat->lignes->sortBy('ordre')->values()->all();
@@ -107,7 +108,7 @@ class FactureAchatActionsTest extends TestCase
 
         $produit = Produit::query()->sole();
         $this->assertSame(['Câble USB-C', 'CBL-USBC', $fournisseur->id], [$produit->nom, $produit->reference, $produit->fournisseur_id]);
-        $this->assertSame(['0.47', '10.00', '8.33'], [$produit->prix_achat_ht, $produit->prix_vente_ttc, $produit->prix_vente_ht]);
+        $this->assertSame(['0.4700', '10.00', '8.33'], [$produit->cmup_ht, $produit->prix_vente_ttc, $produit->prix_vente_ht]);
         $this->assertSame(0, $produit->stock_quantite, 'Un brouillon ne doit avoir aucun impact sur le stock.');
 
         $ligne = $factureAchat->lignes->sole();
@@ -179,7 +180,7 @@ class FactureAchatActionsTest extends TestCase
     public function test_une_quantite_achetee_non_entiere_est_refusee(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 10, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['cmup_ht' => 10, 'taux_tva' => 20]);
 
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("La quantité doit être un nombre entier d'articles, au moins 1.");
@@ -192,7 +193,7 @@ class FactureAchatActionsTest extends TestCase
     public function test_valider_une_facture_dachat_lui_attribue_un_numero_et_incremente_le_stock(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 3, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 3, 'suivi_stock' => true]);
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5],
@@ -206,21 +207,47 @@ class FactureAchatActionsTest extends TestCase
     }
 
     /**
-     * Le seul champ de coût suivi par cette application est prix_achat_ht
-     * (pas de coût moyen pondéré par lot) : la validation d'une réception
-     * doit le rafraîchir au dernier prix payé.
+     * Le stock est valorisé au coût moyen unitaire pondéré : 10 articles à
+     * 5,00 € en stock, puis 10 reçus à 7,00 € et 20 à 7,60 €, valent
+     * (10 x 5 + 10 x 7 + 20 x 7,60) / 40 = 6,80 € l'article.
      */
-    public function test_valider_une_facture_dachat_met_a_jour_le_prix_dachat_du_produit(): void
+    public function test_chaque_reception_recalcule_le_cout_moyen_pondere_du_stock(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['cmup_ht' => 5, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
 
-        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
-            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 25],
-        ]);
-        app(ValiderFactureAchatAction::class)->handle($factureAchat);
+        app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 7],
+        ]));
+        $this->assertSame('6.0000', $produit->fresh()->cmup_ht);
 
-        $this->assertSame('25.00', $produit->fresh()->prix_achat_ht);
+        app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 7.6],
+            ['produit_id' => $produit->id, 'quantite' => 15, 'prix_unitaire_ht' => 7.6],
+        ]));
+
+        $this->assertSame(['6.8000', 40], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
+    }
+
+    /**
+     * Un stock vide (ou négatif, vendu avant d'être reçu) ne pèse rien : le
+     * CMUP repart du coût de la réception. Un produit qui ne suit pas son
+     * stock n'a pas de quantités à pondérer : il garde le coût de son
+     * dernier achat.
+     */
+    public function test_sans_stock_a_ponderer_le_cmup_est_le_cout_de_la_reception(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $venduAvantDEtreRecu = Produit::factory()->create(['cmup_ht' => 5, 'taux_tva' => 20, 'stock_quantite' => -2, 'suivi_stock' => true]);
+        $sansSuiviDeStock = Produit::factory()->create(['cmup_ht' => 5, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $venduAvantDEtreRecu->id, 'quantite' => 4, 'prix_unitaire_ht' => 8],
+            ['produit_id' => $sansSuiviDeStock->id, 'quantite' => 3, 'prix_unitaire_ht' => 9],
+        ]));
+
+        $this->assertSame(['8.0000', 2], [$venduAvantDEtreRecu->fresh()->cmup_ht, $venduAvantDEtreRecu->fresh()->stock_quantite]);
+        $this->assertSame('9.0000', $sansSuiviDeStock->fresh()->cmup_ht);
     }
 
     /**
@@ -231,7 +258,7 @@ class FactureAchatActionsTest extends TestCase
     {
         $ancienFournisseur = Fournisseur::factory()->create();
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['fournisseur_id' => $ancienFournisseur->id, 'prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['fournisseur_id' => $ancienFournisseur->id, 'cmup_ht' => 20, 'taux_tva' => 20]);
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 1],
@@ -250,14 +277,14 @@ class FactureAchatActionsTest extends TestCase
     public function test_valider_une_facture_dachat_remisee_retient_le_cout_apres_remise(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 100, 'remise_pourcentage' => 10],
         ]);
 
         app(ValiderFactureAchatAction::class)->handle($factureAchat);
 
-        $this->assertSame('90.00', $produit->fresh()->prix_achat_ht);
+        $this->assertSame('90.0000', $produit->fresh()->cmup_ht);
     }
 
     /**
@@ -268,21 +295,21 @@ class FactureAchatActionsTest extends TestCase
     public function test_lescompte_de_la_facture_baisse_le_cout_dachat_sans_changer_ses_totaux(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 100, 'remise_pourcentage' => 10],
         ], ['escompte_pourcentage' => 2]);
 
         $factureAchat = app(ValiderFactureAchatAction::class)->handle($factureAchat);
 
-        $this->assertSame('88.20', $produit->fresh()->prix_achat_ht);
+        $this->assertSame('88.2000', $produit->fresh()->cmup_ht);
         $this->assertSame('270.00', $factureAchat->fresh()->total_ht);
     }
 
     public function test_un_escompte_hors_de_0_a_100_pourcent_est_refuse(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
 
         $this->expectExceptionObject(new InvalidArgumentException('L\'escompte doit être compris entre 0 et 100 %.'));
 
@@ -312,8 +339,8 @@ class FactureAchatActionsTest extends TestCase
     public function test_un_brouillon_reste_modifiable_lignes_comprises(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $produitInitial = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
-        $nouveauProduit = Produit::factory()->create(['prix_achat_ht' => 10, 'taux_tva' => 20]);
+        $produitInitial = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
+        $nouveauProduit = Produit::factory()->create(['cmup_ht' => 10, 'taux_tva' => 20]);
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produitInitial->id, 'quantite' => 5],
@@ -331,13 +358,14 @@ class FactureAchatActionsTest extends TestCase
     /**
      * Exigence explicite : une facture d'achat saisie manuellement reste
      * modifiable même après validation (la personne qui l'enregistre peut
-     * se tromper), et la modification recalcule le stock et le prix
-     * d'achat du produit plutôt que de réappliquer la réception en aveugle.
+     * se tromper), et la modification recalcule le stock et le CMUP du
+     * produit plutôt que de réappliquer la réception en aveugle : la
+     * réception corrigée remplace l'ancienne dans la valeur du stock.
      */
     public function test_une_facture_dachat_validee_saisie_manuellement_reste_modifiable_et_recalcule_le_stock(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 3, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 3, 'suivi_stock' => true]);
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
@@ -355,13 +383,13 @@ class FactureAchatActionsTest extends TestCase
 
         $this->assertSame(8, $factureAchat->lignes->first()->quantite);
         $this->assertSame(11, $produit->fresh()->stock_quantite, '3 (stock avant réception) + 8 (quantité corrigée) = 11.');
-        $this->assertSame('22.00', $produit->fresh()->prix_achat_ht);
+        $this->assertSame('21.4545', $produit->fresh()->cmup_ht, '(3 x 20,00 € + 8 x 22,00 €) / 11.');
     }
 
     public function test_corriger_lescompte_dune_facture_dachat_validee_recalcule_le_cout_dachat(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 50],
         ]));
@@ -370,7 +398,7 @@ class FactureAchatActionsTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 50],
         ], ['escompte_pourcentage' => 3]);
 
-        $this->assertSame('48.50', $produit->fresh()->prix_achat_ht);
+        $this->assertSame('48.5000', $produit->fresh()->cmup_ht);
     }
 
     public function test_une_facture_dachat_recuperee_par_api_nest_jamais_modifiable(): void
@@ -393,7 +421,7 @@ class FactureAchatActionsTest extends TestCase
     public function test_une_facture_dachat_deja_retournee_au_fournisseur_nest_plus_modifiable(): void
     {
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5],

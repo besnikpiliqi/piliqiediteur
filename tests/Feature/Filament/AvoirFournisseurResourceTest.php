@@ -53,7 +53,7 @@ class AvoirFournisseurResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->receptionnerAchatDepuisLePanneau($fournisseur, $produit, 5);
         $this->assertSame(5, $produit->fresh()->stock_quantite);
 
@@ -83,7 +83,7 @@ class AvoirFournisseurResourceTest extends TestCase
 
         $client = Client::factory()->create();
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'prix_achat_ht' => 20, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'cmup_ht' => 20, 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->receptionnerAchatDepuisLePanneau($fournisseur, $produit, 5);
         $ligneAchat = $factureAchat->lignes->firstOrFail();
 

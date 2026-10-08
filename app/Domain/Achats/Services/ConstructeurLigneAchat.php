@@ -94,12 +94,13 @@ class ConstructeurLigneAchat
         // Un fournisseur facture le plus souvent en HT (prix d'achat
         // catalogue), mais un ticket de magasin se saisit en TTC : le prix
         // saisi fait foi, voir PrixReference.
-        $prix = $this->resolveurPrix->resoudre($donnees, PrixReference::Ht, $tauxTva, (float) $produit->prix_achat_ht);
+        $prix = $this->resolveurPrix->resoudre($donnees, PrixReference::Ht, $tauxTva, $produit->exists ? $produit->dernierPrixDAchatHt() : null);
 
         if (! $produit->exists) {
             // Son coût réel (remise et escompte déduits) le remplacera à la
-            // validation de la facture, voir LigneAchat::coutUnitaireHt().
-            $produit->prix_achat_ht = $prix['prix_unitaire_ht'];
+            // validation de la facture, voir
+            // StockLedgerService::receptionner().
+            $produit->cmup_ht = $prix['prix_unitaire_ht'];
         }
 
         if (! $produit->exists || $produit->isDirty()) {

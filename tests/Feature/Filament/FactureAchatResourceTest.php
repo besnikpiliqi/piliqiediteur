@@ -134,7 +134,7 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::query()->sole();
         $this->assertSame('Câble USB-C', $produit->nom);
         $this->assertSame($fournisseur->id, $produit->fournisseur_id);
-        $this->assertSame(['0.47', '10.00', '8.33'], [$produit->prix_achat_ht, $produit->prix_vente_ttc, $produit->prix_vente_ht]);
+        $this->assertSame(['0.4700', '10.00', '8.33'], [$produit->cmup_ht, $produit->prix_vente_ttc, $produit->prix_vente_ht]);
 
         $ligneAchat = FactureAchat::query()->sole()->lignes->sole();
         $this->assertSame(['0.47', '1.41'], [$ligneAchat->prix_unitaire_ht, $ligneAchat->montant_ht]);
@@ -144,7 +144,7 @@ class FactureAchatResourceTest extends TestCase
     {
         $this->connecterLeProprietaire();
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'prix_achat_ht' => 2.1, 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'cmup_ht' => 2.1, 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
 
         Livewire::test(CreateFactureAchat::class)
             ->fillForm(['fournisseur_id' => $fournisseur->id])
@@ -171,7 +171,7 @@ class FactureAchatResourceTest extends TestCase
     {
         $this->connecterLeProprietaire();
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['nom' => 'Écran iPhone 13', 'prix_achat_ht' => 40, 'prix_vente_ttc' => 120, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['nom' => 'Écran iPhone 13', 'cmup_ht' => 40, 'prix_vente_ttc' => 120, 'taux_tva' => 20]);
 
         $component = Livewire::test(CreateFactureAchat::class)
             ->fillForm(['fournisseur_id' => $fournisseur->id])
@@ -234,7 +234,7 @@ class FactureAchatResourceTest extends TestCase
         $magasin = $this->connecterLeProprietaire();
         app(TenantContext::class)->set($magasin);
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 5, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['cmup_ht' => 5, 'taux_tva' => 20]);
         app(CreerFactureAchatAction::class)->handle($fournisseur, [['produit_id' => $produit->id, 'quantite' => 1]], ['source' => SourceFactureAchat::Api]);
 
         Livewire::test(CreateFactureAchat::class)
@@ -255,7 +255,7 @@ class FactureAchatResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
 
         Livewire::test(CreateFactureAchat::class)
             ->fillForm([
@@ -281,7 +281,7 @@ class FactureAchatResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
 
         Livewire::test(CreateFactureAchat::class)
             ->fillForm([
@@ -305,7 +305,7 @@ class FactureAchatResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
 
         Livewire::test(CreateFactureAchat::class)->fillForm([
             'fournisseur_id' => $fournisseur->id,
@@ -331,7 +331,7 @@ class FactureAchatResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
 
         Livewire::test(CreateFactureAchat::class)->fillForm([
             'fournisseur_id' => $fournisseur->id,
@@ -374,7 +374,7 @@ class FactureAchatResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
 
         Livewire::test(CreateFactureAchat::class)->fillForm([
             'fournisseur_id' => $fournisseur->id,
@@ -450,7 +450,7 @@ class FactureAchatResourceTest extends TestCase
             'code_barres' => '3700000000017',
             'nom' => 'Ecran Iphone 17 Pro',
             'fournisseur_id' => $fournisseur->id,
-            'prix_achat_ht' => 80,
+            'cmup_ht' => 80,
             'prix_vente_ht' => 150,
             'seuil_alerte' => 1,
         ]);

@@ -45,7 +45,7 @@ class ProduitResourceTest extends TestCase
         Livewire::test(CreateProduit::class)
             ->fillForm([
                 'nom' => 'Ecran Iphone 18 Pro',
-                'prix_achat_ht' => 25,
+                'cmup_ht' => 25,
                 'prix_vente_ttc' => 40,
                 'taux_tva' => 20,
             ])
@@ -138,13 +138,27 @@ class ProduitResourceTest extends TestCase
         $this->assertSame('13.34', $facture->total_tva);
     }
 
-    public function test_le_prix_dachat_est_enregistre_au_centime(): void
+    public function test_le_cmup_est_enregistre_au_dix_millieme(): void
     {
         $this->connecterProprietaire();
 
-        $produit = Produit::factory()->create(['prix_achat_ht' => 8.335]);
+        $produit = Produit::factory()->create(['cmup_ht' => 8.33335]);
 
-        $this->assertEquals(8.34, DB::table('produits')->where('id', $produit->id)->value('prix_achat_ht'));
+        $this->assertEquals(8.3334, DB::table('produits')->where('id', $produit->id)->value('cmup_ht'));
+    }
+
+    public function test_le_cmup_ne_se_saisit_qu_a_la_creation_du_produit(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['cmup_ht' => 6.8]);
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->assertFormFieldIsDisabled('cmup_ht')
+            ->assertFormSet(['cmup_ht' => '6.80'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('6.8000', $produit->fresh()->cmup_ht);
     }
 
     /**
@@ -161,7 +175,7 @@ class ProduitResourceTest extends TestCase
         app(ValiderFactureAchatAction::class)->handle($factureAchat);
 
         Livewire::test(EditProduit::class, ['record' => Produit::query()->sole()->getRouteKey()])
-            ->assertFormSet(['fournisseur_id' => $fournisseur->id, 'prix_achat_ht' => '0.47']);
+            ->assertFormSet(['fournisseur_id' => $fournisseur->id, 'cmup_ht' => '0.47']);
     }
 
     /**
@@ -177,7 +191,7 @@ class ProduitResourceTest extends TestCase
 
         $component = Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()]);
 
-        foreach (['reference', 'nom', 'code_barres', 'fournisseur_id', 'prix_achat_ht'] as $champ) {
+        foreach (['reference', 'nom', 'code_barres', 'fournisseur_id', 'cmup_ht'] as $champ) {
             $component->assertFormFieldIsDisabled($champ);
         }
 
@@ -211,7 +225,7 @@ class ProduitResourceTest extends TestCase
         Produit::factory()->create(['reference' => 'ECR-1']);
 
         Livewire::test(CreateProduit::class)
-            ->fillForm(['reference' => 'ECR-1', 'nom' => 'Autre écran', 'prix_achat_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
+            ->fillForm(['reference' => 'ECR-1', 'nom' => 'Autre écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
             ->call('create')
             ->assertHasFormErrors(['reference' => 'unique']);
 

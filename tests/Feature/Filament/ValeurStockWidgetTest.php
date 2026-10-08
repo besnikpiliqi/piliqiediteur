@@ -29,12 +29,12 @@ class ValeurStockWidgetTest extends TestCase
         Filament::setTenant($magasin);
 
         // En stock : 5 unités à 10 € HT, TVA 20 % => 50 € HT, 10 € TVA, 60 € TTC.
-        Produit::factory()->create(['prix_achat_ht' => 10, 'taux_tva' => 20, 'stock_quantite' => 5, 'suivi_stock' => true]);
+        Produit::factory()->create(['cmup_ht' => 10, 'taux_tva' => 20, 'stock_quantite' => 5, 'suivi_stock' => true]);
         // Épuisé : une quantité de 0 ne vaut jamais rien (0 × prix = 0), quel
         // que soit son prix d'achat -- seul son NOMBRE doit apparaître.
-        Produit::factory()->create(['prix_achat_ht' => 25, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
+        Produit::factory()->create(['cmup_ht' => 25, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
         // Non suivi : ne doit jamais compter, quel que soit son stock_quantite résiduel.
-        Produit::factory()->create(['prix_achat_ht' => 999, 'taux_tva' => 20, 'stock_quantite' => 3, 'suivi_stock' => false]);
+        Produit::factory()->create(['cmup_ht' => 999, 'taux_tva' => 20, 'stock_quantite' => 3, 'suivi_stock' => false]);
 
         Livewire::test(ValeurStockApercu::class)
             ->assertSuccessful()
@@ -56,7 +56,7 @@ class ValeurStockWidgetTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
-        Produit::factory()->create(['prix_achat_ht' => 33.33, 'taux_tva' => 20, 'stock_quantite' => 3, 'suivi_stock' => true]);
+        Produit::factory()->create(['cmup_ht' => 33.33, 'taux_tva' => 20, 'stock_quantite' => 3, 'suivi_stock' => true]);
 
         Livewire::test(ValeurStockApercu::class)
             ->assertSee('120,00 € TTC')

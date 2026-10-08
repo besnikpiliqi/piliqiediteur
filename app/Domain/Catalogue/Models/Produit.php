@@ -33,7 +33,7 @@ class Produit extends Model
         'nom',
         'taille',
         'couleur',
-        'prix_achat_ht',
+        'cmup_ht',
         'prix_vente_ht',
         'prix_vente_ttc',
         'taux_tva',
@@ -58,7 +58,6 @@ class Produit extends Model
         'taille',
         'couleur',
         'fournisseur_id',
-        'prix_achat_ht',
     ];
 
     protected static function booted(): void
@@ -83,12 +82,12 @@ class Produit extends Model
             }
 
             $produit->synchroniserPrixDeVente();
-            $produit->arrondirPrixDAchat();
+            $produit->arrondirLeCmup();
         });
     }
 
     protected $casts = [
-        'prix_achat_ht' => 'decimal:2',
+        'cmup_ht' => 'decimal:4',
         'prix_vente_ht' => 'decimal:2',
         'prix_vente_ttc' => 'decimal:2',
         'taux_tva' => 'decimal:2',
@@ -139,17 +138,23 @@ class Produit extends Model
     }
 
     /**
-     * À la réception d'une facture d'achat validée : le produit retient le
-     * dernier coût réellement payé, remise et escompte déduits (voir
-     * LigneAchat::coutUnitaireHt() -- le seul coût suivi, pas de coût moyen
-     * pondéré par lot), et le fournisseur chez qui il vient d'être acheté.
+     * Le fournisseur d'un produit est celui chez qui il vient d'être acheté
+     * (facture d'achat validée).
      */
-    public function enregistrerUnAchat(LigneAchat $ligne): void
+    public function rattacherAuFournisseur(int $fournisseurId): void
     {
-        $this->forceFill([
-            'prix_achat_ht' => $ligne->coutUnitaireHt(),
-            'fournisseur_id' => $ligne->factureAchat->fournisseur_id,
-        ])->save();
+        $this->forceFill(['fournisseur_id' => $fournisseurId])->save();
+    }
+
+    /**
+     * Le prix unitaire HT de son dernier achat (avant remise), pour
+     * proposer le même sur une nouvelle facture d'achat ; à défaut, son
+     * CMUP.
+     */
+    public function dernierPrixDAchatHt(): float
+    {
+        return (float) ($this->lignesAchat()->latest('id')->value('prix_unitaire_ht')
+            ?? app(CalculateurLigne::class)->arrondirAuCentime((float) $this->cmup_ht));
     }
 
     /**
@@ -199,13 +204,13 @@ class Produit extends Model
     }
 
     /**
-     * Le prix d'achat est enregistré au centime, comme il sera relu (cast
-     * decimal:2) : jamais 8,335 € en base derrière un 8,34 € affiché.
+     * Le CMUP est enregistré au dix-millième d'euro, comme il sera relu
+     * (cast decimal:4).
      */
-    private function arrondirPrixDAchat(): void
+    private function arrondirLeCmup(): void
     {
-        if ($this->isDirty('prix_achat_ht')) {
-            $this->prix_achat_ht = app(CalculateurLigne::class)->arrondirAuCentime((float) $this->prix_achat_ht);
+        if ($this->isDirty('cmup_ht')) {
+            $this->cmup_ht = app(CalculateurLigne::class)->arrondirAuDixMillieme((float) $this->cmup_ht);
         }
     }
 

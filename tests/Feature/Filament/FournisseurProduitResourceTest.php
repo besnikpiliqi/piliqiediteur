@@ -56,7 +56,7 @@ class FournisseurProduitResourceTest extends TestCase
             ->fillForm([
                 'reference' => 'REF-001',
                 'nom' => 'T-shirt blanc',
-                'prix_achat_ht' => 5,
+                'cmup_ht' => 5,
                 'prix_vente_ttc' => 18,
                 'taux_tva' => 20,
             ])

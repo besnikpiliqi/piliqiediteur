@@ -238,7 +238,7 @@ trait AjouteDesLignesDAchat
             $set($champ, $valeur);
         }
 
-        $set('prix_unitaire_ht', $produit === null ? null : self::prixEnTexte((float) $produit->prix_achat_ht));
+        $set('prix_unitaire_ht', $produit === null ? null : self::prixEnTexte($produit->dernierPrixDAchatHt()));
     }
 
     /**

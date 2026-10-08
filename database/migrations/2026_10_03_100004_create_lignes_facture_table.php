@@ -13,9 +13,9 @@ return new class extends Migration
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('facture_id')->constrained('factures')->cascadeOnDelete();
             $table->foreignId('produit_id')->nullable()->constrained('produits')->nullOnDelete();
-            // Une ligne est un produit, un service du catalogue (voir
-            // Service) ou une ligne libre -- jamais un produit et un service
-            // à la fois (voir ConstructeurLigneDocument).
+            // Une ligne vend un produit du catalogue ou un service du magasin
+            // (voir Service), jamais les deux ni une ligne libre (voir
+            // ConstructeurLigneDocument).
             $table->foreignId('service_id')->nullable()->constrained('services')->nullOnDelete();
             // Bien ou service (voir NatureLigne) : la catégorie d'opération de
             // la facture et l'e-reporting en dépendent.

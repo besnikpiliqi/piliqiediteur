@@ -45,45 +45,33 @@ class CreerFactureActionTest extends TestCase
         $this->assertSame('240.00', $facture->total_ttc);
     }
 
-    public function test_une_ligne_sans_produit_requiert_une_description_et_un_prix_explicites(): void
-    {
-        $client = Client::factory()->create();
-
-        $facture = app(CreerFactureAction::class)->handle($client, [
-            ['description' => 'Prestation sur mesure', 'nature' => 'service', 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'quantite' => 1],
-        ]);
-
-        $this->assertSame('Prestation sur mesure', $facture->lignes->first()->description);
-        $this->assertNull($facture->lignes->first()->produit_id);
-    }
-
     /**
      * Un produit est un bien, même si autre chose est envoyé ; un service du
-     * catalogue est un service ; une ligne libre garde ce qu'elle a choisi.
+     * magasin est un service. La description est celle du catalogue, jamais
+     * celle envoyée avec la ligne.
      */
     public function test_chaque_ligne_sait_si_elle_vend_un_bien_ou_un_service(): void
     {
         $client = Client::factory()->create();
-        $ecran = Produit::factory()->create();
-        $mainDOeuvre = Service::factory()->create();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 13']);
+        $mainDOeuvre = Service::factory()->create(['nom' => 'Pose écran']);
 
         $facture = app(CreerFactureAction::class)->handle($client, [
-            ['produit_id' => $ecran->id, 'nature' => 'service', 'quantite' => 1],
-            ['service_id' => $mainDOeuvre->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
-            ['description' => 'Déplacement', 'nature' => 'service', 'prix_unitaire_ttc' => 10, 'taux_tva' => 20, 'quantite' => 1],
+            ['produit_id' => $ecran->id, 'nature' => 'service', 'description' => 'Autre chose', 'quantite' => 1],
+            ['service_id' => $mainDOeuvre->id, 'description' => 'Autre chose', 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
         ]);
 
-        $this->assertSame(
-            [NatureLigne::Bien, NatureLigne::Service, NatureLigne::Service],
-            $facture->lignes->pluck('nature')->all(),
-        );
+        $lignes = $facture->lignes->sortBy('ordre')->values();
+
+        $this->assertSame([NatureLigne::Bien, NatureLigne::Service], $lignes->pluck('nature')->all());
+        $this->assertSame(['Écran iPhone 13', 'Pose écran'], $lignes->pluck('description')->all());
     }
 
-    public function test_une_ligne_libre_qui_ne_dit_pas_si_elle_vend_un_bien_ou_un_service_est_refusee(): void
+    public function test_une_ligne_sans_produit_ni_service_est_refusee(): void
     {
         $client = Client::factory()->create();
 
-        $this->expectExceptionObject(new InvalidArgumentException('Une ligne sans produit ni service doit préciser si elle vend un bien ou un service.'));
+        $this->expectExceptionObject(new InvalidArgumentException('Une ligne vend un produit ou un service du catalogue.'));
 
         try {
             app(CreerFactureAction::class)->handle($client, [
@@ -92,17 +80,6 @@ class CreerFactureActionTest extends TestCase
         } finally {
             $this->assertSame(0, Facture::query()->count());
         }
-    }
-
-    public function test_une_ligne_sans_produit_ni_description_leve_une_exception(): void
-    {
-        $client = Client::factory()->create();
-
-        $this->expectException(InvalidArgumentException::class);
-
-        app(CreerFactureAction::class)->handle($client, [
-            ['prix_unitaire_ht' => 50, 'taux_tva' => 20, 'quantite' => 1],
-        ]);
     }
 
     /**
@@ -183,10 +160,12 @@ class CreerFactureActionTest extends TestCase
     public function test_chaque_ligne_est_calculee_depuis_le_prix_reellement_saisi(): void
     {
         $client = Client::factory()->create();
+        $cable = Produit::factory()->create(['taux_tva' => 20]);
+        $coque = Produit::factory()->create(['taux_tva' => 20]);
 
         $facture = app(CreerFactureAction::class)->handle($client, [
-            ['description' => 'Prestation pro', 'nature' => 'service', 'quantite' => 3, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20],
-            ['description' => 'Article vitrine', 'nature' => 'bien', 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20],
+            ['produit_id' => $cable->id, 'quantite' => 3, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20],
+            ['produit_id' => $coque->id, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20],
         ]);
 
         [$ligneHt, $ligneTtc] = $facture->lignes->sortBy('ordre')->values()->all();

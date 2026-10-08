@@ -12,13 +12,13 @@ return new class extends Migration
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('devis_id')->constrained('devis')->cascadeOnDelete();
-            // nullable : ligne libre (service hors catalogue) ou produit
-            // supprimé depuis -- la ligne garde son propre snapshot, elle
-            // ne dépend jamais des valeurs actuelles du produit.
+            // nullable : ligne de service, ou produit supprimé depuis -- la
+            // ligne garde son propre snapshot, elle ne dépend jamais des
+            // valeurs actuelles du produit.
             $table->foreignId('produit_id')->nullable()->constrained('produits')->nullOnDelete();
-            // Une ligne est un produit, un service du catalogue (voir
-            // Service) ou une ligne libre -- jamais un produit et un service
-            // à la fois (voir ConstructeurLigneDocument).
+            // Une ligne vend un produit du catalogue ou un service du magasin
+            // (voir Service), jamais les deux ni une ligne libre (voir
+            // ConstructeurLigneDocument).
             $table->foreignId('service_id')->nullable()->constrained('services')->nullOnDelete();
             // Bien ou service (voir NatureLigne) : la catégorie d'opération de
             // la facture et l'e-reporting en dépendent.

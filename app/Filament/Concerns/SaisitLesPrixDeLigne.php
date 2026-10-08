@@ -16,16 +16,17 @@ use InvalidArgumentException;
 
 /**
  * PU HT, PU TTC et TVA d'une ligne de document (vente comme achat) : les
- * deux prix restent visibles et saisissables, et c'est le dernier saisi qui
- * fait foi pour le calcul de la ligne (voir PrixReference) -- l'autre n'en
- * est que la conversion au centime.
+ * deux prix restent visibles, et c'est le dernier saisi qui fait foi pour
+ * le calcul de la ligne (voir PrixReference) -- l'autre n'en est que la
+ * conversion au centime. Une vente ne se saisit qu'en TTC : son PU HT
+ * reste affiché mais n'est pas modifiable.
  */
 trait SaisitLesPrixDeLigne
 {
     /**
      * @return array<Component>
      */
-    protected static function champsPrixDeLigne(PrixReference $referenceParDefaut): array
+    protected static function champsPrixDeLigne(PrixReference $referenceParDefaut, bool $prixHtSaisissable = true): array
     {
         return [
             Hidden::make('prix_reference')->default($referenceParDefaut->value),
@@ -36,6 +37,7 @@ trait SaisitLesPrixDeLigne
                 // Une ligne de service (voir DevisResource::ligneSchema()) se
                 // saisit uniquement en TTC.
                 ->visible(fn (Get $get): bool => blank($get('service_id')))
+                ->disabled(! $prixHtSaisissable)
                 ->required(fn (Get $get) => self::referenceDeLigne($get, $referenceParDefaut) === PrixReference::Ht)
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
                     if (blank($state)) {

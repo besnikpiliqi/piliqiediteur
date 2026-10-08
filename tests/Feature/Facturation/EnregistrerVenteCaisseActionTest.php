@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
@@ -62,13 +63,14 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $this->assertSame(2, $produit->fresh()->stock_quantite);
     }
 
-    public function test_encaisser_une_vente_avec_une_ligne_libre_sans_produit(): void
+    public function test_encaisser_une_vente_avec_une_ligne_de_service(): void
     {
         $client = Client::factory()->create();
+        $service = Service::factory()->create(['nom' => 'Retouche']);
 
         $facture = app(EnregistrerVenteCaisseAction::class)->handle(
             $client,
-            [['description' => 'Retouche', 'nature' => 'service', 'quantite' => 1, 'prix_unitaire_ht' => 15, 'taux_tva' => 20]],
+            [['service_id' => $service->id, 'quantite' => 1, 'prix_unitaire_ttc' => 18, 'taux_tva' => 20]],
             ModePaiement::Especes,
         );
 

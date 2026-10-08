@@ -8,18 +8,17 @@ use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
-use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Filament\App\Resources\DevisResource\Pages;
+use App\Filament\Concerns\AjouteDesLignesDeVente;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitLesPrixDeLigne;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -36,6 +35,7 @@ use Filament\Tables\Table;
 
 class DevisResource extends Resource
 {
+    use AjouteDesLignesDeVente;
     use GereLesExceptionsMetier;
     use SaisitLesPrixDeLigne;
 
@@ -76,26 +76,19 @@ class DevisResource extends Resource
                 // tant que le devis n'a pas encore été transformé en
                 // facture : cette page n'est de toute façon accessible que
                 // dans ce cas (voir DevisPolicy::update() et EditDevis).
-                Repeater::make('lignes')
-                    ->label('')
-                    ->schema(self::ligneSchema())
-                    ->columns(9)
-                    ->defaultItems(1)
-                    ->addActionLabel('Ajouter une ligne')
-                    ->required(),
+                ...self::lignesDeVente(),
                 self::totauxDuDocument(PrixReference::Ttc),
             ]),
         ]);
     }
 
     /**
-     * Partagé avec FactureResource : même structure de ligne (snapshot
-     * produit + description/prix/TVA/remise librement modifiables).
-     *
-     * Une ligne de service (service_id, ajoutée par le bouton « Ajouter un
-     * service » de la Caisse) n'a ni produit à chercher ni PU HT : le
-     * vendeur n'y saisit que le TTC, la TVA en est déduite comme pour
-     * toute ligne.
+     * Partagé avec FactureResource et la Caisse. Une ligne vend un produit
+     * du catalogue ou un service du magasin (voir AjouteDesLignesDeVente) :
+     * sa description vient du catalogue et ne se corrige que dans la fiche
+     * du produit ou du service, et seul le PU TTC se saisit -- le PU HT en
+     * est la conversion. Une ligne de service n'a ni produit à chercher ni
+     * PU HT affiché.
      *
      * @return array<Component>
      */
@@ -105,7 +98,7 @@ class DevisResource extends Resource
             Hidden::make('service_id'),
             Select::make('produit_id')
                 ->label('Produit')
-                ->helperText('Laissez vide pour une ligne libre (main d\'œuvre, service, produit hors catalogue...). Recherchez par nom, référence, ou scannez le code-barres.')
+                ->helperText('Recherchez par nom, référence, ou scannez le code-barres.')
                 ->searchable()
                 // Recherche côté serveur plutôt qu'une liste statique
                 // préchargée : inclut le code-barres, pour qu'une
@@ -122,19 +115,7 @@ class DevisResource extends Resource
                     ->get()
                     ->mapWithKeys(fn (Produit $produit) => [$produit->id => "{$produit->nom} ({$produit->reference})"]))
                 ->getOptionLabelUsing(fn ($value) => Produit::find($value)?->nom)
-                // Un Form explicitement modelé sur Produit (plutôt qu'un
-                // simple tableau de schéma) : ce Select n'utilise pas
-                // relationship(), donc Filament ne peut pas déduire tout
-                // seul le modèle à utiliser pour la modale -- sans ça,
-                // le Select fournisseur_id imbriqué (qui, lui, utilise
-                // relationship()) plante en essayant de résoudre sa
-                // relation sur un modèle nul.
-                ->createOptionForm(fn (Form $form): Form => $form
-                    ->model(Produit::class)
-                    ->schema(ProduitResource::creationRapideSchema()))
-                ->createOptionModalHeading('Nouveau produit')
-                ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::PRODUIT_CREATE)))
-                ->createOptionUsing(fn (array $data) => Produit::create($data)->getKey())
+                ->required(fn (Get $get): bool => ! self::estUneLigneDeService($get))
                 ->live()
                 ->columnSpan(2)
                 ->visible(fn (Get $get): bool => ! self::estUneLigneDeService($get))
@@ -154,7 +135,7 @@ class DevisResource extends Resource
                 }),
             TextInput::make('description')
                 ->label(fn (Get $get): string => self::estUneLigneDeService($get) ? 'Service' : 'Description')
-                ->required()
+                ->disabled()
                 // Reprend la place du produit et du PU HT, absents d'une
                 // ligne de service.
                 ->columnSpan(fn (Get $get): int => self::estUneLigneDeService($get) ? 5 : 2),
@@ -162,18 +143,8 @@ class DevisResource extends Resource
             // ligne : le total (et, dans la Caisse, la monnaie à rendre) se
             // met à jour pendant la saisie, pas seulement au clic ailleurs.
             TextInput::make('quantite')->integer()->minValue(1)->required()->default(1)->saisieEnDirect(),
-            ...self::champsPrixDeLigne(PrixReference::Ttc),
+            ...self::champsPrixDeLigne(PrixReference::Ttc, prixHtSaisissable: false),
             TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->minValue(0)->maxValue(100)->default(0)->saisieEnDirect(),
-            // Un produit est un bien, un service du catalogue un service :
-            // seule une ligne libre doit dire ce qu'elle vend (voir
-            // NatureLigne). Placé en dernier, il passe sur sa propre ligne.
-            Select::make('nature')
-                ->label('Nature')
-                ->options(NatureLigne::class)
-                ->helperText('Bien : pièce, accessoire. Service : main-d\'œuvre, réparation.')
-                ->required()
-                ->visible(fn (Get $get): bool => self::estUneLigneLibre($get))
-                ->columnSpan(2),
             self::totalDeLigne(PrixReference::Ttc),
         ];
     }
@@ -181,11 +152,6 @@ class DevisResource extends Resource
     public static function estUneLigneDeService(Get $get): bool
     {
         return filled($get('service_id'));
-    }
-
-    public static function estUneLigneLibre(Get $get): bool
-    {
-        return blank($get('produit_id')) && blank($get('service_id'));
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -87,7 +88,12 @@ class FacturePdfGeneratorTest extends TestCase
         app(TenantContext::class)->set(Magasin::factory()->create());
         $client = Client::factory()->professionnel()->create();
         $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, array_map(
-            fn (string $nature): array => ['description' => 'Ligne', 'nature' => $nature, 'prix_unitaire_ttc' => 60, 'taux_tva' => 20, 'quantite' => 1],
+            fn (string $nature): array => [
+                ...($nature === 'bien' ? ['produit_id' => Produit::factory()->create(['suivi_stock' => false])->id] : ['service_id' => Service::factory()->create()->id]),
+                'prix_unitaire_ttc' => 60,
+                'taux_tva' => 20,
+                'quantite' => 1,
+            ],
             $natures,
         )));
 

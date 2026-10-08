@@ -432,8 +432,9 @@ class AvoirActionsTest extends TestCase
     public function test_le_dernier_retour_dune_ligne_ht_en_credite_le_solde_exact(): void
     {
         $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
-            ['description' => 'Prestation', 'nature' => 'service', 'quantite' => 2, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20],
+            ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20],
         ]));
         $ligneFacture = $facture->lignes->firstOrFail();
 

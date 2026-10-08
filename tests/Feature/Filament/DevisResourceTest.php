@@ -97,39 +97,34 @@ class DevisResourceTest extends TestCase
     }
 
     /**
-     * Besoin explicite : un magasin sans gestion de stock (ou une ligne de
-     * type "main d'œuvre"/service) doit pouvoir créer un devis entièrement
-     * à la main, sans jamais sélectionner de produit du catalogue.
+     * La main-d'œuvre d'un devis s'ajoute comme à la caisse, par le bouton
+     * « Ajouter un service ».
      */
-    public function test_creer_un_devis_avec_une_ligne_entierement_libre_sans_produit(): void
+    public function test_creer_un_devis_avec_une_ligne_de_service(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-
         $client = Client::factory()->create();
+        $pose = Service::factory()->create(['nom' => 'Pose']);
 
-        Livewire::test(CreateDevis::class)
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [
-                    // PU TTC saisi : c'est lui qui fait foi pour une vente
-                    // sur une ligne (voir DevisResource::ligneSchema()). 54 €
-                    // TTC à 20 % de TVA = 45 € HT.
-                    ['description' => 'Main d\'œuvre - pose', 'nature' => 'service', 'quantite' => 3, 'prix_unitaire_ttc' => 54, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
-            ])
+        $component = Livewire::test(CreateDevis::class)
+            ->fillForm(['client_id' => $client->id, 'lignes' => []])
+            ->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['services' => [$pose->id]]);
+        $cle = array_key_first($component->get('data.lignes'));
+        // 54 € TTC à 20 % de TVA = 45 € HT, par 3.
+        $component
+            ->set("data.lignes.{$cle}.quantite", '3')
+            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '54')
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $devis = Devis::query()->firstOrFail();
-        $ligne = $devis->lignes->firstOrFail();
-
-        $this->assertNull($ligne->produit_id);
-        $this->assertSame('Main d\'œuvre - pose', $ligne->description);
+        $ligne = Devis::query()->firstOrFail()->lignes->firstOrFail();
+        $this->assertSame($pose->id, $ligne->service_id);
+        $this->assertSame('Pose', $ligne->description);
         $this->assertSame(NatureLigne::Service, $ligne->nature);
-        $this->assertSame('135.00', $devis->total_ht);
+        $this->assertSame('135.00', $ligne->montant_ht);
     }
 
     public function test_envoyer_un_devis_brouillon_depuis_la_liste_lui_attribue_un_numero(): void
@@ -386,44 +381,9 @@ class DevisResourceTest extends TestCase
     }
 
     /**
-     * Exigence explicite : la création rapide d'un produit depuis une
-     * ligne doit proposer les mêmes informations que la page dédiée
-     * Produits (prix, TVA, stock...), pas un sous-ensemble réduit --
-     * contrairement au client, où un formulaire allégé suffit.
-     */
-    public function test_creer_un_nouveau_produit_a_la_volee_depuis_une_ligne_de_devis(): void
-    {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
-
-        Livewire::test(CreateDevis::class)
-            ->fillForm(['lignes' => [['description' => 'temp']]])
-            ->callFormComponentAction('lignes.0.produit_id', 'createOption', data: [
-                'reference' => 'ECR-IP17-PRO',
-                'nom' => 'Ecran Iphone 17 Pro',
-                'prix_achat_ht' => '80',
-                // 180 € TTC à 20 % de TVA = 150 € HT (voir
-                // ProduitResource::prixVenteTtcSchema() : seul le TTC est
-                // saisi, le HT en est dérivé).
-                'prix_vente_ttc' => '180',
-                'taux_tva' => '20',
-            ])
-            ->assertHasNoFormComponentActionErrors();
-
-        $this->assertDatabaseHas('produits', [
-            'reference' => 'ECR-IP17-PRO',
-            'nom' => 'Ecran Iphone 17 Pro',
-            'prix_achat_ht' => 80,
-            'prix_vente_ht' => 150,
-        ]);
-    }
-
-    /**
-     * Exigence explicite : le PU HT reste visible et saisissable sur une
-     * ligne (mention nécessaire), à côté du PU TTC qui, lui, fait référence
-     * pour le calcul (voir CalculateurLigne::calculerDepuisTtc()).
+     * Exigence explicite : le PU HT reste visible sur une ligne (mention
+     * nécessaire), à côté du PU TTC qui, lui, se saisit et fait référence
+     * pour le calcul.
      */
     public function test_le_pu_ht_et_le_pu_ttc_dune_ligne_restent_tous_deux_visibles(): void
     {

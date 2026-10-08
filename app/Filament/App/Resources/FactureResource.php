@@ -113,13 +113,7 @@ class FactureResource extends Resource
                 // édition (voir EditFacture) : cette page n'est accessible
                 // que pour un brouillon (voir FacturePolicy::update()), qui
                 // n'a aucune existence légale à préserver.
-                Repeater::make('lignes')
-                    ->label('')
-                    ->schema(DevisResource::ligneSchema())
-                    ->columns(9)
-                    ->defaultItems(1)
-                    ->addActionLabel('Ajouter une ligne')
-                    ->required(),
+                ...DevisResource::lignesDeVente(),
                 DevisResource::totauxDuDocument(PrixReference::Ttc),
             ]),
         ]);

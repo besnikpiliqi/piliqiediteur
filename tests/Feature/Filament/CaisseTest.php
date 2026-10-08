@@ -253,12 +253,13 @@ class CaisseTest extends TestCase
         Filament::setTenant($magasin);
 
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 9, 'taux_tva' => 20]);
 
         $component = Livewire::test(Caisse::class)
             ->fillForm([
                 'client_id' => $clientComptoir->id,
                 'lignes' => [
-                    ['description' => 'Pose écran', 'quantite' => 1, 'prix_unitaire_ht' => 0, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 7.5, 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
             ]);
 
@@ -374,7 +375,6 @@ class CaisseTest extends TestCase
         $this->assertSame(1, $ligne['quantite']);
         $this->assertSame(20, $ligne['taux_tva']);
         $this->assertSame('ttc', $ligne['prix_reference']);
-        $this->assertSame('bien', $ligne['nature']);
         $component->assertFormFieldIsVisible('lignes.'.array_key_first($component->get('data.lignes')).'.produit_id');
     }
 

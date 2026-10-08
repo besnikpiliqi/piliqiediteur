@@ -163,7 +163,11 @@ class FactureResourceTest extends TestCase
         $this->assertStringContainsString(AvoirResource::getUrl('view', ['record' => $avoir->fresh()]), $html);
     }
 
-    public function test_une_ligne_libre_doit_dire_si_elle_vend_un_bien_ou_un_service(): void
+    /**
+     * Une vente choisit toujours un produit existant (ou un service, par son
+     * bouton), jamais une ligne libre.
+     */
+    public function test_une_ligne_sans_produit_est_refusee(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
@@ -174,12 +178,33 @@ class FactureResourceTest extends TestCase
         Livewire::test(CreateFacture::class)
             ->fillForm([
                 'client_id' => $client->id,
-                'lignes' => [['description' => 'Coque', 'quantite' => 1, 'prix_unitaire_ttc' => 10, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+                'lignes' => [['quantite' => 1, 'prix_unitaire_ttc' => 10, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
             ])
             ->call('create')
-            ->assertHasFormErrors(['lignes.0.nature' => 'required']);
+            ->assertHasFormErrors(['lignes.0.produit_id' => 'required']);
 
         $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * Le nom vient du catalogue et le prix d'une vente se saisit en TTC :
+     * ni la description ni le PU HT d'une ligne ne se modifient ici.
+     */
+    public function test_la_description_et_le_pu_ht_dune_ligne_ne_se_modifient_pas(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $component = Livewire::test(CreateFacture::class);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->assertFormFieldIsDisabled("lignes.{$cle}.description")
+            ->assertFormFieldIsDisabled("lignes.{$cle}.prix_unitaire_ht")
+            ->assertFormFieldIsEnabled("lignes.{$cle}.prix_unitaire_ttc")
+            ->assertFormComponentActionDoesNotExist("lignes.{$cle}.produit_id", 'createOption');
     }
 
     /**
@@ -299,37 +324,33 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * Même besoin que pour les devis : un magasin de services (pas de
-     * stock) doit pouvoir facturer de la main d'œuvre ou une prestation
-     * jamais enregistrée au catalogue, en remplissant la ligne à la main.
+     * La main-d'œuvre se facture comme à la caisse : par le bouton
+     * « Ajouter un service ».
      */
-    public function test_creer_une_facture_avec_une_ligne_entierement_libre_sans_produit(): void
+    public function test_creer_une_facture_avec_une_ligne_de_service(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-
         $client = Client::factory()->create();
+        $installation = Service::factory()->create(['nom' => 'Installation']);
 
-        Livewire::test(CreateFacture::class)
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [
-                    // PU TTC saisi : c'est lui qui fait foi pour une vente
-                    // sur une ligne (voir DevisResource::ligneSchema()). 72 €
-                    // TTC à 20 % de TVA = 60 € HT.
-                    ['description' => 'Main d\'œuvre - installation', 'nature' => 'service', 'quantite' => 2, 'prix_unitaire_ttc' => 72, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                ],
-            ])
+        $component = Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => $client->id, 'lignes' => []])
+            ->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['services' => [$installation->id]]);
+        $cle = array_key_first($component->get('data.lignes'));
+        // 72 € TTC à 20 % de TVA = 60 € HT, par 2.
+        $component
+            ->set("data.lignes.{$cle}.quantite", '2')
+            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '72')
             ->call('create')
             ->assertHasNoFormErrors();
 
         $facture = Facture::query()->firstOrFail();
         $ligne = $facture->lignes->firstOrFail();
-
-        $this->assertNull($ligne->produit_id);
-        $this->assertSame('Main d\'œuvre - installation', $ligne->description);
+        $this->assertSame($installation->id, $ligne->service_id);
+        $this->assertSame('Installation', $ligne->description);
         $this->assertSame('120.00', $facture->total_ht);
     }
 
@@ -339,29 +360,26 @@ class FactureResourceTest extends TestCase
      * HT précalculée dans le test : 40 € TTC à 20 % de TVA et quantité 2
      * doit totaliser exactement 80,00 € TTC, jamais 79,99 €.
      */
-    public function test_saisir_le_prix_ttc_dune_ligne_sans_produit_totalise_exactement_a_quantite_2(): void
+    public function test_saisir_le_prix_ttc_dune_ligne_totalise_exactement_a_quantite_2(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-
         $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 35, 'taux_tva' => 20]);
 
-        $component = Livewire::test(CreateFacture::class)
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [['description' => 'Prestation', 'nature' => 'service', 'quantite' => 2, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-            ]);
-
+        $component = Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id]);
         $cle = array_key_first($component->get('data.lignes'));
-        $component->set("data.lignes.{$cle}.prix_unitaire_ttc", '40');
+        $component
+            ->set("data.lignes.{$cle}.produit_id", $produit->id)
+            ->set("data.lignes.{$cle}.quantite", '2')
+            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '40');
 
         $component->call('create')->assertHasNoFormErrors();
 
         $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
         $ligne = $facture->lignes->firstOrFail();
-
         $this->assertSame('80.00', $ligne->montant_ttc);
         $this->assertSame('80.00', $facture->total_ttc);
     }
@@ -544,36 +562,25 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * Le prix tapé (HT ou TTC) est gardé tel quel, l'autre en est la
-     * conversion au centime, et la ligne multiplie séparément HT et TTC par
-     * la quantité -- quel que soit le client. Retaper l'autre prix le fait
-     * à son tour garder tel quel.
+     * Le PU TTC tapé est gardé tel quel, le PU HT en est la conversion au
+     * centime, et la ligne multiplie séparément HT et TTC par la quantité.
      */
-    public function test_le_dernier_prix_saisi_sur_une_ligne_est_garde_tel_quel(): void
+    public function test_le_pu_ttc_saisi_est_garde_tel_quel(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-
         $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20]);
 
-        $component = Livewire::test(CreateFacture::class)
-            ->fillForm(['client_id' => $client->id]);
+        $component = Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id]);
         $cle = array_key_first($component->get('data.lignes'));
-
-        $component
-            ->set("data.lignes.{$cle}.description", 'Prestation')
-            ->set("data.lignes.{$cle}.nature", 'service')
-            ->set("data.lignes.{$cle}.quantite", '3')
-            ->set("data.lignes.{$cle}.prix_unitaire_ht", '8.33')
-            ->assertSet("data.lignes.{$cle}.prix_reference", 'ht')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '10.00')
-            ->assertSee('30,00 €')
-            ->assertSee('calculé à partir du PU HT saisi.');
 
         // 10,05 € TTC / 1,20 = 8,375 -> 8,38 € HT.
         $component
+            ->set("data.lignes.{$cle}.produit_id", $produit->id)
+            ->set("data.lignes.{$cle}.quantite", '3')
             ->set("data.lignes.{$cle}.prix_unitaire_ttc", '10.05')
             ->assertSet("data.lignes.{$cle}.prix_reference", 'ttc')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '8.38')

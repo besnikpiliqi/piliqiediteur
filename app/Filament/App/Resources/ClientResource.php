@@ -7,8 +7,8 @@ use App\Domain\Contacts\Models\Client;
 use App\Filament\App\Resources\ClientResource\Pages;
 use Closure;
 use Filament\Forms\Components\Component;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Section;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -36,7 +36,7 @@ class ClientResource extends Resource
 
     /**
      * $get('type_client') renvoie l'instance de l'enum (pas sa valeur
-     * scalaire) une fois le Select "type_client" live interagi -- état
+     * scalaire) une fois le choix "type_client" live interagi -- état
      * "live" oblige -- d'où la normalisation ici : une comparaison directe
      * à TypeClient::Professionnel->value resterait silencieusement
      * toujours fausse dès qu'un utilisateur change réellement la valeur.
@@ -49,6 +49,22 @@ class ClientResource extends Resource
 
             return $type === TypeClient::Professionnel->value;
         };
+    }
+
+    /**
+     * Deux boutons côte à côte plutôt qu'un menu déroulant : un clic au
+     * lieu de deux pendant une vente.
+     */
+    private static function champTypeClient(): Radio
+    {
+        return Radio::make('type_client')
+            ->label('Type de client')
+            ->options(TypeClient::class)
+            ->inline()
+            ->inlineLabel(false)
+            ->default(TypeClient::Particulier)
+            ->required()
+            ->live();
     }
 
     /**
@@ -67,12 +83,7 @@ class ClientResource extends Resource
 
         return [
             TextInput::make('nom')->required()->maxLength(150)->columnSpanFull(),
-            Select::make('type_client')
-                ->label('Type de client')
-                ->options(TypeClient::class)
-                ->default(TypeClient::Particulier)
-                ->required()
-                ->live(),
+            self::champTypeClient(),
             TextInput::make('siret')->label('SIRET')->maxLength(14)->visible($visibleSiProfessionnel),
             TextInput::make('numero_tva')->label('N° TVA intracommunautaire')->maxLength(20)->visible($visibleSiProfessionnel),
             TextInput::make('adresse')->maxLength(255)->columnSpanFull()->visible($visibleSiProfessionnel),
@@ -90,12 +101,7 @@ class ClientResource extends Resource
         return $form->schema([
             Section::make('Identité')->schema([
                 TextInput::make('nom')->required()->maxLength(150)->columnSpanFull(),
-                Select::make('type_client')
-                    ->label('Type de client')
-                    ->options(TypeClient::class)
-                    ->default(TypeClient::Particulier)
-                    ->required()
-                    ->live(),
+                self::champTypeClient(),
                 TextInput::make('siret')
                     ->label('SIRET')
                     ->maxLength(14)

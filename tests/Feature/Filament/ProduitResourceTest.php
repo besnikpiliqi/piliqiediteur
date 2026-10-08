@@ -2,8 +2,12 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -141,5 +145,76 @@ class ProduitResourceTest extends TestCase
         $produit = Produit::factory()->create(['prix_achat_ht' => 8.335]);
 
         $this->assertEquals(8.34, DB::table('produits')->where('id', $produit->id)->value('prix_achat_ht'));
+    }
+
+    /**
+     * Un produit reçu sur une facture d'achat affiche le fournisseur chez
+     * qui il vient d'être acheté.
+     */
+    public function test_la_fiche_produit_affiche_le_fournisseur_de_sa_facture_dachat(): void
+    {
+        $this->connecterProprietaire();
+        $fournisseur = Fournisseur::factory()->create();
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit' => ['nom' => 'Câble USB-C', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 0.47],
+        ]);
+        app(ValiderFactureAchatAction::class)->handle($factureAchat);
+
+        Livewire::test(EditProduit::class, ['record' => Produit::query()->sole()->getRouteKey()])
+            ->assertFormSet(['fournisseur_id' => $fournisseur->id, 'prix_achat_ht' => '0.47']);
+    }
+
+    /**
+     * Ce que le fournisseur dit d'un produit reçu par API (référence, nom,
+     * fournisseur, prix d'achat) reste affiché mais figé ; le magasin garde
+     * la main sur son prix de vente.
+     */
+    public function test_un_produit_recu_par_api_garde_ce_que_son_fournisseur_en_dit(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Ecran', 'prix_vente_ttc' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['source' => SourceFactureAchat::Api]);
+
+        $component = Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()]);
+
+        foreach (['reference', 'nom', 'code_barres', 'fournisseur_id', 'prix_achat_ht'] as $champ) {
+            $component->assertFormFieldIsDisabled($champ);
+        }
+
+        $component
+            ->assertFormFieldIsEnabled('prix_vente_ttc')
+            ->fillForm(['prix_vente_ttc' => 110])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(['Ecran', '110.00'], [$produit->fresh()->nom, $produit->fresh()->prix_vente_ttc]);
+    }
+
+    public function test_un_produit_saisi_a_la_main_reste_entierement_modifiable(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Ecran']);
+        app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->assertFormFieldIsEnabled('nom')
+            ->fillForm(['nom' => 'Écran OLED'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('Écran OLED', $produit->fresh()->nom);
+    }
+
+    public function test_une_reference_deja_prise_est_refusee(): void
+    {
+        $this->connecterProprietaire();
+        Produit::factory()->create(['reference' => 'ECR-1']);
+
+        Livewire::test(CreateProduit::class)
+            ->fillForm(['reference' => 'ECR-1', 'nom' => 'Autre écran', 'prix_achat_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
+            ->call('create')
+            ->assertHasFormErrors(['reference' => 'unique']);
+
+        $this->assertSame(1, Produit::query()->count());
     }
 }

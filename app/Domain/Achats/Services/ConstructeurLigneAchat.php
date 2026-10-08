@@ -1,0 +1,164 @@
+<?php
+
+namespace App\Domain\Achats\Services;
+
+use App\Domain\Achats\Enums\SourceFactureAchat;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Enums\PrixReference;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\QuantiteEntiere;
+use App\Domain\Facturation\Services\ResolveurPrixLigne;
+use Illuminate\Support\Arr;
+use InvalidArgumentException;
+use LogicException;
+
+/**
+ * Enregistre les lignes d'une facture d'achat et ses totaux, à la
+ * création comme à la modification (voir CreerFactureAchatAction et
+ * ModifierFactureAchatAction).
+ *
+ * Chaque ligne reçoit un produit du catalogue, jamais une ligne libre : la
+ * traçabilité de l'avoir fournisseur (voir LigneAchat) n'a de sens que
+ * pour un produit suivi. C'est un produit existant (produit_id), dont la
+ * fiche peut être corrigée au passage, ou un nouveau produit créé avec la
+ * facture et rattaché à son fournisseur -- dans la même transaction que la
+ * facture : une saisie abandonnée ne laisse aucun produit derrière elle.
+ *
+ * Le prix d'achat de la ligne et le prix de vente du produit sont deux
+ * prix distincts : l'un ne recalcule jamais l'autre.
+ */
+class ConstructeurLigneAchat
+{
+    /**
+     * Ce qu'une ligne peut dire de son produit, sous sa clé "produit".
+     */
+    public const ATTRIBUTS_DU_PRODUIT = [
+        'reference',
+        'code_barres',
+        'nom',
+        'taille',
+        'couleur',
+        'prix_vente_ttc',
+        'taux_tva',
+        'suivi_stock',
+        'seuil_alerte',
+    ];
+
+    /**
+     * Ce qu'une ligne peut effacer de la fiche de son produit ; un autre
+     * attribut laissé vide garde sa valeur (ou prend sa valeur par défaut
+     * pour un nouveau produit).
+     */
+    private const ATTRIBUTS_EFFACABLES = ['code_barres', 'taille', 'couleur'];
+
+    public function __construct(
+        private readonly CalculateurLigne $calculateur,
+        private readonly ResolveurPrixLigne $resolveurPrix,
+    ) {}
+
+    /**
+     * @param  list<array{produit_id?: int|string|null, produit?: array<string, mixed>, quantite: int|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}>  $lignes
+     * @return list<LigneAchat>
+     */
+    public function enregistrer(FactureAchat $factureAchat, array $lignes): array
+    {
+        if ($lignes === []) {
+            throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
+        }
+
+        $lignesCreees = [];
+
+        foreach (array_values($lignes) as $ordre => $donnees) {
+            $lignesCreees[] = $this->enregistrerUneLigne($factureAchat, $donnees, $ordre);
+        }
+
+        $factureAchat->forceFill($this->calculateur->totaliser(array_map(
+            fn (LigneAchat $ligne): array => $ligne->only(['montant_ht', 'montant_tva', 'montant_ttc']),
+            $lignesCreees,
+        )))->save();
+
+        return $lignesCreees;
+    }
+
+    /**
+     * @param  array<string, mixed>  $donnees
+     */
+    private function enregistrerUneLigne(FactureAchat $factureAchat, array $donnees, int $ordre): LigneAchat
+    {
+        $produit = $this->produitDeLaLigne($factureAchat, $donnees);
+        $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
+        $tauxTva = (float) ($donnees['taux_tva'] ?? $produit->taux_tva);
+        $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
+        // Un fournisseur facture le plus souvent en HT (prix d'achat
+        // catalogue), mais un ticket de magasin se saisit en TTC : le prix
+        // saisi fait foi, voir PrixReference.
+        $prix = $this->resolveurPrix->resoudre($donnees, PrixReference::Ht, $tauxTva, (float) $produit->prix_achat_ht);
+
+        if (! $produit->exists) {
+            // Son coût réel (remise et escompte déduits) le remplacera à la
+            // validation de la facture, voir LigneAchat::coutUnitaireHt().
+            $produit->prix_achat_ht = $prix['prix_unitaire_ht'];
+        }
+
+        if (! $produit->exists || $produit->isDirty()) {
+            $produit->save();
+        }
+
+        $montants = $this->calculateur->calculer($prix['prix_unitaire_ht'], $prix['prix_unitaire_ttc'], $quantite, $remise);
+
+        return $factureAchat->lignes()->create([
+            'produit_id' => $produit->id,
+            'description' => $produit->nom,
+            'reference' => $produit->reference,
+            'quantite' => $quantite,
+            ...$prix,
+            'taux_tva' => $tauxTva,
+            'remise_pourcentage' => $remise,
+            'ordre' => $ordre,
+            ...$montants,
+        ]);
+    }
+
+    /**
+     * Le produit existant, avec les corrections apportées depuis la ligne,
+     * ou le nouveau produit -- pas encore enregistré dans les deux cas.
+     *
+     * @param  array<string, mixed>  $donnees
+     */
+    private function produitDeLaLigne(FactureAchat $factureAchat, array $donnees): Produit
+    {
+        $attributs = array_filter(
+            Arr::only($donnees['produit'] ?? [], self::ATTRIBUTS_DU_PRODUIT),
+            fn (mixed $valeur, string $attribut): bool => filled($valeur) || in_array($attribut, self::ATTRIBUTS_EFFACABLES, true),
+            ARRAY_FILTER_USE_BOTH,
+        );
+
+        if (filled($donnees['produit_id'] ?? null)) {
+            $produit = Produit::query()->findOrFail($donnees['produit_id']);
+            $produit->fill($attributs);
+
+            // Seule une autre facture récupérée automatiquement, donc la
+            // source elle-même, peut encore corriger ce que le fournisseur
+            // dit du produit.
+            if ($factureAchat->source !== SourceFactureAchat::Api
+                && $produit->isDirty(Produit::ATTRIBUTS_DU_FOURNISSEUR)
+                && $produit->vientDUneFactureAchatApi()) {
+                throw new LogicException("Le produit « {$produit->getOriginal('nom')} » vient d'une facture d'achat récupérée automatiquement : ses informations fournisseur ne se modifient pas.");
+            }
+
+            return $produit;
+        }
+
+        if (! isset($attributs['nom'])) {
+            throw new InvalidArgumentException('Chaque ligne d\'une facture d\'achat doit référencer un produit du catalogue, existant ou nouveau.');
+        }
+
+        return new Produit([
+            'taux_tva' => $donnees['taux_tva'] ?? 20,
+            ...$attributs,
+            'fournisseur_id' => $factureAchat->fournisseur_id,
+        ]);
+    }
+}

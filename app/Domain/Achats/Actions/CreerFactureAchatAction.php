@@ -3,81 +3,30 @@
 namespace App\Domain\Achats\Actions;
 
 use App\Domain\Achats\Models\FactureAchat;
-use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Contacts\Models\Fournisseur;
-use App\Domain\Facturation\Enums\PrixReference;
-use App\Domain\Facturation\Services\CalculateurLigne;
-use App\Domain\Facturation\Services\QuantiteEntiere;
-use App\Domain\Facturation\Services\ResolveurPrixLigne;
 use Illuminate\Support\Facades\DB;
-use InvalidArgumentException;
 
 /**
- * Contrairement aux documents de vente, chaque ligne référence
- * obligatoirement un produit du catalogue (pas de ligne libre) : la
- * traçabilité pour l'avoir fournisseur (voir LigneAchat) n'a de sens que
- * pour un produit suivi.
+ * Enregistre une facture d'achat en brouillon, sans aucun impact sur le
+ * stock (voir ValiderFactureAchatAction). Ses lignes, et les produits
+ * qu'elles créent ou corrigent, sont enregistrés par
+ * ConstructeurLigneAchat.
  */
 class CreerFactureAchatAction
 {
-    public function __construct(
-        private readonly CalculateurLigne $calculateurLigne,
-        private readonly ResolveurPrixLigne $resolveurPrix,
-    ) {}
+    public function __construct(private readonly ConstructeurLigneAchat $constructeurLignes) {}
 
     /**
-     * @param  list<array{produit_id: int|string, quantite: int|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|null, taux_tva?: float|string, remise_pourcentage?: float|string, description?: string, reference?: string}>  $lignes
+     * @param  list<array<string, mixed>>  $lignes  voir ConstructeurLigneAchat::enregistrer()
      * @param  array<string, mixed>  $attributs
      */
     public function handle(Fournisseur $fournisseur, array $lignes, array $attributs = []): FactureAchat
     {
-        if ($lignes === []) {
-            throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
-        }
-
         return DB::transaction(function () use ($fournisseur, $lignes, $attributs) {
             $factureAchat = FactureAchat::create([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]);
 
-            $lignesConstruites = [];
-
-            foreach (array_values($lignes) as $index => $donnees) {
-                if (! isset($donnees['produit_id'])) {
-                    throw new InvalidArgumentException('Chaque ligne d\'une facture d\'achat doit référencer un produit du catalogue.');
-                }
-
-                $produit = Produit::query()->findOrFail($donnees['produit_id']);
-                $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
-                $tauxTva = (float) ($donnees['taux_tva'] ?? $produit->taux_tva);
-                $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
-                // Un fournisseur facture le plus souvent en HT (prix d'achat
-                // catalogue), mais un ticket de magasin se saisit en TTC :
-                // le prix saisi fait foi, voir PrixReference.
-                $prix = $this->resolveurPrix->resoudre($donnees, PrixReference::Ht, $tauxTva, (float) $produit->prix_achat_ht);
-
-                $montants = $this->calculateurLigne->calculer(
-                    $prix['prix_unitaire_ht'],
-                    $prix['prix_unitaire_ttc'],
-                    $quantite,
-                    $remise,
-                );
-
-                $ligne = [
-                    'produit_id' => $produit->id,
-                    'description' => $donnees['description'] ?? $produit->nom,
-                    'reference' => $donnees['reference'] ?? $produit->reference,
-                    'quantite' => $quantite,
-                    ...$prix,
-                    'taux_tva' => $tauxTva,
-                    'remise_pourcentage' => $remise,
-                    'ordre' => $index,
-                    ...$montants,
-                ];
-
-                $factureAchat->lignes()->create($ligne);
-                $lignesConstruites[] = $montants;
-            }
-
-            $factureAchat->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
+            $this->constructeurLignes->enregistrer($factureAchat, $lignes);
 
             return $factureAchat->fresh('lignes');
         });

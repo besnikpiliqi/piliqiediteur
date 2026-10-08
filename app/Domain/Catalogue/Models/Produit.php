@@ -2,6 +2,8 @@
 
 namespace App\Domain\Catalogue\Models;
 
+use App\Domain\Achats\Enums\SourceFactureAchat;
+use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -10,11 +12,13 @@ use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Database\Factories\ProduitFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use InvalidArgumentException;
 
 class Produit extends Model
 {
@@ -42,12 +46,29 @@ class Produit extends Model
     // StockLedgerService est autorisé à la modifier, via les mouvements de
     // stock. Toute autre écriture casserait la cohérence du ledger.
 
+    /**
+     * Ce que le fournisseur dit du produit : figé dès que le produit est
+     * reçu sur une facture d'achat récupérée automatiquement (voir
+     * vientDUneFactureAchatApi()).
+     */
+    public const ATTRIBUTS_DU_FOURNISSEUR = [
+        'reference',
+        'code_barres',
+        'nom',
+        'taille',
+        'couleur',
+        'fournisseur_id',
+        'prix_achat_ht',
+    ];
+
     protected static function booted(): void
     {
         // saving() (pas creating()) : couvre aussi bien la création qu'une
         // édition où la référence serait vidée -- la colonne reste NOT
         // NULL en base, jamais question de la laisser vide après coup.
         static::saving(function (Produit $produit) {
+            $produit->verifierQueSaReferenceEstLibre();
+
             // La référence reste libre à la saisie (manuelle ou future
             // intégration API) : si elle n'est pas fournie, elle est
             // générée automatiquement, par magasin, jamais remise à zéro
@@ -95,6 +116,61 @@ class Produit extends Model
     public function mouvementsStock(): HasMany
     {
         return $this->hasMany(MouvementStock::class);
+    }
+
+    public function lignesAchat(): HasMany
+    {
+        return $this->hasMany(LigneAchat::class);
+    }
+
+    /**
+     * Un produit reçu sur une facture d'achat récupérée automatiquement
+     * (voir SourceFactureAchat) garde ce que son fournisseur en dit (voir
+     * ATTRIBUTS_DU_FOURNISSEUR) : une erreur ne pourrait venir que de la
+     * source elle-même, jamais d'une saisie locale -- comme pour la facture
+     * (voir FactureAchat::estModifiable()). Le magasin reste maître de ce
+     * qui ne regarde que lui : prix de vente, TVA, suivi du stock.
+     */
+    public function vientDUneFactureAchatApi(): bool
+    {
+        return $this->exists && $this->lignesAchat()
+            ->whereHas('factureAchat', fn (Builder $factureAchat) => $factureAchat->where('source', SourceFactureAchat::Api))
+            ->exists();
+    }
+
+    /**
+     * À la réception d'une facture d'achat validée : le produit retient le
+     * dernier coût réellement payé, remise et escompte déduits (voir
+     * LigneAchat::coutUnitaireHt() -- le seul coût suivi, pas de coût moyen
+     * pondéré par lot), et le fournisseur chez qui il vient d'être acheté.
+     */
+    public function enregistrerUnAchat(LigneAchat $ligne): void
+    {
+        $this->forceFill([
+            'prix_achat_ht' => $ligne->coutUnitaireHt(),
+            'fournisseur_id' => $ligne->factureAchat->fournisseur_id,
+        ])->save();
+    }
+
+    /**
+     * La base refuse deux produits du magasin avec la même référence
+     * (archivés compris) : mieux vaut le dire clairement qu'échouer sur
+     * l'index unique.
+     */
+    private function verifierQueSaReferenceEstLibre(): void
+    {
+        if (blank($this->reference) || ! $this->isDirty('reference')) {
+            return;
+        }
+
+        $dejaPrise = static::withTrashed()
+            ->where('reference', $this->reference)
+            ->when($this->exists, fn (Builder $produits) => $produits->whereKeyNot($this->getKey()))
+            ->exists();
+
+        if ($dejaPrise) {
+            throw new InvalidArgumentException("La référence « {$this->reference} » est déjà celle d'un autre produit.");
+        }
     }
 
     /**

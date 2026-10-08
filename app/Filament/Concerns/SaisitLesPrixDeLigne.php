@@ -15,48 +15,37 @@ use Filament\Forms\Set;
 use InvalidArgumentException;
 
 /**
- * PU HT, PU TTC et TVA d'une ligne de document (vente comme achat) : les
- * deux prix restent visibles, et c'est le dernier saisi qui fait foi pour
- * le calcul de la ligne (voir PrixReference) -- l'autre n'en est que la
- * conversion au centime. Une vente ne se saisit qu'en TTC : son PU HT
- * reste affiché mais n'est pas modifiable.
+ * Prix et totaux d'une ligne de document, à l'écran : calculés par le même
+ * résolveur et le même calculateur que l'enregistrement réel (voir
+ * montantsDeLigneSaisie()).
  */
 trait SaisitLesPrixDeLigne
 {
     /**
+     * PU HT, PU TTC et TVA d'une ligne de vente : seul le PU TTC se saisit
+     * (le prix affiché au client), le PU HT n'en est que la conversion au
+     * centime, affichée à côté.
+     *
      * @return array<Component>
      */
-    protected static function champsPrixDeLigne(PrixReference $referenceParDefaut, bool $prixHtSaisissable = true): array
+    protected static function champsPrixDeLigne(): array
     {
+        $referenceParDefaut = PrixReference::Ttc;
+
         return [
             Hidden::make('prix_reference')->default($referenceParDefaut->value),
             TextInput::make('prix_unitaire_ht')
                 ->label('PU HT')
                 ->numeric()
-                ->saisieEnDirect()
-                // Une ligne de service (voir DevisResource::ligneSchema()) se
-                // saisit uniquement en TTC.
+                // Une ligne de service (voir DevisResource::ligneSchema()) ne
+                // montre que son TTC.
                 ->visible(fn (Get $get): bool => blank($get('service_id')))
-                ->disabled(! $prixHtSaisissable)
-                ->required(fn (Get $get) => self::referenceDeLigne($get, $referenceParDefaut) === PrixReference::Ht)
-                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
-                    if (blank($state)) {
-                        return;
-                    }
-
-                    $set('prix_reference', PrixReference::Ht->value);
-
-                    try {
-                        $set('prix_unitaire_ttc', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireTtcDepuisHt((float) $state, self::tauxTvaDeLigne($get))));
-                    } catch (InvalidArgumentException) {
-                        // Taux de TVA invalide (voir sa validation) : rien à convertir.
-                    }
-                }),
+                ->disabled(),
             TextInput::make('prix_unitaire_ttc')
                 ->label('PU TTC')
                 ->numeric()
                 ->saisieEnDirect()
-                ->required(fn (Get $get) => self::referenceDeLigne($get, $referenceParDefaut) === PrixReference::Ttc)
+                ->required()
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
                     if (blank($state)) {
                         // Sur une ligne de service, le PU HT est caché : s'il

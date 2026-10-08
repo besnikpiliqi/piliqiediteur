@@ -100,20 +100,7 @@ class DevisResource extends Resource
                 ->label('Produit')
                 ->helperText('Recherchez par nom, référence, ou scannez le code-barres.')
                 ->searchable()
-                // Recherche côté serveur plutôt qu'une liste statique
-                // préchargée : inclut le code-barres, pour qu'une
-                // douchette USB (qui se contente de "taper" les chiffres
-                // scannés dans le champ actif) retrouve le produit aussi
-                // vite qu'en tapant son nom.
-                ->getSearchResultsUsing(fn (string $search) => Produit::query()
-                    ->where('actif', true)
-                    ->where(fn ($query) => $query
-                        ->where('nom', 'like', "%{$search}%")
-                        ->orWhere('reference', 'like', "%{$search}%")
-                        ->orWhere('code_barres', 'like', "%{$search}%"))
-                    ->limit(50)
-                    ->get()
-                    ->mapWithKeys(fn (Produit $produit) => [$produit->id => "{$produit->nom} ({$produit->reference})"]))
+                ->getSearchResultsUsing(fn (string $search): array => ProduitResource::rechercher(Produit::query()->where('actif', true), $search))
                 ->getOptionLabelUsing(fn ($value) => Produit::find($value)?->nom)
                 ->required(fn (Get $get): bool => ! self::estUneLigneDeService($get))
                 ->live()
@@ -143,7 +130,7 @@ class DevisResource extends Resource
             // ligne : le total (et, dans la Caisse, la monnaie à rendre) se
             // met à jour pendant la saisie, pas seulement au clic ailleurs.
             TextInput::make('quantite')->integer()->minValue(1)->required()->default(1)->saisieEnDirect(),
-            ...self::champsPrixDeLigne(PrixReference::Ttc, prixHtSaisissable: false),
+            ...self::champsPrixDeLigne(),
             TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->minValue(0)->maxValue(100)->default(0)->saisieEnDirect(),
             self::totalDeLigne(PrixReference::Ttc),
         ];

@@ -11,14 +11,11 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\PrixReference;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
+use App\Filament\Concerns\AjouteDesLignesDAchat;
 use App\Filament\Concerns\GereLesExceptionsMetier;
-use App\Filament\Concerns\SaisitLesPrixDeLigne;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
-use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
@@ -28,7 +25,6 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
-use Filament\Forms\Set;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
@@ -47,8 +43,8 @@ use Illuminate\Database\Eloquent\Collection;
  */
 class FactureAchatResource extends Resource
 {
+    use AjouteDesLignesDAchat;
     use GereLesExceptionsMetier;
-    use SaisitLesPrixDeLigne;
     use SaisitUneQuantiteRetournee;
 
     protected static ?string $model = FactureAchat::class;
@@ -67,17 +63,14 @@ class FactureAchatResource extends Resource
     {
         return $form->schema([
             FormSection::make('Facture d\'achat')->schema([
+                // Un fournisseur se crée dans sa propre page (voir
+                // FournisseurResource), jamais depuis une facture d'achat.
                 Select::make('fournisseur_id')
                     ->label('Fournisseur')
                     ->relationship('fournisseur', 'nom')
                     ->searchable()
                     ->preload()
-                    ->required()
-                    ->createOptionForm([
-                        TextInput::make('nom')->required()->maxLength(150),
-                        TextInput::make('siret')->label('SIRET')->maxLength(14),
-                    ])
-                    ->createOptionModalHeading('Nouveau fournisseur'),
+                    ->required(),
                 TextInput::make('numero_fournisseur')
                     ->label('N° de facture du fournisseur')
                     ->helperText('Le numéro propre au fournisseur, pour le rapprochement -- distinct de notre numéro interne.')
@@ -94,61 +87,8 @@ class FactureAchatResource extends Resource
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
 
-            FormSection::make('Lignes')->schema([
-                Repeater::make('lignes')
-                    ->label('')
-                    ->schema([
-                        Select::make('produit_id')
-                            ->label('Produit')
-                            ->helperText('Recherchez par nom, référence, ou scannez le code-barres.')
-                            ->searchable()
-                            ->required()
-                            ->getSearchResultsUsing(fn (string $search) => Produit::query()
-                                ->where(fn ($query) => $query
-                                    ->where('nom', 'like', "%{$search}%")
-                                    ->orWhere('reference', 'like', "%{$search}%")
-                                    ->orWhere('code_barres', 'like', "%{$search}%"))
-                                ->limit(50)
-                                ->get()
-                                ->mapWithKeys(fn (Produit $produit) => [$produit->id => "{$produit->nom} ({$produit->reference})"]))
-                            ->getOptionLabelUsing(fn ($value) => Produit::find($value)?->nom)
-                            // Form explicitement modelé sur Produit : voir
-                            // le commentaire équivalent dans
-                            // DevisResource::ligneSchema().
-                            ->createOptionForm(fn (Form $form): Form => $form
-                                ->model(Produit::class)
-                                ->schema(ProduitResource::creationRapideSchema()))
-                            ->createOptionModalHeading('Nouveau produit')
-                            ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::PRODUIT_CREATE)))
-                            ->createOptionUsing(fn (array $data) => Produit::create($data)->getKey())
-                            ->live()
-                            ->columnSpan(2)
-                            ->afterStateUpdated(function (?int $state, Set $set) {
-                                $produit = $state ? Produit::find($state) : null;
-
-                                if ($produit === null) {
-                                    return;
-                                }
-
-                                $set('description', $produit->nom);
-                                $set('reference', $produit->reference);
-                                $set('prix_unitaire_ht', (string) $produit->prix_achat_ht);
-                                $set('prix_unitaire_ttc', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireTtcDepuisHt((float) $produit->prix_achat_ht, (float) $produit->taux_tva)));
-                                $set('prix_reference', PrixReference::Ht->value);
-                                $set('taux_tva', self::pourcentageEnTexte($produit->taux_tva));
-                            }),
-                        TextInput::make('description')->required()->columnSpan(2),
-                        // live() et non live(onBlur: true) : le total de la
-                        // ligne se met à jour pendant la saisie.
-                        TextInput::make('quantite')->integer()->minValue(1)->required()->default(1)->saisieEnDirect(),
-                        ...self::champsPrixDeLigne(PrixReference::Ht),
-                        TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->minValue(0)->maxValue(100)->default(0)->saisieEnDirect(),
-                        self::totalDeLigne(PrixReference::Ht),
-                    ])
-                    ->columns(9)
-                    ->defaultItems(1)
-                    ->addActionLabel('Ajouter une ligne')
-                    ->required(),
+            FormSection::make('Produits reçus')->schema([
+                ...self::lignesDAchat(),
                 self::totauxDuDocument(PrixReference::Ht),
             ]),
         ]);

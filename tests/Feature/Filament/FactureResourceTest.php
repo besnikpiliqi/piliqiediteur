@@ -402,7 +402,7 @@ class FactureResourceTest extends TestCase
 
         $html = Livewire::test(CreateFacture::class)->html();
 
-        foreach (['quantite', 'prix_unitaire_ht', 'prix_unitaire_ttc', 'taux_tva', 'remise_pourcentage'] as $champ) {
+        foreach (['quantite', 'prix_unitaire_ttc', 'taux_tva', 'remise_pourcentage'] as $champ) {
             $this->assertMatchesRegularExpression(
                 '/wire:model\.live\.unintrusive="data\.lignes\.[^"]+\.'.$champ.'"/',
                 $html,

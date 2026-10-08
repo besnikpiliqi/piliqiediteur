@@ -1,0 +1,326 @@
+<?php
+
+namespace App\Filament\Concerns;
+
+use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Achats\Services\ConstructeurLigneAchat;
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Facturation\Enums\PrixReference;
+use App\Filament\App\Resources\ProduitResource;
+use Filament\Forms\Components\Actions;
+use Filament\Forms\Components\Actions\Action;
+use Filament\Forms\Components\Component;
+use Filament\Forms\Components\Field;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Section;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Forms\Get;
+use Filament\Forms\Set;
+use Filament\Support\Enums\MaxWidth;
+
+/**
+ * Les lignes d'une facture d'achat : chacune se saisit dans un formulaire
+ * complet (le produit, existant ou nouveau, puis ce qu'il coûte sur cette
+ * facture et ce qu'il se vendra en magasin) et apparaît en lecture seule
+ * dans la facture. Le bouton « Modifier » d'une ligne rouvre le même
+ * formulaire.
+ *
+ * Prix d'achat HT et prix de vente TTC sont deux champs distincts, aucun
+ * ne recalcule l'autre. Le produit n'est créé ou corrigé qu'à
+ * l'enregistrement de la facture, avec elle (voir ConstructeurLigneAchat) :
+ * l'état d'une ligne porte donc le produit sous sa clé "produit".
+ */
+trait AjouteDesLignesDAchat
+{
+    use SaisitLesPrixDeLigne;
+
+    private const PRODUIT_EXISTANT = 'existant';
+
+    private const NOUVEAU_PRODUIT = 'nouveau';
+
+    /**
+     * @return array<Component>
+     */
+    public static function lignesDAchat(): array
+    {
+        return [
+            Repeater::make('lignes')
+                ->label('')
+                ->schema(self::ligneDAchatSchema())
+                ->columns(5)
+                ->defaultItems(0)
+                ->itemLabel(fn (array $state): ?string => $state['produit']['nom'] ?? null)
+                // Remplacé par le bouton ci-dessous, qui ouvre le formulaire
+                // de ligne.
+                ->addable(false)
+                ->extraItemActions([self::actionModifierLaLigne()])
+                ->required()
+                ->validationMessages(['required' => 'Ajoutez au moins un produit à la facture.']),
+            Actions::make([self::actionAjouterUnProduit()])->alignCenter(),
+        ];
+    }
+
+    /**
+     * Une ligne ne se modifie que par son formulaire : ses champs restent
+     * affichés en lecture seule, mais sont bien enregistrés.
+     *
+     * @return array<Component>
+     */
+    private static function ligneDAchatSchema(): array
+    {
+        return [
+            Hidden::make('produit_id'),
+            ...array_map(
+                fn (string $champ): Hidden => Hidden::make("produit.{$champ}"),
+                array_diff(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT, ['prix_vente_ttc']),
+            ),
+            TextInput::make('quantite')->label('Quantité')->disabled()->dehydrated(),
+            TextInput::make('prix_unitaire_ht')->label('Prix d\'achat HT')->suffix('€')->disabled()->dehydrated(),
+            TextInput::make('remise_pourcentage')->label('Remise')->suffix('%')->disabled()->dehydrated(),
+            TextInput::make('taux_tva')->label('TVA')->suffix('%')->disabled()->dehydrated(),
+            TextInput::make('produit.prix_vente_ttc')->label('Prix de vente TTC')->suffix('€')->disabled()->dehydrated(),
+            self::totalDeLigne(PrixReference::Ht),
+        ];
+    }
+
+    private static function actionAjouterUnProduit(): Action
+    {
+        return Action::make('ajouterUnProduit')
+            ->label('Ajouter un produit')
+            ->icon('heroicon-m-plus')
+            ->modalHeading('Ajouter un produit à la facture')
+            ->modalSubmitActionLabel('Ajouter à la facture')
+            ->modalWidth(MaxWidth::FourExtraLarge)
+            ->form(self::formulaireDeLigne())
+            ->action(function (array $data, HasForms $livewire): void {
+                /** @var Repeater $lignes */
+                $lignes = $livewire->getForm('form')->getComponent('data.lignes');
+
+                $lignes->state([...($lignes->getState() ?? []), $lignes->generateUuid() => self::ligneDepuisLeFormulaire($data)]);
+                $lignes->callAfterStateUpdated();
+            });
+    }
+
+    private static function actionModifierLaLigne(): Action
+    {
+        return Action::make('modifierLaLigne')
+            ->label('Modifier')
+            ->icon('heroicon-m-pencil-square')
+            ->color('gray')
+            ->modalHeading('Modifier la ligne')
+            ->modalSubmitActionLabel('Enregistrer la ligne')
+            ->modalWidth(MaxWidth::FourExtraLarge)
+            ->fillForm(fn (array $arguments, Repeater $component): array => self::formulaireDepuisLaLigne($component->getRawItemState($arguments['item'])))
+            ->form(self::formulaireDeLigne())
+            ->action(function (array $arguments, array $data, Repeater $component): void {
+                $etat = $component->getState();
+                $etat[$arguments['item']] = self::ligneDepuisLeFormulaire($data);
+
+                $component->state($etat);
+                $component->callAfterStateUpdated();
+            });
+    }
+
+    /**
+     * Les champs du produit sont ceux de sa fiche (voir ProduitResource) et
+     * suivent les mêmes droits : créer un produit demande de pouvoir créer
+     * des produits, corriger sa fiche de pouvoir la modifier. Ceux qui
+     * viennent de son fournisseur restent figés pour un produit reçu sur une
+     * facture récupérée automatiquement (voir
+     * Produit::vientDUneFactureAchatApi()).
+     *
+     * @return array<Component>
+     */
+    private static function formulaireDeLigne(): array
+    {
+        $produitSelectionne = fn (Get $get): ?Produit => filled($get('produit_id')) ? Produit::find($get('produit_id')) : null;
+        $produitChoisi = fn (Get $get): bool => $get('origine') === self::NOUVEAU_PRODUIT || filled($get('produit_id'));
+        $ficheNonModifiable = fn (Get $get): bool => ($produit = $produitSelectionne($get)) !== null && ! auth()->user()->can('update', $produit);
+        $figeParSonFournisseur = fn (Get $get): bool => $produitSelectionne($get)?->vientDUneFactureAchatApi() ?? false;
+        $identificationNonModifiable = fn (Get $get): bool => $ficheNonModifiable($get) || $figeParSonFournisseur($get);
+
+        return [
+            Section::make('Produit')->schema([
+                Radio::make('origine')
+                    ->label('')
+                    ->options([
+                        self::PRODUIT_EXISTANT => 'Produit du catalogue',
+                        self::NOUVEAU_PRODUIT => 'Nouveau produit',
+                    ])
+                    ->inline()
+                    ->default(self::PRODUIT_EXISTANT)
+                    ->required()
+                    ->visible(fn (): bool => auth()->user()->can(PermissionRegistry::PRODUIT_CREATE))
+                    ->live()
+                    ->columnSpanFull()
+                    // Changer d'avis repart d'une fiche vierge : un nouveau
+                    // produit ne doit rien garder de celui choisi avant.
+                    ->afterStateUpdated(fn (Set $set) => self::remplirDepuisLeProduit(null, $set)),
+                Select::make('produit_id')
+                    ->label('Produit')
+                    ->helperText('Recherchez par nom, référence, ou scannez le code-barres.')
+                    ->searchable()
+                    ->getSearchResultsUsing(fn (string $search): array => ProduitResource::rechercher(Produit::query(), $search))
+                    ->getOptionLabelUsing(fn ($value): ?string => Produit::find($value)?->nom)
+                    ->required()
+                    ->visible(fn (Get $get): bool => $get('origine') !== self::NOUVEAU_PRODUIT)
+                    ->live()
+                    ->columnSpanFull()
+                    ->afterStateUpdated(fn (int|string|null $state, Set $set) => self::remplirDepuisLeProduit(filled($state) ? Produit::find($state) : null, $set)),
+                Placeholder::make('fiche_non_modifiable')
+                    ->label('')
+                    ->content(fn (Get $get): string => $figeParSonFournisseur($get)
+                        ? 'Reçu sur une facture d\'achat récupérée automatiquement : sa référence et son nom sont ceux du fournisseur.'
+                        : 'Vous ne pouvez pas modifier la fiche de ce produit : seule la ligne se modifie ici.')
+                    ->visible($identificationNonModifiable)
+                    ->columnSpanFull(),
+                ...array_map(
+                    fn (Field $champ): Field => $champ->visible($produitChoisi)->disabled($identificationNonModifiable),
+                    ProduitResource::champsIdentification($produitSelectionne),
+                ),
+            ])->columns(2),
+
+            Section::make('Prix')
+                ->visible($produitChoisi)
+                ->schema([
+                    TextInput::make('quantite')
+                        ->label('Quantité reçue')
+                        ->integer()
+                        ->minValue(1)
+                        ->required()
+                        ->default(1),
+                    TextInput::make('prix_unitaire_ht')
+                        ->label('Prix d\'achat HT')
+                        ->helperText('Le prix unitaire payé au fournisseur, avant remise.')
+                        ->numeric()
+                        ->minValue(0)
+                        ->prefix('€')
+                        ->required(),
+                    TextInput::make('remise_pourcentage')
+                        ->label('Remise du fournisseur')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(100)
+                        ->suffix('%')
+                        ->default(0),
+                    ...array_map(
+                        fn (Field $champ): Field => $champ->disabled($ficheNonModifiable),
+                        ProduitResource::prixVenteTtcSchema(),
+                    ),
+                ])->columns(3),
+
+            Section::make('Stock')
+                ->visible($produitChoisi)
+                ->schema(array_map(
+                    fn (Field $champ): Field => $champ->disabled($ficheNonModifiable),
+                    ProduitResource::champsSuiviDuStock(),
+                ))
+                ->columns(2),
+        ];
+    }
+
+    /**
+     * Les valeurs du produit choisi, ou une fiche vierge.
+     */
+    private static function remplirDepuisLeProduit(?Produit $produit, Set $set): void
+    {
+        if ($produit === null) {
+            $set('produit_id', null);
+        }
+
+        foreach (self::valeursDuProduit($produit) as $champ => $valeur) {
+            $set($champ, $valeur);
+        }
+
+        $set('prix_unitaire_ht', $produit === null ? null : self::prixEnTexte((float) $produit->prix_achat_ht));
+    }
+
+    /**
+     * La fiche du produit telle que le formulaire l'affiche ; les valeurs
+     * par défaut d'un nouveau produit sans produit.
+     *
+     * @return array<string, mixed>
+     */
+    private static function valeursDuProduit(?Produit $produit): array
+    {
+        return [
+            'reference' => $produit?->reference,
+            'code_barres' => $produit?->code_barres,
+            'nom' => $produit?->nom,
+            'taille' => $produit?->taille,
+            'couleur' => $produit?->couleur,
+            'prix_vente_ttc' => $produit === null ? null : self::prixEnTexte((float) $produit->prix_vente_ttc),
+            'taux_tva' => self::pourcentageEnTexte($produit->taux_tva ?? 20),
+            'suivi_stock' => $produit->suivi_stock ?? true,
+            'seuil_alerte' => $produit->seuil_alerte ?? 0,
+        ];
+    }
+
+    /**
+     * Les champs non modifiables de la fiche ne reviennent pas du
+     * formulaire : la ligne reprend alors ceux du produit.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private static function ligneDepuisLeFormulaire(array $data): array
+    {
+        $produit = filled($data['produit_id'] ?? null) ? Produit::find($data['produit_id']) : null;
+        $valeursDuProduit = [...($produit === null ? [] : self::valeursDuProduit($produit)), ...array_intersect_key($data, array_flip(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT))];
+        $valeursDuProduit['prix_vente_ttc'] = self::prixEnTexte((float) $valeursDuProduit['prix_vente_ttc']);
+
+        return [
+            'produit_id' => $produit?->id,
+            'produit' => $valeursDuProduit,
+            'quantite' => $data['quantite'],
+            'prix_unitaire_ht' => self::prixEnTexte((float) $data['prix_unitaire_ht']),
+            'remise_pourcentage' => $data['remise_pourcentage'] ?? 0,
+            // Le taux de la fiche s'applique aussi à cette ligne.
+            'taux_tva' => $valeursDuProduit['taux_tva'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $ligne
+     * @return array<string, mixed>
+     */
+    private static function formulaireDepuisLaLigne(array $ligne): array
+    {
+        return [
+            ...($ligne['produit'] ?? []),
+            'origine' => filled($ligne['produit_id'] ?? null) ? self::PRODUIT_EXISTANT : self::NOUVEAU_PRODUIT,
+            'produit_id' => $ligne['produit_id'] ?? null,
+            'quantite' => $ligne['quantite'] ?? 1,
+            'prix_unitaire_ht' => $ligne['prix_unitaire_ht'] ?? null,
+            'remise_pourcentage' => $ligne['remise_pourcentage'] ?? 0,
+            'taux_tva' => $ligne['taux_tva'] ?? ($ligne['produit']['taux_tva'] ?? 20),
+        ];
+    }
+
+    /**
+     * Une ligne déjà enregistrée, telle que la facture l'affiche à sa
+     * modification : le produit tel qu'il est aujourd'hui, la ligne telle
+     * qu'elle a été achetée.
+     *
+     * @return array<string, mixed>
+     */
+    public static function ligneDejaEnregistree(LigneAchat $ligne): array
+    {
+        return [
+            'produit_id' => $ligne->produit_id,
+            'produit' => $ligne->produit === null
+                ? ['nom' => $ligne->description, 'reference' => $ligne->reference]
+                : self::valeursDuProduit($ligne->produit),
+            'quantite' => $ligne->quantite,
+            'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
+            'remise_pourcentage' => self::pourcentageEnTexte($ligne->remise_pourcentage),
+            'taux_tva' => self::pourcentageEnTexte($ligne->taux_tva),
+        ];
+    }
+}

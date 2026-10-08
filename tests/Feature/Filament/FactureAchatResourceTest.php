@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
@@ -12,6 +13,7 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\App\Resources\FactureAchatResource\Pages\CreateFactureAchat;
@@ -98,40 +100,151 @@ class FactureAchatResourceTest extends TestCase
     }
 
     /**
-     * Un ticket d'achat (magasin, grande surface) affiche des prix TTC : le
-     * PU TTC saisi fait foi pour la ligne, le PU HT n'en est que la
-     * conversion -- même principe que sur une facture de vente.
+     * Bug rapporté par un magasin : 0,47 € HT de prix d'achat puis 10 € TTC
+     * de prix de vente, et la ligne passait à 8,33 € HT -- le prix de vente
+     * était pris pour le TTC de l'achat. Les deux prix se saisissent dans le
+     * formulaire de ligne, chacun dans son champ, et aucun ne recalcule
+     * l'autre.
      */
-    public function test_saisir_le_pu_ttc_dune_ligne_dachat_fait_foi_pour_son_calcul(): void
+    public function test_le_prix_de_vente_saisi_ne_change_jamais_le_prix_dachat(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
-
+        $this->connecterLeProprietaire();
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_achat_ht' => 20, 'taux_tva' => 20]);
 
         $component = Livewire::test(CreateFactureAchat::class)
-            ->fillForm(['fournisseur_id' => $fournisseur->id]);
-        $cle = array_key_first($component->get('data.lignes'));
+            ->fillForm(['fournisseur_id' => $fournisseur->id])
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
+                'origine' => 'nouveau',
+                'reference' => 'CBL-USBC',
+                'nom' => 'Câble USB-C',
+                'quantite' => 3,
+                'prix_unitaire_ht' => '0.47',
+                'prix_vente_ttc' => '10',
+                'taux_tva' => '20',
+            ])
+            ->assertHasNoFormComponentActionErrors();
 
-        $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id)
-            ->assertSet("data.lignes.{$cle}.prix_reference", 'ht')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '24.00')
-            ->set("data.lignes.{$cle}.quantite", '2')
-            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '40')
-            ->assertSet("data.lignes.{$cle}.prix_reference", 'ttc')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", 33.33)
-            ->assertSee('80,00 €')
-            ->assertSee('calculé à partir du PU TTC saisi.')
+        $ligne = collect($component->get('data.lignes'))->sole();
+        $this->assertSame('0.47', $ligne['prix_unitaire_ht']);
+        $this->assertSame('10.00', $ligne['produit']['prix_vente_ttc']);
+        $this->assertSame(0, Produit::query()->count(), 'Le produit naît avec la facture, pas avant.');
+
+        $component->call('create')->assertHasNoFormErrors();
+
+        $produit = Produit::query()->sole();
+        $this->assertSame('Câble USB-C', $produit->nom);
+        $this->assertSame($fournisseur->id, $produit->fournisseur_id);
+        $this->assertSame(['0.47', '10.00', '8.33'], [$produit->prix_achat_ht, $produit->prix_vente_ttc, $produit->prix_vente_ht]);
+
+        $ligneAchat = FactureAchat::query()->sole()->lignes->sole();
+        $this->assertSame(['0.47', '1.41'], [$ligneAchat->prix_unitaire_ht, $ligneAchat->montant_ht]);
+    }
+
+    public function test_choisir_un_produit_du_catalogue_reprend_sa_fiche_et_son_dernier_prix_dachat(): void
+    {
+        $this->connecterLeProprietaire();
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'prix_achat_ht' => 2.1, 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => $fournisseur->id])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $produit->id])
+            ->assertFormComponentActionDataSet(['nom' => 'Coque iPhone 15', 'prix_unitaire_ht' => '2.10', 'prix_vente_ttc' => '15.00', 'taux_tva' => '20'])
+            ->setFormComponentActionData(['quantite' => 4])
+            ->callMountedFormComponentAction()
+            ->assertHasNoFormComponentActionErrors()
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $factureAchat = FactureAchat::query()->firstOrFail();
-        $this->assertSame('80.00', $factureAchat->total_ttc);
-        $this->assertSame('66.66', $factureAchat->total_ht);
+        $ligne = FactureAchat::query()->sole()->lignes->sole();
+        $this->assertSame([$produit->id, 4, '2.10', '8.40'], [$ligne->produit_id, $ligne->quantite, $ligne->prix_unitaire_ht, $ligne->montant_ht]);
+        $this->assertSame(1, Produit::query()->count());
+    }
+
+    /**
+     * Une ligne ne se corrige jamais en direct dans la facture : ses champs
+     * sont en lecture seule, et « Modifier » rouvre son formulaire, rempli,
+     * pour la remplacer -- sans en ajouter une autre.
+     */
+    public function test_une_ligne_se_modifie_par_son_formulaire_et_non_en_direct(): void
+    {
+        $this->connecterLeProprietaire();
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['nom' => 'Écran iPhone 13', 'prix_achat_ht' => 40, 'prix_vente_ttc' => 120, 'taux_tva' => 20]);
+
+        $component = Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => $fournisseur->id])
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: ['produit_id' => $produit->id, 'quantite' => 2]);
+
+        $cle = array_key_first($component->get('data.lignes'));
+
+        foreach (['quantite', 'prix_unitaire_ht', 'remise_pourcentage', 'taux_tva', 'produit.prix_vente_ttc'] as $champ) {
+            $component->assertFormFieldIsDisabled("lignes.{$cle}.{$champ}");
+        }
+
+        $component
+            ->mountFormComponentAction('lignes', 'modifierLaLigne', arguments: ['item' => $cle])
+            ->assertFormComponentActionDataSet(['origine' => 'existant', 'produit_id' => $produit->id, 'nom' => 'Écran iPhone 13', 'quantite' => 2, 'prix_unitaire_ht' => '40.00'])
+            ->setFormComponentActionData(['quantite' => 5, 'prix_unitaire_ht' => '38.50', 'nom' => 'Écran iPhone 13 OLED'])
+            ->callMountedFormComponentAction()
+            ->assertHasNoFormComponentActionErrors();
+
+        $lignes = $component->get('data.lignes');
+        $this->assertSame([$cle], array_keys($lignes));
+        $this->assertSame([5, '38.50', 'Écran iPhone 13 OLED'], [$lignes[$cle]['quantite'], $lignes[$cle]['prix_unitaire_ht'], $lignes[$cle]['produit']['nom']]);
+
+        $component->call('create')->assertHasNoFormErrors();
+
+        $this->assertSame('192.50', FactureAchat::query()->sole()->total_ht);
+        $this->assertSame('Écran iPhone 13 OLED', $produit->fresh()->nom, 'La fiche du produit se corrige depuis sa facture d\'achat.');
+    }
+
+    public function test_une_facture_dachat_sans_produit_est_refusee(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->call('create')
+            ->assertHasFormErrors(['lignes' => 'required']);
+
+        $this->assertSame(0, FactureAchat::query()->count());
+    }
+
+    /**
+     * Un fournisseur se crée dans la page Fournisseurs, jamais depuis une
+     * facture d'achat.
+     */
+    public function test_un_fournisseur_ne_se_cree_pas_depuis_une_facture_dachat(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateFactureAchat::class)
+            ->assertFormComponentActionDoesNotExist('fournisseur_id', 'createOption');
+    }
+
+    /**
+     * Ce que le fournisseur dit d'un produit reçu par API (référence, nom)
+     * reste affiché mais figé ; le magasin garde la main sur son prix de
+     * vente.
+     */
+    public function test_la_fiche_dun_produit_recu_par_api_ne_se_corrige_pas_depuis_une_ligne(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        app(TenantContext::class)->set($magasin);
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['prix_achat_ht' => 5, 'taux_tva' => 20]);
+        app(CreerFactureAchatAction::class)->handle($fournisseur, [['produit_id' => $produit->id, 'quantite' => 1]], ['source' => SourceFactureAchat::Api]);
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => $fournisseur->id])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $produit->id])
+            ->assertFormFieldIsDisabled('nom', 'mountedFormComponentActionForm0')
+            ->assertFormFieldIsDisabled('reference', 'mountedFormComponentActionForm0')
+            ->assertFormFieldIsEnabled('prix_vente_ttc', 'mountedFormComponentActionForm0')
+            ->assertSee('Reçu sur une facture d\'achat récupérée automatiquement');
     }
 
     public function test_creer_une_facture_dachat_depuis_le_panneau(): void
@@ -302,42 +415,54 @@ class FactureAchatResourceTest extends TestCase
     }
 
     /**
-     * Exigence explicite : la création rapide d'un produit depuis une
-     * ligne de facture d'achat doit proposer les mêmes informations que
-     * la page dédiée Produits (prix, TVA, stock...), pas un sous-ensemble
-     * réduit.
+     * La fiche d'un nouveau produit se remplit dans le formulaire de ligne
+     * avec les mêmes informations que la page Produits (prix, TVA, stock),
+     * et le produit est rattaché au fournisseur de la facture.
      */
-    public function test_creer_un_nouveau_produit_a_la_volee_depuis_une_ligne_de_facture_dachat(): void
+    public function test_un_nouveau_produit_recu_a_la_meme_fiche_que_dans_la_page_produits(): void
+    {
+        $this->connecterLeProprietaire();
+        $fournisseur = Fournisseur::factory()->create();
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => $fournisseur->id])
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
+                'origine' => 'nouveau',
+                'reference' => 'ECR-IP17-PRO',
+                'code_barres' => '3700000000017',
+                'nom' => 'Ecran Iphone 17 Pro',
+                'quantite' => 2,
+                'prix_unitaire_ht' => '80',
+                // 180 € TTC à 20 % de TVA = 150 € HT (voir
+                // ProduitResource::prixVenteTtcSchema() : seul le TTC est
+                // saisi, le HT en est dérivé).
+                'prix_vente_ttc' => '180',
+                'taux_tva' => '20',
+                'suivi_stock' => true,
+                'seuil_alerte' => 1,
+            ])
+            ->assertHasNoFormComponentActionErrors()
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('produits', [
+            'reference' => 'ECR-IP17-PRO',
+            'code_barres' => '3700000000017',
+            'nom' => 'Ecran Iphone 17 Pro',
+            'fournisseur_id' => $fournisseur->id,
+            'prix_achat_ht' => 80,
+            'prix_vente_ht' => 150,
+            'seuil_alerte' => 1,
+        ]);
+    }
+
+    private function connecterLeProprietaire(): Magasin
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
-        $fournisseur = Fournisseur::factory()->create();
-
-        Livewire::test(CreateFactureAchat::class)
-            ->fillForm([
-                'fournisseur_id' => $fournisseur->id,
-                'lignes' => [['description' => 'temp']],
-            ])
-            ->callFormComponentAction('lignes.0.produit_id', 'createOption', data: [
-                'reference' => 'ECR-IP17-PRO',
-                'nom' => 'Ecran Iphone 17 Pro',
-                'prix_achat_ht' => '80',
-                // 180 € TTC à 20 % de TVA = 150 € HT (voir
-                // ProduitResource::prixVenteTtcSchema() : seul le TTC est
-                // saisi, le HT en est dérivé).
-                'prix_vente_ttc' => '180',
-                'taux_tva' => '20',
-            ])
-            ->assertHasNoFormComponentActionErrors();
-
-        $this->assertDatabaseHas('produits', [
-            'reference' => 'ECR-IP17-PRO',
-            'nom' => 'Ecran Iphone 17 Pro',
-            'prix_achat_ht' => 80,
-            'prix_vente_ht' => 150,
-        ]);
+        return $magasin;
     }
 }

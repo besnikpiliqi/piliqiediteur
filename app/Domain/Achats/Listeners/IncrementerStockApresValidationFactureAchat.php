@@ -12,11 +12,9 @@ use App\Domain\Stock\Services\StockLedgerService;
  * doit s'exécuter dans la même transaction que la validation pour rester
  * atomique avec elle (voir le commentaire sur FactureAchatValidee).
  *
- * Met aussi à jour le coût d'achat courant du produit (prix_achat_ht) :
- * c'est le seul champ de coût suivi par cette application (pas de coût
- * moyen pondéré par lot), une réception de marchandise est le moment
- * naturel pour le rafraîchir au dernier coût réellement payé, remise et
- * escompte déduits (voir LigneAchat::coutUnitaireHt()).
+ * Met aussi à jour le coût d'achat et le fournisseur du produit (voir
+ * Produit::enregistrerUnAchat()) : une réception de marchandise est le
+ * moment naturel pour les rafraîchir.
  */
 class IncrementerStockApresValidationFactureAchat
 {
@@ -31,7 +29,7 @@ class IncrementerStockApresValidationFactureAchat
                 continue;
             }
 
-            $produit->forceFill(['prix_achat_ht' => $ligne->coutUnitaireHt()])->save();
+            $produit->enregistrerUnAchat($ligne);
 
             if ($produit->suivi_stock) {
                 $this->stock->enregistrer(

@@ -5,8 +5,10 @@ namespace App\Filament\App\Resources;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ProduitResource\Pages;
-use Filament\Forms\Components\Component;
+use Closure;
+use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -18,6 +20,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Number;
+use Illuminate\Validation\Rules\Unique;
 use InvalidArgumentException;
 
 class ProduitResource extends Resource
@@ -40,38 +43,72 @@ class ProduitResource extends Resource
     private const AIDE_PRIX_ACHAT = 'Mis à jour à chaque facture d\'achat validée : le prix réellement payé, remise et escompte déduits.';
 
     /**
-     * Mêmes champs que form() (hors stock_quantite, propre à l'édition --
-     * un produit tout juste créé n'a de toute façon jamais de stock
-     * existant -- et hors fournisseur_id, redondant sur la facture
-     * d'achat où ce Select apparaît déjà en tête de page), utilisés dans
-     * la modale "+" du Select produit_id d'une ligne de
-     * Facture/Devis/Facture d'achat : voir DevisResource::ligneSchema()
-     * et FactureAchatResource::form().
+     * Référence, code-barres, nom, taille et couleur : la fiche produit et
+     * le formulaire de ligne d'une facture d'achat (voir
+     * AjouteDesLignesDAchat) en partagent la saisie. $produitModifie donne
+     * le produit en cours de modification (null pour un nouveau produit),
+     * dont la référence n'entre pas en conflit avec elle-même.
      *
-     * @return array<Component>
+     * @return array<Field>
      */
-    public static function creationRapideSchema(): array
+    public static function champsIdentification(Closure $produitModifie): array
     {
         return [
             TextInput::make('reference')
                 ->label('Référence')
                 ->helperText('Laissez vide pour une référence générée automatiquement.')
-                ->maxLength(60),
+                ->maxLength(60)
+                // Archivés compris, comme l'index unique de la table (voir
+                // Produit::verifierQueSaReferenceEstLibre()).
+                ->unique(
+                    table: Produit::class,
+                    ignorable: $produitModifie,
+                    modifyRuleUsing: fn (Unique $rule): Unique => $rule->where('magasin_id', app(TenantContext::class)->id()),
+                )
+                ->validationMessages(['unique' => 'Cette référence est déjà celle d\'un autre produit.']),
             TextInput::make('code_barres')->label('Code-barres')->maxLength(50),
             TextInput::make('nom')->required()->maxLength(200)->columnSpanFull(),
             TextInput::make('taille')->maxLength(20),
             TextInput::make('couleur')->maxLength(30),
-            TextInput::make('prix_achat_ht')->label('Prix d\'achat HT')->numeric()->prefix('€')->required()->helperText(self::AIDE_PRIX_ACHAT),
-            ...self::prixVenteTtcSchema(),
+        ];
+    }
+
+    /**
+     * @return array<Field>
+     */
+    public static function champsSuiviDuStock(): array
+    {
+        return [
             Toggle::make('suivi_stock')->label('Suivre le stock')->default(true)->live(),
             TextInput::make('seuil_alerte')
                 ->label('Seuil d\'alerte')
                 ->integer()
                 ->minValue(0)
                 ->default(0)
-                ->visible(fn ($get) => $get('suivi_stock')),
-            Toggle::make('actif')->default(true),
+                ->visible(fn (Get $get): bool => (bool) $get('suivi_stock')),
         ];
+    }
+
+    /**
+     * Recherche côté serveur plutôt qu'une liste préchargée : par nom,
+     * référence ou code-barres, pour qu'une douchette USB (qui se contente
+     * de « taper » les chiffres scannés dans le champ actif) retrouve le
+     * produit aussi vite qu'en tapant son nom.
+     *
+     * @param  Builder<Produit>  $produits
+     * @return array<int, string>
+     */
+    public static function rechercher(Builder $produits, string $recherche): array
+    {
+        return $produits
+            ->where(fn (Builder $produits) => $produits
+                ->where('nom', 'like', "%{$recherche}%")
+                ->orWhere('reference', 'like', "%{$recherche}%")
+                ->orWhere('code_barres', 'like', "%{$recherche}%"))
+            ->limit(50)
+            ->get()
+            ->mapWithKeys(fn (Produit $produit): array => [$produit->id => "{$produit->nom} ({$produit->reference})"])
+            ->all();
     }
 
     /**
@@ -81,9 +118,9 @@ class ProduitResource extends Resource
      * tel quel. Le HT correspondant est déduit par le modèle à
      * l'enregistrement (voir Produit::synchroniserPrixDeVente()).
      *
-     * @return array<Component>
+     * @return array<Field>
      */
-    private static function prixVenteTtcSchema(): array
+    public static function prixVenteTtcSchema(): array
     {
         return [
             TextInput::make('prix_vente_ttc')
@@ -126,43 +163,52 @@ class ProduitResource extends Resource
             .number_format($calculateur->soustraire($prix['prix_unitaire_ttc'], $prix['prix_unitaire_ht']), 2, ',', ' ').' € de TVA';
     }
 
+    /**
+     * Un produit reçu sur une facture d'achat récupérée automatiquement
+     * garde ce que son fournisseur en dit (voir
+     * Produit::vientDUneFactureAchatApi()) : ces champs-là restent
+     * affichés mais ne se modifient pas.
+     */
     public static function form(Form $form): Form
     {
+        $produit = $form->getRecord();
+        $figeParSonFournisseur = $produit instanceof Produit && $produit->vientDUneFactureAchatApi();
+
         return $form->schema([
-            Section::make('Identification')->schema([
-                TextInput::make('reference')
-                    ->label('Référence')
-                    ->helperText('Laissez vide pour une référence générée automatiquement.')
-                    ->maxLength(60),
-                TextInput::make('code_barres')->label('Code-barres')->maxLength(50),
-                TextInput::make('nom')->required()->maxLength(200)->columnSpanFull(),
-                TextInput::make('taille')->maxLength(20),
-                TextInput::make('couleur')->maxLength(30),
-                Select::make('fournisseur_id')
-                    ->label('Fournisseur')
-                    ->relationship('fournisseur', 'nom')
-                    ->searchable()
-                    ->preload(),
-            ])->columns(2),
+            Section::make('Identification')
+                ->description($figeParSonFournisseur ? 'Reçu sur une facture d\'achat récupérée automatiquement : sa référence, son nom, son fournisseur et son prix d\'achat sont ceux du fournisseur.' : null)
+                ->schema([
+                    ...array_map(
+                        fn (Field $champ): Field => $champ->disabled($figeParSonFournisseur),
+                        self::champsIdentification(fn (?Produit $record): ?Produit => $record),
+                    ),
+                    Select::make('fournisseur_id')
+                        ->label('Fournisseur')
+                        ->relationship('fournisseur', 'nom')
+                        ->searchable()
+                        ->preload()
+                        ->helperText('Celui de la dernière facture d\'achat validée pour ce produit.')
+                        ->disabled($figeParSonFournisseur),
+                ])->columns(2),
 
             Section::make('Prix et TVA')->schema([
-                TextInput::make('prix_achat_ht')->label('Prix d\'achat HT')->numeric()->prefix('€')->required()->helperText(self::AIDE_PRIX_ACHAT),
+                TextInput::make('prix_achat_ht')
+                    ->label('Prix d\'achat HT')
+                    ->numeric()
+                    ->prefix('€')
+                    ->required()
+                    ->helperText(self::AIDE_PRIX_ACHAT)
+                    ->disabled($figeParSonFournisseur),
                 ...self::prixVenteTtcSchema(),
             ])->columns(3),
 
             Section::make('Stock')->schema([
-                Toggle::make('suivi_stock')->label('Suivre le stock')->default(true)->live(),
-                TextInput::make('seuil_alerte')
-                    ->label('Seuil d\'alerte')
-                    ->integer()
-                    ->minValue(0)
-                    ->default(0)
-                    ->visible(fn ($get) => $get('suivi_stock')),
+                ...self::champsSuiviDuStock(),
                 TextInput::make('stock_quantite')
                     ->label('Stock actuel')
                     ->disabled()
                     ->dehydrated(false)
-                    ->visible(fn (string $operation, $get) => $operation === 'edit' && $get('suivi_stock'))
+                    ->visible(fn (string $operation, Get $get): bool => $operation === 'edit' && $get('suivi_stock'))
                     ->helperText('Modifiable uniquement via un mouvement de stock, jamais directement ici.'),
             ])->columns(3),
 

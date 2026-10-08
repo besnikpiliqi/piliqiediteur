@@ -6,6 +6,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use InvalidArgumentException;
 use Tests\TestCase;
 
 /**
@@ -38,6 +39,19 @@ class ProduitTest extends TestCase
         $produit = Produit::factory()->create(['reference' => 'MA-REF-PERSO']);
 
         $this->assertSame('MA-REF-PERSO', $produit->reference);
+    }
+
+    /**
+     * Archivés compris, comme l'index unique de la table : l'erreur est
+     * dite clairement plutôt que de casser sur la base.
+     */
+    public function test_une_reference_deja_prise_est_refusee(): void
+    {
+        Produit::factory()->create(['reference' => 'MA-REF-PERSO'])->delete();
+
+        $this->expectExceptionObject(new InvalidArgumentException('La référence « MA-REF-PERSO » est déjà celle d\'un autre produit.'));
+
+        Produit::factory()->create(['reference' => 'MA-REF-PERSO']);
     }
 
     public function test_deux_produits_sans_reference_dans_le_meme_magasin_recoivent_des_numeros_distincts(): void

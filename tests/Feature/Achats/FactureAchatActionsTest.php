@@ -88,6 +88,94 @@ class FactureAchatActionsTest extends TestCase
         ]);
     }
 
+    /**
+     * Le produit naît avec la facture, dans la même transaction, rattaché à
+     * son fournisseur : son prix d'achat est celui de la ligne, son prix de
+     * vente celui saisi pour la vente -- jamais l'un tiré de l'autre.
+     */
+    public function test_une_ligne_cree_son_nouveau_produit_avec_la_facture(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            [
+                'produit' => ['nom' => 'Câble USB-C', 'reference' => 'CBL-USBC', 'prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => true, 'seuil_alerte' => 2],
+                'quantite' => 3,
+                'prix_unitaire_ht' => 0.47,
+            ],
+        ]);
+
+        $produit = Produit::query()->sole();
+        $this->assertSame(['Câble USB-C', 'CBL-USBC', $fournisseur->id], [$produit->nom, $produit->reference, $produit->fournisseur_id]);
+        $this->assertSame(['0.47', '10.00', '8.33'], [$produit->prix_achat_ht, $produit->prix_vente_ttc, $produit->prix_vente_ht]);
+        $this->assertSame(0, $produit->stock_quantite, 'Un brouillon ne doit avoir aucun impact sur le stock.');
+
+        $ligne = $factureAchat->lignes->sole();
+        $this->assertSame([$produit->id, 'Câble USB-C', '0.47', '1.41'], [$ligne->produit_id, $ligne->description, $ligne->prix_unitaire_ht, $ligne->montant_ht]);
+    }
+
+    public function test_une_facture_dachat_refusee_ne_laisse_aucun_produit_derriere_elle(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+
+        try {
+            app(CreerFactureAchatAction::class)->handle($fournisseur, [
+                ['produit' => ['nom' => 'Câble USB-C', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 0.47],
+                ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 0, 'prix_unitaire_ht' => 2],
+            ]);
+            $this->fail('Une quantité nulle doit être refusée.');
+        } catch (InvalidArgumentException) {
+            $this->assertSame(0, Produit::query()->count());
+            $this->assertSame(0, FactureAchat::query()->count());
+        }
+    }
+
+    /**
+     * La fiche d'un produit se corrige depuis sa facture d'achat ; un champ
+     * obligatoire laissé vide garde sa valeur.
+     */
+    public function test_une_ligne_corrige_la_fiche_de_son_produit(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['nom' => 'Ecran', 'reference' => 'ECR-1', 'prix_vente_ttc' => 100, 'taux_tva' => 20]);
+
+        app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'produit' => ['nom' => 'Écran OLED', 'reference' => null, 'prix_vente_ttc' => 120], 'quantite' => 1, 'prix_unitaire_ht' => 40],
+        ]);
+
+        $produit->refresh();
+        $this->assertSame(['Écran OLED', 'ECR-1', '120.00'], [$produit->nom, $produit->reference, $produit->prix_vente_ttc]);
+    }
+
+    /**
+     * Ce que le fournisseur dit d'un produit reçu par API ne se réécrit pas
+     * localement, seulement par la source elle-même (voir
+     * Produit::vientDUneFactureAchatApi()) ; son prix de vente, lui, reste
+     * celui du magasin.
+     */
+    public function test_la_fiche_dun_produit_recu_par_api_garde_ce_que_son_fournisseur_en_dit(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['nom' => 'Ecran', 'prix_vente_ttc' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        app(CreerFactureAchatAction::class)->handle($fournisseur, [['produit_id' => $produit->id, 'quantite' => 1]], ['source' => SourceFactureAchat::Api]);
+
+        app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'produit' => ['nom' => 'Ecran', 'prix_vente_ttc' => 110], 'quantite' => 1],
+        ]);
+        $this->assertSame('110.00', $produit->fresh()->prix_vente_ttc);
+
+        app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'produit' => ['nom' => 'Écran (nom du fournisseur)'], 'quantite' => 1],
+        ], ['source' => SourceFactureAchat::Api]);
+        $this->assertSame('Écran (nom du fournisseur)', $produit->fresh()->nom, 'La source elle-même peut encore corriger le produit.');
+
+        $this->expectExceptionObject(new LogicException('Le produit « Écran (nom du fournisseur) » vient d\'une facture d\'achat récupérée automatiquement : ses informations fournisseur ne se modifient pas.'));
+
+        app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'produit' => ['nom' => 'Écran renommé'], 'quantite' => 1],
+        ]);
+    }
+
     public function test_une_quantite_achetee_non_entiere_est_refusee(): void
     {
         $fournisseur = Fournisseur::factory()->create();
@@ -133,6 +221,26 @@ class FactureAchatActionsTest extends TestCase
         app(ValiderFactureAchatAction::class)->handle($factureAchat);
 
         $this->assertSame('25.00', $produit->fresh()->prix_achat_ht);
+    }
+
+    /**
+     * Le fournisseur d'un produit est celui chez qui il vient d'être acheté,
+     * comme son prix d'achat.
+     */
+    public function test_valider_une_facture_dachat_rattache_le_produit_a_son_fournisseur(): void
+    {
+        $ancienFournisseur = Fournisseur::factory()->create();
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['fournisseur_id' => $ancienFournisseur->id, 'prix_achat_ht' => 20, 'taux_tva' => 20]);
+
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+        $this->assertSame($ancienFournisseur->id, $produit->fresh()->fournisseur_id, 'Un brouillon ne change rien au produit.');
+
+        app(ValiderFactureAchatAction::class)->handle($factureAchat);
+
+        $this->assertSame($fournisseur->id, $produit->fresh()->fournisseur_id);
     }
 
     /**

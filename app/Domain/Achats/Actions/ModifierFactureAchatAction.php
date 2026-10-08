@@ -5,11 +5,8 @@ namespace App\Domain\Achats\Actions;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Enums\PrixReference;
-use App\Domain\Facturation\Services\CalculateurLigne;
-use App\Domain\Facturation\Services\QuantiteEntiere;
-use App\Domain\Facturation\Services\ResolveurPrixLigne;
 use App\Domain\Stock\Services\StockLedgerService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -26,21 +23,20 @@ use LogicException;
  * modifiable même après validation (voir FactureAchat::estModifiable()) :
  * la personne qui l'enregistre peut se tromper, contrairement à une
  * facture récupérée automatiquement par API. Une facture déjà validée a
- * toutefois déjà impacté le stock et le prix d'achat courant du produit
- * (voir IncrementerStockApresValidationFactureAchat) : toute modification
+ * toutefois déjà impacté le stock, le prix d'achat et le fournisseur du
+ * produit (voir IncrementerStockApresValidationFactureAchat) : toute modification
  * de ses lignes recalcule donc l'écart de stock produit par produit plutôt
  * que de réappliquer la réception en aveugle.
  */
 class ModifierFactureAchatAction
 {
     public function __construct(
-        private readonly CalculateurLigne $calculateurLigne,
-        private readonly ResolveurPrixLigne $resolveurPrix,
+        private readonly ConstructeurLigneAchat $constructeurLignes,
         private readonly StockLedgerService $stockLedger,
     ) {}
 
     /**
-     * @param  list<array{produit_id: int|string, quantite: int|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|null, taux_tva?: float|string, remise_pourcentage?: float|string, description?: string, reference?: string}>  $lignes
+     * @param  list<array<string, mixed>>  $lignes  voir ConstructeurLigneAchat::enregistrer()
      * @param  array<string, mixed>  $attributs
      */
     public function handle(FactureAchat $factureAchat, array $lignes, array $attributs = []): FactureAchat
@@ -60,50 +56,10 @@ class ModifierFactureAchatAction
             $factureAchat->update($attributs);
             $factureAchat->lignes()->delete();
 
-            $lignesConstruites = [];
-            $lignesCreees = [];
-
-            foreach (array_values($lignes) as $index => $donnees) {
-                if (! isset($donnees['produit_id'])) {
-                    throw new InvalidArgumentException('Chaque ligne d\'une facture d\'achat doit référencer un produit du catalogue.');
-                }
-
-                $produit = Produit::query()->findOrFail($donnees['produit_id']);
-                $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
-                $tauxTva = (float) ($donnees['taux_tva'] ?? $produit->taux_tva);
-                $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
-                // Un fournisseur facture le plus souvent en HT (prix d'achat
-                // catalogue), mais un ticket de magasin se saisit en TTC :
-                // le prix saisi fait foi, voir PrixReference.
-                $prix = $this->resolveurPrix->resoudre($donnees, PrixReference::Ht, $tauxTva, (float) $produit->prix_achat_ht);
-
-                $montants = $this->calculateurLigne->calculer(
-                    $prix['prix_unitaire_ht'],
-                    $prix['prix_unitaire_ttc'],
-                    $quantite,
-                    $remise,
-                );
-
-                $ligneCreee = $factureAchat->lignes()->create([
-                    'produit_id' => $produit->id,
-                    'description' => $donnees['description'] ?? $produit->nom,
-                    'reference' => $donnees['reference'] ?? $produit->reference,
-                    'quantite' => $quantite,
-                    ...$prix,
-                    'taux_tva' => $tauxTva,
-                    'remise_pourcentage' => $remise,
-                    'ordre' => $index,
-                    ...$montants,
-                ]);
-
-                $lignesCreees[] = $ligneCreee;
-                $lignesConstruites[] = $montants;
-            }
-
-            $factureAchat->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
+            $lignesCreees = $this->constructeurLignes->enregistrer($factureAchat, $lignes);
 
             if ($estValidee) {
-                $this->recalerStockEtPrixAchat($factureAchat, $quantitesAvant, collect($lignesCreees));
+                $this->recalerLeStockEtLesProduits($factureAchat, $quantitesAvant, collect($lignesCreees));
             }
 
             return $factureAchat->fresh('lignes');
@@ -132,7 +88,7 @@ class ModifierFactureAchatAction
      * @param  Collection<int, int>  $quantitesAvant
      * @param  Collection<int, LigneAchat>  $lignesCreees
      */
-    private function recalerStockEtPrixAchat(FactureAchat $factureAchat, Collection $quantitesAvant, Collection $lignesCreees): void
+    private function recalerLeStockEtLesProduits(FactureAchat $factureAchat, Collection $quantitesAvant, Collection $lignesCreees): void
     {
         $quantitesApres = $this->quantitesParProduit($lignesCreees);
 
@@ -155,9 +111,7 @@ class ModifierFactureAchatAction
         }
 
         foreach ($lignesCreees as $ligne) {
-            if ($ligne->produit !== null) {
-                $ligne->produit->forceFill(['prix_achat_ht' => $ligne->coutUnitaireHt()])->save();
-            }
+            $ligne->produit?->enregistrerUnAchat($ligne);
         }
     }
 }

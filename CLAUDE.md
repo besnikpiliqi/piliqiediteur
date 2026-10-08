@@ -158,4 +158,33 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 - Logiciel indépendant (SaaS) vendu à des magasins : son créateur en est l'éditeur, il n'a pas de magasin.
 - Chaque magasin est strictement isolé (`BelongsToMagasin` + `MagasinScope`) : aucun client, produit, service, document ou réglage n'est jamais partagé ni mélangé entre magasins.
+- Prix : seul le prix de vente TTC est un prix arrondi, une seule fois, quand la facture d'achat enregistre le produit. Une vente se calcule depuis ce prix TTC, article par article (PU HT et PU TTC au centime, multipliés par la quantité). Un achat se calcule depuis le PU HT du fournisseur : HT = quantité x PU HT, puis la TVA sur ce HT. Ensuite plus rien ne s'arrondit ni ne se recalcule : les documents affichent les montants tels qu'ils sont enregistrés.
+
+## Feuille de route
+
+Le développeur (Claude) mène le projet en autonomie jusqu'à un logiciel prêt pour la production. Chaque étape suit le protocole de rigueur, puis : relecture adversariale, commit, push, CI verte. Cocher une étape seulement quand elle est terminée.
+
+Fait :
+- [x] Socle : magasins (tenants), utilisateurs, rôles et permissions par magasin, isolation testée, panel Filament du magasin.
+- [x] Clients, fournisseurs, produits, services du magasin.
+- [x] Devis, factures, avoirs (partiels, multi-factures), paiements et allocations, numérotation sans doublon, PDF, factures jamais supprimables.
+- [x] Caisse, clôtures de caisse (journée, fermeture personnelle, clôture automatique), e-reporting, transmission PDP (passerelle factice).
+- [x] Factures d'achat (saisie, API), avoirs fournisseur, stock (grand livre des mouvements), CMUP, barème de prix de vente.
+
+À faire, dans cet ordre :
+1. [ ] Corrections : ventes toujours au prix TTC et achats toujours au prix HT, retours partiels cumulés, défauts de l'audit complet.
+2. [ ] Caisse sécurisée (art. 286 CGI) : plus d'annulation de facture émise, chaînage et signature des ventes, journal des événements (JET), clôtures mensuelles et annuelles avec totaux perpétuels, archives signées, attestation de l'éditeur.
+3. [ ] Journal d'audit des actions importantes (utilisateur, magasin, action, document, anciennes et nouvelles valeurs, IP, navigateur), consultable par le propriétaire.
+4. [ ] Envoi des devis, factures et avoirs par e-mail, notifications, échéances et relances des factures impayées.
+5. [ ] Comptabilité : journaux (ventes, achats, caisse et banque), écritures générées depuis chaque document, plan de comptes du magasin, export FEC, état de TVA (collectée, déductible, à payer).
+6. [ ] Tableau de bord et rapports : chiffre d'affaires, marges, TVA, meilleurs produits, stock, impayés.
+7. [ ] Stock : inventaire (ouverture et comptage), ajustements, catégories, unités.
+8. [ ] Pièces jointes isolées par magasin, contacts des clients et fournisseurs, coordonnées bancaires des fournisseurs.
+9. [ ] RGPD : export et anonymisation des clients, durées de conservation (documents légaux conservés à part).
+10. [ ] API v1 (jetons, ressources, Form Requests, limitation de débit, pagination) et webhooks.
+11. [ ] Couche d'intégrations externes (paiement en ligne, outils comptables), branchée sur les événements.
+12. [ ] Abonnements SaaS : plans, limites, fonctionnalités par plan, facturation des magasins par l'éditeur.
+13. [ ] Administration de l'éditeur : magasins, utilisateurs, abonnements, suspension, statistiques, journaux système ; accès aux données d'un magasin seulement explicite et audité.
+14. [ ] Achats auprès de particuliers (registre des objets achetés, régime de TVA sur marge).
+15. [ ] Mise en production : analyse statique, CI complète, configuration de production (MySQL, Redis, files d'attente, planificateur, sauvegardes), données de démonstration, finition des écrans.
 </projet-piliqiediteur>

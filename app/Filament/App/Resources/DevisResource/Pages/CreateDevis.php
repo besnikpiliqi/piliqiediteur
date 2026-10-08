@@ -6,6 +6,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RevientALaListe;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class CreateDevis extends CreateRecord
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, RevientALaListe;
 
     protected static string $resource = DevisResource::class;
 

@@ -7,6 +7,7 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RevientALaListe;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class CreateAvoir extends CreateRecord
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, RevientALaListe;
 
     protected static string $resource = AvoirResource::class;
 

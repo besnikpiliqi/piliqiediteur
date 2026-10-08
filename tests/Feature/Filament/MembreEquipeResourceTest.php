@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\MembreEquipeResource;
 use App\Filament\App\Resources\MembreEquipeResource\Pages\CreateMembreEquipe;
 use App\Filament\App\Resources\MembreEquipeResource\Pages\EditMembreEquipe;
 use App\Filament\App\Resources\MembreEquipeResource\Pages\ListMembreEquipes;
@@ -159,7 +160,8 @@ class MembreEquipeResourceTest extends TestCase
                 'permissions_supplementaires' => [PermissionRegistry::AVOIR_VIEW],
             ])
             ->call('save')
-            ->assertHasNoFormErrors();
+            ->assertHasNoFormErrors()
+            ->assertRedirect(MembreEquipeResource::getUrl('index'));
 
         app(TenantContext::class)->set($magasin);
         $vendeur->unsetRelation('permissions')->unsetRelation('roles');

@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\PaiementResource\Pages;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Filament\App\Resources\PaiementResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RevientALaListe;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
@@ -17,7 +18,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class CreatePaiement extends CreateRecord
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, RevientALaListe;
 
     protected static string $resource = PaiementResource::class;
 

@@ -6,12 +6,13 @@ use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RevientALaListe;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
 class CreateFactureAchat extends CreateRecord
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, RevientALaListe;
 
     protected static string $resource = FactureAchatResource::class;
 

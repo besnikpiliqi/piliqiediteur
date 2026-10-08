@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RevientALaListe;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class EditFactureAchat extends EditRecord
 {
-    use GereLesExceptionsMetier;
+    use GereLesExceptionsMetier, RevientALaListe;
 
     protected static string $resource = FactureAchatResource::class;
 
@@ -25,14 +26,6 @@ class EditFactureAchat extends EditRecord
         return [
             Actions\DeleteAction::make(),
         ];
-    }
-
-    // Par défaut, Filament reste sur le formulaire d'édition après
-    // sauvegarde : une fois la facture d'achat corrigée, le vendeur n'a
-    // plus rien à y faire et doit pouvoir revenir directement à la liste.
-    protected function getRedirectUrl(): string
-    {
-        return static::getResource()::getUrl('index');
     }
 
     protected function mutateFormDataBeforeFill(array $data): array

@@ -3,11 +3,14 @@
 namespace App\Filament\App\Resources\ClientResource\Pages;
 
 use App\Filament\App\Resources\ClientResource;
+use App\Filament\Concerns\RevientALaListe;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 
 class EditClient extends EditRecord
 {
+    use RevientALaListe;
+
     protected static string $resource = ClientResource::class;
 
     protected function getHeaderActions(): array

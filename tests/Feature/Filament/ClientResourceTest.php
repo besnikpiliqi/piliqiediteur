@@ -10,6 +10,7 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\ClientResource\Pages\CreateClient;
 use App\Filament\App\Resources\ClientResource\Pages\ListClients;
 use App\Models\User;
@@ -56,7 +57,8 @@ class ClientResourceTest extends TestCase
                 'email' => 'jean@example.com',
             ])
             ->call('create')
-            ->assertHasNoFormErrors();
+            ->assertHasNoFormErrors()
+            ->assertRedirect(ClientResource::getUrl('index'));
 
         $this->assertDatabaseHas('clients', [
             'nom' => 'Jean Dupont',

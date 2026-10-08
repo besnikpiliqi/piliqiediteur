@@ -16,6 +16,7 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use InvalidArgumentException;
@@ -56,7 +57,8 @@ class ParametresPrixDeVente extends Page implements HasForms
 
         $this->form->fill([
             'actif' => $magasin->prix_vente_automatique,
-            ...($magasin->bareme_prix_vente ?? BaremePrixDeVente::parDefaut())->versTableau(),
+            ...$magasin->bareme_prix_vente->versTableau(),
+            'essai_taux_tva' => 20,
         ]);
     }
 
@@ -66,7 +68,22 @@ class ParametresPrixDeVente extends Page implements HasForms
             Toggle::make('actif')
                 ->label('Calculer automatiquement le prix de vente')
                 ->helperText('Dans une facture d\'achat, le prix de vente TTC d\'un produit se remplit d\'après ce barème dès que vous saisissez son prix d\'achat. Vous pouvez toujours le corriger. Désactivé, votre barème est gardé pour le jour où vous le réactivez.')
-                ->live(),
+                ->live()
+                // Désactiver remet le barème enregistré : une saisie laissée
+                // en cours ne se retrouve ni grisée à l'écran comme si elle
+                // valait, ni bloquante à l'enregistrement.
+                ->afterStateUpdated(function (bool $state, Set $set): void {
+                    if ($state) {
+                        return;
+                    }
+
+                    /** @var Magasin $magasin */
+                    $magasin = Filament::getTenant();
+
+                    foreach ($magasin->fresh()->bareme_prix_vente->versTableau() as $champ => $valeur) {
+                        $set($champ, $valeur);
+                    }
+                }),
             // Visible même désactivé, pour que le magasin voie d'emblée de
             // quoi il s'agit ; il ne se modifie qu'une fois activé.
             Section::make('Bénéfice selon le prix d\'achat')
@@ -102,7 +119,7 @@ class ParametresPrixDeVente extends Page implements HasForms
                         ->numeric()
                         ->minValue(0)
                         ->suffix('€ HT')
-                        ->required(fn (Get $get): bool => blank($get('paliers')))
+                        ->required(fn (Get $get): bool => $get('actif') && blank($get('paliers')))
                         ->validationMessages(['required' => 'Sans palier, indiquez au moins le bénéfice à appliquer.'])
                         ->disabled(fn (Get $get): bool => ! $get('actif')),
                     Toggle::make('arrondi_x9')
@@ -188,23 +205,28 @@ class ParametresPrixDeVente extends Page implements HasForms
 
         // Désactivé, le barème ne se modifie pas : celui enregistré reste
         // tel quel.
+        if (! $data['actif']) {
+            $magasin->update(['prix_vente_automatique' => false]);
+
+            Notification::make()->title('Prix de vente automatique désactivé')->success()->send();
+
+            return;
+        }
+
         try {
-            $bareme = $data['actif'] ? BaremePrixDeVente::depuisTableau([
+            $bareme = BaremePrixDeVente::depuisTableau([
                 'paliers' => array_values($data['paliers'] ?? []),
                 'benefice_au_dela' => $data['benefice_au_dela'],
                 'arrondi_x9' => $data['arrondi_x9'],
-            ]) : $magasin->bareme_prix_vente;
+            ]);
         } catch (InvalidArgumentException $exception) {
             Notification::make()->title($exception->getMessage())->danger()->send();
 
             return;
         }
 
-        $magasin->update(['prix_vente_automatique' => $data['actif'], 'bareme_prix_vente' => $bareme]);
+        $magasin->update(['prix_vente_automatique' => true, 'bareme_prix_vente' => $bareme]);
 
-        Notification::make()
-            ->title($data['actif'] ? 'Barème de prix de vente enregistré' : 'Prix de vente automatique désactivé')
-            ->success()
-            ->send();
+        Notification::make()->title('Barème de prix de vente enregistré')->success()->send();
     }
 }

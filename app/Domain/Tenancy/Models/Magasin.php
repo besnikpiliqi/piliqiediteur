@@ -85,7 +85,8 @@ class Magasin extends Model implements HasName
 
     /**
      * Le barème avec lequel ses factures d'achat proposent les prix de
-     * vente, tant que le magasin n'a pas désactivé le calcul automatique.
+     * vente, une fois que le magasin a activé le calcul automatique
+     * (désactivé au départ).
      */
     public function baremePrixDeVenteActif(): ?BaremePrixDeVente
     {

@@ -11,6 +11,7 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
@@ -214,6 +215,69 @@ class FactureAchatResourceTest extends TestCase
             ->assertHasNoFormComponentActionErrors();
 
         $this->assertSame('15.00', collect($component->get('data.lignes'))->sole()['produit']['prix_vente_ttc']);
+
+        $component->call('create')->assertHasNoFormErrors();
+
+        $this->assertSame('15.00', Produit::query()->where('nom', 'Câble USB-C')->sole()->prix_vente_ttc);
+    }
+
+    /**
+     * La remise du fournisseur et la TVA font aussi recalculer la
+     * proposition : 10 € HT + 35 € de bénéfice = 45 € HT, soit 54,00 € TTC ;
+     * remisés de 50 %, 5 € HT + 30 € de bénéfice = 35 € HT, soit 42,00 €
+     * TTC à 20 % et 36,93 € TTC à 5,5 %.
+     */
+    public function test_la_remise_et_la_tva_font_recalculer_le_prix_de_vente_propose(): void
+    {
+        $this->connecterLeProprietaire()->update(['prix_vente_automatique' => true]);
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['origine' => 'nouveau', 'nom' => 'Coque', 'prix_unitaire_ht' => '10'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '54.00'])
+            ->setFormComponentActionData(['remise_pourcentage' => '50'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '42.00'])
+            ->setFormComponentActionData(['taux_tva' => '5.5'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '36.93']);
+    }
+
+    /**
+     * Au-delà du dernier palier, sans bénéfice prévu, le barème ne propose
+     * rien : une proposition faite pour un prix d'achat précédent est
+     * retirée (vide pour un nouveau produit, prix de sa fiche pour un
+     * produit du catalogue), mais un prix changé à la main reste.
+     */
+    public function test_au_dela_du_dernier_palier_la_proposition_precedente_est_retiree(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $magasin->update([
+            'prix_vente_automatique' => true,
+            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 99.0, 'benefice' => 50.0]], null, false),
+        ]);
+        $produit = Produit::factory()->create(['cmup_ht' => 100, 'prix_vente_ttc' => 200, 'taux_tva' => 20]);
+        $component = Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id]);
+
+        $component
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['origine' => 'nouveau', 'nom' => 'Écran', 'prix_unitaire_ht' => '15'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '78.00'])
+            ->setFormComponentActionData(['prix_unitaire_ht' => '150'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => null])
+            ->setFormComponentActionData(['prix_unitaire_ht' => '15'])
+            ->setFormComponentActionData(['prix_vente_ttc' => '80'])
+            ->setFormComponentActionData(['prix_unitaire_ht' => '150'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '80'])
+            ->unmountFormComponentAction();
+
+        $component
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $produit->id])
+            ->setFormComponentActionData(['prix_unitaire_ht' => '12'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '74.40'])
+            ->setFormComponentActionData(['prix_unitaire_ht' => '120'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '200.00']);
     }
 
     /**

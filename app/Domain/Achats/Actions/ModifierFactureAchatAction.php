@@ -8,6 +8,7 @@ use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Stock\Services\StockLedgerService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -41,15 +42,20 @@ class ModifierFactureAchatAction
      */
     public function handle(FactureAchat $factureAchat, array $lignes, array $attributs = []): FactureAchat
     {
-        if (! $factureAchat->estModifiable()) {
-            throw new LogicException('Cette facture d\'achat n\'est plus modifiable.');
-        }
-
         if ($lignes === []) {
             throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
         }
 
         return DB::transaction(function () use ($factureAchat, $lignes, $attributs) {
+            // Verrouillée comme à sa validation (voir
+            // ValiderFactureAchatAction) : une validation simultanée ne peut
+            // ni être ignorée ni être appliquée deux fois.
+            $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->firstOrFail();
+
+            if (! $factureAchat->estModifiable()) {
+                throw new LogicException('Cette facture d\'achat n\'est plus modifiable.');
+            }
+
             $estValidee = $factureAchat->statut === StatutFactureAchat::Validee;
             // Avant toute modification : le coût des anciennes lignes dépend
             // aussi de l'ancien escompte de la facture.
@@ -58,7 +64,7 @@ class ModifierFactureAchatAction
             $factureAchat->update($attributs);
             $factureAchat->lignes()->delete();
 
-            $lignesCreees = $this->constructeurLignes->enregistrer($factureAchat, $lignes);
+            $this->constructeurLignes->enregistrer($factureAchat, $lignes);
 
             if ($estValidee) {
                 $this->corrigerLaReception($factureAchat->fresh('lignes'), $lotsAvant);
@@ -66,6 +72,23 @@ class ModifierFactureAchatAction
 
             return $factureAchat->fresh('lignes');
         });
+    }
+
+    /**
+     * Sans stock à pondérer, le coût d'un produit est celui de son dernier
+     * achat validé, cette facture corrigée comprise -- ou retirée.
+     */
+    private function retenirLeCoutDuDernierAchat(Produit $produit): void
+    {
+        $dernierAchat = $produit->lignesAchat()
+            ->whereHas('factureAchat', fn (Builder $factureAchat) => $factureAchat->where('statut', StatutFactureAchat::Validee))
+            ->orderByDesc('facture_achat_id')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($dernierAchat !== null) {
+            $this->stockLedger->retenirLeCoutDuDernierAchat($produit, $dernierAchat->coutUnitaireHt());
+        }
     }
 
     /**
@@ -106,7 +129,11 @@ class ModifierFactureAchatAction
                 continue;
             }
 
-            $this->stockLedger->corrigerUneReception($produit, $lotsAvant[$produitId] ?? [], $lotsApres[$produitId] ?? [], "Correction de la facture d'achat {$factureAchat->numero}");
+            if ($produit->suivi_stock) {
+                $this->stockLedger->corrigerUneReception($produit, $lotsAvant[$produitId] ?? [], $lotsApres[$produitId] ?? [], "Correction de la facture d'achat {$factureAchat->numero}");
+            } else {
+                $this->retenirLeCoutDuDernierAchat($produit);
+            }
 
             if (isset($lotsApres[$produitId])) {
                 $produit->rattacherAuFournisseur($factureAchat->fournisseur_id);

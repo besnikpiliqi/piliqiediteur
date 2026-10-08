@@ -149,11 +149,13 @@ class Produit extends Model
     /**
      * Le prix unitaire HT de son dernier achat (avant remise), pour
      * proposer le même sur une nouvelle facture d'achat ; à défaut, son
-     * CMUP.
+     * CMUP. Le dernier achat est celui de la facture la plus récemment
+     * enregistrée : corriger une facture plus ancienne n'en fait pas le
+     * dernier achat.
      */
     public function dernierPrixDAchatHt(): float
     {
-        return (float) ($this->lignesAchat()->latest('id')->value('prix_unitaire_ht')
+        return (float) ($this->lignesAchat()->orderByDesc('facture_achat_id')->orderByDesc('ordre')->value('prix_unitaire_ht')
             ?? app(CalculateurLigne::class)->arrondirAuCentime((float) $this->cmup_ht));
     }
 

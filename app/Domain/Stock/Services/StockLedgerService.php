@@ -42,16 +42,16 @@ class StockLedgerService
         return DB::transaction(function () use ($produit, $quantite, $coutUnitaireHt, $source, $note) {
             $produitVerrouille = $this->verrouiller($produit);
 
-            $this->changerLeCmup($produit, $produitVerrouille, $produitVerrouille->suivi_stock
-                ? $this->calculateur->coutMoyenPondere([
-                    ['quantite' => max($produitVerrouille->stock_quantite, 0), 'cout_unitaire' => $produitVerrouille->cmup_ht],
-                    ['quantite' => $quantite, 'cout_unitaire' => $coutUnitaireHt],
-                ]) ?? $coutUnitaireHt
-                : $coutUnitaireHt);
-
             if (! $produitVerrouille->suivi_stock) {
+                $this->changerLeCmup($produit, $produitVerrouille, $coutUnitaireHt);
+
                 return null;
             }
+
+            $this->changerLeCmup($produit, $produitVerrouille, $this->calculateur->coutMoyenPondere([
+                ['quantite' => max($produitVerrouille->stock_quantite, 0), 'cout_unitaire' => $produitVerrouille->cmup_ht],
+                ['quantite' => $quantite, 'cout_unitaire' => $coutUnitaireHt],
+            ]) ?? $coutUnitaireHt);
 
             return $this->enregistrer($produit, TypeMouvementStock::ReceptionAchat, $quantite, $source, $note);
         });
@@ -59,40 +59,56 @@ class StockLedgerService
 
     /**
      * Correction d'une réception déjà entrée en stock (facture d'achat
-     * validée, puis modifiée) : ses anciens lots sont retirés de la valeur
-     * du stock et les nouveaux ajoutés, plutôt que de réappliquer la
-     * réception en aveugle ; seul l'écart de quantité passe par un
-     * ajustement. Si le stock restant ne pèse plus rien, le CMUP repart du
-     * coût des nouveaux lots.
+     * validée, puis modifiée), plutôt que de réappliquer la réception en
+     * aveugle ; seul l'écart de quantité passe par un ajustement.
+     *
+     * Un écart de prix ne revalorise que les articles de l'ancienne
+     * réception encore en stock -- ceux déjà vendus sont sortis à leur
+     * CMUP du moment et ne reviennent pas. Un écart de quantité entre (ou
+     * sort) au nouveau coût. 10 articles reçus à 5 €, 9 vendus, puis la
+     * réception corrigée à 6 € : l'article restant vaut 6 €, pas 15 €.
      *
      * @param  list<array{quantite: int, cout_unitaire: float}>  $lotsAvant
      * @param  list<array{quantite: int, cout_unitaire: float}>  $lotsApres
      */
     public function corrigerUneReception(Produit $produit, array $lotsAvant, array $lotsApres, string $note): void
     {
+        if (! $produit->suivi_stock) {
+            throw new LogicException("Le produit [{$produit->id}] ne suit pas son stock (suivi_stock = false).");
+        }
+
         DB::transaction(function () use ($produit, $lotsAvant, $lotsApres, $note) {
             $produitVerrouille = $this->verrouiller($produit);
-            $coutDesNouveauxLots = $this->calculateur->coutMoyenPondere($lotsApres);
+            $stock = max($produitVerrouille->stock_quantite, 0);
+            $quantiteAvant = array_sum(array_column($lotsAvant, 'quantite'));
+            $ecart = array_sum(array_column($lotsApres, 'quantite')) - $quantiteAvant;
+            $encoreEnStock = min($stock, $quantiteAvant);
 
-            $cmup = $produitVerrouille->suivi_stock
-                ? $this->calculateur->coutMoyenPondere([
-                    ['quantite' => max($produitVerrouille->stock_quantite, 0), 'cout_unitaire' => $produitVerrouille->cmup_ht],
-                    ...array_map(fn (array $lot): array => ['quantite' => -$lot['quantite'], 'cout_unitaire' => $lot['cout_unitaire']], $lotsAvant),
-                    ...$lotsApres,
-                ]) ?? $coutDesNouveauxLots
-                : $coutDesNouveauxLots;
+            $cmup = $this->calculateur->coutMoyenPondere([
+                ['quantite' => $stock, 'cout_unitaire' => $produitVerrouille->cmup_ht],
+                ['quantite' => -$encoreEnStock, 'cout_unitaire' => $this->calculateur->coutMoyenPondere($lotsAvant) ?? 0.0],
+                ['quantite' => max($encoreEnStock + $ecart, 0), 'cout_unitaire' => $this->calculateur->coutMoyenPondere($lotsApres) ?? 0.0],
+            ]);
 
+            // Un stock qui ne pèse plus rien garde son CMUP.
             if ($cmup !== null) {
                 $this->changerLeCmup($produit, $produitVerrouille, $cmup);
             }
 
-            $ecart = array_sum(array_column($lotsApres, 'quantite')) - array_sum(array_column($lotsAvant, 'quantite'));
-
-            if ($produitVerrouille->suivi_stock && $ecart !== 0) {
+            if ($ecart !== 0) {
                 $this->ajuster($produitVerrouille, $produitVerrouille->stock_quantite + $ecart, $note);
                 $produit->setAttribute('stock_quantite', $produitVerrouille->stock_quantite)->syncOriginalAttribute('stock_quantite');
             }
         });
+    }
+
+    /**
+     * Un produit qui ne suit pas son stock n'a pas de quantités à
+     * pondérer : son coût est celui de son dernier achat.
+     */
+    public function retenirLeCoutDuDernierAchat(Produit $produit, float $coutUnitaireHt): void
+    {
+        DB::transaction(fn () => $this->changerLeCmup($produit, $this->verrouiller($produit), $coutUnitaireHt));
     }
 
     /**

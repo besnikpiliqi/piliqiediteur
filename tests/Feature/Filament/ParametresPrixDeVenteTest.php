@@ -155,6 +155,39 @@ class ParametresPrixDeVenteTest extends TestCase
         $this->assertEquals(BaremePrixDeVente::parDefaut(), $magasin->fresh()->bareme_prix_vente);
     }
 
+    /**
+     * Désactiver remet le barème enregistré : une saisie laissée en cours,
+     * même invalide, n'empêche pas de désactiver et ne reste pas affichée
+     * comme si elle valait.
+     */
+    public function test_desactiver_remet_le_bareme_enregistre_meme_apres_une_saisie_invalide(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+
+        Livewire::test(ParametresPrixDeVente::class)
+            ->fillForm(['actif' => true, 'benefice_au_dela' => null])
+            ->set('data.paliers', [])
+            ->fillForm(['actif' => false])
+            ->assertFormSet(['benefice_au_dela' => 60.0])
+            ->assertCount('data.paliers', 7)
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $magasin->refresh();
+        $this->assertFalse($magasin->prix_vente_automatique);
+        $this->assertEquals(BaremePrixDeVente::parDefaut(), $magasin->bareme_prix_vente);
+    }
+
+    public function test_l_essai_du_bareme_part_d_une_tva_de_20_pourcent(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(ParametresPrixDeVente::class)
+            ->assertFormSet(['essai_taux_tva' => 20])
+            ->fillForm(['essai_prix_achat_ht' => '0.47'])
+            ->assertSee('12,56 € TTC');
+    }
+
     public function test_un_vendeur_sans_la_permission_ne_peut_pas_acceder_a_la_page(): void
     {
         $magasin = Magasin::factory()->create();

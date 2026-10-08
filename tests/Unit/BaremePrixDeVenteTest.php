@@ -88,6 +88,34 @@ class BaremePrixDeVenteTest extends TestCase
         new BaremePrixDeVente([], null, false);
     }
 
+    /**
+     * L'arrondi au X9 part du prix cible exact, comme le calculateur du
+     * magasin, et jamais du prix déjà arrondi au centime : (10,83 € + 35 €)
+     * x 1,2 = 54,996 € reste sous la demi-dizaine et donne 49 €, même si le
+     * prix cible affiché, au centime, est 55,00 €.
+     *
+     * @return array<string, array{float, float, float, float}>
+     */
+    public static function prixCiblesJusteSousLaDemiDizaine(): array
+    {
+        return [
+            '54,996 € à 20 %' => [10.83, 20, 49.0, 55.0],
+            '114,995 € à 5,5 %' => [64.00, 5.5, 109.0, 115.0],
+            '64,999 € à 10 %' => [19.09, 10, 59.0, 65.0],
+        ];
+    }
+
+    #[DataProvider('prixCiblesJusteSousLaDemiDizaine')]
+    public function test_l_arrondi_x9_part_du_prix_cible_exact(float $prixAchatHt, float $tauxTva, float $prixArrondi, float $prixCibleAffiche): void
+    {
+        $bareme = new BaremePrixDeVente(BaremePrixDeVente::parDefaut()->paliers, 60, true);
+
+        $this->assertSame(['prix_vente_ttc' => $prixArrondi, 'prix_cible_ttc' => $prixCibleAffiche], array_intersect_key(
+            $bareme->prixDeVente($prixAchatHt, $tauxTva),
+            ['prix_vente_ttc' => true, 'prix_cible_ttc' => true],
+        ));
+    }
+
     public function test_un_palier_en_double_est_refuse(): void
     {
         $this->expectException(InvalidArgumentException::class);

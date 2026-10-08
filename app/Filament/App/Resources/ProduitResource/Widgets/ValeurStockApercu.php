@@ -4,7 +4,6 @@ namespace App\Filament\App\Resources\ProduitResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -18,11 +17,12 @@ use Illuminate\Support\Number;
  *
  * Valorisation du stock à son coût d'achat, le CMUP (valeur comptable
  * classique d'un inventaire, pas le chiffre d'affaires potentiel à la
- * vente, voir StockLedgerService), avec
- * sa TVA -- calculée article par article comme une ligne de facture (voir
- * CalculateurLigne) : PU HT et PU TTC de chaque produit au centime, x sa
- * quantité en stock, puis sommes séparées. 3 articles à 33,33 € HT valent
- * donc 99,99 € HT + 20,01 € de TVA = 120,00 € TTC, jamais 119,99 €.
+ * vente, voir StockLedgerService) : la quantité de chaque produit x son
+ * CMUP au dix-millième, arrondie une seule fois au centime, avec sa TVA
+ * (voir CalculateurLigne::valeurAuCoutMoyen()). Le CMUP est une moyenne,
+ * pas un prix affiché : l'arrondir au centime avant de le multiplier
+ * fausserait la valeur d'un stock d'articles bon marché (2 000 articles à
+ * 0,045 € valent 90,00 €, pas 100,00 €).
  *
  * Information sensible (elle révèle la trésorerie immobilisée en stock) :
  * réservée par défaut au propriétaire/administrateur/comptable
@@ -51,11 +51,9 @@ class ValeurStockApercu extends BaseWidget
         $nombreEpuises = $produitsSuivis->count() - $produitsEnStock->count();
 
         $calculateur = app(CalculateurLigne::class);
-        $valeur = $calculateur->totaliser($produitsEnStock->map(function (Produit $produit) use ($calculateur): array {
-            $prix = $calculateur->prixUnitaires(PrixReference::Ht, $calculateur->arrondirAuCentime((float) $produit->cmup_ht), (float) $produit->taux_tva);
-
-            return $calculateur->calculer($prix['prix_unitaire_ht'], $prix['prix_unitaire_ttc'], $produit->stock_quantite);
-        }));
+        $valeur = $calculateur->totaliser($produitsEnStock->map(
+            fn (Produit $produit): array => $calculateur->valeurAuCoutMoyen($produit->stock_quantite, (float) $produit->cmup_ht, (float) $produit->taux_tva),
+        ));
 
         return [
             Stat::make('Valeur du stock', number_format($valeur['total_ttc'], 2, ',', ' ').' € TTC')

@@ -46,7 +46,7 @@ return new class extends Migration
             // Désactivé, il garde son barème pour le jour où il le
             // réactive.
             $table->boolean('prix_vente_automatique')->default(false);
-            $table->json('bareme_prix_vente')->nullable();
+            $table->json('bareme_prix_vente');
             $table->timestamps();
             $table->softDeletes();
 

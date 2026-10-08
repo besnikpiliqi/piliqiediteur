@@ -65,8 +65,8 @@ class LigneAchat extends Model
      * Ce qu'un article de cette ligne a réellement coûté : son PU HT après
      * la remise de la ligne, puis l'escompte de la facture. Le coût d'achat
      * d'un stock se compte après remises, rabais et escomptes (PCG art.
-     * 213-31) ; c'est lui que retient le produit (voir
-     * IncrementerStockApresValidationFactureAchat).
+     * 213-31) ; c'est à ce coût que la ligne entre en stock et compte dans
+     * le CMUP du produit (voir StockLedgerService::receptionner()).
      */
     public function coutUnitaireHt(): float
     {

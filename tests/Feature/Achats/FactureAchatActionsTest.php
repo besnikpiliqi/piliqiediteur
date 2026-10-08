@@ -13,6 +13,8 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\PrixReference;
+use App\Domain\Stock\Enums\TypeMouvementStock;
+use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -118,8 +120,8 @@ class FactureAchatActionsTest extends TestCase
     /**
      * Un produit reçu sans prix de vente (une facture récupérée par API, par
      * exemple) prend celui du barème du magasin s'il l'a activé, calculé
-     * sur le prix d'achat remise déduite : 10 € remisés de 50 % = 5 €,
-     * + 30 € de bénéfice, + 20 % de TVA = 42 € TTC.
+     * sur le prix d'achat remise déduite : 10 € remisés de 50 % = 5 € HT,
+     * + 30 € de bénéfice = 35 € HT, soit 42 € TTC (TVA de 7 € comprise).
      */
     public function test_un_nouveau_produit_sans_prix_de_vente_prend_celui_du_bareme(): void
     {
@@ -401,6 +403,81 @@ class FactureAchatActionsTest extends TestCase
         $this->assertSame(8, $factureAchat->lignes->first()->quantite);
         $this->assertSame(11, $produit->fresh()->stock_quantite, '3 (stock avant réception) + 8 (quantité corrigée) = 11.');
         $this->assertSame('21.4545', $produit->fresh()->cmup_ht, '(3 x 20,00 € + 8 x 22,00 €) / 11.');
+    }
+
+    /**
+     * Corriger une réception dont une partie est déjà vendue ne revalorise
+     * que ce qui reste en stock : 10 reçus à 5 €, 9 vendus, puis la
+     * réception corrigée à 6 € -- l'article restant vaut 6 €, pas
+     * (1 x 5 - 10 x 5 + 10 x 6) / 1 = 15 €. Deux articles de plus reçus
+     * entrent au nouveau coût.
+     */
+    public function test_corriger_une_reception_deja_en_partie_vendue_ne_revalorise_que_le_stock_restant(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['cmup_ht' => 5, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 5],
+        ]));
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 9);
+
+        $factureAchat = app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+            ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 6],
+        ]);
+        $this->assertSame(['6.0000', 1], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
+
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+            ['produit_id' => $produit->id, 'quantite' => 12, 'prix_unitaire_ht' => 6],
+        ]);
+        $this->assertSame(['6.0000', 3], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
+    }
+
+    /**
+     * Un produit qui ne suit pas son stock coûte ce que lui a coûté son
+     * dernier achat : retiré d'une facture corrigée, il reprend le coût de
+     * l'achat d'avant.
+     */
+    public function test_un_produit_sans_suivi_de_stock_retire_d_une_facture_reprend_le_cout_de_son_dernier_achat(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $sansSuivi = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
+        $autre = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
+        app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $sansSuivi->id, 'quantite' => 1, 'prix_unitaire_ht' => 4],
+        ]));
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $sansSuivi->id, 'quantite' => 1, 'prix_unitaire_ht' => 9],
+        ]));
+        $this->assertSame('9.0000', $sansSuivi->fresh()->cmup_ht);
+
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+            ['produit_id' => $autre->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
+        ]);
+
+        $this->assertSame('4.0000', $sansSuivi->fresh()->cmup_ht);
+    }
+
+    /**
+     * Le dernier prix d'achat proposé est celui de la facture enregistrée
+     * le plus récemment : corriger une facture plus ancienne n'en fait pas
+     * le dernier achat.
+     */
+    public function test_le_dernier_prix_dachat_est_celui_de_la_facture_la_plus_recente(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['cmup_ht' => 3, 'taux_tva' => 20]);
+        $ancienne = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5],
+        ]);
+        app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 6],
+        ]);
+
+        app(ModifierFactureAchatAction::class)->handle($ancienne, [
+            ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5.5],
+        ]);
+
+        $this->assertSame(6.0, $produit->fresh()->dernierPrixDAchatHt());
     }
 
     public function test_corriger_lescompte_dune_facture_dachat_validee_recalcule_le_cout_dachat(): void

@@ -35,8 +35,10 @@ use InvalidArgumentException;
  * dans la facture. Le bouton « Modifier » d'une ligne rouvre le même
  * formulaire.
  *
- * Prix d'achat HT et prix de vente TTC sont deux champs distincts, aucun
- * ne recalcule l'autre. Le produit n'est créé ou corrigé qu'à
+ * Prix d'achat HT et prix de vente TTC sont deux champs distincts : le
+ * prix de vente ne change jamais le prix d'achat, et seul le barème du
+ * magasin, s'il l'a activé, propose un prix de vente d'après le prix
+ * d'achat (voir appliquerLeBareme()). Le produit n'est créé ou corrigé qu'à
  * l'enregistrement de la facture, avec elle (voir ConstructeurLigneAchat) :
  * l'état d'une ligne porte donc le produit sous sa clé "produit".
  */
@@ -243,6 +245,10 @@ trait AjouteDesLignesDAchat
             Section::make('Prix')
                 ->visible($produitChoisi)
                 ->schema([
+                    // La dernière proposition du barème, pour savoir si la
+                    // personne a changé le prix de vente elle-même (voir
+                    // appliquerLeBareme()).
+                    Hidden::make('prix_vente_propose')->dehydrated(false),
                     TextInput::make('quantite')
                         ->label('Quantité reçue')
                         ->integer()
@@ -309,11 +315,24 @@ trait AjouteDesLignesDAchat
                 return;
             }
 
-            // Au-delà du dernier palier, sans bénéfice prévu : le prix de
-            // vente se saisit à la main.
             if ($prix !== null) {
                 $set('prix_vente_ttc', self::prixEnTexte($prix['prix_vente_ttc']));
+                $set('prix_vente_propose', self::prixEnTexte($prix['prix_vente_ttc']));
+
+                return;
             }
+
+            // Au-delà du dernier palier, sans bénéfice prévu : le prix de
+            // vente se saisit à la main. Une proposition faite pour un prix
+            // d'achat précédent ne doit pas rester comme si elle valait
+            // encore -- sauf si la personne l'a déjà changée elle-même.
+            if (filled($get('prix_vente_propose')) && $get('prix_vente_ttc') === $get('prix_vente_propose')) {
+                $produit = filled($get('produit_id')) ? Produit::find($get('produit_id')) : null;
+
+                $set('prix_vente_ttc', $produit === null ? null : self::prixEnTexte((float) $produit->prix_vente_ttc));
+            }
+
+            $set('prix_vente_propose', null);
         };
     }
 
@@ -361,6 +380,7 @@ trait AjouteDesLignesDAchat
         }
 
         $set('prix_unitaire_ht', $produit === null ? null : self::prixEnTexte($produit->dernierPrixDAchatHt()));
+        $set('prix_vente_propose', null);
     }
 
     /**

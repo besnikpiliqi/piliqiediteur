@@ -27,7 +27,9 @@ use LogicException;
  * facture : une saisie abandonnée ne laisse aucun produit derrière elle.
  *
  * Le prix d'achat de la ligne et le prix de vente du produit sont deux
- * prix distincts : l'un ne recalcule jamais l'autre.
+ * prix distincts : le prix de vente ne change jamais le prix d'achat, et
+ * seul le barème du magasin, s'il l'a activé, donne son prix de vente à un
+ * nouveau produit reçu sans prix (voir BaremePrixDeVente).
  */
 class ConstructeurLigneAchat
 {

@@ -46,6 +46,14 @@ class CalculateurLigneTest extends TestCase
      * 40,00 € TTC = 33,33 € HT + 6,67 € de TVA ; 8,33 € HT = 8,33 € HT +
      * 1,67 € de TVA = 10,00 € TTC. Le prix saisi reste tel quel.
      */
+    public function test_la_valeur_d_un_stock_au_cout_moyen_s_arrondit_une_seule_fois(): void
+    {
+        $calculateur = new CalculateurLigne;
+
+        $this->assertSame(['montant_ht' => 90.0, 'montant_tva' => 18.0, 'montant_ttc' => 108.0], $calculateur->valeurAuCoutMoyen(2000, 0.045, 20));
+        $this->assertSame(['montant_ht' => 21.45, 'montant_tva' => 4.29, 'montant_ttc' => 25.74], $calculateur->valeurAuCoutMoyen(1, 21.4545, 20));
+    }
+
     public function test_un_article_porte_son_ht_sa_tva_et_son_ttc_au_centime(): void
     {
         $this->assertSame(['prix_unitaire_ht' => 33.33, 'prix_unitaire_ttc' => 40.0], $this->calculateur()->prixUnitaires(PrixReference::Ttc, 40, 20));

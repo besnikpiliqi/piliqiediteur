@@ -44,24 +44,23 @@ class ValeurStockWidgetTest extends TestCase
     }
 
     /**
-     * Article par article, comme une ligne de facture : 33,33 € HT donne
-     * un PU TTC de 40,00 € ; 3 articles valent donc 99,99 € HT + 20,01 € de
-     * TVA = 120,00 € TTC -- jamais 20,00 € de TVA et 119,99 € TTC, ce que
-     * donnait une TVA calculée sur le total.
+     * La valeur d'un stock est sa quantité x son CMUP au dix-millième,
+     * arrondie une seule fois : 900 protections d'écran au CMUP de
+     * 0,045 € valent 40,50 € HT (+ 8,10 € de TVA = 48,60 € TTC), pas
+     * 900 x 0,05 € = 45,00 € HT.
      */
-    public function test_la_valeur_du_stock_se_calcule_article_par_article(): void
+    public function test_la_valeur_du_stock_est_sa_quantite_fois_son_cmup(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
-        Produit::factory()->create(['cmup_ht' => 33.33, 'taux_tva' => 20, 'stock_quantite' => 3, 'suivi_stock' => true]);
+        Produit::factory()->create(['cmup_ht' => 0.045, 'taux_tva' => 20, 'stock_quantite' => 900, 'suivi_stock' => true]);
 
         Livewire::test(ValeurStockApercu::class)
-            ->assertSee('120,00 € TTC')
-            ->assertSee('3 unités en stock · 99,99 € HT · 20,01 € TVA')
-            ->assertDontSee('119,99');
+            ->assertSee('48,60 € TTC')
+            ->assertSee('900 unités en stock · 40,50 € HT · 8,10 € TVA');
     }
 
     public function test_un_vendeur_sans_la_permission_ne_voit_pas_le_widget(): void

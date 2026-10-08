@@ -116,6 +116,28 @@ class CalculateurLigne
     }
 
     /**
+     * Valeur d'un stock au coût moyen (voir coutMoyenPondere()) : la
+     * quantité x le CMUP au dix-millième, arrondie une seule fois au
+     * centime -- 2 000 articles à 0,045 € valent 90,00 € HT, pas 2 000 x
+     * 0,05 €. La TVA se calcule sur ce montant HT.
+     *
+     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     */
+    public function valeurAuCoutMoyen(int $quantite, float $coutMoyenHt, float $tauxTva): array
+    {
+        $this->verifierTauxTva($tauxTva);
+
+        $htCentimes = $this->diviserArrondi($this->multiplier($this->versUnites($coutMoyenHt, 10000), $quantite), 100);
+        $tvaCentimes = $this->diviserArrondi($this->multiplier($htCentimes, $this->versUnites($tauxTva, 100)), 10000);
+
+        return [
+            'montant_ht' => $this->centimesVersMontant($htCentimes),
+            'montant_tva' => $this->centimesVersMontant($tvaCentimes),
+            'montant_ttc' => $this->centimesVersMontant($htCentimes + $tvaCentimes),
+        ];
+    }
+
+    /**
      * Un coût moyen (voir coutMoyenPondere()) tel qu'il est enregistré,
      * au dix-millième d'euro.
      */

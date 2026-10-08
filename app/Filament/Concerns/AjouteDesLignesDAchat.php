@@ -6,8 +6,8 @@ use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ProduitResource;
 use Closure;
@@ -105,9 +105,9 @@ trait AjouteDesLignesDAchat
         return Placeholder::make('montant_paye_au_fournisseur')
             ->label('Montant payé au fournisseur')
             ->columnSpan(2)
-            ->content(fn (Get $get): string => self::montantEnTexte(self::montantsDeLigneSaisie(self::ligneSaisie($get), PrixReference::Ht)['montant_ttc']).' TTC')
+            ->content(fn (Get $get): string => self::montantEnTexte(self::montantsDeLigneSaisie(self::ligneSaisie($get))['montant_ttc']).' TTC')
             ->helperText(function (Get $get): string {
-                $montants = self::montantsDeLigneSaisie(self::ligneSaisie($get), PrixReference::Ht);
+                $montants = self::montantsDeLigneSaisie(self::ligneSaisie($get));
 
                 return ($get('quantite') ?? 0).' x '.self::montantEnTexte((float) $get('prix_unitaire_ht')).' HT'
                     .((float) $get('remise_pourcentage') > 0 ? ' remisé de '.self::pourcentageEnTexte($get('remise_pourcentage')).' %' : '')
@@ -133,7 +133,7 @@ trait AjouteDesLignesDAchat
 
                 try {
                     $calculateur = app(CalculateurLigne::class);
-                    $benefice = $calculateur->soustraire(
+                    $benefice = $calculateur->beneficeUnitaire(
                         $calculateur->prixUnitaireHtDepuisTtc((float) $get('produit.prix_vente_ttc'), (float) ($get('produit.taux_tva') ?? $get('taux_tva') ?? 20)),
                         self::prixDAchatNet($get),
                     );
@@ -350,7 +350,7 @@ trait AjouteDesLignesDAchat
 
         try {
             $calculateur = app(CalculateurLigne::class);
-            $benefice = $calculateur->soustraire(
+            $benefice = $calculateur->beneficeUnitaire(
                 $calculateur->prixUnitaireHtDepuisTtc((float) $get('prix_vente_ttc'), (float) ($get('taux_tva') ?? 20)),
                 self::prixDAchatNet($get),
             );
@@ -359,6 +359,29 @@ trait AjouteDesLignesDAchat
         }
 
         return $detail.' · bénéfice '.number_format($benefice, 2, ',', ' ').' € HT par article';
+    }
+
+    /**
+     * Une ligne d'achat en cours de saisie, calculée comme à
+     * l'enregistrement (voir ConstructeurLigneAchat) : depuis son PU HT,
+     * la TVA sur le HT de la ligne. Une saisie pas encore valable ne donne
+     * aucun montant.
+     *
+     * @param  array<string, mixed>  $ligne
+     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     */
+    public static function montantsDeLigneSaisie(array $ligne): array
+    {
+        try {
+            return app(CalculateurLigne::class)->montantsDAchat(
+                (float) (filled($ligne['prix_unitaire_ht'] ?? null) ? $ligne['prix_unitaire_ht'] : throw new InvalidArgumentException('PU HT à saisir.')),
+                (float) ($ligne['taux_tva'] ?? 0),
+                QuantiteEntiere::depuisSaisie($ligne['quantite'] ?? null),
+                (float) ($ligne['remise_pourcentage'] ?? 0),
+            );
+        } catch (InvalidArgumentException) {
+            return self::AUCUN_MONTANT;
+        }
     }
 
     /**

@@ -4,7 +4,6 @@ namespace App\Domain\Achats\Models;
 
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Illuminate\Database\Eloquent\Model;
@@ -24,8 +23,6 @@ class LigneAchat extends Model
         'reference',
         'quantite',
         'prix_unitaire_ht',
-        'prix_unitaire_ttc',
-        'prix_reference',
         'taux_tva',
         'remise_pourcentage',
         'montant_ht',
@@ -37,8 +34,6 @@ class LigneAchat extends Model
     protected $casts = [
         'quantite' => 'integer',
         'prix_unitaire_ht' => 'decimal:2',
-        'prix_unitaire_ttc' => 'decimal:2',
-        'prix_reference' => PrixReference::class,
         'taux_tva' => 'decimal:2',
         'remise_pourcentage' => 'decimal:2',
         'montant_ht' => 'decimal:2',
@@ -102,6 +97,33 @@ class LigneAchat extends Model
      * mécaniquement plus être compté dans ce qui reste disponible au
      * retour.
      */
+    /**
+     * Montants d'un retour de $quantite articles de cette ligne au
+     * fournisseur : la ligne calculée pour tout ce qui en a été retourné
+     * jusqu'ici, moins ce que les avoirs fournisseur déjà émis ont crédité
+     * (voir CalculateurLigne::retourCumule()). Le dernier retour retombe
+     * ainsi exactement sur la ligne achetée.
+     *
+     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     */
+    public function montantsDuRetour(int $quantite): array
+    {
+        $calculateur = app(CalculateurLigne::class);
+        $avoirsEmis = $this->lignesAvoirFournisseur()
+            ->whereHas('avoirFournisseur', fn ($query) => $query->where('statut', StatutAvoirFournisseur::Emise))
+            ->get(['quantite', 'montant_ht', 'montant_tva', 'montant_ttc']);
+
+        return $calculateur->retourCumule(
+            $calculateur->montantsDAchat(
+                (float) $this->prix_unitaire_ht,
+                (float) $this->taux_tva,
+                (int) $avoirsEmis->sum('quantite') + $quantite,
+                (float) $this->remise_pourcentage,
+            ),
+            $avoirsEmis->toArray(),
+        );
+    }
+
     public function quantiteRetournableRestante(): int
     {
         $resteSurLaLigne = $this->quantite - $this->quantiteDejaRetournee();

@@ -6,10 +6,8 @@ use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
-use App\Domain\Facturation\Services\ResolveurPrixLigne;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use LogicException;
@@ -55,13 +53,10 @@ class ConstructeurLigneAchat
      */
     private const ATTRIBUTS_EFFACABLES = ['code_barres', 'taille', 'couleur'];
 
-    public function __construct(
-        private readonly CalculateurLigne $calculateur,
-        private readonly ResolveurPrixLigne $resolveurPrix,
-    ) {}
+    public function __construct(private readonly CalculateurLigne $calculateur) {}
 
     /**
-     * @param  list<array{produit_id?: int|string|null, produit?: array<string, mixed>, quantite: int|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}>  $lignes
+     * @param  list<array{produit_id?: int|string|null, produit?: array<string, mixed>, quantite: int|string, prix_unitaire_ht?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}>  $lignes
      * @return list<LigneAchat>
      */
     public function enregistrer(FactureAchat $factureAchat, array $lignes): array
@@ -93,23 +88,25 @@ class ConstructeurLigneAchat
         $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
         $tauxTva = (float) ($donnees['taux_tva'] ?? $produit->taux_tva);
         $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
-        // Un fournisseur facture le plus souvent en HT (prix d'achat
-        // catalogue), mais un ticket de magasin se saisit en TTC : le prix
-        // saisi fait foi, voir PrixReference.
-        $prix = $this->resolveurPrix->resoudre($donnees, PrixReference::Ht, $tauxTva, $produit->exists ? $produit->dernierPrixDAchatHt() : null);
+        // Un achat part toujours du PU HT du fournisseur (voir
+        // CalculateurLigne) : celui saisi, sinon le dernier prix d'achat du
+        // produit.
+        $prixUnitaireHt = $this->calculateur->arrondirAuCentime((float) (filled($donnees['prix_unitaire_ht'] ?? null)
+            ? $donnees['prix_unitaire_ht']
+            : (($produit->exists ? $produit->dernierPrixDAchatHt() : null) ?? throw new InvalidArgumentException('Une ligne d\'achat doit fournir prix_unitaire_ht.'))));
 
         if (! $produit->exists) {
             // Son coût réel (remise et escompte déduits) le remplacera à la
             // validation de la facture, voir
             // StockLedgerService::receptionner().
-            $produit->cmup_ht = $prix['prix_unitaire_ht'];
+            $produit->cmup_ht = $prixUnitaireHt;
 
             $bareme = $factureAchat->magasin->baremePrixDeVenteActif();
 
             // Sans prix de vente donné, celui du barème du magasin (voir
             // BaremePrixDeVente), s'il en prévoit un à ce prix d'achat.
             $prixDuBareme = $produit->prix_vente_ttc === null
-                ? $bareme?->prixDeVente($this->calculateur->coutUnitaireNet($prix['prix_unitaire_ht'], $remise), (float) $produit->taux_tva)
+                ? $bareme?->prixDeVente($this->calculateur->coutUnitaireNet($prixUnitaireHt, $remise), (float) $produit->taux_tva)
                 : null;
 
             if ($prixDuBareme !== null) {
@@ -121,18 +118,16 @@ class ConstructeurLigneAchat
             $produit->save();
         }
 
-        $montants = $this->calculateur->calculer($prix['prix_reference'], $prix['prix_unitaire_ht'], $prix['prix_unitaire_ttc'], $tauxTva, $quantite, $remise);
-
         return $factureAchat->lignes()->create([
             'produit_id' => $produit->id,
             'description' => $produit->nom,
             'reference' => $produit->reference,
             'quantite' => $quantite,
-            ...$prix,
+            'prix_unitaire_ht' => $prixUnitaireHt,
             'taux_tva' => $tauxTva,
             'remise_pourcentage' => $remise,
             'ordre' => $ordre,
-            ...$montants,
+            ...$this->calculateur->montantsDAchat($prixUnitaireHt, $tauxTva, $quantite, $remise),
         ]);
     }
 

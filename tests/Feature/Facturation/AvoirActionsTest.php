@@ -426,34 +426,6 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
-     * Même exigence pour une ligne saisie en HT (8,33 € HT x 2 = 16,66 € HT
-     * + 3,33 € de TVA, 20 % de 16,66 € = 19,99 € TTC) : un article rendu
-     * seul vaut 8,33 € HT + 1,67 € de TVA, le second le solde (1,66 € de
-     * TVA) -- TVA créditée = TVA facturée.
-     */
-    public function test_le_dernier_retour_dune_ligne_ht_en_credite_le_solde_exact(): void
-    {
-        $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
-            ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20],
-        ]));
-        $ligneFacture = $facture->lignes->firstOrFail();
-
-        $this->assertSame(['16.66', '3.33', '19.99'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
-
-        $premier = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
-            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
-        ]));
-        $dernier = app(CreerAvoirAction::class)->handle($client, [
-            ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
-        ]);
-
-        $this->assertSame(['8.33', '1.67', '10.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
-        $this->assertSame(['8.33', '1.66', '9.99'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
-    }
-
-    /**
      * Avec une remise, un article rendu seul ne vaut pas la moitié de la
      * ligne : 2 x 40 € TTC remisés de 10 % = 59,99 € HT (6,666 € de remise
      * -> 6,67 €), mais un article seul vaut 30,00 € HT. Le dernier retour

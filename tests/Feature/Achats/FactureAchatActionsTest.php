@@ -12,7 +12,6 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Models\Magasin;
@@ -50,13 +49,12 @@ class FactureAchatActionsTest extends TestCase
     }
 
     /**
-     * Un fournisseur facture le plus souvent en HT, mais un ticket de
-     * magasin se saisit en TTC : chaque ligne est calculée depuis le prix
-     * réellement saisi (8,33 € HT x 3 = 24,99 € HT + 5,00 € de TVA ; 12 €
-     * TTC x 3 = 36,00 € TTC), jamais en reconvertissant l'un dans l'autre
-     * avant de multiplier. Une ligne au prix HT n'a pas de PU TTC.
+     * Un achat part toujours du PU HT du fournisseur, multiplié par la
+     * quantité, la TVA calculée sur ce HT : 8,33 € HT x 3 = 24,99 € HT +
+     * 5,00 € de TVA (20 % de 24,99 €). Sans PU HT saisi, c'est le dernier
+     * prix d'achat du produit (à défaut son coût moyen).
      */
-    public function test_chaque_ligne_dachat_est_calculee_depuis_le_prix_reellement_saisi(): void
+    public function test_un_achat_part_toujours_du_pu_ht(): void
     {
         $fournisseur = Fournisseur::factory()->create();
         $produit = Produit::factory()->create(['taux_tva' => 20]);
@@ -64,23 +62,22 @@ class FactureAchatActionsTest extends TestCase
 
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 8.33],
-            ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ttc' => 12],
             ['produit_id' => $jamaisAchete->id, 'quantite' => 1],
         ]);
 
-        [$ligneHt, $ligneTtc, $ligneCatalogue] = $factureAchat->lignes->sortBy('ordre')->values()->all();
+        [$ligneSaisie, $ligneCatalogue] = $factureAchat->lignes->sortBy('ordre')->values()->all();
 
-        $this->assertSame(PrixReference::Ht, $ligneHt->prix_reference);
-        $this->assertSame(['24.99', '5.00', '29.99'], [$ligneHt->montant_ht, $ligneHt->montant_tva, $ligneHt->montant_ttc]);
-        $this->assertNull($ligneHt->prix_unitaire_ttc);
+        $this->assertSame(['8.33', '24.99', '5.00', '29.99'], [$ligneSaisie->prix_unitaire_ht, $ligneSaisie->montant_ht, $ligneSaisie->montant_tva, $ligneSaisie->montant_ttc]);
+        $this->assertSame(['5.00', '5.00', '1.00', '6.00'], [$ligneCatalogue->prix_unitaire_ht, $ligneCatalogue->montant_ht, $ligneCatalogue->montant_tva, $ligneCatalogue->montant_ttc]);
+    }
 
-        $this->assertSame(PrixReference::Ttc, $ligneTtc->prix_reference);
-        $this->assertSame(['30.00', '6.00', '36.00'], [$ligneTtc->montant_ht, $ligneTtc->montant_tva, $ligneTtc->montant_ttc]);
-        $this->assertSame('10.00', $ligneTtc->prix_unitaire_ht);
+    public function test_un_nouveau_produit_sans_pu_ht_est_refuse(): void
+    {
+        $this->expectExceptionObject(new InvalidArgumentException('Une ligne d\'achat doit fournir prix_unitaire_ht.'));
 
-        $this->assertSame(PrixReference::Ht, $ligneCatalogue->prix_reference);
-        $this->assertSame('5.00', $ligneCatalogue->prix_unitaire_ht);
-        $this->assertNull($ligneCatalogue->prix_unitaire_ttc);
+        app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Coque', 'taux_tva' => 20], 'quantite' => 1],
+        ]);
     }
 
     /**
@@ -157,6 +154,23 @@ class FactureAchatActionsTest extends TestCase
         ]);
 
         $this->assertSame('42.00', Produit::query()->sole()->prix_vente_ttc);
+    }
+
+    /**
+     * Le barème part du coût exact : 2,35 € remisés de 15 % coûtent
+     * 1,9975 €, sous le palier de 2 € -- 10 € de bénéfice, (1,9975 € +
+     * 10 €) x 1,2 = 14,397 € -> 14,40 € TTC, et non le palier suivant
+     * (20,40 €) qu'un coût arrondi à 2,00 € aurait donné.
+     */
+    public function test_le_bareme_part_du_cout_exact_sans_larrondir(): void
+    {
+        app(TenantContext::class)->magasin()->update(['prix_vente_automatique' => true]);
+
+        app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Câble', 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => '2.35', 'remise_pourcentage' => 15],
+        ]);
+
+        $this->assertSame('14.40', Produit::query()->sole()->prix_vente_ttc);
     }
 
     public function test_une_facture_dachat_refusee_ne_laisse_aucun_produit_derriere_elle(): void
@@ -329,6 +343,24 @@ class FactureAchatActionsTest extends TestCase
         app(ValiderFactureAchatAction::class)->handle($factureAchat);
 
         $this->assertSame('90.0000', $produit->fresh()->cmup_ht);
+    }
+
+    /**
+     * Le coût d'un article n'est pas arrondi au centime avant le CMUP : 3 x
+     * 1,18 € remisés de 15 % coûtent 1,003 € chacun (la ligne vaut 3,01 €
+     * HT), pas 1,00 €.
+     */
+    public function test_le_cmup_retient_le_cout_exact_sans_larrondir_au_centime(): void
+    {
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => '1.18', 'remise_pourcentage' => 15],
+        ]);
+
+        app(ValiderFactureAchatAction::class)->handle($factureAchat);
+
+        $this->assertSame('1.0030', $produit->fresh()->cmup_ht);
+        $this->assertSame('3.01', $factureAchat->fresh()->total_ht);
     }
 
     /**

@@ -11,7 +11,6 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDAchat;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -89,7 +88,7 @@ class FactureAchatResource extends Resource
 
             FormSection::make('Produits reçus')->schema([
                 ...self::lignesDAchat(),
-                self::totauxDuDocument(PrixReference::Ht)->label('Total de la facture d\'achat (à payer au fournisseur)'),
+                self::totauxDuDocument()->label('Total de la facture d\'achat (à payer au fournisseur)'),
             ]),
         ]);
     }

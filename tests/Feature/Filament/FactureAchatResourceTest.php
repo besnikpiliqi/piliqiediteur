@@ -172,6 +172,29 @@ class FactureAchatResourceTest extends TestCase
     }
 
     /**
+     * Le bénéfice affiché part du coût exact : 2,01 € remisés de 50 %
+     * coûtent 1,005 € ; vendu 13,20 € TTC (11,00 € HT), l'article rapporte
+     * 9,995 € -> 10,00 €, et non 11,00 € - 1,01 € = 9,99 €.
+     */
+    public function test_le_benefice_affiche_part_du_cout_exact(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
+                'origine' => 'nouveau',
+                'nom' => 'Câble USB-C',
+                'quantite' => 1,
+                'prix_unitaire_ht' => '2.01',
+                'remise_pourcentage' => '50',
+                'prix_vente_ttc' => '13.20',
+                'taux_tva' => '20',
+            ])
+            ->assertSee("13,20 € TTC l'article · bénéfice 10,00 € HT par article");
+    }
+
+    /**
      * Facture signalée par le magasin : 10 x 1,18 € HT montrait 2,40 € de
      * TVA (10 x 1,42 €, le PU TTC arrondi) ; la TVA est 20 % des 11,80 € HT
      * de la ligne.

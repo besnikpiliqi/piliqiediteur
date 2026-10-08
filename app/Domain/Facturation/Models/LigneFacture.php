@@ -5,7 +5,6 @@ namespace App\Domain\Facturation\Models;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Facturation\Enums\NatureLigne;
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -29,7 +28,6 @@ class LigneFacture extends Model
         'quantite',
         'prix_unitaire_ht',
         'prix_unitaire_ttc',
-        'prix_reference',
         'taux_tva',
         'remise_pourcentage',
         'montant_ht',
@@ -42,7 +40,6 @@ class LigneFacture extends Model
         'quantite' => 'integer',
         'prix_unitaire_ht' => 'decimal:2',
         'prix_unitaire_ttc' => 'decimal:2',
-        'prix_reference' => PrixReference::class,
         'nature' => NatureLigne::class,
         'taux_tva' => 'decimal:2',
         'remise_pourcentage' => 'decimal:2',
@@ -100,35 +97,28 @@ class LigneFacture extends Model
     }
 
     /**
-     * Montants d'un retour de $quantite articles de cette ligne, calculés
-     * comme la ligne vendue (voir CalculateurLigne), et pour le retour qui
-     * finit de la créditer, son solde exact une fois déduits les avoirs
-     * déjà émis -- jamais un centime de plus ou de moins que la ligne
-     * vendue (voir CalculateurLigne::solder()).
+     * Montants d'un retour de $quantite articles de cette ligne : la ligne
+     * calculée pour tout ce qui en a été rendu jusqu'ici, moins ce que les
+     * avoirs déjà émis ont crédité (voir CalculateurLigne::retourCumule()).
+     * Le dernier retour retombe ainsi exactement sur la ligne vendue.
      *
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
      */
     public function montantsDuRetour(int $quantite): array
     {
         $calculateur = app(CalculateurLigne::class);
+        $avoirsEmis = $this->lignesAvoir()
+            ->whereHas('avoir', fn ($query) => $query->where('statut', StatutAvoir::Emise))
+            ->get(['quantite', 'montant_ht', 'montant_tva', 'montant_ttc']);
 
-        if ($quantite === $this->quantiteCreditableRestante()) {
-            return $calculateur->solder(
-                $this->only(['montant_ht', 'montant_tva', 'montant_ttc']),
-                $this->lignesAvoir()
-                    ->whereHas('avoir', fn ($query) => $query->where('statut', StatutAvoir::Emise))
-                    ->get(['montant_ht', 'montant_tva', 'montant_ttc'])
-                    ->toArray(),
-            );
-        }
-
-        return $calculateur->calculer(
-            $this->prix_reference,
-            (float) $this->prix_unitaire_ht,
-            $this->prix_unitaire_ttc === null ? null : (float) $this->prix_unitaire_ttc,
-            (float) $this->taux_tva,
-            $quantite,
-            (float) $this->remise_pourcentage,
+        return $calculateur->retourCumule(
+            $calculateur->montantsDeVente(
+                (float) $this->prix_unitaire_ht,
+                (float) $this->prix_unitaire_ttc,
+                (int) $avoirsEmis->sum('quantite') + $quantite,
+                (float) $this->remise_pourcentage,
+            ),
+            $avoirsEmis->toArray(),
         );
     }
 }

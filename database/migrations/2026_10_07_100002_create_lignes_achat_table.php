@@ -23,15 +23,10 @@ return new class extends Migration
             $table->string('reference', 60)->nullable();
             // Nombre entier d'articles (voir QuantiteEntiere).
             $table->unsignedInteger('quantite');
-            // Les prix unitaires tels qu'ils ont été saisis, au centime :
-            // celui que désigne prix_reference fait foi pour le calcul de
-            // la ligne. Un prix TTC a aussi son PU HT (sa conversion, comme
-            // sur la fiche du produit) ; un prix HT n'a pas de PU TTC, la
-            // TVA se calculant sur le HT de la ligne (voir PrixReference et
-            // CalculateurLigne).
+            // Un achat part du PU HT du fournisseur, sans PU TTC : la TVA se
+            // calcule sur le HT de la ligne (voir
+            // CalculateurLigne::montantsDAchat()).
             $table->decimal('prix_unitaire_ht', 12, 2);
-            $table->decimal('prix_unitaire_ttc', 12, 2)->nullable();
-            $table->string('prix_reference', 3);
             $table->decimal('taux_tva', 5, 2);
             $table->decimal('remise_pourcentage', 5, 2)->default(0);
             $table->decimal('montant_ht', 12, 2);

@@ -8,7 +8,6 @@ use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Filament\App\Resources\DevisResource\Pages;
@@ -77,7 +76,7 @@ class DevisResource extends Resource
                 // facture : cette page n'est de toute façon accessible que
                 // dans ce cas (voir DevisPolicy::update() et EditDevis).
                 ...self::lignesDeVente(),
-                self::totauxDuDocument(PrixReference::Ttc),
+                self::totauxDuDocument(),
             ]),
         ]);
     }

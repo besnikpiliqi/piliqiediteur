@@ -117,8 +117,8 @@ class AvoirFournisseurResourceTest extends TestCase
 
     /**
      * L'avoir fournisseur a sa fiche, comme l'avoir client : chaque article
-     * retourné avec son PU HT, son PU TTC, son HT, sa TVA et son TTC, et le
-     * récapitulatif par taux.
+     * retourné avec son PU HT, son HT, sa TVA et son TTC (un achat n'a pas
+     * de PU TTC), et le récapitulatif par taux.
      */
     public function test_la_fiche_de_lavoir_fournisseur_montre_chaque_ligne_et_la_tva_par_taux(): void
     {
@@ -129,7 +129,7 @@ class AvoirFournisseurResourceTest extends TestCase
 
         $produit = Produit::factory()->create(['nom' => 'Ecran Iphone 18', 'taux_tva' => 20, 'suivi_stock' => false]);
         $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
-            ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20],
+            ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => '33.65', 'taux_tva' => 20],
         ]));
         $avoir = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
             ['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => 1],
@@ -140,9 +140,10 @@ class AvoirFournisseurResourceTest extends TestCase
         Livewire::test(ViewAvoirFournisseur::class, ['record' => $avoir->getRouteKey()])
             ->assertSuccessful()
             ->assertSee('Ecran Iphone 18')
-            ->assertSee('33,33')
-            ->assertSee('6,67')
-            ->assertSee('40,00')
+            ->assertSee('33,65')
+            ->assertSee('6,73')
+            ->assertSee('40,38')
+            ->assertDontSee('PU TTC')
             ->assertSee('TVA par taux')
             ->assertSee('20 %');
     }

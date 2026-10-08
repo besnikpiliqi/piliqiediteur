@@ -96,7 +96,6 @@ class CreerAvoirAction
                     'quantite' => $quantite,
                     'prix_unitaire_ht' => $ligneFacture->prix_unitaire_ht,
                     'prix_unitaire_ttc' => $ligneFacture->prix_unitaire_ttc,
-                    'prix_reference' => $ligneFacture->prix_reference,
                     'taux_tva' => $ligneFacture->taux_tva,
                     'remise_pourcentage' => $ligneFacture->remise_pourcentage,
                     'ordre' => $index,

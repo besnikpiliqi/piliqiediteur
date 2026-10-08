@@ -169,7 +169,7 @@ class ParametresPrixDeVente extends Page implements HasForms
                 return 'Aucun bénéfice prévu à ce prix d\'achat : le prix de vente se saisit à la main.';
             }
 
-            $beneficeReel = $calculateur->soustraire($calculateur->prixUnitaireHtDepuisTtc($prix['prix_vente_ttc'], $tauxTva), $prixAchatHt);
+            $beneficeReel = $calculateur->beneficeUnitaire($calculateur->prixUnitaireHtDepuisTtc($prix['prix_vente_ttc'], $tauxTva), $prixAchatHt);
         } catch (InvalidArgumentException) {
             return '—';
         }

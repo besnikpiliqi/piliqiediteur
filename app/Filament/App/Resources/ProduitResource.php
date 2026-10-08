@@ -3,7 +3,6 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ProduitResource\Pages;
@@ -152,13 +151,14 @@ class ProduitResource extends Resource
         $calculateur = app(CalculateurLigne::class);
 
         try {
-            $prix = $calculateur->prixUnitaires(PrixReference::Ttc, (float) $get('prix_vente_ttc'), (float) ($get('taux_tva') ?? 20));
+            $prixUnitaireTtc = $calculateur->arrondirAuCentime((float) $get('prix_vente_ttc'));
+            $prixUnitaireHt = $calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, (float) ($get('taux_tva') ?? 20));
         } catch (InvalidArgumentException) {
             return null;
         }
 
-        return 'Soit '.number_format($prix['prix_unitaire_ht'], 2, ',', ' ').' € HT + '
-            .number_format($calculateur->soustraire($prix['prix_unitaire_ttc'], $prix['prix_unitaire_ht']), 2, ',', ' ').' € de TVA';
+        return 'Soit '.number_format($prixUnitaireHt, 2, ',', ' ').' € HT + '
+            .number_format($calculateur->soustraire($prixUnitaireTtc, $prixUnitaireHt), 2, ',', ' ').' € de TVA';
     }
 
     /**

@@ -2,6 +2,8 @@
 
 namespace App\Filament\App\Resources;
 
+use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
@@ -9,7 +11,6 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
@@ -114,7 +115,7 @@ class FactureResource extends Resource
                 // que pour un brouillon (voir FacturePolicy::update()), qui
                 // n'a aucune existence légale à préserver.
                 ...DevisResource::lignesDeVente(),
-                DevisResource::totauxDuDocument(PrixReference::Ttc),
+                DevisResource::totauxDuDocument(),
             ]),
         ]);
     }
@@ -270,14 +271,15 @@ class FactureResource extends Resource
     /**
      * Lignes d'un document (facture, avoir, devis, facture d'achat, avoir
      * fournisseur) : pour chaque article son PU HT, son PU TTC et son taux,
-     * puis le HT, la TVA et le TTC de la ligne (voir CalculateurLigne). Une
-     * ligne au prix HT n'a pas de PU TTC : sa TVA se calcule sur son total
-     * HT. La remise n'apparaît que si une ligne du document en a une :
-     * c'est elle qui explique alors que PU x quantité diffère du total.
+     * puis le HT, la TVA et le TTC de la ligne (voir CalculateurLigne). Un
+     * achat n'a pas de PU TTC : sa TVA se calcule sur le HT de la ligne. La
+     * remise n'apparaît que si une ligne du document en a une : c'est elle
+     * qui explique alors que PU x quantité diffère du total.
      */
     public static function lignesEntry(?Model $document): RepeatableEntry
     {
         $avecRemise = $document?->lignes->contains(fn (Model $ligne): bool => (float) $ligne->remise_pourcentage != 0) ?? false;
+        $estUnAchat = $document instanceof FactureAchat || $document instanceof AvoirFournisseur;
 
         return RepeatableEntry::make('lignes')
             ->label('')
@@ -285,14 +287,14 @@ class FactureResource extends Resource
                 TextEntry::make('description'),
                 TextEntry::make('quantite')->label('Quantité')->numeric(),
                 TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
-                TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR')->placeholder('—'),
+                TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR')->hidden($estUnAchat),
                 TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
                 TextEntry::make('remise_pourcentage')->label('Remise')->numeric(maxDecimalPlaces: 2)->suffix(' %')->visible($avecRemise),
                 TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
                 TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
                 TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
             ])
-            ->columns($avecRemise ? 9 : 8);
+            ->columns(($avecRemise ? 9 : 8) - ($estUnAchat ? 1 : 0));
     }
 
     /**

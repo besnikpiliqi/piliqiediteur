@@ -5,7 +5,6 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Facturation\Enums\NatureLigne;
-use App\Domain\Facturation\Enums\PrixReference;
 use InvalidArgumentException;
 
 /**
@@ -20,10 +19,7 @@ use InvalidArgumentException;
  */
 class ConstructeurLigneDocument
 {
-    public function __construct(
-        private readonly CalculateurLigne $calculateur,
-        private readonly ResolveurPrixLigne $resolveurPrix,
-    ) {}
+    public function __construct(private readonly CalculateurLigne $calculateur) {}
 
     /**
      * Une ligne vend un produit du catalogue (un bien) ou un service du
@@ -31,12 +27,13 @@ class ConstructeurLigneDocument
      * description et sa référence en sont la copie, elles ne se corrigent
      * que dans la fiche du produit ou du service.
      *
-     * Le prix saisi (HT ou TTC, voir PrixReference) fait foi pour le calcul
-     * de la ligne ; sans prix saisi, c'est le prix de vente TTC du produit
-     * catalogue. Une ligne de service (voir Service) n'a pas de prix
-     * catalogue : son prix est toujours saisi.
+     * Une vente part toujours d'un prix TTC (voir CalculateurLigne) : le PU
+     * TTC saisi, sinon le prix de vente TTC enregistré sur la fiche du
+     * produit ; son PU HT en est la conversion au centime, la même que sur
+     * la fiche. Une ligne de service (voir Service) n'a pas de prix
+     * catalogue : son PU TTC est toujours saisi.
      *
-     * @param  array{produit_id?: int, service_id?: int, quantite: int|string, prix_unitaire_ht?: float|string|null, prix_unitaire_ttc?: float|string|null, prix_reference?: string|PrixReference|null, taux_tva?: float|string, remise_pourcentage?: float|string}  $donnees
+     * @param  array{produit_id?: int, service_id?: int, quantite: int|string, prix_unitaire_ttc?: float|string|null, taux_tva?: float|string, remise_pourcentage?: float|string}  $donnees
      * @return array<string, mixed>
      */
     public function construire(array $donnees, int $ordre): array
@@ -62,24 +59,11 @@ class ConstructeurLigneDocument
 
         $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
 
-        $prix = $this->resolveurPrix->resoudre(
-            $donnees,
-            PrixReference::Ttc,
-            $tauxTva,
-            $produit === null ? null : (float) $produit->prix_vente_ht,
-            $produit === null ? null : (float) $produit->prix_vente_ttc,
-        );
-
+        $prixUnitaireTtc = $this->calculateur->arrondirAuCentime((float) (filled($donnees['prix_unitaire_ttc'] ?? null)
+            ? $donnees['prix_unitaire_ttc']
+            : ($produit?->prix_vente_ttc ?? throw new InvalidArgumentException('Une ligne de service doit fournir prix_unitaire_ttc.'))));
+        $prixUnitaireHt = $this->calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, $tauxTva);
         $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
-
-        $montants = $this->calculateur->calculer(
-            $prix['prix_reference'],
-            $prix['prix_unitaire_ht'],
-            $prix['prix_unitaire_ttc'],
-            $tauxTva,
-            $quantite,
-            $remise,
-        );
 
         return [
             'produit_id' => $produit?->id,
@@ -88,11 +72,12 @@ class ConstructeurLigneDocument
             'description' => $produit?->nom ?? $service->nom,
             'reference' => $produit?->reference,
             'quantite' => $quantite,
-            ...$prix,
+            'prix_unitaire_ht' => $prixUnitaireHt,
+            'prix_unitaire_ttc' => $prixUnitaireTtc,
             'taux_tva' => $tauxTva,
             'remise_pourcentage' => $remise,
             'ordre' => $ordre,
-            ...$montants,
+            ...$this->calculateur->montantsDeVente($prixUnitaireHt, $prixUnitaireTtc, $quantite, $remise),
         ];
     }
 

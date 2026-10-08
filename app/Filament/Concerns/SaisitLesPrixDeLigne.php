@@ -2,10 +2,8 @@
 
 namespace App\Filament\Concerns;
 
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
-use App\Domain\Facturation\Services\ResolveurPrixLigne;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
@@ -14,12 +12,14 @@ use Filament\Forms\Set;
 use InvalidArgumentException;
 
 /**
- * Prix et totaux d'une ligne de document, à l'écran : calculés par le même
- * résolveur et le même calculateur que l'enregistrement réel (voir
+ * Prix et totaux d'une ligne de document, à l'écran : calculés comme à
+ * l'enregistrement réel, par le même calculateur (voir
  * montantsDeLigneSaisie()).
  */
 trait SaisitLesPrixDeLigne
 {
+    private const AUCUN_MONTANT = ['montant_ht' => 0.0, 'montant_tva' => 0.0, 'montant_ttc' => 0.0];
+
     /**
      * PU HT, PU TTC et TVA d'une ligne de vente : seul le PU TTC se saisit
      * (le prix affiché au client, repris tel quel de la fiche du produit),
@@ -99,10 +99,10 @@ trait SaisitLesPrixDeLigne
             ->label('Total TTC')
             ->columnSpanFull()
             ->content(fn (Get $get): string => self::montantEnTexte(
-                self::montantsDeLigneSaisie(self::ligneSaisie($get), PrixReference::Ttc)['montant_ttc'],
+                self::montantsDeLigneSaisie(self::ligneSaisie($get))['montant_ttc'],
             ))
             ->helperText(function (Get $get): string {
-                $montants = self::montantsDeLigneSaisie(self::ligneSaisie($get), PrixReference::Ttc);
+                $montants = self::montantsDeLigneSaisie(self::ligneSaisie($get));
 
                 return self::montantEnTexte($montants['montant_ht']).' HT + '.self::montantEnTexte($montants['montant_tva']).' de TVA';
             });
@@ -112,15 +112,15 @@ trait SaisitLesPrixDeLigne
      * Totaux du document en cours de saisie, sommés séparément comme à
      * l'enregistrement (voir CalculateurLigne::totaliser()).
      */
-    public static function totauxDuDocument(PrixReference $referenceParDefaut): Placeholder
+    public static function totauxDuDocument(): Placeholder
     {
         return Placeholder::make('totaux_document')
             ->label('Totaux')
             ->columnSpanFull()
-            ->content(function (Get $get) use ($referenceParDefaut): string {
+            ->content(function (Get $get): string {
                 try {
                     $totaux = app(CalculateurLigne::class)->totaliser(collect($get('lignes') ?? [])
-                        ->map(fn (array $ligne): array => self::montantsDeLigneSaisie($ligne, $referenceParDefaut)));
+                        ->map(fn (array $ligne): array => self::montantsDeLigneSaisie($ligne)));
                 } catch (InvalidArgumentException) {
                     return '—';
                 }
@@ -137,31 +137,32 @@ trait SaisitLesPrixDeLigne
     }
 
     /**
+     * Une ligne de vente en cours de saisie, calculée comme à
+     * l'enregistrement (voir ConstructeurLigneDocument) : depuis son PU TTC.
+     * Une saisie pas encore valable (prix ou quantité vide, quantité à
+     * virgule, taux ou remise hors de 0-100 %) ne donne aucun montant,
+     * plutôt qu'un montant faux (1,5 compté comme 1).
+     *
      * @param  array<string, mixed>  $ligne
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
      */
-    public static function montantsDeLigneSaisie(array $ligne, PrixReference $referenceParDefaut): array
+    public static function montantsDeLigneSaisie(array $ligne): array
     {
         $calculateur = app(CalculateurLigne::class);
-        $tauxTva = (float) ($ligne['taux_tva'] ?? 0);
 
-        // Une saisie pas encore valable (quantité vide ou à virgule, taux ou
-        // remise hors de 0-100 %) ne donne aucun montant, plutôt qu'un
-        // montant faux (1,5 compté comme 1).
         try {
-            $quantite = QuantiteEntiere::depuisSaisie($ligne['quantite'] ?? null);
-            $prix = app(ResolveurPrixLigne::class)->resoudre($ligne, $referenceParDefaut, $tauxTva);
+            $prixUnitaireTtc = $calculateur->arrondirAuCentime((float) (filled($ligne['prix_unitaire_ttc'] ?? null)
+                ? $ligne['prix_unitaire_ttc']
+                : throw new InvalidArgumentException('PU TTC à saisir.')));
 
-            return $calculateur->calculer(
-                $prix['prix_reference'],
-                $prix['prix_unitaire_ht'],
-                $prix['prix_unitaire_ttc'],
-                $tauxTva,
-                $quantite,
+            return $calculateur->montantsDeVente(
+                $calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, (float) ($ligne['taux_tva'] ?? 0)),
+                $prixUnitaireTtc,
+                QuantiteEntiere::depuisSaisie($ligne['quantite'] ?? null),
                 (float) ($ligne['remise_pourcentage'] ?? 0),
             );
         } catch (InvalidArgumentException) {
-            return ['montant_ht' => 0.0, 'montant_tva' => 0.0, 'montant_ttc' => 0.0];
+            return self::AUCUN_MONTANT;
         }
     }
 

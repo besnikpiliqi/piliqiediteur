@@ -7,7 +7,6 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Enums\NatureLigne;
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
@@ -152,39 +151,30 @@ class CreerFactureActionTest extends TestCase
     }
 
     /**
-     * Le prix réellement saisi sur chaque ligne est gardé tel quel, quel que
-     * soit le client, et multiplié par la quantité -- même au sein d'un même
-     * document : 8,33 € HT x 3 = 24,99 € HT + 5,00 € de TVA (20 % de
-     * 24,99 €), sans PU TTC ; 40 € TTC x 2 = 80,00 € TTC, soit 2 x 33,33 €
-     * HT.
+     * Une vente part toujours de son PU TTC, quel que soit le client,
+     * multiplié par la quantité ; son PU HT en est la conversion au
+     * centime, article par article : 40 € TTC x 2 = 80,00 € TTC, soit 2 x
+     * 33,33 € = 66,66 € HT ; 10,05 € TTC (8,375 € -> 8,38 € HT) x 3 =
+     * 30,15 € TTC et 25,14 € HT.
      */
-    public function test_chaque_ligne_est_calculee_depuis_le_prix_reellement_saisi(): void
+    public function test_une_vente_part_toujours_du_pu_ttc(): void
     {
         $client = Client::factory()->create();
-        $cable = Produit::factory()->create(['taux_tva' => 20]);
         $coque = Produit::factory()->create(['taux_tva' => 20]);
+        $cable = Produit::factory()->create(['taux_tva' => 20]);
 
         $facture = app(CreerFactureAction::class)->handle($client, [
-            ['produit_id' => $cable->id, 'quantite' => 3, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20],
             ['produit_id' => $coque->id, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20],
+            ['produit_id' => $cable->id, 'quantite' => 3, 'prix_unitaire_ttc' => '10.05', 'taux_tva' => 20],
         ]);
 
-        [$ligneHt, $ligneTtc] = $facture->lignes->sortBy('ordre')->values()->all();
+        [$ligneCoque, $ligneCable] = $facture->lignes->sortBy('ordre')->values()->all();
 
-        $this->assertSame(PrixReference::Ht, $ligneHt->prix_reference);
-        $this->assertSame('24.99', $ligneHt->montant_ht);
-        $this->assertSame('5.00', $ligneHt->montant_tva);
-        $this->assertSame('29.99', $ligneHt->montant_ttc);
-        $this->assertNull($ligneHt->prix_unitaire_ttc);
-
-        $this->assertSame(PrixReference::Ttc, $ligneTtc->prix_reference);
-        $this->assertSame('80.00', $ligneTtc->montant_ttc);
-        $this->assertSame('66.66', $ligneTtc->montant_ht);
-        $this->assertSame('33.33', $ligneTtc->prix_unitaire_ht);
-
-        $this->assertSame('91.65', $facture->total_ht);
-        $this->assertSame('18.34', $facture->total_tva);
-        $this->assertSame('109.99', $facture->total_ttc);
+        $this->assertSame(['33.33', '40.00'], [$ligneCoque->prix_unitaire_ht, $ligneCoque->prix_unitaire_ttc]);
+        $this->assertSame(['66.66', '13.34', '80.00'], [$ligneCoque->montant_ht, $ligneCoque->montant_tva, $ligneCoque->montant_ttc]);
+        $this->assertSame(['8.38', '10.05'], [$ligneCable->prix_unitaire_ht, $ligneCable->prix_unitaire_ttc]);
+        $this->assertSame(['25.14', '5.01', '30.15'], [$ligneCable->montant_ht, $ligneCable->montant_tva, $ligneCable->montant_ttc]);
+        $this->assertSame(['91.80', '18.35', '110.15'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 
     /**
@@ -207,7 +197,6 @@ class CreerFactureActionTest extends TestCase
         [$ligneCoque, $ligneCable] = $facture->lignes->sortBy('ordre')->values()->all();
 
         foreach ([[$ligneCoque, $coque->fresh()], [$ligneCable, $cable->fresh()]] as [$ligne, $produit]) {
-            $this->assertSame(PrixReference::Ttc, $ligne->prix_reference);
             $this->assertSame([$produit->prix_vente_ht, $produit->prix_vente_ttc], [$ligne->prix_unitaire_ht, $ligne->prix_unitaire_ttc]);
         }
 

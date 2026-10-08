@@ -6,7 +6,6 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
-use App\Domain\Facturation\Enums\PrixReference;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\ClientResource;
@@ -118,7 +117,7 @@ class Caisse extends Page implements HasForms
 
             Section::make('Produits et services')->schema([
                 ...DevisResource::lignesDeVente(),
-                DevisResource::totauxDuDocument(PrixReference::Ttc),
+                DevisResource::totauxDuDocument(),
             ]),
 
             Section::make('Paiement')->schema([
@@ -234,7 +233,7 @@ class Caisse extends Page implements HasForms
      */
     private function totalTtc(array $lignes): float
     {
-        $montants = collect($lignes)->map(fn (array $ligne) => DevisResource::montantsDeLigneSaisie($ligne, PrixReference::Ttc));
+        $montants = collect($lignes)->map(fn (array $ligne) => DevisResource::montantsDeLigneSaisie($ligne));
 
         try {
             return app(CalculateurLigne::class)->totaliser($montants)['total_ttc'];

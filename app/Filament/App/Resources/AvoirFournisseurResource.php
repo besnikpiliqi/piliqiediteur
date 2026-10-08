@@ -39,9 +39,10 @@ class AvoirFournisseurResource extends Resource
     }
 
     /**
-     * Mêmes colonnes que l'avoir client (voir FactureResource::lignesEntry()) :
-     * pour chaque article retourné, PU HT, PU TTC, taux, puis HT, TVA et
-     * TTC de la ligne, et le récapitulatif par taux.
+     * Mêmes colonnes que la facture d'achat (voir
+     * FactureResource::lignesEntry()) : pour chaque article retourné, PU
+     * HT, taux, puis HT, TVA et TTC de la ligne, et le récapitulatif par
+     * taux.
      */
     public static function infolist(Infolist $infolist): Infolist
     {

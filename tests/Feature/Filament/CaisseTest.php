@@ -152,8 +152,8 @@ class CaisseTest extends TestCase
             ->fillForm([
                 'client_id' => $clientComptoir->id,
                 'lignes' => [
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20, 'remise_pourcentage' => 0],
-                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 8.33, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => '8.33', 'prix_unitaire_ttc' => '10.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => '8.33', 'prix_unitaire_ttc' => '10.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
                 'mode_paiement' => 'especes',
                 'montant_recu' => 25,

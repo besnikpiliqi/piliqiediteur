@@ -191,58 +191,98 @@ class AvoirFournisseurActionsTest extends TestCase
         $this->assertSame(0, $ligneAchat->fresh()->quantiteRetournableRestante());
     }
 
-    /**
-     * Ticket d'achat saisi en TTC (2 x 40 € TTC = 80,00 €) : HT, TVA et TTC
-     * retournés retombent pile sur la ligne achetée (66,66 € / 13,34 € /
-     * 80,00 €), le dernier retour en prenant le solde exact.
-     */
-    public function test_le_dernier_retour_fournisseur_dune_ligne_en_credite_le_solde_exact(): void
+    private function acheter(float $prixUnitaireHt, int $quantite, float $remisePourcentage = 0): FactureAchat
     {
-        $fournisseur = Fournisseur::factory()->create();
         $produit = Produit::factory()->create(['suivi_stock' => false]);
-        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
-            ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20],
+
+        return app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'remise_pourcentage' => $remisePourcentage],
         ]));
-        $ligneAchat = $factureAchat->lignes->firstOrFail();
-
-        $this->assertSame(['66.66', '13.34', '80.00'], [$factureAchat->total_ht, $factureAchat->total_tva, $factureAchat->total_ttc]);
-
-        $premier = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
-            ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1],
-        ]));
-        $dernier = app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
-            ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1],
-        ]);
-
-        $this->assertSame(['33.33', '6.67', '40.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
-        $this->assertSame(['33.33', '6.67', '40.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
     }
 
     /**
-     * Même règle côté fournisseur : 2 x 40 € TTC remisés de 10 % = 59,99 €
-     * HT ; le premier article rendu vaut 30,00 € HT, le dernier en prend
-     * le solde (29,99 € HT, 6,01 € de TVA).
+     * 10 x 0,13 € HT (1,30 € + 0,26 € de TVA) retournés un par un : chaque
+     * retour vaut la ligne calculée pour tout ce qui a été rendu moins les
+     * retours précédents -- 0,02 € ou 0,03 € de TVA, jamais -0,01 € au
+     * dernier -- et leur somme retombe exactement sur la ligne achetée.
      */
-    public function test_le_dernier_retour_fournisseur_dune_ligne_remisee_en_credite_le_solde_exact(): void
+    public function test_des_retours_fournisseur_un_par_un_retombent_exactement_sur_la_ligne(): void
     {
-        $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['suivi_stock' => false]);
-        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
-            ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20, 'remise_pourcentage' => 10],
-        ]));
+        $factureAchat = $this->acheter(0.13, 10);
+        $ligneAchat = $factureAchat->lignes->firstOrFail();
+        $tvaParRetour = [];
+
+        for ($retour = 1; $retour <= 10; $retour++) {
+            $avoir = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
+                ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1],
+            ]));
+            $tvaParRetour[] = $avoir->total_tva;
+        }
+
+        $this->assertSame(['0.03', '0.02', '0.03', '0.02', '0.03', '0.03', '0.02', '0.03', '0.02', '0.03'], $tvaParRetour);
+        $this->assertSame(['1.30', '0.26', '1.56'], [$factureAchat->total_ht, $factureAchat->total_tva, $factureAchat->total_ttc]);
+    }
+
+    /**
+     * 2 x 33,33 € HT remisés de 10 % = 59,99 € HT (6,666 € de remise ->
+     * 6,67 €) + 12,00 € de TVA ; le premier article rendu vaut 30,00 € HT
+     * + 6,00 € de TVA, le second le reste de la ligne : 29,99 € HT + 6,00 €.
+     */
+    public function test_le_second_retour_fournisseur_dune_ligne_remisee_vaut_le_reste_de_la_ligne(): void
+    {
+        $factureAchat = $this->acheter(33.33, 2, 10);
         $ligneAchat = $factureAchat->lignes->firstOrFail();
 
-        $this->assertSame(['59.99', '12.01', '72.00'], [$factureAchat->total_ht, $factureAchat->total_tva, $factureAchat->total_ttc]);
+        $this->assertSame(['59.99', '12.00', '71.99'], [$factureAchat->total_ht, $factureAchat->total_tva, $factureAchat->total_ttc]);
 
         $premier = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
             ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1],
         ]));
-        $dernier = app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
+        $second = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
             ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1],
-        ]);
+        ]));
 
         $this->assertSame(['30.00', '6.00', '36.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
-        $this->assertSame(['29.99', '6.01', '36.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+        $this->assertSame(['29.99', '6.00', '35.99'], [$second->total_ht, $second->total_tva, $second->total_ttc]);
+    }
+
+    /**
+     * Deux retours saisis en même temps (deux brouillons) : leurs montants
+     * sont arrêtés à l'émission, sur les retours déjà émis -- le second
+     * prend le reste de la ligne (0,23 € de TVA), jamais un centime de
+     * plus que la facture d'achat.
+     */
+    public function test_deux_brouillons_simultanes_sont_arretes_a_lemission(): void
+    {
+        $factureAchat = $this->acheter(1.18, 2);
+        $ligneAchat = $factureAchat->lignes->firstOrFail();
+        $selection = [['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1]];
+
+        $brouillonA = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, $selection);
+        $brouillonB = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, $selection);
+
+        $avoirA = app(EmettreAvoirFournisseurAction::class)->handle($brouillonA);
+        $avoirB = app(EmettreAvoirFournisseurAction::class)->handle($brouillonB);
+
+        $this->assertSame(['2.36', '0.47', '2.83'], [$factureAchat->total_ht, $factureAchat->total_tva, $factureAchat->total_ttc]);
+        $this->assertSame(['1.18', '0.24', '1.42'], [$avoirA->total_ht, $avoirA->total_tva, $avoirA->total_ttc]);
+        $this->assertSame(['1.18', '0.23', '1.41'], [$avoirB->total_ht, $avoirB->total_tva, $avoirB->total_ttc]);
+        $this->assertSame(['1.18', '0.23', '1.41'], [$avoirB->lignes->sole()->montant_ht, $avoirB->lignes->sole()->montant_tva, $avoirB->lignes->sole()->montant_ttc]);
+    }
+
+    public function test_un_brouillon_dont_la_ligne_a_ete_retournee_entre_temps_ne_peut_pas_etre_emis(): void
+    {
+        $factureAchat = $this->acheter(1.18, 1);
+        $selection = [['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => 1]];
+
+        $brouillonA = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, $selection);
+        $brouillonB = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, $selection);
+        app(EmettreAvoirFournisseurAction::class)->handle($brouillonA);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('a été retournée ou vendue entre-temps : il ne reste que 0 article(s) à retourner.');
+
+        app(EmettreAvoirFournisseurAction::class)->handle($brouillonB);
     }
 
     public function test_une_quantite_a_retourner_non_entiere_est_refusee(): void

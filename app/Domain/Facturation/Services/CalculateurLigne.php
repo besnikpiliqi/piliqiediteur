@@ -2,25 +2,24 @@
 
 namespace App\Domain\Facturation\Services;
 
-use App\Domain\Facturation\Enums\PrixReference;
 use InvalidArgumentException;
 
 /**
- * Calcul HT/TVA/TTC d'une ligne de document, depuis le prix unitaire
- * réellement saisi (voir PrixReference). Seul le prix de vente TTC est un
- * prix arrondi ; rien d'autre ne s'arrondit à l'article.
+ * Calcul HT/TVA/TTC d'une ligne de document. Le seul prix arrondi est le
+ * prix de vente TTC, une fois, quand il est enregistré ; ensuite rien ne
+ * s'arrondit qu'au moment de calculer un montant.
  *
- * 1. Un prix TTC (le prix de vente affiché en magasin) se décompose
- *    article par article : chaque article a son PU HT, sa TVA et son
- *    PU TTC au centime, avec PU HT + TVA = PU TTC (voir prixUnitaires()),
- *    et la ligne multiplie séparément le HT et le TTC par la quantité, sa
- *    TVA étant leur différence : 2 x 40,00 € TTC = 66,66 € HT + 13,34 € de
- *    TVA = 80,00 € TTC.
- * 2. Un prix HT (facture d'achat, facture à un professionnel) se multiplie
- *    par la quantité, puis la TVA se calcule une seule fois sur le HT de la
- *    ligne, sans PU TTC arrondi entre les deux : 10 x 1,18 € HT = 11,80 €
- *    HT + 2,36 € de TVA (20 % de 11,80 €) = 14,16 € TTC -- et non 10 x
- *    1,42 € (1,18 € x 1,2 = 1,416 € arrondi) = 14,20 €.
+ * 1. Une vente part de son prix TTC, décomposé article par article :
+ *    chaque article a son PU HT (la conversion du TTC au centime, comme
+ *    sur la fiche du produit), sa TVA et son PU TTC, avec PU HT + TVA =
+ *    PU TTC ; la ligne multiplie séparément le HT et le TTC par la
+ *    quantité, sa TVA étant leur différence (montantsDeVente()) : 2 x
+ *    40,00 € TTC = 66,66 € HT + 13,34 € de TVA = 80,00 € TTC.
+ * 2. Un achat part du PU HT du fournisseur, multiplié par la quantité,
+ *    puis la TVA se calcule une seule fois sur le HT de la ligne
+ *    (montantsDAchat()) : 10 x 1,18 € HT = 11,80 € HT + 2,36 € de TVA
+ *    (20 % de 11,80 €) = 14,16 € TTC -- jamais 10 x 1,42 € (1,18 € x 1,2
+ *    = 1,416 € arrondi) = 14,20 €.
  * 3. Les totaux du document somment séparément les HT, les TVA et les TTC
  *    des lignes (totaliser()).
  *
@@ -41,70 +40,44 @@ class CalculateurLigne
     private const UNITES_MAXIMUM = 1e14;
 
     /**
-     * @param  PrixReference  $reference  le prix unitaire réellement saisi, qui fait foi
-     * @param  float|null  $prixUnitaireTtc  sans objet pour un prix saisi en HT
+     * Une ligne de vente, article par article depuis son PU TTC (voir le
+     * point 1 du commentaire de classe).
+     *
      * @param  int  $quantite  nombre entier d'articles (voir QuantiteEntiere)
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
      *
      * @throws InvalidArgumentException
      */
-    public function calculer(
-        PrixReference $reference,
-        float $prixUnitaireHt,
-        ?float $prixUnitaireTtc,
-        float $tauxTva,
-        int $quantite,
-        float $remisePourcentage = 0.0,
-    ): array {
-        $this->verifierTauxTva($tauxTva);
+    public function montantsDeVente(float $prixUnitaireHt, float $prixUnitaireTtc, int $quantite, float $remisePourcentage = 0.0): array
+    {
+        $remiseCentiemes = $this->remiseEnCentiemes($remisePourcentage);
 
-        if ($remisePourcentage < 0 || $remisePourcentage > 100) {
-            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
-        }
-
-        $remiseCentiemes = $this->versUnites($remisePourcentage, 100);
-        $montantHtCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireHt, 100), $quantite, $remiseCentiemes);
-
-        $montantTtcCentimes = match ($reference) {
-            PrixReference::Ttc => $this->montantNetCentimes(
-                $this->versUnites($prixUnitaireTtc ?? throw new InvalidArgumentException('Une ligne au prix TTC doit fournir son PU TTC.'), 100),
-                $quantite,
-                $remiseCentiemes,
-            ),
-            PrixReference::Ht => $montantHtCentimes + $this->diviserArrondi($this->multiplier($montantHtCentimes, $this->versUnites($tauxTva, 100)), 10000),
-        };
-
-        return [
-            'montant_ht' => $this->centimesVersMontant($montantHtCentimes),
-            'montant_tva' => $this->centimesVersMontant($montantTtcCentimes - $montantHtCentimes),
-            'montant_ttc' => $this->centimesVersMontant($montantTtcCentimes),
-        ];
+        return $this->montants(
+            $this->montantNetCentimes($this->versUnites($prixUnitaireHt, 100), $quantite, $remiseCentiemes),
+            $this->montantNetCentimes($this->versUnites($prixUnitaireTtc, 100), $quantite, $remiseCentiemes),
+        );
     }
 
     /**
-     * Les prix unitaires d'une ligne depuis le prix saisi, au centime : un
-     * prix TTC et son PU HT (la TVA de l'article étant leur différence
-     * exacte), ou un prix HT seul -- sans PU TTC arrondi, qui n'existe pas
-     * (voir calculer()).
+     * Une ligne d'achat, depuis le PU HT du fournisseur : la TVA se calcule
+     * une seule fois sur le HT de la ligne (voir le point 2 du commentaire
+     * de classe).
      *
-     * @return array{prix_unitaire_ht: float, prix_unitaire_ttc: float|null}
+     * @param  int  $quantite  nombre entier d'articles (voir QuantiteEntiere)
+     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     *
+     * @throws InvalidArgumentException
      */
-    public function prixUnitaires(PrixReference $reference, float $prixDeReference, float $tauxTva): array
+    public function montantsDAchat(float $prixUnitaireHt, float $tauxTva, int $quantite, float $remisePourcentage = 0.0): array
     {
         $this->verifierTauxTva($tauxTva);
 
-        $prixDeReference = $this->arrondirAuCentime($prixDeReference);
+        $montantHtCentimes = $this->montantNetCentimes($this->versUnites($prixUnitaireHt, 100), $quantite, $this->remiseEnCentiemes($remisePourcentage));
 
-        return match ($reference) {
-            PrixReference::Ttc => [
-                'prix_unitaire_ht' => $this->prixUnitaireHtDepuisTtc($prixDeReference, $tauxTva),
-                'prix_unitaire_ttc' => $prixDeReference,
-            ],
-            PrixReference::Ht => [
-                'prix_unitaire_ht' => $prixDeReference,
-                'prix_unitaire_ttc' => null,
-            ],
-        };
+        return $this->montants(
+            $montantHtCentimes,
+            $montantHtCentimes + $this->diviserArrondi($this->multiplier($montantHtCentimes, $this->versUnites($tauxTva, 100)), 10000),
+        );
     }
 
     public function prixUnitaireHtDepuisTtc(float $prixUnitaireTtc, float $tauxTva): float
@@ -189,20 +162,30 @@ class CalculateurLigne
      */
     public function coutUnitaireNet(float $prixUnitaireHt, float $remisePourcentage, float $escomptePourcentage = 0.0): float
     {
-        foreach ([$remisePourcentage, $escomptePourcentage] as $pourcentage) {
-            if ($pourcentage < 0 || $pourcentage > 100) {
-                throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
-            }
-        }
+        // (100 % - remise) x (100 % - escompte), en (centièmes de point)²,
+        // soit au plus 10^8. Le coût vaut centimes x facteur / 10^6, au
+        // dix-millième ; les centimes sont découpés autour de 10^6 pour
+        // que le produit ne déborde jamais, avec un seul arrondi.
+        $facteur = (10000 - $this->remiseEnCentiemes($remisePourcentage)) * (10000 - $this->remiseEnCentiemes($escomptePourcentage));
+        $centimes = $this->versUnites($prixUnitaireHt, 100);
 
-        // Centimes x (100 % - remise) x (100 % - escompte), en
-        // centièmes de point : 10^-10 €, ramenés au dix-millième.
-        $coutDixMilliemes = $this->diviserArrondi($this->multiplier(
-            $this->multiplier($this->versUnites($prixUnitaireHt, 100), 10000 - $this->versUnites($remisePourcentage, 100)),
-            10000 - $this->versUnites($escomptePourcentage, 100),
-        ), 1_000_000);
+        $coutDixMilliemes = $this->multiplier(intdiv($centimes, 1_000_000), $facteur)
+            + $this->diviserArrondi($this->multiplier($centimes % 1_000_000, $facteur), 1_000_000);
 
         return $coutDixMilliemes / 10000;
+    }
+
+    /**
+     * Ce que rapporte un article : son prix de vente HT moins son coût
+     * d'achat exact (voir coutUnitaireNet()), arrondi une seule fois au
+     * centime -- 11,00 € - 1,005 € = 9,995 € -> 10,00 €.
+     */
+    public function beneficeUnitaire(float $prixVenteHt, float $coutUnitaireHt): float
+    {
+        return $this->centimesVersMontant($this->diviserArrondi(
+            $this->versUnites($prixVenteHt, 10000) - $this->versUnites($coutUnitaireHt, 10000),
+            100,
+        ));
     }
 
     /**
@@ -241,26 +224,28 @@ class CalculateurLigne
     }
 
     /**
-     * Montants du dernier retour d'une ligne : ce qui reste de la ligne une
-     * fois déduits les retours déjà émis, plutôt qu'un recalcul de la
-     * quantité restante. Avec une remise, recalculer chaque retour pourrait
-     * créditer au total un centime de plus ou de moins que la ligne
-     * facturée (2 x 8,33 € HT remisés de 10 % = 14,99 € HT, mais chaque
-     * article rendu seul vaut 7,50 € HT) ; le solde garantit que HT, TVA et
-     * TTC crédités retombent exactement sur la ligne (7,50 € puis 7,49 €).
+     * Montants d'un retour : ceux de toute la quantité rendue jusqu'ici
+     * (retours déjà émis compris) moins ce que les retours déjà émis ont
+     * crédité -- jamais un recalcul du seul retour. Recalculer chaque
+     * retour à part arrondirait sa remise ou sa TVA une fois de plus : 10 x
+     * 0,13 € HT (1,30 € + 0,26 € de TVA) rendus un par un créditeraient
+     * 0,03 € de TVA neuf fois, et le dernier retour -0,01 €. En cumulé, la
+     * TVA créditée suit 0,03, 0,05, 0,08... jusqu'aux 0,26 € de la ligne,
+     * jamais négative, et le dernier retour retombe exactement sur la
+     * ligne.
      *
-     * @param  array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}  $montantsLigne
+     * @param  array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}  $montantsDuCumul  la ligne calculée pour toute la quantité rendue jusqu'ici
      * @param  iterable<array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}>  $montantsDejaCredites
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
      */
-    public function solder(array $montantsLigne, iterable $montantsDejaCredites): array
+    public function retourCumule(array $montantsDuCumul, iterable $montantsDejaCredites): array
     {
         $dejaCredite = $this->totaliser($montantsDejaCredites);
 
         return [
-            'montant_ht' => $this->centimesVersMontant($this->versUnites((float) $montantsLigne['montant_ht'], 100) - $this->versUnites($dejaCredite['total_ht'], 100)),
-            'montant_tva' => $this->centimesVersMontant($this->versUnites((float) $montantsLigne['montant_tva'], 100) - $this->versUnites($dejaCredite['total_tva'], 100)),
-            'montant_ttc' => $this->centimesVersMontant($this->versUnites((float) $montantsLigne['montant_ttc'], 100) - $this->versUnites($dejaCredite['total_ttc'], 100)),
+            'montant_ht' => $this->soustraire($montantsDuCumul['montant_ht'], $dejaCredite['total_ht']),
+            'montant_tva' => $this->soustraire($montantsDuCumul['montant_tva'], $dejaCredite['total_tva']),
+            'montant_ttc' => $this->soustraire($montantsDuCumul['montant_ttc'], $dejaCredite['total_ttc']),
         ];
     }
 
@@ -354,6 +339,33 @@ class CalculateurLigne
         return $this->centimesVersMontant(
             $this->versUnites((float) $montant, 100) - $this->versUnites($this->sommer($montantsDeduits), 100),
         );
+    }
+
+    /**
+     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     */
+    private function montants(int $montantHtCentimes, int $montantTtcCentimes): array
+    {
+        return [
+            'montant_ht' => $this->centimesVersMontant($montantHtCentimes),
+            'montant_tva' => $this->centimesVersMontant($montantTtcCentimes - $montantHtCentimes),
+            'montant_ttc' => $this->centimesVersMontant($montantTtcCentimes),
+        ];
+    }
+
+    /**
+     * Une remise (ou un escompte) en centièmes de point : hors de 0-100 %,
+     * elle n'existe pas.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function remiseEnCentiemes(float $remisePourcentage): int
+    {
+        if ($remisePourcentage < 0 || $remisePourcentage > 100) {
+            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
+        }
+
+        return $this->versUnites($remisePourcentage, 100);
     }
 
     /**

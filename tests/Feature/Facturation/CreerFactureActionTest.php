@@ -153,9 +153,10 @@ class CreerFactureActionTest extends TestCase
 
     /**
      * Le prix réellement saisi sur chaque ligne est gardé tel quel, quel que
-     * soit le client, et chaque ligne multiplie séparément son HT et son TTC
-     * par la quantité : 8,33 € HT x 3 = 24,99 € HT ; 40 € TTC x 2 = 80,00 €
-     * TTC -- même au sein d'un même document.
+     * soit le client, et multiplié par la quantité -- même au sein d'un même
+     * document : 8,33 € HT x 3 = 24,99 € HT + 5,00 € de TVA (20 % de
+     * 24,99 €), sans PU TTC ; 40 € TTC x 2 = 80,00 € TTC, soit 2 x 33,33 €
+     * HT.
      */
     public function test_chaque_ligne_est_calculee_depuis_le_prix_reellement_saisi(): void
     {
@@ -172,9 +173,9 @@ class CreerFactureActionTest extends TestCase
 
         $this->assertSame(PrixReference::Ht, $ligneHt->prix_reference);
         $this->assertSame('24.99', $ligneHt->montant_ht);
-        $this->assertSame('5.01', $ligneHt->montant_tva);
-        $this->assertSame('30.00', $ligneHt->montant_ttc);
-        $this->assertSame('10.00', $ligneHt->prix_unitaire_ttc);
+        $this->assertSame('5.00', $ligneHt->montant_tva);
+        $this->assertSame('29.99', $ligneHt->montant_ttc);
+        $this->assertNull($ligneHt->prix_unitaire_ttc);
 
         $this->assertSame(PrixReference::Ttc, $ligneTtc->prix_reference);
         $this->assertSame('80.00', $ligneTtc->montant_ttc);
@@ -182,26 +183,37 @@ class CreerFactureActionTest extends TestCase
         $this->assertSame('33.33', $ligneTtc->prix_unitaire_ht);
 
         $this->assertSame('91.65', $facture->total_ht);
-        $this->assertSame('18.35', $facture->total_tva);
-        $this->assertSame('110.00', $facture->total_ttc);
+        $this->assertSame('18.34', $facture->total_tva);
+        $this->assertSame('109.99', $facture->total_ttc);
     }
 
     /**
-     * Sans prix saisi, la ligne reprend le prix de vente TTC du produit
-     * catalogue (celui affiché en magasin).
+     * Sans prix saisi, la ligne reprend tels quels les prix de vente
+     * enregistrés sur la fiche du produit -- arrondis une seule fois, à
+     * leur enregistrement : rien ne se recalcule à la vente, que la fiche
+     * ait été saisie en TTC ou en HT.
      */
-    public function test_sans_prix_saisi_la_ligne_reprend_le_prix_ttc_du_produit(): void
+    public function test_sans_prix_saisi_la_ligne_reprend_tels_quels_les_prix_du_produit(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $coque = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['prix_vente_ht' => 10.01, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $facture = app(CreerFactureAction::class)->handle($client, [
-            ['produit_id' => $produit->id, 'quantite' => 2],
+            ['produit_id' => $coque->id, 'quantite' => 2],
+            ['produit_id' => $cable->id, 'quantite' => 3],
         ]);
 
-        $ligne = $facture->lignes->firstOrFail();
-        $this->assertSame(PrixReference::Ttc, $ligne->prix_reference);
-        $this->assertSame('80.00', $facture->total_ttc);
+        [$ligneCoque, $ligneCable] = $facture->lignes->sortBy('ordre')->values()->all();
+
+        foreach ([[$ligneCoque, $coque->fresh()], [$ligneCable, $cable->fresh()]] as [$ligne, $produit]) {
+            $this->assertSame(PrixReference::Ttc, $ligne->prix_reference);
+            $this->assertSame([$produit->prix_vente_ht, $produit->prix_vente_ttc], [$ligne->prix_unitaire_ht, $ligne->prix_unitaire_ttc]);
+        }
+
+        $this->assertSame(['33.33', '40.00'], [$ligneCoque->prix_unitaire_ht, $ligneCoque->prix_unitaire_ttc]);
+        $this->assertSame(['10.01', '12.01'], [$ligneCable->prix_unitaire_ht, $ligneCable->prix_unitaire_ttc]);
+        $this->assertSame(['96.69', '19.34', '116.03'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 
     public function test_une_ligne_de_service_reprend_le_nom_du_service_et_se_calcule_depuis_le_ttc_saisi(): void

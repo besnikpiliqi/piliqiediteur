@@ -82,7 +82,9 @@
     </div>
 
     {{-- La remise n'apparaît que si une ligne en a une : elle explique
-         alors pourquoi PU x quantité diffère du total de la ligne. --}}
+         alors pourquoi PU x quantité diffère du total de la ligne. Une
+         ligne au prix HT n'a pas de PU TTC : sa TVA se calcule sur son
+         total HT (voir CalculateurLigne). --}}
     @php
         $avecRemise = $facture->lignes->contains(fn ($ligne) => (float) $ligne->remise_pourcentage != 0);
     @endphp
@@ -109,7 +111,7 @@
                     <td>{{ $ligne->description }}</td>
                     <td class="montant">{{ \Illuminate\Support\Number::format($ligne->quantite, locale: 'fr') }}</td>
                     <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ht, 2, ',', ' ') }} €</td>
-                    <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ttc, 2, ',', ' ') }} €</td>
+                    <td class="montant">{{ $ligne->prix_unitaire_ttc === null ? '—' : number_format((float) $ligne->prix_unitaire_ttc, 2, ',', ' ').' €' }}</td>
                     <td class="montant">{{ \Illuminate\Support\Number::format((float) $ligne->taux_tva, maxPrecision: 2, locale: 'fr') }} %</td>
                     @if($avecRemise)
                         <td class="montant">{{ \Illuminate\Support\Number::format((float) $ligne->remise_pourcentage, maxPrecision: 2, locale: 'fr') }} %</td>

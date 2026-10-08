@@ -105,9 +105,15 @@ final readonly class BaremePrixDeVente implements Castable
     }
 
     /**
-     * (prix d'achat HT + bénéfice) x (1 + TVA), au centime : le prix cible ;
-     * arrondi au X9 si le magasin le veut. Null quand le barème ne prévoit
-     * aucun bénéfice pour ce prix d'achat.
+     * (prix d'achat HT + bénéfice) x (1 + TVA), depuis le prix d'achat
+     * exact (au dix-millième, remise déduite) et arrondi une seule fois :
+     * au centime, le prix cible ; ou, si le magasin le veut, au prix
+     * finissant par 9 le plus proche du prix cible EXACT -- moins de la
+     * moitié de la dizaine, on descend, sinon on monte (77,60 € -> 79 € ;
+     * 74,00 € -> 69 € ; 54,996 € -> 49 €, là où 55,00 € arrondi donnerait
+     * 59 €). Sous 5 €, pas de X9 au-dessus de 0 : le prix cible reste tel
+     * quel. Null quand le barème ne prévoit aucun bénéfice pour ce prix
+     * d'achat.
      *
      * @return array{prix_vente_ttc: float, prix_cible_ttc: float, benefice: float}|null
      */
@@ -120,30 +126,14 @@ final readonly class BaremePrixDeVente implements Castable
             return null;
         }
 
-        $venteHt = $calculateur->sommer([$prixAchatHt, $benefice]);
-        $prixCibleTtc = $calculateur->prixUnitaireTtcDepuisHt($venteHt, $tauxTva);
+        $prixCibleTtc = $calculateur->prixTtcArrondi($prixAchatHt + $benefice, $tauxTva);
+        $dizaineLaPlusProche = $calculateur->prixTtcArrondi($prixAchatHt + $benefice, $tauxTva, pasCentimes: 1000);
 
         return [
-            'prix_vente_ttc' => $this->arrondiX9 ? ($this->prixX9($venteHt, $tauxTva) ?? $prixCibleTtc) : $prixCibleTtc,
+            'prix_vente_ttc' => $this->arrondiX9 && $dizaineLaPlusProche >= 10 ? $dizaineLaPlusProche - 1 : $prixCibleTtc,
             'prix_cible_ttc' => $prixCibleTtc,
             'benefice' => $benefice,
         ];
-    }
-
-    /**
-     * Le prix finissant par 9 le plus proche du prix cible EXACT, (achat +
-     * bénéfice) x (1 + TVA), avant tout arrondi au centime : moins de la
-     * moitié de la dizaine, on descend, sinon on monte (77,60 € -> 79 € ;
-     * 74,00 € -> 69 € ; 54,996 € -> 49 €, là où 55,00 € arrondi donnerait
-     * 59 €). Calculé en entiers, au millionième d'euro. Null sous 5 € : pas
-     * de X9 au-dessus de 0, le prix cible reste tel quel.
-     */
-    private function prixX9(float $venteHt, float $tauxTva): ?float
-    {
-        $millioniemes = (int) round($venteHt * 100) * (10000 + (int) round($tauxTva * 100));
-        $dizaines = intdiv($millioniemes + 5_000_000, 10_000_000);
-
-        return $dizaines >= 1 ? (float) ($dizaines * 10 - 1) : null;
     }
 
     /**

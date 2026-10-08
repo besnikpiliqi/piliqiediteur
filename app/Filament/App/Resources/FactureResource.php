@@ -270,9 +270,10 @@ class FactureResource extends Resource
     /**
      * Lignes d'un document (facture, avoir, devis, facture d'achat, avoir
      * fournisseur) : pour chaque article son PU HT, son PU TTC et son taux,
-     * puis le HT, la TVA et le TTC de la ligne (voir CalculateurLigne). La
-     * remise n'apparaît que si une ligne du document en a une : c'est elle
-     * qui explique alors que PU x quantité diffère du total.
+     * puis le HT, la TVA et le TTC de la ligne (voir CalculateurLigne). Une
+     * ligne au prix HT n'a pas de PU TTC : sa TVA se calcule sur son total
+     * HT. La remise n'apparaît que si une ligne du document en a une :
+     * c'est elle qui explique alors que PU x quantité diffère du total.
      */
     public static function lignesEntry(?Model $document): RepeatableEntry
     {
@@ -284,7 +285,7 @@ class FactureResource extends Resource
                 TextEntry::make('description'),
                 TextEntry::make('quantite')->label('Quantité')->numeric(),
                 TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
-                TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR'),
+                TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR')->placeholder('—'),
                 TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
                 TextEntry::make('remise_pourcentage')->label('Remise')->numeric(maxDecimalPlaces: 2)->suffix(' %')->visible($avecRemise),
                 TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),

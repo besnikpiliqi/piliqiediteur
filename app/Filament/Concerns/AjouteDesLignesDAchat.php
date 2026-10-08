@@ -361,9 +361,13 @@ trait AjouteDesLignesDAchat
         return $detail.' · bénéfice '.number_format($benefice, 2, ',', ' ').' € HT par article';
     }
 
+    /**
+     * Ce que coûte un article, remise de la ligne déduite, sans arrondi
+     * (voir CalculateurLigne::coutUnitaireNet()).
+     */
     private static function prixDAchatNet(Get $get): float
     {
-        return app(CalculateurLigne::class)->appliquerRemise((float) $get('prix_unitaire_ht'), (float) ($get('remise_pourcentage') ?? 0));
+        return app(CalculateurLigne::class)->coutUnitaireNet((float) $get('prix_unitaire_ht'), (float) ($get('remise_pourcentage') ?? 0));
     }
 
     /**

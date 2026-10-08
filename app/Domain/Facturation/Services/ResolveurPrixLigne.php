@@ -7,8 +7,9 @@ use InvalidArgumentException;
 
 /**
  * Détermine, pour une ligne à enregistrer (vente comme achat), quel prix
- * unitaire fait foi et ce que vaut l'autre au centime : le prix saisi s'il
- * y en a un, sinon le prix catalogue du produit.
+ * unitaire fait foi : le prix saisi s'il y en a un, sinon le prix
+ * catalogue du produit -- et, pour un prix TTC, son PU HT au centime (voir
+ * CalculateurLigne::prixUnitaires()).
  */
 class ResolveurPrixLigne
 {
@@ -16,7 +17,7 @@ class ResolveurPrixLigne
 
     /**
      * @param  array<string, mixed>  $donnees
-     * @return array{prix_unitaire_ht: float, prix_unitaire_ttc: float, prix_reference: PrixReference}
+     * @return array{prix_unitaire_ht: float, prix_unitaire_ttc: float|null, prix_reference: PrixReference}
      */
     public function resoudre(
         array $donnees,

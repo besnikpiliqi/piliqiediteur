@@ -52,8 +52,9 @@ class FactureAchatActionsTest extends TestCase
     /**
      * Un fournisseur facture le plus souvent en HT, mais un ticket de
      * magasin se saisit en TTC : chaque ligne est calculée depuis le prix
-     * réellement saisi (8,33 € HT x 3 = 24,99 € HT ; 12 € TTC x 3 = 36,00 €
-     * TTC), jamais en reconvertissant l'un dans l'autre avant de multiplier.
+     * réellement saisi (8,33 € HT x 3 = 24,99 € HT + 5,00 € de TVA ; 12 €
+     * TTC x 3 = 36,00 € TTC), jamais en reconvertissant l'un dans l'autre
+     * avant de multiplier. Une ligne au prix HT n'a pas de PU TTC.
      */
     public function test_chaque_ligne_dachat_est_calculee_depuis_le_prix_reellement_saisi(): void
     {
@@ -70,7 +71,8 @@ class FactureAchatActionsTest extends TestCase
         [$ligneHt, $ligneTtc, $ligneCatalogue] = $factureAchat->lignes->sortBy('ordre')->values()->all();
 
         $this->assertSame(PrixReference::Ht, $ligneHt->prix_reference);
-        $this->assertSame(['24.99', '5.01', '30.00'], [$ligneHt->montant_ht, $ligneHt->montant_tva, $ligneHt->montant_ttc]);
+        $this->assertSame(['24.99', '5.00', '29.99'], [$ligneHt->montant_ht, $ligneHt->montant_tva, $ligneHt->montant_ttc]);
+        $this->assertNull($ligneHt->prix_unitaire_ttc);
 
         $this->assertSame(PrixReference::Ttc, $ligneTtc->prix_reference);
         $this->assertSame(['30.00', '6.00', '36.00'], [$ligneTtc->montant_ht, $ligneTtc->montant_tva, $ligneTtc->montant_ttc]);
@@ -78,7 +80,30 @@ class FactureAchatActionsTest extends TestCase
 
         $this->assertSame(PrixReference::Ht, $ligneCatalogue->prix_reference);
         $this->assertSame('5.00', $ligneCatalogue->prix_unitaire_ht);
-        $this->assertSame('6.00', $ligneCatalogue->prix_unitaire_ttc);
+        $this->assertNull($ligneCatalogue->prix_unitaire_ttc);
+    }
+
+    /**
+     * Facture signalée par le magasin : la TVA d'une ligne au prix HT est
+     * 20 % de son HT -- 10 x 1,18 € = 11,80 € HT + 2,36 € de TVA = 14,16 €
+     * TTC, et non 10 x 1,42 € (1,18 € x 1,2 = 1,416 € arrondi) = 14,20 €.
+     */
+    public function test_la_tva_dune_ligne_au_prix_ht_se_calcule_sur_son_total_ht(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $coque = Produit::factory()->create(['taux_tva' => 20]);
+        $ecran = Produit::factory()->create(['taux_tva' => 20]);
+
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $coque->id, 'quantite' => 10, 'prix_unitaire_ht' => '1.18'],
+            ['produit_id' => $ecran->id, 'quantite' => 5, 'prix_unitaire_ht' => '33.65'],
+        ]);
+
+        [$coques, $ecrans] = $factureAchat->lignes->sortBy('ordre')->values()->all();
+
+        $this->assertSame(['11.80', '2.36', '14.16'], [$coques->montant_ht, $coques->montant_tva, $coques->montant_ttc]);
+        $this->assertSame(['168.25', '33.65', '201.90'], [$ecrans->montant_ht, $ecrans->montant_tva, $ecrans->montant_ttc]);
+        $this->assertSame(['180.05', '36.01', '216.06'], [$factureAchat->total_ht, $factureAchat->total_tva, $factureAchat->total_ttc]);
     }
 
     public function test_une_ligne_sans_produit_est_refusee(): void

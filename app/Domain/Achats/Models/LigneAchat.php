@@ -70,10 +70,9 @@ class LigneAchat extends Model
      */
     public function coutUnitaireHt(): float
     {
-        $calculateur = app(CalculateurLigne::class);
-
-        return $calculateur->appliquerRemise(
-            $calculateur->appliquerRemise((float) $this->prix_unitaire_ht, (float) $this->remise_pourcentage),
+        return app(CalculateurLigne::class)->coutUnitaireNet(
+            (float) $this->prix_unitaire_ht,
+            (float) $this->remise_pourcentage,
             (float) $this->factureAchat->escompte_pourcentage,
         );
     }

@@ -143,6 +143,8 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Le logiciel est encore en développement et aucune donnée réelle n'existe : on ne garde aucune trace d'un état antérieur, mais on code tout comme pour la production.
 - Chaque table est définie par UNE seule migration de création qui contient directement son schéma final. Pour changer une table, on modifie sa migration de création (jamais de migration `add_x_to_y`, de renommage de colonne ni de reprise de données), puis on recrée la base avec `php artisan migrate:fresh`.
 - Aucun code, cast, règle de validation, commentaire ou test qui n'existe que pour gérer des données enregistrées avant un changement.
+- À chaque modification ou ajout, si le code touché peut être réduit ou rendu plus lisible, on le réécrit proprement, même si cela supprime ou change ce qui existait déjà. On ne crée jamais une fonction, une classe, une table, une colonne ou quoi que ce soit d'autre uniquement pour éviter de supprimer ou de modifier l'existant : si réécrire donne un code plus simple, on réécrit. Les fonctions, colonnes, tests et commentaires devenus inutiles sont supprimés.
+- Seulement une fois le logiciel en production, on écrira le code de façon à ne rien casser ni entrer en conflit avec ce qui existe déjà.
 
 ## Produit
 

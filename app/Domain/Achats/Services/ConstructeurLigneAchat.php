@@ -109,7 +109,7 @@ class ConstructeurLigneAchat
             // Sans prix de vente donné, celui du barème du magasin (voir
             // BaremePrixDeVente), s'il en prévoit un à ce prix d'achat.
             $prixDuBareme = $produit->prix_vente_ttc === null
-                ? $bareme?->prixDeVente($this->calculateur->appliquerRemise($prix['prix_unitaire_ht'], $remise), (float) $produit->taux_tva)
+                ? $bareme?->prixDeVente($this->calculateur->coutUnitaireNet($prix['prix_unitaire_ht'], $remise), (float) $produit->taux_tva)
                 : null;
 
             if ($prixDuBareme !== null) {
@@ -121,7 +121,7 @@ class ConstructeurLigneAchat
             $produit->save();
         }
 
-        $montants = $this->calculateur->calculer($prix['prix_unitaire_ht'], $prix['prix_unitaire_ttc'], $quantite, $remise);
+        $montants = $this->calculateur->calculer($prix['prix_reference'], $prix['prix_unitaire_ht'], $prix['prix_unitaire_ttc'], $tauxTva, $quantite, $remise);
 
         return $factureAchat->lignes()->create([
             'produit_id' => $produit->id,

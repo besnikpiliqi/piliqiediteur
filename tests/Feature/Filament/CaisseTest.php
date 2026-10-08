@@ -374,7 +374,6 @@ class CaisseTest extends TestCase
         $this->assertNull($ligne['produit_id']);
         $this->assertSame(1, $ligne['quantite']);
         $this->assertSame(20, $ligne['taux_tva']);
-        $this->assertSame('ttc', $ligne['prix_reference']);
         $component->assertFormFieldIsVisible('lignes.'.array_key_first($component->get('data.lignes')).'.produit_id');
     }
 

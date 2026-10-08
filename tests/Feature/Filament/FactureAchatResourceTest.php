@@ -171,6 +171,30 @@ class FactureAchatResourceTest extends TestCase
             ->assertSee('Total HT 0,47 € · TVA 0,09 € · Total TTC 0,56 €');
     }
 
+    /**
+     * Facture signalée par le magasin : 10 x 1,18 € HT montrait 2,40 € de
+     * TVA (10 x 1,42 €, le PU TTC arrondi) ; la TVA est 20 % des 11,80 € HT
+     * de la ligne.
+     */
+    public function test_la_tva_dune_ligne_dachat_est_celle_de_son_total_ht(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
+                'origine' => 'nouveau',
+                'nom' => 'Coque Iphone 16',
+                'quantite' => 10,
+                'prix_unitaire_ht' => '1.18',
+                'prix_vente_ttc' => '12',
+                'taux_tva' => '20',
+            ])
+            ->assertSee('14,16 € TTC')
+            ->assertSee('10 x 1,18 € HT = 11,80 € HT + 2,36 € de TVA')
+            ->assertSee('Total HT 11,80 € · TVA 2,36 € · Total TTC 14,16 €');
+    }
+
     public function test_choisir_un_produit_du_catalogue_reprend_sa_fiche_et_son_dernier_prix_dachat(): void
     {
         $this->connecterLeProprietaire();

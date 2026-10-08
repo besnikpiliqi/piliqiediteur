@@ -100,8 +100,8 @@ class LigneFacture extends Model
     }
 
     /**
-     * Montants d'un retour de $quantite articles de cette ligne : ses PU,
-     * article par article (voir CalculateurLigne), et pour le retour qui
+     * Montants d'un retour de $quantite articles de cette ligne, calculés
+     * comme la ligne vendue (voir CalculateurLigne), et pour le retour qui
      * finit de la créditer, son solde exact une fois déduits les avoirs
      * déjà émis -- jamais un centime de plus ou de moins que la ligne
      * vendue (voir CalculateurLigne::solder()).
@@ -123,8 +123,10 @@ class LigneFacture extends Model
         }
 
         return $calculateur->calculer(
+            $this->prix_reference,
             (float) $this->prix_unitaire_ht,
-            (float) $this->prix_unitaire_ttc,
+            $this->prix_unitaire_ttc === null ? null : (float) $this->prix_unitaire_ttc,
+            (float) $this->taux_tva,
             $quantite,
             (float) $this->remise_pourcentage,
         );

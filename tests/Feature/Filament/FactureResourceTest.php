@@ -582,7 +582,6 @@ class FactureResourceTest extends TestCase
             ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '3')
             ->set("data.lignes.{$cle}.prix_unitaire_ttc", '10.05')
-            ->assertSet("data.lignes.{$cle}.prix_reference", 'ttc')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '8.38')
             ->assertSee('30,15 €')
             ->call('create')

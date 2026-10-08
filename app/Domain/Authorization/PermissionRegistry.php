@@ -49,6 +49,12 @@ final class PermissionRegistry
     // voir SeedMagasinRolesAction et ProduitResource.
     public const PRODUIT_VOIR_VALEUR_STOCK = 'produit.voir_valeur_stock';
 
+    /**
+     * Régler le barème qui calcule les prix de vente (voir
+     * BaremePrixDeVente) : il fixe les prix de tout le magasin.
+     */
+    public const PRIX_VENTE_REGLER = 'prix_vente.regler';
+
     // Devis
     public const DEVIS_VIEW = 'devis.view';
 
@@ -129,7 +135,7 @@ final class PermissionRegistry
         return [
             self::CLIENT_VIEW, self::CLIENT_CREATE, self::CLIENT_UPDATE, self::CLIENT_DELETE,
             self::FOURNISSEUR_VIEW, self::FOURNISSEUR_CREATE, self::FOURNISSEUR_UPDATE, self::FOURNISSEUR_DELETE,
-            self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_DELETE, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK,
+            self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_DELETE, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK, self::PRIX_VENTE_REGLER,
             self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ANNULER,
             self::MANDAT_PDP_GERER,
@@ -167,6 +173,7 @@ final class PermissionRegistry
             self::PRODUIT_DELETE => 'Produits : supprimer',
             self::PRODUIT_AJUSTER_STOCK => 'Produits : ajuster le stock',
             self::PRODUIT_VOIR_VALEUR_STOCK => 'Produits : voir la valeur totale du stock',
+            self::PRIX_VENTE_REGLER => 'Prix de vente : régler le barème automatique',
             self::DEVIS_VIEW => 'Devis : voir',
             self::DEVIS_CREATE => 'Devis : créer',
             self::DEVIS_UPDATE => 'Devis : modifier',

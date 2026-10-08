@@ -115,6 +115,23 @@ class FactureAchatActionsTest extends TestCase
         $this->assertSame([$produit->id, 'Câble USB-C', '0.47', '1.41'], [$ligne->produit_id, $ligne->description, $ligne->prix_unitaire_ht, $ligne->montant_ht]);
     }
 
+    /**
+     * Un produit reçu sans prix de vente (une facture récupérée par API, par
+     * exemple) prend celui du barème du magasin s'il l'a activé, calculé
+     * sur le prix d'achat remise déduite : 10 € remisés de 50 % = 5 €,
+     * + 30 € de bénéfice, + 20 % de TVA = 42 € TTC.
+     */
+    public function test_un_nouveau_produit_sans_prix_de_vente_prend_celui_du_bareme(): void
+    {
+        app(TenantContext::class)->magasin()->update(['prix_vente_automatique' => true]);
+
+        app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Coque', 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 10, 'remise_pourcentage' => 50],
+        ]);
+
+        $this->assertSame('42.00', Produit::query()->sole()->prix_vente_ttc);
+    }
+
     public function test_une_facture_dachat_refusee_ne_laisse_aucun_produit_derriere_elle(): void
     {
         $fournisseur = Fournisseur::factory()->create();

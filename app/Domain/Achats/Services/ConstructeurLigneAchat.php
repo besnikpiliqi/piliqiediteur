@@ -101,6 +101,18 @@ class ConstructeurLigneAchat
             // validation de la facture, voir
             // StockLedgerService::receptionner().
             $produit->cmup_ht = $prix['prix_unitaire_ht'];
+
+            $bareme = $factureAchat->magasin->baremePrixDeVenteActif();
+
+            // Sans prix de vente donné, celui du barème du magasin (voir
+            // BaremePrixDeVente), s'il en prévoit un à ce prix d'achat.
+            $prixDuBareme = $produit->prix_vente_ttc === null
+                ? $bareme?->prixDeVente($this->calculateur->appliquerRemise($prix['prix_unitaire_ht'], $remise), (float) $produit->taux_tva)
+                : null;
+
+            if ($prixDuBareme !== null) {
+                $produit->prix_vente_ttc = $prixDuBareme['prix_vente_ttc'];
+            }
         }
 
         if (! $produit->exists || $produit->isDirty()) {

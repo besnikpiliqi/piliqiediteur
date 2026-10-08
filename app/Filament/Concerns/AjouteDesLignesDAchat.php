@@ -7,7 +7,10 @@ use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\PrixReference;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ProduitResource;
+use Closure;
 use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Component;
@@ -23,6 +26,7 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Support\Enums\MaxWidth;
+use InvalidArgumentException;
 
 /**
  * Les lignes d'une facture d'achat : chacune se saisit dans un formulaire
@@ -201,16 +205,24 @@ trait AjouteDesLignesDAchat
                         ->numeric()
                         ->minValue(0)
                         ->prefix('€')
-                        ->required(),
+                        ->required()
+                        ->saisieEnDirect()
+                        ->afterStateUpdated(self::appliquerLeBareme($ficheNonModifiable)),
                     TextInput::make('remise_pourcentage')
                         ->label('Remise du fournisseur')
                         ->numeric()
                         ->minValue(0)
                         ->maxValue(100)
                         ->suffix('%')
-                        ->default(0),
+                        ->default(0)
+                        ->saisieEnDirect()
+                        ->afterStateUpdated(self::appliquerLeBareme($ficheNonModifiable)),
                     ...array_map(
-                        fn (Field $champ): Field => $champ->disabled($ficheNonModifiable),
+                        fn (Field $champ): Field => (match ($champ->getName()) {
+                            'prix_vente_ttc' => $champ->helperText(fn (Get $get): ?string => self::detailDuPrixDeVente($get)),
+                            'taux_tva' => $champ->afterStateUpdated(self::appliquerLeBareme($ficheNonModifiable)),
+                            default => $champ,
+                        })->disabled($ficheNonModifiable),
                         ProduitResource::prixVenteTtcSchema(),
                     ),
                 ])->columns(3),
@@ -223,6 +235,66 @@ trait AjouteDesLignesDAchat
                 ))
                 ->columns(2),
         ];
+    }
+
+    /**
+     * Le barème du magasin (voir BaremePrixDeVente) propose le prix de vente
+     * TTC dès que le prix d'achat, sa remise ou la TVA changent ; la
+     * personne qui enregistre la facture d'achat reste libre de le changer
+     * ensuite. Rien ne change sur une fiche qu'elle ne peut pas modifier.
+     */
+    private static function appliquerLeBareme(Closure $ficheNonModifiable): Closure
+    {
+        return function (Get $get, Set $set) use ($ficheNonModifiable): void {
+            $bareme = app(TenantContext::class)->magasin()->baremePrixDeVenteActif();
+
+            if ($bareme === null || $ficheNonModifiable($get) || blank($get('prix_unitaire_ht'))) {
+                return;
+            }
+
+            try {
+                $prix = $bareme->prixDeVente(self::prixDAchatNet($get), (float) ($get('taux_tva') ?? 20));
+            } catch (InvalidArgumentException) {
+                // Saisie pas encore valable (remise ou TVA hors limites).
+                return;
+            }
+
+            // Au-delà du dernier palier, sans bénéfice prévu : le prix de
+            // vente se saisit à la main.
+            if ($prix !== null) {
+                $set('prix_vente_ttc', self::prixEnTexte($prix['prix_vente_ttc']));
+            }
+        };
+    }
+
+    /**
+     * « Soit 8,33 € HT + 1,67 € de TVA », et le bénéfice que ce prix laisse
+     * sur chaque article, comme le montre le barème.
+     */
+    private static function detailDuPrixDeVente(Get $get): ?string
+    {
+        $detail = ProduitResource::detailPrixDeVente($get);
+
+        if ($detail === null || blank($get('prix_unitaire_ht'))) {
+            return $detail;
+        }
+
+        try {
+            $calculateur = app(CalculateurLigne::class);
+            $benefice = $calculateur->soustraire(
+                $calculateur->prixUnitaireHtDepuisTtc((float) $get('prix_vente_ttc'), (float) ($get('taux_tva') ?? 20)),
+                self::prixDAchatNet($get),
+            );
+        } catch (InvalidArgumentException) {
+            return $detail;
+        }
+
+        return $detail.' · bénéfice '.number_format($benefice, 2, ',', ' ').' € HT par article';
+    }
+
+    private static function prixDAchatNet(Get $get): float
+    {
+        return app(CalculateurLigne::class)->appliquerRemise((float) $get('prix_unitaire_ht'), (float) ($get('remise_pourcentage') ?? 0));
     }
 
     /**

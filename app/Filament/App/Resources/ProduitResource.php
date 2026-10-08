@@ -143,7 +143,7 @@ class ProduitResource extends Resource
      * "Soit 33,33 € HT + 6,67 € de TVA" : le détail exact qu'une ligne de
      * vente reprendra pour cet article (voir CalculateurLigne).
      */
-    private static function detailPrixDeVente(Get $get): ?string
+    public static function detailPrixDeVente(Get $get): ?string
     {
         if (blank($get('prix_vente_ttc'))) {
             return null;

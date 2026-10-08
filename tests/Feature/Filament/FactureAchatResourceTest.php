@@ -163,6 +163,63 @@ class FactureAchatResourceTest extends TestCase
     }
 
     /**
+     * Une fois le barème du magasin activé (voir
+     * BaremePrixDeVente::parDefaut()), le prix de vente TTC est proposé dès
+     * que le prix d'achat est saisi : 0,47 € d'achat HT + 10 € de bénéfice
+     * = 10,47 € HT, soit 12,56 € TTC, TVA de 2,09 € comprise. La personne
+     * qui enregistre la facture d'achat peut toujours changer ce prix.
+     */
+    public function test_le_bareme_du_magasin_propose_le_prix_de_vente_dun_nouveau_produit(): void
+    {
+        $this->connecterLeProprietaire()->update(['prix_vente_automatique' => true]);
+
+        $component = Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['origine' => 'nouveau', 'nom' => 'Câble USB-C', 'prix_unitaire_ht' => '0.47'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '12.56'])
+            ->assertSee('bénéfice 10,00 € HT par article')
+            ->setFormComponentActionData(['prix_vente_ttc' => '15'])
+            ->callMountedFormComponentAction()
+            ->assertHasNoFormComponentActionErrors();
+
+        $this->assertSame('15.00', collect($component->get('data.lignes'))->sole()['produit']['prix_vente_ttc']);
+    }
+
+    /**
+     * Choisir un produit du catalogue garde son prix de vente ; c'est un
+     * nouveau prix d'achat qui fait recalculer le barème.
+     */
+    public function test_un_nouveau_prix_dachat_recalcule_le_prix_de_vente_dun_produit_du_catalogue(): void
+    {
+        $this->connecterLeProprietaire()->update(['prix_vente_automatique' => true]);
+        $produit = Produit::factory()->create(['cmup_ht' => 2.1, 'prix_vente_ttc' => 15, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['produit_id' => $produit->id])
+            ->assertFormComponentActionDataSet(['prix_unitaire_ht' => '2.10', 'prix_vente_ttc' => '15.00'])
+            ->setFormComponentActionData(['prix_unitaire_ht' => '3'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '21.60']);
+    }
+
+    /**
+     * Tant que le magasin n'a pas activé son barème (désactivé au départ),
+     * le prix de vente se saisit à la main.
+     */
+    public function test_sans_calcul_automatique_le_prix_de_vente_se_saisit_a_la_main(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['origine' => 'nouveau', 'nom' => 'Câble USB-C', 'prix_unitaire_ht' => '0.47'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => null]);
+    }
+
+    /**
      * Une ligne ne se corrige jamais en direct dans la facture : ses champs
      * sont en lecture seule, et « Modifier » rouvre son formulaire, rempli,
      * pour la remplacer -- sans en ajouter une autre.

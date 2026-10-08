@@ -40,6 +40,13 @@ return new class extends Migration
             // (voir CalculateurPeriodeEReporting).
             $table->boolean('option_debits_tva')->default(false);
             $table->time('heure_cloture_automatique')->default('00:00:00');
+            // Barème de prix de vente (voir BaremePrixDeVente) : chaque
+            // magasin démarre avec l'exemple du logiciel, désactivé (voir
+            // Magasin::booted()), qu'il active et règle s'il le veut.
+            // Désactivé, il garde son barème pour le jour où il le
+            // réactive.
+            $table->boolean('prix_vente_automatique')->default(false);
+            $table->json('bareme_prix_vente')->nullable();
             $table->timestamps();
             $table->softDeletes();
 

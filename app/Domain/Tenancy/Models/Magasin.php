@@ -6,6 +6,7 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Avoir;
@@ -55,6 +56,8 @@ class Magasin extends Model implements HasName
         'heure_cloture_automatique',
         'regime_tva',
         'option_debits_tva',
+        'prix_vente_automatique',
+        'bareme_prix_vente',
     ];
 
     protected $casts = [
@@ -62,6 +65,8 @@ class Magasin extends Model implements HasName
         'heure_cloture_automatique' => 'datetime:H:i',
         'regime_tva' => RegimeTva::class,
         'option_debits_tva' => 'boolean',
+        'prix_vente_automatique' => 'boolean',
+        'bareme_prix_vente' => BaremePrixDeVente::class,
     ];
 
     protected static function booted(): void
@@ -73,7 +78,18 @@ class Magasin extends Model implements HasName
             $magasin->locale ??= 'fr';
             $magasin->pays ??= 'FR';
             $magasin->heure_cloture_automatique ??= '00:00';
+            $magasin->prix_vente_automatique ??= false;
+            $magasin->bareme_prix_vente ??= BaremePrixDeVente::parDefaut();
         });
+    }
+
+    /**
+     * Le barème avec lequel ses factures d'achat proposent les prix de
+     * vente, tant que le magasin n'a pas désactivé le calcul automatique.
+     */
+    public function baremePrixDeVenteActif(): ?BaremePrixDeVente
+    {
+        return $this->prix_vente_automatique ? $this->bareme_prix_vente : null;
     }
 
     public function utilisateurs(): BelongsToMany

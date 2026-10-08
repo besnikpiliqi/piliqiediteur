@@ -182,7 +182,7 @@ Fait :
 8. [ ] Pièces jointes isolées par magasin, contacts des clients et fournisseurs, coordonnées bancaires des fournisseurs.
 9. [ ] RGPD : export et anonymisation des clients, durées de conservation (documents légaux conservés à part).
 10. [ ] API v1 (jetons, ressources, Form Requests, limitation de débit, pagination) et webhooks.
-11. [ ] Couche d'intégrations externes (paiement en ligne, outils comptables), branchée sur les événements. Plateforme agréée retenue par l'éditeur pour la facture électronique et l'e-reporting : SUPER PDP (API OAuth2, norme AFNOR XP Z12-013, documentation https://www.superpdp.tech/openapi/#superpdp), à brancher derrière PdpGatewayInterface à la place de la passerelle factice.
+11. [ ] Couche d'intégrations externes (paiement en ligne, outils comptables), branchée sur les événements. Plateforme agréée retenue par l'éditeur pour la facture électronique et l'e-reporting : SUPER PDP (API OAuth2, norme AFNOR XP Z12-013, documentation https://www.superpdp.tech/openapi/#superpdp), à brancher derrière PdpGatewayInterface à la place de la passerelle factice. Bac à sable de l'éditeur : entreprises fictives Tricatel (n° 000000001, adresses Peppol 0225:315143296_110451 et _replyto) et Burger Queen (n° 000000002, réel normal mensuel, adresses Peppol 0225:315143296_110452 et _replyto, mandat de facturation de Tricatel vérifié).
 12. [ ] Abonnements SaaS : plans, limites, fonctionnalités par plan, facturation des magasins par l'éditeur.
 13. [ ] Administration de l'éditeur : magasins, utilisateurs, abonnements, suspension, statistiques, journaux système ; accès aux données d'un magasin seulement explicite et audité.
 14. [ ] Achats auprès de particuliers (registre des objets achetés, régime de TVA sur marge).

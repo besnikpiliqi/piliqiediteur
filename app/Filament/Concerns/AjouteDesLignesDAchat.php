@@ -89,8 +89,58 @@ trait AjouteDesLignesDAchat
             TextInput::make('remise_pourcentage')->label('Remise')->suffix('%')->disabled()->dehydrated(),
             TextInput::make('taux_tva')->label('TVA')->suffix('%')->disabled()->dehydrated(),
             TextInput::make('produit.prix_vente_ttc')->label('Prix de vente TTC')->suffix('€')->disabled()->dehydrated(),
-            self::totalDeLigne(PrixReference::Ht),
+            self::montantPayeAuFournisseur(),
+            self::venteEnMagasin(),
         ];
+    }
+
+    /**
+     * Ce que la ligne coûte au magasin : le prix d'achat x la quantité,
+     * TVA comprise -- jamais un montant de vente.
+     */
+    private static function montantPayeAuFournisseur(): Placeholder
+    {
+        return Placeholder::make('montant_paye_au_fournisseur')
+            ->label('Montant payé au fournisseur')
+            ->columnSpan(2)
+            ->content(fn (Get $get): string => self::montantEnTexte(self::montantsDeLigneSaisie(self::ligneSaisie($get), PrixReference::Ht)['montant_ttc']).' TTC')
+            ->helperText(function (Get $get): string {
+                $montants = self::montantsDeLigneSaisie(self::ligneSaisie($get), PrixReference::Ht);
+
+                return ($get('quantite') ?? 0).' x '.self::montantEnTexte((float) $get('prix_unitaire_ht')).' HT'
+                    .((float) $get('remise_pourcentage') > 0 ? ' remisé de '.self::pourcentageEnTexte($get('remise_pourcentage')).' %' : '')
+                    .' = '.self::montantEnTexte($montants['montant_ht']).' HT + '.self::montantEnTexte($montants['montant_tva']).' de TVA';
+            });
+    }
+
+    /**
+     * Le prix auquel chaque article se vendra en magasin, et ce qu'il
+     * rapporte une fois son prix d'achat payé.
+     */
+    private static function venteEnMagasin(): Placeholder
+    {
+        return Placeholder::make('vente_en_magasin')
+            ->label('Vente en magasin')
+            ->columnSpan(3)
+            ->content(function (Get $get): string {
+                if (blank($get('produit.prix_vente_ttc'))) {
+                    return '—';
+                }
+
+                $vente = self::montantEnTexte((float) $get('produit.prix_vente_ttc')).' TTC l\'article';
+
+                try {
+                    $calculateur = app(CalculateurLigne::class);
+                    $benefice = $calculateur->soustraire(
+                        $calculateur->prixUnitaireHtDepuisTtc((float) $get('produit.prix_vente_ttc'), (float) ($get('produit.taux_tva') ?? $get('taux_tva') ?? 20)),
+                        self::prixDAchatNet($get),
+                    );
+                } catch (InvalidArgumentException) {
+                    return $vente;
+                }
+
+                return $vente.' · bénéfice '.self::montantEnTexte($benefice).' HT par article';
+            });
     }
 
     private static function actionAjouterUnProduit(): Action

@@ -140,6 +140,36 @@ class FactureAchatResourceTest extends TestCase
         $this->assertSame(['0.47', '1.41'], [$ligneAchat->prix_unitaire_ht, $ligneAchat->montant_ht]);
     }
 
+    /**
+     * Une coque achetée 0,47 € HT et vendue 12 € TTC : la ligne montre
+     * d'un côté ce qu'elle coûte au magasin (0,47 € HT + 0,09 € de TVA =
+     * 0,56 € TTC payés au fournisseur), de l'autre son prix de vente et ce
+     * qu'il rapporte (10,00 € HT - 0,47 € = 9,53 € par article) -- sans
+     * jamais laisser croire que 0,56 € est un prix de vente.
+     */
+    public function test_la_ligne_separe_le_montant_paye_au_fournisseur_du_prix_de_vente(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
+                'origine' => 'nouveau',
+                'nom' => 'Coque Iphone 16',
+                'quantite' => 1,
+                'prix_unitaire_ht' => '0.47',
+                'prix_vente_ttc' => '12',
+                'taux_tva' => '20',
+            ])
+            ->assertSee('Montant payé au fournisseur')
+            ->assertSee('0,56 € TTC')
+            ->assertSee('1 x 0,47 € HT = 0,47 € HT + 0,09 € de TVA')
+            ->assertSee('Vente en magasin')
+            ->assertSee("12,00 € TTC l'article · bénéfice 9,53 € HT par article")
+            ->assertSee("Total de la facture d'achat (à payer au fournisseur)")
+            ->assertSee('Total HT 0,47 € · TVA 0,09 € · Total TTC 0,56 €');
+    }
+
     public function test_choisir_un_produit_du_catalogue_reprend_sa_fiche_et_son_dernier_prix_dachat(): void
     {
         $this->connecterLeProprietaire();

@@ -89,7 +89,7 @@ class FactureAchatResource extends Resource
 
             FormSection::make('Produits reçus')->schema([
                 ...self::lignesDAchat(),
-                self::totauxDuDocument(PrixReference::Ht),
+                self::totauxDuDocument(PrixReference::Ht)->label('Total de la facture d\'achat (à payer au fournisseur)'),
             ]),
         ]);
     }

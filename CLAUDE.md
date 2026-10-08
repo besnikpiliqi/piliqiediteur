@@ -1,3 +1,11 @@
+# Protocole de rigueur (prioritaire sur toutes les autres règles)
+
+1. Jamais de raccourci : pas de `// ...`, de « reste inchangé », de TODO, de fonction vide ni de code incomplet. Chaque fichier écrit est complet.
+2. À chaque modification, vérifier l'isolation des magasins : tout modèle de données d'un magasin utilise `BelongsToMagasin` ; toute requête qui contourne `MagasinScope` (`withoutGlobalScopes`, `DB::table`, requête brute, job, commande planifiée) filtre explicitement par magasin ; toute règle `unique`/`exists` est limitée au magasin.
+3. Pendant le travail, lancer les tests ciblés (`php artisan test --compact <fichier>`) ; avant chaque commit, lancer toute la suite `php artisan test --compact`.
+4. Si un test échoue, corriger soi-même la cause et relancer jusqu'à ce que tout soit vert. Ne jamais supprimer, affaiblir ou réécrire un test pour le faire passer. Si l'échec révèle une règle métier à trancher (calcul, arrondi, obligation légale), la soumettre à l'utilisateur au lieu de choisir.
+5. Avant chaque commit, lancer `vendor/bin/pint --dirty --format agent`.
+
 <laravel-boost-guidelines>
 === foundation rules ===
 

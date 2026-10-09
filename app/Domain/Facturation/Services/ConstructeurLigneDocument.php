@@ -31,7 +31,8 @@ class ConstructeurLigneDocument
      * TTC saisi, sinon le prix de vente TTC enregistré sur la fiche du
      * produit ; son PU HT en est la conversion au centime, la même que sur
      * la fiche. Une ligne de service (voir Service) n'a pas de prix
-     * catalogue : son PU TTC est toujours saisi.
+     * catalogue : son PU TTC est toujours saisi. Un PU TTC n'est jamais
+     * négatif : une vente ne rembourse rien, c'est le rôle d'un avoir.
      *
      * @param  array{produit_id?: int, service_id?: int, quantite: int|string, prix_unitaire_ttc?: float|string|null, taux_tva?: float|string, remise_pourcentage?: float|string}  $donnees
      * @return array<string, mixed>
@@ -62,6 +63,11 @@ class ConstructeurLigneDocument
         $prixUnitaireTtc = $this->calculateur->arrondirAuCentime((float) (filled($donnees['prix_unitaire_ttc'] ?? null)
             ? $donnees['prix_unitaire_ttc']
             : ($produit?->prix_vente_ttc ?? throw new InvalidArgumentException('Une ligne de service doit fournir prix_unitaire_ttc.'))));
+
+        if ($prixUnitaireTtc < 0) {
+            throw new InvalidArgumentException('Le PU TTC d\'une ligne ne peut pas être négatif.');
+        }
+
         $prixUnitaireHt = $this->calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, $tauxTva);
         $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
 

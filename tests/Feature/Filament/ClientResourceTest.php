@@ -239,6 +239,22 @@ class ClientResourceTest extends TestCase
     }
 
     /**
+     * Les messages de validation s'affichent en français, le champ nommé
+     * par son libellé.
+     */
+    public function test_un_client_sans_nom_est_refuse_avec_un_message_en_francais(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => '', 'type_client' => TypeClient::Particulier->value])
+            ->call('create')
+            ->assertHasFormErrors(['nom' => 'Le champ nom est obligatoire.']);
+
+        $this->assertSame(1, Client::query()->count(), 'Seul le client comptoir existe.');
+    }
+
+    /**
      * Facultatif, mais un SIRET saisi compte 14 chiffres.
      */
     public function test_un_siret_qui_ne_compte_pas_14_chiffres_est_refuse(): void

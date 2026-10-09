@@ -115,10 +115,10 @@ class FactureResource extends Resource
             ])->columns(2),
 
             FormSection::make('Lignes')->schema([
-                // Contrairement à Devis, les lignes restent modifiables en
-                // édition (voir EditFacture) : cette page n'est accessible
-                // que pour un brouillon (voir FacturePolicy::update()), qui
-                // n'a aucune existence légale à préserver.
+                // Lignes modifiables tant que la facture n'est pas émise :
+                // cette page n'est accessible qu'à un brouillon (voir
+                // FacturePolicy::update()), qui n'a aucune existence légale
+                // à préserver.
                 ...DevisResource::lignesDeVente(),
                 DevisResource::totauxDuDocument(),
             ]),
@@ -407,12 +407,13 @@ class FactureResource extends Resource
                             // mais peut librement saisir moins (acompte).
                             ->maxValue(fn (Facture $record) => $record->montantRestant())
                             ->default(fn (Facture $record) => $record->montantRestant()),
-                        TextInput::make('reference')->label('Référence'),
+                        TextInput::make('reference')->label('Référence')->maxLength(100),
                         DatePicker::make('recu_le')
                             ->label('Reçu le')
                             ->required()
                             ->default(today())
-                            ->minDate(today()),
+                            ->maxDate(today())
+                            ->validationMessages(['before_or_equal' => 'Un paiement ne peut pas être reçu à une date future.']),
                     ])
                     ->requiresConfirmation()
                     ->visible(fn (Facture $record) => $record->montantRestant() > 0

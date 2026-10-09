@@ -39,7 +39,7 @@ class ParametresPrixDeVente extends Page implements HasForms
 
     protected static ?string $title = 'Prix de vente';
 
-    protected static string $view = 'filament.app.pages.parametres-prix-de-vente';
+    protected static string $view = 'filament.app.pages.formulaire-de-parametres';
 
     /**
      * @var array<string, mixed>

@@ -10,10 +10,12 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use InvalidArgumentException;
 use LogicException;
 use Tests\TestCase;
 
@@ -145,5 +147,48 @@ class EnregistrerVenteCaisseActionTest extends TestCase
             'mode_paiement' => ModePaiement::CarteBancaire->value,
             'reference' => 'TRX-0042',
         ]);
+    }
+
+    /**
+     * Une vente offerte (remise de 100 %) est soldée sans rien encaisser :
+     * elle n'attend aucun règlement.
+     */
+    public function test_une_vente_a_zero_euro_est_payee_sans_encaissement(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $facture = app(EnregistrerVenteCaisseAction::class)->handle(
+            $client,
+            [['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 100]],
+            ModePaiement::Especes,
+        );
+
+        $this->assertSame('0.00', $facture->total_ttc);
+        $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
+        $this->assertSame(0, Paiement::query()->count());
+    }
+
+    /**
+     * Une vente ne rembourse jamais rien : c'est le rôle d'un avoir.
+     */
+    public function test_un_pu_ttc_negatif_est_refuse_sans_rien_enregistrer(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
+
+        try {
+            app(EnregistrerVenteCaisseAction::class)->handle(
+                $client,
+                [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ttc' => -50]],
+                ModePaiement::Especes,
+            );
+            $this->fail('Un PU TTC négatif aurait dû être refusé.');
+        } catch (InvalidArgumentException $exception) {
+            $this->assertSame('Le PU TTC d\'une ligne ne peut pas être négatif.', $exception->getMessage());
+        }
+
+        $this->assertSame(0, Facture::query()->count());
+        $this->assertSame(0, Paiement::query()->count());
     }
 }

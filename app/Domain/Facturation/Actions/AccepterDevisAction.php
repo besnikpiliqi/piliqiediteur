@@ -8,11 +8,9 @@ use Illuminate\Support\Facades\DB;
 use LogicException;
 
 /**
- * StatutDevis::Accepte existait depuis la Phase 3 mais n'était atteint par
- * aucun code : un devis envoyé restait "envoyé" indéfiniment, même après
- * acceptation verbale/écrite du client. Nécessaire pour conditionner la
- * conversion en facture (voir CreerFactureDepuisDevisAction) à une
- * acceptation explicite plutôt qu'à un simple envoi.
+ * Constate l'acceptation, verbale ou écrite, d'un devis par son client :
+ * seule cette acceptation explicite, et non un simple envoi, permet de le
+ * convertir en facture (voir CreerFactureDepuisDevisAction).
  */
 class AccepterDevisAction
 {

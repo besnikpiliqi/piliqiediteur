@@ -234,17 +234,35 @@ class PaiementResourceTest extends TestCase
     }
 
     /**
-     * Une date de réception dans le passé n'a pas de sens pour un
-     * encaissement qui vient d'être saisi : seule une date à partir
-     * d'aujourd'hui est acceptée, comme pour l'échéance d'une facture.
+     * Un virement vu hier sur le relevé s'enregistre aujourd'hui avec sa
+     * vraie date de réception.
      */
-    public function test_laction_rapide_encaisser_refuse_une_date_de_reception_dans_le_passe(): void
+    public function test_laction_rapide_encaisser_accepte_une_date_de_reception_passee(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
+        $this->travelTo('2026-10-09 10:00:00');
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
 
+        Livewire::test(ListFactures::class)
+            ->callTableAction('encaisser', $facture, data: [
+                'mode_paiement' => ModePaiement::Virement->value,
+                'montant' => 120,
+                'recu_le' => '2026-10-08',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame('2026-10-08', Paiement::query()->sole()->recu_le->toDateString());
+        $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
+    }
+
+    /**
+     * Aucun paiement ne se reçoit dans le futur.
+     */
+    public function test_laction_rapide_encaisser_refuse_une_date_de_reception_future(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $this->connecterLeProprietaire();
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
 
@@ -252,9 +270,34 @@ class PaiementResourceTest extends TestCase
             ->callTableAction('encaisser', $facture, data: [
                 'mode_paiement' => ModePaiement::Especes->value,
                 'montant' => 120,
-                'recu_le' => now()->subDay()->toDateString(),
+                'recu_le' => '2026-10-10',
             ])
-            ->assertHasTableActionErrors(['recu_le']);
+            ->assertHasTableActionErrors(['recu_le' => 'before_or_equal'])
+            ->assertSee('Un paiement ne peut pas être reçu à une date future.');
+
+        $this->assertSame(0, Paiement::query()->count());
+        $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
+    }
+
+    /**
+     * La référence tient en 100 caractères, comme sa colonne : au-delà, la
+     * saisie est refusée au lieu d'échouer en base.
+     */
+    public function test_laction_rapide_encaisser_refuse_une_reference_de_plus_de_100_caracteres(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
+
+        Livewire::test(ListFactures::class)
+            ->callTableAction('encaisser', $facture, data: [
+                'mode_paiement' => ModePaiement::CarteBancaire->value,
+                'montant' => 120,
+                'reference' => str_repeat('A', 101),
+                'recu_le' => now()->toDateString(),
+            ])
+            ->assertHasTableActionErrors(['reference' => 'max'])
+            ->assertSee('Le champ référence ne doit pas dépasser 100 caractères.');
 
         $this->assertSame(0, Paiement::query()->count());
     }
@@ -294,17 +337,13 @@ class PaiementResourceTest extends TestCase
     }
 
     /**
-     * Même garde-fou que l'action rapide "Encaisser" (voir
-     * test_laction_rapide_encaisser_refuse_une_date_de_reception_dans_le_passe),
-     * appliqué cette fois au formulaire multi-factures de PaiementResource.
+     * Mêmes règles de date que l'action rapide « Encaisser » (voir
+     * test_laction_rapide_encaisser_accepte_une_date_de_reception_passee).
      */
-    public function test_impossible_denregistrer_un_paiement_avec_une_date_de_reception_dans_le_passe(): void
+    public function test_le_formulaire_des_paiements_accepte_une_date_de_reception_passee(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
-
+        $this->travelTo('2026-10-09 10:00:00');
+        $this->connecterLeProprietaire();
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
 
@@ -313,13 +352,62 @@ class PaiementResourceTest extends TestCase
                 'client_id' => $client->id,
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => 120,
-                'recu_le' => now()->subDay()->toDateString(),
+                'recu_le' => '2026-10-08',
                 'allocations' => [
                     ['facture_id' => $facture->id, 'montant' => 120],
                 ],
             ])
             ->call('create')
-            ->assertHasFormErrors(['recu_le']);
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('2026-10-08', Paiement::query()->sole()->recu_le->toDateString());
+        $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
+    }
+
+    public function test_le_formulaire_des_paiements_refuse_une_date_de_reception_future(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
+
+        Livewire::test(CreatePaiement::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'mode_paiement' => ModePaiement::Virement->value,
+                'montant' => 120,
+                'recu_le' => '2026-10-10',
+                'allocations' => [
+                    ['facture_id' => $facture->id, 'montant' => 120],
+                ],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['recu_le' => 'before_or_equal'])
+            ->assertSee('Un paiement ne peut pas être reçu à une date future.');
+
+        $this->assertSame(0, Paiement::query()->count());
+    }
+
+    public function test_le_formulaire_des_paiements_refuse_une_reference_de_plus_de_100_caracteres(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
+
+        Livewire::test(CreatePaiement::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'mode_paiement' => ModePaiement::Cheque->value,
+                'montant' => 120,
+                'reference' => str_repeat('A', 101),
+                'recu_le' => now()->toDateString(),
+                'allocations' => [
+                    ['facture_id' => $facture->id, 'montant' => 120],
+                ],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['reference' => 'max'])
+            ->assertSee('Le champ référence ne doit pas dépasser 100 caractères.');
 
         $this->assertSame(0, Paiement::query()->count());
     }
@@ -398,5 +486,15 @@ class PaiementResourceTest extends TestCase
             ->assertTableColumnStateSet('client.nom', 'Jeanne Archivée', $paiement);
         Livewire::test(CreatePaiement::class)
             ->assertFormFieldExists('client_id', fn (Select $champ): bool => ! array_key_exists($client->id, $champ->getOptions()));
+    }
+
+    private function connecterLeProprietaire(): Magasin
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        return $magasin;
     }
 }

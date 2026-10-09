@@ -34,7 +34,7 @@ class ParametresFiscaux extends Page implements HasForms
 
     protected static ?string $title = 'Paramètres fiscaux';
 
-    protected static string $view = 'filament.app.pages.parametres-fiscaux';
+    protected static string $view = 'filament.app.pages.formulaire-de-parametres';
 
     /**
      * @var array<string, mixed>

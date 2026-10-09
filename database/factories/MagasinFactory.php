@@ -18,17 +18,16 @@ class MagasinFactory extends Factory
         return [
             'nom' => fake()->unique()->company(),
             'raison_sociale' => fake()->company(),
-            'siren' => fake()->numerify('#########'),
-            'siret' => fake()->numerify('##############'),
-            'numero_tva' => 'FR'.fake()->numerify('##').fake()->numerify('#########'),
+            'forme_juridique' => 'SAS',
+            'siren' => $siren = fake()->unique()->numerify('#########'),
+            'siret' => $siren.fake()->numerify('#####'),
+            'numero_tva' => 'FR'.fake()->numerify('##').$siren,
             'adresse' => fake()->streetAddress(),
             'code_postal' => fake()->postcode(),
             'ville' => fake()->city(),
             'pays' => 'FR',
             'email' => fake()->unique()->companyEmail(),
             'telephone' => fake()->phoneNumber(),
-            'devise' => 'EUR',
-            'locale' => 'fr',
             'statut' => StatutMagasin::Active,
         ];
     }

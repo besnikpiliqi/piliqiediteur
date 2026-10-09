@@ -40,6 +40,7 @@ trait SaisitLesPrixDeLigne
             TextInput::make('prix_unitaire_ttc')
                 ->label('PU TTC')
                 ->numeric()
+                ->minValue(0)
                 ->saisieEnDirect()
                 ->required()
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
@@ -139,8 +140,8 @@ trait SaisitLesPrixDeLigne
     /**
      * Une ligne de vente en cours de saisie, calculée comme à
      * l'enregistrement (voir ConstructeurLigneDocument) : depuis son PU TTC.
-     * Une saisie pas encore valable (prix ou quantité vide, quantité à
-     * virgule, taux ou remise hors de 0-100 %) ne donne aucun montant,
+     * Une saisie pas encore valable (prix vide ou négatif, quantité vide ou
+     * à virgule, taux ou remise hors de 0-100 %) ne donne aucun montant,
      * plutôt qu'un montant faux (1,5 compté comme 1).
      *
      * @param  array<string, mixed>  $ligne
@@ -154,6 +155,10 @@ trait SaisitLesPrixDeLigne
             $prixUnitaireTtc = $calculateur->arrondirAuCentime((float) (filled($ligne['prix_unitaire_ttc'] ?? null)
                 ? $ligne['prix_unitaire_ttc']
                 : throw new InvalidArgumentException('PU TTC à saisir.')));
+
+            if ($prixUnitaireTtc < 0) {
+                throw new InvalidArgumentException('PU TTC négatif.');
+            }
 
             return $calculateur->montantsDeVente(
                 $calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, (float) ($ligne['taux_tva'] ?? 0)),

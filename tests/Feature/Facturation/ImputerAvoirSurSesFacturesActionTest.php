@@ -76,6 +76,24 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
         $this->assertSame(0.0, $client->soldeCrediteur());
     }
 
+    /**
+     * Comme un acompte (voir MarquerFacturesEnRetardTest), un avoir partiel
+     * laisse en retard la facture échue qui n'est pas soldée.
+     */
+    public function test_un_avoir_partiel_laisse_en_retard_sa_facture_echue(): void
+    {
+        $client = Client::factory()->professionnel()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = $this->emettreFacture($client, $produit, 3);
+        $facture->forceFill(['statut' => StatutFacture::EnRetard])->save();
+
+        $this->emettreAvoir($client, [[$facture, 1]]);
+
+        $facture->refresh();
+        $this->assertSame(StatutFacture::EnRetard, $facture->statut);
+        $this->assertSame(120.0, $facture->montantRestant());
+    }
+
     public function test_seul_l_excedent_sur_le_reste_a_payer_devient_un_credit_pour_le_client(): void
     {
         $client = Client::factory()->professionnel()->create();

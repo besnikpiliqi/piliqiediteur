@@ -36,7 +36,7 @@ class ParametresRelances extends Page implements HasForms
 
     protected static ?string $title = 'Relances des factures impayées';
 
-    protected static string $view = 'filament.app.pages.parametres-relances';
+    protected static string $view = 'filament.app.pages.formulaire-de-parametres';
 
     /**
      * @var array<string, mixed>

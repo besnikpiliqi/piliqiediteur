@@ -11,11 +11,12 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Permet à un vendeur de fermer SA PROPRE caisse (relevé de ses ventes
- * depuis sa dernière clôture personnelle, ou depuis le début de la
- * journée s'il n'en a encore fait aucune) -- jamais la clôture officielle
- * de la journée du magasin (voir CloturerCaisseAction, réservée à
- * cloture_caisse.gerer). Voir le docblock de ClotureCaissePersonnelle pour
- * ce qui distingue les deux.
+ * qu'aucune de ses fermetures n'a encore comptées, depuis sa dernière
+ * clôture personnelle ou le début de la journée s'il n'en a encore fait
+ * aucune, ou depuis sa plus ancienne vente comptée si elle est antérieure)
+ * -- jamais la clôture officielle de la journée du magasin (voir
+ * CloturerCaisseAction, réservée à cloture_caisse.gerer). Voir le docblock
+ * de ClotureCaissePersonnelle pour ce qui distingue les deux.
  *
  * Aucune condition de blocage : contrairement à CloturerCaisseAction, un
  * vendeur peut fermer sa caisse aussi souvent qu'il le souhaite, y compris
@@ -34,8 +35,6 @@ class FermerSaCaisseAction
                 ->lockForUpdate()
                 ->first();
 
-            $depuis = $derniere?->cloturee_a ?? Carbon::now()->startOfDay();
-
             // Les ventes jamais encore comptées par une fermeture, et non
             // celles d'ID supérieur à la dernière comptée : l'ID est
             // attribué à la création du brouillon, et un brouillon créé
@@ -46,6 +45,15 @@ class FermerSaCaisseAction
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
+
+            // « Depuis » couvre toutes les ventes du relevé, y compris celles
+            // d'une journée précédente que le vendeur n'avait pas fermée.
+            $depuis = $derniere?->cloturee_a ?? Carbon::now()->startOfDay();
+            $plusAncienneVente = $factures->min('date_emission');
+
+            if ($plusAncienneVente !== null && $plusAncienneVente->lt($depuis)) {
+                $depuis = $plusAncienneVente;
+            }
 
             $cloture = new ClotureCaissePersonnelle;
             $cloture->forceFill([

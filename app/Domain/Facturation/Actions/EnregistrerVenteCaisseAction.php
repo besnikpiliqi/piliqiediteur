@@ -40,9 +40,10 @@ class EnregistrerVenteCaisseAction
 
             $montantRestant = $facture->montantRestant();
 
-            // Rien à encaisser si le crédit du client a déjà tout couvert :
-            // une vente comptoir reste toujours soldée immédiatement, mais
-            // pas forcément par un encaissement en espèces/CB.
+            // Rien à encaisser si le crédit du client a déjà tout couvert, ou
+            // si la vente ne coûte rien (remise de 100 %) : une vente
+            // comptoir reste toujours soldée immédiatement, mais pas
+            // forcément par un encaissement en espèces/CB.
             if ($montantRestant > 0) {
                 $this->enregistrerPaiement->handle(
                     $client,
@@ -54,6 +55,8 @@ class EnregistrerVenteCaisseAction
                     ],
                     [['facture_id' => $facture->id, 'montant' => $montantRestant]],
                 );
+            } else {
+                $facture->constaterUnReglement();
             }
 
             return $facture->fresh('lignes');

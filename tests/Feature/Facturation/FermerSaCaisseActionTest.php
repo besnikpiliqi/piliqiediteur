@@ -58,6 +58,51 @@ class FermerSaCaisseActionTest extends TestCase
         $this->assertSame($vendeur->id, $cloture->cree_par);
     }
 
+    /**
+     * Une vente de la veille que le vendeur n'a pas fermée est comptée par
+     * le relevé du lendemain : « Depuis » remonte jusqu'à elle.
+     */
+    public function test_le_releve_part_de_la_plus_ancienne_vente_qu_il_compte(): void
+    {
+        $vendeur = User::factory()->create();
+        $client = Client::factory()->create();
+        $this->travelTo('2026-10-07 18:00:00');
+        $this->emettreFacturePour($vendeur, $client, 100);
+
+        $this->travelTo('2026-10-08 10:00:00');
+        $cloture = app(FermerSaCaisseAction::class)->handle($vendeur);
+
+        $this->assertSame(1, $cloture->nombre_ventes);
+        $this->assertSame('2026-10-07 18:00:00', $cloture->periode_debut->format('Y-m-d H:i:s'));
+    }
+
+    public function test_sans_vente_ni_fermeture_le_releve_part_du_debut_de_la_journee(): void
+    {
+        $vendeur = User::factory()->create();
+        $this->travelTo('2026-10-08 10:00:00');
+
+        $cloture = app(FermerSaCaisseAction::class)->handle($vendeur);
+
+        $this->assertSame(0, $cloture->nombre_ventes);
+        $this->assertSame('2026-10-08 00:00:00', $cloture->periode_debut->format('Y-m-d H:i:s'));
+    }
+
+    public function test_le_releve_suivant_part_de_la_fermeture_precedente(): void
+    {
+        $vendeur = User::factory()->create();
+        $client = Client::factory()->create();
+        $this->travelTo('2026-10-08 09:00:00');
+        app(FermerSaCaisseAction::class)->handle($vendeur);
+        $this->travelTo('2026-10-08 10:00:00');
+        $this->emettreFacturePour($vendeur, $client, 100);
+
+        $this->travelTo('2026-10-08 11:00:00');
+        $cloture = app(FermerSaCaisseAction::class)->handle($vendeur);
+
+        $this->assertSame(1, $cloture->nombre_ventes);
+        $this->assertSame('2026-10-08 09:00:00', $cloture->periode_debut->format('Y-m-d H:i:s'));
+    }
+
     public function test_une_seconde_fermeture_ne_reprend_que_les_ventes_depuis_la_premiere(): void
     {
         $vendeur = User::factory()->create();

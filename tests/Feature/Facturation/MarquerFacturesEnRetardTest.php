@@ -10,7 +10,6 @@ use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
@@ -54,22 +53,34 @@ class MarquerFacturesEnRetardTest extends TestCase
     {
         $magasin = Magasin::factory()->create();
         $facture = $this->emettreFacture($magasin, now()->subDay()->toDateString());
-
-        app(TenantContext::class)->set($magasin);
-        $paiement = Paiement::create([
-            'client_id' => $facture->client_id,
-            'mode_paiement' => ModePaiement::Especes,
+        app(EnregistrerPaiementAction::class)->handle($facture->client, [
+            'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 50,
             'recu_le' => now()->toDateString(),
-        ]);
-        $facture->allocationsPaiement()->create([
-            'paiement_id' => $paiement->id,
-            'montant_alloue' => 50,
-        ]);
+        ], [['facture_id' => $facture->id, 'montant' => 50]]);
+        $this->assertSame(StatutFacture::PartiellementPayee, $facture->fresh()->statut);
+        app(TenantContext::class)->clear();
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
         $this->assertSame(StatutFacture::EnRetard, $facture->fresh()->statut);
+    }
+
+    /**
+     * L'échéance est le dernier jour pour payer, à l'heure de Paris : une
+     * facture échue aujourd'hui n'est pas encore en retard, même juste
+     * après minuit.
+     */
+    public function test_une_facture_dont_l_echeance_est_aujourd_hui_n_est_pas_encore_en_retard(): void
+    {
+        $this->travelTo('2026-10-09 00:15:00');
+        $magasin = Magasin::factory()->create();
+        $facture = $this->emettreFacture($magasin, '2026-10-09');
+        app(TenantContext::class)->clear();
+
+        $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
+
+        $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
     }
 
     public function test_une_facture_dont_lecheance_nest_pas_encore_passee_nest_pas_touchee(): void

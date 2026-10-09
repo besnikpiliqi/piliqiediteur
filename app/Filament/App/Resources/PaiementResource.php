@@ -79,12 +79,16 @@ class PaiementResource extends Resource
                 // live() et non live(onBlur: true) : le reste à allouer se
                 // met à jour pendant la saisie.
                 TextInput::make('montant')->label('Montant reçu')->numeric()->required()->maxValue(Caisse::MONTANT_MAXIMUM)->saisieEnDirect(),
-                TextInput::make('reference')->label('Référence'),
+                TextInput::make('reference')->label('Référence')->maxLength(100),
+                // Un paiement vu hier sur le relevé s'enregistre aujourd'hui ;
+                // aucun ne se reçoit dans le futur (voir
+                // EnregistrerPaiementAction).
                 DatePicker::make('recu_le')
                     ->label('Reçu le')
                     ->required()
                     ->default(today())
-                    ->minDate(today()),
+                    ->maxDate(today())
+                    ->validationMessages(['before_or_equal' => 'Un paiement ne peut pas être reçu à une date future.']),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
 

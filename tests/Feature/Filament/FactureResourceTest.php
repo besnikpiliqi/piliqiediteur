@@ -799,9 +799,11 @@ class FactureResourceTest extends TestCase
         $facture = Facture::query()->firstOrFail();
         Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
 
-        Livewire::test(ListFactures::class)
+        $telechargement = Livewire::test(ListFactures::class)
             ->callTableAction('telecharger_pdf', $facture->fresh())
-            ->assertSuccessful();
+            ->assertFileDownloaded("ticket-{$facture->fresh()->numero}.pdf");
+
+        $this->assertStringStartsWith('%PDF', base64_decode($telechargement->effects['download']['content']));
     }
 
     public function test_un_brouillon_est_supprimable_mais_plus_une_fois_emis(): void

@@ -457,6 +457,28 @@ class CaisseTest extends TestCase
         $this->assertSame(0, Facture::query()->count());
     }
 
+    /**
+     * Un PU TTC négatif ferait émettre un ticket de montant négatif, sans
+     * rien encaisser : la caisse le refuse.
+     */
+    public function test_un_pu_ttc_negatif_est_refuse(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class);
+        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.produit_id", $produit->id)
+            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '-50')
+            ->call('encaisser')
+            ->assertHasFormErrors(["lignes.{$cle}.prix_unitaire_ttc" => 'min'])
+            ->assertSee('Le champ PU TTC doit être supérieur ou égal à 0.');
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
     public function test_ajouter_un_produit_ajoute_une_ligne_vide_avec_les_valeurs_par_defaut(): void
     {
         $this->ouvrirLaCaisseDUnMagasin();

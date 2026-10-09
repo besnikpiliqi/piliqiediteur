@@ -11,7 +11,9 @@ return new class extends Migration
         Schema::create('sequences_documents', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            // devis, facture_vente, avoir, facture_achat, cloture_caisse...
+            // Une valeur de TypeDocument : devis, facture, ticket_caisse,
+            // avoir, facture_achat, avoir_fournisseur, cloture_caisse,
+            // soumission_ereporting, produit.
             $table->string('type_document', 40);
             // clé de période : "" (pas de reset), "2026" (reset annuel), etc.
             $table->string('period_key', 20)->default('');

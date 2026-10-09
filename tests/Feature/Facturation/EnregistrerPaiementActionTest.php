@@ -10,6 +10,7 @@ use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -188,5 +189,67 @@ class EnregistrerPaiementActionTest extends TestCase
         ], [
             ['facture_id' => $facture->id, 'montant' => 50],
         ]);
+    }
+
+    /**
+     * Un paiement vu hier sur le relevé s'enregistre aujourd'hui avec sa
+     * vraie date ; aucun ne se reçoit dans le futur, quel que soit l'écran
+     * ou l'appel qui l'enregistre.
+     */
+    public function test_un_paiement_recu_a_une_date_future_est_refuse(): void
+    {
+        $this->travelTo('2026-10-09 23:30:00');
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+
+        try {
+            app(EnregistrerPaiementAction::class)->handle($client, [
+                'mode_paiement' => ModePaiement::Virement->value,
+                'montant' => 120,
+                'recu_le' => '2026-10-10',
+            ], [['facture_id' => $facture->id, 'montant' => 120]]);
+            $this->fail('Un paiement reçu à une date future aurait dû être refusé.');
+        } catch (LogicException $exception) {
+            $this->assertSame('Un paiement ne peut pas être reçu à une date future.', $exception->getMessage());
+        }
+
+        $this->assertSame(0, Paiement::query()->count());
+        $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
+    }
+
+    public function test_un_paiement_recu_a_une_date_passee_est_enregistre(): void
+    {
+        $this->travelTo('2026-10-09 00:30:00');
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+
+        $paiement = app(EnregistrerPaiementAction::class)->handle($client, [
+            'mode_paiement' => ModePaiement::Virement->value,
+            'montant' => 120,
+            'recu_le' => '2026-10-08',
+        ], [['facture_id' => $facture->id, 'montant' => 120]]);
+
+        $this->assertSame('2026-10-08', $paiement->fresh()->recu_le->toDateString());
+        $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
+    }
+
+    /**
+     * Le solde d'une facture en retard la règle entièrement : elle passe
+     * payée ; un acompte la laisse en retard (voir
+     * MarquerFacturesEnRetardTest).
+     */
+    public function test_le_solde_d_une_facture_en_retard_la_passe_payee(): void
+    {
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+        $facture->forceFill(['statut' => StatutFacture::EnRetard])->save();
+
+        app(EnregistrerPaiementAction::class)->handle($client, [
+            'mode_paiement' => ModePaiement::Virement->value,
+            'montant' => 120,
+            'recu_le' => now()->toDateString(),
+        ], [['facture_id' => $facture->id, 'montant' => 120]]);
+
+        $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
     }
 }

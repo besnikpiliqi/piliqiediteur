@@ -176,9 +176,11 @@ class AvoirResourceTest extends TestCase
         Livewire::test(ListFactures::class)->callTableAction('avoir', $facture, data: ['motif' => 'Retour client']);
         $avoir = Avoir::query()->where('client_id', $client->id)->firstOrFail();
 
-        Livewire::test(ListAvoirs::class)
+        $telechargement = Livewire::test(ListAvoirs::class)
             ->callTableAction('telecharger_pdf', $avoir)
-            ->assertSuccessful();
+            ->assertFileDownloaded("avoir-{$avoir->numero}.pdf");
+
+        $this->assertStringStartsWith('%PDF', base64_decode($telechargement->effects['download']['content']));
     }
 
     /**

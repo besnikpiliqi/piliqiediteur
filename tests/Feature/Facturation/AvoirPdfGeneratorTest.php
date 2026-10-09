@@ -39,4 +39,36 @@ class AvoirPdfGeneratorTest extends TestCase
 
         $this->assertStringContainsString("Option pour le paiement de la taxe d'après les débits", $html);
     }
+
+    /**
+     * Mêmes mentions du vendeur que sur la facture qu'il rectifie.
+     */
+    public function test_lavoir_imprime_l_identite_legale_du_magasin(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create([
+            'raison_sociale' => 'Martin et Fils',
+            'forme_juridique' => 'SARL',
+            'siren' => '123456789',
+            'numero_tva' => 'FR32123456789',
+            'adresse' => '12 quai des Pêcheurs',
+            'code_postal' => '13002',
+            'ville' => 'Marseille',
+        ]));
+        $client = Client::factory()->professionnel()->create();
+        $produit = Produit::factory()->create();
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]));
+        $avoir = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]));
+
+        $html = view('avoirs.pdf', [
+            'avoir' => $avoir->load('client', 'lignes.ligneFacture.facture', 'magasin'),
+        ])->render();
+
+        foreach (['Martin et Fils SARL', '12 quai des Pêcheurs', '13002 Marseille', 'SIREN : 123456789', 'TVA intracommunautaire : FR32123456789'] as $mention) {
+            $this->assertStringContainsString($mention, $html);
+        }
+    }
 }

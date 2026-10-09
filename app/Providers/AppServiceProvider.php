@@ -31,6 +31,7 @@ use App\Policies\PaiementPolicy;
 use App\Policies\ProduitPolicy;
 use App\Policies\ServicePolicy;
 use App\Policies\SoumissionEReportingPolicy;
+use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Illuminate\Database\Eloquent\Builder;
@@ -39,6 +40,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
 
 class AppServiceProvider extends ServiceProvider
@@ -87,6 +89,24 @@ class AppServiceProvider extends ServiceProvider
 
         $this->declarerLaSaisieEnDirect();
         $this->limiterLesChoixAuMagasin();
+        $this->nommerLesChampsDansLesMessages();
+    }
+
+    /**
+     * Un message de validation (voir lang/fr/validation.php) nomme le champ
+     * par son libellé, en minuscule au milieu de la phrase (« Le champ nom
+     * est obligatoire. »), sauf un sigle, qui garde ses majuscules (« Le
+     * champ PU TTC... », jamais « pU TTC »).
+     */
+    private function nommerLesChampsDansLesMessages(): void
+    {
+        Field::configureUsing(function (Field $champ): void {
+            $champ->validationAttribute(static function (Field $component): string {
+                $libelle = strip_tags((string) $component->getLabel());
+
+                return preg_match('/^\p{Lu}\p{Ll}/u', $libelle) === 1 ? Str::lcfirst($libelle) : $libelle;
+            });
+        });
     }
 
     /**

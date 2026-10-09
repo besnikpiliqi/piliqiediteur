@@ -9,12 +9,13 @@ use Illuminate\Support\Facades\DB;
 use LogicException;
 
 /**
- * Copie telle quelle les lignes déjà figées du devis accepté vers une
- * nouvelle facture BROUILLON (jamais émise automatiquement : l'émission
- * reste une étape manuelle distincte, voir EmettreFactureAction) -- aucun
- * recalcul de prix, le devis a déjà figé ses montants au moment de sa
- * propre émission, exactement comme CreerAvoirAction fait un miroir de la
- * facture plutôt que de reconstruire via ConstructeurLigneDocument.
+ * Copie les montants enregistrés sur les lignes du devis accepté, au
+ * moment de la conversion, vers une nouvelle facture BROUILLON (jamais
+ * émise automatiquement : l'émission reste une étape manuelle distincte,
+ * voir EmettreFactureAction) -- aucun recalcul de prix, comme
+ * CreerAvoirAction reprend les lignes de la facture plutôt que de les
+ * reconstruire via ConstructeurLigneDocument. Converti, le devis n'est
+ * plus modifiable (voir Devis::estModifiable()).
  */
 class CreerFactureDepuisDevisAction
 {

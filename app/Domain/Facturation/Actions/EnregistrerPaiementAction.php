@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -22,6 +23,8 @@ use LogicException;
  *
  * Le client arrive déjà résolu par une requête limitée au magasin, jamais
  * en client_id brut : chaque facture allouée doit appartenir à CE client.
+ * Un paiement s'enregistre le jour où il est reçu ou plus tard (un
+ * virement vu hier sur le relevé), jamais à une date future.
  */
 class EnregistrerPaiementAction
 {
@@ -33,6 +36,10 @@ class EnregistrerPaiementAction
      */
     public function handle(Client $client, array $donneesPaiement, array $allocations): Paiement
     {
+        if (Carbon::parse($donneesPaiement['recu_le'])->startOfDay()->gt(today())) {
+            throw new LogicException('Un paiement ne peut pas être reçu à une date future.');
+        }
+
         return DB::transaction(function () use ($client, $donneesPaiement, $allocations) {
             $paiement = Paiement::create([
                 ...$donneesPaiement,

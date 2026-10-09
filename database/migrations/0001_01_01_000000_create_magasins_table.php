@@ -16,7 +16,10 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->string('nom', 150);
+            // Identité légale imprimée sur les devis, factures et avoirs
+            // (voir IdentiteMagasin et documents/pdf/en-tete.blade.php).
             $table->string('raison_sociale', 200)->nullable();
+            $table->string('forme_juridique', 100)->nullable();
             $table->string('siren', 9)->nullable();
             $table->string('siret', 14)->nullable();
             $table->string('numero_tva', 20)->nullable();
@@ -27,8 +30,6 @@ return new class extends Migration
             $table->string('pays', 2)->default('FR');
             $table->string('email', 150)->nullable();
             $table->string('telephone', 30)->nullable();
-            $table->string('devise', 3)->default('EUR');
-            $table->string('locale', 5)->default('fr');
             $table->string('statut', 30)->default('pending_verification');
             // Nullable : tant que le propriétaire n'a pas configuré son
             // régime (voir ParametresFiscaux), la soumission périodique

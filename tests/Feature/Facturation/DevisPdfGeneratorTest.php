@@ -38,7 +38,7 @@ class DevisPdfGeneratorTest extends TestCase
         $html = view('devis.pdf', ['devis' => $devis->load('client', 'lignes', 'magasin')])->render();
 
         foreach ([
-            'Boutique du Port', '12 quai des Pêcheurs', '13002 Marseille', 'SIRET : 12345678900011', 'TVA intracommunautaire : FR12123456789',
+            'Boutique du Port', 'Martin et Fils SARL', '12 quai des Pêcheurs', '13002 Marseille', 'SIREN : 123456789', 'SIRET : 12345678900011', 'TVA intracommunautaire : FR12123456789',
             'Établi pour', 'Atelier Martin',
             $devis->numero, 'Valable jusqu&#039;au 31/12/2026',
             'Écran 15 pouces', '<td class="montant">2</td>', '<td class="montant">100,00 €</td>', '<td class="montant">120,00 €</td>', '<td class="montant">20 %</td>',
@@ -54,9 +54,12 @@ class DevisPdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->create([
             'nom' => 'Boutique du Port',
+            'raison_sociale' => 'Martin et Fils',
+            'forme_juridique' => 'SARL',
             'adresse' => '12 quai des Pêcheurs',
             'code_postal' => '13002',
             'ville' => 'Marseille',
+            'siren' => '123456789',
             'siret' => '12345678900011',
             'numero_tva' => 'FR12123456789',
         ]));

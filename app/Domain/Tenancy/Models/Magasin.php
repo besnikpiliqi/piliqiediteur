@@ -50,6 +50,7 @@ class Magasin extends Model implements HasName
     protected $fillable = [
         'nom',
         'raison_sociale',
+        'forme_juridique',
         'siren',
         'siret',
         'numero_tva',
@@ -60,8 +61,6 @@ class Magasin extends Model implements HasName
         'pays',
         'email',
         'telephone',
-        'devise',
-        'locale',
         'statut',
         'heure_cloture_automatique',
         'regime_tva',
@@ -87,8 +86,6 @@ class Magasin extends Model implements HasName
         static::creating(function (Magasin $magasin) {
             $magasin->uuid ??= (string) Str::uuid();
             $magasin->statut ??= StatutMagasin::EnAttenteVerification;
-            $magasin->devise ??= 'EUR';
-            $magasin->locale ??= 'fr';
             $magasin->pays ??= 'FR';
             $magasin->heure_cloture_automatique ??= '00:00';
             $magasin->prix_vente_automatique ??= false;

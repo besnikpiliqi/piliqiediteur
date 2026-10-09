@@ -11,6 +11,7 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -151,6 +152,76 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertStringContainsString("Catégorie de l'opération : {$categorie}</div>", $html);
     }
 
+    /**
+     * Les mentions du vendeur (voir IdentiteMagasin) : raison sociale et
+     * forme juridique, adresse complète, SIREN, SIRET, n° de TVA et
+     * coordonnées.
+     */
+    public function test_la_facture_imprime_l_identite_legale_du_magasin(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create([
+            'nom' => 'Boutique du Port',
+            'raison_sociale' => 'Martin et Fils',
+            'forme_juridique' => 'SARL',
+            'siren' => '123456789',
+            'siret' => '12345678900012',
+            'numero_tva' => 'FR32123456789',
+            'adresse' => '12 quai des Pêcheurs',
+            'complement_adresse' => 'Bâtiment B',
+            'code_postal' => '13002',
+            'ville' => 'Marseille',
+            'pays' => 'FR',
+            'telephone' => '04 91 00 00 00',
+            'email' => 'contact@boutique-du-port.fr',
+        ]));
+        $facture = $this->factureEmise();
+
+        $html = view('factures.pdf', [
+            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
+        ])->render();
+
+        $this->assertStringContainsString(
+            '<div class="magasin-nom">Boutique du Port</div>'
+            .'Martin et Fils SARL<br>12 quai des Pêcheurs<br>Bâtiment B<br>13002 Marseille<br>FR<br>'
+            .'SIREN : 123456789<br>SIRET : 12345678900012<br>TVA intracommunautaire : FR32123456789<br>'
+            .'Tél. 04 91 00 00 00 · contact@boutique-du-port.fr',
+            preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], $html),
+        );
+    }
+
+    /**
+     * Un magasin qui n'a pas encore rempli son identité n'imprime ni ligne
+     * vide ni libellé sans valeur.
+     */
+    public function test_l_identite_non_renseignee_ne_s_imprime_pas(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create([
+            'nom' => 'Boutique du Port',
+            'raison_sociale' => null,
+            'forme_juridique' => null,
+            'siren' => null,
+            'siret' => null,
+            'numero_tva' => null,
+            'adresse' => null,
+            'complement_adresse' => null,
+            'code_postal' => null,
+            'ville' => null,
+            'pays' => 'FR',
+            'telephone' => null,
+            'email' => null,
+        ]));
+        $facture = $this->factureEmise();
+
+        $html = view('factures.pdf', [
+            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
+        ])->render();
+
+        $this->assertStringContainsString('<div class="magasin-nom">Boutique du Port</div></td>', preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], $html));
+        $this->assertStringNotContainsString('SIREN', $html);
+        $this->assertStringNotContainsString('TVA intracommunautaire', $html);
+        $this->assertStringNotContainsString('Tél.', $html);
+    }
+
     public function test_le_nom_de_fichier_utilise_le_numero_ou_brouillon(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
@@ -250,5 +321,14 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertStringNotContainsString('Payé', $html);
         $this->assertStringNotContainsString('Crédité par avoir', $html);
         $this->assertStringNotContainsString('Restant dû', $html);
+    }
+
+    private function factureEmise(): Facture
+    {
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
+
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]));
     }
 }

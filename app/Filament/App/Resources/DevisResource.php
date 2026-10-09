@@ -78,10 +78,10 @@ class DevisResource extends Resource
             ])->columns(2),
 
             Section::make('Lignes')->schema([
-                // Modifiables même en édition (voir Devis::estModifiable())
-                // tant que le devis n'a pas encore été transformé en
-                // facture : cette page n'est de toute façon accessible que
-                // dans ce cas (voir DevisPolicy::update() et EditDevis).
+                // Lignes modifiables tant que le devis n'est pas converti en
+                // facture, quel que soit son statut (voir
+                // Devis::estModifiable()) : cette page n'est accessible que
+                // dans ce cas (voir DevisPolicy::update()).
                 ...self::lignesDeVente(),
                 self::totauxDuDocument(),
             ]),

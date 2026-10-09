@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Domain\CaisseSecurisee\Actions\VerifierIntegriteAction;
 use App\Domain\CaisseSecurisee\Enums\DeclenchementVerification;
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
-use App\Domain\CaisseSecurisee\Services\AnomalieFiscale;
+use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
@@ -67,17 +67,16 @@ class VerifierIntegriteFiscale extends Command
                 continue;
             }
 
-            $anomalies = $rapport->anomalies();
             $lignes[] = [
                 $magasin->nom,
                 $rapport->complet ? 'Complète' : 'Incrémentale',
                 (string) $rapport->nombreDEnregistrementsVerifies(),
-                $anomalies === [] ? 'Aucune' : (string) count($anomalies),
+                $rapport->estConforme() ? 'Aucune' : (string) $rapport->nombreDAnomalies(),
             ];
 
-            if ($anomalies !== []) {
+            if (! $rapport->estConforme()) {
                 $echecs++;
-                $this->afficherLesAnomalies($magasin, $anomalies);
+                $this->afficherLesAnomalies($magasin, $rapport);
             }
         }
 
@@ -95,19 +94,18 @@ class VerifierIntegriteFiscale extends Command
     }
 
     /**
-     * Les anomalies du magasin, jusqu'à autant que le journal des
-     * événements en retient (voir VerifierIntegriteAction) : une clé
-     * retirée du dépôt n'inonde pas la sortie de la commande.
-     *
-     * @param  list<AnomalieFiscale>  $anomalies
+     * Les anomalies du magasin que garde le rapport, comme le journal des
+     * événements (voir RapportIntegrite::ANOMALIES_RETENUES), puis le
+     * nombre des autres : une clé retirée du dépôt n'inonde pas la sortie
+     * de la commande.
      */
-    private function afficherLesAnomalies(Magasin $magasin, array $anomalies): void
+    private function afficherLesAnomalies(Magasin $magasin, RapportIntegrite $rapport): void
     {
-        foreach (array_slice($anomalies, 0, VerifierIntegriteAction::ANOMALIES_JOURNALISEES) as $anomalie) {
+        foreach ($rapport->anomalies() as $anomalie) {
             $this->error("{$magasin->nom} [{$anomalie->code->value}] {$anomalie->message}");
         }
 
-        $autres = count($anomalies) - VerifierIntegriteAction::ANOMALIES_JOURNALISEES;
+        $autres = $rapport->nombreDAnomalies() - count($rapport->anomalies());
 
         if ($autres > 0) {
             $this->error("{$magasin->nom} : et {$autres} autre(s) anomalie(s).");

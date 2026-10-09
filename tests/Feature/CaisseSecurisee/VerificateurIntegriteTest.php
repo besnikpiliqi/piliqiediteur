@@ -327,6 +327,30 @@ class VerificateurIntegriteTest extends TestCase
         ], $this->anomalies($this->verifier()));
     }
 
+    /**
+     * Un simple INSERT, sans retirer aucun déclencheur, glisse un faux
+     * événement avant le premier de sa chaîne, en tête de l'export du
+     * journal : la vérification le relit, complète comme reprise, et le
+     * signale comme une rupture de séquence.
+     */
+    public function test_un_enregistrement_insere_avant_le_premier_de_sa_chaine_est_releve(): void
+    {
+        $magasin = $this->magasinActif();
+        $this->activite();
+        $pointsDeReprise = $this->verifier()->pointsDeReprise();
+        $initialisation = (array) DB::table('enregistrements_fiscaux')->where('magasin_id', $magasin->id)->where('chaine', 'evenement')->where('sequence', 1)->first();
+
+        DB::table('enregistrements_fiscaux')->insert([...Arr::except($initialisation, 'id'), 'sequence' => 0, 'type' => '280', 'contenu' => 'faux', 'signature' => 'faux']);
+
+        $anomalies = [
+            [95, 'Rupture de séquence du journal des événements : l\'enregistrement n° 0 est hors de la séquence de la chaîne, qui commence au n° 1.'],
+            [90, 'Enregistrement n° 0 du journal des événements : sa signature ne correspond pas à son contenu signé.'],
+            [90, 'Enregistrement n° 0 du journal des événements : son contenu signé n\'est pas un JSON lisible.'],
+        ];
+        $this->assertSame($anomalies, $this->anomalies($this->verifier()));
+        $this->assertSame($anomalies, $this->anomalies($this->verifier($pointsDeReprise)));
+    }
+
     public function test_un_enregistrement_dans_une_chaine_inconnue_est_detecte(): void
     {
         $magasin = $this->magasinActif();
@@ -553,6 +577,55 @@ class VerificateurIntegriteTest extends TestCase
     }
 
     /**
+     * Le document de activite() dont l'enregistrement est copié, sa chaîne,
+     * la séquence de la copie, en fin de chaîne, et l'anomalie attendue
+     * (%d : l'identifiant du document).
+     *
+     * @return array<string, array{0: string, 1: ChaineFiscale, 2: int, 3: string}>
+     */
+    public static function documentsEnregistresDeuxFois(): array
+    {
+        return [
+            'ticket' => ['ticket', ChaineFiscale::Vente, 6, 'Le ticket TK-2026-000001 a 2 enregistrements de la chaîne des ventes (séquences 1, 6) au lieu d\'un seul.'],
+            'avoir' => ['avoir', ChaineFiscale::Vente, 6, 'L\'avoir AV-2026-000001 a 2 enregistrements de la chaîne des ventes (séquences 2, 6) au lieu d\'un seul.'],
+            'paiement' => ['virement', ChaineFiscale::Encaissement, 4, 'Le paiement (identifiant interne %d) a 2 enregistrements de la chaîne des encaissements (séquences 3, 4) au lieu d\'un seul.'],
+        ];
+    }
+
+    /**
+     * Une copie de l'enregistrement d'un document, ajoutée en fin de sa
+     * chaîne : le document a deux enregistrements.
+     */
+    #[DataProvider('documentsEnregistresDeuxFois')]
+    public function test_un_document_enregistre_deux_fois_est_detecte(string $document, ChaineFiscale $chaine, int $sequenceDeLaCopie, string $anomalie): void
+    {
+        $magasin = $this->magasinActif();
+        $documents = $this->activite();
+        $enregistrement = (array) DB::table('enregistrements_fiscaux')->where('magasin_id', $magasin->id)->where('id', $this->enregistrementDe($documents[$document], $chaine)->id)->first();
+
+        DB::table('enregistrements_fiscaux')->insert([...Arr::except($enregistrement, 'id'), 'sequence' => $sequenceDeLaCopie]);
+
+        $this->assertContains([90, sprintf($anomalie, $documents[$document]->getKey())], $this->anomalies($this->verifier()));
+    }
+
+    /**
+     * Le second ticket renuméroté TK-2026-000025, dernier numéro de la
+     * série : les vingt-trois numéros qui le précèdent manquent, le message
+     * énumère les vingt premiers.
+     */
+    public function test_les_numeros_manquants_au_milieu_d_une_serie_sont_decomptes_et_enumeres(): void
+    {
+        $magasin = $this->magasinActif();
+        $documents = $this->activite();
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['ticketAvecCredit']->id)->update(['numero' => 'TK-2026-000025']);
+
+        DB::table('sequences_documents')->where('magasin_id', $magasin->id)->where('type_document', 'ticket_caisse')->update(['prochain_numero' => 26]);
+
+        $enumeres = implode(', ', array_map(static fn (int $numero): string => sprintf('TK-2026-%06d', $numero), range(2, 21)));
+        $this->assertContains([95, "Série TK-2026- : 23 numéro(s) attribué(s) sans document : {$enumeres}…."], $this->anomalies($this->verifier()));
+    }
+
+    /**
      * @return array<string, array{0: string, 1: string}>
      */
     public static function numerosHorsSerie(): array
@@ -731,6 +804,41 @@ class VerificateurIntegriteTest extends TestCase
         ], $this->anomalies($this->verifier()));
     }
 
+    /**
+     * Le pic de mémoire d'une reprise sans nouvel enregistrement, en octets,
+     * après une vérification complète qui en donne les points de reprise.
+     */
+    private function memoireDUneRepriseSansNouvelEnregistrement(): int
+    {
+        $pointsDeReprise = $this->verifier()->pointsDeReprise();
+        memory_reset_peak_usage();
+        $avant = memory_get_usage();
+
+        $this->verifier($pointsDeReprise);
+
+        return memory_get_peak_usage() - $avant;
+    }
+
+    /**
+     * Les contrôles qui portent chaque nuit sur tout le registre (ligne de
+     * tête, correspondance entre documents et enregistrements,
+     * numérotation) se font en base ou en flux : cent cinquante ventes de
+     * plus ne pèsent presque rien sur la mémoire d'une reprise.
+     */
+    public function test_la_memoire_d_une_reprise_ne_grandit_pas_avec_le_registre(): void
+    {
+        $this->magasinActif();
+        $client = Client::factory()->create();
+        $the = $this->produit('THE', 8);
+        $vendre = fn (int $nombre) => collect(range(1, $nombre))->each(fn () => $this->encaisser($client, [[$the, 1]], ModePaiement::Especes));
+        $vendre(10);
+        $memoireAvecDixVentes = $this->memoireDUneRepriseSansNouvelEnregistrement();
+
+        $vendre(150);
+
+        $this->assertLessThan(200_000, $this->memoireDUneRepriseSansNouvelEnregistrement() - $memoireAvecDixVentes);
+    }
+
     public function test_un_point_de_reprise_disparu_depuis_la_verification_precedente_rompt_la_sequence(): void
     {
         $magasin = $this->magasinActif();
@@ -759,6 +867,86 @@ class VerificateurIntegriteTest extends TestCase
         $this->assertSame([
             [90, 'L\'enregistrement n° 5 de la chaîne des ventes a changé depuis la vérification précédente : il n\'est plus celui qu\'elle a vérifié.'],
         ], $this->anomalies($this->verifier($pointsDeReprise)));
+    }
+
+    /**
+     * Un enregistrement dont la signature ne se vérifie pas n'est jamais un
+     * point de reprise : la reprise suivante le relit, et signale de
+     * nouveau ce qu'il a, sans prétendre qu'il a changé depuis.
+     */
+    public function test_un_enregistrement_a_la_signature_invalide_n_est_jamais_un_point_de_reprise(): void
+    {
+        $this->magasinActif();
+        $this->activite();
+        $dernier = $this->enregistrement(ChaineFiscale::Vente, 5);
+        $this->falsifierLEnregistrement($dernier, ['contenu' => str_replace('"motif":null', '"motif":"Geste commercial"', $dernier->contenu)]);
+        $anomalies = [
+            [90, 'Enregistrement n° 5 de la chaîne des ventes : sa signature ne correspond pas à son contenu signé.'],
+            [90, 'L\'avoir AV-2026-000002 ne correspond plus à ce qui a été signé à son émission (motif).'],
+        ];
+
+        $complete = $this->verifier();
+        $reprise = $this->verifier($complete->pointsDeReprise());
+
+        $this->assertSame($anomalies, $this->anomalies($complete));
+        $this->assertSame(['sequence' => 4, 'signature' => $this->enregistrement(ChaineFiscale::Vente, 4)->signature], $complete->pointsDeReprise()['vente']);
+        $this->assertSame($anomalies, $this->anomalies($reprise));
+        $this->assertSame(['vente' => 1, 'encaissement' => 0, 'evenement' => 0], $reprise->enregistrementsVerifies());
+    }
+
+    /**
+     * Une clé retirée du dépôt depuis la vérification précédente : les
+     * points de reprise qu'elle a signés n'ont pas changé, c'est le dépôt
+     * qui a changé, et la reprise le dit. Ils ne prouvent plus rien et ne
+     * sont plus des points de reprise : la vérification suivante relira
+     * tout.
+     */
+    public function test_un_point_de_reprise_dont_la_cle_n_est_plus_epinglee_est_signale_sans_etre_dit_modifie(): void
+    {
+        $this->magasinActif();
+        $this->activite();
+        $pointsDeReprise = $this->verifier()->pointsDeReprise();
+        $ancienneCle = $this->enregistrement(ChaineFiscale::Vente, 5)->cle_id;
+        $nouvellePaire = SignataireFiscal::genererUnePaire();
+        config([
+            'caisse_securisee.cle_privee' => base64_encode($nouvellePaire['cle_privee']),
+            'caisse_securisee.cles_publiques' => ['nouvelle.pem' => $nouvellePaire['cle_publique']],
+        ]);
+
+        $reprise = $this->verifier($pointsDeReprise);
+
+        $this->assertSame([
+            [90, "L'enregistrement n° 5 de la chaîne des ventes, dernier vérifié par la vérification précédente, est signé avec une clé qui n'est pas épinglée ({$ancienneCle})."],
+            [90, "L'enregistrement n° 3 de la chaîne des encaissements, dernier vérifié par la vérification précédente, est signé avec une clé qui n'est pas épinglée ({$ancienneCle})."],
+            [90, "L'enregistrement n° 2 du journal des événements, dernier vérifié par la vérification précédente, est signé avec une clé qui n'est pas épinglée ({$ancienneCle})."],
+        ], $this->anomalies($reprise));
+        $this->assertSame([], $reprise->pointsDeReprise());
+    }
+
+    /**
+     * L'enregistrement du ticket de A désigne désormais le ticket de B, et
+     * celui de B le ticket de A : la vérification de A ne prend jamais le
+     * document ni l'enregistrement de B pour le sien.
+     */
+    public function test_un_enregistrement_et_un_document_de_deux_magasins_ne_se_correspondent_jamais(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $magasinB = $this->magasinActif();
+        $ticketDeB = $this->encaisser(Client::factory()->create(), [[$this->produit('THE', 8), 1]], ModePaiement::Especes);
+        $enregistrementDeB = $this->enregistrementDe($ticketDeB, ChaineFiscale::Vente);
+        $magasinA = $this->magasinActif();
+        $ticketDeA = $this->encaisser(Client::factory()->create(), [[$this->produit('THE', 8), 1]], ModePaiement::Especes);
+        $enregistrementDeA = $this->enregistrementDe($ticketDeA, ChaineFiscale::Vente);
+        DB::unprepared('DROP TRIGGER enregistrements_fiscaux_ajout_seul_update');
+
+        DB::table('enregistrements_fiscaux')->where('magasin_id', $magasinB->id)->where('id', $enregistrementDeB->id)->update(['document_id' => $ticketDeA->id]);
+        DB::table('enregistrements_fiscaux')->where('magasin_id', $magasinA->id)->where('id', $enregistrementDeA->id)->update(['document_id' => $ticketDeB->id]);
+
+        $this->assertSame([
+            [90, 'Enregistrement n° 1 de la chaîne des ventes : l\'en-tête signé diffère de ses colonnes (document).'],
+            [90, 'Le ticket TK-2026-000001 n\'a aucun enregistrement de la chaîne des ventes.'],
+            [90, "Enregistrement n° 1 de la chaîne des ventes : il désigne une facture introuvable ou jamais numérotée (identifiant interne {$ticketDeB->id})."],
+        ], $this->anomalies($this->verifier()));
     }
 
     /**

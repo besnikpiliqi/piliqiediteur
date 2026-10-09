@@ -49,7 +49,13 @@ return new class extends Migration
             $table->unique(['magasin_id', 'chaine', 'sequence']);
             $table->index(['magasin_id', 'chaine', 'horodatage']);
             $table->index(['magasin_id', 'chaine', 'type']);
-            $table->index(['document_type', 'document_id']);
+            // Les enregistrements d'un document, dans sa chaîne et sous ses
+            // types : la vérification de l'intégrité les cherche pour
+            // chaque document. Faute de statistiques, SQLite prendrait
+            // sinon l'index précédent, et parcourrait chaque fois tous les
+            // enregistrements du même type (tous les paiements, par
+            // exemple).
+            $table->index(['document_type', 'document_id', 'chaine', 'type']);
         });
 
         DeclencheursAjoutSeul::poser('enregistrements_fiscaux');

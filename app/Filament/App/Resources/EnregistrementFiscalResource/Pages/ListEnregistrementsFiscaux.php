@@ -110,8 +110,10 @@ class ListEnregistrementsFiscaux extends ListRecords
 
     /**
      * Le résultat de la vérification : le nombre d'enregistrements
-     * vérifiés, ou ses anomalies (les premières, toutes étant au journal
-     * des événements), qui restent affichées jusqu'à ce qu'on les ferme.
+     * vérifiés, ou le nombre de ses anomalies et les premières d'entre
+     * elles (le journal des événements en garde davantage, voir
+     * RapportIntegrite::ANOMALIES_RETENUES), qui restent affichées jusqu'à
+     * ce qu'on les ferme.
      */
     protected static function notifierLeRapport(RapportIntegrite $rapport): void
     {
@@ -127,11 +129,10 @@ class ListEnregistrementsFiscaux extends ListRecords
             return;
         }
 
-        $anomalies = $rapport->anomalies();
-        $premieres = array_map(static fn (AnomalieFiscale $anomalie): string => e($anomalie->message), array_slice($anomalies, 0, 5));
+        $premieres = array_map(static fn (AnomalieFiscale $anomalie): string => e($anomalie->message), array_slice($rapport->anomalies(), 0, 5));
 
         Notification::make()
-            ->title(sprintf('Intégrité : %d anomalie(s) relevée(s)', count($anomalies)))
+            ->title(sprintf('Intégrité : %d anomalie(s) relevée(s)', $rapport->nombreDAnomalies()))
             ->body(implode('<br>', [...$premieres, e("Vérification {$verification}. Les anomalies sont inscrites au journal des événements.")]))
             ->danger()
             ->persistent()

@@ -22,9 +22,9 @@ use Illuminate\Support\Facades\Log;
  * VerificateurIntegrite), puis inscrit la vérification au journal des
  * événements (art. 286 I-3° bis du CGI) :
  *
- * - chaque anomalie, une rupture de séquence ou de numérotation (JET 95)
- *   ou un autre défaut d'intégrité (JET 90), jusqu'à
- *   ANOMALIES_JOURNALISEES par vérification ;
+ * - chaque anomalie que garde son rapport, une rupture de séquence ou de
+ *   numérotation (JET 95) ou un autre défaut d'intégrité (JET 90), soit
+ *   au plus RapportIntegrite::ANOMALIES_RETENUES par vérification ;
  * - puis l'opération de contrôle (JET 280) : vérification complète ou
  *   incrémentale, déclenchement, résultat, nombre total d'anomalies,
  *   nombre d'enregistrements vérifiés et point de reprise de chaque
@@ -32,23 +32,16 @@ use Illuminate\Support\Facades\Log;
  *
  * Une vérification incrémentale reprend après les points de reprise de la
  * dernière opération de contrôle du magasin, pourvu que sa signature se
- * vérifie avec une clé épinglée ; sinon, ou s'il n'y en a jamais eu, elle
- * vérifie tout le registre. Toute anomalie est en plus signalée au journal
- * de l'application (Log::critical), pour que l'éditeur intervienne.
+ * vérifie avec une clé épinglée ; sinon, s'il n'y en a jamais eu ou
+ * qu'elle n'en note aucun, elle vérifie tout le registre, et s'inscrit
+ * comme complète. Toute anomalie est en plus signalée au journal de
+ * l'application (Log::critical), pour que l'éditeur intervienne.
  *
  * Fermé par défaut : sans clé de signature, la vérification ne pourrait
  * pas s'inscrire au journal, elle est refusée avant de commencer.
  */
 class VerifierIntegriteAction
 {
-    /**
-     * Le nombre d'anomalies qu'une vérification inscrit au journal des
-     * événements, au plus : une clé retirée du dépôt rendrait chaque
-     * enregistrement suspect, et le journal ne doit pas s'en remplir.
-     * L'opération de contrôle en donne toujours le nombre total.
-     */
-    public const ANOMALIES_JOURNALISEES = 100;
-
     public function __construct(
         private readonly VerificateurIntegrite $verificateur,
         private readonly RegistreFiscal $registre,
@@ -66,12 +59,11 @@ class VerifierIntegriteAction
         $this->signataire->cleId();
 
         $rapport = $this->verificateur->verifier($magasin, $complet ? null : $this->pointsDeRepriseDuDernierControle());
-        $anomalies = $rapport->anomalies();
 
-        DB::transaction(function () use ($magasin, $rapport, $anomalies, $declenchement): void {
+        DB::transaction(function () use ($magasin, $rapport, $declenchement): void {
             $this->registre->verrouiller($magasin);
 
-            foreach (array_slice($anomalies, 0, self::ANOMALIES_JOURNALISEES) as $anomalie) {
+            foreach ($rapport->anomalies() as $anomalie) {
                 $this->registre->journaliser($anomalie->code, $anomalie->details());
             }
 
@@ -79,7 +71,7 @@ class VerifierIntegriteAction
                 'verification' => $rapport->complet ? 'complete' : 'incrementale',
                 'declenchement' => $declenchement->value,
                 'resultat' => $rapport->estConforme() ? 'conforme' : 'anomalies',
-                'nombre_anomalies' => count($anomalies),
+                'nombre_anomalies' => $rapport->nombreDAnomalies(),
                 'enregistrements_verifies' => $rapport->enregistrementsVerifies(),
                 'points_de_reprise' => $rapport->pointsDeReprise(),
             ]);
@@ -89,10 +81,10 @@ class VerifierIntegriteAction
             Log::critical('Caisse sécurisée : la vérification de l\'intégrité du registre fiscal a relevé des anomalies.', [
                 'magasin_id' => $magasin->getKey(),
                 'verification' => $rapport->complet ? 'complete' : 'incrementale',
-                'nombre_anomalies' => count($anomalies),
+                'nombre_anomalies' => $rapport->nombreDAnomalies(),
                 'anomalies' => array_map(
                     static fn (AnomalieFiscale $anomalie): string => "[{$anomalie->code->value}] {$anomalie->message}",
-                    array_slice($anomalies, 0, self::ANOMALIES_JOURNALISEES),
+                    $rapport->anomalies(),
                 ),
             ]);
         }

@@ -19,6 +19,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
 use ErrorException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Exceptions\MathException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -34,13 +35,14 @@ use ValueError;
  * base, sans rien écrire, et rend ses anomalies dans un RapportIntegrite.
  *
  * 1. Les chaînes du registre (ChaineFiscale), enregistrement par
- *    enregistrement : séquences continues depuis 1, sans trou ; signature
- *    précédente égale à celle de l'enregistrement précédent, absente du
- *    seul premier ; signature valide pour une clé ÉPINGLÉE, seule à faire
- *    foi (voir SignataireFiscal) ; horodatages qui ne reculent pas ;
- *    en-tête signé identique aux colonnes ; grands totaux perpétuels qui
- *    avancent du montant de chaque vente. Puis la ligne de tête du
- *    registre, qui doit noter le dernier enregistrement de chaque chaîne.
+ *    enregistrement : séquences continues depuis 1, sans trou, aucune
+ *    inférieure à 1 ; signature précédente égale à celle de
+ *    l'enregistrement précédent, absente du seul premier ; signature
+ *    valide pour une clé ÉPINGLÉE, seule à faire foi (voir
+ *    SignataireFiscal) ; horodatages qui ne reculent pas ; en-tête signé
+ *    identique aux colonnes ; grands totaux perpétuels qui avancent du
+ *    montant de chaque vente. Puis la ligne de tête du registre, qui doit
+ *    noter le dernier enregistrement de chaque chaîne.
  * 2. Les documents : le bloc « document » d'un ticket, d'une facture ou
  *    d'un avoir, et le paiement et les imputations d'un encaissement,
  *    recalculés depuis la base (voir ContenuFiscal), doivent être ceux qui
@@ -63,9 +65,23 @@ use ValueError;
  * VerifierIntegriteAction), elle ne reprend chaque chaîne qu'après son
  * point de reprise, dont l'enregistrement doit être resté celui qu'elle
  * avait vérifié, et ne recalcule que les documents et les imputations de
- * ces nouveaux enregistrements. La ligne de tête, la correspondance entre
- * documents et enregistrements et la numérotation, peu coûteuses, se
- * vérifient toujours entièrement.
+ * ces nouveaux enregistrements. Elle relit aussi toute ligne de séquence
+ * inférieure à 1 : un simple ajout, que les déclencheurs de la table
+ * laissent passer, ne peut glisser une ligne avant le point de reprise
+ * qu'à une telle séquence, les autres étant déjà prises dans une chaîne
+ * sans trou (l'index unique des séquences refuse un doublon). Le point de
+ * reprise d'une chaîne est son dernier enregistrement dont la signature se
+ * vérifie : un enregistrement dont la signature ne se vérifie pas est relu,
+ * et signalé de nouveau, par la reprise suivante, au lieu d'en devenir le
+ * point de départ. La ligne de tête, la correspondance entre documents et
+ * enregistrements et la numérotation se vérifient toujours entièrement.
+ *
+ * Tout se lit en flux (par paquets) ou se compte en base : la mémoire
+ * d'une vérification, complète ou non, ne grandit pas avec le registre.
+ * Pour une reprise, elle suit ce qui s'y est inscrit depuis la précédente ;
+ * le rapport ne garde que les premières anomalies (voir RapportIntegrite),
+ * et seules les imputations signées introuvables en base et les numéros
+ * hors de leur série se retiennent jusqu'à la fin de la vérification.
  *
  * Rien n'est verrouillé, pour ne jamais arrêter les ventes : tout se lit
  * dans une même transaction, qui donne sous MySQL et MariaDB (REPEATABLE
@@ -92,6 +108,15 @@ class VerificateurIntegrite
         'encaissement' => ['paiement' => 'paiement'],
     ];
 
+    /**
+     * Le modèle de chaque alias de document.
+     */
+    private const MODELES = [
+        'facture' => Facture::class,
+        'avoir' => Avoir::class,
+        'paiement' => Paiement::class,
+    ];
+
     private RapportIntegrite $rapport;
 
     private Magasin $magasin;
@@ -104,35 +129,29 @@ class VerificateurIntegrite
     private array $clesEpinglees = [];
 
     /**
-     * Les tickets et factures numérotés du magasin, par identifiant :
-     * numéro et date d'émission telle qu'enregistrée (UTC).
-     *
-     * @var array<int, stdClass>
-     */
-    private array $factures = [];
-
-    /**
-     * Les avoirs numérotés du magasin, comme $factures.
-     *
-     * @var array<int, stdClass>
-     */
-    private array $avoirs = [];
-
-    /**
-     * Les documents dont l'enregistrement a été vérifié, par alias.
+     * Pour une reprise seulement, les documents dont l'enregistrement a été
+     * vérifié, par alias : ceux dont elle vérifie les imputations.
      *
      * @var array{facture: list<int>, avoir: list<int>, paiement: list<int>}
      */
     private array $documentsVerifies = ['facture' => [], 'avoir' => [], 'paiement' => []];
 
     /**
-     * Les imputations que signent les enregistrements vérifiés, par clé
-     * (voir cleDImputation()) : le montant signé, en centimes (null s'il
-     * est illisible), à chaque fois qu'elles y figurent.
+     * Les imputations signées par un enregistrement vérifié et introuvables
+     * en base, par clé (voir cleDImputation()).
      *
-     * @var array<string, list<int|null>>
+     * @var array<string, array{origine: string, origine_id: int|null, facture_id: int|null, montant: int|null}>
      */
-    private array $imputationsSignees = [];
+    private array $imputationsIntrouvables = [];
+
+    /**
+     * Le dernier document dont les imputations signées ont été lues, par
+     * alias : les imputations d'un même paiement, d'une même facture ou
+     * d'un même avoir se suivent en base.
+     *
+     * @var array<string, array{document_id: int, imputations: list<array{origine: string, origine_id: int|null, facture_id: int|null, montant: int|null}>}>
+     */
+    private array $dernieresImputationsLues = [];
 
     public function __construct(
         private readonly SignataireFiscal $signataire,
@@ -142,7 +161,8 @@ class VerificateurIntegrite
 
     /**
      * Vérifie le registre du magasin actif, entièrement, ou après les
-     * points de reprise de la vérification précédente.
+     * points de reprise de la vérification précédente. Elle est complète
+     * quand aucune chaîne ne repart d'un point de reprise.
      *
      * @param  array<string, array{sequence: int, signature: string}>|null  $pointsDeReprise  par valeur de ChaineFiscale ; null pour tout vérifier
      *
@@ -154,20 +174,26 @@ class VerificateurIntegrite
             throw new LogicException('La vérification de l\'intégrité ne porte que sur le registre du magasin actif.');
         }
 
-        $this->rapport = new RapportIntegrite($pointsDeReprise === null);
+        $reprises = [];
+
+        foreach (ChaineFiscale::cases() as $chaine) {
+            if (isset($pointsDeReprise[$chaine->value])) {
+                $reprises[$chaine->value] = $pointsDeReprise[$chaine->value];
+            }
+        }
+
+        $this->rapport = new RapportIntegrite($reprises === []);
         $this->magasin = $magasin;
         $this->clesEpinglees = array_keys($this->signataire->clesEpinglees());
         $this->documentsVerifies = ['facture' => [], 'avoir' => [], 'paiement' => []];
-        $this->imputationsSignees = [];
+        $this->imputationsIntrouvables = [];
+        $this->dernieresImputationsLues = [];
 
-        DB::transaction(function () use ($pointsDeReprise): void {
-            $this->factures = Facture::query()->whereNotNull('numero')->toBase()->get(['id', 'numero', 'date_emission'])->keyBy('id')->all();
-            $this->avoirs = Avoir::query()->whereNotNull('numero')->toBase()->get(['id', 'numero', 'date_emission'])->keyBy('id')->all();
-
+        DB::transaction(function () use ($reprises): void {
             $this->verifierLesChainesInconnues();
 
             foreach (ChaineFiscale::cases() as $chaine) {
-                $this->verifierLaChaine($chaine, $pointsDeReprise[$chaine->value] ?? null);
+                $this->verifierLaChaine($chaine, $reprises[$chaine->value] ?? null);
             }
 
             $this->verifierLaTete();
@@ -209,63 +235,80 @@ class VerificateurIntegrite
     /**
      * Parcourt la chaîne dans l'ordre de ses séquences, depuis le début ou
      * après son point de reprise, et note dans le rapport ce qu'elle en a
-     * vérifié.
+     * vérifié, avec son nouveau point de reprise : le dernier
+     * enregistrement dont la signature se vérifie. Toute ligne de séquence
+     * inférieure à 1, qu'aucune chaîne n'attribue, se relit d'abord, même
+     * par une reprise, et se vérifie seule : elle ne prolonge rien.
      *
      * @param  array{sequence: int, signature: string}|null  $pointDeReprise
      */
     private function verifierLaChaine(ChaineFiscale $chaine, ?array $pointDeReprise): void
     {
         $precedent = $pointDeReprise === null ? null : $this->repartirDu($chaine, $pointDeReprise);
+        $pointDeRepriseSuivant = $precedent !== null && $precedent['signature_valide'] ? self::pointDeReprise($precedent) : null;
         $verifies = 0;
+
+        $this->enregistrements()
+            ->where('chaine', $chaine->value)
+            ->where('sequence', '<', 1)
+            ->lazyById(500, 'sequence')
+            ->each(function (EnregistrementFiscal $horsSequence) use ($chaine, &$verifies): void {
+                $this->verifierLEnregistrement($chaine, $horsSequence, null);
+                $verifies++;
+            });
 
         $this->enregistrements()
             ->where('chaine', $chaine->value)
             ->where('sequence', '>', $pointDeReprise['sequence'] ?? 0)
             ->lazyById(500, 'sequence')
-            ->each(function (EnregistrementFiscal $enregistrement) use ($chaine, &$precedent, &$verifies): void {
+            ->each(function (EnregistrementFiscal $enregistrement) use ($chaine, &$precedent, &$pointDeRepriseSuivant, &$verifies): void {
                 $precedent = $this->verifierLEnregistrement($chaine, $enregistrement, $precedent);
                 $verifies++;
+
+                if ($precedent['signature_valide']) {
+                    $pointDeRepriseSuivant = self::pointDeReprise($precedent);
+                }
             });
 
-        $this->rapport->noterLaChaine(
-            $chaine,
-            $verifies,
-            $precedent === null ? null : ['sequence' => $precedent['sequence'], 'signature' => $precedent['signature']],
-        );
+        $this->rapport->noterLaChaine($chaine, $verifies, $pointDeRepriseSuivant);
     }
 
     /**
-     * L'enregistrement du point de reprise, d'où la chaîne repart : il doit
-     * être resté celui que la vérification précédente a vérifié, même
-     * signature et contenu qui se vérifie avec elle. L'enregistrement qui
-     * le suit doit signer la signature du point de reprise, même s'il a
-     * disparu ou changé depuis.
+     * L'enregistrement du point de reprise, d'où la chaîne repart. La
+     * vérification précédente en a vérifié la signature, sans quoi il n'en
+     * serait pas un : il doit avoir gardé la même, et son contenu se
+     * vérifier encore avec elle, sinon il a changé depuis. Seule exception,
+     * une clé qui n'est pas épinglée, que le dépôt a pu retirer depuis : la
+     * reprise le dit, sans prétendre que l'enregistrement a changé.
+     * L'enregistrement qui le suit doit signer la signature du point de
+     * reprise, même s'il a disparu ou changé depuis.
      *
      * @param  array{sequence: int, signature: string}  $pointDeReprise
-     * @return array{sequence: int, signature: string, horodatage: string|null, gt: array{reel: int, absolu: int}|null}
+     * @return array{sequence: int, signature: string, horodatage: string|null, gt: array{reel: int, absolu: int}|null, signature_valide: bool}
      */
     private function repartirDu(ChaineFiscale $chaine, array $pointDeReprise): array
     {
         $reference = ['chaine' => $chaine->value, 'sequence' => $pointDeReprise['sequence']];
         $enregistrement = $this->enregistrements()->where('chaine', $chaine->value)->where('sequence', $pointDeReprise['sequence'])->first();
-        $etat = ['sequence' => $pointDeReprise['sequence'], 'signature' => $pointDeReprise['signature'], 'horodatage' => null, 'gt' => null];
+        $situation = sprintf('L\'enregistrement n° %d %s', $pointDeReprise['sequence'], self::nomDeLaChaine($chaine));
+        $etat = ['sequence' => $pointDeReprise['sequence'], 'signature' => $pointDeReprise['signature'], 'horodatage' => null, 'gt' => null, 'signature_valide' => false];
 
         if ($enregistrement === null) {
-            $this->rapport->signaler(AnomalieFiscale::rupture('reprise', sprintf(
-                'L\'enregistrement n° %d %s, dernier vérifié par la vérification précédente, a disparu.',
-                $pointDeReprise['sequence'],
-                self::nomDeLaChaine($chaine),
-            ), $reference));
+            $this->rapport->signaler(AnomalieFiscale::rupture('reprise', "{$situation}, dernier vérifié par la vérification précédente, a disparu.", $reference));
 
             return $etat;
         }
 
-        if ($enregistrement->signature !== $pointDeReprise['signature'] || ! $this->signataire->verifier($enregistrement->contenu, $enregistrement->signature, $enregistrement->cle_id)) {
-            $this->rapport->signaler(AnomalieFiscale::defaut('reprise', sprintf(
-                'L\'enregistrement n° %d %s a changé depuis la vérification précédente : il n\'est plus celui qu\'elle a vérifié.',
-                $pointDeReprise['sequence'],
-                self::nomDeLaChaine($chaine),
-            ), $reference));
+        $aChange = "{$situation} a changé depuis la vérification précédente : il n'est plus celui qu'elle a vérifié.";
+        $defaut = match (true) {
+            $enregistrement->signature !== $pointDeReprise['signature'] => $aChange,
+            ! in_array($enregistrement->cle_id, $this->clesEpinglees, true) => "{$situation}, dernier vérifié par la vérification précédente, est signé avec une clé qui n'est pas épinglée ({$enregistrement->cle_id}).",
+            ! $this->signatureValide($enregistrement) => $aChange,
+            default => null,
+        };
+
+        if ($defaut !== null) {
+            $this->rapport->signaler(AnomalieFiscale::defaut('reprise', $defaut, $reference));
         }
 
         $contenu = self::decoder($enregistrement->contenu);
@@ -274,6 +317,7 @@ class VerificateurIntegrite
             ...$etat,
             'horodatage' => self::horodatageEnBase($enregistrement->getRawOriginal('horodatage')),
             'gt' => $chaine === ChaineFiscale::Vente && $contenu !== null ? self::grandsTotauxSignes($contenu) : null,
+            'signature_valide' => $defaut === null,
         ];
     }
 
@@ -281,8 +325,8 @@ class VerificateurIntegrite
      * Vérifie un enregistrement à la suite du précédent de sa chaîne, et
      * rend ce que l'enregistrement suivant doit prolonger.
      *
-     * @param  array{sequence: int, signature: string, horodatage: string|null, gt: array{reel: int, absolu: int}|null}|null  $precedent
-     * @return array{sequence: int, signature: string, horodatage: string|null, gt: array{reel: int, absolu: int}|null}
+     * @param  array{sequence: int, signature: string, horodatage: string|null, gt: array{reel: int, absolu: int}|null, signature_valide: bool}|null  $precedent
+     * @return array{sequence: int, signature: string, horodatage: string|null, gt: array{reel: int, absolu: int}|null, signature_valide: bool}
      */
     private function verifierLEnregistrement(ChaineFiscale $chaine, EnregistrementFiscal $enregistrement, ?array $precedent): array
     {
@@ -290,7 +334,6 @@ class VerificateurIntegrite
         $situation = sprintf('Enregistrement n° %d %s', $enregistrement->sequence, self::nomDeLaChaine($chaine));
         $suiteDirecte = $this->verifierLaSequence($chaine, $enregistrement, $precedent, $reference);
         $horodatage = self::horodatageEnBase($enregistrement->getRawOriginal('horodatage'));
-        $suivant = ['sequence' => $enregistrement->sequence, 'signature' => $enregistrement->signature, 'horodatage' => $horodatage, 'gt' => null];
 
         if ($suiteDirecte && $enregistrement->signature_precedente !== ($precedent['signature'] ?? null)) {
             $this->rapport->signaler(AnomalieFiscale::defaut('chainage', $precedent === null
@@ -307,7 +350,13 @@ class VerificateurIntegrite
             ), $reference));
         }
 
-        $this->verifierLaSignature($enregistrement, $situation, $reference);
+        $suivant = [
+            'sequence' => $enregistrement->sequence,
+            'signature' => $enregistrement->signature,
+            'horodatage' => $horodatage,
+            'gt' => null,
+            'signature_valide' => $this->verifierLaSignature($enregistrement, $situation, $reference),
+        ];
         $contenu = self::decoder($enregistrement->contenu);
 
         if ($contenu === null) {
@@ -340,7 +389,8 @@ class VerificateurIntegrite
 
     /**
      * La séquence suit-elle directement celle du précédent (1 pour le
-     * premier) ? Sinon, la rupture est signalée.
+     * premier) ? Sinon, la rupture est signalée, comme une séquence
+     * inférieure à 1, qu'aucune chaîne n'attribue.
      *
      * @param  array{sequence: int}|null  $precedent
      * @param  array<string, int|string>  $reference
@@ -353,38 +403,50 @@ class VerificateurIntegrite
             return true;
         }
 
-        $this->rapport->signaler(AnomalieFiscale::rupture('sequence', $enregistrement->sequence > $attendue
-            ? sprintf(
-                'Rupture de séquence %s : %s avant l\'enregistrement n° %d.',
-                self::nomDeLaChaine($chaine),
-                $enregistrement->sequence === $attendue + 1
-                    ? "l'enregistrement n° {$attendue} manque"
-                    : sprintf('les enregistrements n° %d à %d manquent', $attendue, $enregistrement->sequence - 1),
-                $enregistrement->sequence,
-            )
-            : sprintf('Rupture de séquence %s : l\'enregistrement n° %d suit l\'enregistrement n° %d.', self::nomDeLaChaine($chaine), $enregistrement->sequence, $attendue - 1), $reference));
+        $this->rapport->signaler(AnomalieFiscale::rupture('sequence', sprintf('Rupture de séquence %s : %s.', self::nomDeLaChaine($chaine), match (true) {
+            $enregistrement->sequence < 1 => "l'enregistrement n° {$enregistrement->sequence} est hors de la séquence de la chaîne, qui commence au n° 1",
+            $enregistrement->sequence === $attendue + 1 => "l'enregistrement n° {$attendue} manque avant l'enregistrement n° {$enregistrement->sequence}",
+            $enregistrement->sequence > $attendue => sprintf('les enregistrements n° %d à %d manquent avant l\'enregistrement n° %d', $attendue, $enregistrement->sequence - 1, $enregistrement->sequence),
+            default => sprintf('l\'enregistrement n° %d suit l\'enregistrement n° %d', $enregistrement->sequence, $attendue - 1),
+        }), $reference));
 
         return false;
     }
 
     /**
-     * La signature se vérifie avec la clé épinglée que désigne
-     * l'enregistrement, et elle seule : une clé inconnue du dépôt ne
-     * prouve rien, quel que soit ce qu'elle vérifie.
+     * La signature se vérifie-t-elle avec la clé épinglée que désigne
+     * l'enregistrement, et elle seule ? Sinon, le défaut est signalé : une
+     * clé inconnue du dépôt ne prouve rien, quel que soit ce qu'elle
+     * vérifie.
      *
      * @param  array<string, int|string>  $reference
      */
-    private function verifierLaSignature(EnregistrementFiscal $enregistrement, string $situation, array $reference): void
+    private function verifierLaSignature(EnregistrementFiscal $enregistrement, string $situation, array $reference): bool
     {
         if (! in_array($enregistrement->cle_id, $this->clesEpinglees, true)) {
             $this->rapport->signaler(AnomalieFiscale::defaut('cle', "{$situation} : signé avec une clé qui n'est pas épinglée ({$enregistrement->cle_id}).", $reference));
 
-            return;
+            return false;
         }
 
-        if ($enregistrement->algorithme !== SignataireFiscal::ALGORITHME || ! $this->signataire->verifier($enregistrement->contenu, $enregistrement->signature, $enregistrement->cle_id)) {
+        if (! $this->signatureValide($enregistrement)) {
             $this->rapport->signaler(AnomalieFiscale::defaut('signature', "{$situation} : sa signature ne correspond pas à son contenu signé.", $reference));
+
+            return false;
         }
+
+        return true;
+    }
+
+    /**
+     * L'algorithme de la signature est-il celui du module, et la signature
+     * se vérifie-t-elle avec la clé de l'enregistrement ? Une clé qui n'est
+     * pas épinglée ne vérifie rien (voir SignataireFiscal::verifier()).
+     */
+    private function signatureValide(EnregistrementFiscal $enregistrement): bool
+    {
+        return $enregistrement->algorithme === SignataireFiscal::ALGORITHME
+            && $this->signataire->verifier($enregistrement->contenu, $enregistrement->signature, $enregistrement->cle_id);
     }
 
     /**
@@ -566,9 +628,10 @@ class VerificateurIntegrite
 
     /**
      * Le document de l'enregistrement d'une vente ou d'un encaissement,
-     * recalculé depuis la base, doit être celui qui a été signé. Un
-     * enregistrement qui ne désigne pas un document numéroté du bon type
-     * est signalé par verifierLesEnregistrementsDesDocuments().
+     * recalculé depuis la base, doit être celui qui a été signé, et chaque
+     * imputation qu'il signe doit exister en base. Un enregistrement qui ne
+     * désigne pas un document numéroté du bon type est signalé par
+     * verifierLesEnregistrementsDesDocuments().
      *
      * @param  array<string, mixed>  $contenu
      */
@@ -582,8 +645,8 @@ class VerificateurIntegrite
         }
 
         $document = match ($alias) {
-            'facture' => isset($this->factures[$documentId]) ? Facture::query()->find($documentId) : null,
-            'avoir' => isset($this->avoirs[$documentId]) ? Avoir::query()->find($documentId) : null,
+            'facture' => Facture::query()->whereNotNull('numero')->find($documentId),
+            'avoir' => Avoir::query()->whereNotNull('numero')->find($documentId),
             'paiement' => Paiement::query()->find($documentId),
         };
 
@@ -591,11 +654,14 @@ class VerificateurIntegrite
             return;
         }
 
-        $this->documentsVerifies[$alias][] = $documentId;
-        $libelle = $this->libelleDuDocument($alias, $documentId);
+        if (! $this->rapport->complet) {
+            $this->documentsVerifies[$alias][] = $documentId;
+        }
+
+        $libelle = self::libelleDuDocument($alias, $documentId, $document instanceof Paiement ? null : $document->numero);
         $reference = ['chaine' => $chaine->value, 'sequence' => $enregistrement->sequence, 'document' => $alias, 'document_id' => $documentId];
         $donnees = is_array($contenu['donnees'] ?? null) ? $contenu['donnees'] : [];
-        $this->noterLesImputationsSignees($alias, $documentId, $donnees);
+        $this->noterLesImputationsIntrouvables(self::imputationsSignees($alias, $documentId, $donnees));
 
         try {
             $recalcule = $document instanceof Paiement
@@ -636,24 +702,21 @@ class VerificateurIntegrite
     }
 
     /**
-     * Note les imputations que signe le document : celles d'un paiement
-     * sur ses factures, les crédits d'avoir qui ont réglé une facture à son
-     * émission, les imputations d'un avoir sur les factures qu'il corrige.
+     * Note les imputations signées qui n'existent pas en base, signalées
+     * par verifierLesImputations().
      *
-     * @param  array<array-key, mixed>  $donnees
+     * @param  list<array{origine: string, origine_id: int|null, facture_id: int|null, montant: int|null}>  $imputations
      */
-    private function noterLesImputationsSignees(string $alias, int $documentId, array $donnees): void
+    private function noterLesImputationsIntrouvables(array $imputations): void
     {
-        [$imputations, $cle] = match ($alias) {
-            'paiement' => [$donnees['allocations'] ?? [], static fn (array $imputation): string => self::cleDImputation('paiement', $documentId, $imputation['facture_id'] ?? null)],
-            'facture' => [$donnees['contexte']['credits_avoir'] ?? [], static fn (array $imputation): string => self::cleDImputation('avoir', $imputation['avoir_id'] ?? null, $documentId)],
-            'avoir' => [$donnees['contexte']['imputations'] ?? [], static fn (array $imputation): string => self::cleDImputation('avoir', $documentId, $imputation['facture_id'] ?? null)],
-        };
+        foreach ($imputations as $imputation) {
+            $cle = self::cleDImputation($imputation);
 
-        foreach (is_array($imputations) ? $imputations : [] as $imputation) {
-            if (is_array($imputation)) {
-                $this->imputationsSignees[$cle($imputation)][] = is_int($imputation['montant'] ?? null) ? $imputation['montant'] : null;
+            if (isset($this->imputationsIntrouvables[$cle]) || ($imputation['origine_id'] !== null && $imputation['facture_id'] !== null && self::allocationsDeLImputation($imputation)->exists())) {
+                continue;
             }
+
+            $this->imputationsIntrouvables[$cle] = $imputation;
         }
     }
 
@@ -662,149 +725,335 @@ class VerificateurIntegrite
      * document numéroté (un paiement pour un encaissement) de la nature de
      * son type, un ticket dans la série des tickets, une facture dans celle
      * des factures ; chaque document numéroté et chaque paiement a
-     * exactement un enregistrement.
+     * exactement un enregistrement. La base ne rend que ce qui est en
+     * défaut.
      */
     private function verifierLesEnregistrementsDesDocuments(): void
     {
-        $enregistrementsParDocument = ['facture' => [], 'avoir' => [], 'paiement' => []];
-
         $this->enregistrements()
             ->whereIn('chaine', array_keys(self::DOCUMENTS_PAR_TYPE))
-            ->select(['id', 'chaine', 'sequence', 'type', 'document_type', 'document_id'])
-            ->lazyById(1000)
-            ->each(function (EnregistrementFiscal $enregistrement) use (&$enregistrementsParDocument): void {
-                $chaine = (string) $enregistrement->getRawOriginal('chaine');
-                $alias = self::DOCUMENTS_PAR_TYPE[$chaine][$enregistrement->type] ?? null;
-                $situation = sprintf('Enregistrement n° %d %s', $enregistrement->sequence, self::nomDeLaChaine(ChaineFiscale::from($chaine)));
-                $reference = ['chaine' => $chaine, 'sequence' => $enregistrement->sequence];
+            ->whereNot(static fn (Builder $enregistrements): Builder => self::designentUnDocumentDeLeurType($enregistrements))
+            ->orderBy('id')
+            ->toBase()
+            ->get(['chaine', 'sequence', 'type'])
+            ->each(function (stdClass $enregistrement): void {
+                $chaine = ChaineFiscale::from($enregistrement->chaine);
+                $situation = sprintf('Enregistrement n° %d %s', $enregistrement->sequence, self::nomDeLaChaine($chaine));
 
-                if ($alias === null) {
-                    $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', "{$situation} : son type « {$enregistrement->type} » n'est pas celui d'un document que sa chaîne enregistre.", $reference));
-
-                    return;
-                }
-
-                if ($enregistrement->getRawOriginal('document_type') !== $alias || $enregistrement->getRawOriginal('document_id') === null) {
-                    $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', "{$situation} : il ne désigne pas le document qu'il enregistre.", $reference));
-
-                    return;
-                }
-
-                $enregistrementsParDocument[$alias][(int) $enregistrement->getRawOriginal('document_id')][] = ['sequence' => $enregistrement->sequence, 'type' => $enregistrement->type, 'reference' => $reference, 'situation' => $situation];
+                $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', isset(self::DOCUMENTS_PAR_TYPE[$chaine->value][$enregistrement->type])
+                    ? "{$situation} : il ne désigne pas le document qu'il enregistre."
+                    : "{$situation} : son type « {$enregistrement->type} » n'est pas celui d'un document que sa chaîne enregistre.", ['chaine' => $chaine->value, 'sequence' => (int) $enregistrement->sequence]));
             });
 
-        $documents = [
-            'facture' => array_keys($this->factures),
-            'avoir' => array_keys($this->avoirs),
-            'paiement' => Paiement::query()->orderBy('id')->pluck('id')->map(static fn (int|string $id): int => (int) $id)->all(),
-        ];
-
-        foreach ($documents as $alias => $identifiants) {
-            foreach ($identifiants as $documentId) {
-                $this->verifierLEnregistrementUniqueDuDocument($alias, $documentId, $enregistrementsParDocument[$alias][$documentId] ?? []);
-            }
-
-            foreach (array_diff_key($enregistrementsParDocument[$alias], array_flip($identifiants)) as $documentId => $enregistrements) {
-                foreach ($enregistrements as $enregistrement) {
-                    $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', sprintf(
-                        '%s : il désigne %s introuvable%s (identifiant interne %d).',
-                        $enregistrement['situation'],
-                        $alias === 'paiement' ? 'un paiement' : ($alias === 'avoir' ? 'un avoir' : 'une facture'),
-                        $alias === 'paiement' ? '' : ' ou jamais numéroté'.($alias === 'avoir' ? '' : 'e'),
-                        $documentId,
-                    ), $enregistrement['reference']));
-                }
-            }
+        foreach (array_keys(self::MODELES) as $alias) {
+            $this->verifierLEnregistrementUniqueDesDocuments($alias);
+            $this->verifierLesDocumentsDesEnregistrements($alias);
         }
     }
 
     /**
-     * @param  list<array{sequence: int, type: string, reference: array<string, int|string>, situation: string}>  $enregistrements
+     * Les enregistrements qui désignent un document de la nature de leur
+     * type (voir DOCUMENTS_PAR_TYPE).
+     *
+     * @param  Builder<EnregistrementFiscal>  $enregistrements
+     * @return Builder<EnregistrementFiscal>
      */
-    private function verifierLEnregistrementUniqueDuDocument(string $alias, int $documentId, array $enregistrements): void
+    private static function designentUnDocumentDeLeurType(Builder $enregistrements): Builder
     {
-        $libelle = $this->libelleDuDocument($alias, $documentId);
-        $chaine = $alias === 'paiement' ? ChaineFiscale::Encaissement : ChaineFiscale::Vente;
-        $reference = ['document' => $alias, 'document_id' => $documentId];
+        return $enregistrements
+            ->whereNotNull('enregistrements_fiscaux.document_type')
+            ->whereNotNull('enregistrements_fiscaux.document_id')
+            ->where(static function (Builder $natures): void {
+                foreach (self::DOCUMENTS_PAR_TYPE as $chaine => $types) {
+                    foreach ($types as $type => $alias) {
+                        $natures->orWhere(static fn (Builder $nature): Builder => $nature
+                            ->where('enregistrements_fiscaux.chaine', $chaine)
+                            ->where('enregistrements_fiscaux.type', $type)
+                            ->where('enregistrements_fiscaux.document_type', $alias));
+                    }
+                }
+            });
+    }
 
-        if (count($enregistrements) !== 1) {
-            $sequences = array_column($enregistrements, 'sequence');
+    /**
+     * La chaîne et les types des enregistrements d'un document.
+     *
+     * @return array{0: string, 1: list<string>}
+     */
+    private static function enregistrementsDuDocument(string $alias): array
+    {
+        foreach (self::DOCUMENTS_PAR_TYPE as $chaine => $types) {
+            $typesDuDocument = array_keys($types, $alias, true);
 
-            $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', $enregistrements === []
-                ? sprintf('%s n\'a aucun enregistrement %s.', $libelle, self::nomDeLaChaine($chaine))
-                : sprintf('%s a %d enregistrements %s (séquences %s) au lieu d\'un seul.', $libelle, count($enregistrements), self::nomDeLaChaine($chaine), self::liste($sequences)), $reference));
-
-            return;
+            if ($typesDuDocument !== []) {
+                return [$chaine, $typesDuDocument];
+            }
         }
 
-        if ($alias !== 'facture') {
-            return;
-        }
+        throw new LogicException("Aucune chaîne n'enregistre de document « {$alias} ».");
+    }
 
-        $typeAttendu = str_starts_with($this->factures[$documentId]->numero, TypeDocument::TicketCaisse->code().'-') ? 'ticket' : 'facture';
+    /**
+     * Chaque document numéroté (chaque paiement) a exactement un
+     * enregistrement, et un ticket ou une facture est enregistré sous le
+     * type de sa série : la base compte les enregistrements de chaque
+     * document et ne rend que ceux qui sont en défaut. Un document rendu
+     * avec un seul enregistrement est donc un ticket ou une facture
+     * enregistré sous le type de l'autre série.
+     */
+    private function verifierLEnregistrementUniqueDesDocuments(string $alias): void
+    {
+        [$chaine, $types] = self::enregistrementsDuDocument($alias);
+        $table = (new (self::MODELES[$alias]))->getTable();
+        $numero = $alias === 'paiement' ? 'null' : "{$table}.numero";
 
-        if ($enregistrements[0]['type'] !== $typeAttendu) {
-            $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', sprintf(
-                '%s est enregistré comme « %s » alors que son numéro le place dans la série des %ss.',
-                $libelle,
-                $enregistrements[0]['type'],
-                $typeAttendu,
-            ), [...$reference, ...$enregistrements[0]['reference']]));
-        }
+        self::MODELES[$alias]::query()
+            ->when($alias !== 'paiement', static fn (Builder $documents): Builder => $documents->whereNotNull("{$table}.numero"))
+            ->leftJoin('enregistrements_fiscaux', static fn (JoinClause $enregistrements): JoinClause => $enregistrements
+                ->on('enregistrements_fiscaux.document_id', '=', "{$table}.id")
+                ->on('enregistrements_fiscaux.magasin_id', '=', "{$table}.magasin_id")
+                ->where('enregistrements_fiscaux.chaine', $chaine)
+                ->whereIn('enregistrements_fiscaux.type', $types)
+                ->where('enregistrements_fiscaux.document_type', $alias))
+            ->groupBy("{$table}.id", ...($alias === 'paiement' ? [] : ["{$table}.numero"]))
+            ->when(
+                $alias === 'facture',
+                static fn (Builder $documents): Builder => $documents->havingRaw(
+                    "count(enregistrements_fiscaux.id) <> 1 or min(enregistrements_fiscaux.type) <> case when {$table}.numero like ? then ? else ? end",
+                    [TypeDocument::TicketCaisse->code().'-%', 'ticket', 'facture'],
+                ),
+                static fn (Builder $documents): Builder => $documents->havingRaw('count(enregistrements_fiscaux.id) <> 1'),
+            )
+            ->orderBy("{$table}.id")
+            ->toBase()
+            ->selectRaw("{$table}.id as id, {$numero} as numero, count(enregistrements_fiscaux.id) as nombre, min(enregistrements_fiscaux.type) as type_enregistre, min(enregistrements_fiscaux.sequence) as sequence_enregistree")
+            ->get()
+            ->each(function (stdClass $document) use ($alias, $chaine, $types): void {
+                $documentId = (int) $document->id;
+                $libelle = self::libelleDuDocument($alias, $documentId, $document->numero);
+                $nombre = (int) $document->nombre;
+                $reference = ['document' => $alias, 'document_id' => $documentId];
+                $nomDeLaChaine = self::nomDeLaChaine(ChaineFiscale::from($chaine));
+
+                if ($nombre !== 1) {
+                    $sequences = $this->enregistrements()
+                        ->where('chaine', $chaine)
+                        ->whereIn('type', $types)
+                        ->where('document_type', $alias)
+                        ->where('document_id', $documentId)
+                        ->orderBy('sequence')
+                        ->limit(self::LISTE_MAXIMUM)
+                        ->pluck('sequence')
+                        ->all();
+
+                    $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', $nombre === 0
+                        ? "{$libelle} n'a aucun enregistrement {$nomDeLaChaine}."
+                        : sprintf('%s a %d enregistrements %s (séquences %s) au lieu d\'un seul.', $libelle, $nombre, $nomDeLaChaine, self::liste($sequences, $nombre)), $reference));
+
+                    return;
+                }
+
+                $typeAttendu = str_starts_with($document->numero, TypeDocument::TicketCaisse->code().'-') ? 'ticket' : 'facture';
+
+                if ($document->type_enregistre !== $typeAttendu) {
+                    $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', sprintf(
+                        '%s est enregistré comme « %s » alors que son numéro le place dans la série des %ss.',
+                        $libelle,
+                        $document->type_enregistre,
+                        $typeAttendu,
+                    ), [...$reference, 'chaine' => $chaine, 'sequence' => (int) $document->sequence_enregistree]));
+                }
+            });
+    }
+
+    /**
+     * Chaque enregistrement d'un document désigne un document numéroté du
+     * magasin (un paiement du magasin) : la base ne rend que ceux qui n'en
+     * désignent aucun.
+     */
+    private function verifierLesDocumentsDesEnregistrements(string $alias): void
+    {
+        [$chaine, $types] = self::enregistrementsDuDocument($alias);
+        $table = (new (self::MODELES[$alias]))->getTable();
+        $nature = match ($alias) {
+            'facture' => 'une facture introuvable ou jamais numérotée',
+            'avoir' => 'un avoir introuvable ou jamais numéroté',
+            'paiement' => 'un paiement introuvable',
+        };
+
+        $this->enregistrements()
+            ->where('enregistrements_fiscaux.chaine', $chaine)
+            ->whereIn('enregistrements_fiscaux.type', $types)
+            ->where('enregistrements_fiscaux.document_type', $alias)
+            ->whereNotNull('enregistrements_fiscaux.document_id')
+            ->leftJoin($table, static fn (JoinClause $documents): JoinClause => $documents
+                ->on("{$table}.id", '=', 'enregistrements_fiscaux.document_id')
+                ->on("{$table}.magasin_id", '=', 'enregistrements_fiscaux.magasin_id')
+                ->when($alias !== 'paiement', static fn (JoinClause $numerotes): JoinClause => $numerotes->whereNotNull("{$table}.numero")))
+            ->whereNull("{$table}.id")
+            ->orderBy('enregistrements_fiscaux.sequence')
+            ->toBase()
+            ->get(['enregistrements_fiscaux.sequence', 'enregistrements_fiscaux.document_id'])
+            ->each(fn (stdClass $enregistrement) => $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', sprintf(
+                'Enregistrement n° %d %s : il désigne %s (identifiant interne %d).',
+                $enregistrement->sequence,
+                self::nomDeLaChaine(ChaineFiscale::from($chaine)),
+                $nature,
+                $enregistrement->document_id,
+            ), ['chaine' => $chaine, 'sequence' => (int) $enregistrement->sequence])));
     }
 
     /**
      * Chaque imputation d'un paiement ou d'un avoir figure dans exactement
      * un contenu signé, pour son montant, et chaque imputation signée
-     * existe en base. Une vérification incrémentale ne regarde que les
-     * imputations des documents qu'elle a vérifiés : toutes naissent dans
-     * la transaction où l'un d'eux est signé.
+     * existe en base. Les imputations en base se lisent en flux, et pour
+     * chacune les seuls contenus qui peuvent la signer. Une vérification
+     * incrémentale ne regarde que les imputations des documents qu'elle a
+     * vérifiés : toutes naissent dans la transaction où l'un d'eux est
+     * signé.
      */
     private function verifierLesImputations(): void
     {
         $complet = $this->rapport->complet;
-        $imputations = [];
 
-        $paiements = PaiementAllocation::query()
-            ->when(! $complet, fn (Builder $allocations): Builder => $allocations->whereIn('paiement_id', $this->documentsVerifies['paiement']))
-            ->orderBy('id')
-            ->get(['paiement_id', 'facture_id', 'montant_alloue']);
+        PaiementAllocation::query()
+            ->when(! $complet, fn (Builder $allocations): Builder => $allocations->whereIntegerInRaw('paiement_id', $this->documentsVerifies['paiement']))
+            ->select(['id', 'paiement_id', 'facture_id', 'montant_alloue'])
+            ->lazyById(500)
+            ->each(fn (PaiementAllocation $allocation) => $this->verifierLImputation([
+                'origine' => 'paiement',
+                'origine_id' => (int) $allocation->paiement_id,
+                'facture_id' => (int) $allocation->facture_id,
+                'montant' => $this->centimes($allocation),
+            ]));
 
-        foreach ($paiements as $allocation) {
-            $imputations[self::cleDImputation('paiement', (int) $allocation->paiement_id, (int) $allocation->facture_id)] = $this->centimes($allocation);
-        }
-
-        $avoirs = AvoirAllocation::query()
+        AvoirAllocation::query()
             ->when(! $complet, fn (Builder $allocations): Builder => $allocations->where(fn (Builder $documents): Builder => $documents
-                ->whereIn('facture_id', $this->documentsVerifies['facture'])
-                ->orWhereIn('avoir_id', $this->documentsVerifies['avoir'])))
-            ->orderBy('id')
-            ->get(['avoir_id', 'facture_id', 'montant_alloue']);
+                ->whereIntegerInRaw('facture_id', $this->documentsVerifies['facture'])
+                ->orWhereIntegerInRaw('avoir_id', $this->documentsVerifies['avoir'])))
+            ->select(['id', 'avoir_id', 'facture_id', 'montant_alloue'])
+            ->lazyById(500)
+            ->each(fn (AvoirAllocation $allocation) => $this->verifierLImputation([
+                'origine' => 'avoir',
+                'origine_id' => (int) $allocation->avoir_id,
+                'facture_id' => (int) $allocation->facture_id,
+                'montant' => $this->centimes($allocation),
+            ]));
 
-        foreach ($avoirs as $allocation) {
-            $imputations[self::cleDImputation('avoir', (int) $allocation->avoir_id, (int) $allocation->facture_id)] = $this->centimes($allocation);
+        foreach ($this->imputationsIntrouvables as $cle => $imputation) {
+            $this->rapport->signaler(AnomalieFiscale::defaut('imputation', "{$this->libelleDeLImputation($imputation)}, signée, est introuvable en base.", ['imputation' => $cle]));
         }
+    }
 
-        foreach ($imputations as $cle => $montant) {
-            $signees = $this->imputationsSignees[$cle] ?? [];
-            $libelle = $this->libelleDeLImputation($cle);
-            $reference = ['imputation' => $cle];
+    /**
+     * Une imputation en base figure dans exactement un des contenus qui
+     * peuvent la signer, pour son montant : celui de son paiement, ou pour
+     * un avoir, celui de la facture qu'il a réglée à son émission ou le
+     * sien.
+     *
+     * @param  array{origine: string, origine_id: int, facture_id: int, montant: int|null}  $imputation
+     */
+    private function verifierLImputation(array $imputation): void
+    {
+        $cle = self::cleDImputation($imputation);
+        $signataires = $imputation['origine'] === 'paiement'
+            ? [['paiement', $imputation['origine_id']]]
+            : [['facture', $imputation['facture_id']], ['avoir', $imputation['origine_id']]];
+        $signees = [];
 
-            $message = match (true) {
-                $signees === [] => sprintf('%s (%s) ne figure dans aucun contenu signé.', $libelle, self::montant($montant)),
-                count($signees) > 1 => sprintf('%s (%s) figure dans %d contenus signés au lieu d\'un seul.', $libelle, self::montant($montant), count($signees)),
-                $montant === null || $signees[0] !== $montant => sprintf('%s : %s en base, %s dans son contenu signé.', $libelle, self::montant($montant), self::montant($signees[0])),
-                default => null,
-            };
-
-            if ($message !== null) {
-                $this->rapport->signaler(AnomalieFiscale::defaut('imputation', $message, $reference));
+        foreach ($signataires as [$alias, $documentId]) {
+            foreach ($this->imputationsSigneesDuDocument($alias, $documentId) as $signee) {
+                if (self::cleDImputation($signee) === $cle) {
+                    $signees[] = $signee['montant'];
+                }
             }
         }
 
-        foreach (array_diff_key($this->imputationsSignees, $imputations) as $cle => $signees) {
-            $this->rapport->signaler(AnomalieFiscale::defaut('imputation', "{$this->libelleDeLImputation($cle)}, signée, est introuvable en base.", ['imputation' => $cle]));
+        $montant = $imputation['montant'];
+
+        if ($montant !== null && $signees === [$montant]) {
+            return;
         }
+
+        $libelle = $this->libelleDeLImputation($imputation);
+
+        $this->rapport->signaler(AnomalieFiscale::defaut('imputation', match (true) {
+            $signees === [] => sprintf('%s (%s) ne figure dans aucun contenu signé.', $libelle, self::montant($montant)),
+            count($signees) > 1 => sprintf('%s (%s) figure dans %d contenus signés au lieu d\'un seul.', $libelle, self::montant($montant), count($signees)),
+            default => sprintf('%s : %s en base, %s dans son contenu signé.', $libelle, self::montant($montant), self::montant($signees[0])),
+        }, ['imputation' => $cle]));
+    }
+
+    /**
+     * Les imputations que signent les enregistrements du document, relues
+     * une seule fois pour les imputations du même document qui se suivent.
+     *
+     * @return list<array{origine: string, origine_id: int|null, facture_id: int|null, montant: int|null}>
+     */
+    private function imputationsSigneesDuDocument(string $alias, int $documentId): array
+    {
+        if (($this->dernieresImputationsLues[$alias]['document_id'] ?? null) === $documentId) {
+            return $this->dernieresImputationsLues[$alias]['imputations'];
+        }
+
+        [$chaine, $types] = self::enregistrementsDuDocument($alias);
+        $imputations = [];
+
+        $this->enregistrements()
+            ->where('chaine', $chaine)
+            ->whereIn('type', $types)
+            ->where('document_type', $alias)
+            ->where('document_id', $documentId)
+            ->orderBy('id')
+            ->pluck('contenu')
+            ->each(function (string $contenu) use ($alias, $documentId, &$imputations): void {
+                $donnees = self::decoder($contenu)['donnees'] ?? null;
+                $imputations = [...$imputations, ...self::imputationsSignees($alias, $documentId, is_array($donnees) ? $donnees : [])];
+            });
+
+        $this->dernieresImputationsLues[$alias] = ['document_id' => $documentId, 'imputations' => $imputations];
+
+        return $imputations;
+    }
+
+    /**
+     * Les imputations que signent les données d'un document : celles d'un
+     * paiement sur ses factures, les crédits d'avoir qui ont réglé une
+     * facture à son émission, les imputations d'un avoir sur les factures
+     * qu'il corrige. Un identifiant ou un montant illisible vaut null.
+     *
+     * @param  array<array-key, mixed>  $donnees
+     * @return list<array{origine: string, origine_id: int|null, facture_id: int|null, montant: int|null}>
+     */
+    private static function imputationsSignees(string $alias, int $documentId, array $donnees): array
+    {
+        $entier = static fn (mixed $valeur): ?int => is_int($valeur) ? $valeur : null;
+        [$imputations, $imputation] = match ($alias) {
+            'paiement' => [$donnees['allocations'] ?? [], static fn (array $signee): array => ['origine' => 'paiement', 'origine_id' => $documentId, 'facture_id' => $entier($signee['facture_id'] ?? null)]],
+            'facture' => [$donnees['contexte']['credits_avoir'] ?? [], static fn (array $signee): array => ['origine' => 'avoir', 'origine_id' => $entier($signee['avoir_id'] ?? null), 'facture_id' => $documentId]],
+            'avoir' => [$donnees['contexte']['imputations'] ?? [], static fn (array $signee): array => ['origine' => 'avoir', 'origine_id' => $documentId, 'facture_id' => $entier($signee['facture_id'] ?? null)]],
+        };
+        $signees = [];
+
+        foreach (is_array($imputations) ? $imputations : [] as $signee) {
+            if (is_array($signee)) {
+                $signees[] = [...$imputation($signee), 'montant' => $entier($signee['montant'] ?? null)];
+            }
+        }
+
+        return $signees;
+    }
+
+    /**
+     * @param  array{origine: string, origine_id: int, facture_id: int}  $imputation
+     * @return Builder<PaiementAllocation>|Builder<AvoirAllocation>
+     */
+    private static function allocationsDeLImputation(array $imputation): Builder
+    {
+        return ($imputation['origine'] === 'paiement'
+            ? PaiementAllocation::query()->where('paiement_id', $imputation['origine_id'])
+            : AvoirAllocation::query()->where('avoir_id', $imputation['origine_id']))
+            ->where('facture_id', $imputation['facture_id']);
     }
 
     // ---------------------------------------------------------------
@@ -816,7 +1065,11 @@ class VerificateurIntegrite
      * numéros vont de 1 au dernier numéro que la série a attribué (voir
      * DocumentNumberingService), chacun une seule fois, écrit comme la
      * série l'écrit, dans l'année de l'émission de son document. Un numéro
-     * attribué puis disparu se voit donc aussi, même le dernier.
+     * attribué puis disparu se voit donc aussi, même le dernier. Les
+     * documents se lisent en flux, et de chaque série ne se retient que le
+     * compte des numéros qu'elle a attribués : chaque numéro n'ayant qu'une
+     * écriture, et la base refusant deux documents du même numéro, il en
+     * manque autant que ce compte est loin du dernier attribué.
      */
     private function verifierLaNumerotation(): void
     {
@@ -826,45 +1079,60 @@ class VerificateurIntegrite
             ->get()
             ->groupBy(static fn (SequenceDocument $serie): string => $serie->type_document === TypeDocument::Avoir ? 'avoir' : 'facture');
 
-        foreach (['facture' => $this->factures, 'avoir' => $this->avoirs] as $alias => $documents) {
-            $seriesDuDocument = ($series[$alias] ?? collect())->keyBy('prefixe');
-            $numerosParSerie = [];
+        foreach (['facture', 'avoir'] as $alias) {
+            $seriesDuDocument = ($series[$alias] ?? collect())->keyBy('prefixe')->all();
+            $attribuesPresents = array_fill_keys(array_keys($seriesDuDocument), 0);
+            $horsDeLaSerie = array_fill_keys(array_keys($seriesDuDocument), []);
 
-            foreach ($documents as $documentId => $document) {
-                $serie = $this->serieDuNumero($document->numero, $seriesDuDocument->all(), $alias, (int) $documentId);
+            self::MODELES[$alias]::query()
+                ->whereNotNull('numero')
+                ->toBase()
+                ->select(['id', 'numero', 'date_emission'])
+                ->lazyById(1000, 'numero')
+                ->each(function (stdClass $document) use ($alias, $seriesDuDocument, &$attribuesPresents, &$horsDeLaSerie): void {
+                    $serieEtRang = $this->serieDuNumero($document->numero, $seriesDuDocument, $alias, (int) $document->id);
 
-                if ($serie === null) {
-                    continue;
-                }
+                    if ($serieEtRang === null) {
+                        return;
+                    }
 
-                $numerosParSerie[$serie->prefixe][] = (int) substr($document->numero, strlen($serie->prefixe));
-                $this->verifierLAnneeDuNumero($serie, $document, $alias, (int) $documentId);
-            }
+                    [$serie, $rang] = $serieEtRang;
+                    $this->verifierLAnneeDuNumero($serie, $document, $alias);
+
+                    if ($rang >= 1 && $rang <= self::dernierAttribue($serie)) {
+                        $attribuesPresents[$serie->prefixe]++;
+                    } else {
+                        $horsDeLaSerie[$serie->prefixe][] = $rang;
+                    }
+                });
 
             foreach ($seriesDuDocument as $prefixe => $serie) {
-                $this->verifierLaContinuiteDeLaSerie($serie, $numerosParSerie[$prefixe] ?? []);
+                $this->verifierLaContinuiteDeLaSerie($alias, $serie, $attribuesPresents[$prefixe], $horsDeLaSerie[$prefixe]);
             }
         }
     }
 
     /**
      * La série dont le document porte le numéro, écrit comme elle l'écrit,
-     * ou null après avoir signalé qu'il n'appartient à aucune.
+     * et le rang du numéro dans la série, ou null après avoir signalé qu'il
+     * n'appartient à aucune.
      *
      * @param  array<string, SequenceDocument>  $series  par préfixe
+     * @return array{0: SequenceDocument, 1: int}|null
      */
-    private function serieDuNumero(string $numero, array $series, string $alias, int $documentId): ?SequenceDocument
+    private function serieDuNumero(string $numero, array $series, string $alias, int $documentId): ?array
     {
         $reference = ['document' => $alias, 'document_id' => $documentId, 'numero' => $numero];
+        $prefixeEtRang = self::prefixeEtRang($numero);
 
-        if (preg_match('/^(.*-)(\d+)$/D', $numero, $morceaux) !== 1 || ! isset($series[$morceaux[1]])) {
+        if ($prefixeEtRang === null || ! isset($series[$prefixeEtRang[0]])) {
             $this->rapport->signaler(AnomalieFiscale::rupture('numerotation', "Le numéro {$numero} n'appartient à aucune série de numérotation du magasin.", $reference));
 
             return null;
         }
 
-        $serie = $series[$morceaux[1]];
-        $ecritureDeLaSerie = self::numeroDeLaSerie($serie, (int) $morceaux[2]);
+        $serie = $series[$prefixeEtRang[0]];
+        $ecritureDeLaSerie = self::numeroDeLaSerie($serie, $prefixeEtRang[1]);
 
         if ($numero !== $ecritureDeLaSerie) {
             $this->rapport->signaler(AnomalieFiscale::rupture('numerotation', "Le numéro {$numero} n'est pas écrit comme sa série écrit ses numéros ({$ecritureDeLaSerie}).", $reference));
@@ -872,10 +1140,10 @@ class VerificateurIntegrite
             return null;
         }
 
-        return $serie;
+        return [$serie, $prefixeEtRang[1]];
     }
 
-    private function verifierLAnneeDuNumero(SequenceDocument $serie, stdClass $document, string $alias, int $documentId): void
+    private function verifierLAnneeDuNumero(SequenceDocument $serie, stdClass $document, string $alias): void
     {
         $emission = self::horodatageEnBase($document->date_emission);
 
@@ -888,42 +1156,106 @@ class VerificateurIntegrite
         if ($anneeDEmission !== $serie->period_key) {
             $this->rapport->signaler(AnomalieFiscale::defaut('numerotation', sprintf(
                 '%s est numéroté dans l\'année %s mais émis le %s.',
-                $this->libelleDuDocument($alias, $documentId),
+                self::libelleDuDocument($alias, (int) $document->id, $document->numero),
                 $serie->period_key,
                 self::aLHeureDeParis($emission),
-            ), ['document' => $alias, 'document_id' => $documentId, 'numero' => $document->numero]));
+            ), ['document' => $alias, 'document_id' => (int) $document->id, 'numero' => $document->numero]));
         }
     }
 
     /**
-     * @param  list<int>  $numeros  ceux que portent les documents de la série
+     * @param  int  $attribuesPresents  le nombre de documents de la série dont le numéro est l'un de ceux qu'elle a attribués
+     * @param  list<int>  $horsDeLaSerie  les rangs des documents de la série hors de ceux qu'elle a attribués
      */
-    private function verifierLaContinuiteDeLaSerie(SequenceDocument $serie, array $numeros): void
+    private function verifierLaContinuiteDeLaSerie(string $alias, SequenceDocument $serie, int $attribuesPresents, array $horsDeLaSerie): void
     {
-        $dernierAttribue = (int) $serie->prochain_numero - 1;
+        $dernierAttribue = self::dernierAttribue($serie);
         $reference = ['serie' => $serie->prefixe];
-        $manquants = $dernierAttribue < 1 ? [] : array_values(array_diff(range(1, $dernierAttribue), $numeros));
-        $auDela = array_values(array_filter($numeros, static fn (int $numero): bool => $numero < 1 || $numero > $dernierAttribue));
-        sort($auDela);
+        $manquants = max(0, $dernierAttribue) - $attribuesPresents;
         $ecrire = fn (int $numero): string => self::numeroDeLaSerie($serie, $numero);
 
-        if ($manquants !== []) {
+        if ($manquants > 0) {
             $this->rapport->signaler(AnomalieFiscale::rupture('numerotation', sprintf(
                 'Série %s : %d numéro(s) attribué(s) sans document : %s.',
                 $serie->prefixe,
-                count($manquants),
-                self::liste(array_map($ecrire, $manquants)),
+                $manquants,
+                self::liste(array_map($ecrire, $this->premiersNumerosManquants($alias, $serie)), $manquants),
             ), $reference));
         }
 
-        if ($auDela !== []) {
+        if ($horsDeLaSerie !== []) {
+            sort($horsDeLaSerie);
+
             $this->rapport->signaler(AnomalieFiscale::rupture('numerotation', sprintf(
                 'Série %s : %s hors des numéros qu\'elle a attribués (%s).',
                 $serie->prefixe,
-                self::liste(array_map($ecrire, $auDela)),
+                self::liste(array_map($ecrire, $horsDeLaSerie)),
                 $dernierAttribue < 1 ? 'aucun' : "de {$ecrire(1)} à {$ecrire($dernierAttribue)}",
             ), $reference));
         }
+    }
+
+    /**
+     * Les premiers numéros attribués par la série sans document qui les
+     * porte, autant qu'un message en énumère : ses documents se lisent dans
+     * l'ordre de leurs numéros (une écriture plus longue est un numéro plus
+     * grand, sans zéro de tête), jusqu'à les avoir trouvés.
+     *
+     * @return list<int>
+     */
+    private function premiersNumerosManquants(string $alias, SequenceDocument $serie): array
+    {
+        $dernierAttribue = self::dernierAttribue($serie);
+        $manquants = [];
+        $attendu = 1;
+
+        $numeros = self::MODELES[$alias]::query()
+            ->whereRaw('substr(numero, 1, ?) = ?', [strlen($serie->prefixe), $serie->prefixe])
+            ->orderByRaw('length(numero)')
+            ->orderBy('numero')
+            ->toBase()
+            ->select(['numero'])
+            ->lazy(1000);
+
+        foreach ($numeros as $document) {
+            $prefixeEtRang = self::prefixeEtRang($document->numero);
+
+            if ($prefixeEtRang === null || $prefixeEtRang[0] !== $serie->prefixe || self::numeroDeLaSerie($serie, $prefixeEtRang[1]) !== $document->numero || $prefixeEtRang[1] < $attendu) {
+                continue;
+            }
+
+            for (; $attendu < min($prefixeEtRang[1], $dernierAttribue + 1) && count($manquants) < self::LISTE_MAXIMUM; $attendu++) {
+                $manquants[] = $attendu;
+            }
+
+            if ($prefixeEtRang[1] > $dernierAttribue || count($manquants) === self::LISTE_MAXIMUM) {
+                return $manquants;
+            }
+
+            $attendu = $prefixeEtRang[1] + 1;
+        }
+
+        for (; $attendu <= $dernierAttribue && count($manquants) < self::LISTE_MAXIMUM; $attendu++) {
+            $manquants[] = $attendu;
+        }
+
+        return $manquants;
+    }
+
+    private static function dernierAttribue(SequenceDocument $serie): int
+    {
+        return (int) $serie->prochain_numero - 1;
+    }
+
+    /**
+     * Le préfixe et le rang d'un numéro (« TK-2026- » et 12 pour
+     * TK-2026-000012), ou null s'il ne finit pas par un rang.
+     *
+     * @return array{0: string, 1: int}|null
+     */
+    private static function prefixeEtRang(string $numero): ?array
+    {
+        return preg_match('/^(.*-)(\d+)$/D', $numero, $morceaux) === 1 ? [$morceaux[1], (int) $morceaux[2]] : null;
     }
 
     // ---------------------------------------------------------------
@@ -933,38 +1265,57 @@ class VerificateurIntegrite
     /**
      * La façon dont le message désigne un document : « Le ticket
      * TK-2026-000001 », « La facture FAC-2026-000001 », « L'avoir
-     * AV-2026-000001 », « Le paiement (identifiant interne 12) ».
+     * AV-2026-000001 », « Le paiement (identifiant interne 12) », ou par
+     * son identifiant interne un document sans numéro.
      */
-    private function libelleDuDocument(string $alias, int $documentId): string
+    private static function libelleDuDocument(string $alias, ?int $documentId, ?string $numero): string
     {
-        $numero = match ($alias) {
-            'facture' => $this->factures[$documentId]->numero ?? null,
-            'avoir' => $this->avoirs[$documentId]->numero ?? null,
-            default => null,
-        };
+        $identifiant = $documentId ?? '?';
 
         return match (true) {
-            $alias === 'paiement' => "Le paiement (identifiant interne {$documentId})",
-            $numero === null => ($alias === 'avoir' ? 'L\'avoir' : 'La facture')." (identifiant interne {$documentId})",
+            $alias === 'paiement' => "Le paiement (identifiant interne {$identifiant})",
+            $numero === null => ($alias === 'avoir' ? 'L\'avoir' : 'La facture')." (identifiant interne {$identifiant})",
             $alias === 'avoir' => "L'avoir {$numero}",
             str_starts_with($numero, TypeDocument::TicketCaisse->code().'-') => "Le ticket {$numero}",
             default => "La facture {$numero}",
         };
     }
 
-    private function libelleDeLImputation(string $cle): string
+    /**
+     * Le numéro d'un document à désigner dans un message.
+     */
+    private static function numeroDuDocument(string $alias, ?int $documentId): ?string
     {
-        [$origine, $origineId, $factureId] = explode(':', $cle) + ['', '', ''];
-        $facture = lcfirst($this->libelleDuDocument('facture', (int) $factureId));
-
-        return $origine === 'paiement'
-            ? "L'imputation du paiement (identifiant interne {$origineId}) sur {$facture}"
-            : 'L\'imputation de '.lcfirst($this->libelleDuDocument('avoir', (int) $origineId))." sur {$facture}";
+        return $documentId === null ? null : self::MODELES[$alias]::query()->whereKey($documentId)->value('numero');
     }
 
-    private static function cleDImputation(string $origine, mixed $origineId, mixed $factureId): string
+    /**
+     * @param  array{origine: string, origine_id: int|null, facture_id: int|null}  $imputation
+     */
+    private function libelleDeLImputation(array $imputation): string
     {
-        return sprintf('%s:%s:%s', $origine, is_int($origineId) ? $origineId : '?', is_int($factureId) ? $factureId : '?');
+        $facture = lcfirst(self::libelleDuDocument('facture', $imputation['facture_id'], self::numeroDuDocument('facture', $imputation['facture_id'])));
+
+        return $imputation['origine'] === 'paiement'
+            ? "L'imputation du paiement (identifiant interne ".($imputation['origine_id'] ?? '?').") sur {$facture}"
+            : 'L\'imputation de '.lcfirst(self::libelleDuDocument('avoir', $imputation['origine_id'], self::numeroDuDocument('avoir', $imputation['origine_id'])))." sur {$facture}";
+    }
+
+    /**
+     * @param  array{origine: string, origine_id: int|null, facture_id: int|null}  $imputation
+     */
+    private static function cleDImputation(array $imputation): string
+    {
+        return sprintf('%s:%s:%s', $imputation['origine'], $imputation['origine_id'] ?? '?', $imputation['facture_id'] ?? '?');
+    }
+
+    /**
+     * @param  array{sequence: int, signature: string}  $etat
+     * @return array{sequence: int, signature: string}
+     */
+    private static function pointDeReprise(array $etat): array
+    {
+        return ['sequence' => $etat['sequence'], 'signature' => $etat['signature']];
     }
 
     private static function numeroDeLaSerie(SequenceDocument $serie, int $numero): string
@@ -1083,12 +1434,16 @@ class VerificateurIntegrite
     }
 
     /**
+     * Les valeurs, jusqu'à autant qu'un message en énumère, suivies de
+     * points de suspension quand il y en a davantage.
+     *
      * @param  list<int|string>  $valeurs
+     * @param  int|null  $nombre  combien il y en a en tout, quand $valeurs n'en donne que les premières
      */
-    private static function liste(array $valeurs): string
+    private static function liste(array $valeurs, ?int $nombre = null): string
     {
-        $liste = implode(', ', array_slice($valeurs, 0, self::LISTE_MAXIMUM));
+        $enumerees = array_slice($valeurs, 0, self::LISTE_MAXIMUM);
 
-        return count($valeurs) > self::LISTE_MAXIMUM ? "{$liste}…" : $liste;
+        return implode(', ', $enumerees).(($nombre ?? count($valeurs)) > count($enumerees) ? '…' : '');
     }
 }

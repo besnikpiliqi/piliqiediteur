@@ -6,18 +6,30 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 
 /**
  * Le résultat d'une vérification de l'intégrité du registre fiscal d'un
- * magasin (voir VerificateurIntegrite) : ses anomalies, dans l'ordre où
- * elle les a relevées, et, pour chaque chaîne, le nombre d'enregistrements
- * vérifiés et son point de reprise, c'est-à-dire la séquence et la
- * signature du dernier enregistrement vérifié, d'où repartira la
+ * magasin (voir VerificateurIntegrite) : le nombre de ses anomalies et les
+ * premières d'entre elles, dans l'ordre où elle les a relevées, et, pour
+ * chaque chaîne, le nombre d'enregistrements vérifiés et son point de
+ * reprise, c'est-à-dire la séquence et la signature du dernier
+ * enregistrement vérifié dont la signature se vérifie, d'où repartira la
  * vérification incrémentale suivante.
  */
 final class RapportIntegrite
 {
     /**
+     * Le nombre d'anomalies que le rapport garde, au plus : une clé retirée
+     * du dépôt rendrait chaque enregistrement suspect, et ni la mémoire de
+     * la vérification ni le journal des événements, où chacune s'inscrit
+     * (voir VerifierIntegriteAction), ne doivent grandir avec le registre.
+     * Le rapport compte toujours toutes les anomalies.
+     */
+    public const ANOMALIES_RETENUES = 100;
+
+    /**
      * @var list<AnomalieFiscale>
      */
     private array $anomalies = [];
+
+    private int $nombreDAnomalies = 0;
 
     /**
      * @var array<string, int>
@@ -30,13 +42,15 @@ final class RapportIntegrite
     private array $pointsDeReprise = [];
 
     /**
-     * @param  bool  $complet  tout le registre depuis son premier enregistrement, ou seulement ce qui s'y est inscrit depuis les points de reprise de la vérification précédente
+     * @param  bool  $complet  chaque chaîne relue depuis son premier enregistrement, aucune ne repartant d'un point de reprise de la vérification précédente
      */
     public function __construct(public readonly bool $complet) {}
 
     public function signaler(AnomalieFiscale $anomalie): void
     {
-        $this->anomalies[] = $anomalie;
+        if (++$this->nombreDAnomalies <= self::ANOMALIES_RETENUES) {
+            $this->anomalies[] = $anomalie;
+        }
     }
 
     /**
@@ -56,15 +70,26 @@ final class RapportIntegrite
 
     public function estConforme(): bool
     {
-        return $this->anomalies === [];
+        return $this->nombreDAnomalies === 0;
     }
 
     /**
+     * Les premières anomalies relevées, ANOMALIES_RETENUES au plus.
+     *
      * @return list<AnomalieFiscale>
      */
     public function anomalies(): array
     {
         return $this->anomalies;
+    }
+
+    /**
+     * Le nombre de toutes les anomalies relevées, même au-delà de celles
+     * que le rapport garde.
+     */
+    public function nombreDAnomalies(): int
+    {
+        return $this->nombreDAnomalies;
     }
 
     /**

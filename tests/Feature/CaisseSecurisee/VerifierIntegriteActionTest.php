@@ -174,6 +174,25 @@ class VerifierIntegriteActionTest extends TestCase
     }
 
     /**
+     * Le registre encore vide, la première opération de contrôle n'a aucun
+     * point de reprise : la suivante relit chaque chaîne depuis son premier
+     * enregistrement, et s'inscrit comme complète.
+     */
+    public function test_apres_une_operation_de_controle_sans_point_de_reprise_la_verification_est_complete(): void
+    {
+        $this->magasinActif();
+        $this->verifier(complet: true);
+
+        $rapport = $this->verifier(complet: false);
+
+        $this->assertTrue($rapport->complet);
+        $this->assertSame(
+            ['verification' => 'complete', 'enregistrements_verifies' => ['vente' => 0, 'encaissement' => 0, 'evenement' => 2]],
+            Arr::only($this->detailsDuDernierControle(), ['verification', 'enregistrements_verifies']),
+        );
+    }
+
+    /**
      * Des points de reprise falsifiés pour sauter des enregistrements ne
      * se vérifient plus avec leur signature : tout le registre est
      * vérifié, et la falsification relevée.
@@ -199,10 +218,11 @@ class VerifierIntegriteActionTest extends TestCase
 
     /**
      * Une clé retirée du dépôt rend suspect chaque enregistrement qu'elle a
-     * signé : le journal n'en retient que les cent premiers, l'opération de
-     * contrôle en donne le nombre total.
+     * signé : le rapport et le journal n'en retiennent que les cent
+     * premiers, le rapport et l'opération de contrôle en donnent le nombre
+     * total.
      */
-    public function test_le_journal_ne_retient_que_les_cent_premieres_anomalies_d_une_verification(): void
+    public function test_le_rapport_et_le_journal_ne_retiennent_que_les_cent_premieres_anomalies_d_une_verification(): void
     {
         $this->magasinActif();
         DB::transaction(function (): void {
@@ -219,7 +239,8 @@ class VerifierIntegriteActionTest extends TestCase
 
         $rapport = $this->verifier(complet: true);
 
-        $this->assertCount(105, $rapport->anomalies());
+        $this->assertSame(105, $rapport->nombreDAnomalies());
+        $this->assertCount(100, $rapport->anomalies());
         $this->assertSame(100, EnregistrementFiscal::query()->where('type', '90')->count());
         $this->assertSame(105, $this->detailsDuDernierControle()['nombre_anomalies']);
     }

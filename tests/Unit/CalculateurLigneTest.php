@@ -574,4 +574,76 @@ class CalculateurLigneTest extends TestCase
         $this->assertSame(-10.0, $this->calculateur()->soustraire('40.00', '30.00', 20));
         $this->assertSame(0.0, $this->calculateur()->sommer([null, '']));
     }
+
+    /**
+     * Une colonne decimal(12,2) ou (5,2), lue en chaîne par le cast
+     * decimal:2, donne ses centièmes exacts ; un entier compte des unités
+     * entières (un taux de 20 % vaut 2000).
+     */
+    public function test_une_colonne_decimale_se_lit_en_centiemes_exacts(): void
+    {
+        $this->assertSame(12000, $this->calculateur()->enCentiemes('120.00'));
+        $this->assertSame(-5, $this->calculateur()->enCentiemes('-0.05'));
+        $this->assertSame(50, $this->calculateur()->enCentiemes('0.5'));
+        $this->assertSame(700, $this->calculateur()->enCentiemes('7'));
+        $this->assertSame(0, $this->calculateur()->enCentiemes('-0.00'));
+        $this->assertSame(999999999999, $this->calculateur()->enCentiemes('9999999999.99'));
+        $this->assertSame(2000, $this->calculateur()->enCentiemes(20));
+        $this->assertSame(-300, $this->calculateur()->enCentiemes(-3));
+    }
+
+    /**
+     * Seule l'écriture exacte d'une colonne se lit : jamais un flottant,
+     * même entier, ni une saisie à interpréter.
+     *
+     * @return array<string, array{mixed}>
+     */
+    public static function ecrituresIllisibles(): array
+    {
+        return [
+            'trois décimales' => ['1.234'],
+            'virgule' => ['1,00'],
+            'espace avant' => [' 1.00'],
+            'espace après' => ['1.00 '],
+            'retour à la ligne final' => ["1.00\n"],
+            'signe plus' => ['+1.00'],
+            'sans partie entière' => ['.50'],
+            'point final' => ['1.'],
+            'notation scientifique' => ['1e3'],
+            'chaîne vide' => [''],
+            'signe seul' => ['-'],
+            'flottant' => [1.5],
+            'flottant entier' => [120.0],
+            'flottant imprécis' => [0.1 + 0.2],
+            'null' => [null],
+        ];
+    }
+
+    #[DataProvider('ecrituresIllisibles')]
+    public function test_une_ecriture_inexacte_ne_se_lit_pas_en_centiemes(mixed $valeur): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Montant illisible : une chaîne décimale exacte (deux décimales au plus) ou un entier est attendu.');
+
+        $this->calculateur()->enCentiemes($valeur);
+    }
+
+    public function test_un_montant_au_dela_des_colonnes_ne_se_lit_pas_en_centiemes(): void
+    {
+        $this->assertThrows(fn () => $this->calculateur()->enCentiemes('1000000000000.00'), InvalidArgumentException::class, 'Montant hors limites.');
+        $this->assertThrows(fn () => $this->calculateur()->enCentiemes('-99999999999999999999.00'), InvalidArgumentException::class, 'Montant hors limites.');
+        $this->assertThrows(fn () => $this->calculateur()->enCentiemes(1_000_000_000_000), InvalidArgumentException::class, 'Montant hors limites.');
+        $this->assertThrows(fn () => $this->calculateur()->enCentiemes(PHP_INT_MAX), InvalidArgumentException::class, 'Montant hors limites.');
+    }
+
+    public function test_des_centiemes_s_ecrivent_comme_une_colonne_decimale(): void
+    {
+        $this->assertSame('120.00', $this->calculateur()->enDecimal(12000));
+        $this->assertSame('-0.05', $this->calculateur()->enDecimal(-5));
+        $this->assertSame('0.07', $this->calculateur()->enDecimal(7));
+        $this->assertSame('0.00', $this->calculateur()->enDecimal(0));
+        $this->assertSame('-12.30', $this->calculateur()->enDecimal(-1230));
+        $this->assertSame('9999999999.99', $this->calculateur()->enDecimal(999999999999));
+        $this->assertThrows(fn () => $this->calculateur()->enDecimal(PHP_INT_MIN), InvalidArgumentException::class, 'Montant hors limites.');
+    }
 }

@@ -350,6 +350,62 @@ class CalculateurLigne
     }
 
     /**
+     * Un montant, un taux ou une remise enregistré au centième
+     * (decimal(12,2) ou decimal(5,2), lu en chaîne par le cast decimal:2),
+     * en centièmes entiers : « 120.00 » vaut 12000, « -0.05 » vaut -5, un
+     * entier compte des unités entières (20 vaut 2000). Seule l'écriture
+     * exacte d'une colonne est acceptée : au plus deux décimales, un point,
+     * aucun espace ni signe « + ». Un flottant est refusé, même rond :
+     * rien ne dit qu'il soit la valeur exacte d'une colonne (0.1 + 0.2
+     * vaut 0.30000000000000004), et PHP le convertirait en silence avant
+     * l'appel (1.5 deviendrait l'entier 1) si le paramètre n'acceptait que
+     * des chaînes et des entiers.
+     *
+     * @param  string|int  $valeur
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enCentiemes(mixed $valeur): int
+    {
+        if (is_int($valeur)) {
+            $centiemes = $this->multiplier($valeur, 100);
+        } elseif (is_string($valeur) && preg_match('/^(-?)(\d+)(?:\.(\d{1,2}))?$/D', $valeur, $morceaux) === 1) {
+            $unites = ltrim($morceaux[2], '0');
+
+            // Plus de 12 chiffres dépassent la borne de toute façon, et
+            // leur conversion en entier saturerait en silence.
+            if (strlen($unites) > 12) {
+                throw new InvalidArgumentException('Montant hors limites.');
+            }
+
+            $centiemes = ($morceaux[1] === '-' ? -1 : 1) * ((int) $unites * 100 + (int) str_pad($morceaux[3] ?? '', 2, '0'));
+        } else {
+            throw new InvalidArgumentException('Montant illisible : une chaîne décimale exacte (deux décimales au plus) ou un entier est attendu.');
+        }
+
+        if (abs($centiemes) >= self::UNITES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return $centiemes;
+    }
+
+    /**
+     * L'inverse d'enCentiemes() : 12000 s'écrit « 120.00 », -5 s'écrit
+     * « -0.05 », comme le cast decimal:2.
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enDecimal(int $centiemes): string
+    {
+        if (abs($centiemes) >= self::UNITES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return sprintf('%s%d.%02d', $centiemes < 0 ? '-' : '', intdiv(abs($centiemes), 100), abs($centiemes) % 100);
+    }
+
+    /**
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
      */
     private function montants(int $montantHtCentimes, int $montantTtcCentimes): array

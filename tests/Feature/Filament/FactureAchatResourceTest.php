@@ -14,6 +14,8 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Stock\Enums\TypeMouvementStock;
+use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -372,6 +374,35 @@ class FactureAchatResourceTest extends TestCase
             ->assertFormComponentActionDataSet(['prix_unitaire_ht' => '2.10', 'prix_vente_ttc' => '15.00'])
             ->setFormComponentActionData(['prix_unitaire_ht' => '3'])
             ->assertFormComponentActionDataSet(['prix_vente_ttc' => '21.60']);
+    }
+
+    /**
+     * Rouverte avec « Modifier », une ligne garde la proposition du barème
+     * (2 € d'achat + 5 € de bénéfice, soit 8,40 € TTC) : passée à 20 €
+     * d'achat, au-delà du dernier palier, la proposition est retirée comme
+     * à la première ouverture.
+     */
+    public function test_rouvrir_une_ligne_garde_la_proposition_du_bareme(): void
+    {
+        $this->connecterLeProprietaire()->update([
+            'prix_vente_automatique' => true,
+            'bareme_prix_vente' => new BaremePrixDeVente([['jusqu_a' => 10.0, 'benefice' => 5.0]], null, false),
+        ]);
+        $component = Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['origine' => 'nouveau', 'nom' => 'Coque', 'prix_unitaire_ht' => '2'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '8.40'])
+            ->callMountedFormComponentAction()
+            ->assertHasNoFormComponentActionErrors();
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->mountFormComponentAction('lignes', 'modifierLaLigne', arguments: ['item' => $cle])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '8.40'])
+            ->setFormComponentActionData(['prix_unitaire_ht' => '20']);
+
+        $component->assertFormComponentActionDataSet(['prix_vente_ttc' => null]);
     }
 
     /**
@@ -834,6 +865,59 @@ class FactureAchatResourceTest extends TestCase
             ->assertActionHidden(DeleteAction::class);
 
         $this->assertFalse(auth()->user()->can('delete', $factureAchat));
+    }
+
+    /**
+     * Deux lignes du même produit (5 + 5 reçus), 4 vendus : l'avoir
+     * fournisseur propose 5 puis 1, et refuse d'en retourner 5 + 5 -- il
+     * n'en reste que 6 en stock.
+     */
+    public function test_l_avoir_fournisseur_partage_le_stock_entre_deux_lignes_du_meme_produit(): void
+    {
+        $this->connecterLeProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
+        ]));
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4);
+        $component = Livewire::test(ListFacturesAchat::class)->mountTableAction('avoir_fournisseur', $factureAchat);
+        $lignes = $component->get('mountedTableActionsData.0.lignes');
+        $this->assertSame([5, 1], array_column(array_values($lignes), 'quantite'));
+        [$premiere, $seconde] = array_keys($lignes);
+
+        $component
+            ->set("mountedTableActionsData.0.lignes.{$seconde}.quantite", 5)
+            ->set('mountedTableActionsData.0.motif', 'Marchandise non conforme')
+            ->callMountedTableAction();
+
+        $this->assertSame(
+            ['« Câble USB-C » : ces lignes en retournent 10 au total, mais il n\'en reste que 6 en stock (les autres ont déjà été vendus ou retournés).'],
+            $component->errors()->get("mountedTableActionsData.0.lignes.{$premiere}.quantite"),
+        );
+        $this->assertSame(0, AvoirFournisseur::query()->count());
+        $this->assertSame(6, $produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * Le produit d'une réception validée a été archivé : enregistrer sa
+     * correction affiche pourquoi elle est refusée, au lieu d'une page
+     * d'erreur.
+     */
+    public function test_corriger_une_reception_dont_le_produit_est_archive_affiche_pourquoi(): void
+    {
+        $this->connecterLeProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
+        ]));
+        $produit->delete();
+
+        Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
+            ->call('save')
+            ->assertNotified('Le produit « Câble USB-C » a été archivé : restaurez-le depuis le catalogue avant de corriger cette facture d\'achat.');
+
+        $this->assertSame(5, Produit::withTrashed()->find($produit->id)->stock_quantite);
     }
 
     private function connecterLeProprietaire(): Magasin

@@ -178,6 +178,40 @@ class ParametresPrixDeVenteTest extends TestCase
         $this->assertEquals(BaremePrixDeVente::parDefaut(), $magasin->bareme_prix_vente);
     }
 
+    /**
+     * Désactiver le calcul remet le barème enregistré : les erreurs de la
+     * saisie abandonnée disparaissent avec elle.
+     */
+    public function test_desactiver_le_calcul_efface_les_erreurs_de_la_saisie_abandonnee(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(ParametresPrixDeVente::class)
+            ->fillForm(['actif' => true, 'benefice_au_dela' => null])
+            ->set('data.paliers', [])
+            ->call('save')
+            ->assertHasFormErrors(['benefice_au_dela' => 'required'])
+            ->fillForm(['actif' => false])
+            ->assertHasNoFormErrors();
+    }
+
+    /**
+     * Une TVA vidée n'est pas un taux de 0 % : l'essai n'affiche rien tant
+     * qu'elle manque (0,47 € d'achat donneraient 10,47 € au lieu de
+     * 12,56 € TTC), comme une facture d'achat ne propose rien.
+     */
+    public function test_l_essai_du_bareme_ne_calcule_rien_tant_que_la_tva_est_vide(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(ParametresPrixDeVente::class)
+            ->fillForm(['essai_prix_achat_ht' => '0.47', 'essai_taux_tva' => ''])
+            ->assertDontSee('10,47 €')
+            ->assertDontSee('bénéfice réel')
+            ->fillForm(['essai_taux_tva' => '20'])
+            ->assertSee('12,56 € TTC');
+    }
+
     public function test_l_essai_du_bareme_part_d_une_tva_de_20_pourcent(): void
     {
         $this->connecterLeProprietaire();

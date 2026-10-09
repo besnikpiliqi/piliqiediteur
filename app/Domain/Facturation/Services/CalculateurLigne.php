@@ -200,11 +200,13 @@ class CalculateurLigne
     /**
      * Coût unitaire moyen de lots (quantité, coût unitaire) pondéré par
      * leurs quantités, au dix-millième d'euro : Σ(quantité x coût) /
-     * Σ quantité. Une quantité négative retire un lot (voir
-     * StockLedgerService::corrigerUneReception()). Null quand les lots ne
-     * pèsent rien : quantité totale ou valeur totale nulle ou négative.
+     * Σ quantité. Des lots de coût nul (marchandise offerte) coûtent 0 ;
+     * des lots qui ne pèsent rien (aucun article) n'ont pas de coût moyen :
+     * null. Une quantité ou un coût négatif n'a pas de sens.
      *
      * @param  iterable<array{quantite: int, cout_unitaire: float|string}>  $lots
+     *
+     * @throws InvalidArgumentException
      */
     public function coutMoyenPondere(iterable $lots): ?float
     {
@@ -212,11 +214,17 @@ class CalculateurLigne
         $valeurTotaleDixMilliemes = 0;
 
         foreach ($lots as $lot) {
+            $coutDixMilliemes = $this->versUnites((float) $lot['cout_unitaire'], 10000);
+
+            if ($lot['quantite'] < 0 || $coutDixMilliemes < 0) {
+                throw new InvalidArgumentException('Un lot de stock ne peut avoir ni quantité ni coût négatif.');
+            }
+
             $quantiteTotale += $lot['quantite'];
-            $valeurTotaleDixMilliemes += $this->multiplier($this->versUnites((float) $lot['cout_unitaire'], 10000), $lot['quantite']);
+            $valeurTotaleDixMilliemes += $this->multiplier($coutDixMilliemes, $lot['quantite']);
         }
 
-        if ($quantiteTotale <= 0 || $valeurTotaleDixMilliemes <= 0) {
+        if ($quantiteTotale === 0) {
             return null;
         }
 

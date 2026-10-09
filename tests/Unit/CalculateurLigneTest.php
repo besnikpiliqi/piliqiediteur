@@ -537,6 +537,35 @@ class CalculateurLigneTest extends TestCase
         $this->assertSame(70.0, $this->calculateur()->prixTtcArrondi(54.1667, 20, pasCentimes: 1000));
     }
 
+    /**
+     * Le coût moyen de lots se pondère par leurs quantités, au dix-millième :
+     * 10 à 2 € et 20 à 3,5 € coûtent 3 € ; 3 à 1 € et 4 à 2 €, 1,5714 €. Des
+     * lots offerts coûtent 0 €, et des lots sans aucun article n'ont pas de
+     * coût moyen.
+     */
+    public function test_le_cout_moyen_pondere_compte_les_lots_offerts_a_zero(): void
+    {
+        $this->assertSame(3.0, $this->calculateur()->coutMoyenPondere([['quantite' => 10, 'cout_unitaire' => 2], ['quantite' => 20, 'cout_unitaire' => '3.5']]));
+        $this->assertSame(1.5714, $this->calculateur()->coutMoyenPondere([['quantite' => 3, 'cout_unitaire' => 1], ['quantite' => 4, 'cout_unitaire' => 2]]));
+        $this->assertSame(0.0, $this->calculateur()->coutMoyenPondere([['quantite' => 0, 'cout_unitaire' => 5], ['quantite' => 10, 'cout_unitaire' => 0]]));
+        $this->assertNull($this->calculateur()->coutMoyenPondere([['quantite' => 0, 'cout_unitaire' => 5]]));
+        $this->assertNull($this->calculateur()->coutMoyenPondere([]));
+    }
+
+    public function test_un_lot_de_quantite_ou_de_cout_negatif_est_refuse(): void
+    {
+        $this->assertThrows(
+            fn () => $this->calculateur()->coutMoyenPondere([['quantite' => -1, 'cout_unitaire' => 5], ['quantite' => 10, 'cout_unitaire' => 5]]),
+            InvalidArgumentException::class,
+            'Un lot de stock ne peut avoir ni quantité ni coût négatif.',
+        );
+        $this->assertThrows(
+            fn () => $this->calculateur()->coutMoyenPondere([['quantite' => 10, 'cout_unitaire' => -0.5]]),
+            InvalidArgumentException::class,
+            'Un lot de stock ne peut avoir ni quantité ni coût négatif.',
+        );
+    }
+
     public function test_sommer_et_soustraire_comptent_au_centime_exact(): void
     {
         $this->assertSame(0.3, $this->calculateur()->sommer([0.1, 0.2]));

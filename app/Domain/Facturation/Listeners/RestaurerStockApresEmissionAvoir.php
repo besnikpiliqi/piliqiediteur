@@ -3,16 +3,20 @@
 namespace App\Domain\Facturation\Listeners;
 
 use App\Domain\Facturation\Events\AvoirEmis;
-use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 
 /**
- * Un avoir total crédite l'intégralité d'une facture déjà émise : le
- * stock vendu par cette facture doit donc être restauré, exactement comme
- * pour une annulation (voir RestaurerStockApresAnnulationFacture). Les
- * deux restent des listeners distincts malgré le code quasi-identique :
- * ils réagissent à des events de domaines différents (Facture vs Avoir),
- * les coupler forcerait une dépendance artificielle entre les deux.
+ * Un avoir, total ou partiel, rend au stock les articles qu'il reprend,
+ * ligne par ligne : chacune remet en stock au plus ce que la vente de sa
+ * facture en a fait sortir et qui n'y est pas encore revenu (voir
+ * Facture::quantiteSortieDuStock()) -- un article vendu sans suivi du
+ * stock n'en est jamais sorti, son retour n'y fait rien entrer. Chaque
+ * retour a pour source la ligne de l'avoir, qui relie l'avoir à la facture
+ * reprise.
+ *
+ * Même effet qu'une annulation (voir RestaurerStockApresAnnulationFacture),
+ * mais un listener distinct : ils réagissent à des events différents
+ * (Facture vs Avoir), les coupler forcerait une dépendance artificielle.
  */
 class RestaurerStockApresEmissionAvoir
 {
@@ -22,19 +26,15 @@ class RestaurerStockApresEmissionAvoir
     {
         foreach ($event->avoir->lignes as $ligne) {
             $produit = $ligne->produit;
+            $facture = $ligne->ligneFacture?->facture;
 
-            if ($produit !== null && $produit->suivi_stock) {
-                // Chaque ligne peut provenir d'une facture différente (voir
-                // le docblock de CreerAvoirAction) : la note se construit
-                // ligne par ligne, pas au niveau de l'avoir.
-                $numeroFacture = $ligne->ligneFacture?->facture?->numero;
-
-                $this->stock->enregistrer(
+            if ($produit !== null && $produit->suivi_stock && $facture !== null) {
+                $this->stock->retournerDeLaVente(
                     produit: $produit,
-                    type: TypeMouvementStock::RetourClient,
                     quantite: $ligne->quantite,
-                    source: $event->avoir,
-                    note: "Avoir {$event->avoir->numero} sur facture {$numeroFacture}",
+                    quantiteEncoreSortie: fn (): int => $facture->quantiteSortieDuStock($produit),
+                    source: $ligne,
+                    note: "Avoir {$event->avoir->numero} sur facture {$facture->numero}",
                 );
             }
         }

@@ -86,18 +86,6 @@ class LigneAchat extends Model
     }
 
     /**
-     * Un produit déjà vendu à un client ne doit jamais pouvoir être
-     * retourné au fournisseur. Cette application ne trace pas le stock par
-     * lot/unité (un seul compteur agrégé produits.stock_quantite, voir
-     * StockLedgerService) : on ne peut donc pas savoir si CE lot précis a
-     * été vendu, seulement combien d'unités du produit restent en stock au
-     * total. On plafonne donc la quantité retournable au minimum entre le
-     * reliquat de cette ligne et le stock actuellement disponible du
-     * produit -- un produit vendu a quitté le stock, il ne peut
-     * mécaniquement plus être compté dans ce qui reste disponible au
-     * retour.
-     */
-    /**
      * Montants d'un retour de $quantite articles de cette ligne au
      * fournisseur : la ligne calculée pour tout ce qui en a été retourné
      * jusqu'ici, moins ce que les avoirs fournisseur déjà émis ont crédité
@@ -124,6 +112,19 @@ class LigneAchat extends Model
         );
     }
 
+    /**
+     * Un produit déjà vendu à un client ne doit jamais pouvoir être
+     * retourné au fournisseur. Cette application ne trace pas le stock par
+     * lot/unité (un seul compteur agrégé produits.stock_quantite, voir
+     * StockLedgerService) : on ne peut donc pas savoir si CE lot précis a
+     * été vendu, seulement combien d'unités du produit restent en stock au
+     * total. On plafonne donc la quantité retournable au minimum entre le
+     * reliquat de cette ligne et le stock actuellement disponible du
+     * produit -- un produit vendu a quitté le stock, il ne peut
+     * mécaniquement plus être compté dans ce qui reste disponible au
+     * retour. Plusieurs lignes du même produit se partagent ce stock (voir
+     * AvoirFournisseur::verifierQueLeStockSuffit()).
+     */
     public function quantiteRetournableRestante(): int
     {
         $resteSurLaLigne = $this->quantite - $this->quantiteDejaRetournee();

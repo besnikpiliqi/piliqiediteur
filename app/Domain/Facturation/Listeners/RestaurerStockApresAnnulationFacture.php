@@ -3,15 +3,15 @@
 namespace App\Domain\Facturation\Listeners;
 
 use App\Domain\Facturation\Events\FactureAnnulee;
-use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 
 /**
  * Symétrique de DecrementerStockApresEmissionFacture : annuler une facture
- * déjà émise doit rendre au stock ce que la vente en avait retiré. On
- * utilise le type "retour_client" (entrée) plutôt qu'un simple ajustement
- * générique : ça reste lisible dans le ledger ("pourquoi ce retour ?" →
- * la note référence la facture annulée).
+ * déjà émise rend au stock ce que la vente en avait retiré, jamais plus
+ * (voir Facture::quantiteSortieDuStock()). On utilise le type
+ * "retour_client" (entrée) plutôt qu'un simple ajustement générique : ça
+ * reste lisible dans le ledger ("pourquoi ce retour ?" → la source est la
+ * facture annulée).
  */
 class RestaurerStockApresAnnulationFacture
 {
@@ -19,16 +19,18 @@ class RestaurerStockApresAnnulationFacture
 
     public function handle(FactureAnnulee $event): void
     {
-        foreach ($event->facture->lignes as $ligne) {
+        $facture = $event->facture;
+
+        foreach ($facture->lignes as $ligne) {
             $produit = $ligne->produit;
 
             if ($produit !== null && $produit->suivi_stock) {
-                $this->stock->enregistrer(
+                $this->stock->retournerDeLaVente(
                     produit: $produit,
-                    type: TypeMouvementStock::RetourClient,
                     quantite: $ligne->quantite,
-                    source: $event->facture,
-                    note: "Annulation facture {$event->facture->numero}",
+                    quantiteEncoreSortie: fn (): int => $facture->quantiteSortieDuStock($produit),
+                    source: $facture,
+                    note: "Annulation facture {$facture->numero}",
                 );
             }
         }

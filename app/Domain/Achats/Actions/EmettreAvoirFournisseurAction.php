@@ -34,6 +34,7 @@ class EmettreAvoirFournisseurAction
             }
 
             $this->arreterLesMontants($avoirFournisseur);
+            $avoirFournisseur->verifierQueLeStockSuffit();
 
             $numero = $this->numerotation->suivant($avoirFournisseur->magasin, TypeDocument::AvoirFournisseur, now()->format('Y'));
 

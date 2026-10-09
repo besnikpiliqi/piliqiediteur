@@ -3,6 +3,8 @@
 namespace App\Domain\Catalogue\Models;
 
 use App\Domain\Achats\Enums\SourceFactureAchat;
+use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\TypeDocument;
@@ -135,6 +137,33 @@ class Produit extends Model
     public function rattacherAuFournisseur(int $fournisseurId): void
     {
         $this->forceFill(['fournisseur_id' => $fournisseurId])->save();
+    }
+
+    /**
+     * Ses lignes d'achat validées, dans l'ordre où elles ont été reçues :
+     * par date de validation de leur facture d'achat (une facture créée
+     * avant une autre peut être validée après elle), puis par facture et
+     * par ordre de ligne.
+     *
+     * @param  'asc'|'desc'  $sens
+     */
+    public function achatsValides(string $sens = 'asc'): HasMany
+    {
+        return $this->lignesAchat()
+            ->whereHas('factureAchat', fn (Builder $factureAchat) => $factureAchat->where('statut', StatutFactureAchat::Validee))
+            ->orderBy(FactureAchat::query()->select('date_validation')->whereColumn('factures_achat.id', 'lignes_achat.facture_achat_id'), $sens)
+            ->orderBy('facture_achat_id', $sens)
+            ->orderBy('ordre', $sens)
+            ->orderBy('id', $sens);
+    }
+
+    /**
+     * La ligne de son dernier achat validé (voir achatsValides()), qui
+     * donne son fournisseur et, s'il ne suit pas son stock, son coût.
+     */
+    public function dernierAchatValide(): ?LigneAchat
+    {
+        return $this->achatsValides('desc')->first();
     }
 
     /**

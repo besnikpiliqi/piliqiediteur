@@ -5,6 +5,7 @@ namespace App\Domain\Achats\Models;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -111,6 +112,17 @@ class FactureAchat extends Model
     public function possedeDesLignesRetournables(): bool
     {
         return $this->lignes->contains(fn (LigneAchat $ligne) => $ligne->quantiteRetournableRestante() > 0);
+    }
+
+    /**
+     * Un produit de ses lignes archivé depuis leur saisie (voir les
+     * SoftDeletes de Produit) : il ne se reçoit plus et ne se corrige plus
+     * en stock tant qu'il n'est pas restauré (voir
+     * ValiderFactureAchatAction et ModifierFactureAchatAction).
+     */
+    public function produitArchive(): ?Produit
+    {
+        return Produit::onlyTrashed()->whereIn('id', $this->lignes()->select('produit_id'))->orderBy('nom')->first();
     }
 
     /**

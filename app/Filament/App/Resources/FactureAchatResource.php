@@ -16,6 +16,7 @@ use App\Filament\Concerns\AjouteDesLignesDAchat;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
@@ -206,22 +207,13 @@ class FactureAchatResource extends Resource
                                     ->label('Produit / description')
                                     ->disabled()
                                     ->dehydrated(false),
-                                self::champQuantiteRetournee('Quantité à retourner', fn (Get $get): int => LigneAchat::find($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0),
+                                self::champQuantiteRetournee('Quantité à retourner', fn (Get $get): int => LigneAchat::find($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0)
+                                    ->rule(self::regleStockDuProduitRetourne()),
                             ])
                             ->columns(3)
                             ->addable(false)
                             ->deletable(true)
-                            ->default(
-                                $record->lignes
-                                    ->map(fn (LigneAchat $ligne) => [
-                                        'ligne_achat_id' => $ligne->id,
-                                        'description' => $ligne->description,
-                                        'quantite' => $ligne->quantiteRetournableRestante(),
-                                    ])
-                                    ->filter(fn (array $ligne) => $ligne['quantite'] > 0)
-                                    ->values()
-                                    ->all()
-                            ),
+                            ->default(self::lignesRetournables($record)),
                         Textarea::make('motif')->label('Motif du retour')->required(),
                     ])
                     ->requiresConfirmation()
@@ -239,6 +231,65 @@ class FactureAchatResource extends Resource
                     static::suppressionEnMasse(),
                 ]),
             ]);
+    }
+
+    /**
+     * Chaque ligne encore retournable, proposée pour tout ce qui peut en
+     * être retourné ; deux lignes du même produit se partagent son stock,
+     * dans l'ordre de la facture.
+     *
+     * @return list<array{ligne_achat_id: int, description: string, quantite: int}>
+     */
+    private static function lignesRetournables(FactureAchat $factureAchat): array
+    {
+        $stockRestant = [];
+        $lignes = [];
+
+        foreach ($factureAchat->lignes as $ligne) {
+            $quantite = $ligne->quantiteRetournableRestante();
+
+            if ($ligne->produit?->suivi_stock) {
+                $stockRestant[$ligne->produit_id] ??= max(0, $ligne->produit->stock_quantite);
+                $quantite = min($quantite, $stockRestant[$ligne->produit_id]);
+                $stockRestant[$ligne->produit_id] -= $quantite;
+            }
+
+            if ($quantite > 0) {
+                $lignes[] = ['ligne_achat_id' => $ligne->id, 'description' => $ligne->description, 'quantite' => $quantite];
+            }
+        }
+
+        return $lignes;
+    }
+
+    /**
+     * Deux lignes du même produit se partagent son stock : leur total ne
+     * peut pas le dépasser (voir AvoirFournisseur::verifierQueLeStockSuffit(),
+     * qui le revérifie à l'enregistrement).
+     */
+    private static function regleStockDuProduitRetourne(): Closure
+    {
+        return fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+            $produit = LigneAchat::query()->find($get('ligne_achat_id'))?->produit;
+
+            if ($produit === null || ! $produit->suivi_stock) {
+                return;
+            }
+
+            $lignes = collect($get('../../lignes') ?? []);
+            $lignesDuProduit = LigneAchat::query()
+                ->whereIn('id', $lignes->pluck('ligne_achat_id')->filter())
+                ->where('produit_id', $produit->id)
+                ->pluck('id')
+                ->all();
+            $quantite = $lignes
+                ->filter(fn (array $ligne): bool => in_array((int) ($ligne['ligne_achat_id'] ?? 0), $lignesDuProduit, true))
+                ->sum(fn (array $ligne): int => (int) ($ligne['quantite'] ?? 0));
+
+            if ($quantite > $produit->stock_quantite) {
+                $fail(AvoirFournisseur::messageStockInsuffisant($produit, $quantite));
+            }
+        };
     }
 
     public static function getPages(): array

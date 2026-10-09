@@ -12,7 +12,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('produit_id')->constrained('produits')->cascadeOnDelete();
-            // vente, reception_achat, retour_fournisseur, retour_client, ajustement
+            // vente, reception_achat, retour_fournisseur, retour_client,
+            // ajustement_entree, ajustement_sortie (voir TypeMouvementStock).
             $table->string('type', 30);
             // Nombre entier d'articles, toujours positif : le sens (+/-)
             // est déterminé par `type`, jamais par le signe stocké -- évite

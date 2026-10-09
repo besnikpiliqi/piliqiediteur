@@ -8,12 +8,15 @@ use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
+use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Stock\Enums\TypeMouvementStock;
+use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -141,6 +144,68 @@ class AvoirFournisseurActionsTest extends TestCase
         app(EmettreAvoirFournisseurAction::class)->handle($avoir);
 
         $this->assertSame(0, $produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * Deux lignes du même produit (5 + 5 reçus), puis 4 vendus : il en
+     * reste 6 en stock. Chaque ligne prise seule pourrait en retourner 5,
+     * mais ensemble elles ne retournent pas plus que les 6 en stock --
+     * sinon des articles déjà vendus seraient « retournés » et le stock
+     * tomberait à -4.
+     */
+    public function test_deux_lignes_du_meme_produit_ne_retournent_pas_ensemble_plus_que_le_stock(): void
+    {
+        $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoirEnDeuxLignes($produit);
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4);
+        [$premiere, $seconde] = $factureAchat->lignes->all();
+
+        $this->assertThrows(
+            fn () => app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+                ['ligne_achat_id' => $premiere->id, 'quantite' => 5],
+                ['ligne_achat_id' => $seconde->id, 'quantite' => 5],
+            ]),
+            LogicException::class,
+            '« Câble USB-C » : ces lignes en retournent 10 au total, mais il n\'en reste que 6 en stock (les autres ont déjà été vendus ou retournés).',
+        );
+
+        $this->assertSame(0, AvoirFournisseur::query()->count());
+        $this->assertSame(6, $produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * Le stock change entre la création de l'avoir et son émission : 3 + 3
+     * retours acceptés sur 6 en stock, puis 2 de plus vendus -- l'émission
+     * est refusée et rien ne sort du stock.
+     */
+    public function test_le_total_retourne_par_produit_est_reverifie_a_l_emission(): void
+    {
+        $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoirEnDeuxLignes($produit);
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4);
+        [$premiere, $seconde] = $factureAchat->lignes->all();
+        $avoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+            ['ligne_achat_id' => $premiere->id, 'quantite' => 3],
+            ['ligne_achat_id' => $seconde->id, 'quantite' => 3],
+        ]);
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+
+        $this->assertThrows(
+            fn () => app(EmettreAvoirFournisseurAction::class)->handle($avoir),
+            LogicException::class,
+            '« Câble USB-C » : ces lignes en retournent 6 au total, mais il n\'en reste que 4 en stock (les autres ont déjà été vendus ou retournés).',
+        );
+
+        $this->assertSame(StatutAvoirFournisseur::Brouillon, $avoir->fresh()->statut);
+        $this->assertSame(4, $produit->fresh()->stock_quantite);
+    }
+
+    private function recevoirEnDeuxLignes(Produit $produit): FactureAchat
+    {
+        return app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
+        ]));
     }
 
     public function test_impossible_de_retourner_plus_que_la_quantite_recue(): void

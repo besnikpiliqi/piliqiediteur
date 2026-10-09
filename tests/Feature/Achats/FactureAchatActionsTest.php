@@ -14,6 +14,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Stock\Enums\TypeMouvementStock;
+use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
@@ -640,6 +641,305 @@ class FactureAchatActionsTest extends TestCase
         app(ModifierFactureAchatAction::class)->handle($factureAchat->fresh(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
+    }
+
+    /**
+     * Le CMUP d'une réception corrigée se rejoue sur tout le grand livre :
+     * 10 reçus à 2 €, puis 10 à 10 € (CMUP 6 €), 10 vendus. La seconde
+     * réception corrigée à 5 € donne (10 x 2 + 10 x 5) / 20 = 3,50 € aux 10
+     * articles restants ; corrigée ensuite à 1 €, (10 x 2 + 10 x 1) / 20 =
+     * 1,50 €.
+     */
+    public function test_corriger_une_reception_sur_un_stock_deja_melange_rejoue_le_cmup(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['cmup_ht' => 2, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 2]]);
+        $seconde = $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 10]]);
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 10);
+        $this->assertSame(['6.0000', 10], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
+
+        $seconde = app(ModifierFactureAchatAction::class)->handle($seconde, $fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 5],
+        ]);
+        $this->assertSame(['3.5000', 10], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
+
+        app(ModifierFactureAchatAction::class)->handle($seconde, $fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 1],
+        ]);
+        $this->assertSame(['1.5000', 10], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
+    }
+
+    /**
+     * Une marchandise finalement offerte ne coûte rien : 10 reçus à 5 €,
+     * puis la réception corrigée à 0 € -- CMUP 0 €, pas l'ancien coût.
+     */
+    public function test_une_reception_corrigee_a_cout_nul_donne_un_cmup_nul(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['cmup_ht' => 5, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 5]]);
+
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 0],
+        ]);
+
+        $this->assertSame(['0.0000', 10], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
+    }
+
+    /**
+     * Le dernier achat est celui validé le plus récemment, pas celui de la
+     * facture créée la dernière : F1 (8 €) est créée avant F2 (5 €), mais
+     * validée après elle. Corrigée à 9 €, F1 reste le dernier achat d'un
+     * produit qui ne suit pas son stock.
+     */
+    public function test_un_produit_sans_suivi_reprend_le_cout_de_l_achat_valide_le_plus_recemment(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
+        $f1 = app(CreerFactureAchatAction::class)->handle($fournisseur, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 8]]);
+        $f2 = app(CreerFactureAchatAction::class)->handle($fournisseur, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]]);
+        app(ValiderFactureAchatAction::class)->handle($f2);
+        $this->travel(1)->minute();
+        $f1 = app(ValiderFactureAchatAction::class)->handle($f1);
+        $this->assertSame('8.0000', $produit->fresh()->cmup_ht);
+
+        app(ModifierFactureAchatAction::class)->handle($f1, $fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 9],
+        ]);
+
+        $this->assertSame('9.0000', $produit->fresh()->cmup_ht);
+    }
+
+    /**
+     * Ce qu'une réception a fait entrer en stock se lit dans le grand
+     * livre, pas dans ses lignes : 10 reçus, puis corrigés à 5 pendant que
+     * le produit ne suivait plus son stock (rien ne bouge). Le suivi
+     * réactivé, la réception corrigée à 7 retire 3 des 10 entrés.
+     */
+    public function test_corriger_une_reception_part_de_ce_qu_elle_a_fait_entrer_en_stock(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['cmup_ht' => 4, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 4]]);
+        $produit->update(['suivi_stock' => false]);
+        $factureAchat = app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 4],
+        ]);
+        $this->assertSame(10, $produit->fresh()->stock_quantite);
+        $produit->update(['suivi_stock' => true]);
+
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 7, 'prix_unitaire_ht' => 4],
+        ]);
+
+        $this->assertSame(['4.0000', 7], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
+    }
+
+    /**
+     * Une réception validée alors que le produit ne suivait pas son stock
+     * n'y est jamais entrée : activer le suivi depuis la ligne de sa
+     * correction ne fait rien entrer ni sortir (le stock ne tombe pas à
+     * -5), seul son coût change.
+     */
+    public function test_activer_le_suivi_en_corrigeant_une_reception_jamais_entree_en_stock_ne_cree_aucun_ajustement(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['cmup_ht' => 4, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $factureAchat = $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 4]]);
+
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => $produit->id, 'produit' => ['suivi_stock' => true], 'quantite' => 5, 'prix_unitaire_ht' => 3],
+        ]);
+
+        $produit->refresh();
+        $this->assertTrue($produit->suivi_stock);
+        $this->assertSame(['3.0000', 0], [$produit->cmup_ht, $produit->stock_quantite]);
+        $this->assertSame(0, $produit->mouvementsStock()->count());
+    }
+
+    /**
+     * Le grand livre dit seul le sens de chaque mouvement : une réception
+     * de 10 corrigée à 5, puis à 15, puis 4 vendus -- la somme des
+     * mouvements donne le stock, et chaque correction a pour source la
+     * facture d'achat corrigée.
+     */
+    public function test_le_stock_se_recalcule_depuis_le_grand_livre_apres_chaque_correction(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['cmup_ht' => 4, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 4]]);
+        $factureAchat = app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 4],
+        ]);
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 15, 'prix_unitaire_ht' => 4],
+        ]);
+
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4);
+
+        $grandLivre = $produit->mouvementsStock()->orderBy('id')->get();
+        $this->assertSame(
+            [['reception_achat', 10, $factureAchat->id], ['ajustement_sortie', 5, $factureAchat->id], ['ajustement_entree', 10, $factureAchat->id], ['vente', 4, null]],
+            $grandLivre->map(fn (MouvementStock $mouvement): array => [$mouvement->type->value, $mouvement->quantite, $mouvement->source_id])->all(),
+        );
+        $this->assertSame(11, $grandLivre->sum(fn (MouvementStock $mouvement): int => $mouvement->type->variation($mouvement->quantite)));
+        $this->assertSame(11, $produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * Un produit ajouté à une réception déjà validée entre en stock à son
+     * coût, comme s'il avait été reçu avec elle.
+     */
+    public function test_un_produit_ajoute_a_une_reception_validee_entre_en_stock(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $recu = Produit::factory()->create(['cmup_ht' => 2, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $ajoute = Produit::factory()->create(['cmup_ht' => 9, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir($fournisseur, [['produit_id' => $recu->id, 'quantite' => 10, 'prix_unitaire_ht' => 2]]);
+
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => $recu->id, 'quantite' => 10, 'prix_unitaire_ht' => 2],
+            ['produit_id' => $ajoute->id, 'quantite' => 4, 'prix_unitaire_ht' => 3],
+        ]);
+
+        $this->assertSame(['3.0000', 4], [$ajoute->fresh()->cmup_ht, $ajoute->fresh()->stock_quantite]);
+        $this->assertSame(['2.0000', 10], [$recu->fresh()->cmup_ht, $recu->fresh()->stock_quantite]);
+    }
+
+    /**
+     * Le fournisseur d'un produit est celui de sa dernière facture d'achat
+     * validée : corriger l'ancienne facture chez A ne le ramène pas chez A
+     * tant que la facture chez B reste son dernier achat.
+     */
+    public function test_corriger_une_ancienne_facture_garde_le_fournisseur_du_dernier_achat(): void
+    {
+        $ancien = Fournisseur::factory()->create();
+        $dernier = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $ancienneFacture = $this->recevoir($ancien, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]]);
+        $this->travel(1)->minute();
+        $this->recevoir($dernier, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 6]]);
+
+        app(ModifierFactureAchatAction::class)->handle($ancienneFacture, $ancien, [
+            ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5.5],
+        ], ['notes' => 'Prix corrigé']);
+
+        $this->assertSame($dernier->id, $produit->fresh()->fournisseur_id);
+    }
+
+    /**
+     * Retiré de sa dernière facture d'achat, le produit revient au
+     * fournisseur de l'achat validé d'avant ; retiré de son seul achat, il
+     * garde son fournisseur.
+     */
+    public function test_un_produit_retire_de_sa_derniere_facture_reprend_le_fournisseur_de_l_achat_d_avant(): void
+    {
+        $ancien = Fournisseur::factory()->create();
+        $dernier = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $seulAchat = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $autre = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $this->recevoir($ancien, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]]);
+        $this->travel(1)->minute();
+        $derniereFacture = $this->recevoir($dernier, [
+            ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 6],
+            ['produit_id' => $seulAchat->id, 'quantite' => 1, 'prix_unitaire_ht' => 6],
+        ]);
+
+        app(ModifierFactureAchatAction::class)->handle($derniereFacture, $dernier, [
+            ['produit_id' => $autre->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
+        ]);
+
+        $this->assertSame($ancien->id, $produit->fresh()->fournisseur_id);
+        $this->assertSame($dernier->id, $seulAchat->fresh()->fournisseur_id);
+    }
+
+    /**
+     * Un produit archivé depuis la saisie du brouillon ne se reçoit plus
+     * en silence : la validation est refusée, avec un message, et rien
+     * n'entre en stock.
+     */
+    public function test_valider_une_facture_dachat_dont_un_produit_est_archive_est_refuse(): void
+    {
+        $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
+        ]);
+        $produit->delete();
+
+        $this->assertThrows(
+            fn () => app(ValiderFactureAchatAction::class)->handle($factureAchat),
+            LogicException::class,
+            'Le produit « Câble USB-C » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture, avant de la valider.',
+        );
+
+        $this->assertSame(StatutFactureAchat::Brouillon, $factureAchat->fresh()->statut);
+        $this->assertSame(0, Produit::withTrashed()->find($produit->id)->stock_quantite);
+        $this->assertSame(0, MouvementStock::query()->count());
+    }
+
+    /**
+     * Le produit d'une réception validée archivé depuis : la corriger est
+     * refusé avec un message (plus d'erreur de produit introuvable), et la
+     * facture reste telle quelle.
+     */
+    public function test_corriger_une_facture_dachat_validee_dont_un_produit_est_archive_est_refuse(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $autre = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2]]);
+        $produit->delete();
+
+        $this->assertThrows(
+            fn () => app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+                ['produit_id' => $autre->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
+            ]),
+            LogicException::class,
+            'Le produit « Câble USB-C » a été archivé : restaurez-le depuis le catalogue avant de corriger cette facture d\'achat.',
+        );
+
+        $this->assertSame([$produit->id], $factureAchat->fresh()->lignes->pluck('produit_id')->all());
+        $this->assertSame(0, $autre->fresh()->stock_quantite);
+    }
+
+    /**
+     * Dans un brouillon, un produit archivé ne se garde pas (message), mais
+     * se retire.
+     */
+    public function test_un_brouillon_ne_garde_pas_un_produit_archive_mais_peut_le_retirer(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20]);
+        $autre = Produit::factory()->create(['taux_tva' => 20]);
+        $brouillon = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
+        ]);
+        $produit->delete();
+
+        $this->assertThrows(
+            fn () => app(ModifierFactureAchatAction::class)->handle($brouillon, $fournisseur, [
+                ['produit_id' => $produit->id, 'quantite' => 6, 'prix_unitaire_ht' => 2],
+            ]),
+            LogicException::class,
+            'Le produit « Câble USB-C » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture.',
+        );
+        $this->assertSame(5, $brouillon->fresh()->lignes->sole()->quantite);
+
+        app(ModifierFactureAchatAction::class)->handle($brouillon, $fournisseur, [
+            ['produit_id' => $autre->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
+        ]);
+
+        $this->assertSame([$autre->id], $brouillon->fresh()->lignes->pluck('produit_id')->all());
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $lignes
+     */
+    private function recevoir(Fournisseur $fournisseur, array $lignes): FactureAchat
+    {
+        return app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, $lignes));
     }
 
     /**

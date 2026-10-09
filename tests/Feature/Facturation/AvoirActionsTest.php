@@ -209,6 +209,47 @@ class AvoirActionsTest extends TestCase
         $this->assertSame(10, $produit->fresh()->stock_quantite);
     }
 
+    /**
+     * 3 articles vendus sans suivi du stock ne sont jamais sortis du stock :
+     * le suivi activé ensuite, leur retour n'y fait rien entrer (le stock
+     * ne passe pas à 3).
+     */
+    public function test_le_retour_d_un_article_vendu_sans_suivi_du_stock_ne_le_fait_pas_entrer(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = $this->emettreFacture($client, $produit, 3);
+        $produit->update(['suivi_stock' => true]);
+
+        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture)));
+
+        $this->assertSame(0, $produit->fresh()->stock_quantite);
+        $this->assertSame(0, $produit->mouvementsStock()->count());
+    }
+
+    /**
+     * Retourné en deux avoirs, un article vendu revient en stock une
+     * seule fois en tout ; chaque retour a pour source la ligne de son
+     * avoir.
+     */
+    public function test_des_retours_successifs_rendent_au_stock_ce_que_la_vente_en_a_sorti(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $facture = $this->emettreFacture($client, $produit, 3);
+        $ligneFacture = $facture->lignes->firstOrFail();
+
+        $premier = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]]));
+        $second = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 2]]));
+
+        $this->assertSame(0, $produit->fresh()->stock_quantite);
+        $this->assertSame(0, $facture->quantiteSortieDuStock($produit));
+        $this->assertSame(
+            [[$premier->lignes->sole()->id, 1], [$second->lignes->sole()->id, 2]],
+            $produit->mouvementsStock()->where('type', 'retour_client')->orderBy('id')->get()->map(fn ($mouvement): array => [$mouvement->source_id, $mouvement->quantite])->all(),
+        );
+    }
+
     public function test_impossible_de_creer_un_avoir_sur_une_facture_en_brouillon(): void
     {
         $client = Client::factory()->create();

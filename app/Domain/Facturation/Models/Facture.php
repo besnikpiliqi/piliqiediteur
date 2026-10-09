@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
@@ -12,6 +13,7 @@ use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
@@ -180,6 +182,27 @@ class Facture extends Model implements DocumentEnvoyable
     public function avoirsEmisConcernes(): Builder
     {
         return $this->avoirsConcernes()->where('statut', StatutAvoir::Emise);
+    }
+
+    /**
+     * Ce que cette facture a fait sortir du stock pour ce produit à son
+     * émission (voir DecrementerStockApresEmissionFacture) et qui n'y est
+     * pas encore revenu, par son annulation ou par un avoir sur l'une de
+     * ses lignes (voir RestaurerStockApresEmissionAvoir) : jamais plus ne
+     * peut y revenir. Un article vendu sans suivi du stock n'en est jamais
+     * sorti.
+     */
+    public function quantiteSortieDuStock(Produit $produit): int
+    {
+        $mouvements = MouvementStock::query()
+            ->where('produit_id', $produit->getKey())
+            ->where(fn (Builder $mouvements) => $mouvements
+                ->whereMorphedTo('source', $this)
+                ->orWhereHasMorph('source', [LigneAvoir::class], fn (Builder $ligneAvoir) => $ligneAvoir
+                    ->whereHas('ligneFacture', fn (Builder $ligneFacture) => $ligneFacture->where('facture_id', $this->getKey()))))
+            ->get(['type', 'quantite']);
+
+        return -$mouvements->sum(fn (MouvementStock $mouvement): int => $mouvement->type->variation($mouvement->quantite));
     }
 
     public function possedeDesLignesCreditables(): bool

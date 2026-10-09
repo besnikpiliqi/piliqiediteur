@@ -14,6 +14,8 @@ use LogicException;
  * Même logique que EmettreFactureAction côté vente : la facture d'achat ne
  * reçoit son numéro interne qu'à la validation, moment où le stock est
  * incrémenté (voir FactureAchatValidee/IncrementerStockApresValidationFactureAchat).
+ * Chacun de ses produits doit encore être au catalogue : une réception ne
+ * se perd jamais en silence.
  */
 class ValiderFactureAchatAction
 {
@@ -26,6 +28,10 @@ class ValiderFactureAchatAction
 
             if (! $factureAchat->statut->peutTransitionnerVers(StatutFactureAchat::Validee)) {
                 throw new LogicException("Impossible de valider une facture d'achat au statut [{$factureAchat->statut->value}].");
+            }
+
+            if (($produitArchive = $factureAchat->produitArchive()) !== null) {
+                throw new LogicException("Le produit « {$produitArchive->nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture, avant de la valider.");
             }
 
             $numero = $this->numerotation->suivant($factureAchat->magasin, TypeDocument::FactureAchat, now()->format('Y'));

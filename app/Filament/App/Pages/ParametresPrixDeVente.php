@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Filament\App\Resources\ProduitResource;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
@@ -71,7 +72,7 @@ class ParametresPrixDeVente extends Page implements HasForms
                 ->live()
                 // Désactiver remet le barème enregistré : une saisie laissée
                 // en cours ne se retrouve ni grisée à l'écran comme si elle
-                // valait, ni bloquante à l'enregistrement.
+                // valait, avec ses erreurs, ni bloquante à l'enregistrement.
                 ->afterStateUpdated(function (bool $state, Set $set): void {
                     if ($state) {
                         return;
@@ -83,6 +84,8 @@ class ParametresPrixDeVente extends Page implements HasForms
                     foreach ($magasin->fresh()->bareme_prix_vente->versTableau() as $champ => $valeur) {
                         $set($champ, $valeur);
                     }
+
+                    $this->resetErrorBag();
                 }),
             // Visible même désactivé, pour que le magasin voie d'emblée de
             // quoi il s'agit ; il ne se modifie qu'une fois activé.
@@ -151,18 +154,20 @@ class ParametresPrixDeVente extends Page implements HasForms
 
     /**
      * Le barème tel qu'il est en train d'être saisi, appliqué au prix
-     * d'achat d'essai -- comme le fera une facture d'achat.
+     * d'achat d'essai -- comme le fera une facture d'achat, qui ne propose
+     * rien tant que la TVA est vide.
      */
     private static function essayer(Get $get): string
     {
-        if (blank($get('essai_prix_achat_ht'))) {
+        $tauxTva = ProduitResource::tauxDeTvaSaisi($get('essai_taux_tva'));
+
+        if (blank($get('essai_prix_achat_ht')) || $tauxTva === null) {
             return '—';
         }
 
         try {
             $calculateur = app(CalculateurLigne::class);
             $prixAchatHt = (float) $get('essai_prix_achat_ht');
-            $tauxTva = (float) ($get('essai_taux_tva') ?? 20);
             $prix = self::baremeSaisi($get)->prixDeVente($prixAchatHt, $tauxTva);
 
             if ($prix === null) {

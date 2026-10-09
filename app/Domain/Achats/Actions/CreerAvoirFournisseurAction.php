@@ -21,7 +21,9 @@ use LogicException;
  * quantité partielle de chacune (même logique que CreerAvoirAction côté
  * vente). Un produit déjà vendu à un client ne peut jamais être inclus :
  * voir LigneAchat::quantiteRetournableRestante(), qui plafonne la
- * quantité retournable au stock actuellement disponible du produit.
+ * quantité retournable de chaque ligne au stock actuellement disponible du
+ * produit, et AvoirFournisseur::verifierQueLeStockSuffit(), qui plafonne
+ * aussi le total des lignes d'un même produit.
  */
 class CreerAvoirFournisseurAction
 {
@@ -90,6 +92,7 @@ class CreerAvoirFournisseurAction
                 $lignesConstruites[] = $montants;
             }
 
+            $avoir->verifierQueLeStockSuffit();
             $avoir->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
 
             return $avoir->fresh('lignes');

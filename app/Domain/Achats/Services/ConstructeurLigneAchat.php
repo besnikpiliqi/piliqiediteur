@@ -23,6 +23,8 @@ use LogicException;
  * fiche peut être corrigée au passage, ou un nouveau produit créé avec la
  * facture et rattaché à son fournisseur -- dans la même transaction que la
  * facture : une saisie abandonnée ne laisse aucun produit derrière elle.
+ * Un produit archivé ne se reçoit plus : la ligne qui le garde est
+ * refusée, avec un message, tant qu'il n'est pas restauré.
  *
  * Le prix d'achat de la ligne et le prix de vente du produit sont deux
  * prix distincts : le prix de vente ne change jamais le prix d'achat, et
@@ -170,7 +172,12 @@ class ConstructeurLigneAchat
         );
 
         if (filled($donnees['produit_id'] ?? null)) {
-            $produit = Produit::query()->findOrFail($donnees['produit_id']);
+            $produit = Produit::withTrashed()->findOrFail($donnees['produit_id']);
+
+            if ($produit->trashed()) {
+                throw new LogicException("Le produit « {$produit->nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture.");
+            }
+
             $produit->fill($attributs);
 
             // Seule une autre facture récupérée automatiquement, donc la

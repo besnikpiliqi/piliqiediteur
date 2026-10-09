@@ -82,6 +82,9 @@ trait AjouteDesLignesDAchat
     {
         return [
             Hidden::make('produit_id'),
+            // Gardée avec la ligne pour la retrouver à sa réouverture (voir
+            // appliquerLeBareme()), jamais enregistrée.
+            Hidden::make('prix_vente_propose')->dehydrated(false),
             ...array_map(
                 fn (string $champ): Hidden => Hidden::make("produit.{$champ}"),
                 array_diff(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT, ['prix_vente_ttc']),
@@ -253,7 +256,7 @@ trait AjouteDesLignesDAchat
                     // La dernière proposition du barème, pour savoir si la
                     // personne a changé le prix de vente elle-même (voir
                     // appliquerLeBareme()).
-                    Hidden::make('prix_vente_propose')->dehydrated(false),
+                    Hidden::make('prix_vente_propose'),
                     TextInput::make('quantite')
                         ->label('Quantité reçue')
                         ->integer()
@@ -460,6 +463,7 @@ trait AjouteDesLignesDAchat
             'remise_pourcentage' => $data['remise_pourcentage'] ?? 0,
             // Le taux de la fiche s'applique aussi à cette ligne.
             'taux_tva' => $valeursDuProduit['taux_tva'],
+            'prix_vente_propose' => $data['prix_vente_propose'] ?? null,
         ];
     }
 
@@ -477,6 +481,7 @@ trait AjouteDesLignesDAchat
             'prix_unitaire_ht' => $ligne['prix_unitaire_ht'] ?? null,
             'remise_pourcentage' => $ligne['remise_pourcentage'] ?? 0,
             'taux_tva' => $ligne['taux_tva'] ?? ($ligne['produit']['taux_tva'] ?? 20),
+            'prix_vente_propose' => $ligne['prix_vente_propose'] ?? null,
         ];
     }
 

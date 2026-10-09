@@ -4,6 +4,7 @@ namespace App\Domain\Achats\Models;
 
 use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
@@ -12,6 +13,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
+use LogicException;
 
 /**
  * Document de retour au fournisseur, jamais modifiable ni supprimable une
@@ -67,5 +70,42 @@ class AvoirFournisseur extends Model
     public function lignes(): HasMany
     {
         return $this->hasMany(LigneAvoirFournisseur::class)->orderBy('ordre');
+    }
+
+    /**
+     * Chaque ligne est plafonnée au stock de son produit (voir
+     * LigneAchat::quantiteRetournableRestante()), mais deux lignes du même
+     * produit (deux lignes de la facture d'achat) ne peuvent pas non plus
+     * en retourner ensemble plus que son stock : des articles déjà vendus
+     * seraient retournés. Le stock est lu sous verrou, à la création de
+     * l'avoir comme à son émission, puisqu'il change entre les deux.
+     *
+     * @throws LogicException
+     */
+    public function verifierQueLeStockSuffit(): void
+    {
+        $quantitesParProduit = $this->lignes()
+            ->whereNotNull('produit_id')
+            ->get()
+            ->groupBy('produit_id')
+            ->map(fn (Collection $lignes): int => $lignes->sum('quantite'))
+            ->sortKeys();
+
+        foreach ($quantitesParProduit as $produitId => $quantite) {
+            $produit = Produit::query()->whereKey($produitId)->lockForUpdate()->first();
+
+            if ($produit !== null && $produit->suivi_stock && $quantite > $produit->stock_quantite) {
+                throw new LogicException(self::messageStockInsuffisant($produit, $quantite));
+            }
+        }
+    }
+
+    /**
+     * Le même message dans le formulaire de l'avoir et à son
+     * enregistrement.
+     */
+    public static function messageStockInsuffisant(Produit $produit, int $quantite): string
+    {
+        return "« {$produit->nom} » : ces lignes en retournent {$quantite} au total, mais il n'en reste que ".max(0, $produit->stock_quantite).' en stock (les autres ont déjà été vendus ou retournés).';
     }
 }

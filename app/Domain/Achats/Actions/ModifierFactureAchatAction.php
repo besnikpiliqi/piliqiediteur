@@ -9,7 +9,6 @@ use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Stock\Services\StockLedgerService;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -27,12 +26,12 @@ use LogicException;
  * facture récupérée automatiquement par API. Une facture déjà validée a
  * toutefois déjà impacté le stock, le CMUP et le fournisseur du produit
  * (voir IncrementerStockApresValidationFactureAchat) : toute modification
- * de ses lignes recalcule donc l'écart de stock produit par produit plutôt
- * que de réappliquer la réception en aveugle.
+ * de ses lignes corrige donc la réception produit par produit plutôt que
+ * de la réappliquer en aveugle (voir corrigerLaReception()).
  *
  * Comme CreerFactureAchatAction, elle reçoit le fournisseur déjà résolu par
  * une requête limitée au magasin, jamais un fournisseur_id brut venu du
- * formulaire : il est recopié sur les produits reçus.
+ * formulaire.
  */
 class ModifierFactureAchatAction
 {
@@ -62,9 +61,20 @@ class ModifierFactureAchatAction
             }
 
             $estValidee = $factureAchat->statut === StatutFactureAchat::Validee;
-            // Avant toute modification : le coût des anciennes lignes dépend
-            // aussi de l'ancien escompte de la facture.
-            $lotsAvant = $estValidee ? $this->lotsParProduit($factureAchat->lignes) : [];
+
+            if ($estValidee && ($produitArchive = $factureAchat->produitArchive()) !== null) {
+                throw new LogicException("Le produit « {$produitArchive->nom} » a été archivé : restaurez-le depuis le catalogue avant de corriger cette facture d'achat.");
+            }
+
+            $produitsAvant = $factureAchat->lignes->pluck('produit_id')->filter()->map(fn (int|string $produitId): int => (int) $produitId)->unique()->values()->all();
+            // Lu avant que les lignes ne corrigent les fiches : activer le
+            // suivi du stock depuis une ligne ne fait pas entrer après coup
+            // une réception qui n'est jamais entrée en stock, le désactiver
+            // n'empêche pas de corriger ce qu'elle y a fait entrer.
+            $suiviDuStockAvant = Produit::query()
+                ->whereIn('id', [...$produitsAvant, ...array_filter(array_column($lignes, 'produit_id'))])
+                ->pluck('suivi_stock', 'id')
+                ->all();
 
             $factureAchat->update([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]);
             $factureAchat->lignes()->delete();
@@ -72,7 +82,7 @@ class ModifierFactureAchatAction
             $this->constructeurLignes->enregistrer($factureAchat, $lignes);
 
             if ($estValidee) {
-                $this->corrigerLaReception($factureAchat->fresh('lignes'), $lotsAvant);
+                $this->corrigerLaReception($factureAchat->fresh('lignes'), $produitsAvant, $suiviDuStockAvant);
             }
 
             return $factureAchat->fresh('lignes');
@@ -80,69 +90,64 @@ class ModifierFactureAchatAction
     }
 
     /**
-     * Sans stock à pondérer, le coût d'un produit est celui de son dernier
-     * achat validé, cette facture corrigée comprise -- ou retirée.
+     * Ne rejoue PAS un nouveau mouvement de réception (qui fausserait
+     * l'historique) : pour chaque produit de la facture, avant ou après la
+     * correction, un produit qui suivait son stock voit sa réception
+     * corrigée dans le grand livre (voir
+     * StockLedgerService::corrigerUneReception()), un autre reprend le coût
+     * de son dernier achat validé. Chacun reprend aussi le fournisseur de
+     * son dernier achat validé -- pas forcément celui de cette facture, si
+     * elle n'est pas la plus récente.
+     *
+     * @param  list<int>  $produitsAvant
+     * @param  array<int, bool>  $suiviDuStockAvant
      */
-    private function retenirLeCoutDuDernierAchat(Produit $produit): void
+    private function corrigerLaReception(FactureAchat $factureAchat, array $produitsAvant, array $suiviDuStockAvant): void
     {
-        $dernierAchat = $produit->lignesAchat()
-            ->whereHas('factureAchat', fn (Builder $factureAchat) => $factureAchat->where('statut', StatutFactureAchat::Validee))
-            ->orderByDesc('facture_achat_id')
-            ->orderByDesc('id')
-            ->first();
+        $quantitesApres = $factureAchat->lignes
+            ->groupBy('produit_id')
+            ->map(fn (Collection $lignesDuProduit): int => $lignesDuProduit->sum('quantite'));
 
-        if ($dernierAchat !== null) {
-            $this->stockLedger->retenirLeCoutDuDernierAchat($produit, $dernierAchat->coutUnitaireHt());
+        foreach (array_unique([...$produitsAvant, ...$quantitesApres->keys()->all()]) as $produitId) {
+            $produit = Produit::query()->findOrFail($produitId);
+            $dernierAchat = $produit->dernierAchatValide();
+
+            if ($suiviDuStockAvant[$produitId] ?? $produit->suivi_stock) {
+                $this->stockLedger->corrigerUneReception(
+                    $produit,
+                    $factureAchat,
+                    in_array($produitId, $produitsAvant, true),
+                    $quantitesApres->get($produitId, 0),
+                    $this->lotsDesReceptions($produit),
+                    "Correction de la facture d'achat {$factureAchat->numero}",
+                );
+            } elseif ($dernierAchat !== null) {
+                $this->stockLedger->retenirLeCoutDuDernierAchat($produit, $dernierAchat->coutUnitaireHt());
+            }
+
+            if ($dernierAchat !== null) {
+                $produit->rattacherAuFournisseur($dernierAchat->factureAchat->fournisseur_id);
+            }
         }
     }
 
     /**
-     * Ce que chaque ligne a fait entrer en stock, par produit.
+     * Les lignes de chaque facture d'achat validée du produit, au coût que
+     * chacune a réellement payé (voir LigneAchat::coutUnitaireHt()), de la
+     * réception la plus ancienne à la plus récente.
      *
-     * @param  Collection<int, LigneAchat>  $lignes
      * @return array<int, list<array{quantite: int, cout_unitaire: float}>>
      */
-    private function lotsParProduit(Collection $lignes): array
+    private function lotsDesReceptions(Produit $produit): array
     {
-        return $lignes
-            ->filter(fn (LigneAchat $ligne): bool => $ligne->produit_id !== null)
-            ->groupBy('produit_id')
-            ->map(fn (Collection $lignesDuProduit): array => $lignesDuProduit
+        return $produit->achatsValides()
+            ->with('factureAchat')
+            ->get()
+            ->groupBy('facture_achat_id')
+            ->map(fn (Collection $lignes): array => $lignes
                 ->map(fn (LigneAchat $ligne): array => ['quantite' => $ligne->quantite, 'cout_unitaire' => $ligne->coutUnitaireHt()])
                 ->values()
                 ->all())
             ->all();
-    }
-
-    /**
-     * Ne rejoue PAS un nouveau mouvement de réception (qui fausserait
-     * l'historique) : pour chaque produit, l'ancienne réception est
-     * remplacée par la nouvelle dans la valeur du stock et seul l'écart de
-     * quantité passe par un ajustement (voir
-     * StockLedgerService::corrigerUneReception()).
-     *
-     * @param  array<int, list<array{quantite: int, cout_unitaire: float}>>  $lotsAvant
-     */
-    private function corrigerLaReception(FactureAchat $factureAchat, array $lotsAvant): void
-    {
-        $lotsApres = $this->lotsParProduit($factureAchat->lignes);
-
-        foreach (array_unique([...array_keys($lotsAvant), ...array_keys($lotsApres)]) as $produitId) {
-            $produit = Produit::find($produitId);
-
-            if ($produit === null) {
-                continue;
-            }
-
-            if ($produit->suivi_stock) {
-                $this->stockLedger->corrigerUneReception($produit, $lotsAvant[$produitId] ?? [], $lotsApres[$produitId] ?? [], "Correction de la facture d'achat {$factureAchat->numero}");
-            } else {
-                $this->retenirLeCoutDuDernierAchat($produit);
-            }
-
-            if (isset($lotsApres[$produitId])) {
-                $produit->rattacherAuFournisseur($factureAchat->fournisseur_id);
-            }
-        }
     }
 }

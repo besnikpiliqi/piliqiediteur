@@ -4,6 +4,7 @@ namespace Tests\Feature\Stock;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Stock\Enums\TypeMouvementStock;
+use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Notifications\StockSousLeSeuilDAlerte;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
@@ -82,6 +83,25 @@ class StockLedgerServiceTest extends TestCase
         app(StockLedgerService::class)->ajuster($produit, 7, 'Inventaire physique');
 
         $this->assertSame(7, $produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * Le type d'un ajustement dit son sens : le stock se recalcule depuis
+     * le seul grand livre, sans lire la note des mouvements.
+     */
+    public function test_un_ajustement_enregistre_son_sens_dans_le_grand_livre(): void
+    {
+        $produit = Produit::factory()->create();
+        $stock = app(StockLedgerService::class);
+        $stock->enregistrer($produit, TypeMouvementStock::ReceptionAchat, 10);
+
+        $sortie = $stock->ajuster($produit, 7, 'Casse');
+        $entree = $stock->ajuster($produit, 12, 'Inventaire physique');
+
+        $this->assertSame([TypeMouvementStock::AjustementSortie, 3], [$sortie->type, $sortie->quantite]);
+        $this->assertSame([TypeMouvementStock::AjustementEntree, 5], [$entree->type, $entree->quantite]);
+        $this->assertSame(12, $produit->mouvementsStock()->get()->sum(fn (MouvementStock $mouvement): int => $mouvement->type->variation($mouvement->quantite)));
+        $this->assertSame(12, $produit->fresh()->stock_quantite);
     }
 
     public function test_une_quantite_negative_ou_nulle_est_refusee(): void

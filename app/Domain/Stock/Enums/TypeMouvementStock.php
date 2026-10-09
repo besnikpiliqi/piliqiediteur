@@ -2,13 +2,19 @@
 
 namespace App\Domain\Stock\Enums;
 
+/**
+ * Chaque type dit à lui seul le sens du mouvement (voir estEntree()) : le
+ * stock d'un produit se recalcule donc toujours depuis son grand livre,
+ * sans lire la note d'aucun mouvement.
+ */
 enum TypeMouvementStock: string
 {
     case Vente = 'vente';
     case ReceptionAchat = 'reception_achat';
     case RetourFournisseur = 'retour_fournisseur';
     case RetourClient = 'retour_client';
-    case Ajustement = 'ajustement';
+    case AjustementEntree = 'ajustement_entree';
+    case AjustementSortie = 'ajustement_sortie';
 
     /**
      * true = entre en stock (+), false = sort du stock (-).
@@ -16,11 +22,16 @@ enum TypeMouvementStock: string
     public function estEntree(): bool
     {
         return match ($this) {
-            self::ReceptionAchat, self::RetourClient => true,
-            self::Vente, self::RetourFournisseur => false,
-            self::Ajustement => throw new \LogicException(
-                "Le sens d'un ajustement doit être explicite, voir StockLedgerService::ajuster()."
-            ),
+            self::ReceptionAchat, self::RetourClient, self::AjustementEntree => true,
+            self::Vente, self::RetourFournisseur, self::AjustementSortie => false,
         };
+    }
+
+    /**
+     * Ce que $quantite articles de ce mouvement changent au stock.
+     */
+    public function variation(int $quantite): int
+    {
+        return $this->estEntree() ? $quantite : -$quantite;
     }
 }

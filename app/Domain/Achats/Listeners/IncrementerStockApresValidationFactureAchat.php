@@ -14,7 +14,9 @@ use App\Domain\Stock\Services\StockLedgerService;
  * Chaque ligne entre en stock à son coût réellement payé, remise et
  * escompte déduits (voir LigneAchat::coutUnitaireHt()), ce qui recalcule
  * le CMUP du produit (voir StockLedgerService::receptionner()) ; le
- * produit est rattaché au fournisseur de la facture.
+ * produit est rattaché au fournisseur de la facture. Chaque ligne a un
+ * produit au catalogue : la validation refuse un produit archivé (voir
+ * ValiderFactureAchatAction).
  */
 class IncrementerStockApresValidationFactureAchat
 {
@@ -25,14 +27,8 @@ class IncrementerStockApresValidationFactureAchat
         $factureAchat = $event->factureAchat;
 
         foreach ($factureAchat->lignes as $ligne) {
-            $produit = $ligne->produit;
-
-            if ($produit === null) {
-                continue;
-            }
-
-            $this->stock->receptionner($produit, $ligne->quantite, $ligne->coutUnitaireHt(), $factureAchat, "Réception facture d'achat {$factureAchat->numero}");
-            $produit->rattacherAuFournisseur($factureAchat->fournisseur_id);
+            $this->stock->receptionner($ligne->produit, $ligne->quantite, $ligne->coutUnitaireHt(), $factureAchat, "Réception facture d'achat {$factureAchat->numero}");
+            $ligne->produit->rattacherAuFournisseur($factureAchat->fournisseur_id);
         }
     }
 }

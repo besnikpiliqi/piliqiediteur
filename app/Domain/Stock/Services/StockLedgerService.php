@@ -7,6 +7,8 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Events\StockPasseSousLeSeuilDAlerte;
 use App\Domain\Stock\Models\MouvementStock;
+use Closure;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -24,7 +26,8 @@ use LogicException;
  * Produit::$cmup_ht), recalculé après chaque entrée achetée (voir
  * receptionner()) : toute sortie (vente, retour fournisseur) et toute
  * autre entrée (retour client, ajustement) se fait au CMUP du moment, qui
- * ne change donc pas.
+ * ne change donc pas. Une réception corrigée après coup rejoue tout le
+ * grand livre du produit (voir corrigerUneReception()).
  *
  * Seul à voir chaque mouvement, il signale aussi le passage d'un produit
  * à son seuil d'alerte (voir StockPasseSousLeSeuilDAlerte).
@@ -52,57 +55,89 @@ class StockLedgerService
                 return null;
             }
 
-            $this->changerLeCmup($produit, $produitVerrouille, $this->calculateur->coutMoyenPondere([
-                ['quantite' => max($produitVerrouille->stock_quantite, 0), 'cout_unitaire' => $produitVerrouille->cmup_ht],
-                ['quantite' => $quantite, 'cout_unitaire' => $coutUnitaireHt],
-            ]) ?? $coutUnitaireHt);
+            $this->changerLeCmup($produit, $produitVerrouille, $this->cmupApresUneEntree(
+                $produitVerrouille->stock_quantite,
+                (float) $produitVerrouille->cmup_ht,
+                $quantite,
+                $coutUnitaireHt,
+            ));
 
             return $this->enregistrer($produit, TypeMouvementStock::ReceptionAchat, $quantite, $source, $note);
         });
     }
 
     /**
-     * Correction d'une réception déjà entrée en stock (facture d'achat
-     * validée, puis modifiée), plutôt que de réappliquer la réception en
-     * aveugle ; seul l'écart de quantité passe par un ajustement.
+     * Correction d'une réception déjà validée ($reception : la facture
+     * d'achat corrigée), pour un produit qui suivait son stock quand on la
+     * corrige.
      *
-     * Un écart de prix ne revalorise que les articles de l'ancienne
-     * réception encore en stock -- ceux déjà vendus sont sortis à leur
-     * CMUP du moment et ne reviennent pas. Un écart de quantité entre (ou
-     * sort) au nouveau coût. 10 articles reçus à 5 €, 9 vendus, puis la
-     * réception corrigée à 6 € : l'article restant vaut 6 €, pas 15 €.
+     * La quantité : ce que la réception a réellement fait entrer se lit
+     * dans le grand livre (ses mouvements, dont elle est la source), et
+     * seul l'écart avec la quantité corrigée passe par un ajustement, dont
+     * elle est aussi la source. Un produit qui figurait déjà sur la
+     * réception sans qu'aucun mouvement n'en vienne n'est jamais entré en
+     * stock (il ne suivait pas son stock à la validation) : rien à
+     * corriger en quantité. Un produit ajouté par la correction entre en
+     * stock.
      *
-     * @param  list<array{quantite: int, cout_unitaire: float}>  $lotsAvant
-     * @param  list<array{quantite: int, cout_unitaire: float}>  $lotsApres
+     * Le coût : le CMUP se recalcule en rejouant tout le grand livre du
+     * produit (voir cmupRejoue()), chaque réception entrant au coût actuel
+     * de ses lignes. Les articles déjà vendus sont sortis à leur CMUP du
+     * moment et ne reviennent pas : 10 reçus à 2 €, 10 à 10 € (CMUP 6),
+     * 10 vendus, puis la seconde réception corrigée à 5 € -- le stock
+     * restant vaut 3,50 € l'article.
+     *
+     * @param  array<int|string, list<array{quantite: int, cout_unitaire: float}>>  $lotsDesReceptions  les lignes de chaque réception du produit (par identifiant de sa source), de la plus ancienne à la plus récente
      */
-    public function corrigerUneReception(Produit $produit, array $lotsAvant, array $lotsApres, string $note): void
-    {
-        if (! $produit->suivi_stock) {
-            throw new LogicException("Le produit [{$produit->id}] ne suit pas son stock (suivi_stock = false).");
-        }
-
-        DB::transaction(function () use ($produit, $lotsAvant, $lotsApres, $note) {
+    public function corrigerUneReception(
+        Produit $produit,
+        Model $reception,
+        bool $figuraitSurLaReception,
+        int $quantiteRecue,
+        array $lotsDesReceptions,
+        string $note,
+    ): void {
+        DB::transaction(function () use ($produit, $reception, $figuraitSurLaReception, $quantiteRecue, $lotsDesReceptions, $note) {
             $produitVerrouille = $this->verrouiller($produit);
-            $stock = max($produitVerrouille->stock_quantite, 0);
-            $quantiteAvant = array_sum(array_column($lotsAvant, 'quantite'));
-            $ecart = array_sum(array_column($lotsApres, 'quantite')) - $quantiteAvant;
-            $encoreEnStock = min($stock, $quantiteAvant);
+            $grandLivre = $produitVerrouille->mouvementsStock()->orderBy('id')->get();
+            $mouvementsDeLaReception = $grandLivre->filter(fn (MouvementStock $mouvement): bool => $this->vientDe($mouvement, $reception->getMorphClass(), $reception->getKey()));
 
-            $cmup = $this->calculateur->coutMoyenPondere([
-                ['quantite' => $stock, 'cout_unitaire' => $produitVerrouille->cmup_ht],
-                ['quantite' => -$encoreEnStock, 'cout_unitaire' => $this->calculateur->coutMoyenPondere($lotsAvant) ?? 0.0],
-                ['quantite' => max($encoreEnStock + $ecart, 0), 'cout_unitaire' => $this->calculateur->coutMoyenPondere($lotsApres) ?? 0.0],
-            ]);
+            if (! $figuraitSurLaReception || $mouvementsDeLaReception->isNotEmpty()) {
+                $ecart = $quantiteRecue - $this->variationTotale($mouvementsDeLaReception);
 
-            // Un stock qui ne pèse plus rien garde son CMUP.
+                if ($ecart !== 0) {
+                    $grandLivre->push($this->ajuster($produitVerrouille, $produitVerrouille->stock_quantite + $ecart, $note, $reception));
+                    $produit->setAttribute('stock_quantite', $produitVerrouille->stock_quantite)->syncOriginalAttribute('stock_quantite');
+                }
+            }
+
+            $cmup = $this->cmupRejoue($produitVerrouille, $grandLivre, $reception->getMorphClass(), $lotsDesReceptions);
+
             if ($cmup !== null) {
                 $this->changerLeCmup($produit, $produitVerrouille, $cmup);
             }
+        });
+    }
 
-            if ($ecart !== 0) {
-                $this->ajuster($produitVerrouille, $produitVerrouille->stock_quantite + $ecart, $note);
-                $produit->setAttribute('stock_quantite', $produitVerrouille->stock_quantite)->syncOriginalAttribute('stock_quantite');
-            }
+    /**
+     * Retour client d'articles vendus (avoir, annulation) : n'entre en
+     * stock que ce que la vente en a fait sortir et qui n'y est pas encore
+     * revenu ($quantiteEncoreSortie, lue sous le verrou du produit pour que
+     * deux retours simultanés ne rendent pas deux fois les mêmes articles).
+     * Un article vendu sans suivi du stock n'en est jamais sorti : rien n'y
+     * revient.
+     *
+     * @param  Closure(): int  $quantiteEncoreSortie
+     */
+    public function retournerDeLaVente(Produit $produit, int $quantite, Closure $quantiteEncoreSortie, Model $source, string $note): ?MouvementStock
+    {
+        return DB::transaction(function () use ($produit, $quantite, $quantiteEncoreSortie, $source, $note) {
+            $this->verrouiller($produit);
+            $quantiteRetournee = min($quantite, $quantiteEncoreSortie());
+
+            return $quantiteRetournee > 0
+                ? $this->enregistrer($produit, TypeMouvementStock::RetourClient, $quantiteRetournee, $source, $note)
+                : null;
         });
     }
 
@@ -135,17 +170,17 @@ class StockLedgerService
             throw new LogicException("Le produit [{$produit->id}] ne suit pas son stock (suivi_stock = false).");
         }
 
-        $delta = $type->estEntree() ? $quantite : -$quantite;
-
-        return $this->appliquer($produit, $type, $quantite, $delta, $source, $note, $creeParUserId);
+        return $this->appliquer($produit, $type, $quantite, $source, $note, $creeParUserId);
     }
 
     /**
-     * Correction manuelle (inventaire physique, casse...) : on part de la
+     * Correction manuelle (inventaire physique, casse...) ou d'une
+     * réception ($source : la facture d'achat corrigée) : on part de la
      * quantité cible plutôt que d'un delta, pour coller à l'usage ("j'ai
-     * compté 42 articles") plutôt qu'à une mécanique interne.
+     * compté 42 articles") plutôt qu'à une mécanique interne. Le sens de
+     * l'écart donne le type du mouvement (entrée ou sortie).
      */
-    public function ajuster(Produit $produit, int $quantiteCible, string $note, ?int $creeParUserId = null): MouvementStock
+    public function ajuster(Produit $produit, int $quantiteCible, string $note, ?Model $source = null, ?int $creeParUserId = null): MouvementStock
     {
         $delta = $quantiteCible - $produit->stock_quantite;
 
@@ -153,29 +188,28 @@ class StockLedgerService
             throw new InvalidArgumentException('Aucun écart à ajuster.');
         }
 
-        $noteComplete = sprintf('%s (%s%s)', $note, $delta > 0 ? '+' : '', $delta);
+        $type = $delta > 0 ? TypeMouvementStock::AjustementEntree : TypeMouvementStock::AjustementSortie;
 
-        return $this->appliquer($produit, TypeMouvementStock::Ajustement, abs($delta), $delta, null, $noteComplete, $creeParUserId);
+        return $this->appliquer($produit, $type, abs($delta), $source, $note, $creeParUserId);
     }
 
     private function appliquer(
         Produit $produit,
         TypeMouvementStock $type,
-        int $quantiteMouvement,
-        int $delta,
+        int $quantite,
         ?Model $source,
         ?string $note,
         ?int $creeParUserId,
     ): MouvementStock {
-        return DB::transaction(function () use ($produit, $type, $quantiteMouvement, $delta, $source, $note, $creeParUserId) {
+        return DB::transaction(function () use ($produit, $type, $quantite, $source, $note, $creeParUserId) {
             $produitVerrouille = $this->verrouiller($produit);
 
-            $nouvelleQuantite = $produitVerrouille->stock_quantite + $delta;
+            $nouvelleQuantite = $produitVerrouille->stock_quantite + $type->variation($quantite);
 
             $mouvement = MouvementStock::create([
                 'produit_id' => $produitVerrouille->id,
                 'type' => $type,
-                'quantite' => $quantiteMouvement,
+                'quantite' => $quantite,
                 'source_type' => $source?->getMorphClass(),
                 'source_id' => $source?->getKey(),
                 'survenu_le' => now(),
@@ -195,6 +229,120 @@ class StockLedgerService
 
             return $mouvement;
         });
+    }
+
+    /**
+     * Le CMUP du produit si chaque réception avait été saisie juste dès le
+     * départ : le grand livre rejoué dans l'ordre, chaque réception
+     * entrant à sa place, pour toute la quantité qu'elle a fait entrer
+     * (ajustements de correction compris), au coût actuel de ses lignes,
+     * une ligne après l'autre comme à sa validation (voir receptionner()).
+     * Les sorties et les autres entrées ne changent pas le CMUP, et un
+     * stock vide ou négatif ne pèse rien.
+     *
+     * Le stock que le grand livre n'explique pas (aucun en pratique : seul
+     * ce service fait varier le stock, toujours par un mouvement) est
+     * valorisé au CMUP actuel. Sans aucune réception à rejouer, le coût
+     * est celui de la dernière ligne achetée, comme pour un produit qui ne
+     * suit pas son stock ; null s'il n'y en a aucune.
+     *
+     * @param  Collection<int, MouvementStock>  $grandLivre  dans l'ordre
+     * @param  array<int|string, list<array{quantite: int, cout_unitaire: float}>>  $lotsDesReceptions
+     */
+    private function cmupRejoue(Produit $produit, Collection $grandLivre, string $typeDeReception, array $lotsDesReceptions): ?float
+    {
+        $stock = $produit->stock_quantite - $this->variationTotale($grandLivre);
+        $cmup = (float) $produit->cmup_ht;
+        $receptionsVues = [];
+        $uneReceptionAPese = false;
+
+        foreach ($grandLivre as $mouvement) {
+            $receptionId = $mouvement->source_type === $typeDeReception ? $mouvement->source_id : null;
+
+            if ($receptionId === null) {
+                $stock += $mouvement->type->variation($mouvement->quantite);
+
+                continue;
+            }
+
+            if (isset($receptionsVues[$receptionId])) {
+                continue;
+            }
+
+            $receptionsVues[$receptionId] = true;
+            $quantite = $this->variationTotale($grandLivre->filter(fn (MouvementStock $autre): bool => $this->vientDe($autre, $typeDeReception, $receptionId)));
+            $lots = $this->lotsEntres($quantite, $lotsDesReceptions[$receptionId] ?? []);
+
+            if ($lots === []) {
+                $stock += $quantite;
+
+                continue;
+            }
+
+            foreach ($lots as $lot) {
+                $cmup = $this->cmupApresUneEntree($stock, $cmup, $lot['quantite'], $lot['cout_unitaire']);
+                $stock += $lot['quantite'];
+            }
+
+            $uneReceptionAPese = true;
+        }
+
+        if ($uneReceptionAPese) {
+            return $cmup;
+        }
+
+        $derniereReception = end($lotsDesReceptions);
+
+        return $derniereReception === false || $derniereReception === [] ? null : (float) end($derniereReception)['cout_unitaire'];
+    }
+
+    /**
+     * Les lots par lesquels une réception est entrée en stock : ses lignes,
+     * quand elles disent la quantité qu'elle a fait entrer. Sinon (le
+     * produit ne suivait pas son stock à une correction), cette quantité au
+     * coût moyen de ses lignes ; aucun lot sans quantité entrée ni ligne.
+     *
+     * @param  list<array{quantite: int, cout_unitaire: float}>  $lignes
+     * @return list<array{quantite: int, cout_unitaire: float}>
+     */
+    private function lotsEntres(int $quantite, array $lignes): array
+    {
+        if ($quantite <= 0 || $lignes === []) {
+            return [];
+        }
+
+        if (array_sum(array_column($lignes, 'quantite')) === $quantite) {
+            return $lignes;
+        }
+
+        return [['quantite' => $quantite, 'cout_unitaire' => $this->calculateur->coutMoyenPondere($lignes) ?? 0.0]];
+    }
+
+    private function cmupApresUneEntree(int $stock, float $cmup, int $quantite, float $coutUnitaireHt): float
+    {
+        return $this->calculateur->coutMoyenPondere([
+            ['quantite' => max($stock, 0), 'cout_unitaire' => $cmup],
+            ['quantite' => $quantite, 'cout_unitaire' => $coutUnitaireHt],
+        ]) ?? $coutUnitaireHt;
+    }
+
+    private function vientDe(MouvementStock $mouvement, string $typeDeSource, int|string $sourceId): bool
+    {
+        return $mouvement->source_type === $typeDeSource && (string) $mouvement->source_id === (string) $sourceId;
+    }
+
+    /**
+     * @param  iterable<MouvementStock>  $mouvements
+     */
+    private function variationTotale(iterable $mouvements): int
+    {
+        $variation = 0;
+
+        foreach ($mouvements as $mouvement) {
+            $variation += $mouvement->type->variation($mouvement->quantite);
+        }
+
+        return $variation;
     }
 
     /**

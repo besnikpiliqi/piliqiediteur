@@ -3,15 +3,14 @@
     "name": "besnikpiliqi/piliqiediteur",
     "type": "project",
     "description": "Logiciel de gestion vendu en SaaS aux magasins : devis, factures, avoirs, paiements, caisse et clôtures, achats et stock, e-reporting.",
-    "keywords": ["laravel", "framework"],
-    "license": "MIT",
+    "license": "proprietary",
     "require": {
         "php": "^8.3",
+        "ext-openssl": "*",
+        "ext-zip": "*",
         "barryvdh/laravel-dompdf": "^3.1",
-        "bezhansalleh/filament-shield": "^3.9",
         "filament/filament": "^3.3",
         "laravel/framework": "^13.17",
-        "laravel/sanctum": "^4.3",
         "laravel/tinker": "^3.0",
         "spatie/laravel-permission": "^6.25"
     },
@@ -42,13 +41,7 @@
             "composer install",
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate",
-            "@php artisan migrate --force",
-            "npm install --ignore-scripts",
-            "npm run build"
-        ],
-        "dev": [
-            "Composer\\Config::disableProcessTimeout",
-            "@php artisan dev"
+            "@php artisan migrate --force"
         ],
         "test": [
             "@php artisan config:clear --ansi @no_additional_args",
@@ -62,14 +55,6 @@
         "post-update-cmd": [
             "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
         ],
-        "post-root-package-install": [
-            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
-        ],
-        "post-create-project-cmd": [
-            "@php artisan key:generate --ansi",
-            "@php -r \"file_exists('database/database.sqlite') || touch('database/database.sqlite');\"",
-            "@php artisan migrate --graceful --ansi"
-        ],
         "pre-package-uninstall": [
             "Illuminate\\Foundation\\ComposerScripts::prePackageUninstall"
         ]
@@ -82,11 +67,7 @@
     "config": {
         "optimize-autoloader": true,
         "preferred-install": "dist",
-        "sort-packages": true,
-        "allow-plugins": {
-            "pestphp/pest-plugin": true,
-            "php-http/discovery": true
-        }
+        "sort-packages": true
     },
     "minimum-stability": "stable",
     "prefer-stable": true

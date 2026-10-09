@@ -28,9 +28,10 @@ use Illuminate\Support\Str;
  * RegistreFiscal.
  *
  * Les horodatages, enregistrés et signés en UTC, s'affichent à l'heure de
- * Paris. La fiche montre le contenu signé mis en forme ; l'export CSV du
- * journal (voir ListEnregistrementsFiscaux) en donne le texte exact, pour
- * vérifier chaque signature hors de l'application.
+ * Paris. La fiche montre le contenu signé mis en forme, puis son texte
+ * exact, à copier pour vérifier la signature hors de l'application ;
+ * l'export CSV du journal des événements (voir ListEnregistrementsFiscaux)
+ * reprend aussi ce texte pour chaque événement technique.
  */
 class EnregistrementFiscalResource extends Resource
 {
@@ -91,14 +92,19 @@ class EnregistrementFiscalResource extends Resource
             ])->columns(2),
 
             InfolistSection::make('Contenu signé')
-                ->description('Mis en forme pour la lecture. La signature porte sur le texte exact de ce contenu, que l\'export CSV du journal reproduit à l\'identique.')
+                ->description('Mis en forme pour la lecture, puis tel qu\'il est signé : la signature porte sur ce texte exact, à copier sans le modifier pour la vérifier hors de l\'application.')
                 ->schema([
-                    ViewEntry::make('contenu')->hiddenLabel()
+                    ViewEntry::make('contenu_mis_en_forme')->hiddenLabel()
                         ->view('filament.app.infolists.contenu-signe')
                         ->state(fn (EnregistrementFiscal $record): string => json_encode(
                             $record->contenuSigne(),
                             JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
                         )),
+                    TextEntry::make('contenu')->label('Texte exact signé')
+                        ->fontFamily(FontFamily::Mono)
+                        ->copyable()
+                        ->copyMessage('Texte signé copié')
+                        ->extraAttributes(['style' => 'overflow-wrap: anywhere;']),
                 ]),
         ]);
     }

@@ -11,6 +11,10 @@ use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Stock\Enums\TypeMouvementStock;
@@ -22,7 +26,10 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Closure;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
 use Tests\TestCase;
@@ -1009,6 +1016,130 @@ class FactureAchatActionsTest extends TestCase
         ]);
 
         $this->assertSame([$autre->id], $brouillon->fresh()->lignes->pluck('produit_id')->all());
+    }
+
+    /**
+     * Une vente verrouille le registre fiscal, puis les produits qu'elle
+     * sort du stock. Une facture d'achat qui change le taux de TVA d'un
+     * produit (JET 270) verrouille donc le registre avant d'écrire la
+     * facture ou le moindre produit, même celui que corrige une ligne
+     * précédente : sinon l'achat et la vente s'attendraient l'un l'autre.
+     */
+    public function test_une_facture_dachat_qui_change_un_taux_de_tva_verrouille_d_abord_le_registre_fiscal(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $corrige = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20]);
+        $livre = Produit::factory()->create(['reference' => 'LIV-01', 'nom' => 'Livre', 'taux_tva' => 20]);
+
+        $requetes = $this->requetesDe(fn () => app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $corrige->id, 'produit' => ['prix_vente_ttc' => 12], 'quantite' => 1, 'prix_unitaire_ht' => 5],
+            ['produit_id' => $livre->id, 'produit' => ['taux_tva' => '5.5'], 'quantite' => 1, 'prix_unitaire_ht' => 5],
+        ]));
+
+        $verrouDuRegistre = $this->rangDeLaPremiere($requetes, '"tetes_registre_fiscal"');
+        $this->assertLessThan($this->rangDeLaPremiere($requetes, 'insert into "factures_achat"'), $verrouDuRegistre);
+        $this->assertLessThan($this->rangDeLaPremiere($requetes, 'update "produits"'), $verrouDuRegistre);
+        $this->assertSame(['12.00', '5.50'], [$corrige->fresh()->prix_vente_ttc, $livre->fresh()->taux_tva]);
+        $this->assertSame([
+            'parametre' => 'taux_tva',
+            'produit' => ['id' => $livre->id, 'reference' => 'LIV-01', 'nom' => 'Livre'],
+            'ancienne_valeur' => '20.00',
+            'nouvelle_valeur' => '5.50',
+        ], EnregistrementFiscal::query()->where('type', (string) CodeEvenement::ParametreDeConformite->value)->sole()->contenuSigne()['donnees']['details']);
+    }
+
+    public function test_corriger_un_taux_de_tva_depuis_une_facture_dachat_verrouille_le_registre_avant_la_facture(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $livre = Produit::factory()->create(['taux_tva' => 20]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $livre->id, 'quantite' => 1, 'prix_unitaire_ht' => 5],
+        ]);
+
+        $requetes = $this->requetesDe(fn () => app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => $livre->id, 'produit' => ['taux_tva' => '5.5'], 'quantite' => 1, 'prix_unitaire_ht' => 5],
+        ]));
+
+        $this->assertLessThan($this->rangDeLaPremiere($requetes, '"factures_achat"'), $this->rangDeLaPremiere($requetes, '"tetes_registre_fiscal"'));
+        $this->assertSame('5.50', $livre->fresh()->taux_tva);
+    }
+
+    /**
+     * Le formulaire renvoie le taux de la fiche avec chaque ligne : une
+     * facture d'achat qui ne le change pas ne touche pas au registre
+     * fiscal, et s'enregistre même quand la caisse sécurisée ne peut rien
+     * signer.
+     */
+    public function test_une_facture_dachat_qui_ne_change_aucun_taux_s_enregistre_sans_le_registre_fiscal(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $livre = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20]);
+        $this->retirerLaCleDeSignature();
+
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $livre->id, 'produit' => ['prix_vente_ttc' => 12, 'taux_tva' => '20'], 'quantite' => 1, 'prix_unitaire_ht' => 5],
+        ]);
+
+        $this->assertModelExists($factureAchat);
+        $this->assertSame('12.00', $livre->fresh()->prix_vente_ttc);
+        $this->assertSame(0, EnregistrementFiscal::query()->count());
+    }
+
+    public function test_sans_cle_de_signature_une_facture_dachat_qui_change_un_taux_est_refusee_tout_entiere(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $livre = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20]);
+        $this->retirerLaCleDeSignature();
+
+        $this->assertThrows(fn () => app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $livre->id, 'produit' => ['prix_vente_ttc' => 12, 'taux_tva' => '5.5'], 'quantite' => 1, 'prix_unitaire_ht' => 5],
+        ]), ModuleFiscalNonConfigureException::class);
+
+        $this->assertSame(['10.00', '20.00'], [$livre->fresh()->prix_vente_ttc, $livre->fresh()->taux_tva]);
+        $this->assertSame(0, FactureAchat::query()->count());
+    }
+
+    /**
+     * La clé privée de signature disparaît de l'environnement : le
+     * registre déjà résolu, qui la garde en mémoire, est oublié.
+     */
+    private function retirerLaCleDeSignature(): void
+    {
+        config(['caisse_securisee.cle_privee' => null]);
+        $this->app->forgetInstance(RegistreFiscal::class);
+    }
+
+    /**
+     * Les requêtes SQL qu'exécute l'opération, dans l'ordre.
+     *
+     * @return list<string>
+     */
+    private function requetesDe(Closure $operation): array
+    {
+        $requetes = [];
+        DB::listen(function (QueryExecuted $requete) use (&$requetes): void {
+            $requetes[] = $requete->sql;
+        });
+
+        $operation();
+
+        return $requetes;
+    }
+
+    /**
+     * Le rang de la première requête qui contient l'extrait.
+     *
+     * @param  list<string>  $requetes
+     */
+    private function rangDeLaPremiere(array $requetes, string $extrait): int
+    {
+        foreach ($requetes as $rang => $requete) {
+            if (str_contains($requete, $extrait)) {
+                return $rang;
+            }
+        }
+
+        $this->fail("Aucune requête ne contient {$extrait}.");
     }
 
     /**

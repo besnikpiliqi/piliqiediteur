@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Closure;
 use Illuminate\Database\DatabaseTransactionRecord;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -62,7 +63,10 @@ use LogicException;
  * Les verrous se prennent toujours dans cet ordre : le registre, puis la
  * ligne du document, puis sequences_documents (voir
  * DocumentNumberingService) ; un autre ordre exposerait deux ventes
- * simultanées à un interblocage.
+ * simultanées à un interblocage. Le registre se verrouille donc en tête de
+ * toute transaction qui écrit au registre, y compris celle d'une action qui
+ * modifie un paramètre ayant un impact sur la conformité (voir
+ * sousVerrou()).
  *
  * Lié en scoped() (voir AppServiceProvider) : l'instant que donne le verrou
  * vaut pour toutes les écritures fiscales de la transaction, transactions
@@ -110,6 +114,40 @@ class RegistreFiscal
     public function verrouiller(Magasin $magasin): InstantFiscal
     {
         return $this->verrou($magasin)[1];
+    }
+
+    /**
+     * Exécute $operation sous le verrou du registre du magasin actif (voir
+     * verrouiller()), premier verrou de sa transaction : dans une
+     * transaction qu'il ouvre lui-même, le registre se verrouille avant que
+     * $operation ne s'exécute ; dans la transaction déjà ouverte d'un
+     * appelant, celui-ci doit l'avoir verrouillé en tête, avant tout autre
+     * verrou. Une transaction en cours qui ne le tient pas encore est
+     * refusée : elle a pu verrouiller des lignes (un produit, une facture
+     * d'achat) qu'une vente, qui verrouille le registre en premier, attend
+     * ensuite, et le verrouiller après elles exposerait à un interblocage.
+     *
+     * @template TResultat
+     *
+     * @param  Closure(): TResultat  $operation
+     * @return TResultat
+     *
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function sousVerrou(Magasin $magasin, Closure $operation): mixed
+    {
+        $transaction = $this->transactionsEnCours()->first();
+
+        if ($transaction !== null && ($this->verrous[$magasin->getKey()]['transaction'] ?? null) !== $transaction) {
+            throw new LogicException('Le registre fiscal se verrouille en tête de transaction, avant tout autre verrou : la transaction en cours doit le verrouiller dès son début.');
+        }
+
+        return DB::transaction(function () use ($magasin, $operation): mixed {
+            $this->verrouiller($magasin);
+
+            return $operation();
+        });
     }
 
     /**

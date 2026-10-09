@@ -5,9 +5,11 @@ namespace App\Domain\Achats\Services;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
+use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use LogicException;
@@ -36,6 +38,11 @@ use LogicException;
  * formulaire, dont l'état se forge. Sans utilisateur connecté (facture
  * récupérée automatiquement chez le fournisseur), il n'y a aucun droit à
  * vérifier.
+ *
+ * Corriger le taux de TVA d'un produit existant s'inscrit au journal des
+ * événements du magasin (voir JournaliseSesParametresDeConformite) : l'action
+ * qui enregistre les lignes verrouille d'abord le registre fiscal, en tête
+ * de sa transaction (voir verrouillerLeRegistreSiUnTauxChange()).
  */
 class ConstructeurLigneAchat
 {
@@ -61,7 +68,38 @@ class ConstructeurLigneAchat
      */
     private const ATTRIBUTS_EFFACABLES = ['code_barres', 'taille', 'couleur'];
 
-    public function __construct(private readonly CalculateurLigne $calculateur) {}
+    public function __construct(
+        private readonly CalculateurLigne $calculateur,
+        private readonly RegistreFiscal $registre,
+    ) {}
+
+    /**
+     * Verrouille le registre fiscal du magasin actif quand une ligne change
+     * le taux de TVA d'un produit existant, paramètre ayant un impact sur la
+     * conformité dont le changement s'inscrit au journal des événements : le
+     * registre est le premier verrou de la transaction qui l'inscrit (voir
+     * RegistreFiscal::sousVerrou()). L'action qui enregistre les lignes
+     * l'appelle donc en tête de sa transaction, avant de verrouiller la
+     * facture d'achat ou d'écrire un produit : sinon une vente, qui
+     * verrouille le registre puis ses produits, et l'achat, qui tiendrait
+     * un produit déjà corrigé en attendant le registre, s'attendraient
+     * l'un l'autre. Une facture d'achat qui ne change aucun taux ne touche
+     * pas au registre.
+     *
+     * @param  list<array<string, mixed>>  $lignes  voir enregistrer()
+     */
+    public function verrouillerLeRegistreSiUnTauxChange(array $lignes): void
+    {
+        foreach ($lignes as $donnees) {
+            $produit = filled($donnees['produit_id'] ?? null) ? Produit::withTrashed()->find($donnees['produit_id']) : null;
+
+            if ($produit?->fill(Arr::only(self::attributsDuProduit($donnees), Produit::parametresDeConformite()))->isDirty()) {
+                $this->registre->verrouiller(app(TenantContext::class)->magasin());
+
+                return;
+            }
+        }
+    }
 
     /**
      * @param  list<array{produit_id?: int|string|null, produit?: array<string, mixed>, quantite: int|string, prix_unitaire_ht?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}>  $lignes
@@ -165,11 +203,7 @@ class ConstructeurLigneAchat
      */
     private function produitDeLaLigne(FactureAchat $factureAchat, array $donnees): Produit
     {
-        $attributs = array_filter(
-            Arr::only($donnees['produit'] ?? [], self::ATTRIBUTS_DU_PRODUIT),
-            fn (mixed $valeur, string $attribut): bool => filled($valeur) || in_array($attribut, self::ATTRIBUTS_EFFACABLES, true),
-            ARRAY_FILTER_USE_BOTH,
-        );
+        $attributs = self::attributsDuProduit($donnees);
 
         if (filled($donnees['produit_id'] ?? null)) {
             $produit = Produit::withTrashed()->findOrFail($donnees['produit_id']);
@@ -201,5 +235,21 @@ class ConstructeurLigneAchat
             ...$attributs,
             'fournisseur_id' => $factureAchat->fournisseur_id,
         ]);
+    }
+
+    /**
+     * Ce que la ligne dit de son produit : les attributs qu'elle renseigne,
+     * et ceux qu'elle peut effacer.
+     *
+     * @param  array<string, mixed>  $donnees
+     * @return array<string, mixed>
+     */
+    private static function attributsDuProduit(array $donnees): array
+    {
+        return array_filter(
+            Arr::only($donnees['produit'] ?? [], self::ATTRIBUTS_DU_PRODUIT),
+            fn (mixed $valeur, string $attribut): bool => filled($valeur) || in_array($attribut, self::ATTRIBUTS_EFFACABLES, true),
+            ARRAY_FILTER_USE_BOTH,
+        );
     }
 }

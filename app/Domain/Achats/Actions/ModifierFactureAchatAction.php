@@ -31,7 +31,10 @@ use LogicException;
  *
  * Comme CreerFactureAchatAction, elle reçoit le fournisseur déjà résolu par
  * une requête limitée au magasin, jamais un fournisseur_id brut venu du
- * formulaire.
+ * formulaire, et quand une ligne change le taux de TVA d'un produit, le
+ * registre fiscal du magasin est le premier verrou de sa transaction,
+ * avant la facture d'achat (voir
+ * ConstructeurLigneAchat::verrouillerLeRegistreSiUnTauxChange()).
  */
 class ModifierFactureAchatAction
 {
@@ -51,6 +54,8 @@ class ModifierFactureAchatAction
         }
 
         return DB::transaction(function () use ($factureAchat, $fournisseur, $lignes, $attributs) {
+            $this->constructeurLignes->verrouillerLeRegistreSiUnTauxChange($lignes);
+
             // Verrouillée comme à sa validation (voir
             // ValiderFactureAchatAction) : une validation simultanée ne peut
             // ni être ignorée ni être appliquée deux fois.

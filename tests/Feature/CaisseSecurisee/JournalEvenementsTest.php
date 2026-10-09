@@ -23,6 +23,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Route;
 use LogicException;
@@ -73,6 +74,26 @@ class JournalEvenementsTest extends TestCase
     private function details(Magasin $magasin, CodeEvenement $code): array
     {
         return $this->dernier($magasin, $code)->contenuSigne()['donnees']['details'];
+    }
+
+    /**
+     * L'ancienne et la nouvelle valeur de chaque changement de paramètre
+     * (JET 270) du journal du magasin, dans l'ordre de sa chaîne.
+     *
+     * @return list<array{0: mixed, 1: mixed}>
+     */
+    private function changementsDeParametre(Magasin $magasin): array
+    {
+        return app(TenantContext::class)->runAs($magasin, fn (): array => EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', (string) CodeEvenement::ParametreDeConformite->value)
+            ->orderBy('sequence')
+            ->get()
+            ->map(fn (EnregistrementFiscal $evenement): array => [
+                $evenement->contenuSigne()['donnees']['details']['ancienne_valeur'],
+                $evenement->contenuSigne()['donnees']['details']['nouvelle_valeur'],
+            ])
+            ->all());
     }
 
     private function membre(Magasin $magasin, User $utilisateur): MagasinUser
@@ -382,6 +403,56 @@ class JournalEvenementsTest extends TestCase
         $this->retirerLaCleDeSignature();
 
         $this->assertThrows(fn () => $produit->update(['taux_tva' => 20]), ModuleFiscalNonConfigureException::class);
+
+        $this->assertSame('5.50', $produit->fresh()->taux_tva);
+        $this->assertSame([], $this->codes($magasin));
+    }
+
+    /**
+     * Deux enregistrements qui se chevauchent : la fiche chargée avant que
+     * l'autre ne change le taux en garde l'ancienne valeur en mémoire ; le
+     * journal inscrit celle que la modification remplace en base.
+     */
+    public function test_l_ancienne_valeur_inscrite_est_celle_que_la_modification_remplace_en_base(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $produit = Produit::factory()->create(['taux_tva' => 20]);
+        $chargeAvant = Produit::query()->findOrFail($produit->id);
+        $produit->update(['taux_tva' => 5.5]);
+
+        $chargeAvant->update(['taux_tva' => 10]);
+
+        $this->assertSame([['20.00', '5.50'], ['5.50', '10.00']], $this->changementsDeParametre($magasin));
+        $this->assertSame('10.00', $produit->fresh()->taux_tva);
+    }
+
+    public function test_remettre_la_valeur_deja_en_base_n_inscrit_rien(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $produit = Produit::factory()->create(['taux_tva' => 20]);
+        $chargeAvant = Produit::query()->findOrFail($produit->id);
+        $produit->update(['taux_tva' => 5.5]);
+
+        $chargeAvant->update(['taux_tva' => 5.5]);
+
+        $this->assertSame([['20.00', '5.50']], $this->changementsDeParametre($magasin));
+    }
+
+    /**
+     * Une vente verrouille le registre en premier : une transaction déjà
+     * commencée, qui a pu verrouiller autre chose, ne le verrouille pas
+     * après coup pour inscrire un changement de taux, qui est refusé.
+     */
+    public function test_un_taux_modifie_dans_une_transaction_qui_n_a_pas_d_abord_verrouille_le_registre_est_refuse(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $produit = Produit::factory()->create(['taux_tva' => 5.5]);
+
+        $this->assertThrows(
+            fn () => DB::transaction(fn () => $produit->update(['taux_tva' => 20])),
+            LogicException::class,
+            'Le registre fiscal se verrouille en tête de transaction, avant tout autre verrou',
+        );
 
         $this->assertSame('5.50', $produit->fresh()->taux_tva);
         $this->assertSame([], $this->codes($magasin));

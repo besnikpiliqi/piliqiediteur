@@ -32,6 +32,9 @@ use InvalidArgumentException;
  * Format : UTF-8 avec marque d'ordre des octets, séparateur
  * point-virgule, guillemets doublés (RFC 4180), pour s'ouvrir tel quel
  * dans un tableur français ; le contenu signé s'y relit octet pour octet.
+ * Les colonnes de lecture reprennent des valeurs venues de l'utilisateur
+ * (son nom, son navigateur) : aucune n'y est évaluée comme une formule
+ * (voir sansFormule()).
  */
 class ExporterJournalDesEvenementsAction
 {
@@ -126,7 +129,7 @@ class ExporterJournalDesEvenementsAction
         $donnees = $evenement->contenuSigne()['donnees'] ?? [];
         $details = $donnees['details'] ?? [];
 
-        return [
+        $lecture = [
             (string) $evenement->sequence,
             $evenement->horodatage->setTimezone(config('app.timezone'))->format('d/m/Y H:i:s'),
             (string) ($evenement->contenuSigne()['horodatage'] ?? ''),
@@ -137,6 +140,10 @@ class ExporterJournalDesEvenementsAction
             (string) ($donnees['ip'] ?? ''),
             (string) ($donnees['agent_utilisateur'] ?? ''),
             (string) $evenement->libelleDuDocument(),
+        ];
+
+        return [
+            ...array_map(self::sansFormule(...), $lecture),
             (string) $evenement->signature_precedente,
             $evenement->signature,
             $evenement->algorithme,
@@ -144,6 +151,20 @@ class ExporterJournalDesEvenementsAction
             $evenement->version_module,
             $evenement->contenu,
         ];
+    }
+
+    /**
+     * Une cellule qui commence par =, +, -, @, une tabulation ou un retour
+     * chariot serait évaluée comme une formule par un tableur (injection de
+     * formule, jusqu'à l'exfiltration du fichier) : elle est précédée d'une
+     * apostrophe, qui la fait lire comme du texte. Seules les colonnes de
+     * lecture passent par ici : celles de la vérification se relisent octet
+     * pour octet, et aucune ne commence ainsi (une signature DER encodée en
+     * base64url commence par « M », le contenu signé par « { »).
+     */
+    private static function sansFormule(string $valeur): string
+    {
+        return preg_match('/^[=+\-@\t\r]/', $valeur) === 1 ? "'{$valeur}" : $valeur;
     }
 
     /**

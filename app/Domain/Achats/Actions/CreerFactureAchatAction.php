@@ -11,7 +11,9 @@ use Illuminate\Support\Facades\DB;
  * Enregistre une facture d'achat en brouillon, sans aucun impact sur le
  * stock (voir ValiderFactureAchatAction). Ses lignes, et les produits
  * qu'elles créent ou corrigent, sont enregistrés par
- * ConstructeurLigneAchat.
+ * ConstructeurLigneAchat. Quand une ligne change le taux de TVA d'un
+ * produit, le registre fiscal du magasin est le premier verrou de la
+ * transaction (voir ConstructeurLigneAchat::verrouillerLeRegistreSiUnTauxChange()).
  */
 class CreerFactureAchatAction
 {
@@ -24,6 +26,8 @@ class CreerFactureAchatAction
     public function handle(Fournisseur $fournisseur, array $lignes, array $attributs = []): FactureAchat
     {
         return DB::transaction(function () use ($fournisseur, $lignes, $attributs) {
+            $this->constructeurLignes->verrouillerLeRegistreSiUnTauxChange($lignes);
+
             $factureAchat = FactureAchat::create([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]);
 
             $this->constructeurLignes->enregistrer($factureAchat, $lignes);

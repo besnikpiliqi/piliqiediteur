@@ -91,7 +91,7 @@ class Magasin extends Model implements HasName
         });
     }
 
-    protected function parametresDeConformite(): array
+    public static function parametresDeConformite(): array
     {
         return ['regime_tva', 'option_debits_tva'];
     }

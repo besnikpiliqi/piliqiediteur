@@ -139,13 +139,28 @@ class EnregistrementFiscal extends Model
     }
 
     /**
-     * Le document que référence le contenu signé (« facture n° 12 »), ou
-     * null.
+     * Le document que référence le contenu signé, ou null : une vente par
+     * sa nature et son numéro légal (« Ticket TK-2026-000001 ») ; un
+     * paiement, ou le document d'un événement technique (un produit), par
+     * son identifiant interne, nommé comme tel (« Produit (identifiant
+     * interne 12) ») pour ne jamais passer pour un numéro légal.
      */
     public function libelleDuDocument(): ?string
     {
-        $document = $this->contenuSigne()['document'] ?? null;
+        $contenu = $this->contenuSigne();
+        $document = $contenu['document'] ?? null;
 
-        return is_array($document) ? "{$document['type']} n° {$document['id']}" : null;
+        if (! is_array($document)) {
+            return null;
+        }
+
+        $nature = $this->chaine === ChaineFiscale::Evenement
+            ? Str::ucfirst(str_replace('_', ' ', $document['type']))
+            : $this->libelleDuType();
+        $numeroLegal = $this->chaine === ChaineFiscale::Vente ? ($contenu['donnees']['document']['numero'] ?? null) : null;
+
+        return $numeroLegal === null
+            ? "{$nature} (identifiant interne {$document['id']})"
+            : "{$nature} {$numeroLegal}";
     }
 }

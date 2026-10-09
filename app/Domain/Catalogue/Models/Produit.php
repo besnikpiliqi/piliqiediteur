@@ -100,7 +100,7 @@ class Produit extends Model
         return $this->belongsTo(Fournisseur::class);
     }
 
-    protected function parametresDeConformite(): array
+    public static function parametresDeConformite(): array
     {
         return ['taux_tva'];
     }

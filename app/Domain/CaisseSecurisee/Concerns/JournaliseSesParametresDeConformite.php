@@ -7,7 +7,7 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Services\TenantContext;
 use BackedEnum;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use LogicException;
 
 /**
@@ -19,31 +19,70 @@ use LogicException;
  * transaction que la modification : l'une ne s'enregistre jamais sans
  * l'autre.
  *
- * save() ouvre lui-même cette transaction quand un paramètre change, et le
- * registre du magasin se verrouille avant que la fiche ne s'écrive, dans
- * l'ordre des verrous de RegistreFiscal. Fermé par défaut : si le registre
- * ne peut pas inscrire l'événement, la modification est refusée avec lui.
+ * Quand un paramètre change, save() s'exécute sous le verrou du registre
+ * du magasin, premier verrou de sa transaction (voir
+ * RegistreFiscal::sousVerrou()) : appelé hors transaction, il ouvre la
+ * sienne et verrouille le registre avant toute écriture ; appelé dans la
+ * transaction d'une action, celle-ci doit avoir verrouillé le registre dès
+ * son début (voir ConstructeurLigneAchat), sans quoi la modification est
+ * refusée. L'ancienne valeur inscrite est celle de la fiche en base, relue
+ * sous ce verrou : celle que la modification remplace réellement, même si
+ * la fiche en mémoire a été chargée avant qu'une autre modification ne
+ * l'emporte ; une valeur déjà en base n'est pas un changement. Fermé par
+ * défaut : si le registre ne peut pas inscrire l'événement, la
+ * modification est refusée avec lui.
  *
- * Seules les écritures qui passent par le modèle sont journalisées : un
- * update() en masse, DB::table() ou une requête brute ne déclenchent aucun
- * événement Eloquent, et aucun code ne modifie ces paramètres ainsi.
+ * Seules les écritures qui passent par save() sont journalisées : un
+ * update() en masse, DB::table() ou une requête brute n'y passent pas, et
+ * aucun code ne modifie ces paramètres ainsi.
  */
 trait JournaliseSesParametresDeConformite
 {
-    public static function bootJournaliseSesParametresDeConformite(): void
-    {
-        static::updating(static function (Model $fiche): void {
-            $fiche->journaliserSesParametresModifies();
-        });
-    }
-
     public function save(array $options = []): bool
     {
-        if (! $this->exists || ! $this->isDirty($this->parametresDeConformite())) {
+        $parametresModifies = array_values(array_filter(
+            static::parametresDeConformite(),
+            fn (string $parametre): bool => $this->isDirty($parametre),
+        ));
+
+        if (! $this->exists || $parametresModifies === []) {
             return parent::save($options);
         }
 
-        return DB::transaction(fn (): bool => parent::save($options));
+        $magasinActif = app(TenantContext::class)->magasin();
+
+        if ($this->magasinIdDesParametres() !== $magasinActif->getKey()) {
+            throw new LogicException('Un paramètre ayant un impact sur la conformité ne se modifie que dans son propre magasin, dont le journal des événements note la modification.');
+        }
+
+        return app(RegistreFiscal::class)->sousVerrou($magasinActif, function () use ($options, $parametresModifies): bool {
+            $enBase = $this->newQueryWithoutScope(SoftDeletingScope::class)
+                ->whereKey($this->getKey())
+                ->lockForUpdate()
+                ->firstOrFail($parametresModifies);
+
+            if (! parent::save($options)) {
+                return false;
+            }
+
+            foreach ($parametresModifies as $parametre) {
+                $ancienneValeur = self::valeurDansLeJournal($enBase->getAttribute($parametre));
+                $nouvelleValeur = self::valeurDansLeJournal($this->getAttribute($parametre));
+
+                if ($ancienneValeur === $nouvelleValeur) {
+                    continue;
+                }
+
+                app(RegistreFiscal::class)->journaliser(CodeEvenement::ParametreDeConformite, [
+                    'parametre' => $parametre,
+                    ...$this->identiteDansLeJournal(),
+                    'ancienne_valeur' => $ancienneValeur,
+                    'nouvelle_valeur' => $nouvelleValeur,
+                ], $this->documentDuJournal());
+            }
+
+            return true;
+        });
     }
 
     /**
@@ -52,7 +91,7 @@ trait JournaliseSesParametresDeConformite
      *
      * @return list<string>
      */
-    abstract protected function parametresDeConformite(): array;
+    abstract public static function parametresDeConformite(): array;
 
     /**
      * Le magasin dont ces paramètres règlent la conformité : il doit être
@@ -79,31 +118,6 @@ trait JournaliseSesParametresDeConformite
     protected function documentDuJournal(): ?Model
     {
         return null;
-    }
-
-    private function journaliserSesParametresModifies(): void
-    {
-        $parametresModifies = array_values(array_filter(
-            $this->parametresDeConformite(),
-            fn (string $parametre): bool => $this->isDirty($parametre),
-        ));
-
-        if ($parametresModifies === []) {
-            return;
-        }
-
-        if ($this->magasinIdDesParametres() !== app(TenantContext::class)->id()) {
-            throw new LogicException('Un paramètre ayant un impact sur la conformité ne se modifie que dans son propre magasin, dont le journal des événements note la modification.');
-        }
-
-        foreach ($parametresModifies as $parametre) {
-            app(RegistreFiscal::class)->journaliser(CodeEvenement::ParametreDeConformite, [
-                'parametre' => $parametre,
-                ...$this->identiteDansLeJournal(),
-                'ancienne_valeur' => self::valeurDansLeJournal($this->getOriginal($parametre)),
-                'nouvelle_valeur' => self::valeurDansLeJournal($this->getAttribute($parametre)),
-            ], $this->documentDuJournal());
-        }
     }
 
     /**

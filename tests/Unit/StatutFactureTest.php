@@ -28,6 +28,21 @@ class StatutFactureTest extends TestCase
         $this->assertSame([], StatutFacture::Annulee->transitionsAutorisees());
     }
 
+    public function test_une_facture_ni_payee_ni_annulee_peut_encore_changer_de_statut(): void
+    {
+        $statutsNonDefinitifs = array_filter(
+            StatutFacture::cases(),
+            fn (StatutFacture $statut): bool => ! in_array($statut, [StatutFacture::Payee, StatutFacture::Annulee], true),
+        );
+
+        $culsDeSac = array_filter(
+            $statutsNonDefinitifs,
+            fn (StatutFacture $statut): bool => $statut->transitionsAutorisees() === [],
+        );
+
+        $this->assertSame([], array_values($culsDeSac));
+    }
+
     public function test_un_brouillon_ne_peut_pas_devenir_paye_directement(): void
     {
         $this->assertFalse(StatutFacture::Brouillon->peutTransitionnerVers(StatutFacture::Payee));

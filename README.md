@@ -5,7 +5,8 @@ Logiciel de gestion vendu en SaaS à des magasins. Chaque magasin travaille dans
 Il couvre :
 
 - les clients, les fournisseurs, les produits et les services du magasin ;
-- les devis, les factures, les avoirs et les paiements, numérotés sans doublon et imprimables en PDF ;
+- les devis, les factures et les avoirs, numérotés sans doublon et imprimables en PDF ;
+- les paiements des clients et leur répartition sur les factures ;
 - la caisse, la fermeture de caisse de chaque vendeur et la clôture de la journée ;
 - les factures d'achat, les avoirs fournisseur, le stock et son coût moyen pondéré ;
 - l'envoi des documents par e-mail et les relances des factures impayées ;

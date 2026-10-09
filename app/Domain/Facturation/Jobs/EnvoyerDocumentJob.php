@@ -2,7 +2,6 @@
 
 namespace App\Domain\Facturation\Jobs;
 
-use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Mail\DocumentMail;
@@ -19,7 +18,6 @@ use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -38,9 +36,11 @@ use Throwable;
  * base, et un serveur d'envoi lent ou indisponible ne retarde jamais le
  * geste du magasin.
  *
- * Le document est relu au moment de partir : annulé entre-temps, il ne
- * part pas ; une relance ne part que si la facture est toujours échue et
- * impayée, et son rappel dit ce qu'il reste à payer à cet instant.
+ * Le document est relu au moment de partir : une relance ne part que si
+ * la facture est toujours échue et impayée, et son rappel dit ce qu'il
+ * reste à payer à cet instant. Un document émis le reste pour toujours
+ * (une correction est un avoir à part) : un envoi ne perd jamais son
+ * objet.
  *
  * Idempotent : un envoi déjà envoyé ne repart jamais, même si le job est
  * rejoué. ShouldBeUnique : jamais deux exécutions du même envoi en
@@ -82,13 +82,13 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 
         $document = $envoi->document ?? throw new ModelNotFoundException("Le document de l'envoi [{$envoi->id}] n'existe plus.");
 
-        if (($sansObjet = $this->raisonDeNePasPartir($envoi, $document)) !== null) {
-            $this->echouer($envoi, $sansObjet);
-
-            return;
-        }
-
         if ($document instanceof Facture && $envoi->nature === NatureEnvoi::Relance) {
+            if (! $document->estEchueEtImpayee()) {
+                $this->echouer($envoi, 'La facture a été réglée ou soldée par un avoir entre-temps : la relance n\'est pas partie.');
+
+                return;
+            }
+
             $envoi->forceFill(['message' => $document->messageDeRelance()])->save();
         }
 
@@ -141,18 +141,6 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             $exception instanceof ModelNotFoundException => 'Le document n\'existe plus.',
             default => "Une erreur inattendue a empêché l'envoi : {$this->consigne($envoi)}, et contactez le support si elle se répète.",
         });
-    }
-
-    /**
-     * Ce qui, depuis la programmation de l'envoi, l'a rendu sans objet.
-     */
-    private function raisonDeNePasPartir(EnvoiDocument $envoi, Model&DocumentEnvoyable $document): ?string
-    {
-        return match (true) {
-            ! $document->peutEtreEnvoye() => "Le document est passé au statut « {$document->statut->getLabel()} » entre-temps : l'e-mail n'est pas parti.",
-            $document instanceof Facture && $envoi->nature === NatureEnvoi::Relance && ! $document->estEchueEtImpayee() => 'La facture a été réglée ou soldée par un avoir entre-temps : la relance n\'est pas partie.',
-            default => null,
-        };
     }
 
     /**

@@ -3,7 +3,6 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Filament\App\Resources\AvoirResource\Pages;
@@ -32,8 +31,9 @@ use Illuminate\Database\Eloquent\Builder;
  * FactureResource (pour le cas simple d'une seule facture, pré-rempli
  * depuis celle-ci), ou depuis cette Resource (pour regrouper des lignes de
  * plusieurs factures différentes d'un même client, voir le docblock de
- * CreerAvoirAction). Jamais de page edit : un avoir émis ne se modifie ni
- * ne se supprime jamais (voir AvoirPolicy).
+ * CreerAvoirAction). Les deux créent et émettent l'avoir d'un seul geste
+ * (voir EnregistrerAvoirAction). Jamais de page edit : un avoir émis ne se
+ * modifie ni ne se supprime jamais (voir AvoirPolicy).
  */
 class AvoirResource extends Resource
 {
@@ -158,9 +158,7 @@ class AvoirResource extends Resource
     private static function lignesCreditablesPourClient(int $clientId): array
     {
         return LigneFacture::query()
-            ->whereHas('facture', fn (Builder $query) => $query
-                ->where('client_id', $clientId)
-                ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee]))
+            ->whereHas('facture', fn (Builder $query) => $query->emises()->where('client_id', $clientId))
             ->with('facture')
             ->get()
             ->map(fn (LigneFacture $ligne) => [

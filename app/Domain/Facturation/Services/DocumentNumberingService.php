@@ -62,7 +62,7 @@ class DocumentNumberingService
 
         try {
             SequenceDocument::query()->createOrFirst($critere, [
-                'prefixe' => $this->prefixeParDefaut($type, $periodKey),
+                'prefixe' => $this->prefixe($type, $periodKey),
                 'prochain_numero' => 1,
                 'rembourrage' => 6,
             ]);
@@ -77,20 +77,8 @@ class DocumentNumberingService
         return SequenceDocument::query()->where($critere)->lockForUpdate()->firstOrFail();
     }
 
-    private function prefixeParDefaut(TypeDocument $type, string $periodKey): string
+    private function prefixe(TypeDocument $type, string $periodKey): string
     {
-        $code = match ($type) {
-            TypeDocument::Devis => 'DEV',
-            TypeDocument::Facture => 'FAC',
-            TypeDocument::TicketCaisse => 'TK',
-            TypeDocument::Avoir => 'AV',
-            TypeDocument::FactureAchat => 'FA',
-            TypeDocument::AvoirFournisseur => 'AF',
-            TypeDocument::ClotureCaisse => 'Z',
-            TypeDocument::SoumissionEReporting => 'ER',
-            TypeDocument::Produit => 'PRD',
-        };
-
-        return $periodKey !== '' ? "{$code}-{$periodKey}-" : "{$code}-";
+        return $periodKey !== '' ? "{$type->code()}-{$periodKey}-" : "{$type->code()}-";
     }
 }

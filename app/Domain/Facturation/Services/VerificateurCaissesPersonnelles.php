@@ -43,10 +43,9 @@ class VerificateurCaissesPersonnelles
     }
 
     /**
-     * Même règle que FermerSaCaisseAction : une vente annulée ne compte
-     * pas (elle ne désactive donc jamais la clôture manuelle), et une vente
-     * émise après une fermeture reste ouverte tant qu'une fermeture ne l'a
-     * pas comptée.
+     * Même règle que FermerSaCaisseAction : toute vente émise compte, même
+     * corrigée depuis par un avoir, et une vente émise après une fermeture
+     * reste ouverte tant qu'une fermeture ne l'a pas comptée.
      */
     private function aUneVenteNonFermee(User $vendeur, CarbonInterface $date): bool
     {

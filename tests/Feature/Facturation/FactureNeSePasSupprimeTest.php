@@ -4,9 +4,9 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Models\User;
@@ -16,8 +16,8 @@ use Tests\TestCase;
 /**
  * Exigence légale explicite : une facture ÉMISE (numérotée) ne doit
  * jamais pouvoir être supprimée, quel que soit le rôle de l'utilisateur
- * (y compris le propriétaire). Toute correction passe par une annulation
- * (statut) ou un avoir -- jamais par une suppression.
+ * (y compris le propriétaire). Toute correction passe par un avoir --
+ * jamais par une suppression.
  *
  * Un brouillon, lui, n'a reçu aucun numéro légal (voir
  * EmettreFactureAction) : il n'a aucune existence fiscale et peut donc
@@ -45,7 +45,7 @@ class FactureNeSePasSupprimeTest extends TestCase
         $this->assertFalse($proprietaire->can('forceDelete', $facture));
     }
 
-    public function test_une_facture_annulee_reste_definitivement_non_supprimable(): void
+    public function test_une_facture_corrigee_par_un_avoir_total_reste_definitivement_non_supprimable(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
@@ -56,11 +56,14 @@ class FactureNeSePasSupprimeTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
         $facture = app(EmettreFactureAction::class)->handle($facture);
-        $facture = app(AnnulerFactureAction::class)->handle($facture, 'Erreur de saisie');
+        app(EnregistrerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
+        ], 'Erreur de saisie');
 
         $this->actingAs($proprietaire);
 
-        $this->assertFalse($proprietaire->can('delete', $facture));
+        $this->assertFalse($proprietaire->can('delete', $facture->fresh()));
+        $this->assertFalse($proprietaire->can('update', $facture->fresh()));
     }
 
     public function test_le_modele_facture_ne_possede_aucune_capacite_de_suppression_douce(): void

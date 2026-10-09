@@ -23,7 +23,8 @@ interface DocumentEnvoyable
 
     /**
      * Seul un document qui existe légalement pour son client part par
-     * e-mail : jamais une facture brouillon ou annulée, par exemple.
+     * e-mail : jamais une facture ou un avoir encore brouillon, par
+     * exemple.
      */
     public function peutEtreEnvoye(): bool;
 }

@@ -109,12 +109,7 @@ class PaiementResource extends Resource
 
                                     return Facture::query()
                                         ->where('client_id', $clientId)
-                                        ->whereIn('statut', [
-                                            StatutFacture::Emise,
-                                            StatutFacture::Envoyee,
-                                            StatutFacture::PartiellementPayee,
-                                            StatutFacture::EnRetard,
-                                        ])
+                                        ->whereIn('statut', StatutFacture::quiAttendentUnReglement())
                                         ->get()
                                         ->filter(fn (Facture $facture) => $facture->montantRestant() > 0)
                                         ->mapWithKeys(fn (Facture $facture) => [

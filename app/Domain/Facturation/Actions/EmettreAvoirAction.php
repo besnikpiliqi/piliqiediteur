@@ -3,7 +3,6 @@
 namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Facturation\Enums\StatutAvoir;
-use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Models\Avoir;
@@ -55,10 +54,10 @@ class EmettreAvoirAction
     /**
      * Un brouillon n'a encore aucune existence légale : entre sa création
      * et son émission, un autre avoir a pu créditer les mêmes lignes (deux
-     * retours saisis en même temps) ou la facture a pu être annulée. Ses
-     * quantités sont donc revérifiées et ses montants arrêtés au moment où
-     * il devient un document fiscal -- le dernier retour d'une ligne en
-     * prend alors le solde exact (voir LigneFacture::montantsDuRetour()).
+     * retours saisis en même temps). Ses quantités sont donc revérifiées et
+     * ses montants arrêtés au moment où il devient un document fiscal -- le
+     * dernier retour d'une ligne en prend alors le solde exact (voir
+     * LigneFacture::montantsDuRetour()).
      *
      * @throws LogicException
      */
@@ -68,14 +67,9 @@ class EmettreAvoirAction
 
         foreach ($avoir->lignes as $ligneAvoir) {
             $ligneFacture = LigneFacture::query()
-                ->with('facture')
                 ->whereKey($ligneAvoir->ligne_facture_id)
                 ->lockForUpdate()
                 ->firstOrFail();
-
-            if ($ligneFacture->facture->statut === StatutFacture::Annulee) {
-                throw new LogicException("Impossible d'émettre cet avoir : la facture {$ligneFacture->facture->numero} a été annulée.");
-            }
 
             $restante = $ligneFacture->quantiteCreditableRestante();
 

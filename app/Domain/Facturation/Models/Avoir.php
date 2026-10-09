@@ -39,7 +39,8 @@ class Avoir extends Model implements DocumentEnvoyable
     protected $table = 'avoirs';
 
     // numero, statut, date_emission, totaux : jamais en mass assignment,
-    // uniquement via CreerAvoirAction/EmettreAvoirAction.
+    // uniquement via EnregistrerAvoirAction (CreerAvoirAction puis
+    // EmettreAvoirAction).
     protected $fillable = [
         'client_id',
         'motif',

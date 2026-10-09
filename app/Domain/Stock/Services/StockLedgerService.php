@@ -128,7 +128,7 @@ class StockLedgerService
     }
 
     /**
-     * Retour client d'articles vendus (avoir, annulation) : n'entre en
+     * Retour client d'articles vendus, par un avoir : n'entre en
      * stock que ce que la vente en a fait sortir et qui n'y est pas encore
      * revenu ($quantiteEncoreSortie, lue sous le verrou du produit pour que
      * deux retours simultanés ne rendent pas deux fois les mêmes articles).

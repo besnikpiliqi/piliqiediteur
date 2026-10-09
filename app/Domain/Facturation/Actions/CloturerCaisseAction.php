@@ -17,9 +17,9 @@ use LogicException;
 /**
  * Agrège en un seul document fiscal toutes les ventes à des clients
  * PARTICULIERS d'une journée donnée, moins les avoirs qui leur ont été
- * émis ce jour-là : la TVA d'une vente annulée se corrige le jour de
- * l'annulation (art. 272 du CGI), et en caisse une correction est
- * toujours une opération en négatif, jamais une modification. Les ventes
+ * émis ce jour-là : la TVA d'une vente corrigée se régularise le jour de
+ * l'avoir (art. 272 du CGI), et en caisse une correction est toujours une
+ * opération en négatif, jamais une modification ni une suppression. Les ventes
  * et avoirs à des professionnels n'y figurent jamais, ils relèvent de
  * l'e-invoicing individuelle (voir Facture::relevantDeLeInvoicing). Une
  * journée ne peut être clôturée qu'une seule fois (contrainte unique

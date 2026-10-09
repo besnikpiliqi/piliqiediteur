@@ -4,12 +4,12 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -226,20 +226,25 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->assertSame(StatutEnvoi::Envoye, $relance->fresh()->statut);
     }
 
-    public function test_une_facture_annulee_entre_temps_ne_part_pas(): void
+    /**
+     * La facture a été corrigée par un avoir entre la programmation de son
+     * envoi et son départ : elle reste le document émis de son client, et
+     * part quand même.
+     */
+    public function test_une_facture_corrigee_par_un_avoir_entre_temps_part_quand_meme(): void
     {
         Mail::fake();
         $magasin = $this->magasin();
         $facture = $this->emettreFacture(Client::factory()->create());
         Queue::fake([EnvoyerDocumentJob::class]);
         $envoi = app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, null);
-        app(AnnulerFactureAction::class)->handle($facture->fresh(), 'Erreur de client');
+        app(EnregistrerAvoirAction::class)->handle($facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]], 'Erreur de client');
 
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
 
-        Mail::assertNothingSent();
-        $envoi->refresh();
-        $this->assertSame([StatutEnvoi::Echec, 'Le document est passé au statut « Annulée » entre-temps : l\'e-mail n\'est pas parti.'], [$envoi->statut, $envoi->erreur]);
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('client@exemple.fr')
+            && $mail->attachments()[0]->as === "ticket-{$facture->numero}.pdf");
+        $this->assertSame(StatutEnvoi::Envoye, $envoi->fresh()->statut);
     }
 
     /**

@@ -4,9 +4,9 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
@@ -181,17 +181,27 @@ class FermerSaCaisseActionTest extends TestCase
         $this->assertSame(0, $troisieme->nombre_ventes, 'Une vente déjà comptée ne doit jamais l\'être une seconde fois.');
     }
 
-    public function test_une_vente_annulee_avant_la_fermeture_nest_pas_comptee(): void
+    /**
+     * Une vente corrigée par un avoir avant la fermeture reste une vente
+     * émise du vendeur : le relevé la compte. L'avoir, document à part, ne
+     * rend aucun argent (il reste un crédit du client) et n'entre pas dans
+     * le relevé.
+     */
+    public function test_une_vente_corrigee_par_un_avoir_avant_la_fermeture_reste_comptee(): void
     {
         $vendeur = User::factory()->create();
         $client = Client::factory()->create();
         $this->emettreFacturePour($vendeur, $client, 100);
-        app(AnnulerFactureAction::class)->handle(Facture::query()->firstOrFail(), 'Erreur de saisie');
+        $venteCorrigee = Facture::query()->firstOrFail();
+        app(EnregistrerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $venteCorrigee->lignes->firstOrFail()->id, 'quantite' => 1],
+        ], 'Erreur de saisie');
         $this->emettreFacturePour($vendeur, $client, 50);
 
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur);
 
-        $this->assertSame(1, $cloture->nombre_ventes);
-        $this->assertSame('60.00', $cloture->total_ttc);
+        $this->assertSame(2, $cloture->nombre_ventes);
+        $this->assertSame('180.00', $cloture->total_ttc);
+        $this->assertContains($venteCorrigee->id, $cloture->factures()->pluck('factures.id')->all());
     }
 }

@@ -3,8 +3,7 @@
 namespace App\Filament\App\Resources\AvoirResource\Pages;
 
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\CreerAvoirAction;
-use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -12,9 +11,9 @@ use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Émet immédiatement l'avoir dès sa création, comme l'action rapide de
- * FactureResource : pas d'étape brouillon intermédiaire exposée dans
- * l'UI pour ce formulaire.
+ * Crée et émet l'avoir d'un seul geste, comme l'action rapide de
+ * FactureResource (voir EnregistrerAvoirAction) : aucun brouillon d'avoir
+ * n'existe jamais dans l'interface, pas même après un refus.
  */
 class CreateAvoir extends CreateRecord
 {
@@ -24,12 +23,10 @@ class CreateAvoir extends CreateRecord
 
     protected function handleRecordCreation(array $data): Model
     {
-        return static::executerOuInterrompre(function () use ($data) {
-            $client = Client::query()->findOrFail($data['client_id']);
-
-            $avoir = app(CreerAvoirAction::class)->handle($client, $data['lignes'], $data['motif']);
-
-            return app(EmettreAvoirAction::class)->handle($avoir);
-        });
+        return static::executerOuInterrompre(fn () => app(EnregistrerAvoirAction::class)->handle(
+            Client::query()->findOrFail($data['client_id']),
+            $data['lignes'],
+            $data['motif'],
+        ));
     }
 }

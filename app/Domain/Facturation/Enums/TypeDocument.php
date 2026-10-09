@@ -28,4 +28,24 @@ enum TypeDocument: string
     case ClotureCaisse = 'cloture_caisse';
     case SoumissionEReporting = 'soumission_ereporting';
     case Produit = 'produit';
+
+    /**
+     * Le code par lequel commence chaque numéro de la série (voir
+     * DocumentNumberingService) : il dit pour toujours dans quelle série
+     * un document a été numéroté (voir Facture::serie()).
+     */
+    public function code(): string
+    {
+        return match ($this) {
+            self::Devis => 'DEV',
+            self::Facture => 'FAC',
+            self::TicketCaisse => 'TK',
+            self::Avoir => 'AV',
+            self::FactureAchat => 'FA',
+            self::AvoirFournisseur => 'AF',
+            self::ClotureCaisse => 'Z',
+            self::SoumissionEReporting => 'ER',
+            self::Produit => 'PRD',
+        };
+    }
 }

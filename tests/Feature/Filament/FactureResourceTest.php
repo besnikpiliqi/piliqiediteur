@@ -753,7 +753,12 @@ class FactureResourceTest extends TestCase
         $this->assertSame(8, $produit->fresh()->stock_quantite);
     }
 
-    public function test_annuler_une_facture_emise_depuis_le_panneau_restaure_le_stock(): void
+    /**
+     * Même le propriétaire, qui a toutes les permissions, n'a aucune action
+     * pour annuler une facture émise : il la corrige par un avoir, qui rend
+     * le stock, et la facture reste émise avec son numéro.
+     */
+    public function test_une_facture_emise_ne_s_annule_pas_depuis_le_panneau_elle_se_corrige_par_un_avoir(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
@@ -774,12 +779,16 @@ class FactureResourceTest extends TestCase
 
         $facture = Facture::query()->firstOrFail();
         Livewire::test(ListFactures::class)->callTableAction('emettre', $facture);
+        $numero = $facture->fresh()->numero;
         $this->assertSame(7, $produit->fresh()->stock_quantite);
 
-        Livewire::test(ListFactures::class)->callTableAction('annuler', $facture->fresh(), data: ['motif' => 'Erreur de saisie']);
+        Livewire::test(ListFactures::class)
+            ->assertTableActionDoesNotExist('annuler')
+            ->assertTableActionVisible('avoir', $facture->fresh())
+            ->callTableAction('avoir', $facture->fresh(), data: ['motif' => 'Erreur de saisie']);
 
         $facture->refresh();
-        $this->assertSame(StatutFacture::Annulee, $facture->statut);
+        $this->assertSame([StatutFacture::Payee, $numero], [$facture->statut, $facture->numero]);
         $this->assertSame(10, $produit->fresh()->stock_quantite);
     }
 

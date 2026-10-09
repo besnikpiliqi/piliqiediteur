@@ -7,6 +7,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
@@ -21,7 +22,9 @@ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use LogicException;
 use Tests\TestCase;
 
 class AvoirResourceTest extends TestCase
@@ -181,6 +184,51 @@ class AvoirResourceTest extends TestCase
             ->assertFileDownloaded("avoir-{$avoir->numero}.pdf");
 
         $this->assertStringStartsWith('%PDF', base64_decode($telechargement->effects['download']['content']));
+    }
+
+    /**
+     * Création et émission ne font qu'un (voir EnregistrerAvoirAction) :
+     * un refus pendant l'émission, simulé ici après la création de
+     * l'avoir, ne laisse aucun brouillon d'avoir, et le magasin voit
+     * pourquoi.
+     */
+    public function test_un_refus_a_l_emission_depuis_le_formulaire_ne_laisse_aucun_brouillon_d_avoir(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $ligneFacture = $this->emettreFactureDepuisLePanneau($client)->lignes->firstOrFail();
+        Event::listen(AvoirEmis::class, fn () => throw new LogicException('Émission impossible.'));
+
+        Livewire::test(CreateAvoir::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]],
+                'motif' => 'Retour client',
+            ])
+            ->call('create')
+            ->assertNotified('Émission impossible.');
+
+        $this->assertSame(0, Avoir::query()->count());
+    }
+
+    public function test_un_refus_a_l_emission_depuis_la_liste_des_factures_ne_laisse_aucun_brouillon_d_avoir(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $facture = $this->emettreFactureDepuisLePanneau(Client::factory()->create());
+        Event::listen(AvoirEmis::class, fn () => throw new LogicException('Émission impossible.'));
+
+        Livewire::test(ListFactures::class)
+            ->callTableAction('avoir', $facture, data: ['motif' => 'Retour client'])
+            ->assertNotified('Émission impossible.');
+
+        $this->assertSame(0, Avoir::query()->count());
+        $this->assertSame(7, $facture->lignes->firstOrFail()->produit->fresh()->stock_quantite);
     }
 
     /**

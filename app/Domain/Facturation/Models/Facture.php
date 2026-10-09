@@ -12,6 +12,7 @@ use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -30,11 +31,11 @@ use Illuminate\Support\Carbon;
 use LogicException;
 
 /**
- * PAS de SoftDeletes ici, volontairement : une facture numérotée (émise ou
- * annulée) ne se supprime jamais, même "doucement" -- la loi impose sa
- * conservation, et une correction passe par un avoir. Un brouillon, sans
- * numéro ni existence légale, peut en revanche être supprimé
- * définitivement (voir FacturePolicy::delete()).
+ * PAS de SoftDeletes ici, volontairement : une facture numérotée ne se
+ * supprime jamais, même "doucement" -- la loi impose sa conservation, et
+ * une correction passe par un avoir (voir EnregistrerAvoirAction). Un
+ * brouillon, sans numéro ni existence légale, peut en revanche être
+ * supprimé définitivement (voir FacturePolicy::delete()).
  */
 class Facture extends Model implements DocumentEnvoyable
 {
@@ -101,31 +102,43 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
+     * Les factures émises, quel que soit leur statut commercial depuis
+     * (envoyée, payée, en retard...) : tout sauf les brouillons, qui n'ont
+     * encore ni numéro ni existence légale. Une facture émise le reste
+     * pour toujours, même corrigée par un avoir.
+     */
+    public function scopeEmises(Builder $query): Builder
+    {
+        return $query->where('statut', '!=', StatutFacture::Brouillon);
+    }
+
+    /**
      * Les ventes d'un vendeur pas encore comptées dans une fermeture de sa
-     * caisse : émises (ni brouillon, ni annulée) et jamais notées par une
-     * fermeture précédente -- quel que soit le moment où le brouillon a été
-     * créé, et donc son ID.
+     * caisse : émises et jamais notées par une fermeture précédente --
+     * quel que soit le moment où le brouillon a été créé, et donc son ID.
      */
     public function scopeNonFermeesParLeVendeur(Builder $query, int $vendeurId): Builder
     {
         return $query
+            ->emises()
             ->where('cree_par', $vendeurId)
-            ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee])
             ->whereDoesntHave('cloturesCaissePersonnelles');
     }
 
     /**
      * Les ventes à des particuliers émises tel jour qu'aucune clôture n'a
-     * encore comptées (voir CloturerCaisseAction) -- jamais un brouillon ni
-     * une facture annulée, jamais une vente à un professionnel, qui relève
-     * de la facture électronique (voir relevantDeLeInvoicing()).
+     * encore comptées (voir CloturerCaisseAction) -- jamais un brouillon,
+     * jamais une vente à un professionnel, qui relève de la facture
+     * électronique (voir relevantDeLeInvoicing()). Une vente corrigée
+     * depuis par un avoir y figure : l'avoir se déduit à part, le jour de
+     * son émission.
      */
     public function scopeEnAttenteDeCloture(Builder $query, CarbonInterface|string $jour): Builder
     {
         return $query
+            ->emises()
             ->whereHas('client', fn (Builder $client) => $client->where('type_client', TypeClient::Particulier))
             ->whereDate('date_emission', $jour)
-            ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee])
             ->whereNull('cloture_caisse_id');
     }
 
@@ -178,10 +191,9 @@ class Facture extends Model implements DocumentEnvoyable
     /**
      * Ce que cette facture a fait sortir du stock pour ce produit à son
      * émission (voir DecrementerStockApresEmissionFacture) et qui n'y est
-     * pas encore revenu, par son annulation ou par un avoir sur l'une de
-     * ses lignes (voir RestaurerStockApresEmissionAvoir) : jamais plus ne
-     * peut y revenir. Un article vendu sans suivi du stock n'en est jamais
-     * sorti.
+     * pas encore revenu par un avoir sur l'une de ses lignes (voir
+     * RestaurerStockApresEmissionAvoir) : jamais plus ne peut y revenir. Un
+     * article vendu sans suivi du stock n'en est jamais sorti.
      */
     public function quantiteSortieDuStock(Produit $produit): int
     {
@@ -252,7 +264,7 @@ class Facture extends Model implements DocumentEnvoyable
     /**
      * Une facture se relance (voir EnvoyerDocumentAction::relancer()) une
      * fois son échéance passée, tant qu'il reste quelque chose à régler --
-     * jamais une facture payée, annulée ou soldée par un avoir.
+     * jamais une facture payée ou soldée par un avoir.
      */
     public function estEchueEtImpayee(): bool
     {
@@ -325,11 +337,29 @@ class Facture extends Model implements DocumentEnvoyable
 
     /**
      * Seule une facture émise existe pour son client : un brouillon n'a
-     * pas encore de numéro, une facture annulée ne vaut plus rien.
+     * pas encore de numéro. Une fois émise, elle le reste pour toujours,
+     * même corrigée par un avoir.
      */
     public function peutEtreEnvoye(): bool
     {
-        return ! in_array($this->statut, [StatutFacture::Brouillon, StatutFacture::Annulee], true);
+        return $this->statut !== StatutFacture::Brouillon;
+    }
+
+    /**
+     * La série dans laquelle la facture a été numérotée à son émission :
+     * tickets de caisse ou factures (voir EmettreFactureAction), chacune
+     * avec son propre circuit fiscal (clôture de caisse et e-reporting,
+     * ou facture électronique). Son numéro la porte pour toujours, même si
+     * le type du client change depuis. Un brouillon n'a encore aucune
+     * série.
+     */
+    public function serie(): ?TypeDocument
+    {
+        return match (true) {
+            $this->numero === null => null,
+            str_starts_with($this->numero, TypeDocument::TicketCaisse->code().'-') => TypeDocument::TicketCaisse,
+            default => TypeDocument::Facture,
+        };
     }
 
     /**

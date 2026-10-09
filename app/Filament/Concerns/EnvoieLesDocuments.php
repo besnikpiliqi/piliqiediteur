@@ -36,8 +36,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 trait EnvoieLesDocuments
 {
     /**
-     * Dès que le document a son numéro, même annulé : un brouillon n'a
-     * encore aucune existence pour le client.
+     * Dès que le document a son numéro : un brouillon n'a encore aucune
+     * existence pour le client.
      *
      * @template TAction of MountableAction
      *

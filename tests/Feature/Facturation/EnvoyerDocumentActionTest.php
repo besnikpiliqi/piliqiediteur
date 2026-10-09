@@ -5,12 +5,12 @@ namespace Tests\Feature\Facturation;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
-use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -108,19 +108,23 @@ class EnvoyerDocumentActionTest extends TestCase
         Queue::assertNotPushed(EnvoyerDocumentJob::class);
     }
 
-    public function test_une_facture_annulee_ne_part_plus(): void
+    /**
+     * Corrigée par un avoir total, la facture reste le document émis de son
+     * client : elle part toujours, et garde son statut (soldée par l'avoir,
+     * elle est payée).
+     */
+    public function test_une_facture_corrigee_par_un_avoir_total_part_toujours(): void
     {
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin();
-        $facture = app(AnnulerFactureAction::class)->handle($this->emettreFacture(Client::factory()->create()), 'Erreur de client');
+        $facture = $this->emettreFacture(Client::factory()->create());
+        app(EnregistrerAvoirAction::class)->handle($facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]], 'Erreur de client');
 
-        $this->assertThrows(
-            fn () => app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, null),
-            LogicException::class,
-            'Impossible d\'envoyer ce document au statut « Annulée ».',
-        );
+        $envoi = app(EnvoyerDocumentAction::class)->handle($facture->fresh(), 'client@exemple.fr', null, null);
 
-        $this->assertSame(0, EnvoiDocument::query()->count());
+        $this->assertTrue($envoi->document->is($facture));
+        $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
+        Queue::assertPushed(EnvoyerDocumentJob::class, 1);
     }
 
     public function test_un_avoir_emis_part_sans_changer_de_statut(): void

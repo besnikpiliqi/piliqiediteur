@@ -3,17 +3,22 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Enums\StatutAvoir;
+use App\Domain\Facturation\Events\AvoirEmis;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use InvalidArgumentException;
 use LogicException;
 use Tests\TestCase;
@@ -262,15 +267,46 @@ class AvoirActionsTest extends TestCase
         app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
     }
 
-    public function test_impossible_de_creer_un_avoir_sur_une_facture_annulee(): void
+    /**
+     * Une facture entièrement reprise par un avoir total n'a plus rien à
+     * créditer : elle reste émise, mais aucun second avoir ne la reprend.
+     */
+    public function test_impossible_de_creer_un_avoir_sur_une_facture_deja_corrigee_par_un_avoir_total(): void
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit);
-        $facture = app(AnnulerFactureAction::class)->handle($facture, 'Erreur de saisie');
+        app(EnregistrerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture), 'Erreur de saisie');
 
-        $this->expectException(LogicException::class);
+        $this->expectExceptionObject(new LogicException("La ligne \"{$produit->nom}\" ne peut pas être créditée au-delà de la quantité restante (0)."));
+
         app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
+    }
+
+    /**
+     * Les tickets de caisse (clôture et e-reporting) et les factures
+     * (facture électronique) suivent des circuits fiscaux différents : un
+     * client devenu professionnel après un ticket ne peut pas faire
+     * reprendre ce ticket et une facture dans un même avoir.
+     */
+    public function test_un_avoir_melangeant_ticket_et_facture_est_refuse(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ticket = $this->emettreFacture($client, $produit);
+        $client->update(['type_client' => TypeClient::Professionnel, 'siret' => '73282932000074']);
+        $facture = $this->emettreFacture($client->fresh(), $produit);
+
+        $this->expectExceptionObject(new InvalidArgumentException('Un avoir ne mélange jamais des tickets de caisse et des factures : faites un avoir pour les tickets, et un autre pour les factures.'));
+
+        try {
+            app(CreerAvoirAction::class)->handle($client, [
+                ['ligne_facture_id' => $ticket->lignes->firstOrFail()->id, 'quantite' => 1],
+                ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
+            ]);
+        } finally {
+            $this->assertSame(0, Avoir::query()->count());
+        }
     }
 
     /**
@@ -411,22 +447,76 @@ class AvoirActionsTest extends TestCase
         $this->assertSame(['29.99', '6.01', '36.00'], [$ligneAvoir->montant_ht, $ligneAvoir->montant_tva, $ligneAvoir->montant_ttc]);
     }
 
-    public function test_un_avoir_ne_s_emet_pas_sur_une_facture_annulee_depuis_sa_saisie(): void
+    /**
+     * Un brouillon d'avoir saisi avant que sa facture soit entièrement
+     * corrigée par un avoir total ne s'émet plus : il n'a plus rien à
+     * créditer, et le stock n'est rendu qu'une fois.
+     */
+    public function test_un_brouillon_d_avoir_ne_s_emet_plus_apres_la_correction_totale_de_sa_facture(): void
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 1);
-        $avoir = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
-        app(AnnulerFactureAction::class)->handle($facture, 'Erreur de saisie');
+        $brouillon = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
+        app(EnregistrerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture), 'Erreur de saisie');
 
-        $this->expectExceptionObject(new LogicException("Impossible d'émettre cet avoir : la facture {$facture->numero} a été annulée."));
+        $this->expectExceptionObject(new LogicException("La ligne \"{$produit->nom}\" a été créditée entre-temps par un autre avoir : il ne reste que 0 article(s) à créditer."));
 
         try {
-            app(EmettreAvoirAction::class)->handle($avoir);
+            app(EmettreAvoirAction::class)->handle($brouillon);
         } finally {
-            $this->assertSame(StatutAvoir::Brouillon, $avoir->fresh()->statut);
+            $this->assertSame(StatutAvoir::Brouillon, $brouillon->fresh()->statut);
             $this->assertSame(10, $produit->fresh()->stock_quantite);
         }
+    }
+
+    public function test_enregistrer_un_avoir_le_cree_et_l_emet_d_un_seul_geste(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $facture = $this->emettreFacture($client, $produit, 3);
+
+        $avoir = app(EnregistrerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture), 'Produit défectueux');
+
+        $avoir->refresh();
+        $this->assertSame(StatutAvoir::Emise, $avoir->statut);
+        $this->assertStringStartsWith('AV-', $avoir->numero);
+        $this->assertSame('Produit défectueux', $avoir->motif);
+        $this->assertSame('180.00', $avoir->total_ttc);
+        $this->assertSame(10, $produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * Création et émission forment une seule transaction : un refus pendant
+     * l'émission (ici après le retour en stock) ne laisse ni brouillon
+     * d'avoir, ni ligne, ni retour en stock, ni numéro consommé -- l'avoir
+     * enregistré ensuite reçoit le premier numéro.
+     */
+    public function test_un_echec_d_emission_ne_laisse_aucun_brouillon_d_avoir(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $facture = $this->emettreFacture($client, $produit, 3);
+        $tentatives = 0;
+        Event::listen(AvoirEmis::class, function () use (&$tentatives): void {
+            if ($tentatives++ === 0) {
+                throw new LogicException('Émission impossible.');
+            }
+        });
+
+        try {
+            app(EnregistrerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture), 'Produit défectueux');
+            $this->fail("L'émission aurait dû échouer.");
+        } catch (LogicException $exception) {
+            $this->assertSame('Émission impossible.', $exception->getMessage());
+        }
+
+        $this->assertSame(0, Avoir::query()->count());
+        $this->assertSame(0, LigneAvoir::query()->count());
+        $this->assertSame(7, $produit->fresh()->stock_quantite);
+        $this->assertSame(0, $produit->mouvementsStock()->where('type', 'retour_client')->count());
+        $this->assertSame('AV-2026-000001', app(EnregistrerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture), 'Produit défectueux')->numero);
     }
 
     /**

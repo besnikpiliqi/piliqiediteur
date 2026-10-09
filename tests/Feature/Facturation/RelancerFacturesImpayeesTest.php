@@ -4,11 +4,9 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\AnnulerFactureAction;
-use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
-use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -151,16 +149,15 @@ class RelancerFacturesImpayeesTest extends TestCase
         Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('archive@exemple.fr'));
     }
 
-    public function test_les_factures_reglees_annulees_ou_sans_adresse_ne_sont_pas_relancees(): void
+    public function test_les_factures_reglees_corrigees_par_un_avoir_ou_sans_adresse_ne_sont_pas_relancees(): void
     {
         Mail::fake();
         $this->travelTo('2026-10-01 09:00:00');
         $magasin = $this->magasinQuiRelance();
         $payee = $this->factureImpayee($magasin, 'payee@exemple.fr');
         $this->payer($payee, 120);
-        $annulee = app(AnnulerFactureAction::class)->handle($this->factureImpayee($magasin, 'annulee@exemple.fr'), 'Erreur');
-        $soldeeParAvoir = $this->factureImpayee($magasin, 'avoir@exemple.fr');
-        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($soldeeParAvoir->client, [['ligne_facture_id' => $soldeeParAvoir->lignes->first()->id, 'quantite' => 1]]));
+        $corrigeeParAvoir = $this->factureImpayee($magasin, 'avoir@exemple.fr');
+        app(EnregistrerAvoirAction::class)->handle($corrigeeParAvoir->client, [['ligne_facture_id' => $corrigeeParAvoir->lignes->first()->id, 'quantite' => 1]], 'Erreur');
         $sansAdresse = $this->factureImpayee($magasin, null);
         $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], ['date_echeance' => '2026-10-01']);
         $partiellementPayee = $this->factureImpayee($magasin, 'partielle@exemple.fr');
@@ -170,7 +167,7 @@ class RelancerFacturesImpayeesTest extends TestCase
 
         Mail::assertSent(DocumentMail::class, 1);
         Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('partielle@exemple.fr'));
-        foreach ([$payee, $annulee, $soldeeParAvoir, $sansAdresse, $brouillon] as $facture) {
+        foreach ([$payee, $corrigeeParAvoir, $sansAdresse, $brouillon] as $facture) {
             $this->assertSame([], $this->niveauxRelances($facture));
         }
     }

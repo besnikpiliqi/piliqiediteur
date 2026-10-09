@@ -72,7 +72,7 @@ class SeedMagasinRolesAction
             ],
             // Un vendeur crée/émet ses propres devis et factures, mais ne
             // voit que celles qu'il a lui-même créées (voir FacturePolicy)
-            // et ne peut pas les annuler -- ça reste une action de
+            // et ne les corrige pas par un avoir -- ça reste une action de
             // supervision réservée à l'admin/propriétaire par défaut.
             RoleMagasin::Vendeur->value => [
                 PermissionRegistry::CLIENT_VIEW,

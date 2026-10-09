@@ -14,12 +14,12 @@ use Filament\Support\Contracts\HasLabel;
  * impact sur le stock ; la validation attribue le numéro interne et
  * incrémente le stock (voir ValiderFactureAchatAction).
  *
- * Pas de statut "annulée" : une facture saisie manuellement, validée et
- * sans avoir fournisseur émis, se corrige directement (voir
- * ModifierFactureAchatAction) ; sinon (facture récupérée par API, ou déjà
- * retournée en partie) par un avoir fournisseur (voir
- * FactureAchat::estModifiable()) -- jamais par une annulation rétroactive
- * de la réception.
+ * Aucun statut qui défasse la réception : une facture saisie
+ * manuellement, validée et sans avoir fournisseur émis, se corrige
+ * directement (voir ModifierFactureAchatAction) ; sinon (facture récupérée
+ * par API, ou déjà retournée en partie) par un avoir fournisseur (voir
+ * FactureAchat::estModifiable()) -- jamais en effaçant la réception après
+ * coup.
  */
 enum StatutFactureAchat: string implements HasColor, HasLabel
 {

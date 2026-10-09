@@ -7,7 +7,6 @@ use App\Domain\Achats\Events\FactureAchatValidee;
 use App\Domain\Achats\Listeners\DecrementerStockApresEmissionAvoirFournisseur;
 use App\Domain\Achats\Listeners\IncrementerStockApresValidationFactureAchat;
 use App\Domain\Facturation\Events\AvoirEmis;
-use App\Domain\Facturation\Events\FactureAnnulee;
 use App\Domain\Facturation\Events\FactureEmise;
 use App\Domain\Facturation\Events\SoumissionEReportingGeneree;
 use App\Domain\Facturation\Listeners\AppliquerAvoirDisponibleApresEmissionFacture;
@@ -15,7 +14,6 @@ use App\Domain\Facturation\Listeners\DeclencherTransmissionPdpApresEmissionFactu
 use App\Domain\Facturation\Listeners\DeclencherTransmissionPdpApresSoumissionEReporting;
 use App\Domain\Facturation\Listeners\DecrementerStockApresEmissionFacture;
 use App\Domain\Facturation\Listeners\ImputerAvoirSurSesFacturesApresEmission;
-use App\Domain\Facturation\Listeners\RestaurerStockApresAnnulationFacture;
 use App\Domain\Facturation\Listeners\RestaurerStockApresEmissionAvoir;
 use App\Domain\Stock\Events\StockPasseSousLeSeuilDAlerte;
 use App\Domain\Stock\Listeners\NotifierLeStockSousLeSeuilDAlerte;
@@ -36,7 +34,6 @@ class EventServiceProvider extends ServiceProvider
         Event::listen(FactureEmise::class, DecrementerStockApresEmissionFacture::class);
         Event::listen(FactureEmise::class, AppliquerAvoirDisponibleApresEmissionFacture::class);
         Event::listen(FactureEmise::class, DeclencherTransmissionPdpApresEmissionFacture::class);
-        Event::listen(FactureAnnulee::class, RestaurerStockApresAnnulationFacture::class);
         Event::listen(AvoirEmis::class, RestaurerStockApresEmissionAvoir::class);
         Event::listen(AvoirEmis::class, ImputerAvoirSurSesFacturesApresEmission::class);
         Event::listen(SoumissionEReportingGeneree::class, DeclencherTransmissionPdpApresSoumissionEReporting::class);

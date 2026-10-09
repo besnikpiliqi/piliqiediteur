@@ -8,7 +8,8 @@ use Tests\TestCase;
 /**
  * Verrouille la machine à états : aucun statut ne doit être un cul-de-sac
  * accidentel (une facture partiellement payée doit pouvoir devenir payée),
- * et seuls « payée » et « annulée » sont définitifs.
+ * et seule « payée » est définitive. Une facture émise ne se corrige que
+ * par un avoir (voir CorrectionParAvoirTest).
  */
 class StatutFactureTest extends TestCase
 {
@@ -22,17 +23,16 @@ class StatutFactureTest extends TestCase
         $this->assertTrue(StatutFacture::PartiellementPayee->peutTransitionnerVers(StatutFacture::EnRetard));
     }
 
-    public function test_payee_et_annulee_n_ont_aucune_transition(): void
+    public function test_une_facture_payee_n_a_plus_aucune_transition(): void
     {
         $this->assertSame([], StatutFacture::Payee->transitionsAutorisees());
-        $this->assertSame([], StatutFacture::Annulee->transitionsAutorisees());
     }
 
-    public function test_une_facture_ni_payee_ni_annulee_peut_encore_changer_de_statut(): void
+    public function test_une_facture_non_payee_peut_encore_changer_de_statut(): void
     {
         $statutsNonDefinitifs = array_filter(
             StatutFacture::cases(),
-            fn (StatutFacture $statut): bool => ! in_array($statut, [StatutFacture::Payee, StatutFacture::Annulee], true),
+            fn (StatutFacture $statut): bool => $statut !== StatutFacture::Payee,
         );
 
         $culsDeSac = array_filter(
@@ -41,6 +41,16 @@ class StatutFactureTest extends TestCase
         );
 
         $this->assertSame([], array_values($culsDeSac));
+    }
+
+    public function test_aucun_statut_ne_ramene_une_facture_emise_en_brouillon(): void
+    {
+        $statutsQuiRamenentEnBrouillon = array_filter(
+            StatutFacture::cases(),
+            fn (StatutFacture $statut): bool => $statut->peutTransitionnerVers(StatutFacture::Brouillon),
+        );
+
+        $this->assertSame([], array_values($statutsQuiRamenentEnBrouillon));
     }
 
     public function test_un_brouillon_ne_peut_pas_devenir_paye_directement(): void

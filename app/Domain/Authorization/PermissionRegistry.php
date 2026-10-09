@@ -82,8 +82,6 @@ final class PermissionRegistry
 
     public const FACTURE_EMETTRE = 'facture.emettre';
 
-    public const FACTURE_ANNULER = 'facture.annuler';
-
     // Envoyer une facture émise par e-mail et relancer une facture
     // impayée (voir EnvoyerDocumentAction), parmi celles que
     // l'utilisateur voit (voir FacturePolicy::envoyer()).
@@ -156,7 +154,7 @@ final class PermissionRegistry
             self::FOURNISSEUR_VIEW, self::FOURNISSEUR_CREATE, self::FOURNISSEUR_UPDATE, self::FOURNISSEUR_DELETE,
             self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_DELETE, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK, self::PRIX_VENTE_REGLER,
             self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
-            self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ANNULER, self::FACTURE_ENVOYER, self::RELANCES_REGLER,
+            self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ENVOYER, self::RELANCES_REGLER,
             self::MANDAT_PDP_GERER,
             self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
             self::PAIEMENT_VIEW, self::PAIEMENT_CREER,
@@ -201,7 +199,6 @@ final class PermissionRegistry
             self::FACTURE_VIEW_TOUTES => 'Factures : voir celles de toute l\'équipe',
             self::FACTURE_CREATE => 'Factures : créer',
             self::FACTURE_EMETTRE => 'Factures : émettre',
-            self::FACTURE_ANNULER => 'Factures : annuler',
             self::FACTURE_ENVOYER => 'Factures : envoyer par e-mail et relancer',
             self::RELANCES_REGLER => 'Relances : régler les relances automatiques',
             self::MANDAT_PDP_GERER => 'Mandat PDP : gérer',

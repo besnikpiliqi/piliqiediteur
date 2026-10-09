@@ -5,10 +5,8 @@ namespace App\Filament\App\Resources;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Facturation\Actions\AnnulerFactureAction;
-use App\Domain\Facturation\Actions\CreerAvoirAction;
-use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -384,7 +382,7 @@ class FactureResource extends Resource
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->modalDescription('Un numéro définitif sera attribué et le stock sera décrémenté. Cette action est irréversible.')
+                    ->modalDescription('Un numéro définitif sera attribué et le stock sera décrémenté. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && auth()->user()->can('emettre', $record))
                     ->action(fn (Facture $record) => static::executerSansCasser(fn () => app(EmettreFactureAction::class)->handle($record))),
                 Tables\Actions\Action::make('encaisser')
@@ -430,17 +428,6 @@ class FactureResource extends Resource
                 self::telechargerLePdf(Tables\Actions\Action::make('telecharger_pdf')),
                 self::envoyerParEmail(Tables\Actions\Action::make('envoyer_par_email')),
                 self::relancer(Tables\Actions\Action::make('relancer')),
-                Tables\Actions\Action::make('annuler')
-                    ->label('Annuler')
-                    ->icon('heroicon-o-x-circle')
-                    ->color('danger')
-                    ->form([
-                        Textarea::make('motif')->label('Motif de l\'annulation')->required(),
-                    ])
-                    ->requiresConfirmation()
-                    ->visible(fn (Facture $record) => $record->statut->peutTransitionnerVers(StatutFacture::Annulee)
-                        && auth()->user()->can('annuler', $record))
-                    ->action(fn (Facture $record, array $data) => static::executerSansCasser(fn () => app(AnnulerFactureAction::class)->handle($record, $data['motif']))),
                 Tables\Actions\Action::make('avoir')
                     ->label('Avoir')
                     ->icon('heroicon-o-receipt-refund')
@@ -480,19 +467,12 @@ class FactureResource extends Resource
                     ])
                     ->requiresConfirmation()
                     ->modalDescription('Seules les lignes et quantités conservées ci-dessous seront créditées, et leur stock restauré. Retirez les lignes à ne pas créditer. Cette action est irréversible.')
-                    ->visible(fn (Facture $record) => in_array($record->statut, [
-                        StatutFacture::Emise,
-                        StatutFacture::Envoyee,
-                        StatutFacture::PartiellementPayee,
-                        StatutFacture::Payee,
-                        StatutFacture::EnRetard,
-                    ], true)
+                    ->visible(fn (Facture $record) => $record->statut !== StatutFacture::Brouillon
                         && $record->possedeDesLignesCreditables()
                         && auth()->user()->can(PermissionRegistry::AVOIR_CREER))
-                    ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
-                        $avoir = app(CreerAvoirAction::class)->handle($record->client, $data['lignes'], $data['motif']);
-                        app(EmettreAvoirAction::class)->handle($avoir);
-                    })),
+                    ->action(fn (Facture $record, array $data) => static::executerSansCasser(
+                        fn () => app(EnregistrerAvoirAction::class)->handle($record->client, $data['lignes'], $data['motif']),
+                    )),
             ])
             // Seuls les brouillons partent : une facture déjà émise se
             // corrige par un avoir (voir l'action "avoir" ci-dessus).

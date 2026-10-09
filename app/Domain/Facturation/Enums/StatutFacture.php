@@ -10,6 +10,12 @@ use Filament\Support\Contracts\HasLabel;
  * avec le statut de transmission réglementaire PDP (voir TransmissionPdp),
  * qui évolue indépendamment (une facture peut être "payee" ici tout en
  * ayant une transmission PDP encore "en_attente").
+ *
+ * Une facture émise ne revient jamais en arrière et ne disparaît jamais
+ * (art. 286 du CGI) : elle se corrige par un avoir, total ou partiel, qui
+ * est un document à part (voir EnregistrerAvoirAction).
+ * Seul un brouillon, qui n'a pas encore de numéro, se supprime (voir
+ * FacturePolicy::delete()).
  */
 enum StatutFacture: string implements HasColor, HasLabel
 {
@@ -19,7 +25,6 @@ enum StatutFacture: string implements HasColor, HasLabel
     case PartiellementPayee = 'partiellement_payee';
     case Payee = 'payee';
     case EnRetard = 'en_retard';
-    case Annulee = 'annulee';
 
     /**
      * @return list<self>
@@ -27,9 +32,9 @@ enum StatutFacture: string implements HasColor, HasLabel
     public function transitionsAutorisees(): array
     {
         return match ($this) {
-            self::Brouillon => [self::Emise, self::Annulee],
-            self::Emise => [self::Envoyee, self::PartiellementPayee, self::Payee, self::EnRetard, self::Annulee],
-            self::Envoyee => [self::PartiellementPayee, self::Payee, self::EnRetard, self::Annulee],
+            self::Brouillon => [self::Emise],
+            self::Emise => [self::Envoyee, self::PartiellementPayee, self::Payee, self::EnRetard],
+            self::Envoyee => [self::PartiellementPayee, self::Payee, self::EnRetard],
             // Une facture partiellement payée devient "payee" une fois le
             // solde réglé (un deuxième paiement par exemple), et reste
             // détectable comme en retard si l'échéance passe entre-temps.
@@ -38,7 +43,7 @@ enum StatutFacture: string implements HasColor, HasLabel
             // son échéance est toujours dépassée (voir
             // Facture::constaterUnReglement()).
             self::EnRetard => [self::Payee],
-            self::Payee, self::Annulee => [],
+            self::Payee => [],
         };
     }
 
@@ -73,7 +78,6 @@ enum StatutFacture: string implements HasColor, HasLabel
             self::PartiellementPayee => 'Partiellement payée',
             self::Payee => 'Payée',
             self::EnRetard => 'En retard',
-            self::Annulee => 'Annulée',
         };
     }
 
@@ -84,7 +88,7 @@ enum StatutFacture: string implements HasColor, HasLabel
             self::Emise, self::Envoyee => 'info',
             self::PartiellementPayee => 'warning',
             self::Payee => 'success',
-            self::EnRetard, self::Annulee => 'danger',
+            self::EnRetard => 'danger',
         };
     }
 }

@@ -12,11 +12,8 @@ use App\Domain\Stock\Services\StockLedgerService;
  * Facture::quantiteSortieDuStock()) -- un article vendu sans suivi du
  * stock n'en est jamais sorti, son retour n'y fait rien entrer. Chaque
  * retour a pour source la ligne de l'avoir, qui relie l'avoir à la facture
- * reprise.
- *
- * Même effet qu'une annulation (voir RestaurerStockApresAnnulationFacture),
- * mais un listener distinct : ils réagissent à des events différents
- * (Facture vs Avoir), les coupler forcerait une dépendance artificielle.
+ * reprise. C'est le seul retour au stock d'une vente : une facture émise
+ * ne se corrige que par un avoir.
  */
 class RestaurerStockApresEmissionAvoir
 {

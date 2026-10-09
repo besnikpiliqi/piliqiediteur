@@ -4,9 +4,9 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -68,7 +68,12 @@ class FacturesApercuWidgetTest extends TestCase
             ->assertSee('0 facture émise');
     }
 
-    public function test_une_facture_annulee_ne_compte_pas_dans_le_chiffre_daffaires(): void
+    /**
+     * Une vente corrigée par un avoir reste émise, mais l'avoir se déduit
+     * du chiffre d'affaires de la période où il est émis : une vente
+     * entièrement reprise n'en laisse rien.
+     */
+    public function test_un_avoir_se_deduit_du_chiffre_daffaires(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
@@ -81,11 +86,13 @@ class FacturesApercuWidgetTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
         $facture = app(EmettreFactureAction::class)->handle($facture);
-        app(AnnulerFactureAction::class)->handle($facture, 'Erreur de saisie');
+        app(EnregistrerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
+        ], 'Erreur de saisie');
 
         Livewire::test(FacturesApercu::class)
             ->assertSuccessful()
             ->assertSee('0,00 €')
-            ->assertSee('0 facture émise');
+            ->assertSee('1 facture émise, 1 avoir déduit');
     }
 }

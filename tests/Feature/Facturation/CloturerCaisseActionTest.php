@@ -5,12 +5,12 @@ namespace Tests\Feature\Facturation;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
@@ -58,7 +58,12 @@ class CloturerCaisseActionTest extends TestCase
         $this->assertSame($cloture->id, $factureParticulier->fresh()->cloture_caisse_id);
     }
 
-    public function test_exclut_les_brouillons_et_les_factures_annulees(): void
+    /**
+     * Une vente corrigée le jour même par un avoir total reste une vente
+     * de la journée, et l'avoir s'en déduit : la journée ne garde rien de
+     * cette vente, sans qu'aucun document disparaisse.
+     */
+    public function test_exclut_les_brouillons_et_deduit_une_vente_corrigee_par_un_avoir_total(): void
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -68,12 +73,15 @@ class CloturerCaisseActionTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        $factureAnnulee = $this->emettreFacturePour($client);
-        app(AnnulerFactureAction::class)->handle($factureAnnulee, 'Erreur de saisie');
+        $venteCorrigee = $this->emettreFacturePour($client);
+        app(EnregistrerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $venteCorrigee->lignes->firstOrFail()->id, 'quantite' => 1],
+        ], 'Erreur de saisie');
 
         $cloture = app(CloturerCaisseAction::class)->handle($this->magasin, now());
 
-        $this->assertSame(0, $cloture->nombre_ventes);
+        $this->assertSame(1, $cloture->nombre_ventes);
+        $this->assertSame(1, $cloture->nombre_avoirs);
         $this->assertSame('0.00', $cloture->total_ttc);
     }
 

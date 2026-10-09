@@ -67,20 +67,15 @@ class FacturePolicy extends MagasinPolicy
         return $this->view($user, $facture) && $user->can(PermissionRegistry::FACTURE_ENVOYER);
     }
 
-    public function annuler(User $user, Facture $facture): bool
-    {
-        return $this->appartientAuMagasinActif($facture) && $user->can(PermissionRegistry::FACTURE_ANNULER);
-    }
-
     /**
      * Un brouillon n'a jamais reçu de numéro (attribué uniquement à
      * l'émission, voir EmettreFactureAction) : il n'a donc aucune existence
      * légale ni fiscale, le supprimer ne casse aucune continuité de
-     * numérotation. Dès que la facture quitte ce statut -- y compris après
-     * une annulation -- sa suppression redevient refusée sans exception et
-     * sans condition de rôle, y compris pour le propriétaire : la loi
-     * impose la conservation de tout document numéroté. Correction d'une
-     * facture déjà émise = avoir (voir Avoir), jamais suppression.
+     * numérotation. Dès que la facture quitte ce statut, sa suppression
+     * est refusée sans exception et sans condition de rôle, y compris pour
+     * le propriétaire : la loi impose la conservation de tout document
+     * numéroté. Correction d'une facture déjà émise = avoir (voir
+     * EnregistrerAvoirAction), jamais suppression.
      */
     public function delete(User $user, Facture $facture): bool
     {

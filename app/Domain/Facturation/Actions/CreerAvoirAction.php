@@ -26,6 +26,15 @@ use LogicException;
  * possibles sur une même ligne de facture (ex : un second défaut découvert
  * après un premier avoir), tant que leur somme ne dépasse jamais la
  * quantité facturée (voir LigneFacture::quantiteCreditableRestante()).
+ *
+ * Jamais de tickets de caisse et de factures dans un même avoir : leurs
+ * circuits fiscaux diffèrent (clôture de caisse et e-reporting, ou
+ * facture électronique), et un avoir n'en suit qu'un (voir
+ * Facture::serie()).
+ *
+ * L'avoir créé ici reste un brouillon jusqu'à son émission : l'interface
+ * passe toujours par EnregistrerAvoirAction, qui fait les deux d'un seul
+ * geste.
  */
 class CreerAvoirAction
 {
@@ -56,6 +65,7 @@ class CreerAvoirAction
             ]);
 
             $lignesConstruites = [];
+            $serie = null;
 
             foreach (array_values($lignesSelectionnees) as $index => $selection) {
                 $ligneFacture = LigneFacture::query()
@@ -74,8 +84,14 @@ class CreerAvoirAction
                     throw new InvalidArgumentException("Cette ligne appartient à une facture d'un autre client.");
                 }
 
-                if (in_array($facture->statut, [StatutFacture::Brouillon, StatutFacture::Annulee], true)) {
+                if ($facture->statut === StatutFacture::Brouillon) {
                     throw new LogicException("Impossible de créditer une ligne d'une facture au statut [{$facture->statut->value}].");
+                }
+
+                $serie ??= $facture->serie();
+
+                if ($facture->serie() !== $serie) {
+                    throw new InvalidArgumentException('Un avoir ne mélange jamais des tickets de caisse et des factures : faites un avoir pour les tickets, et un autre pour les factures.');
                 }
 
                 $restante = $ligneFacture->quantiteCreditableRestante();

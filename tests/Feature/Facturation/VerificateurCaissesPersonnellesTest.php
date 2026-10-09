@@ -4,9 +4,9 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\AnnulerFactureAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
@@ -134,11 +134,11 @@ class VerificateurCaissesPersonnellesTest extends TestCase
     }
 
     /**
-     * Une vente émise puis annulée le même jour n'est jamais comptée par
-     * une fermeture : elle ne doit donc jamais bloquer la clôture de la
-     * journée, avant comme après la fermeture du vendeur.
+     * Une vente émise puis corrigée le même jour par un avoir reste une
+     * vente émise que la fermeture du vendeur doit compter : elle laisse
+     * sa caisse ouverte jusqu'à cette fermeture, pas au-delà.
      */
-    public function test_une_vente_annulee_ne_laisse_pas_la_caisse_ouverte(): void
+    public function test_une_vente_corrigee_par_un_avoir_laisse_la_caisse_ouverte_jusqua_sa_fermeture(): void
     {
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
@@ -149,11 +149,14 @@ class VerificateurCaissesPersonnellesTest extends TestCase
 
         $this->travelTo(now()->subDay());
         $this->emettreFacturePour($vendeur, $client, $produit);
-        app(AnnulerFactureAction::class)->handle(Facture::query()->latest('id')->firstOrFail(), 'Erreur de saisie');
+        $venteCorrigee = Facture::query()->latest('id')->firstOrFail();
+        app(EnregistrerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $venteCorrigee->lignes->firstOrFail()->id, 'quantite' => 1],
+        ], 'Erreur de saisie');
         $this->travelBack();
 
         $verificateur = app(VerificateurCaissesPersonnelles::class);
-        $this->assertFalse($verificateur->vendeursAvecCaisseOuverte(now()->subDay())->contains('id', $vendeur->id));
+        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(now()->subDay())->contains('id', $vendeur->id));
 
         app(FermerSaCaisseAction::class)->handle($vendeur);
         $this->assertFalse($verificateur->vendeursAvecCaisseOuverte(now()->subDay())->contains('id', $vendeur->id));

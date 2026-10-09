@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\Auth\RegisterMagasin;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,7 +29,6 @@ class RegisterMagasinPageTest extends TestCase
         $utilisateur = User::where('email', 'jeanne@maboutique.fr')->firstOrFail();
 
         $this->assertAuthenticatedAs($utilisateur);
-        $this->assertNotNull($utilisateur->current_magasin_id);
-        $this->assertTrue($utilisateur->estProprietaireDe($utilisateur->magasinActuel));
+        $this->assertSame([$utilisateur->id], Magasin::query()->where('nom', 'Ma Boutique')->sole()->proprietaires()->get()->modelKeys());
     }
 }

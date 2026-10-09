@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Domain\Contacts\Enums\SourceFournisseur;
 use App\Domain\Contacts\Models\Fournisseur;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -21,7 +20,6 @@ class FournisseurFactory extends Factory
             'telephone' => fake()->phoneNumber(),
             'email' => fake()->companyEmail(),
             'pays' => 'FR',
-            'source' => SourceFournisseur::Manuel,
             'actif' => true,
         ];
     }

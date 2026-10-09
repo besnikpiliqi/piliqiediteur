@@ -114,7 +114,7 @@ class StockLedgerServiceTest extends TestCase
 
     /**
      * Le passage au seuil d'alerte prévient ceux qui gèrent le stock du
-     * magasin (permission d'ajuster le stock : le propriétaire par défaut),
+     * magasin (permission de gérer le stock : le propriétaire par défaut),
      * pas les vendeurs, ni le propriétaire d'un autre magasin.
      */
     public function test_le_passage_au_seuil_d_alerte_previent_ceux_qui_gerent_le_stock(): void

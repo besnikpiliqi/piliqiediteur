@@ -86,11 +86,6 @@ class Avoir extends Model implements DocumentEnvoyable
             ->whereNull('cloture_caisse_id');
     }
 
-    public function clotureCaisse(): BelongsTo
-    {
-        return $this->belongsTo(ClotureCaisse::class);
-    }
-
     public function creePar(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cree_par');

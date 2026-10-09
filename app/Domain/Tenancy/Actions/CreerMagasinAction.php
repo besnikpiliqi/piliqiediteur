@@ -15,15 +15,12 @@ use Illuminate\Support\Facades\DB;
 /**
  * Point d'entrée unique pour la création d'un magasin : l'enregistrement
  * seul ne suffit jamais, il faut toujours dans la même transaction semer
- * ses rôles par défaut, rattacher le propriétaire, et activer ce magasin
- * comme magasin courant de l'utilisateur. Oublier une de ces étapes
- * laisserait un magasin dans un état incohérent (rôles manquants,
- * personne n'y ayant accès...).
+ * ses rôles par défaut, créer son client comptoir et rattacher le
+ * propriétaire. Oublier une de ces étapes laisserait un magasin dans un
+ * état incohérent (rôles manquants, personne n'y ayant accès...).
  *
- * Le statut est mis directement à `active` : aucune vérification SIRET
- * automatisée n'est branchée pour l'instant (nécessiterait une
- * intégration API Sirene/INSEE, prévue mais pas encore implémentée).
- * À revoir si une étape de vérification doit bloquer l'activation.
+ * Le statut est mis directement à `active` : aucune vérification du
+ * SIRET (API Sirene de l'INSEE) ne précède l'activation d'un magasin.
  */
 class CreerMagasinAction
 {
@@ -64,7 +61,6 @@ class CreerMagasinAction
             ]);
 
             $proprietaire->assignRole(RoleMagasin::Proprietaire->value);
-            $proprietaire->forceFill(['current_magasin_id' => $magasin->getKey()])->save();
 
             return $magasin;
         });

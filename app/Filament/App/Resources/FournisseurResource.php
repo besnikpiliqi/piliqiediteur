@@ -2,7 +2,6 @@
 
 namespace App\Filament\App\Resources;
 
-use App\Domain\Contacts\Enums\SourceFournisseur;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FournisseurResource\Pages;
@@ -74,12 +73,10 @@ class FournisseurResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('nom')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('siret')->label('SIRET')->searchable(),
-                Tables\Columns\TextColumn::make('source')->badge(),
                 Tables\Columns\TextColumn::make('email'),
                 Tables\Columns\IconColumn::make('actif')->boolean(),
             ])
             ->filters([
-                Tables\Filters\SelectFilter::make('source')->options(SourceFournisseur::class),
                 Tables\Filters\TernaryFilter::make('actif'),
                 Tables\Filters\TrashedFilter::make(),
             ])

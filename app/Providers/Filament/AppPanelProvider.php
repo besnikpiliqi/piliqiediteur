@@ -26,8 +26,8 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
  * Panneau applicatif quotidien des magasins : propriétaires et vendeurs y
- * gèrent clients, produits, factures. C'est le panneau PAR DÉFAUT
- * (->default()) et le seul avec la tenancy Filament activée, branchée sur
+ * gèrent clients, produits, factures. C'est le seul panneau, donc le
+ * panneau par défaut (->default()), avec la tenancy Filament branchée sur
  * Magasin (URL /app/{magasin:uuid}/...).
  *
  * BindTenantContextFromFilamentTenant (en tenantMiddleware, donc exécuté

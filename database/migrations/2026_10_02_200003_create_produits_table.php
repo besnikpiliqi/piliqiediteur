@@ -11,7 +11,6 @@ return new class extends Migration
         Schema::create('produits', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            $table->foreignId('produit_parent_id')->nullable()->constrained('produits')->nullOnDelete();
             $table->foreignId('fournisseur_id')->nullable()->constrained('fournisseurs')->nullOnDelete();
             $table->string('reference', 60);
             $table->string('code_barres', 50)->nullable();

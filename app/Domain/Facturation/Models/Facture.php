@@ -30,10 +30,11 @@ use Illuminate\Support\Carbon;
 use LogicException;
 
 /**
- * PAS de SoftDeletes ici, volontairement : une facture ne se supprime
- * jamais, même "doucement" (voir FacturePolicy::delete() et la migration
- * create_factures_table). La loi impose sa conservation ; une correction
- * passe par un avoir, jamais par une suppression.
+ * PAS de SoftDeletes ici, volontairement : une facture numérotée (émise ou
+ * annulée) ne se supprime jamais, même "doucement" -- la loi impose sa
+ * conservation, et une correction passe par un avoir. Un brouillon, sans
+ * numéro ni existence légale, peut en revanche être supprimé
+ * définitivement (voir FacturePolicy::delete()).
  */
 class Facture extends Model implements DocumentEnvoyable
 {
@@ -126,16 +127,6 @@ class Facture extends Model implements DocumentEnvoyable
             ->whereDate('date_emission', $jour)
             ->whereNotIn('statut', [StatutFacture::Brouillon, StatutFacture::Annulee])
             ->whereNull('cloture_caisse_id');
-    }
-
-    public function devisOrigine(): BelongsTo
-    {
-        return $this->belongsTo(Devis::class, 'devis_id');
-    }
-
-    public function clotureCaisse(): BelongsTo
-    {
-        return $this->belongsTo(ClotureCaisse::class);
     }
 
     public function lignes(): HasMany

@@ -18,9 +18,9 @@ use Filament\Pages\Page;
  * Seul endroit où le régime de TVA du magasin se configure : en dépend
  * directement la cadence de transmission de l'e-reporting (voir
  * CalculateurPeriodeEReporting et la commande planifiée
- * app:soumettre-ereporting-periodique). Réservé au propriétaire, même
- * permission que la gestion du mandat PDP -- les deux relèvent de la
- * même responsabilité de configuration fiscale du magasin.
+ * app:soumettre-ereporting-periodique). Réservé à qui a la permission
+ * mandat_pdp.gerer (le propriétaire par défaut, voir
+ * SeedMagasinRolesAction) : la configuration fiscale du magasin.
  */
 class ParametresFiscaux extends Page implements HasForms
 {

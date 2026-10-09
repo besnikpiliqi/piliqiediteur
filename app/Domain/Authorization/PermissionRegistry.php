@@ -41,6 +41,10 @@ final class PermissionRegistry
 
     public const PRODUIT_DELETE = 'produit.delete';
 
+    /**
+     * Gérer le stock du magasin : reçoit les alertes de stock bas (voir
+     * NotifierLeStockSousLeSeuilDAlerte).
+     */
     public const PRODUIT_AJUSTER_STOCK = 'produit.ajuster_stock';
 
     // Un vendeur voit le prix/stock de chaque produit (nécessaire pour
@@ -186,7 +190,7 @@ final class PermissionRegistry
             self::PRODUIT_CREATE => 'Produits et services : créer',
             self::PRODUIT_UPDATE => 'Produits et services : modifier',
             self::PRODUIT_DELETE => 'Produits : supprimer',
-            self::PRODUIT_AJUSTER_STOCK => 'Produits : ajuster le stock',
+            self::PRODUIT_AJUSTER_STOCK => 'Produits : gérer le stock (alertes de stock bas)',
             self::PRODUIT_VOIR_VALEUR_STOCK => 'Produits : voir la valeur totale du stock',
             self::PRIX_VENTE_REGLER => 'Prix de vente : régler le barème automatique',
             self::DEVIS_VIEW => 'Devis : voir',

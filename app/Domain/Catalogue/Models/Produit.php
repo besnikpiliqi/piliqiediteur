@@ -28,7 +28,6 @@ class Produit extends Model
     use BelongsToMagasin, HasFactory, SoftDeletes;
 
     protected $fillable = [
-        'produit_parent_id',
         'fournisseur_id',
         'reference',
         'code_barres',
@@ -93,16 +92,6 @@ class Produit extends Model
     public function fournisseur(): BelongsTo
     {
         return $this->belongsTo(Fournisseur::class);
-    }
-
-    public function parent(): BelongsTo
-    {
-        return $this->belongsTo(self::class, 'produit_parent_id');
-    }
-
-    public function declinaisons(): HasMany
-    {
-        return $this->hasMany(self::class, 'produit_parent_id');
     }
 
     public function mouvementsStock(): HasMany

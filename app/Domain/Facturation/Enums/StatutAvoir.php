@@ -8,16 +8,13 @@ use Filament\Support\Contracts\HasLabel;
 /**
  * Cycle de vie volontairement minimal par rapport à StatutFacture : un
  * avoir n'est jamais payé, et son envoi par e-mail ne change pas son
- * statut (voir EnvoiDocument). Il est soit en cours de
- * préparation (brouillon), soit émis (document fiscal définitif), soit
- * annulé (uniquement possible tant qu'il est encore un brouillon, avant
- * tout numéro légal -- voir AnnulerFactureAction pour la même logique).
+ * statut (voir EnvoiDocument). Il est soit en cours de préparation
+ * (brouillon), soit émis (document fiscal définitif, numéroté).
  */
 enum StatutAvoir: string implements HasColor, HasLabel
 {
     case Brouillon = 'brouillon';
     case Emise = 'emise';
-    case Annulee = 'annulee';
 
     /**
      * @return list<self>
@@ -25,8 +22,8 @@ enum StatutAvoir: string implements HasColor, HasLabel
     public function transitionsAutorisees(): array
     {
         return match ($this) {
-            self::Brouillon => [self::Emise, self::Annulee],
-            self::Emise, self::Annulee => [],
+            self::Brouillon => [self::Emise],
+            self::Emise => [],
         };
     }
 
@@ -40,7 +37,6 @@ enum StatutAvoir: string implements HasColor, HasLabel
         return match ($this) {
             self::Brouillon => 'Brouillon',
             self::Emise => 'Émis',
-            self::Annulee => 'Annulé',
         };
     }
 
@@ -49,7 +45,6 @@ enum StatutAvoir: string implements HasColor, HasLabel
         return match ($this) {
             self::Brouillon => 'gray',
             self::Emise => 'success',
-            self::Annulee => 'danger',
         };
     }
 }

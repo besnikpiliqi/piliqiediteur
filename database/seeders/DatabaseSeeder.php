@@ -2,24 +2,17 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
+/**
+ * Aucune donnée n'est semée tant que les données de démonstration n'existent
+ * pas (étape 15 de la feuille de route) : un magasin se crée par
+ * l'inscription du panneau, qui passe par CreerMagasinAction.
+ */
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
-
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        $this->command?->info('Aucune donnée de démonstration : créez un magasin depuis la page d\'inscription (/app/register).');
     }
 }

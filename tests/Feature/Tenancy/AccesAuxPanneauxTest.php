@@ -9,49 +9,36 @@ use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Panel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
  * Qui ouvre quel panneau (voir User::canAccessPanel(), getTenants() et
- * canAccessTenant()) : le panneau de l'éditeur reste fermé à tous, et un
- * magasin ne s'ouvre qu'à ses membres actifs.
+ * canAccessTenant()) : seul le panneau des magasins s'ouvre, et un magasin
+ * ne s'ouvre qu'à ses membres actifs.
  */
 class AccesAuxPanneauxTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_le_panneau_de_l_editeur_refuse_le_proprietaire_d_un_magasin(): void
+    public function test_le_proprietaire_d_un_magasin_n_ouvre_aucun_autre_panneau(): void
     {
         $proprietaire = User::factory()->create();
         app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
 
-        $reponse = $this->actingAs($proprietaire)->get('/super-admin');
-
-        $reponse->assertForbidden();
-    }
-
-    /**
-     * @return array<string, array{StatutMembreMagasin}>
-     */
-    public static function statutsQuiNOuvrentPasLeMagasin(): array
-    {
-        return [
-            'suspendu' => [StatutMembreMagasin::Suspendu],
-            'invité' => [StatutMembreMagasin::Invite],
-        ];
+        $this->assertTrue($proprietaire->canAccessPanel(Filament::getPanel('app')));
+        $this->assertFalse($proprietaire->canAccessPanel(Panel::make()->id('editeur')));
     }
 
     /**
      * Membre actif d'un autre magasin, il entre dans le panneau, mais ce
      * magasin-ci ne s'ouvre pas et ne figure pas dans son sélecteur.
      */
-    #[DataProvider('statutsQuiNOuvrentPasLeMagasin')]
-    public function test_un_membre_qui_n_est_pas_actif_n_ouvre_pas_ce_magasin(StatutMembreMagasin $statut): void
+    public function test_un_membre_suspendu_n_ouvre_pas_ce_magasin(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $membre = $this->membreAuStatut($magasin, $statut);
+        $membre = $this->membreSuspendu($magasin);
         $autreMagasin = app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
         $autreMagasin->utilisateurs()->attach($membre->getKey(), ['role' => RoleMagasin::Vendeur->value, 'statut' => StatutMembreMagasin::Actif->value]);
 
@@ -61,21 +48,20 @@ class AccesAuxPanneauxTest extends TestCase
         $this->assertSame([$autreMagasin->getKey()], $membre->getTenants(Filament::getPanel('app'))->modelKeys());
     }
 
-    #[DataProvider('statutsQuiNOuvrentPasLeMagasin')]
-    public function test_sans_aucun_magasin_actif_le_panneau_est_refuse(StatutMembreMagasin $statut): void
+    public function test_sans_aucun_magasin_actif_le_panneau_est_refuse(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $membre = $this->membreAuStatut($magasin, $statut);
+        $membre = $this->membreSuspendu($magasin);
 
         $reponse = $this->actingAs($membre)->get("/app/{$magasin->uuid}");
 
         $reponse->assertForbidden();
     }
 
-    private function membreAuStatut(Magasin $magasin, StatutMembreMagasin $statut): User
+    private function membreSuspendu(Magasin $magasin): User
     {
         $membre = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
-        $magasin->membres()->where('user_id', $membre->getKey())->update(['statut' => $statut->value]);
+        $magasin->membres()->where('user_id', $membre->getKey())->update(['statut' => StatutMembreMagasin::Suspendu->value]);
 
         return $membre;
     }

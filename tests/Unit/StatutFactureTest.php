@@ -7,8 +7,8 @@ use Tests\TestCase;
 
 /**
  * Verrouille la machine à états : aucun statut ne doit être un cul-de-sac
- * accidentel. PartiellementPayee -> Payee a été un bug réel (corrigé) :
- * une facture partiellement payée ne pouvait jamais atteindre "payee".
+ * accidentel (une facture partiellement payée doit pouvoir devenir payée),
+ * et seuls « payée » et « annulée » sont définitifs.
  */
 class StatutFactureTest extends TestCase
 {
@@ -22,12 +22,10 @@ class StatutFactureTest extends TestCase
         $this->assertTrue(StatutFacture::PartiellementPayee->peutTransitionnerVers(StatutFacture::EnRetard));
     }
 
-    public function test_payee_et_annulee_sont_des_statuts_definitifs_sans_transition(): void
+    public function test_payee_et_annulee_n_ont_aucune_transition(): void
     {
         $this->assertSame([], StatutFacture::Payee->transitionsAutorisees());
         $this->assertSame([], StatutFacture::Annulee->transitionsAutorisees());
-        $this->assertTrue(StatutFacture::Payee->estDefinitive());
-        $this->assertTrue(StatutFacture::Annulee->estDefinitive());
     }
 
     public function test_un_brouillon_ne_peut_pas_devenir_paye_directement(): void

@@ -100,8 +100,8 @@ class CreerMembreMagasinActionTest extends TestCase
     }
 
     /**
-     * Recréer un membre suspendu (ou invité) heurtait l'unicité du
-     * rattachement et finissait en erreur 500.
+     * Un membre suspendu reste rattaché au magasin : le recréer est refusé
+     * par un message, sans toucher à son rattachement.
      */
     public function test_recreer_un_membre_suspendu_demande_de_modifier_son_statut(): void
     {

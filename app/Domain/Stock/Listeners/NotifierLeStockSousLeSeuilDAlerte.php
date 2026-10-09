@@ -12,9 +12,9 @@ use App\Models\User;
 use Illuminate\Support\Facades\Notification;
 
 /**
- * Prévient les membres du magasin qui gèrent son stock (permission
- * d'ajuster le stock, voir ProduitPolicy) -- jamais un membre d'un autre
- * magasin, ni un membre invité ou suspendu.
+ * Prévient les membres du magasin qui gèrent son stock (voir
+ * PermissionRegistry::PRODUIT_AJUSTER_STOCK) -- jamais un membre d'un
+ * autre magasin, ni un membre suspendu.
  *
  * Les permissions d'un membre dépendent du magasin (voir
  * MagasinTeamResolver) : elles sont lues dans le contexte du magasin du

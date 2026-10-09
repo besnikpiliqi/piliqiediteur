@@ -18,7 +18,6 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
-            $table->foreignId('current_magasin_id')->nullable()->constrained('magasins')->nullOnDelete();
             $table->rememberToken();
             $table->timestamps();
             $table->softDeletes();

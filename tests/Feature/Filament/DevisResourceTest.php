@@ -612,6 +612,6 @@ class DevisResourceTest extends TestCase
 
         $this->assertSoftDeleted($devisBrouillon);
         $this->assertNotSoftDeleted($devisConverti);
-        $this->assertSame($devisConverti->id, Facture::query()->sole()->devisOrigine->id);
+        $this->assertSame($devisConverti->id, Facture::query()->sole()->devis_id);
     }
 }

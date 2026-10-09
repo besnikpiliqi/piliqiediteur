@@ -14,10 +14,10 @@ return new class extends Migration
             $table->foreignId('facture_achat_id')->constrained('factures_achat')->cascadeOnDelete();
             // Nullable au niveau base (même logique que lignes_facture : un
             // produit supprimé ne doit jamais effacer l'historique d'achat),
-            // mais obligatoire en pratique : CreerFactureAchatAction exige
-            // un produit_id sur chaque ligne, la traçabilité pour l'avoir
-            // fournisseur (voir LigneAchat::quantiteRetournableRestante())
-            // n'ayant de sens que pour un produit suivi en stock.
+            // mais chaque ligne reçoit un produit, existant ou créé avec la
+            // facture (voir ConstructeurLigneAchat) : la traçabilité pour
+            // l'avoir fournisseur (voir LigneAchat::quantiteRetournableRestante())
+            // n'a de sens que pour un produit du catalogue.
             $table->foreignId('produit_id')->nullable()->constrained('produits')->nullOnDelete();
             $table->string('description', 255);
             $table->string('reference', 60)->nullable();

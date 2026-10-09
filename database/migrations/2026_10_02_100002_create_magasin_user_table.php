@@ -13,8 +13,7 @@ return new class extends Migration
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->string('role', 30)->default('employee');
-            $table->string('statut', 20)->default('invited');
-            $table->foreignId('invited_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->string('statut', 20);
             $table->timestamp('joined_at')->nullable();
             $table->timestamps();
 

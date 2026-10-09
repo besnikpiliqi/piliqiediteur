@@ -17,10 +17,10 @@ use LogicException;
 /**
  * Point d'entrée UNIQUE pour toute modification de stock. Aucun autre
  * endroit du code ne doit écrire dans produits.stock_quantite ou dans
- * mouvements_stock directement -- ni Billing (ventes), ni Purchasing
- * (réceptions/retours fournisseur), qui déclenchent ce service via des
- * listeners d'événements plutôt que des appels directs, pour garder les
- * domaines découplés.
+ * mouvements_stock directement. Les ventes, les avoirs, la validation des
+ * factures d'achat et les avoirs fournisseur l'appellent par des listeners
+ * de leurs événements ; la correction d'une facture d'achat déjà validée
+ * l'appelle directement (voir ModifierFactureAchatAction).
  *
  * Le stock est valorisé au coût moyen unitaire pondéré (CMUP, voir
  * Produit::$cmup_ht), recalculé après chaque entrée achetée (voir

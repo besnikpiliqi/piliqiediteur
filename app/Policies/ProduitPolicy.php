@@ -58,9 +58,4 @@ class ProduitPolicy extends MagasinPolicy
     {
         return $this->appartientAuMagasinActif($produit) && $user->can(PermissionRegistry::PRODUIT_DELETE);
     }
-
-    public function ajusterStock(User $user, Produit $produit): bool
-    {
-        return $this->appartientAuMagasinActif($produit) && $user->can(PermissionRegistry::PRODUIT_AJUSTER_STOCK);
-    }
 }

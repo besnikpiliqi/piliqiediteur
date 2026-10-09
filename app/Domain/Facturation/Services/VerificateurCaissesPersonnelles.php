@@ -8,19 +8,19 @@ use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 /**
- * Un vendeur peut fermer sa caisse personnelle aussi souvent qu'il le
- * souhaite, ou jamais (voir FermerSaCaisseAction) : rien ne l'y oblige, et
- * la clôture officielle de la journée (voir CloturerCaisseAction) agrège
- * directement les factures, jamais les relevés personnels -- un vendeur
- * qui oublie de fermer sa caisse ne bloque donc jamais la clôture.
+ * Un vendeur ferme sa caisse personnelle aussi souvent qu'il le souhaite
+ * (voir FermerSaCaisseAction), et la clôture de la journée (voir
+ * CloturerCaisseAction) agrège directement les factures, jamais les relevés
+ * personnels.
  *
- * Avant de clôturer manuellement, le propriétaire doit néanmoins pouvoir
- * voir si un vendeur a encore des ventes de cette journée qu'il n'a pas
- * fermées de son côté, pour ne pas que son relevé personnel (son outil de
- * réconciliation de fin de service) parte en retard. Volontairement
- * absent de la commande automatique de minuit (voir
- * ClotureAutomatiqueCaisse) : elle doit garantir qu'une journée est
- * toujours clôturée même si personne n'intervient, jamais bloquer dessus.
+ * Seule la clôture manuelle en tient compte : tant qu'un vendeur a des
+ * ventes de la journée qu'il n'a pas fermées de son côté, le bouton
+ * « Clôturer une journée » reste désactivé et nomme ces vendeurs (voir
+ * ListClotureCaisses), pour que leur relevé personnel (leur outil de
+ * réconciliation de fin de service) ne parte pas en retard. La clôture
+ * automatique de minuit (voir ClotureAutomatiqueCaisse) ne le consulte
+ * jamais : une journée est toujours clôturée, même si personne
+ * n'intervient.
  */
 class VerificateurCaissesPersonnelles
 {
@@ -44,8 +44,9 @@ class VerificateurCaissesPersonnelles
 
     /**
      * Même règle que FermerSaCaisseAction : une vente annulée ne compte
-     * pas (elle ne bloque donc jamais la clôture), et une vente émise après
-     * une fermeture reste ouverte tant qu'une fermeture ne l'a pas comptée.
+     * pas (elle ne désactive donc jamais la clôture manuelle), et une vente
+     * émise après une fermeture reste ouverte tant qu'une fermeture ne l'a
+     * pas comptée.
      */
     private function aUneVenteNonFermee(User $vendeur, CarbonInterface $date): bool
     {

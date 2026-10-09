@@ -15,10 +15,10 @@ use LogicException;
  * Filet de sécurité réglementaire : un magasin qui oublie de clôturer sa
  * caisse (bouton manuel, voir ClotureCaisseResource) ne doit jamais
  * laisser une journée de ventes aux particuliers sans e-reporting. Cette
- * commande planifiée (voir bootstrap/app.php, juste après
- * app:marquer-factures-en-retard) clôture la VEILLE pour chaque magasin
- * actif qui ne l'a pas déjà fait lui-même -- jamais le jour même, qui
- * n'est pas encore terminé au moment où elle tourne.
+ * commande planifiée à minuit, heure de Paris (voir bootstrap/app.php,
+ * avant le marquage des factures en retard à 00:15), clôture la VEILLE
+ * pour chaque magasin actif qui ne l'a pas déjà fait lui-même -- jamais le
+ * jour même, qui n'est pas encore terminé au moment où elle tourne.
  */
 #[Signature('app:cloturer-caisses-automatiquement')]
 #[Description("Clôture automatiquement la caisse de la veille pour les magasins qui ne l'ont pas fait eux-mêmes")]

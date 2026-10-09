@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MagasinUser;
@@ -14,7 +13,6 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -57,28 +55,15 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     {
         return $this->belongsToMany(Magasin::class, 'magasin_user')
             ->using(MagasinUser::class)
-            ->withPivot(['role', 'statut', 'invited_by', 'joined_at'])
+            ->withPivot(['role', 'statut', 'joined_at'])
             ->withTimestamps();
-    }
-
-    public function magasinActuel(): BelongsTo
-    {
-        return $this->belongsTo(Magasin::class, 'current_magasin_id');
     }
 
     public function appartientA(Magasin $magasin): bool
     {
         return $this->magasins()
             ->wherePivot('magasin_id', $magasin->getKey())
-            ->wherePivot('statut', 'active')
-            ->exists();
-    }
-
-    public function estProprietaireDe(Magasin $magasin): bool
-    {
-        return $this->magasins()
-            ->wherePivot('magasin_id', $magasin->getKey())
-            ->wherePivot('role', 'owner')
+            ->wherePivot('statut', StatutMembreMagasin::Actif->value)
             ->exists();
     }
 
@@ -96,8 +81,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     /**
      * Filament\Models\Contracts\HasTenants : liste des magasins affichés
      * dans le sélecteur de tenant du panneau "app". Seuls les
-     * rattachements actifs apparaissent -- un accès invité ou suspendu
-     * n'ouvre pas la porte.
+     * rattachements actifs apparaissent -- un accès suspendu n'ouvre pas
+     * la porte.
      */
     public function getTenants(Panel $panel): array|Collection
     {
@@ -113,19 +98,16 @@ class User extends Authenticatable implements FilamentUser, HasTenants
 
     /**
      * Sans cette implémentation explicite, Filament se rabat sur
-     * `config('app.env') === 'local'` pour autoriser l'accès à un panneau
-     * -- ce qui passe silencieusement en local mais bloque tout (y
-     * compris les tests, le staging et la production) avec un 403. On
-     * n'a jamais voulu dépendre de l'environnement pour l'autorisation.
+     * `config('app.env') === 'local'` pour autoriser l'accès à un panneau :
+     * l'accès ne doit jamais dépendre de l'environnement. Seul le panneau
+     * des magasins existe, ouvert à qui est membre actif d'au moins un
+     * magasin ; tout autre panneau reste fermé, jusqu'à ce que
+     * l'administration de l'éditeur (étape 13 de la feuille de route)
+     * définisse le sien.
      */
     public function canAccessPanel(Panel $panel): bool
     {
-        return match ($panel->getId()) {
-            'app' => $this->magasins()->wherePivot('statut', StatutMembreMagasin::Actif->value)->exists(),
-            // Le panneau Super Admin n'a pas encore de notion de "staff
-            // plateforme" -- personne n'y accède tant que la Phase 7
-            // (administration SaaS) ne l'aura pas modélisée explicitement.
-            default => false,
-        };
+        return $panel->getId() === 'app'
+            && $this->magasins()->wherePivot('statut', StatutMembreMagasin::Actif->value)->exists();
     }
 }

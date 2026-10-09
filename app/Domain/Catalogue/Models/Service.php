@@ -2,13 +2,11 @@
 
 namespace App\Domain\Catalogue\Models;
 
-use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\ServiceFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -87,13 +85,5 @@ class Service extends Model
     public function scopeActifs(Builder $query): void
     {
         $query->where('actif', true);
-    }
-
-    /**
-     * @return HasMany<LigneFacture, $this>
-     */
-    public function lignesFacture(): HasMany
-    {
-        return $this->hasMany(LigneFacture::class);
     }
 }

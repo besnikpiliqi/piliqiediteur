@@ -8,13 +8,13 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
 
 /**
- * Contrat d'intégration avec un PDP (Plateforme de Dématérialisation
- * Partenaire). Le domaine Facturation et le domaine Tenancy ne dépendent
- * QUE de cette interface, jamais d'un vendeur concret (voir §18 du cahier
- * des charges : pas de code spécifique à un fournisseur dans les actions
- * métier). FakePdpGateway (liée par défaut, voir PdpServiceProvider) sert
- * de sandbox tant qu'aucun vendeur réel n'est choisi ; une implémentation
- * réelle prendra sa place sous App\Integrations\Pdp\<NomDuVendeur>\...
+ * Contrat d'intégration avec un PDP (plateforme agréée de facturation
+ * électronique). Le domaine Facturation et le domaine Tenancy ne dépendent
+ * QUE de cette interface, jamais d'un prestataire concret : aucun code
+ * propre à un prestataire dans les actions métier. FakePdpGateway (liée par
+ * défaut, voir PdpServiceProvider) est une passerelle factice ;
+ * l'implémentation SUPER PDP (étape 11 de la feuille de route) prendra sa
+ * place.
  */
 interface PdpGatewayInterface
 {

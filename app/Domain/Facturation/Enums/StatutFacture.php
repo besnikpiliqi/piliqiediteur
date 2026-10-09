@@ -47,11 +47,6 @@ enum StatutFacture: string implements HasColor, HasLabel
         return in_array($cible, $this->transitionsAutorisees(), true);
     }
 
-    public function estDefinitive(): bool
-    {
-        return in_array($this, [self::Payee, self::Annulee], true);
-    }
-
     /**
      * Une facture émise dont il reste quelque chose à régler : elle peut
      * recevoir un paiement, ou l'imputation d'un avoir qui la corrige.

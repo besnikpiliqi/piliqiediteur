@@ -11,9 +11,9 @@ use Spatie\Permission\Models\Role;
 
 /**
  * Crée les 5 rôles Spatie par défaut pour un magasin, avec une matrice de
- * permissions raisonnable par défaut. Un propriétaire pourra ensuite
- * affiner via Filament Shield -- ceci ne fait qu'amorcer un magasin neuf
- * avec des rôles exploitables immédiatement.
+ * permissions raisonnable par défaut, exploitable dès sa création. Le
+ * propriétaire affine ensuite les droits de chaque membre par ses
+ * permissions supplémentaires (voir EditMembreEquipe).
  *
  * Exige que TenantContext soit déjà positionné sur le magasin concerné
  * (Spatie scope automatiquement les rôles créés par team via le resolver,

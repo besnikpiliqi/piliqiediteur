@@ -11,14 +11,14 @@ return new class extends Migration
         Schema::create('transmissions_pdp', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            // Polymorphique : une facture aujourd'hui, une clôture de
-            // caisse (e-reporting) ou une facture d'achat reçue demain --
-            // même mécanique de suivi/historique pour tous.
+            // Polymorphique : une facture ou une soumission d'e-reporting
+            // (voir les morphMany transmissionsPdp()) -- même mécanique de
+            // suivi/historique pour toutes.
             $table->nullableMorphs('transmissible');
             $table->string('direction', 10); // outbound, inbound
             $table->string('prestataire_pdp', 60);
             $table->string('transmission_externe_id')->nullable();
-            $table->string('format', 10)->nullable(); // facturx, ubl, cii
+            $table->string('format', 10)->nullable(); // facturx, ereporting (voir FakePdpGateway)
             $table->string('statut', 20)->default('soumise');
             $table->string('chemin_fichier_archive')->nullable();
             $table->string('code_erreur', 60)->nullable();

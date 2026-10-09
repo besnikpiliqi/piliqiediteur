@@ -233,7 +233,7 @@ class ProduitResource extends Resource
                     ->disabled()
                     ->dehydrated(false)
                     ->visible(fn (string $operation, Get $get): bool => $operation === 'edit' && $get('suivi_stock'))
-                    ->helperText('Modifiable uniquement via un mouvement de stock, jamais directement ici.'),
+                    ->helperText('Tenu à jour par les ventes, les retours clients, les factures d\'achat et les avoirs fournisseur : il ne se saisit pas ici.'),
             ])->columns(3),
 
             Toggle::make('actif')->default(true),

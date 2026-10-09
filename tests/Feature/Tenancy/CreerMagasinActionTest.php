@@ -26,12 +26,9 @@ class CreerMagasinActionTest extends TestCase
             'email' => 'contact@maboutique.fr',
         ], $proprietaire);
 
-        $proprietaire->refresh();
-
         $this->assertSame(StatutMagasin::Active, $magasin->statut);
         $this->assertTrue($proprietaire->appartientA($magasin));
-        $this->assertTrue($proprietaire->estProprietaireDe($magasin));
-        $this->assertSame($magasin->id, $proprietaire->current_magasin_id);
+        $this->assertSame([$proprietaire->id], $magasin->proprietaires()->get()->modelKeys());
     }
 
     /**

@@ -14,12 +14,11 @@ use App\Integrations\Pdp\Enums\StatutTransmissionPdp;
 use Illuminate\Support\Str;
 
 /**
- * Sandbox locale : accepte tout instantanément. Permet de développer et
- * tester tout le pipeline (mandat, émission, transmission) sans attendre
- * le choix d'un vendeur PDP réel ni dépendre d'un réseau externe dans les
- * tests. À remplacer par une vraie implémentation sous
- * App\Integrations\Pdp\<Vendeur>\<Vendeur>PdpGateway une fois choisie,
- * en changeant uniquement le binding dans PdpServiceProvider.
+ * Passerelle factice : accepte tout instantanément. Permet de développer et
+ * tester tout le pipeline (mandat, émission, transmission) sans dépendre
+ * d'un réseau externe. L'implémentation SUPER PDP (étape 11 de la feuille
+ * de route) la remplacera, en changeant uniquement le binding dans
+ * PdpServiceProvider.
  */
 class FakePdpGateway implements PdpGatewayInterface
 {

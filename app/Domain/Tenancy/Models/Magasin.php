@@ -2,19 +2,11 @@
 
 namespace App\Domain\Tenancy\Models;
 
-use App\Domain\Achats\Models\AvoirFournisseur;
-use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
-use App\Domain\Facturation\Models\Avoir;
-use App\Domain\Facturation\Models\ClotureCaisse;
-use App\Domain\Facturation\Models\Devis;
-use App\Domain\Facturation\Models\Facture;
-use App\Domain\Facturation\Models\Paiement;
-use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
@@ -62,7 +54,6 @@ class Magasin extends Model implements HasName
         'email',
         'telephone',
         'statut',
-        'heure_cloture_automatique',
         'regime_tva',
         'option_debits_tva',
         'prix_vente_automatique',
@@ -73,7 +64,6 @@ class Magasin extends Model implements HasName
 
     protected $casts = [
         'statut' => StatutMagasin::class,
-        'heure_cloture_automatique' => 'datetime:H:i',
         'regime_tva' => RegimeTva::class,
         'option_debits_tva' => 'boolean',
         'prix_vente_automatique' => 'boolean',
@@ -87,7 +77,6 @@ class Magasin extends Model implements HasName
             $magasin->uuid ??= (string) Str::uuid();
             $magasin->statut ??= StatutMagasin::EnAttenteVerification;
             $magasin->pays ??= 'FR';
-            $magasin->heure_cloture_automatique ??= '00:00';
             $magasin->prix_vente_automatique ??= false;
             $magasin->bareme_prix_vente ??= BaremePrixDeVente::parDefaut();
             $magasin->relances_automatiques ??= false;
@@ -156,18 +145,13 @@ class Magasin extends Model implements HasName
     {
         return $this->belongsToMany(User::class, 'magasin_user')
             ->using(MagasinUser::class)
-            ->withPivot(['role', 'statut', 'invited_by', 'joined_at'])
+            ->withPivot(['role', 'statut', 'joined_at'])
             ->withTimestamps();
-    }
-
-    public function estActif(): bool
-    {
-        return $this->statut === StatutMagasin::Active;
     }
 
     /**
      * Les membres qui ont aujourd'hui accès au magasin : un rattachement
-     * invité ou suspendu ne reçoit rien de lui (voir les notifications).
+     * suspendu ne reçoit rien de lui (voir les notifications).
      */
     public function membresActifs(): BelongsToMany
     {
@@ -179,12 +163,15 @@ class Magasin extends Model implements HasName
         return $this->membresActifs()->wherePivot('role', RoleMagasin::Proprietaire->value);
     }
 
-    // Les relations ci-dessous existent avant tout pour la convention de
-    // tenancy de Filament (Resource::$tenantOwnershipRelationshipName) :
-    // elles ne sont PAS le mécanisme d'isolation réel, qui reste
-    // BelongsToMagasin + MagasinScope (seul mécanisme actif en dehors de
-    // Filament : API, jobs, console). Les deux restent cohérents puisque
-    // la création passe toujours par le TenantContext déjà positionné.
+    /**
+     * clients(), fournisseurs(), produits() et services() servent aux
+     * créations que Filament enregistre lui-même (CreateClient,
+     * CreateFournisseur, CreateProduit et la fenêtre « Nouveau » de
+     * ManageServices) : il y rattache la fiche au magasin par la relation
+     * que nomme Resource::getTenantRelationshipName(), le pluriel du
+     * modèle. Les créations qui surchargent handleRecordCreation() ne s'en
+     * servent pas. L'isolation, elle, reste BelongsToMagasin + MagasinScope.
+     */
     public function clients(): HasMany
     {
         return $this->hasMany(Client::class);
@@ -205,49 +192,9 @@ class Magasin extends Model implements HasName
         return $this->hasMany(Service::class);
     }
 
-    public function devis(): HasMany
-    {
-        return $this->hasMany(Devis::class);
-    }
-
-    public function factures(): HasMany
-    {
-        return $this->hasMany(Facture::class);
-    }
-
-    public function paiements(): HasMany
-    {
-        return $this->hasMany(Paiement::class);
-    }
-
-    public function avoirs(): HasMany
-    {
-        return $this->hasMany(Avoir::class);
-    }
-
-    public function cloturesCaisse(): HasMany
-    {
-        return $this->hasMany(ClotureCaisse::class);
-    }
-
-    public function facturesAchat(): HasMany
-    {
-        return $this->hasMany(FactureAchat::class);
-    }
-
-    public function avoirsFournisseur(): HasMany
-    {
-        return $this->hasMany(AvoirFournisseur::class);
-    }
-
-    public function soumissionsEReporting(): HasMany
-    {
-        return $this->hasMany(SoumissionEReporting::class);
-    }
-
     /**
-     * Même remarque que ci-dessus : sert la convention de tenancy
-     * Filament pour MembreEquipeResource (modèle = MagasinUser).
+     * Les rattachements des membres de l'équipe (voir CreateMembreEquipe et
+     * EmailLibrePourUnNouveauMembre).
      */
     public function membres(): HasMany
     {

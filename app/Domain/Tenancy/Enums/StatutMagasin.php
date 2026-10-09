@@ -8,19 +8,4 @@ enum StatutMagasin: string
     case Active = 'active';
     case Suspendu = 'suspended';
     case Ferme = 'closed';
-
-    public function label(): string
-    {
-        return match ($this) {
-            self::EnAttenteVerification => 'En attente de vérification',
-            self::Active => 'Actif',
-            self::Suspendu => 'Suspendu',
-            self::Ferme => 'Fermé',
-        };
-    }
-
-    public function permetConnexion(): bool
-    {
-        return $this === self::Active;
-    }
 }

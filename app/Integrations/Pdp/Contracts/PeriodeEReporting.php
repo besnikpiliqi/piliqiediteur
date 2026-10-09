@@ -15,9 +15,4 @@ final readonly class PeriodeEReporting
         public CarbonImmutable $fin,
         public CarbonImmutable $dateLimiteTransmission,
     ) {}
-
-    public function contient(CarbonImmutable $date): bool
-    {
-        return $date->between($this->debut, $this->fin);
-    }
 }

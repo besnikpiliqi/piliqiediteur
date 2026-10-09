@@ -52,14 +52,11 @@ class ListClotureCaisses extends ListRecords
             default => sprintf('%d vente(s) au comptoir et %d avoir(s) déduit(s), pour un total net de %s €, seront regroupés dans cette clôture. %s', $ventesAClore->count(), $avoirsAClore->count(), $totalNet, $avertissement),
         };
 
-        // Un vendeur qui oublie de fermer sa caisse personnelle ne bloque
-        // jamais la clôture officielle (qui agrège directement les
-        // factures, voir CloturerCaisseAction) -- mais le propriétaire doit
-        // le savoir et pouvoir le relancer avant de clôturer manuellement,
-        // sous peine qu'un relevé personnel parte en retard (voir
-        // VerificateurCaissesPersonnelles). Volontairement absent de la
-        // commande automatique de minuit : elle doit toujours clôturer, pas
-        // se bloquer dessus.
+        // Seule la clôture manuelle attend les caisses personnelles : tant
+        // qu'un vendeur n'a pas fermé ses ventes de la journée, le bouton
+        // reste désactivé et nomme les vendeurs à relancer (voir
+        // VerificateurCaissesPersonnelles). La clôture automatique de
+        // minuit, elle, clôture toujours.
         $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte($veille);
 
         return [

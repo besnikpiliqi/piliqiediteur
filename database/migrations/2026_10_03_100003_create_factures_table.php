@@ -38,10 +38,11 @@ return new class extends Migration
             // Un stockage redondant finirait par désynchroniser l'affiché
             // du réel si une allocation est un jour corrigée.
             $table->timestamps();
-            // PAS de softDeletes() ici, volontairement : une facture ne se
-            // supprime jamais (obligation légale de conservation, voir
-            // FacturePolicy). Une correction passe par un avoir, pas par
-            // une suppression, même "douce".
+            // PAS de softDeletes() ici, volontairement : une facture
+            // numérotée (émise ou annulée) ne se supprime jamais (obligation
+            // légale de conservation) ; une correction passe par un avoir.
+            // Un brouillon, sans numéro, se supprime définitivement (voir
+            // FacturePolicy::delete()).
 
             $table->unique(['magasin_id', 'numero']);
             $table->index(['magasin_id', 'statut']);

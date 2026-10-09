@@ -4,10 +4,6 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-/**
- * Créée avant users : un utilisateur retient le magasin sur lequel il
- * travaille (users.current_magasin_id).
- */
 return new class extends Migration
 {
     public function up(): void
@@ -40,7 +36,6 @@ return new class extends Migration
             // les prestations de services, champ du flux d'e-reporting
             // (voir CalculateurPeriodeEReporting).
             $table->boolean('option_debits_tva')->default(false);
-            $table->time('heure_cloture_automatique')->default('00:00:00');
             // Barème de prix de vente (voir BaremePrixDeVente) : chaque
             // magasin démarre avec l'exemple du logiciel, désactivé (voir
             // Magasin::booted()), qu'il active et règle s'il le veut.

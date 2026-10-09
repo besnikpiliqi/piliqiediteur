@@ -16,8 +16,10 @@ use RuntimeException;
  * Clés (voir config/caisse_securisee.php) :
  * - la clé privée de l'éditeur vient de l'environnement du serveur ;
  * - une clé se désigne par son cle_id, le SHA-256 hexadécimal de sa clé
- *   publique au format DER SubjectPublicKeyInfo, qui est canonique,
- *   contrairement au PEM ;
+ *   publique dans son écriture de référence (voir spki()) : ni le PEM ni
+ *   le DER que réécrit OpenSSL ne sont canoniques, une même clé pouvant
+ *   s'écrire avec un point compressé ou les paramètres explicites de sa
+ *   courbe ;
  * - seules les clés publiques épinglées dans le dépôt font foi : une
  *   signature ne se vérifie qu'avec elles, et la clé privée ne signe que
  *   si sa clé publique en fait partie.
@@ -30,6 +32,13 @@ class SignataireFiscal
     public const ALGORITHME = 'ES256';
 
     public const COURBE = 'prime256v1';
+
+    /**
+     * Le début du DER SubjectPublicKeyInfo d'une clé P-256 à point non
+     * compressé : SEQUENCE { SEQUENCE { id-ecPublicKey, prime256v1 },
+     * BIT STRING }, que suivent les 65 octets du point, 04 || X || Y.
+     */
+    private const ENTETE_SPKI_P256 = '3059301306072a8648ce3d020106082a8648ce3d030107034200';
 
     /**
      * Les clés publiques épinglées, par cle_id.
@@ -46,7 +55,8 @@ class SignataireFiscal
 
     /**
      * Une nouvelle paire de clés ECDSA P-256 : la clé privée et la clé
-     * publique au format PEM, et le cle_id de la clé publique.
+     * publique (écriture de référence) au format PEM, et le cle_id de la
+     * clé publique.
      *
      * @return array{cle_id: string, cle_privee: string, cle_publique: string}
      */
@@ -61,7 +71,7 @@ class SignataireFiscal
         return [
             'cle_id' => self::empreinte($cle),
             'cle_privee' => $clePrivee,
-            'cle_publique' => openssl_pkey_get_details($cle)['key'],
+            'cle_publique' => self::pem(self::spki($cle)),
         ];
     }
 
@@ -109,7 +119,9 @@ class SignataireFiscal
     }
 
     /**
-     * Les clés publiques épinglées au format PEM, par cle_id.
+     * Les clés publiques épinglées par cle_id, chacune au format PEM dans
+     * son écriture de référence, quelle que soit celle du fichier épinglé :
+     * le SHA-256 du DER de ce PEM est toujours son cle_id.
      *
      * @return array<string, string>
      *
@@ -118,7 +130,7 @@ class SignataireFiscal
     public function clesEpinglees(): array
     {
         return array_map(
-            static fn (OpenSSLAsymmetricKey $cle): string => openssl_pkey_get_details($cle)['key'],
+            static fn (OpenSSLAsymmetricKey $cle): string => self::pem(self::spki($cle)),
             $this->trousseau(),
         );
     }
@@ -204,14 +216,36 @@ class SignataireFiscal
     }
 
     /**
-     * Le cle_id d'une clé : SHA-256 hexadécimal du DER SubjectPublicKeyInfo
-     * de sa clé publique (le corps base64 du PEM « PUBLIC KEY »).
+     * Le cle_id d'une clé P-256 : SHA-256 hexadécimal de l'écriture de
+     * référence de sa clé publique.
      */
     private static function empreinte(OpenSSLAsymmetricKey $cle): string
     {
-        $clePubliquePem = openssl_pkey_get_details($cle)['key'];
+        return hash('sha256', self::spki($cle));
+    }
 
-        return hash('sha256', base64_decode((string) preg_replace('/-----[^-]+-----|\s+/', '', $clePubliquePem), true));
+    /**
+     * L'écriture de référence de la clé publique d'une clé P-256 : DER
+     * SubjectPublicKeyInfo, courbe nommée et point non compressé
+     * 04 || X || Y, chaque coordonnée sur 32 octets. Elle se reconstruit
+     * depuis les coordonnées, car OpenSSL réécrit une clé telle qu'il l'a
+     * lue : un point compressé ou les paramètres explicites de la courbe
+     * donneraient d'autres octets, donc un autre cle_id, pour la même clé.
+     * OpenSSL rend aussi chaque coordonnée sans ses octets nuls de tête,
+     * d'où le complément à 32 octets.
+     */
+    private static function spki(OpenSSLAsymmetricKey $cle): string
+    {
+        $coordonnees = openssl_pkey_get_details($cle)['ec'];
+
+        return hex2bin(self::ENTETE_SPKI_P256)."\x04"
+            .str_pad($coordonnees['x'], 32, "\0", STR_PAD_LEFT)
+            .str_pad($coordonnees['y'], 32, "\0", STR_PAD_LEFT);
+    }
+
+    private static function pem(string $der): string
+    {
+        return "-----BEGIN PUBLIC KEY-----\n".chunk_split(base64_encode($der), 64, "\n")."-----END PUBLIC KEY-----\n";
     }
 
     private static function base64url(string $octets): string

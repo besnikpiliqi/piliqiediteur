@@ -5,6 +5,7 @@ namespace Tests\Feature\CaisseSecurisee;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use Illuminate\Support\Arr;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -28,8 +29,9 @@ class SignataireFiscalTest extends TestCase
     }
 
     /**
-     * Le cle_id d'une clé publique PEM, calculé sans le signataire : le
-     * SHA-256 du DER SubjectPublicKeyInfo, corps base64 du PEM.
+     * Le cle_id d'une clé publique PEM écrite par OpenSSL (courbe nommée,
+     * point non compressé), calculé sans le signataire : le SHA-256 du DER
+     * SubjectPublicKeyInfo, corps base64 du PEM.
      */
     private function cleIdDe(string $clePubliquePem): string
     {
@@ -52,6 +54,53 @@ class SignataireFiscalTest extends TestCase
     private function signatureDer(string $signature): string
     {
         return base64_decode(strtr($signature, '-_', '+/'));
+    }
+
+    private function fixture(string $fichier): string
+    {
+        return file_get_contents(base_path("tests/Fixtures/CaisseSecurisee/{$fichier}"));
+    }
+
+    private function pem(string $etiquette, string $der): string
+    {
+        return "-----BEGIN {$etiquette}-----\n".chunk_split(base64_encode($der), 64, "\n")."-----END {$etiquette}-----\n";
+    }
+
+    /**
+     * Le point compressé d'une clé P-256 : 02 ou 03 selon la parité de Y,
+     * puis X sur 32 octets.
+     *
+     * @param  array{x: string, y: string}  $coordonnees
+     */
+    private function pointCompresse(array $coordonnees): string
+    {
+        return (ord(substr($coordonnees['y'], -1)) % 2 === 0 ? "\x02" : "\x03").str_pad($coordonnees['x'], 32, "\0", STR_PAD_LEFT);
+    }
+
+    /**
+     * La clé publique des tests telle que l'écrit
+     * `openssl ec -pubout -conv_form compressed`.
+     */
+    private function clePubliqueDeTestCompressee(): string
+    {
+        $coordonnees = openssl_pkey_get_details(openssl_pkey_get_public($this->clePubliqueDeTest()))['ec'];
+
+        return $this->pem('PUBLIC KEY', hex2bin('3039301306072a8648ce3d020106082a8648ce3d030107032200').$this->pointCompresse($coordonnees));
+    }
+
+    /**
+     * La clé privée des tests telle que l'écrit
+     * `openssl ec -conv_form compressed` : SEC1, courbe nommée, clé
+     * publique au point compressé.
+     */
+    private function clePriveeDeTestCompressee(): string
+    {
+        $coordonnees = openssl_pkey_get_details(openssl_pkey_get_private(base64_decode(config('caisse_securisee.cle_privee'))))['ec'];
+
+        return $this->pem('EC PRIVATE KEY', hex2bin('30570201010420')
+            .str_pad($coordonnees['d'], 32, "\0", STR_PAD_LEFT)
+            .hex2bin('a00a06082a8648ce3d030107a124032200')
+            .$this->pointCompresse($coordonnees));
     }
 
     public function test_une_signature_se_verifie_avec_la_cle_epinglee_qui_l_a_produite(): void
@@ -139,6 +188,77 @@ class SignataireFiscalTest extends TestCase
         $this->assertSame($this->cleIdDe($nouvelle['publique']), $signataire->cleId());
         $this->assertTrue($signataire->verifier(self::CONTENU, $signatureAncienne, $cleIdAncienne));
         $this->assertTrue($signataire->verifier(self::CONTENU, $signataire->signer(self::CONTENU), $signataire->cleId()));
+    }
+
+    /**
+     * OpenSSL réécrit une clé telle qu'il l'a lue : la clé publique
+     * épinglée au point compressé reste la même clé, sous le même cle_id.
+     */
+    public function test_une_cle_epinglee_au_point_compresse_signe_sous_son_cle_id_de_reference(): void
+    {
+        $cleIdDeReference = $this->cleIdDe($this->clePubliqueDeTest());
+        config(['caisse_securisee.cles_publiques' => ['compressee.pem' => $this->clePubliqueDeTestCompressee()]]);
+        $signataire = $this->signataire();
+
+        $signature = $signataire->signer(self::CONTENU);
+
+        $this->assertSame($cleIdDeReference, $signataire->cleId());
+        $this->assertTrue($signataire->verifier(self::CONTENU, $signature, $signataire->cleId()));
+    }
+
+    public function test_une_cle_privee_au_point_compresse_signe_sous_son_cle_id_de_reference(): void
+    {
+        config(['caisse_securisee.cle_privee' => base64_encode($this->clePriveeDeTestCompressee())]);
+        $signataire = $this->signataire();
+
+        $signature = $signataire->signer(self::CONTENU);
+
+        $this->assertSame($this->cleIdDe($this->clePubliqueDeTest()), $signataire->cleId());
+        $this->assertTrue($signataire->verifier(self::CONTENU, $signature, $signataire->cleId()));
+    }
+
+    /**
+     * Les autres écritures de la clé de cle-non-compressee.pem, produites
+     * par `openssl ec -pubout` avec -conv_form compressed ou
+     * -param_enc explicit.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function autresEcrituresDUneCle(): array
+    {
+        return [
+            'point compressé' => ['cle-compressee.pem'],
+            'paramètres explicites de la courbe' => ['cle-parametres-explicites.pem'],
+        ];
+    }
+
+    /**
+     * Épinglée deux fois sous deux écritures, une clé reste une seule clé,
+     * listée dans son écriture de référence.
+     */
+    #[DataProvider('autresEcrituresDUneCle')]
+    public function test_une_cle_epinglee_sous_deux_ecritures_n_a_qu_un_cle_id(string $autreEcriture): void
+    {
+        $reference = $this->fixture('cle-non-compressee.pem');
+        config(['caisse_securisee.cles_publiques' => ['reference.pem' => $reference, 'autre.pem' => $this->fixture($autreEcriture)]]);
+
+        $clesEpinglees = $this->signataire()->clesEpinglees();
+
+        $this->assertSame([$this->cleIdDe($reference) => $reference], $clesEpinglees);
+    }
+
+    /**
+     * Les deux coordonnées de la clé de cle-non-compressee.pem commencent
+     * par un octet nul, qu'OpenSSL omet en les rendant.
+     */
+    public function test_une_cle_aux_coordonnees_commencant_par_un_octet_nul_garde_son_cle_id(): void
+    {
+        $cle = $this->fixture('cle-non-compressee.pem');
+        config(['caisse_securisee.cles_publiques' => ['cle.pem' => $cle]]);
+
+        $clesEpinglees = $this->signataire()->clesEpinglees();
+
+        $this->assertSame([$this->cleIdDe($cle) => $cle], $clesEpinglees);
     }
 
     public function test_une_cle_privee_non_epinglee_refuse_de_signer(): void

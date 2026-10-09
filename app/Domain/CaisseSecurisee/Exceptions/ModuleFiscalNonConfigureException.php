@@ -8,11 +8,11 @@ use RuntimeException;
  * Le module fiscal ne peut pas signer : clé privée absente ou illisible,
  * clé publique non épinglée, clé épinglée invalide.
  *
- * Fermé par défaut : une donnée fiscale qui ne peut pas être signée n'est
- * pas enregistrée, et la vente qui la produit est refusée, plutôt que
- * d'enregistrer des ventes que rien ne protège. Aucun message ne contient
- * la clé privée : seulement l'empreinte (cle_id) de clés publiques, ou le
- * nom d'un fichier épinglé.
+ * Fermé par défaut : SignataireFiscal lève cette exception au lieu de
+ * signer, et toute écriture fiscale qui la reçoit refuse l'opération
+ * qu'elle devait enregistrer, plutôt que de l'enregistrer sans signature.
+ * Aucun message ne contient la clé privée : seulement l'empreinte
+ * (cle_id) de clés publiques, ou le nom d'un fichier épinglé.
  */
 class ModuleFiscalNonConfigureException extends RuntimeException
 {

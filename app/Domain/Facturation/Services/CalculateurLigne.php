@@ -353,11 +353,15 @@ class CalculateurLigne
      * Un montant, un taux ou une remise enregistré au centième
      * (decimal(12,2) ou decimal(5,2), lu en chaîne par le cast decimal:2),
      * en centièmes entiers : « 120.00 » vaut 12000, « -0.05 » vaut -5, un
-     * entier compte des unités entières (20 vaut 2000). Seule l'écriture
-     * exacte d'une colonne est acceptée : au plus deux décimales, un point,
-     * aucun espace ni signe « + ». Un flottant est refusé, même rond :
-     * rien ne dit qu'il soit la valeur exacte d'une colonne (0.1 + 0.2
-     * vaut 0.30000000000000004), et PHP le convertirait en silence avant
+     * entier compte des unités entières (20 vaut 2000). Seule une écriture
+     * décimale exacte est acceptée : des chiffres, au plus deux décimales
+     * après un point, un « - » facultatif, aucun espace ni signe « + » ;
+     * des zéros de tête ne changent rien (« 0007.5 » vaut 750). Comme
+     * partout dans la classe, la borne est UNITES_MAXIMUM, au-delà des
+     * colonnes : un montant qu'aucune colonne ne contiendrait se lit
+     * encore sous cette borne. Un flottant est refusé, même rond : rien ne
+     * dit qu'il soit la valeur exacte d'une colonne (0.1 + 0.2 vaut
+     * 0.30000000000000004), et PHP le convertirait en silence avant
      * l'appel (1.5 deviendrait l'entier 1) si le paramètre n'acceptait que
      * des chaînes et des entiers.
      *

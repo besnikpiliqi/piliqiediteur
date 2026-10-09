@@ -586,6 +586,7 @@ class CalculateurLigneTest extends TestCase
         $this->assertSame(-5, $this->calculateur()->enCentiemes('-0.05'));
         $this->assertSame(50, $this->calculateur()->enCentiemes('0.5'));
         $this->assertSame(700, $this->calculateur()->enCentiemes('7'));
+        $this->assertSame(750, $this->calculateur()->enCentiemes('0007.5'));
         $this->assertSame(0, $this->calculateur()->enCentiemes('-0.00'));
         $this->assertSame(999999999999, $this->calculateur()->enCentiemes('9999999999.99'));
         $this->assertSame(2000, $this->calculateur()->enCentiemes(20));
@@ -593,8 +594,8 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * Seule l'écriture exacte d'une colonne se lit : jamais un flottant,
-     * même entier, ni une saisie à interpréter.
+     * Seule une écriture décimale exacte se lit : jamais un flottant, même
+     * entier, ni une saisie à interpréter.
      *
      * @return array<string, array{mixed}>
      */
@@ -628,8 +629,14 @@ class CalculateurLigneTest extends TestCase
         $this->calculateur()->enCentiemes($valeur);
     }
 
-    public function test_un_montant_au_dela_des_colonnes_ne_se_lit_pas_en_centiemes(): void
+    /**
+     * La borne est celle de toute la classe (1e14 centièmes), non celle des
+     * colonnes : 999 999 999 999,99 se lit encore, le centime suivant non.
+     */
+    public function test_un_montant_au_dela_de_la_borne_ne_se_lit_pas_en_centiemes(): void
     {
+        $this->assertSame(99999999999999, $this->calculateur()->enCentiemes('999999999999.99'));
+        $this->assertSame(-99999999999999, $this->calculateur()->enCentiemes('-999999999999.99'));
         $this->assertThrows(fn () => $this->calculateur()->enCentiemes('1000000000000.00'), InvalidArgumentException::class, 'Montant hors limites.');
         $this->assertThrows(fn () => $this->calculateur()->enCentiemes('-99999999999999999999.00'), InvalidArgumentException::class, 'Montant hors limites.');
         $this->assertThrows(fn () => $this->calculateur()->enCentiemes(1_000_000_000_000), InvalidArgumentException::class, 'Montant hors limites.');

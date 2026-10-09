@@ -26,7 +26,8 @@ return [
     | (voir php artisan caisse:generer-cle), avec sa phrase secrète si elle
     | est chiffrée. Elle n'existe que dans l'environnement du serveur :
     | jamais dans le dépôt, jamais en base, jamais affichée. Sans elle,
-    | aucune donnée fiscale n'est signée et la vente est refusée.
+    | rien n'est signé : SignataireFiscal lève
+    | ModuleFiscalNonConfigureException au lieu de signer.
     |
     */
 

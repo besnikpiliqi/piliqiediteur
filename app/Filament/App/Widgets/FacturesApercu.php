@@ -33,7 +33,7 @@ class FacturesApercu extends BaseWidget
 
     private function statPourPeriode(string $label, Carbon $debut, Carbon $fin): Stat
     {
-        $totauxTtc = Facture::query()->emises()->whereBetween('date_emission', [$debut, $fin])->pluck('total_ttc');
+        $totauxTtc = Facture::query()->emises()->emisEntre($debut, $fin)->pluck('total_ttc');
         $totalTtc = app(CalculateurLigne::class)->sommer($totauxTtc);
         $nombreFactures = $totauxTtc->count();
 

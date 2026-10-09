@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -20,9 +21,11 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\Caisse;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Exceptions;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -202,6 +205,40 @@ class CaisseTest extends TestCase
 
         $this->assertSame(0, Facture::query()->count());
         $this->assertSame(0, Paiement::query()->count());
+    }
+
+    /**
+     * L'horloge du serveur a reculé d'une seconde depuis la dernière vente :
+     * le registre fiscal refuse la suivante. Le vendeur en lit la raison au
+     * lieu d'une erreur serveur, l'incident est signalé au journal, et rien
+     * n'est enregistré.
+     */
+    public function test_une_horloge_qui_recule_refuse_la_vente_avec_un_message_sans_rien_enregistrer(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:05', 'UTC'));
+        app(EnregistrerVenteCaisseAction::class)->handle($clientComptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:04', 'UTC'));
+        Exceptions::fake([HorlogeRegressiveException::class]);
+
+        Livewire::test(Caisse::class)
+            ->fillForm([
+                'client_id' => $clientComptoir->id,
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+                'mode_paiement' => 'especes',
+            ])
+            ->call('encaisser')
+            ->assertNotified("L'horloge du serveur a reculé : il est 09/10/2026 08:00:04 UTC, mais le registre fiscal du magasin n°{$magasin->id} a déjà été verrouillé à 09/10/2026 08:00:05 UTC. Aucune opération fiscale n'est enregistrée tant que l'horloge n'est pas corrigée.");
+
+        Exceptions::assertReported(HorlogeRegressiveException::class);
+        $this->assertSame([1, 1], [Facture::query()->count(), Paiement::query()->count()]);
     }
 
     public function test_encaisser_sans_aucune_ligne_est_refuse(): void

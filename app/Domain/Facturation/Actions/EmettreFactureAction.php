@@ -35,8 +35,8 @@ use LogicException;
  *     numérotation (voir RegistreFiscal) ; il donne l'instant de
  *     l'émission ;
  *  2. la facture, relue verrouillée, reçoit son numéro, dans la série et
- *     l'année de cet instant à l'heure de Paris, et cet instant pour date
- *     d'émission ;
+ *     l'année de cet instant à l'heure de Paris, et cet instant, en UTC,
+ *     pour date d'émission (voir HorodateSonEmission) ;
  *  3. FactureEmise sort le stock, applique le crédit d'avoir du client et
  *     prépare la transmission PDP ;
  *  4. le règlement comptant d'une vente au comptoir, s'il y en a un, paie
@@ -83,7 +83,7 @@ class EmettreFactureAction
             $facture->forceFill([
                 'numero' => $numero,
                 'statut' => StatutFacture::Emise,
-                'date_emission' => $instant->enHeureLocale(),
+                'date_emission' => $instant->utc,
             ])->save();
 
             // Synchrone et dans la même transaction : voir le commentaire

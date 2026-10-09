@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -30,6 +31,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Exceptions;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -751,6 +753,31 @@ class FactureResourceTest extends TestCase
         $this->assertSame(StatutFacture::Emise, $facture->statut);
         $this->assertNotNull($facture->numero);
         $this->assertSame(8, $produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * Sans clé de signature, le registre fiscal refuse l'émission : la
+     * facture reste un brouillon sans numéro, l'utilisateur en lit la
+     * raison au lieu d'une erreur serveur, et l'incident est signalé au
+     * journal.
+     */
+    public function test_sans_cle_de_signature_l_emission_est_refusee_avec_un_message(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        config(['caisse_securisee.cle_privee' => null]);
+        Exceptions::fake([ModuleFiscalNonConfigureException::class]);
+
+        Livewire::test(ListFactures::class)
+            ->callTableAction('emettre', $facture)
+            ->assertNotified('Caisse sécurisée non configurée : la clé privée de signature (CAISSE_SECURISEE_CLE_PRIVEE) est absente.');
+
+        Exceptions::assertReported(ModuleFiscalNonConfigureException::class);
+        $this->assertSame([StatutFacture::Brouillon, null], [$facture->fresh()->statut, $facture->fresh()->numero]);
     }
 
     /**

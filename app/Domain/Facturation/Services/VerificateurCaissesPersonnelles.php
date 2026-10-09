@@ -30,7 +30,7 @@ class VerificateurCaissesPersonnelles
     public function vendeursAvecCaisseOuverte(CarbonInterface $date): Collection
     {
         $vendeurIds = Facture::query()
-            ->whereDate('date_emission', $date)
+            ->emisLe($date)
             ->whereNotNull('cree_par')
             ->distinct()
             ->pluck('cree_par');
@@ -51,7 +51,7 @@ class VerificateurCaissesPersonnelles
     {
         return Facture::query()
             ->nonFermeesParLeVendeur($vendeur->id)
-            ->whereDate('date_emission', $date)
+            ->emisLe($date)
             ->exists();
     }
 }

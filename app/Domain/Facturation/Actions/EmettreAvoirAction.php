@@ -26,8 +26,8 @@ use LogicException;
  *     numérotation (voir RegistreFiscal) ; il donne l'instant de
  *     l'émission ;
  *  2. l'avoir, relu verrouillé, arrête ses montants, reçoit son numéro,
- *     dans l'année de cet instant à l'heure de Paris, et cet instant pour
- *     date d'émission ;
+ *     dans l'année de cet instant à l'heure de Paris, et cet instant, en
+ *     UTC, pour date d'émission (voir HorodateSonEmission) ;
  *  3. AvoirEmis rend le stock et impute l'avoir sur ses factures ;
  *  4. l'avoir est signé en négatif dans la chaîne des ventes (voir
  *     ContenuFiscal), avec les lignes et les numéros des documents qu'il
@@ -69,7 +69,7 @@ class EmettreAvoirAction
             $avoir->forceFill([
                 'numero' => $numero,
                 'statut' => StatutAvoir::Emise,
-                'date_emission' => $instant->enHeureLocale(),
+                'date_emission' => $instant->utc,
             ])->save();
 
             // Synchrone et dans la même transaction, voir le commentaire

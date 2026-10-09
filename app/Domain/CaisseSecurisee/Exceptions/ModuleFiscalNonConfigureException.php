@@ -2,8 +2,6 @@
 
 namespace App\Domain\CaisseSecurisee\Exceptions;
 
-use RuntimeException;
-
 /**
  * Le module fiscal ne peut pas signer : clé privée absente ou illisible,
  * clé publique non épinglée, clé épinglée invalide.
@@ -14,7 +12,7 @@ use RuntimeException;
  * Aucun message ne contient la clé privée : seulement l'empreinte
  * (cle_id) de clés publiques, ou le nom d'un fichier épinglé.
  */
-class ModuleFiscalNonConfigureException extends RuntimeException
+class ModuleFiscalNonConfigureException extends RefusFiscalException
 {
     public static function clePriveeAbsente(): self
     {

@@ -155,16 +155,22 @@ class SignataireFiscalTest extends TestCase
 
     /**
      * Une même signature n'a qu'une écriture : base64 classique, remplissage
-     * ou texte qui n'est pas du base64url ne vérifient rien.
+     * ou texte qui n'est pas du base64url ne vérifient rien. La signature
+     * ECDSA change à chaque appel : on en garde une dont le base64 classique
+     * s'écrit autrement que le base64url, car sans « + », « / » ni
+     * remplissage les deux écritures sont identiques.
      */
     public function test_une_signature_mal_ecrite_ne_verifie_rien(): void
     {
         $signataire = $this->signataire();
-        $signature = $signataire->signer(self::CONTENU);
+        do {
+            $signature = $signataire->signer(self::CONTENU);
+            $base64Classique = base64_encode($this->signatureDer($signature));
+        } while ($base64Classique === $signature);
         $cleId = $signataire->cleId();
 
         $this->assertFalse($signataire->verifier(self::CONTENU, $signature.'=', $cleId));
-        $this->assertFalse($signataire->verifier(self::CONTENU, base64_encode($this->signatureDer($signature)), $cleId));
+        $this->assertFalse($signataire->verifier(self::CONTENU, $base64Classique, $cleId));
         $this->assertFalse($signataire->verifier(self::CONTENU, '', $cleId));
         $this->assertFalse($signataire->verifier(self::CONTENU, 'pas une signature', $cleId));
     }

@@ -15,6 +15,7 @@ use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use LogicException;
 use Tests\TestCase;
@@ -111,6 +112,34 @@ class CloturerCaisseActionTest extends TestCase
             ['taux_tva' => '20.00', 'montant_ht' => 50.0, 'montant_tva' => 10.0, 'montant_ttc' => 60.0],
         ], $cloture->ventilation_tva);
         $this->assertSame($cloture->id, $avoir->fresh()->cloture_caisse_id);
+    }
+
+    /**
+     * Une journée de caisse va de minuit à minuit à Paris, alors que la
+     * date d'émission s'enregistre en UTC : 0 h 30 le 15 juillet à Paris,
+     * c'est 22 h 30 UTC le 14. La vente de 23 h 30 se compte le 14 ; la
+     * vente et l'avoir émis après minuit, le 15.
+     */
+    public function test_une_journee_de_caisse_va_de_minuit_a_minuit_a_paris(): void
+    {
+        $client = Client::factory()->create();
+        $this->travelTo(CarbonImmutable::parse('2026-07-14 21:30:00', 'UTC'));
+        $venteDu14 = $this->emettreFacturePour($client, 50);
+        $this->travelTo(CarbonImmutable::parse('2026-07-14 22:30:00', 'UTC'));
+        $venteDu15 = $this->emettreFacturePour($client, 100);
+        $avoirDu15 = app(EnregistrerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $venteDu14->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]);
+
+        $clotureDu14 = app(CloturerCaisseAction::class)->handle($this->magasin, '2026-07-14');
+        $clotureDu15 = app(CloturerCaisseAction::class)->handle($this->magasin, '2026-07-15');
+
+        $this->assertSame([1, 0, '60.00'], [$clotureDu14->nombre_ventes, $clotureDu14->nombre_avoirs, $clotureDu14->total_ttc]);
+        $this->assertSame([1, 1, '60.00'], [$clotureDu15->nombre_ventes, $clotureDu15->nombre_avoirs, $clotureDu15->total_ttc]);
+        $this->assertSame(
+            [$clotureDu14->id, $clotureDu15->id, $clotureDu15->id],
+            [$venteDu14->fresh()->cloture_caisse_id, $venteDu15->fresh()->cloture_caisse_id, $avoirDu15->fresh()->cloture_caisse_id],
+        );
     }
 
     /**

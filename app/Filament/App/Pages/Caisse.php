@@ -3,6 +3,7 @@
 namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -10,6 +11,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
@@ -44,7 +46,7 @@ use LogicException;
  */
 class Caisse extends Page implements HasForms
 {
-    use InteractsWithForms;
+    use GereLesExceptionsMetier, InteractsWithForms;
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
 
@@ -198,8 +200,8 @@ class Caisse extends Page implements HasForms
                 $modePaiement,
                 $data['reference'] ?? null,
             );
-        } catch (LogicException $exception) {
-            Notification::make()->title($exception->getMessage())->danger()->send();
+        } catch (LogicException|RefusFiscalException $exception) {
+            static::notifierLeRefus($exception);
 
             return;
         }

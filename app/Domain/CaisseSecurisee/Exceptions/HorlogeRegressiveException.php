@@ -3,7 +3,6 @@
 namespace App\Domain\CaisseSecurisee\Exceptions;
 
 use Carbon\CarbonInterface;
-use RuntimeException;
 
 /**
  * L'horloge du serveur donne une heure antérieure au dernier verrou du
@@ -13,7 +12,7 @@ use RuntimeException;
  * NTP) n'est pas corrigée ; RegistreFiscal signale chaque refus dans le
  * journal de l'application (Log::critical).
  */
-class HorlogeRegressiveException extends RuntimeException
+class HorlogeRegressiveException extends RefusFiscalException
 {
     public static function pour(int $magasinId, CarbonInterface $instant, CarbonInterface $dernierVerrou): self
     {

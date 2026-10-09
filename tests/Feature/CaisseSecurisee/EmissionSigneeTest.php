@@ -21,6 +21,7 @@ use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
@@ -281,6 +282,34 @@ class EmissionSigneeTest extends TestCase
         $this->assertTrue($ticket->date_emission->equalTo($vente->horodatage));
         $this->assertSame('20261231233012Z', $this->contenu($vente)['horodatage']);
         $this->assertSame('TK-2027-000001', $ticket->numero);
+    }
+
+    /**
+     * La nuit du passage à l'heure d'hiver, 2 h 30 à Paris revient deux
+     * fois : à 0 h 30 UTC (heure d'été) puis à 1 h 30 UTC. Un ticket émis
+     * à la première, puis un avoir émis à 2 h 10 de l'heure d'hiver (1 h 10
+     * UTC), gardent chacun leur instant : la date d'émission relue et la
+     * date signée sont l'horodatage du registre, et l'avoir reste après le
+     * ticket.
+     */
+    public function test_l_heure_qui_se_repete_au_passage_a_l_heure_d_hiver_garde_l_instant_de_chaque_emission(): void
+    {
+        $this->magasinActif();
+        $client = Client::factory()->create();
+        $produit = $this->produit('A-020', 'Article à 20 €', 20);
+        $this->travelTo(CarbonImmutable::parse('2026-10-25 00:30:00', 'UTC'));
+        $ticket = $this->encaisser($client, [[$produit, 1]]);
+        $this->travelTo(CarbonImmutable::parse('2026-10-25 01:10:00', 'UTC'));
+
+        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
+
+        $venteDuTicket = $this->enregistrementDe($ticket, ChaineFiscale::Vente);
+        $venteDeLAvoir = $this->enregistrementDe($avoir, ChaineFiscale::Vente);
+        $this->assertSame(['20261025003000Z', '2026-10-25T02:30:00+02:00'], [$this->contenu($venteDuTicket)['horodatage'], $this->contenu($venteDuTicket)['donnees']['document']['date_emission']]);
+        $this->assertSame(['20261025011000Z', '2026-10-25T02:10:00+01:00'], [$this->contenu($venteDeLAvoir)['horodatage'], $this->contenu($venteDeLAvoir)['donnees']['document']['date_emission']]);
+        $this->assertTrue($ticket->fresh()->date_emission->equalTo($venteDuTicket->horodatage));
+        $this->assertTrue($avoir->fresh()->date_emission->equalTo($venteDeLAvoir->horodatage));
+        $this->assertTrue($avoir->fresh()->date_emission->greaterThan($ticket->fresh()->date_emission));
     }
 
     public function test_une_facture_professionnelle_sans_reglement_signe_son_echeance_et_aucun_reglement(): void

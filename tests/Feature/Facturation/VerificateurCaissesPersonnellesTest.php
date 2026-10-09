@@ -13,6 +13,7 @@ use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -95,6 +96,27 @@ class VerificateurCaissesPersonnellesTest extends TestCase
 
         $this->assertTrue($vendeursEnAttente->contains('id', $vendeurOuvert->id));
         $this->assertFalse($vendeursEnAttente->contains('id', $vendeurFerme->id));
+    }
+
+    /**
+     * La journée se lit à Paris : une vente émise à 0 h 30 le 15 juillet
+     * à Paris (22 h 30 UTC le 14) laisse la caisse ouverte le 15, pas le
+     * 14.
+     */
+    public function test_une_vente_apres_minuit_a_paris_ouvre_la_caisse_du_lendemain(): void
+    {
+        $magasin = Magasin::factory()->create();
+        app(TenantContext::class)->set($magasin);
+        $vendeur = User::factory()->create();
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
+        $this->travelTo(CarbonImmutable::parse('2026-07-14 22:30:00', 'UTC'));
+        $this->emettreFacturePour($vendeur, $client, $produit);
+
+        $verificateur = app(VerificateurCaissesPersonnelles::class);
+
+        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(CarbonImmutable::parse('2026-07-14'))->isEmpty());
+        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(CarbonImmutable::parse('2026-07-15'))->contains('id', $vendeur->id));
     }
 
     public function test_aucun_vendeur_en_attente_sans_aucune_vente_ce_jour_la(): void

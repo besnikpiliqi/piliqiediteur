@@ -13,6 +13,7 @@ use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Widgets\FacturesApercu;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -66,6 +67,30 @@ class FacturesApercuWidgetTest extends TestCase
             ->assertSuccessful()
             ->assertSee('0,00 €')
             ->assertSee('0 facture émise');
+    }
+
+    /**
+     * Les périodes se lisent à Paris : une vente émise le lundi 12 octobre
+     * à 0 h 30 à Paris (22 h 30 UTC le dimanche) compte dans la semaine en
+     * cours, comme dans le mois et l'année.
+     */
+    public function test_une_vente_du_lundi_apres_minuit_a_paris_compte_dans_la_semaine(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $this->travelTo(CarbonImmutable::parse('2026-10-11 22:30:00', 'UTC'));
+        app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]));
+
+        Livewire::test(FacturesApercu::class)
+            ->assertSuccessful()
+            ->assertSee('1 facture émise')
+            ->assertDontSee('0 facture émise');
     }
 
     /**

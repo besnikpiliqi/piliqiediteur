@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -45,12 +46,12 @@ use LogicException;
 class Facture extends Model implements DocumentEnvoyable
 {
     /** @use HasFactory<FactureFactory> */
-    use BelongsToMagasin, EstEnvoyeParEmail, HasFactory, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, HasFactory, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
 
     protected $table = 'factures';
 
-    // numero, statut, date_emission, totaux, montant_paye : jamais en
-    // mass assignment, uniquement via les Actions dédiées (voir
+    // numero, statut, date_emission, totaux : jamais en mass assignment,
+    // uniquement via les Actions dédiées (voir
     // app/Domain/Facturation/Actions).
     protected $fillable = [
         'client_id',
@@ -63,7 +64,6 @@ class Facture extends Model implements DocumentEnvoyable
 
     protected $casts = [
         'statut' => StatutFacture::class,
-        'date_emission' => 'datetime',
         'date_echeance' => 'date',
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
@@ -168,7 +168,7 @@ class Facture extends Model implements DocumentEnvoyable
         return $query
             ->emises()
             ->whereHas('client', fn (Builder $client) => $client->where('type_client', TypeClient::Particulier))
-            ->whereDate('date_emission', $jour)
+            ->emisLe($jour)
             ->whereNull('cloture_caisse_id');
     }
 

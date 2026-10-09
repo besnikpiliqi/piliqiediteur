@@ -25,9 +25,10 @@ final readonly class InstantFiscal
     }
 
     /**
-     * Le même instant à l'heure de l'application (Europe/Paris) : la date
-     * d'émission d'un document, son année de numérotation, le jour de
-     * réception d'un règlement.
+     * Le même instant à l'heure de l'application (Europe/Paris) : l'année
+     * de numérotation d'un document, le jour de réception d'un règlement.
+     * La date d'émission d'un document s'enregistre, elle, en UTC (voir
+     * HorodateSonEmission).
      */
     public function enHeureLocale(): CarbonImmutable
     {

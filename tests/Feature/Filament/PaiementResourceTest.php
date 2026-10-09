@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -17,9 +18,11 @@ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\PaiementResource\Pages\CreatePaiement;
 use App\Filament\App\Resources\PaiementResource\Pages\ListPaiements;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Exceptions;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -76,6 +79,38 @@ class PaiementResourceTest extends TestCase
 
         $this->assertSame(1, Paiement::query()->count());
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
+    }
+
+    /**
+     * L'horloge du serveur a reculé depuis l'émission de la facture : le
+     * registre fiscal refuse le paiement. Le formulaire reste ouvert avec
+     * la raison au lieu d'une erreur serveur, l'incident est signalé au
+     * journal, et rien n'est enregistré.
+     */
+    public function test_une_horloge_qui_recule_refuse_le_paiement_avec_un_message(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $client = Client::factory()->create();
+        $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:05', 'UTC'));
+        $facture = $this->emettreFactureDepuisLePanneau($client);
+        $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:04', 'UTC'));
+        Exceptions::fake([HorlogeRegressiveException::class]);
+
+        Livewire::test(CreatePaiement::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'mode_paiement' => ModePaiement::Virement->value,
+                'montant' => 120,
+                'recu_le' => '2026-10-09',
+                'allocations' => [
+                    ['facture_id' => $facture->id, 'montant' => 120],
+                ],
+            ])
+            ->call('create')
+            ->assertNotified("L'horloge du serveur a reculé : il est 09/10/2026 08:00:04 UTC, mais le registre fiscal du magasin n°{$magasin->id} a déjà été verrouillé à 09/10/2026 08:00:05 UTC. Aucune opération fiscale n'est enregistrée tant que l'horloge n'est pas corrigée.");
+
+        Exceptions::assertReported(HorlogeRegressiveException::class);
+        $this->assertSame([0, StatutFacture::Emise], [Paiement::query()->count(), $facture->fresh()->statut]);
     }
 
     /**

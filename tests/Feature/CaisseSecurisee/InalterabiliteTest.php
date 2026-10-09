@@ -22,11 +22,13 @@ use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -81,7 +83,7 @@ class InalterabiliteTest extends TestCase
             'total' => [static fn (): array => ['total_ttc' => '1.00'], 'total_ttc'],
             'client' => [static fn (): array => ['client_id' => Client::factory()->create()->id], 'client_id'],
             'numéro' => [static fn (): array => ['numero' => 'TK-2026-999999'], 'numero'],
-            'date d\'émission' => [static fn (): array => ['date_emission' => '2020-01-01 00:00:00'], 'date_emission'],
+            'date d\'émission' => [static fn (): array => ['date_emission' => CarbonImmutable::parse('2020-01-01 00:00:00', 'UTC')], 'date_emission'],
             'notes' => [static fn (): array => ['notes' => 'Réécrite après coup'], 'notes'],
         ];
     }
@@ -298,6 +300,43 @@ class InalterabiliteTest extends TestCase
         $this->assertThrows(fn () => DB::table($table)->where('id', $id)->delete(), QueryException::class, "{$table} : table en ajout seul, suppression refusée");
 
         $this->assertSame($avant, $this->ligneEnBase($table, $id));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function tablesDesDonneesFiscales(): array
+    {
+        return array_combine($tables = [
+            'factures',
+            'lignes_facture',
+            'avoirs',
+            'lignes_avoir',
+            'paiements',
+            'paiement_allocations',
+            'avoir_allocations',
+            'sequences_documents',
+            'soumissions_ereporting',
+            'transmissions_pdp',
+            'tetes_registre_fiscal',
+            'enregistrements_fiscaux',
+        ], array_map(static fn (string $table): array => [$table], $tables));
+    }
+
+    /**
+     * Aucune donnée fiscale ne disparaît avec son magasin : la clé
+     * magasin_id de chaque table refuse la suppression du magasin au lieu
+     * de la propager. Elle se lit dans le schéma, car supprimer un magasin
+     * qui a émis une facture échoue de toute façon par plusieurs clés à la
+     * fois (registre, séquences, clients) et par les déclencheurs ajout
+     * seul : l'échec ne dirait pas que chacune de ces clés refuse.
+     */
+    #[DataProvider('tablesDesDonneesFiscales')]
+    public function test_la_cle_magasin_d_une_donnee_fiscale_refuse_la_suppression_du_magasin(string $table): void
+    {
+        $cle = collect(Schema::getForeignKeys($table))->sole(static fn (array $cle): bool => $cle['columns'] === ['magasin_id']);
+
+        $this->assertSame(['magasins', ['id'], 'restrict'], [$cle['foreign_table'], $cle['foreign_columns'], $cle['on_delete']]);
     }
 
     /**

@@ -29,7 +29,11 @@ return new class extends Migration
             $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
             $table->string('numero', 40)->nullable();
             $table->string('statut', 20)->default('brouillon');
-            $table->timestamp('date_emission')->nullable();
+            // L'instant du registre fiscal à l'émission, en UTC à la seconde
+            // (voir HorodateSonEmission) : dateTime, que MySQL ne convertit
+            // jamais selon le fuseau de la connexion, contrairement à
+            // timestamp.
+            $table->dateTime('date_emission')->nullable();
             $table->string('devise', 3)->default('EUR');
             $table->text('motif')->nullable();
             $table->decimal('total_ht', 12, 2)->default(0);

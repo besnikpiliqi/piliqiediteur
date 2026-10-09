@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -35,7 +36,7 @@ use Illuminate\Support\Collection;
  */
 class Avoir extends Model implements DocumentEnvoyable
 {
-    use BelongsToMagasin, EstEnvoyeParEmail, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
 
     protected $table = 'avoirs';
 
@@ -50,7 +51,6 @@ class Avoir extends Model implements DocumentEnvoyable
 
     protected $casts = [
         'statut' => StatutAvoir::class,
-        'date_emission' => 'datetime',
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
         'total_ttc' => 'decimal:2',
@@ -96,7 +96,7 @@ class Avoir extends Model implements DocumentEnvoyable
     {
         return $query
             ->whereHas('client', fn (Builder $client) => $client->where('type_client', TypeClient::Particulier))
-            ->whereDate('date_emission', $jour)
+            ->emisLe($jour)
             ->where('statut', StatutAvoir::Emise)
             ->whereNull('cloture_caisse_id');
     }

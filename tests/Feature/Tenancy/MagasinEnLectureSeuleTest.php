@@ -35,7 +35,9 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -346,6 +348,31 @@ class MagasinEnLectureSeuleTest extends TestCase
         $cloture = ClotureCaisse::query()->sole();
         $this->assertSame([1, '12.00'], [$cloture->nombre_ventes, $cloture->total_ttc]);
         $this->assertSame($cloture->id, $ticket->fresh()->cloture_caisse_id);
+    }
+
+    /**
+     * Les ventes du jour du changement de statut sont clôturées à minuit,
+     * puis déclarées une fois leur période d'e-reporting terminée.
+     */
+    #[DataProvider('statutsEnLectureSeule')]
+    public function test_les_dernieres_ventes_sont_declarees(StatutMagasin $statut): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $magasin = $this->ouvrirLeMagasin();
+        $magasin->update(['regime_tva' => RegimeTva::ReelNormalMensuel]);
+        $this->vendreUnTicket();
+        $this->passerEn($magasin, $statut);
+        $this->travelTo('2026-10-06 00:00:00');
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+        $this->travelTo('2026-10-11 01:00:00');
+
+        $this->artisan('app:soumettre-ereporting-periodique')->assertSuccessful();
+
+        $soumission = SoumissionEReporting::query()->sole();
+        $this->assertSame(
+            ['2026-10-01', '2026-10-10', 1, '12.00'],
+            [$soumission->periode_debut->toDateString(), $soumission->periode_fin->toDateString(), $soumission->nombre_clotures, $soumission->total_ttc],
+        );
     }
 
     #[DataProvider('statutsEnLectureSeule')]

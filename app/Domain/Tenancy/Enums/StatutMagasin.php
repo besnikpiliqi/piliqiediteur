@@ -5,7 +5,7 @@ namespace App\Domain\Tenancy\Enums;
 use Filament\Support\Contracts\HasLabel;
 
 /**
- * Un magasin est actif dès sa création (voir CreerMagasinAction). Suspendu
+ * Un magasin est actif dès sa création (voir Magasin::booted()). Suspendu
  * ou fermé, il passe en lecture seule (voir estEnLectureSeule()) : la
  * consultation et les téléchargements restent possibles, plus aucune vente
  * ni aucun e-mail aux clients, tandis que ses clôtures, les statuts de ses

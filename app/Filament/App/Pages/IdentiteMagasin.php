@@ -101,7 +101,8 @@ class IdentiteMagasin extends Page implements HasForms
                         // n'appartient qu'à un seul magasin du logiciel, et le
                         // SIRET d'un magasin supprimé, qui reste en base, ne
                         // sert jamais à un autre (voir l'index unique de
-                        // magasins.siret et Magasin::forceDelete()).
+                        // magasins.siret et le déclencheur qui refuse
+                        // d'effacer un magasin).
                         ->unique(table: Magasin::class, ignorable: fn (): Magasin => $this->magasin())
                         ->validationMessages([
                             'regex' => 'Le SIRET compte 14 chiffres, sans espace.',

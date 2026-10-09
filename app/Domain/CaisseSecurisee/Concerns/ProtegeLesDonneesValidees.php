@@ -22,9 +22,10 @@ use Illuminate\Database\Eloquent\Model;
  * update() ou un delete() en masse, DB::table() ou une requête brute ne
  * déclenchent aucun événement Eloquent. Sur les tables où l'on ne fait
  * qu'ajouter (paiements, imputations, registre fiscal), les déclencheurs
- * SQL les refusent (voir DeclencheursAjoutSeul) ; sur les factures, les
- * avoirs et leurs lignes, dont le brouillon reste modifiable, le contenu
- * signé au registre fiscal à l'émission en révèle les effets.
+ * SQL les refusent (voir DeclencheursDeProtection::ajoutSeul()) ; sur les
+ * factures, les avoirs et leurs lignes, dont le brouillon reste
+ * modifiable, le contenu signé au registre fiscal à l'émission en révèle
+ * les effets.
  */
 trait ProtegeLesDonneesValidees
 {

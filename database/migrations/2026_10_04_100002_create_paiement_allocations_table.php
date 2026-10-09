@@ -1,6 +1,6 @@
 <?php
 
-use App\Domain\CaisseSecurisee\Support\DeclencheursAjoutSeul;
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -29,7 +29,7 @@ return new class extends Migration
             $table->index(['magasin_id', 'facture_id']);
         });
 
-        DeclencheursAjoutSeul::poser('paiement_allocations');
+        DeclencheursDeProtection::ajoutSeul('paiement_allocations');
     }
 
     public function down(): void

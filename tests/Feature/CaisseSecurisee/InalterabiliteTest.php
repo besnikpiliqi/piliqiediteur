@@ -378,8 +378,9 @@ class InalterabiliteTest extends TestCase
         $referencee = $fiche($facture);
 
         // La base refuse d'elle-même, quel que soit le code qui le tente : la
-        // requête passe outre les garde-fous des modèles (un magasin refuse
-        // déjà toute suppression définitive, voir Magasin::forceDelete()).
+        // requête passe outre les garde-fous des modèles (un magasin, lui,
+        // ne se supprime jamais définitivement, voir le déclencheur de sa
+        // table).
         $this->assertThrows(fn () => $referencee->newQueryWithoutScopes()->whereKey($referencee->getKey())->delete(), QueryException::class);
 
         $this->assertModelExists($referencee);

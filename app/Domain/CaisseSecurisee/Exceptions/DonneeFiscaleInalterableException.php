@@ -9,8 +9,9 @@ use LogicException;
  * I-3° bis du CGI) : une correction s'inscrit par une nouvelle écriture,
  * jamais en réécrivant l'ancienne. Levée par le modèle avant toute
  * requête (voir ProtegeLesDonneesValidees) ; les déclencheurs SQL des
- * tables où l'on ne fait qu'ajouter (voir DeclencheursAjoutSeul) refusent
- * en plus ce qui ne passe pas par le modèle.
+ * tables où l'on ne fait qu'ajouter (voir
+ * DeclencheursDeProtection::ajoutSeul()) refusent en plus ce qui ne passe
+ * pas par le modèle.
  */
 class DonneeFiscaleInalterableException extends LogicException
 {

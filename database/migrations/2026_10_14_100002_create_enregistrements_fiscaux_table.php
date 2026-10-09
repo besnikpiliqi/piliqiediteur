@@ -1,6 +1,6 @@
 <?php
 
-use App\Domain\CaisseSecurisee\Support\DeclencheursAjoutSeul;
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
  * Le registre fiscal (art. 286 I-3° bis du CGI, voir RegistreFiscal) : on
  * n'y fait qu'ajouter. Chaque ligne garde le contenu exact qu'elle signe
  * et la signature de la ligne précédente de sa chaîne ; la base refuse
- * toute modification et toute suppression (voir DeclencheursAjoutSeul).
+ * toute modification et toute suppression (voir DeclencheursDeProtection).
  */
 return new class extends Migration
 {
@@ -58,7 +58,7 @@ return new class extends Migration
             $table->index(['document_type', 'document_id', 'chaine', 'type']);
         });
 
-        DeclencheursAjoutSeul::poser('enregistrements_fiscaux');
+        DeclencheursDeProtection::ajoutSeul('enregistrements_fiscaux');
     }
 
     public function down(): void

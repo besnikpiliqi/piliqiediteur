@@ -1,6 +1,6 @@
 <?php
 
-use App\Domain\CaisseSecurisee\Support\DeclencheursAjoutSeul;
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\Schema;
  * Les paiements reçus : on n'y fait qu'ajouter (art. 286 I-3° bis du CGI).
  * Chacun est signé à son enregistrement dans la chaîne des encaissements
  * du registre fiscal (voir EnregistrerPaiementAction) ; la base refuse
- * toute modification et toute suppression (voir DeclencheursAjoutSeul), et
- * les clés étrangères toute suppression d'une fiche qu'il référence.
+ * toute modification et toute suppression (voir
+ * DeclencheursDeProtection), et les clés étrangères toute suppression
+ * d'une fiche qu'il référence.
  */
 return new class extends Migration
 {
@@ -32,7 +33,7 @@ return new class extends Migration
             $table->index(['magasin_id', 'recu_le']);
         });
 
-        DeclencheursAjoutSeul::poser('paiements');
+        DeclencheursDeProtection::ajoutSeul('paiements');
     }
 
     public function down(): void

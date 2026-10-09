@@ -17,7 +17,7 @@ use App\Models\User;
  *
  * Rien d'autre n'est permis : un enregistrement ne s'écrit que par
  * RegistreFiscal, et ne se modifie ni ne se supprime jamais (voir
- * ProtegeLesDonneesValidees et DeclencheursAjoutSeul).
+ * ProtegeLesDonneesValidees et DeclencheursDeProtection::ajoutSeul()).
  */
 class EnregistrementFiscalPolicy extends MagasinPolicy
 {

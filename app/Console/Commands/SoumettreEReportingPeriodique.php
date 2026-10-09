@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Domain\Facturation\Actions\GenererSoumissionEReportingAction;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Integrations\Pdp\Services\CalculateurPeriodeEReporting;
@@ -24,6 +23,9 @@ use Illuminate\Support\Carbon;
  *
  * Un magasin sans régime de TVA configuré (voir ParametresFiscaux) est
  * simplement ignoré, même dégradation douce que l'absence de mandat PDP.
+ * Un magasin suspendu ou fermé est déclaré comme les autres : ses
+ * déclarations continuent jusqu'au bout, comme ses clôtures (voir
+ * ClotureAutomatiqueCaisse). Seul un magasin supprimé n'est plus traité.
  */
 #[Signature('app:soumettre-ereporting-periodique')]
 #[Description("Génère et transmet au PDP les soumissions d'e-reporting des périodes venant de se terminer")]
@@ -38,7 +40,6 @@ class SoumettreEReportingPeriodique extends Command
         $totalSoumissions = 0;
 
         Magasin::query()
-            ->where('statut', StatutMagasin::Active)
             ->whereNotNull('regime_tva')
             ->each(function (Magasin $magasin) use ($tenantContext, $calculateur, $genererSoumission, $aujourdHui, &$totalSoumissions) {
                 $tenantContext->runAs($magasin, function () use ($magasin, $calculateur, $genererSoumission, $aujourdHui, &$totalSoumissions) {

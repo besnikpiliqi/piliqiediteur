@@ -11,7 +11,9 @@ use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use LogicException;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -44,6 +46,21 @@ class CreerMagasinActionTest extends TestCase
         $magasin->delete();
 
         $this->assertThrows(fn () => $magasin->forceDelete(), LogicException::class, 'Un magasin ne se supprime jamais définitivement : ses documents sont conservés et son SIRET ne servira jamais à un autre magasin.');
+
+        $this->assertSame('12345678900012', Magasin::withTrashed()->find($magasin->id)?->siret);
+    }
+
+    /**
+     * Une requête qui passe outre le modèle ne l'efface pas davantage : la
+     * base refuse elle-même la suppression, et la ligne garde son SIRET.
+     */
+    public function test_la_base_refuse_d_effacer_un_magasin(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'siren' => '123456789', 'siret' => '12345678900012'], User::factory()->create());
+        $magasin->delete();
+
+        $this->assertThrows(fn () => Magasin::withTrashed()->whereKey($magasin->id)->forceDelete(), QueryException::class, 'magasins : suppression définitive refusée');
+        $this->assertThrows(fn () => DB::table('magasins')->where('id', $magasin->id)->delete(), QueryException::class, 'magasins : suppression définitive refusée');
 
         $this->assertSame('12345678900012', Magasin::withTrashed()->find($magasin->id)?->siret);
     }

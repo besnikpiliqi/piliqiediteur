@@ -1,5 +1,6 @@
 <?php
 
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -56,11 +57,16 @@ return new class extends Migration
 
             // Un SIRET ne sert jamais à un autre magasin, magasins supprimés
             // compris : un magasin ne s'efface jamais de cette table (voir
-            // Magasin::booted()), ses documents restent conservés et son
-            // établissement reste le sien.
+            // le déclencheur ci-dessous), ses documents restent conservés et
+            // son établissement reste le sien.
             $table->unique('siret');
             $table->index(['statut']);
         });
+
+        // Supprimé, un magasin reste en base avec deleted_at : la base
+        // refuse elle-même sa suppression définitive, même par une requête
+        // qui ne passe pas par le modèle (voir aussi Magasin::forceDelete()).
+        DeclencheursDeProtection::sansSuppression('magasins');
     }
 
     public function down(): void

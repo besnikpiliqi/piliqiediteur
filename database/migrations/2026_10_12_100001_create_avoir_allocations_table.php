@@ -1,6 +1,6 @@
 <?php
 
-use App\Domain\CaisseSecurisee\Support\DeclencheursAjoutSeul;
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
  * (voir ImputerAvoirSurSesFacturesAction) ou celle de la facture qui
  * absorbe un crédit (voir AppliquerAvoirsDisponiblesAction), et figure
  * dans le contenu signé de ce document au registre fiscal ; la base refuse
- * toute modification et toute suppression (voir DeclencheursAjoutSeul).
+ * toute modification et toute suppression (voir DeclencheursDeProtection).
  */
 return new class extends Migration
 {
@@ -33,7 +33,7 @@ return new class extends Migration
             $table->index(['magasin_id', 'facture_id']);
         });
 
-        DeclencheursAjoutSeul::poser('avoir_allocations');
+        DeclencheursDeProtection::ajoutSeul('avoir_allocations');
     }
 
     public function down(): void

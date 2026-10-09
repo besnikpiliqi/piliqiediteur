@@ -38,7 +38,8 @@ use LogicException;
  * Son statut (voir StatutMagasin) ne vient jamais d'un formulaire du
  * magasin : actif à la création, il ne changera que par l'administration
  * de l'éditeur (étape 13 de la feuille de route). Un magasin ne se
- * supprime jamais définitivement (voir forceDelete()).
+ * supprime jamais définitivement (voir forceDelete() et le déclencheur de
+ * la table magasins).
  */
 class Magasin extends Model implements HasName
 {
@@ -97,11 +98,14 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * Un magasin ne s'efface jamais de la base, même sans événements de
-     * modèle (forceDeleteQuietly()) : ses documents se conservent dix ans,
-     * même après sa résiliation, et son SIRET ne sert jamais à un autre
-     * magasin (voir l'index unique de magasins.siret). Supprimé, il reste
-     * en base avec deleted_at.
+     * Un magasin ne s'efface jamais de la base : ses documents se
+     * conservent dix ans, même après sa résiliation, et son SIRET ne sert
+     * jamais à un autre magasin (voir l'index unique de magasins.siret).
+     * Supprimé, il reste en base avec deleted_at. Le modèle refuse ici,
+     * même sans événements (forceDeleteQuietly()) ; la base refuse
+     * elle-même ce qui ne passe pas par lui, forceDelete() du constructeur
+     * de requêtes ou DB::table() compris (voir
+     * DeclencheursDeProtection::sansSuppression()).
      *
      * @throws LogicException
      */

@@ -52,7 +52,7 @@ class SeedMagasinRolesActionTest extends TestCase
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
 
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul Vendeur',
             'email' => 'paul-vendeur@example.test',
             'password' => 'mot-de-passe-sur',
@@ -95,7 +95,7 @@ class SeedMagasinRolesActionTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $membre = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Camille',
             'email' => 'camille@example.test',
             'password' => 'mot-de-passe-sur',
@@ -139,18 +139,16 @@ class SeedMagasinRolesActionTest extends TestCase
     }
 
     /**
-     * L'administrateur reçoit d'office tout ce qu'un membre peut recevoir,
-     * sauf les paramètres du magasin (identité et TVA) ; le mandat PDP
-     * reste au propriétaire.
+     * L'administrateur reçoit d'office toutes les autorisations, sauf les
+     * paramètres du magasin (identité et TVA).
      */
-    public function test_l_administrateur_recoit_d_office_tout_sauf_les_parametres_et_le_mandat(): void
+    public function test_l_administrateur_recoit_d_office_tout_sauf_les_parametres_du_magasin(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
 
         $administrateur = $this->membre($magasin, RoleMagasin::Administrateur);
 
         $manquantes = array_values(array_diff(PermissionRegistry::toutes(), $administrateur->getDirectPermissions()->pluck('name')->all()));
-        sort($manquantes);
-        $this->assertSame(['mandat_pdp.gerer', 'parametres.gerer'], $manquantes);
+        $this->assertSame(['parametres.gerer'], $manquantes);
     }
 }

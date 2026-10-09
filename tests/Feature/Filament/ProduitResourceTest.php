@@ -307,7 +307,7 @@ class ProduitResourceTest extends TestCase
     public function test_un_vendeur_ne_supprime_pas_de_produits_en_masse(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
         $this->actingAs($vendeur);

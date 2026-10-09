@@ -68,8 +68,7 @@ class JournalDesDroits
     }
 
     /**
-     * Ses droits tels que la base les donne, dans le magasin actif, celui
-     * des permissions de Spatie (voir MagasinTeamResolver).
+     * Ses droits dans ce magasin, tels que la base les donne.
      *
      * @return array{role: string, statut: string, permissions: list<string>}|null
      */
@@ -84,7 +83,7 @@ class JournalDesDroits
         return [
             'role' => $membre->role->value,
             'statut' => $membre->statut->value,
-            'permissions' => $utilisateur->permissions()->orderBy('permissions.name')->pluck('permissions.name')->all(),
+            'permissions' => $utilisateur->autorisationsCocheesDans($magasin),
         ];
     }
 }

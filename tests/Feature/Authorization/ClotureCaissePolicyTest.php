@@ -39,7 +39,7 @@ class ClotureCaissePolicyTest extends TestCase
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $vendeur = $this->vendeurQuiVoitLesClotures($magasin, 'paul@example.test');
-        $comptable = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Comptable', 'email' => 'comptable@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Comptable);
+        $comptable = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Comptable', 'email' => 'comptable@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Comptable);
         $this->actingAs($vendeur);
         $clotureDuVendeur = ClotureCaisse::factory()->create();
 
@@ -49,6 +49,7 @@ class ClotureCaissePolicyTest extends TestCase
     private function vendeurQuiVoitLesClotures(Magasin $magasin, string $email): User
     {
         return app(CreerMembreMagasinAction::class)->handle(
+            $this->proprietaireDe($magasin),
             $magasin,
             ['name' => $email, 'email' => $email, 'password' => 'mot-de-passe-sur'],
             RoleMagasin::Vendeur,

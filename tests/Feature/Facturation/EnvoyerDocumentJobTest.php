@@ -277,7 +277,7 @@ class EnvoyerDocumentJobTest extends TestCase
     public function test_un_echec_passe_l_envoi_en_echec_et_previent_l_expediteur(): void
     {
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'secret123'], RoleMagasin::Vendeur);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'secret123'], RoleMagasin::Vendeur);
         $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
         $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['destinataire' => 'compta@client.fr', 'envoye_par' => $vendeur->id]);
         Mail::shouldReceive('to')->andThrow(new TransportException('535 Authentication failed for smtp-user@editeur.example'));

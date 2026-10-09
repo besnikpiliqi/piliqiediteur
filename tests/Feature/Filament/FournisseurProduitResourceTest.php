@@ -77,7 +77,7 @@ class FournisseurProduitResourceTest extends TestCase
     public function test_un_observateur_ne_supprime_pas_de_fournisseurs_en_masse(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $observateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Observateur);
         $this->actingAs($observateur);

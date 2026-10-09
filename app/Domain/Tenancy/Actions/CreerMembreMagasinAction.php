@@ -17,8 +17,8 @@ use InvalidArgumentException;
 use LogicException;
 
 /**
- * Le propriétaire crée lui-même le compte de ses salariés et leur
- * communique les identifiants directement (de la main à la main) : pas
+ * Le magasin crée lui-même le compte de ses salariés et leur communique
+ * les identifiants directement (de la main à la main) : pas
  * d'auto-inscription, pas de lien de vérification par email. L'adresse
  * email n'a besoin d'être confirmée par personne -- c'est le magasin qui
  * se porte garant de la personne, pas une boîte mail.
@@ -27,11 +27,13 @@ use LogicException;
  * une adresse déjà utilisée par un compte est refusée (voir
  * EmailLibrePourUnNouveauMembre).
  *
- * Le rôle n'est qu'un libellé et un modèle : le membre reçoit, directement
- * dans ce magasin, les autorisations cochées pour lui, ou sans liste
- * celles du modèle de son rôle (voir RoleMagasin::permissionsParDefaut()).
- * Une autorisation inconnue ou réservée au propriétaire n'est jamais
- * donnée (voir PermissionRegistry::cochables()).
+ * Le rôle n'est qu'un libellé et un modèle (voir
+ * RoleMagasin::permissionsParDefaut()) : le propriétaire coche les
+ * autorisations de chaque membre. Il donne au nouveau membre celles qu'il
+ * coche, ou sans liste le modèle de son rôle. Un autre membre qui gère
+ * l'équipe ne coche rien : le nouveau membre reçoit le modèle de son rôle,
+ * limité aux autorisations de celui qui le crée, qui ne crée donc jamais
+ * un compte plus autorisé que lui (voir autorisationsDuModele()).
  *
  * Les droits donnés au nouveau membre s'inscrivent au journal des
  * événements du magasin (JET 130, voir JournalDesDroits).
@@ -42,30 +44,42 @@ class CreerMembreMagasinAction
 
     /**
      * @param  array{name: string, email: string, password: string}  $donnees
-     * @param  list<string>|null  $permissions  les autorisations cochées ; null : le modèle du rôle
+     * @param  list<string>|null  $permissions  les autorisations que le propriétaire coche ; null : le modèle du rôle
      *
      * @throws ValidationException quand l'adresse e-mail est déjà utilisée par un compte
-     * @throws InvalidArgumentException quand une autorisation est inconnue ou réservée au propriétaire
+     * @throws InvalidArgumentException quand une autorisation est inconnue
+     * @throws LogicException quand un autre membre que le propriétaire coche les autorisations
      */
-    public function handle(Magasin $magasin, array $donnees, RoleMagasin $role, ?array $permissions = null): User
+    public function handle(User $auteur, Magasin $magasin, array $donnees, RoleMagasin $role, ?array $permissions = null): User
     {
         if ($role === RoleMagasin::Proprietaire) {
             throw new LogicException('Le rôle propriétaire ne peut pas être attribué via la gestion d\'équipe.');
         }
 
-        $permissions = PermissionRegistry::verifierCochables($permissions ?? $role->permissionsParDefaut());
+        if ($permissions !== null) {
+            if (! $auteur->estProprietaireDe($magasin)) {
+                throw new LogicException('Seul le propriétaire coche les autorisations d\'un membre.');
+            }
+
+            $permissions = PermissionRegistry::verifierConnues($permissions);
+        }
 
         Validator::make($donnees, ['email' => [new EmailLibrePourUnNouveauMembre($magasin)]])->validate();
 
-        return DB::transaction(function () use ($magasin, $donnees, $role, $permissions) {
-            // Défensif : le propriétaire agit normalement déjà depuis le
-            // panneau de CE magasin (TenantContext déjà positionné dessus
-            // par Filament), mais une Action ne doit jamais supposer le
+        return DB::transaction(function () use ($auteur, $magasin, $donnees, $role, $permissions) {
+            // Défensif : l'auteur agit normalement déjà depuis le panneau
+            // de CE magasin (TenantContext déjà positionné dessus par
+            // Filament), mais une Action ne doit jamais supposer le
             // contexte ambiant d'un appelant qu'elle ne contrôle pas : les
             // autorisations et le journal des événements sont ceux du
             // magasin actif.
             app(TenantContext::class)->set($magasin);
+
+            // Le registre du magasin, verrouillé, sérialise les
+            // modifications de ses droits : les autorisations de l'auteur
+            // sont relues après lui.
             $avant = $this->journalDesDroits->avant($magasin, null);
+            $permissions ??= $this->autorisationsDuModele($auteur, $magasin, $role);
 
             $utilisateur = User::create([
                 'name' => $donnees['name'],
@@ -76,7 +90,7 @@ class CreerMembreMagasinAction
             // email_verified_at n'est pas mass-assignable (hors de
             // $fillable, volontairement, pour qu'une requête utilisateur ne
             // puisse jamais s'auto-vérifier). Vérifié immédiatement ici :
-            // c'est le propriétaire qui crée ce compte et transmet les
+            // c'est le magasin qui crée ce compte et transmet les
             // identifiants lui-même, il n'y a rien à confirmer par email.
             $utilisateur->forceFill(['email_verified_at' => now()])->save();
 
@@ -91,5 +105,25 @@ class CreerMembreMagasinAction
 
             return $utilisateur;
         });
+    }
+
+    /**
+     * Les autorisations que reçoit un nouveau membre de ce rôle, créé par
+     * cet auteur sans liste cochée : tout le modèle du rôle quand l'auteur
+     * est le propriétaire ; sinon, seulement celles du modèle que l'auteur
+     * a lui-même dans ce magasin. L'écran de création les affiche telles
+     * quelles (voir MembreEquipeResource::champRole()).
+     *
+     * @return list<string>
+     */
+    public function autorisationsDuModele(User $auteur, Magasin $magasin, RoleMagasin $role): array
+    {
+        $modele = $role->permissionsParDefaut();
+
+        if ($auteur->estProprietaireDe($magasin)) {
+            return $modele;
+        }
+
+        return array_values(array_intersect($modele, $auteur->autorisationsCocheesDans($magasin)));
     }
 }

@@ -1159,7 +1159,7 @@ class FactureAchatActionsTest extends TestCase
     private function connecterUnMembreQuiSaisitLesAchats(array $droitsProduit): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Observateur);
         $membre->givePermissionTo([PermissionRegistry::FACTURE_ACHAT_CREER, ...$droitsProduit]);

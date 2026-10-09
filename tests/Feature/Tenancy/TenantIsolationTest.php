@@ -284,7 +284,7 @@ class TenantIsolationTest extends TestCase
             'facture, modification' => [FactureResource::class, 'edit', static fn (): Model => Facture::factory()->create()],
             'fournisseur, modification' => [FournisseurResource::class, 'edit', static fn (): Model => Fournisseur::factory()->create()],
             'membre de l\'équipe, modification' => [MembreEquipeResource::class, 'edit', static fn (Magasin $magasin): Model => $magasin->membres()
-                ->where('user_id', app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur)->getKey())
+                ->where('user_id', app(CreerMembreMagasinAction::class)->handle($magasin->proprietaires()->get()->sole(), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur)->getKey())
                 ->firstOrFail()],
             'produit, modification' => [ProduitResource::class, 'edit', static fn (): Model => Produit::factory()->create()],
             'soumission e-reporting, détail' => [SoumissionEReportingResource::class, 'view', static fn (): Model => self::creerEnregistrement(SoumissionEReporting::class)],

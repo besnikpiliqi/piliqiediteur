@@ -3,10 +3,12 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Actions\ReinitialiserMotDePasseMembreAction;
 use App\Domain\Tenancy\Actions\RetirerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MagasinUser;
 use App\Domain\Tenancy\Rules\EmailLibrePourUnNouveauMembre;
 use App\Filament\App\Resources\MembreEquipeResource\Pages;
@@ -21,22 +23,21 @@ use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Support\Arr;
 use Illuminate\Validation\Rules\Password;
 
 /**
- * Gestion de l'équipe du magasin (vendeurs, comptable...). Le propriétaire
- * crée directement les comptes et communique les identifiants lui-même --
- * pas d'auto-inscription, pas de vérification d'email (voir
+ * Gestion de l'équipe du magasin (vendeurs, comptable...). Le magasin crée
+ * directement les comptes et communique les identifiants lui-même -- pas
+ * d'auto-inscription, pas de vérification d'email (voir
  * CreerMembreMagasinAction). Modifier, « Nouveau mot de passe » et
  * « Retirer » passent par MembreEquipePolicy (update, delete) : il faut
- * « Équipe : modifier », et le propriétaire n'est jamais modifiable ni
- * supprimable ici -- un seul chemin mène à ce rôle, la création du magasin.
- * « Nouveau mot de passe » n'apparaît pas non plus sur sa propre ligne
- * (voir ReinitialiserMotDePasseMembreAction).
+ * « Équipe : modifier », et ni le propriétaire ni sa propre ligne ne se
+ * modifient ou ne se retirent ici -- un seul chemin mène au rôle de
+ * propriétaire, la création du magasin.
  *
  * Le rôle choisi coche d'office les autorisations de son modèle ; seul le
- * propriétaire les coche ou les décoche ensuite (voir champAutorisations()).
+ * propriétaire les coche ou les décoche, et change le rôle d'un membre
+ * (voir champAutorisations() et EditMembreEquipe).
  */
 class MembreEquipeResource extends Resource
 {
@@ -86,7 +87,9 @@ class MembreEquipeResource extends Resource
 
     /**
      * Le rôle du membre : un libellé, et le modèle d'autorisations que
-     * l'écran coche de nouveau à chaque changement de rôle.
+     * l'écran coche de nouveau à chaque changement de rôle, tel que la
+     * personne connectée le donne (voir
+     * CreerMembreMagasinAction::autorisationsDuModele()).
      */
     public static function champRole(): Select
     {
@@ -97,40 +100,47 @@ class MembreEquipeResource extends Resource
             ))
             ->required()
             ->live()
-            ->afterStateUpdated(fn (Set $set, ?string $state) => $set(
-                'permissions',
-                RoleMagasin::tryFrom((string) $state)?->permissionsParDefaut() ?? [],
-            ));
+            ->afterStateUpdated(function (Set $set, ?string $state): void {
+                $role = RoleMagasin::tryFrom((string) $state);
+
+                /** @var Magasin $magasin */
+                $magasin = Filament::getTenant();
+
+                $set('permissions', $role === null ? [] : app(CreerMembreMagasinAction::class)->autorisationsDuModele(auth()->user(), $magasin, $role));
+            });
     }
 
     /**
-     * Les autorisations du membre, parmi celles que le propriétaire peut
-     * cocher (jamais celles qui lui sont réservées). Seul le propriétaire
-     * les coche ou les décoche : un autre membre qui gère l'équipe les voit
-     * sans pouvoir les changer, et ne les envoie pas. Le membre reçoit
-     * alors le modèle de son rôle à sa création ou à un changement de
-     * rôle, jamais plus, et garde sinon celles que le propriétaire a
-     * cochées.
+     * Les autorisations du membre. Seul le propriétaire les coche ou les
+     * décoche : un autre membre qui gère l'équipe les voit sans pouvoir
+     * les changer, et ne les envoie pas. Un membre qu'il crée reçoit le
+     * modèle de son rôle, sans les autorisations que lui-même n'a pas ; un
+     * membre qu'il modifie garde celles que le propriétaire a cochées.
      */
     public static function champAutorisations(): CheckboxList
     {
         return CheckboxList::make('permissions')
             ->label('Autorisations')
-            ->helperText('Cochées d\'après le rôle choisi : cochez ou décochez ce que ce membre peut voir et faire.')
-            ->options(Arr::only(PermissionRegistry::libelles(), PermissionRegistry::cochables()))
+            ->helperText(fn (string $operation): string => match (true) {
+                static::proprietaireConnecte() => 'Cochées d\'après le rôle choisi : cochez ou décochez ce que ce membre peut voir et faire.',
+                $operation === 'create' => 'Le modèle du rôle choisi, sans les autorisations que vous n\'avez pas vous-même. Seul le propriétaire les coche ou les décoche.',
+                default => 'Seul le propriétaire coche ou décoche les autorisations d\'un membre et change son rôle.',
+            })
+            ->options(PermissionRegistry::libelles())
             ->columns(2)
             ->bulkToggleable()
             ->disabled(fn (): bool => ! static::proprietaireConnecte());
     }
 
     /**
-     * Le propriétaire du magasin actif est-il celui qui agit ? Son rôle
-     * Spatie, 'owner', ne vaut que dans son magasin (voir
-     * MagasinTeamResolver).
+     * La personne connectée est-elle le propriétaire du magasin ouvert ?
      */
-    private static function proprietaireConnecte(): bool
+    public static function proprietaireConnecte(): bool
     {
-        return auth()->user()?->hasRole(RoleMagasin::Proprietaire->value) ?? false;
+        /** @var Magasin $magasin */
+        $magasin = Filament::getTenant();
+
+        return auth()->user()?->estProprietaireDe($magasin) ?? false;
     }
 
     public static function table(Table $table): Table
@@ -162,7 +172,6 @@ class MembreEquipeResource extends Resource
                             ->rule(Password::default()),
                     ])
                     ->authorize('update')
-                    ->hidden(fn (MagasinUser $record): bool => $record->utilisateur->is(auth()->user()))
                     ->action(fn (MagasinUser $record, array $data) => static::executerSansCasser(fn () => app(ReinitialiserMotDePasseMembreAction::class)
                         ->handle(auth()->user(), $record, $data['nouveau_mot_de_passe']))),
                 Tables\Actions\Action::make('retirer')

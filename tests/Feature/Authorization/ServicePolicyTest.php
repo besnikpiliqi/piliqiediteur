@@ -39,7 +39,7 @@ class ServicePolicyTest extends TestCase
     public function test_chaque_role_voit_les_services_et_seuls_les_gestionnaires_les_modifient(RoleMagasin $role, bool $gereLeCatalogue): void
     {
         $magasin = $this->creerMagasin();
-        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur',
         ], $role);
         $service = Service::factory()->create();

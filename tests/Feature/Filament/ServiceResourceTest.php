@@ -132,7 +132,7 @@ class ServiceResourceTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
         $this->actingAs($vendeur);

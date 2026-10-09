@@ -53,7 +53,7 @@ class IdentiteMagasinTest extends TestCase
     public function test_un_membre_sans_les_parametres_du_magasin_n_accede_pas_a_l_identite(RoleMagasin $role): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Membre', 'email' => 'membre@ma-boutique.fr', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@ma-boutique.fr', 'password' => 'mot-de-passe-sur'], $role);
 
         $this->actingAs($membre)
             ->get(IdentiteMagasin::getUrl(tenant: $magasin))

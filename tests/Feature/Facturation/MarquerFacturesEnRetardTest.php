@@ -127,7 +127,7 @@ class MarquerFacturesEnRetardTest extends TestCase
     {
         $proprietaireA = User::factory()->create();
         $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $proprietaireA);
-        $vendeurA = app(CreerMembreMagasinAction::class)->handle($magasinA, ['name' => 'Vendeur', 'email' => 'vendeur@boutique-a.fr', 'password' => 'secret123'], RoleMagasin::Vendeur);
+        $vendeurA = app(CreerMembreMagasinAction::class)->handle($proprietaireA, $magasinA, ['name' => 'Vendeur', 'email' => 'vendeur@boutique-a.fr', 'password' => 'secret123'], RoleMagasin::Vendeur);
         $proprietaireB = User::factory()->create();
         $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
         $factureA1 = $this->emettreFacture($magasinA, now()->subDays(5)->toDateString());

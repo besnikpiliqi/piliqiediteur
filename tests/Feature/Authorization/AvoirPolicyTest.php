@@ -46,7 +46,7 @@ class AvoirPolicyTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
         $avoir = $this->emettreUnAvoirEnTantQue($proprietaire);
 
         $this->assertSame($peutEnvoyer, $membre->can('envoyer', $avoir));
@@ -83,7 +83,7 @@ class AvoirPolicyTest extends TestCase
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $vendeur = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
-        $comptable = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Comptable', 'email' => 'comptable@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Comptable);
+        $comptable = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Comptable', 'email' => 'comptable@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Comptable);
         $avoirDuVendeur = $this->emettreUnAvoirEnTantQue($vendeur);
 
         $this->assertTrue($comptable->can('view', $avoirDuVendeur));
@@ -92,6 +92,7 @@ class AvoirPolicyTest extends TestCase
     private function vendeurQuiVoitLesAvoirs(Magasin $magasin, string $email): User
     {
         return app(CreerMembreMagasinAction::class)->handle(
+            $this->proprietaireDe($magasin),
             $magasin,
             ['name' => $email, 'email' => $email, 'password' => 'mot-de-passe-sur'],
             RoleMagasin::Vendeur,

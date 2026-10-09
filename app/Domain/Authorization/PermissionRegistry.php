@@ -15,8 +15,8 @@ use InvalidArgumentException;
  * membre dans le magasin A n'accorde rien dans le magasin B. Le
  * propriétaire les a toutes, par son rôle 'owner' (voir
  * SeedMagasinRolesAction) ; un membre de l'équipe a celles que le
- * propriétaire coche pour lui parmi cochables(), à partir du modèle de
- * son rôle (voir RoleMagasin::permissionsParDefaut()).
+ * propriétaire coche pour lui, à partir du modèle de son rôle (voir
+ * RoleMagasin::permissionsParDefaut() et MettreAJourMembreMagasinAction).
  */
 final class PermissionRegistry
 {
@@ -101,13 +101,6 @@ final class PermissionRegistry
     public const RELANCES_REGLER = 'relances.regler';
 
     /**
-     * Gérer le mandat de transmission à la plateforme agréée (PDP) :
-     * réservé au propriétaire, jamais coché pour un membre (voir
-     * reserveesAuProprietaire()).
-     */
-    public const MANDAT_PDP_GERER = 'mandat_pdp.gerer';
-
-    /**
      * Régler les paramètres du magasin : son identité légale
      * (IdentiteMagasin) et sa TVA (ParametresFiscaux). Aucun modèle de
      * rôle ne la coche d'office : le propriétaire la détient, et la coche
@@ -116,8 +109,11 @@ final class PermissionRegistry
     public const PARAMETRES_GERER = 'parametres.gerer';
 
     // Équipe (membres du magasin) -- cochée d'office pour l'administrateur
-    // (voir RoleMagasin::permissionsParDefaut()). Seul le propriétaire
-    // coche les autorisations d'un membre (voir MembreEquipeResource).
+    // (voir RoleMagasin::permissionsParDefaut()). Gérer l'équipe ne fait
+    // jamais obtenir une autorisation qu'on n'a pas : seul le propriétaire
+    // coche les autorisations d'un membre et change son rôle (voir
+    // CreerMembreMagasinAction, MettreAJourMembreMagasinAction et
+    // ReinitialiserMotDePasseMembreAction).
     public const EQUIPE_VIEW = 'equipe.view';
 
     public const EQUIPE_CREER = 'equipe.creer';
@@ -182,7 +178,7 @@ final class PermissionRegistry
             self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_DELETE, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK, self::PRIX_VENTE_REGLER,
             self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ENVOYER, self::RELANCES_REGLER,
-            self::MANDAT_PDP_GERER, self::PARAMETRES_GERER,
+            self::PARAMETRES_GERER,
             self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
             self::PAIEMENT_VIEW, self::PAIEMENT_CREER,
             self::AVOIR_VIEW, self::AVOIR_CREER, self::AVOIR_ENVOYER,
@@ -194,42 +190,19 @@ final class PermissionRegistry
     }
 
     /**
-     * Les permissions que seul le propriétaire détient, par son rôle, et
-     * qu'il ne coche jamais pour un membre : la connexion du magasin à la
-     * plateforme agréée de facturation électronique l'engage auprès d'elle.
-     *
-     * @return list<string>
-     */
-    public static function reserveesAuProprietaire(): array
-    {
-        return [self::MANDAT_PDP_GERER];
-    }
-
-    /**
-     * Les permissions que le propriétaire peut cocher pour un membre de
-     * son équipe : toutes, sauf celles qui lui sont réservées.
-     *
-     * @return list<string>
-     */
-    public static function cochables(): array
-    {
-        return array_values(array_diff(self::toutes(), self::reserveesAuProprietaire()));
-    }
-
-    /**
-     * Les permissions cochées pour un membre, refusées dès que l'une
-     * d'elles n'est pas cochable : inconnue, ou réservée au propriétaire.
+     * Les autorisations cochées pour un membre, refusées dès que l'une
+     * d'elles est inconnue.
      *
      * @param  array<array-key, mixed>  $permissions
      * @return list<string>
      *
      * @throws InvalidArgumentException
      */
-    public static function verifierCochables(array $permissions): array
+    public static function verifierConnues(array $permissions): array
     {
         foreach ($permissions as $permission) {
-            if (! is_string($permission) || ! in_array($permission, self::cochables(), true)) {
-                throw new InvalidArgumentException('Autorisation inconnue ou réservée au propriétaire : '.(is_scalar($permission) ? $permission : get_debug_type($permission)));
+            if (! is_string($permission) || ! in_array($permission, self::toutes(), true)) {
+                throw new InvalidArgumentException('Autorisation inconnue : '.(is_scalar($permission) ? $permission : get_debug_type($permission)));
             }
         }
 
@@ -271,7 +244,6 @@ final class PermissionRegistry
             self::FACTURE_EMETTRE => 'Factures : émettre',
             self::FACTURE_ENVOYER => 'Factures : envoyer par e-mail et relancer',
             self::RELANCES_REGLER => 'Relances : régler les relances automatiques',
-            self::MANDAT_PDP_GERER => 'Mandat PDP : gérer',
             self::PARAMETRES_GERER => 'Paramètres du magasin : identité et TVA',
             self::EQUIPE_VIEW => 'Équipe : voir',
             self::EQUIPE_CREER => 'Équipe : créer des comptes',

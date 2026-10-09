@@ -13,6 +13,11 @@ use LogicException;
  * communique lui-même au salarié. Un compte n'appartient qu'à un seul
  * magasin : ce mot de passe n'ouvre que celui-ci.
  *
+ * Qui choisit le mot de passe peut ensuite ouvrir le compte. Un autre
+ * membre que le propriétaire n'en donne donc un qu'à un membre dont il a
+ * lui-même toutes les autorisations : il n'obtient jamais, en ouvrant ce
+ * compte, une autorisation que le propriétaire ne lui a pas cochée.
+ *
  * Le mot de passe du propriétaire ne se réinitialise jamais ici : il le
  * change dans son profil, ou par « Mot de passe oublié » sur la page de
  * connexion.
@@ -31,6 +36,13 @@ class ReinitialiserMotDePasseMembreAction
 
         if ($membre->role === RoleMagasin::Proprietaire) {
             throw new LogicException('Ce mot de passe ne se réinitialise pas depuis l\'équipe : la personne utilise « Mot de passe oublié » sur la page de connexion.');
+        }
+
+        $magasin = $membre->magasin;
+
+        if (! $auteur->estProprietaireDe($magasin)
+            && array_diff($membre->utilisateur->autorisationsCocheesDans($magasin), $auteur->autorisationsCocheesDans($magasin)) !== []) {
+            throw new LogicException('Seul le propriétaire peut donner un nouveau mot de passe à ce membre : il a des autorisations que vous n\'avez pas.');
         }
 
         $membre->utilisateur->forceFill(['password' => $nouveauMotDePasse])->save();

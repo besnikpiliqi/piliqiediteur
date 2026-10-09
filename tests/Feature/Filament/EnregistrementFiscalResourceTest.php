@@ -114,7 +114,7 @@ class EnregistrementFiscalResourceTest extends TestCase
     public function test_ce_membre_consulte_la_caisse_securisee(RoleMagasin $role): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Camille', 'email' => 'camille@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Camille', 'email' => 'camille@example.test', 'password' => 'mot-de-passe-sur'], $role);
 
         $reponse = $this->actingAs($membre)->get(EnregistrementFiscalResource::getUrl('index', ['tenant' => $magasin]));
 
@@ -124,7 +124,7 @@ class EnregistrementFiscalResourceTest extends TestCase
     public function test_un_vendeur_n_ouvre_pas_la_caisse_securisee(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
 
         $reponse = $this->actingAs($vendeur)->get(EnregistrementFiscalResource::getUrl('index', ['tenant' => $magasin]));
 

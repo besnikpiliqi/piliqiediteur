@@ -45,20 +45,29 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
-     * Un nouveau membre de l'équipe du magasin, créé comme le propriétaire
-     * le crée (voir CreerMembreMagasinAction) : avec les autorisations
-     * données, ou, sans liste, celles du modèle de son rôle. Le magasin
-     * reste ensuite le magasin actif.
+     * Un nouveau membre de l'équipe du magasin, créé par son propriétaire
+     * (voir CreerMembreMagasinAction) : avec les autorisations données,
+     * ou, sans liste, celles du modèle de son rôle. Le magasin reste
+     * ensuite le magasin actif.
      *
      * @param  list<string>|null  $permissions
      */
     protected function membre(Magasin $magasin, RoleMagasin $role, ?array $permissions = null): User
     {
-        return app(CreerMembreMagasinAction::class)->handle($magasin, [
+        return app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
             'password' => 'mot-de-passe-sur',
         ], $role, $permissions);
+    }
+
+    /**
+     * Le propriétaire du magasin, seul à cocher les autorisations des
+     * membres de son équipe.
+     */
+    protected function proprietaireDe(Magasin $magasin): User
+    {
+        return $magasin->proprietaires()->get()->sole();
     }
 
     /**

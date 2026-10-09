@@ -208,7 +208,7 @@ class ModifierProfilTest extends TestCase
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
 
-        return app(CreerMembreMagasinAction::class)->handle($magasin, [
+        return app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Paul',
             'email' => 'paul@example.test',
             'password' => 'ancien-mot-de-passe',

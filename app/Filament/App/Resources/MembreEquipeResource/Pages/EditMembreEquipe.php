@@ -6,7 +6,6 @@ use App\Domain\Tenancy\Actions\MettreAJourMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\MagasinUser;
-use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\MembreEquipeResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -23,16 +22,17 @@ class EditMembreEquipe extends EditRecord
 
     /**
      * Le rôle, le statut et les autorisations du membre se modifient ici
-     * -- les autorisations par le seul propriétaire (voir
-     * MembreEquipeResource::champAutorisations()). Jamais son nom, son
-     * adresse ni son mot de passe : il les change lui-même dans son profil
-     * (voir ModifierProfil), et « Nouveau mot de passe », sur la liste, lui
-     * en donne un sans jamais montrer l'ancien.
+     * -- le rôle et les autorisations par le seul propriétaire : pour un
+     * autre membre qui gère l'équipe, ils sont affichés sans pouvoir être
+     * changés ni envoyés (voir MettreAJourMembreMagasinAction). Jamais son
+     * nom, son adresse ni son mot de passe : il les change lui-même dans
+     * son profil (voir ModifierProfil), et « Nouveau mot de passe », sur la
+     * liste, lui en donne un sans jamais montrer l'ancien.
      */
     public function form(Form $form): Form
     {
         return $form->schema([
-            MembreEquipeResource::champRole(),
+            MembreEquipeResource::champRole()->disabled(fn (): bool => ! MembreEquipeResource::proprietaireConnecte()),
             Select::make('statut')
                 ->label('Statut')
                 ->options(StatutMembreMagasin::class)
@@ -49,8 +49,7 @@ class EditMembreEquipe extends EditRecord
         /** @var MagasinUser $membre */
         $membre = $this->record;
 
-        app(TenantContext::class)->set($membre->magasin);
-        $data['permissions'] = $membre->utilisateur->getDirectPermissions()->pluck('name')->all();
+        $data['permissions'] = $membre->utilisateur->autorisationsCocheesDans($membre->magasin);
 
         return $data;
     }
@@ -58,17 +57,17 @@ class EditMembreEquipe extends EditRecord
     /**
      * Le rôle, le statut et les autorisations s'enregistrent ensemble ou
      * pas du tout, en un seul événement du journal (JET 130, voir
-     * MettreAJourMembreMagasinAction). Sans liste d'autorisations (un
-     * administrateur ne l'envoie pas), un changement de rôle donne le
-     * modèle du nouveau rôle, et un simple changement de statut garde
-     * celles que le propriétaire a cochées.
+     * MettreAJourMembreMagasinAction). Un autre membre que le propriétaire
+     * n'envoie ni rôle ni autorisations : le membre garde les siens, et
+     * seul son statut change.
      */
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
         /** @var MagasinUser $record */
         return static::executerOuInterrompre(fn () => app(MettreAJourMembreMagasinAction::class)->handle(
+            auth()->user(),
             $record,
-            RoleMagasin::from($data['role']),
+            isset($data['role']) ? RoleMagasin::from($data['role']) : $record->role,
             StatutMembreMagasin::from($data['statut']),
             $data['permissions'] ?? null,
         ));

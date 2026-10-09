@@ -124,7 +124,7 @@ class StockLedgerServiceTest extends TestCase
         app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], $proprietaireAutreMagasin);
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'secret123'], RoleMagasin::Vendeur);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'secret123'], RoleMagasin::Vendeur);
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'reference' => 'CAB-USBC', 'stock_quantite' => 7, 'seuil_alerte' => 5]);
 
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);

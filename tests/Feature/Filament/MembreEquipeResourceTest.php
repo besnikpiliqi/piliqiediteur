@@ -158,17 +158,25 @@ class MembreEquipeResourceTest extends TestCase
     }
 
     /**
-     * Connecter la plateforme agréée (le mandat PDP) reste réservé au
-     * propriétaire : la case n'est jamais proposée pour un membre.
+     * Le propriétaire peut cocher chaque autorisation pour un membre,
+     * paramètres du magasin compris, sous son libellé : aucune ne lui
+     * manque.
      */
-    public function test_le_mandat_pdp_n_est_jamais_propose(): void
+    public function test_le_proprietaire_peut_cocher_chaque_autorisation_sous_son_libelle(): void
     {
         $this->connecterLeProprietaire();
+        $toutes = PermissionRegistry::toutes();
+        sort($toutes);
 
         Livewire::test(CreateMembreEquipe::class)
-            ->assertFormFieldExists('permissions', fn (CheckboxList $autorisations): bool => ! array_key_exists(PermissionRegistry::MANDAT_PDP_GERER, $autorisations->getOptions())
-                && $autorisations->getOptions()[PermissionRegistry::PARAMETRES_GERER] === 'Paramètres du magasin : identité et TVA'
-                && $autorisations->getOptions()[PermissionRegistry::FACTURE_ENVOYER] === 'Factures : envoyer par e-mail et relancer')
+            ->assertFormFieldExists('permissions', function (CheckboxList $autorisations) use ($toutes): bool {
+                $proposees = array_keys($autorisations->getOptions());
+                sort($proposees);
+
+                return $proposees === $toutes
+                    && $autorisations->getOptions()[PermissionRegistry::PARAMETRES_GERER] === 'Paramètres du magasin : identité et TVA'
+                    && $autorisations->getOptions()[PermissionRegistry::FACTURE_ENVOYER] === 'Factures : envoyer par e-mail et relancer';
+            })
             ->assertFormFieldIsEnabled('permissions');
     }
 
@@ -204,11 +212,114 @@ class MembreEquipeResourceTest extends TestCase
         ], $this->autorisations($vendeur, $magasin));
     }
 
+    /**
+     * Le propriétaire n'a laissé à son administrateur que la gestion de
+     * l'équipe et ses propres factures : la liste, qu'il ne peut pas
+     * changer, montre que le compte « Administrateur » qu'il crée n'aura
+     * que ces autorisations-là, et le compte n'a bien qu'elles.
+     */
+    public function test_un_membre_qui_gere_l_equipe_cree_un_compte_qui_n_a_pas_plus_d_autorisations_que_lui(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $administrateur = $this->membre($magasin, RoleMagasin::Administrateur, [
+            PermissionRegistry::EQUIPE_VIEW, PermissionRegistry::EQUIPE_CREER, PermissionRegistry::FACTURE_VIEW,
+        ]);
+        $this->connecter($administrateur, $magasin);
+
+        $composant = Livewire::test(CreateMembreEquipe::class)->fillForm([
+            'name' => 'Second compte',
+            'email' => 'second@example.test',
+            'password' => 'mot-de-passe-sur',
+            'role' => RoleMagasin::Administrateur->value,
+        ]);
+        $affichees = $composant->get('data.permissions');
+        sort($affichees);
+        $composant->call('create')->assertHasNoFormErrors();
+
+        $this->assertSame(['equipe.creer', 'equipe.view', 'facture.view'], $affichees);
+        $this->assertSame(['equipe.creer', 'equipe.view', 'facture.view'], $this->autorisations(User::where('email', 'second@example.test')->sole(), $magasin));
+    }
+
+    /**
+     * Un vendeur à qui le propriétaire a coché « Équipe : modifier » pour
+     * suspendre ses collègues n'ouvre pas sa propre ligne : il s'y
+     * donnerait le rôle Administrateur et tout son modèle.
+     */
+    public function test_un_membre_qui_gere_l_equipe_n_ouvre_pas_sa_propre_ligne(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::EQUIPE_VIEW, PermissionRegistry::EQUIPE_MODIFIER]);
+        $saLigne = $magasin->membres()->where('user_id', $vendeur->id)->firstOrFail();
+        $this->connecter($vendeur, $magasin);
+
+        Livewire::test(ListMembreEquipes::class)
+            ->assertTableActionHidden('edit', $saLigne)
+            ->assertTableActionHidden('retirer', $saLigne);
+        Livewire::test(EditMembreEquipe::class, ['record' => $saLigne->getRouteKey()])
+            ->assertForbidden();
+
+        $this->assertSame(RoleMagasin::Vendeur, $saLigne->fresh()->role);
+        $this->assertSame(['equipe.modifier', 'equipe.view'], $this->autorisations($vendeur, $magasin));
+    }
+
+    /**
+     * Le propriétaire a coché « Avoirs : créer » pour un vendeur, sans
+     * « Factures : envoyer par e-mail et relancer ». L'administrateur voit
+     * son rôle sans pouvoir le changer : même par une requête forgée, le
+     * vendeur garde son rôle et les choix du propriétaire, que le modèle
+     * d'un autre rôle effacerait.
+     */
+    public function test_un_administrateur_ne_change_pas_le_role_d_un_membre(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $administrateur = $this->membre($magasin, RoleMagasin::Administrateur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::AVOIR_CREER]);
+        $membre = $magasin->membres()->where('user_id', $vendeur->id)->firstOrFail();
+        $this->connecter($administrateur, $magasin);
+
+        Livewire::test(EditMembreEquipe::class, ['record' => $membre->getRouteKey()])
+            ->assertFormFieldIsDisabled('role')
+            ->set('data.role', RoleMagasin::Comptable->value)
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(RoleMagasin::Vendeur, $membre->fresh()->role);
+        $this->assertSame(['avoir.creer', 'facture.view'], $this->autorisations($vendeur, $magasin));
+    }
+
+    /**
+     * Le propriétaire a coché « Paramètres du magasin » pour son
+     * administrateur, et « Équipe : modifier » pour un vendeur : le
+     * vendeur ne donne pas à l'administrateur un mot de passe de son
+     * choix, qui lui ouvrirait l'identité et la TVA du magasin.
+     */
+    public function test_un_membre_qui_gere_l_equipe_ne_donne_pas_de_mot_de_passe_a_un_membre_plus_autorise_que_lui(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $administrateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
+            'name' => 'Marc', 'email' => 'marc@example.test', 'password' => 'mot-de-passe-de-marc',
+        ], RoleMagasin::Administrateur, [...RoleMagasin::Administrateur->permissionsParDefaut(), PermissionRegistry::PARAMETRES_GERER]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [
+            ...RoleMagasin::Vendeur->permissionsParDefaut(),
+            PermissionRegistry::EQUIPE_VIEW,
+            PermissionRegistry::EQUIPE_MODIFIER,
+        ]);
+        $this->connecter($vendeur, $magasin);
+
+        Livewire::test(ListMembreEquipes::class)
+            ->callTableAction('reinitialiser_mot_de_passe', $magasin->membres()->where('user_id', $administrateur->id)->firstOrFail(), data: [
+                'nouveau_mot_de_passe' => 'choisi-par-le-vendeur',
+            ])
+            ->assertNotified('Seul le propriétaire peut donner un nouveau mot de passe à ce membre : il a des autorisations que vous n\'avez pas.');
+
+        $this->assertTrue(Hash::check('mot-de-passe-de-marc', $administrateur->fresh()->password));
+    }
+
     public function test_le_proprietaire_donne_un_nouveau_mot_de_passe_a_un_vendeur(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'ancien-mot-de-passe',
         ], RoleMagasin::Vendeur);
         $this->actingAs($proprietaire);
@@ -227,7 +338,7 @@ class MembreEquipeResourceTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'ancien-mot-de-passe',
         ], RoleMagasin::Vendeur);
         $this->actingAs($proprietaire);
@@ -250,7 +361,7 @@ class MembreEquipeResourceTest extends TestCase
     public function test_un_administrateur_ne_change_pas_son_propre_mot_de_passe_depuis_lequipe(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $administrateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $administrateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Admin', 'email' => 'admin@example.test', 'password' => 'mot-de-passe-admin',
         ], RoleMagasin::Administrateur);
         $membreAdministrateur = $magasin->membres()->where('user_id', $administrateur->id)->firstOrFail();
@@ -275,7 +386,7 @@ class MembreEquipeResourceTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $administrateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $administrateur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Admin', 'email' => 'admin@example.test', 'password' => 'mot-de-passe-admin',
         ], RoleMagasin::Administrateur);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [

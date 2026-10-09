@@ -65,7 +65,12 @@ class CreerMagasinActionTest extends TestCase
         $this->assertSame(['owner'], $roles->all());
     }
 
-    public function test_le_proprietaire_a_la_permission_de_gerer_le_mandat_pdp_mais_pas_ladministrateur(): void
+    /**
+     * Le propriétaire tient de son rôle toutes les autorisations du
+     * magasin, paramètres du magasin compris ; l'administrateur n'a pas
+     * ceux-ci tant que le propriétaire ne les lui coche pas.
+     */
+    public function test_le_proprietaire_a_les_parametres_du_magasin_mais_pas_ladministrateur(): void
     {
         $proprietaire = User::factory()->create();
 
@@ -75,11 +80,11 @@ class CreerMagasinActionTest extends TestCase
         $contexte = app(TenantContext::class);
         $this->actingAs($proprietaire);
         $contexte->set($magasin);
-        $this->assertTrue($proprietaire->can(PermissionRegistry::MANDAT_PDP_GERER));
+        $this->assertTrue($proprietaire->can(PermissionRegistry::PARAMETRES_GERER));
 
         $this->actingAs($admin);
         $contexte->set($magasin);
-        $this->assertFalse($admin->can(PermissionRegistry::MANDAT_PDP_GERER));
+        $this->assertFalse($admin->can(PermissionRegistry::PARAMETRES_GERER));
     }
 
     public function test_deux_magasins_ont_chacun_leurs_propres_roles_independants(): void

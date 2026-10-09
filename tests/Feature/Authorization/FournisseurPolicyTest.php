@@ -36,7 +36,7 @@ class FournisseurPolicyTest extends TestCase
     public function test_supprimer_des_fournisseurs_selon_le_role(RoleMagasin $role, bool $peutSupprimer): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
         $fournisseur = Fournisseur::factory()->create();
 
         $this->assertSame($peutSupprimer, $membre->can('deleteAny', Fournisseur::class));
@@ -51,7 +51,7 @@ class FournisseurPolicyTest extends TestCase
     public function test_restaurer_des_fournisseurs_selon_le_role(RoleMagasin $role, bool $peutRestaurer): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
         $fournisseur = Fournisseur::factory()->create();
         $fournisseur->delete();
 

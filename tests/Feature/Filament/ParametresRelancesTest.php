@@ -168,7 +168,7 @@ class ParametresRelancesTest extends TestCase
     public function test_un_vendeur_n_accede_pas_aux_relances(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
 
         $this->actingAs($vendeur)
             ->get(ParametresRelances::getUrl(tenant: $magasin))

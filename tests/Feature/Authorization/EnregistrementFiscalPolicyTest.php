@@ -35,7 +35,7 @@ class EnregistrementFiscalPolicyTest extends TestCase
 
     private function vendeur(Magasin $magasin): User
     {
-        return app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        return app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
     }
 
     public function test_la_permission_ouvre_la_consultation_quel_que_soit_le_role(): void
@@ -47,6 +47,7 @@ class EnregistrementFiscalPolicyTest extends TestCase
         $this->assertFalse($vendeur->can('view', $evenement));
 
         app(MettreAJourMembreMagasinAction::class)->handle(
+            $this->proprietaireDe($magasin),
             $magasin->membres()->where('user_id', $vendeur->getKey())->firstOrFail(),
             RoleMagasin::Vendeur,
             StatutMembreMagasin::Actif,

@@ -265,6 +265,7 @@ class EnvoieLesDocumentsTest extends TestCase
         $this->travelTo('2026-10-15 10:00:00');
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $vendeur = app(CreerMembreMagasinAction::class)->handle(
+            $this->proprietaireDe($magasin),
             $magasin,
             ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'mot-de-passe-sur'],
             RoleMagasin::Vendeur,

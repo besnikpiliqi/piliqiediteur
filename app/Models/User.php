@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MagasinUser;
+use App\Domain\Tenancy\Services\TenantContext;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasTenants;
@@ -64,6 +65,33 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             ->wherePivot('magasin_id', $magasin->getKey())
             ->wherePivot('statut', StatutMembreMagasin::Actif->value)
             ->exists();
+    }
+
+    /**
+     * Le rôle propriétaire ne s'obtient qu'en créant le magasin (voir
+     * CreerMagasinAction) et ne se modifie jamais depuis l'équipe : seul
+     * le propriétaire coche les autorisations des membres et change leur
+     * rôle.
+     */
+    public function estProprietaireDe(Magasin $magasin): bool
+    {
+        return $magasin->proprietaires()->whereKey($this->getKey())->exists();
+    }
+
+    /**
+     * Les autorisations cochées pour lui dans ce magasin, relues dans la
+     * base, par ordre alphabétique : celles qui lui sont données
+     * directement dans ce magasin (Spatie en mode teams). Le propriétaire,
+     * lui, tient les siennes de son rôle.
+     *
+     * @return list<string>
+     */
+    public function autorisationsCocheesDans(Magasin $magasin): array
+    {
+        return app(TenantContext::class)->runAs(
+            $magasin,
+            fn (): array => $this->permissions()->orderBy('permissions.name')->pluck('permissions.name')->all(),
+        );
     }
 
     /**

@@ -27,7 +27,7 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
 
@@ -58,10 +58,10 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeurA = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $vendeurA = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul2@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
-        $vendeurB = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $vendeurB = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Jean', 'email' => 'jean@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
 

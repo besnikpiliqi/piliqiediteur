@@ -21,8 +21,9 @@ use Illuminate\Database\Eloquent\Model;
  * normalement.
  *
  * Les autorisations cochées ne sont transmises que par le propriétaire ;
- * sans elles (un administrateur, dont la liste n'est pas envoyée), le
- * membre reçoit le modèle de son rôle.
+ * sans elles (un autre membre qui gère l'équipe, dont la liste n'est pas
+ * envoyée), le membre reçoit le modèle de son rôle, sans les autorisations
+ * que celui qui le crée n'a pas.
  */
 class CreateMembreEquipe extends CreateRecord
 {
@@ -36,7 +37,7 @@ class CreateMembreEquipe extends CreateRecord
             /** @var Magasin $magasin */
             $magasin = Filament::getTenant();
 
-            $utilisateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            $utilisateur = app(CreerMembreMagasinAction::class)->handle(auth()->user(), $magasin, [
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'password' => $data['password'],

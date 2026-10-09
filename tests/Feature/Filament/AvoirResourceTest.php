@@ -379,6 +379,7 @@ class AvoirResourceTest extends TestCase
     private function vendeurQuiVoitLesAvoirs(Magasin $magasin, string $email): User
     {
         return app(CreerMembreMagasinAction::class)->handle(
+            $this->proprietaireDe($magasin),
             $magasin,
             ['name' => $email, 'email' => $email, 'password' => 'mot-de-passe-sur'],
             RoleMagasin::Vendeur,

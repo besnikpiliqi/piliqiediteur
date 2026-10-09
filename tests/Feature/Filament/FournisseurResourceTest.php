@@ -152,7 +152,7 @@ class FournisseurResourceTest extends TestCase
     public function test_un_observateur_ne_restaure_pas_un_fournisseur_supprime(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $observateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+        $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Observateur);
         $this->actingAs($observateur);

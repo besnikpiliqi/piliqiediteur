@@ -7,10 +7,10 @@ use Filament\Support\Contracts\HasLabel;
 
 /**
  * Le rôle d'un membre, sur le pivot magasin_user : un libellé, et le
- * modèle des autorisations cochées pour lui à sa création ou à un
- * changement de rôle (voir permissionsParDefaut()). Le propriétaire coche
- * ou décoche ensuite ce qu'il veut pour chacun (voir
- * MembreEquipeResource).
+ * modèle des autorisations cochées pour lui à sa création ou quand le
+ * propriétaire change son rôle (voir permissionsParDefaut()). Le
+ * propriétaire coche ou décoche ensuite ce qu'il veut pour chacun (voir
+ * CreerMembreMagasinAction et MettreAJourMembreMagasinAction).
  *
  * Seul le propriétaire a un rôle Spatie, 'owner', qui porte toutes les
  * autorisations du magasin (voir SeedMagasinRolesAction) ; un autre membre
@@ -50,8 +50,8 @@ enum RoleMagasin: string implements HasLabel
 
     /**
      * Les autorisations cochées d'office pour ce rôle. Le propriétaire les
-     * a toutes ; l'administrateur toutes celles qu'un membre peut
-     * recevoir, sauf les paramètres du magasin (identité et TVA).
+     * a toutes ; l'administrateur aussi, sauf les paramètres du magasin
+     * (identité et TVA).
      *
      * @return list<string>
      */
@@ -74,7 +74,7 @@ enum RoleMagasin: string implements HasLabel
         return match ($this) {
             self::Proprietaire => PermissionRegistry::toutes(),
             self::Administrateur => array_values(array_diff(
-                PermissionRegistry::cochables(),
+                PermissionRegistry::toutes(),
                 [PermissionRegistry::PARAMETRES_GERER],
             )),
             // Le comptable voit l'intégralité des factures du magasin

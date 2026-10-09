@@ -189,7 +189,7 @@ class JournalEvenementsTest extends TestCase
             return 'fermée';
         });
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
         $this->actingAs($vendeur);
         $this->get("/app/{$magasin->uuid}")->assertSuccessful();
         $magasin->utilisateurs()->detach($vendeur->getKey());
@@ -256,7 +256,7 @@ class JournalEvenementsTest extends TestCase
         $autreMagasin = $this->magasinDe(User::factory()->create(), 'Autre boutique');
         $this->actingAs($proprietaire);
 
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul Vendeur', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Paul Vendeur', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
 
         $this->assertSame(['260', '130'], $this->codes($magasin));
         $this->assertSame([], $this->codes($autreMagasin));
@@ -275,9 +275,9 @@ class JournalEvenementsTest extends TestCase
     public function test_un_changement_de_role_ou_de_statut_inscrit_les_droits_avant_et_apres(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
 
-        app(MettreAJourMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur), RoleMagasin::Observateur, StatutMembreMagasin::Suspendu);
+        app(MettreAJourMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $this->rattachement($magasin, $vendeur), RoleMagasin::Observateur, StatutMembreMagasin::Suspendu);
 
         $this->assertSame(['260', '130', '130'], $this->codes($magasin));
         $this->assertSame([
@@ -292,10 +292,10 @@ class JournalEvenementsTest extends TestCase
     public function test_une_mise_a_jour_qui_ne_change_rien_n_inscrit_rien(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
 
-        app(MettreAJourMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif);
-        app(MettreAJourMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif, [PermissionRegistry::FACTURE_VIEW]);
+        app(MettreAJourMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $this->rattachement($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif);
+        app(MettreAJourMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $this->rattachement($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif, [PermissionRegistry::FACTURE_VIEW]);
 
         $this->assertSame(['260', '130'], $this->codes($magasin));
     }
@@ -303,9 +303,9 @@ class JournalEvenementsTest extends TestCase
     public function test_les_autorisations_cochees_s_inscrivent_avant_et_apres(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK]);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK]);
 
-        app(MettreAJourMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif, [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK, PermissionRegistry::AVOIR_VIEW]);
+        app(MettreAJourMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $this->rattachement($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif, [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK, PermissionRegistry::AVOIR_VIEW]);
 
         $this->assertSame(['260', '130', '130'], $this->codes($magasin));
         $this->assertSame([
@@ -318,7 +318,7 @@ class JournalEvenementsTest extends TestCase
     public function test_le_retrait_d_un_membre_inscrit_les_droits_qu_il_perd(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_VIEW]);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_VIEW]);
 
         app(RetirerMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur));
 
@@ -332,11 +332,11 @@ class JournalEvenementsTest extends TestCase
     public function test_sans_cle_de_signature_aucun_droit_n_est_modifie(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
         $this->retirerLaCleDeSignature();
 
         $this->assertThrows(
-            fn () => app(MettreAJourMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur), RoleMagasin::Comptable, StatutMembreMagasin::Actif),
+            fn () => app(MettreAJourMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $this->rattachement($magasin, $vendeur), RoleMagasin::Comptable, StatutMembreMagasin::Actif),
             ModuleFiscalNonConfigureException::class,
         );
 
@@ -460,7 +460,7 @@ class JournalEvenementsTest extends TestCase
         $proprietaire = User::factory()->create();
         $magasin = $this->magasinDe($proprietaire);
         $this->actingAs($proprietaire)->get("/app/{$magasin->uuid}")->assertSuccessful();
-        app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
         Produit::factory()->create(['taux_tva' => 5.5])->update(['taux_tva' => 20]);
 
         $evenements = app(TenantContext::class)->runAs($magasin, fn () => EnregistrementFiscal::query()

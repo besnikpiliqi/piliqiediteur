@@ -53,10 +53,10 @@ use Illuminate\Validation\Validator as ValidatorDeLaravel;
 class AppServiceProvider extends ServiceProvider
 {
     /**
-     * scoped() : le verrou du registre fiscal pris dans une transaction, et
-     * son instant, valent pour toutes les écritures fiscales de cette
-     * transaction (voir RegistreFiscal), et s'oublient entre deux requêtes
-     * ou deux jobs.
+     * scoped() : l'instant que donne le verrou du registre fiscal vaut pour
+     * toutes les écritures fiscales de la transaction, transactions
+     * imbriquées comprises (voir RegistreFiscal), et s'oublie entre deux
+     * requêtes ou deux jobs.
      */
     public function register(): void
     {

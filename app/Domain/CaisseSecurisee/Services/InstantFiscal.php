@@ -7,8 +7,9 @@ use Carbon\CarbonImmutable;
 /**
  * L'instant d'une transaction fiscale, que donne RegistreFiscal::verrouiller()
  * une fois le registre du magasin verrouillé : en UTC, à la seconde, jamais
- * antérieur au dernier enregistrement du magasin. Toutes les écritures
- * fiscales de la transaction portent cet instant.
+ * antérieur au dernier verrou du registre du magasin. Toutes les écritures
+ * fiscales de la transaction, transactions imbriquées comprises, portent
+ * cet instant.
  */
 final readonly class InstantFiscal
 {

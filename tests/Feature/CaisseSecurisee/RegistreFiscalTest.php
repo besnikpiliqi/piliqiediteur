@@ -8,7 +8,9 @@ use App\Domain\CaisseSecurisee\Exceptions\DonneeFiscaleInalterableException;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
+use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\Facturation\Models\Facture;
@@ -26,7 +28,9 @@ use Illuminate\Support\Facades\Route;
 use InvalidArgumentException;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Tests\TestCase;
+use Throwable;
 
 /**
  * Le registre fiscal : chaînes signées et chaînées par magasin, verrou et
@@ -52,6 +56,40 @@ class RegistreFiscalTest extends TestCase
     private function enregistrer(ChaineFiscale $chaine = ChaineFiscale::Vente, string $type = 'ticket', array $donnees = ['total_ttc_centimes' => 1250], ?Model $document = null): EnregistrementFiscal
     {
         return DB::transaction(fn (): EnregistrementFiscal => app(RegistreFiscal::class)->enregistrer($chaine, $type, $donnees, $document));
+    }
+
+    /**
+     * Attend le refus de l'appel au registre, fait dans une transaction,
+     * puis vérifie la base avant d'annuler cette transaction : ce que le
+     * registre aurait écrit avant de refuser s'y voit encore, alors que
+     * l'annulation l'effacerait.
+     *
+     * @param  Closure(RegistreFiscal): mixed  $appel
+     * @param  class-string<Throwable>  $exception
+     * @param  Closure(): void  $verifierLaBase
+     */
+    private function assertRefuseAvantDEcrire(Closure $appel, string $exception, string $message, Closure $verifierLaBase): void
+    {
+        DB::beginTransaction();
+
+        try {
+            $this->assertThrows(fn () => $appel(app(RegistreFiscal::class)), $exception, $message);
+            $verifierLaBase();
+        } finally {
+            DB::rollBack();
+        }
+    }
+
+    /**
+     * @param  Closure(RegistreFiscal): mixed  $appel
+     * @param  class-string<Throwable>  $exception
+     */
+    private function assertRefuseSansRienEcrire(Closure $appel, string $exception, string $message): void
+    {
+        $this->assertRefuseAvantDEcrire($appel, $exception, $message, function (): void {
+            $this->assertDatabaseCount('tetes_registre_fiscal', 0);
+            $this->assertDatabaseCount('enregistrements_fiscaux', 0);
+        });
     }
 
     /**
@@ -176,18 +214,28 @@ class RegistreFiscalTest extends TestCase
         $this->assertSame(ModuleFiscal::VERSION, $enregistrement->version_module);
     }
 
+    /**
+     * Le verrou se prend ici d'abord dans une transaction imbriquée, validée
+     * avant la fin de la transaction englobante : le verrou de ligne, lui,
+     * reste tenu jusqu'à la validation de celle-ci, et son instant aussi.
+     */
     public function test_les_ecritures_d_une_transaction_portent_toutes_l_instant_de_son_verrou(): void
     {
         $this->travelTo('2026-10-09 10:15:30');
         $magasin = $this->magasinActif();
 
-        [$instant, $redonne, $vente, $encaissement] = DB::transaction(function () use ($magasin): array {
+        [$instant, $redonne, $vente, $encaissement, $evenement] = DB::transaction(function () use ($magasin): array {
             $registre = app(RegistreFiscal::class);
-            $instant = $registre->verrouiller($magasin);
-            $this->travel(5)->seconds();
-            $vente = $registre->enregistrer(ChaineFiscale::Vente, 'ticket', []);
+            [$instant, $vente] = DB::transaction(function () use ($registre, $magasin): array {
+                $instant = $registre->verrouiller($magasin);
+                $this->travel(5)->seconds();
 
-            return DB::transaction(fn (): array => [$instant, $registre->verrouiller($magasin), $vente, $registre->enregistrer(ChaineFiscale::Encaissement, 'paiement', [])]);
+                return [$instant, $registre->enregistrer(ChaineFiscale::Vente, 'ticket', [])];
+            });
+            $this->travel(5)->seconds();
+            $encaissement = $registre->enregistrer(ChaineFiscale::Encaissement, 'paiement', []);
+
+            return DB::transaction(fn (): array => [$instant, $registre->verrouiller($magasin), $vente, $encaissement, $registre->journaliser(CodeEvenement::ParametreDeConformite)]);
         });
         $suivante = $this->enregistrer(ChaineFiscale::Vente);
 
@@ -195,7 +243,66 @@ class RegistreFiscalTest extends TestCase
         $this->assertSame($instant, $redonne);
         $this->assertSame('20261009081530Z', $this->contenu($vente)['horodatage']);
         $this->assertSame('20261009081530Z', $this->contenu($encaissement)['horodatage']);
-        $this->assertSame('20261009081535Z', $this->contenu($suivante)['horodatage']);
+        $this->assertSame('20261009081530Z', $this->contenu($evenement)['horodatage']);
+        $this->assertSame('20261009081540Z', $this->contenu($suivante)['horodatage']);
+    }
+
+    /**
+     * Un point de sauvegarde annulé efface ce qu'il avait écrit, ligne de
+     * tête comprise (ici créée par lui) : ni la vente abandonnée ni son
+     * initialisation ne restent. La transaction englobante garde son
+     * instant et le note de nouveau comme dernier verrou du registre.
+     */
+    public function test_un_point_de_sauvegarde_annule_ne_laisse_ni_ses_enregistrements_ni_un_instant_oublie(): void
+    {
+        $this->travelTo('2026-10-09 10:15:30');
+        $this->magasinActif();
+
+        $vente = DB::transaction(function (): EnregistrementFiscal {
+            $registre = app(RegistreFiscal::class);
+            rescue(fn () => DB::transaction(function () use ($registre): never {
+                $registre->enregistrer(ChaineFiscale::Vente, 'ticket', []);
+
+                throw new RuntimeException('Vente abandonnée.');
+            }), report: false);
+            $this->travel(5)->seconds();
+
+            return $registre->enregistrer(ChaineFiscale::Vente, 'ticket', []);
+        });
+        $this->travelTo('2026-10-09 10:15:29');
+
+        $this->assertSame([['evenement', 1, '260'], ['vente', 1, 'ticket']], $this->registre());
+        $this->assertNull($vente->signature_precedente);
+        $this->assertSame('20261009081530Z', $this->contenu($vente)['horodatage']);
+        $this->assertThrows(fn () => $this->enregistrer(), HorlogeRegressiveException::class, 'a déjà été verrouillé à 09/10/2026 08:15:30 UTC');
+    }
+
+    /**
+     * Sous MySQL et MariaDB (REPEATABLE READ), une lecture sans verrou relit
+     * la photo prise à la première lecture de la transaction, et ignore ce
+     * qu'une autre caisse a validé depuis. Ici la photo du registre est
+     * vide, mais la ligne de tête, lue verrouillée, sait qu'une autre caisse
+     * du magasin a déjà inscrit l'initialisation et quatre ventes : c'est
+     * elle qui décide de la séquence, de la signature précédente et des
+     * événements à inscrire.
+     */
+    public function test_l_etat_des_chaines_se_lit_sur_la_ligne_de_tete_verrouillee_et_non_sur_une_photo_du_registre(): void
+    {
+        $this->magasinActif();
+        Model::unguarded(fn (): TeteRegistreFiscal => TeteRegistreFiscal::create([
+            'chaines' => [
+                'evenement' => ['sequence' => 1, 'signature' => 'signature-de-l-initialisation'],
+                'vente' => ['sequence' => 4, 'signature' => 'signature-de-la-quatrieme-vente'],
+            ],
+            'version_module' => ModuleFiscal::VERSION,
+            'cle_id' => $this->cleIdDe($this->clePubliqueDeTest()),
+        ]));
+
+        $vente = $this->enregistrer(ChaineFiscale::Vente);
+
+        $this->assertSame([['vente', 5, 'ticket']], $this->registre());
+        $this->assertSame('signature-de-la-quatrieme-vente', $vente->signature_precedente);
+        $this->assertSame('signature-de-la-quatrieme-vente', $this->contenu($vente)['signature_precedente']);
     }
 
     public function test_le_registre_refuse_d_ecrire_hors_transaction(): void
@@ -217,13 +324,11 @@ class RegistreFiscalTest extends TestCase
         $autreMagasin = Magasin::factory()->create();
         $this->magasinActif();
 
-        $this->assertThrows(
-            fn () => DB::transaction(fn () => app(RegistreFiscal::class)->verrouiller($autreMagasin)),
+        $this->assertRefuseSansRienEcrire(
+            fn (RegistreFiscal $registre) => $registre->verrouiller($autreMagasin),
             LogicException::class,
             'Le registre fiscal ne se verrouille que pour le magasin actif.',
         );
-
-        $this->assertDatabaseCount('tetes_registre_fiscal', 0);
     }
 
     public function test_sans_cle_de_signature_le_registre_ne_se_verrouille_pas(): void
@@ -231,31 +336,44 @@ class RegistreFiscalTest extends TestCase
         config(['caisse_securisee.cle_privee' => null]);
         $magasin = $this->magasinActif();
 
-        $this->assertThrows(
-            fn () => DB::transaction(fn () => app(RegistreFiscal::class)->verrouiller($magasin)),
+        $this->assertRefuseSansRienEcrire(
+            fn (RegistreFiscal $registre) => $registre->verrouiller($magasin),
             ModuleFiscalNonConfigureException::class,
             'la clé privée de signature (CAISSE_SECURISEE_CLE_PRIVEE) est absente',
         );
-
-        $this->assertDatabaseCount('tetes_registre_fiscal', 0);
     }
 
     public function test_une_horloge_qui_recule_est_refusee_et_signalee(): void
     {
         $this->travelTo('2026-10-09 10:00:05');
-        $this->magasinActif();
+        $magasin = $this->magasinActif();
         $this->enregistrer();
         $this->travelTo('2026-10-09 10:00:04');
         Log::spy();
 
-        $this->assertThrows(
-            fn () => $this->enregistrer(),
+        $this->assertRefuseAvantDEcrire(
+            fn (RegistreFiscal $registre) => $registre->enregistrer(ChaineFiscale::Vente, 'ticket', []),
             HorlogeRegressiveException::class,
-            'L\'horloge du serveur a reculé : il est 09/10/2026 08:00:04 UTC',
+            "L'horloge du serveur a reculé : il est 09/10/2026 08:00:04 UTC, mais le registre fiscal du magasin n°{$magasin->id} a déjà été verrouillé à 09/10/2026 08:00:05 UTC.",
+            fn () => $this->assertSame([['evenement', 1, '260'], ['vente', 1, 'ticket']], $this->registre()),
         );
 
-        $this->assertSame([['evenement', 1, '260'], ['vente', 1, 'ticket']], $this->registre());
         Log::shouldHaveReceived('critical')->once();
+    }
+
+    public function test_un_verrou_sans_ecriture_fixe_aussi_l_heure_sous_laquelle_l_horloge_ne_recule_plus(): void
+    {
+        $this->travelTo('2026-10-09 10:00:05');
+        $magasin = $this->magasinActif();
+        DB::transaction(fn (): InstantFiscal => app(RegistreFiscal::class)->verrouiller($magasin));
+        $this->travelTo('2026-10-09 10:00:04');
+
+        $this->assertRefuseAvantDEcrire(
+            fn (RegistreFiscal $registre) => $registre->enregistrer(ChaineFiscale::Vente, 'ticket', []),
+            HorlogeRegressiveException::class,
+            "le registre fiscal du magasin n°{$magasin->id} a déjà été verrouillé à 09/10/2026 08:00:05 UTC.",
+            fn () => $this->assertDatabaseCount('enregistrements_fiscaux', 0),
+        );
     }
 
     public function test_le_premier_enregistrement_du_magasin_est_precede_de_l_initialisation_et_elle_seule(): void
@@ -366,9 +484,11 @@ class RegistreFiscalTest extends TestCase
     {
         $this->magasinActif();
 
-        $this->assertThrows(fn () => $this->enregistrer(ChaineFiscale::Evenement, '270'), LogicException::class, 'journaliser()');
-
-        $this->assertDatabaseCount('enregistrements_fiscaux', 0);
+        $this->assertRefuseSansRienEcrire(
+            fn (RegistreFiscal $registre) => $registre->enregistrer(ChaineFiscale::Evenement, '270', []),
+            LogicException::class,
+            'journaliser()',
+        );
     }
 
     /**
@@ -391,9 +511,11 @@ class RegistreFiscalTest extends TestCase
     {
         $this->magasinActif();
 
-        $this->assertThrows(fn () => $this->enregistrer(ChaineFiscale::Vente, 'ticket', $donnees), InvalidArgumentException::class, $message);
-
-        $this->assertDatabaseCount('enregistrements_fiscaux', 0);
+        $this->assertRefuseSansRienEcrire(
+            fn (RegistreFiscal $registre) => $registre->enregistrer(ChaineFiscale::Vente, 'ticket', $donnees),
+            InvalidArgumentException::class,
+            $message,
+        );
     }
 
     public function test_un_document_d_un_autre_magasin_est_refuse(): void
@@ -402,13 +524,11 @@ class RegistreFiscalTest extends TestCase
         $factureDUnAutreMagasin = Facture::factory()->create();
         $this->magasinActif();
 
-        $this->assertThrows(
-            fn () => $this->enregistrer(ChaineFiscale::Vente, 'facture', [], $factureDUnAutreMagasin),
+        $this->assertRefuseSansRienEcrire(
+            fn (RegistreFiscal $registre) => $registre->enregistrer(ChaineFiscale::Vente, 'facture', [], $factureDUnAutreMagasin),
             LogicException::class,
             'Le registre fiscal n\'enregistre qu\'un document déjà enregistré du magasin actif.',
         );
-
-        $this->assertDatabaseCount('enregistrements_fiscaux', 0);
     }
 
     public function test_le_modele_refuse_de_modifier_un_enregistrement(): void

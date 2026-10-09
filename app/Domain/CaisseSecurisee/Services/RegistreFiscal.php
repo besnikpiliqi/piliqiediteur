@@ -43,22 +43,33 @@ use LogicException;
  *   de signature (270).
  *
  * Toutes les écritures fiscales d'un magasin se sérialisent sur sa ligne de
- * tetes_registre_fiscal (voir verrouiller()). Les verrous se prennent
- * toujours dans cet ordre : le registre, puis la ligne du document, puis
- * sequences_documents (voir DocumentNumberingService) ; un autre ordre
- * exposerait deux ventes simultanées à un interblocage.
+ * tetes_registre_fiscal (voir verrouiller()), qui tient aussi l'état de ses
+ * chaînes : la séquence et la signature du dernier enregistrement de
+ * chacune, la version du module et la clé du dernier enregistrement du
+ * magasin. Cet état ne se lit que sur cette ligne, verrouillée, jamais dans
+ * enregistrements_fiscaux : sous MySQL et MariaDB (REPEATABLE READ), une
+ * lecture sans verrou relit la photo prise à la première lecture de la
+ * transaction et ignorerait ce qu'une autre caisse a inscrit depuis, et une
+ * lecture verrouillée du dernier enregistrement d'une chaîne poserait un
+ * verrou d'intervalle jusque sur les enregistrements d'un autre magasin.
  *
- * Lié en scoped() (voir AppServiceProvider) : le verrou pris dans une
- * transaction, et son instant, valent pour toutes les écritures fiscales
- * de cette transaction, quel que soit le code qui les fait.
+ * Les verrous se prennent toujours dans cet ordre : le registre, puis la
+ * ligne du document, puis sequences_documents (voir
+ * DocumentNumberingService) ; un autre ordre exposerait deux ventes
+ * simultanées à un interblocage.
+ *
+ * Lié en scoped() (voir AppServiceProvider) : l'instant que donne le verrou
+ * vaut pour toutes les écritures fiscales de la transaction, transactions
+ * imbriquées comprises, quel que soit le code qui les fait.
  */
 class RegistreFiscal
 {
     public const FORMAT = 1;
 
     /**
-     * Les verrous tenus, par magasin : la transaction qui tient le verrou
-     * et l'instant donné à ses écritures.
+     * Les verrous tenus, par magasin : la transaction la plus externe, dont
+     * seule la fin libère le verrou de ligne, et l'instant donné à ses
+     * écritures.
      *
      * @var array<int, array{transaction: DatabaseTransactionRecord, instant: InstantFiscal}>
      */
@@ -75,9 +86,12 @@ class RegistreFiscal
     /**
      * Verrouille le registre du magasin actif jusqu'à la fin de la
      * transaction en cours et donne l'instant de ses écritures fiscales :
-     * maintenant, en UTC à la seconde, noté sur la ligne de verrou. Rappelé
-     * avant la fin de la transaction qui l'a pris, transactions imbriquées
-     * comprises, il redonne le même instant.
+     * maintenant, en UTC à la seconde, noté sur la ligne de verrou comme
+     * dernier verrou du registre. Le verrou de ligne ne tombe qu'à la
+     * validation de la transaction la plus externe : jusque-là, rappelé
+     * depuis n'importe quelle transaction imbriquée, il redonne le même
+     * instant, et le note de nouveau si un point de sauvegarde annulé l'a
+     * effacé.
      *
      * Rien n'est verrouillé hors d'une transaction (le verrou tomberait
      * aussitôt), pour un autre magasin que le magasin actif, sans clé de
@@ -89,43 +103,7 @@ class RegistreFiscal
      */
     public function verrouiller(Magasin $magasin): InstantFiscal
     {
-        $transaction = $this->transactionsEnCours()->last()
-            ?? throw new LogicException('Le registre fiscal ne se verrouille que dans une transaction : hors transaction, son verrou tomberait aussitôt.');
-        $magasinId = $magasin->getKey();
-
-        if ($magasinId !== app(TenantContext::class)->id()) {
-            throw new LogicException('Le registre fiscal ne se verrouille que pour le magasin actif.');
-        }
-
-        $verrouTenu = $this->verrous[$magasinId] ?? null;
-
-        if ($verrouTenu !== null && $this->transactionsEnCours()->containsStrict($verrouTenu['transaction'])) {
-            return $verrouTenu['instant'];
-        }
-
-        $this->signataire->cleId();
-
-        $tete = $this->teteVerrouillee($magasinId);
-        $instant = CarbonImmutable::now('UTC')->startOfSecond();
-        $dernierHorodatage = $tete->dernier_horodatage;
-
-        if ($dernierHorodatage !== null && $instant->lessThan($dernierHorodatage)) {
-            Log::critical('Registre fiscal : l\'horloge du serveur a reculé, opération fiscale refusée.', [
-                'magasin_id' => $magasinId,
-                'instant' => $instant->toIso8601String(),
-                'dernier_horodatage' => $dernierHorodatage->toIso8601String(),
-            ]);
-
-            throw HorlogeRegressiveException::pour($magasinId, $instant, $dernierHorodatage);
-        }
-
-        if ($dernierHorodatage === null || $instant->greaterThan($dernierHorodatage)) {
-            $tete->forceFill(['dernier_horodatage' => $instant])->save();
-        }
-
-        $this->verrous[$magasinId] = ['transaction' => $transaction, 'instant' => new InstantFiscal($instant)];
-
-        return $this->verrous[$magasinId]['instant'];
+        return $this->verrou($magasin)[1];
     }
 
     /**
@@ -177,51 +155,95 @@ class RegistreFiscal
             throw new LogicException('Le registre fiscal n\'enregistre qu\'un document déjà enregistré du magasin actif.');
         }
 
-        $instant = $this->verrouiller($magasin);
+        [$tete, $instant] = $this->verrou($magasin);
 
-        foreach ($this->evenementsAutomatiques($magasin->getKey()) as [$code, $details]) {
-            $this->inscrire($magasin, $instant, ChaineFiscale::Evenement, (string) $code->value, $this->evenement($code, $details), null);
+        foreach ($this->evenementsAutomatiques($tete) as [$code, $details]) {
+            $this->inscrire($magasin, $tete, $instant, ChaineFiscale::Evenement, (string) $code->value, $this->evenement($code, $details), null);
         }
 
-        return $this->inscrire($magasin, $instant, $chaine, $type, $donnees, $document);
+        return $this->inscrire($magasin, $tete, $instant, $chaine, $type, $donnees, $document);
+    }
+
+    /**
+     * Le verrou du registre du magasin (voir verrouiller()) : sa ligne de
+     * tête, lue verrouillée, et l'instant de la transaction. La ligne se
+     * relit à chaque appel, car un point de sauvegarde annulé a pu effacer
+     * ce que la transaction y avait écrit.
+     *
+     * @return array{0: TeteRegistreFiscal, 1: InstantFiscal}
+     *
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    private function verrou(Magasin $magasin): array
+    {
+        $transaction = $this->transactionsEnCours()->first()
+            ?? throw new LogicException('Le registre fiscal ne se verrouille que dans une transaction : hors transaction, son verrou tomberait aussitôt.');
+        $magasinId = $magasin->getKey();
+
+        if ($magasinId !== app(TenantContext::class)->id()) {
+            throw new LogicException('Le registre fiscal ne se verrouille que pour le magasin actif.');
+        }
+
+        $this->signataire->cleId();
+
+        $tete = $this->teteVerrouillee($magasinId);
+        $verrouTenu = $this->verrous[$magasinId] ?? null;
+        $instant = $verrouTenu !== null && $verrouTenu['transaction'] === $transaction
+            ? $verrouTenu['instant']
+            : new InstantFiscal(CarbonImmutable::now('UTC')->startOfSecond());
+        $dernierVerrou = $tete->dernier_horodatage;
+
+        if ($dernierVerrou !== null && $instant->utc->lessThan($dernierVerrou)) {
+            Log::critical('Registre fiscal : l\'horloge du serveur a reculé, opération fiscale refusée.', [
+                'magasin_id' => $magasinId,
+                'instant' => $instant->utc->toIso8601String(),
+                'dernier_verrou' => $dernierVerrou->toIso8601String(),
+            ]);
+
+            throw HorlogeRegressiveException::pour($magasinId, $instant->utc, $dernierVerrou);
+        }
+
+        if ($dernierVerrou === null || $instant->utc->greaterThan($dernierVerrou)) {
+            $tete->forceFill(['dernier_horodatage' => $instant->utc])->save();
+        }
+
+        $this->verrous[$magasinId] = ['transaction' => $transaction, 'instant' => $instant];
+
+        return [$tete, $instant];
     }
 
     /**
      * Les événements techniques à inscrire avant le prochain enregistrement
-     * du magasin, d'après le dernier : l'initialisation s'il n'y en a
-     * aucun, sinon le changement de version du module fiscal, puis celui
-     * de la clé de signature.
+     * du magasin, d'après le dernier, tel que le note la ligne de tête :
+     * l'initialisation s'il n'y en a aucun, sinon le changement de version
+     * du module fiscal, puis celui de la clé de signature.
      *
      * @return list<array{0: CodeEvenement, 1: array<string, string>}>
      */
-    private function evenementsAutomatiques(int $magasinId): array
+    private function evenementsAutomatiques(TeteRegistreFiscal $tete): array
     {
-        $dernier = EnregistrementFiscal::query()
-            ->where('magasin_id', $magasinId)
-            ->latest('id')
-            ->first(['version_module', 'cle_id']);
-
-        if ($dernier === null) {
+        if ($tete->version_module === null) {
             return [[CodeEvenement::Initialisation, []]];
         }
 
         $evenements = [];
 
-        if ($dernier->version_module !== $this->versionDuModule) {
-            $memeMajeure = explode('.', $dernier->version_module)[0] === explode('.', $this->versionDuModule)[0];
+        if ($tete->version_module !== $this->versionDuModule) {
+            $memeMajeure = explode('.', $tete->version_module)[0] === explode('.', $this->versionDuModule)[0];
 
             $evenements[] = [
                 $memeMajeure ? CodeEvenement::VersionMineure : CodeEvenement::VersionMajeure,
-                ['ancienne_valeur' => $dernier->version_module, 'nouvelle_valeur' => $this->versionDuModule],
+                ['ancienne_valeur' => $tete->version_module, 'nouvelle_valeur' => $this->versionDuModule],
             ];
         }
 
         $cleId = $this->signataire->cleId();
 
-        if ($dernier->cle_id !== $cleId) {
+        if ($tete->cle_id !== $cleId) {
             $evenements[] = [
                 CodeEvenement::ParametreDeConformite,
-                ['parametre' => 'cle_id', 'ancienne_valeur' => $dernier->cle_id, 'nouvelle_valeur' => $cleId],
+                ['parametre' => 'cle_id', 'ancienne_valeur' => $tete->cle_id, 'nouvelle_valeur' => $cleId],
             ];
         }
 
@@ -252,16 +274,17 @@ class RegistreFiscal
     }
 
     /**
+     * Inscrit l'enregistrement à la suite de la tête de sa chaîne, puis
+     * avance cette tête sur la ligne de verrou, dans la même transaction :
+     * un point de sauvegarde annulé efface l'un et l'autre.
+     *
      * @param  array<array-key, mixed>  $donnees
      */
-    private function inscrire(Magasin $magasin, InstantFiscal $instant, ChaineFiscale $chaine, string $type, array $donnees, ?Model $document): EnregistrementFiscal
+    private function inscrire(Magasin $magasin, TeteRegistreFiscal $tete, InstantFiscal $instant, ChaineFiscale $chaine, string $type, array $donnees, ?Model $document): EnregistrementFiscal
     {
-        $precedent = EnregistrementFiscal::query()
-            ->where('magasin_id', $magasin->getKey())
-            ->where('chaine', $chaine->value)
-            ->orderByDesc('sequence')
-            ->first(['sequence', 'signature']);
-        $sequence = ($precedent?->sequence ?? 0) + 1;
+        $chaines = $tete->chaines ?? [];
+        $sequence = ($chaines[$chaine->value]['sequence'] ?? 0) + 1;
+        $signaturePrecedente = $chaines[$chaine->value]['signature'] ?? null;
         /** @var User|null $operateur */
         $operateur = auth()->user();
         $cleId = $this->signataire->cleId();
@@ -277,10 +300,11 @@ class RegistreFiscal
             'operateur' => $operateur === null ? null : ['id' => $operateur->getKey(), 'nom' => $operateur->name],
             'version_module' => $this->versionDuModule,
             'cle_id' => $cleId,
-            'signature_precedente' => $precedent?->signature,
+            'signature_precedente' => $signaturePrecedente,
             'document' => $document === null ? null : ['type' => $document->getMorphClass(), 'id' => $document->getKey()],
             'donnees' => $donnees,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        $signature = $this->signataire->signer($contenu);
 
         $enregistrement = (new EnregistrementFiscal)->forceFill([
             'chaine' => $chaine,
@@ -291,13 +315,16 @@ class RegistreFiscal
             'operateur_id' => $operateur?->getKey(),
             'horodatage' => $instant->utc,
             'contenu' => $contenu,
-            'signature_precedente' => $precedent?->signature,
-            'signature' => $this->signataire->signer($contenu),
+            'signature_precedente' => $signaturePrecedente,
+            'signature' => $signature,
             'algorithme' => SignataireFiscal::ALGORITHME,
             'cle_id' => $cleId,
             'version_module' => $this->versionDuModule,
         ]);
         $enregistrement->save();
+
+        $chaines[$chaine->value] = ['sequence' => $sequence, 'signature' => $signature];
+        $tete->forceFill(['chaines' => $chaines, 'version_module' => $this->versionDuModule, 'cle_id' => $cleId])->save();
 
         return $enregistrement;
     }

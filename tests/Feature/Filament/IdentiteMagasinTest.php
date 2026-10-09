@@ -3,6 +3,10 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerDevisAction;
+use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -12,6 +16,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -24,7 +29,7 @@ class IdentiteMagasinTest extends TestCase
         $magasin = $this->connecterLeProprietaire();
 
         Livewire::test(IdentiteMagasin::class)
-            ->assertFormSet(['nom' => 'Ma Boutique', 'pays' => 'FR'])
+            ->assertFormSet(['nom' => 'Ma Boutique', 'code' => 'MABOUT', 'pays' => 'FR'])
             ->fillForm($this->identiteComplete())
             ->call('save')
             ->assertHasNoFormErrors()
@@ -176,6 +181,110 @@ class IdentiteMagasinTest extends TestCase
     }
 
     /**
+     * Le code saisi en minuscules s'enregistre en majuscules, et le
+     * formulaire montre ensuite le code enregistré.
+     */
+    public function test_le_code_saisi_en_minuscules_s_enregistre_en_majuscules(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+
+        Livewire::test(IdentiteMagasin::class)
+            ->fillForm(['code' => 'lyon1'])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertFormSet(['code' => 'LYON1']);
+
+        $this->assertSame('LYON1', $magasin->fresh()->code);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function codesRefuses(): array
+    {
+        return [
+            'code d\'une lettre' => ['L', 'Le code compte 2 à 10 lettres ou chiffres, sans espace ni tiret.'],
+            'code avec un tiret' => ['LYON-1', 'Le code compte 2 à 10 lettres ou chiffres, sans espace ni tiret.'],
+            'code d\'un autre magasin' => ['LYON1', 'Ce code est déjà utilisé : choisissez-en un autre, par exemple LYON2.'],
+            'code d\'un magasin supprimé' => ['ANCIEN', 'Ce code est déjà utilisé : choisissez-en un autre, par exemple LYON2.'],
+        ];
+    }
+
+    /**
+     * Un code n'appartient qu'à un seul magasin du logiciel, même supprimé.
+     */
+    #[DataProvider('codesRefuses')]
+    public function test_un_code_refuse_n_est_pas_enregistre(string $code, string $message): void
+    {
+        Magasin::factory()->create(['code' => 'LYON1']);
+        Magasin::factory()->create(['code' => 'ANCIEN'])->delete();
+        $magasin = $this->connecterLeProprietaire();
+
+        Livewire::test(IdentiteMagasin::class)
+            ->fillForm(['code' => $code])
+            ->call('save')
+            ->assertHasFormErrors(['code'])
+            ->assertSee($message);
+
+        $this->assertSame('MABOUT', $magasin->fresh()->code);
+    }
+
+    /**
+     * Dès le premier document numéroté, le code figure dans les numéros :
+     * le champ se désactive, et le modèle refuse tout changement.
+     */
+    public function test_le_code_ne_change_plus_apres_un_premier_devis_numerote(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $this->numeroterUnPremierDevis();
+
+        Livewire::test(IdentiteMagasin::class)
+            ->assertFormFieldIsDisabled('code')
+            ->assertSee('Il figure dans les numéros de vos documents : il ne change plus.');
+
+        $this->assertThrows(fn () => $magasin->fresh()->update(['code' => 'AUTRE']), LogicException::class, 'Le code du magasin figure déjà dans les numéros de ses documents : il ne change plus.');
+        $this->assertSame('MABOUT', $magasin->fresh()->code);
+    }
+
+    /**
+     * Une référence de produit (PRD-000001) ne porte pas le code : le
+     * premier produit ne le rend pas définitif.
+     */
+    public function test_un_premier_produit_ne_rend_pas_le_code_definitif(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        Produit::factory()->create(['reference' => null]);
+
+        Livewire::test(IdentiteMagasin::class)
+            ->assertFormFieldIsEnabled('code')
+            ->fillForm(['code' => 'LYON1'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('LYON1', $magasin->fresh()->code);
+    }
+
+    /**
+     * Un premier document numéroté pendant que la page est ouverte : le
+     * code saisi n'est pas enregistré, le reste de l'identité l'est, et le
+     * formulaire montre le code enregistré, désormais définitif.
+     */
+    public function test_un_code_devenu_definitif_pendant_la_saisie_n_est_pas_enregistre(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $page = Livewire::test(IdentiteMagasin::class)->assertFormFieldIsEnabled('code');
+        $this->numeroterUnPremierDevis();
+
+        $page->fillForm(['code' => 'AUTRE', 'raison_sociale' => 'Ma Boutique SARL'])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertFormSet(['code' => 'MABOUT'])
+            ->assertFormFieldIsDisabled('code');
+
+        $this->assertSame(['MABOUT', 'Ma Boutique SARL'], [$magasin->fresh()->code, $magasin->fresh()->raison_sociale]);
+    }
+
+    /**
      * L'identité d'un magasin ne touche jamais celle d'un autre.
      */
     public function test_l_identite_reste_celle_du_magasin_actif(): void
@@ -198,6 +307,7 @@ class IdentiteMagasinTest extends TestCase
     {
         return [
             'nom' => 'Boutique du Port',
+            'code' => 'PORT1',
             'raison_sociale' => 'Martin et Fils',
             'forme_juridique' => 'SARL',
             'siren' => '123456789',
@@ -211,6 +321,14 @@ class IdentiteMagasinTest extends TestCase
             'email' => 'contact@boutique-du-port.fr',
             'telephone' => '04 91 00 00 00',
         ];
+    }
+
+    private function numeroterUnPremierDevis(): void
+    {
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
+        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        app(EmettreDevisAction::class)->handle($devis);
     }
 
     private function connecterLeProprietaire(): Magasin

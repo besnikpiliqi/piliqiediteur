@@ -13,6 +13,10 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->string('nom', 150);
+            // Code court inséré dans tous les numéros de ses documents
+            // (FAC-LYON1-2026-000001, voir CodeMagasin et
+            // DocumentNumberingService) : définitif dès son premier document.
+            $table->string('code', 10);
             // Identité légale imprimée sur les devis, factures et avoirs
             // (voir IdentiteMagasin et documents/pdf/en-tete.blade.php).
             $table->string('raison_sociale', 200)->nullable();
@@ -60,6 +64,11 @@ return new class extends Migration
             // le déclencheur ci-dessous), ses documents restent conservés et
             // son établissement reste le sien.
             $table->unique('siret');
+            // Un code n'appartient qu'à un seul magasin du logiciel, magasins
+            // supprimés compris : il n'est jamais repris. Unique dans tout le
+            // logiciel, il l'est forcément dans la société, sans lire les
+            // autres magasins de son SIREN ni dépendre d'un SIREN déclaré.
+            $table->unique('code');
             $table->index(['statut']);
         });
 

@@ -31,7 +31,7 @@ class AvoirActionsTest extends TestCase
     {
         parent::setUp();
 
-        app(TenantContext::class)->set(Magasin::factory()->create());
+        app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'LYON1']));
     }
 
     private function emettreFacture(Client $client, Produit $produit, int $quantite = 1): Facture
@@ -519,7 +519,7 @@ class AvoirActionsTest extends TestCase
         $this->assertSame(0, LigneAvoir::query()->count());
         $this->assertSame(7, $produit->fresh()->stock_quantite);
         $this->assertSame(0, $produit->mouvementsStock()->where('type', 'retour_client')->count());
-        $this->assertSame('AV-2026-000001', app(EnregistrerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture), 'Produit défectueux')->numero);
+        $this->assertSame('AV-LYON1-2026-000001', app(EnregistrerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture), 'Produit défectueux')->numero);
     }
 
     /**

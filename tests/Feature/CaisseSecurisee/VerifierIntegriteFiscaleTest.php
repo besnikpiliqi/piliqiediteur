@@ -39,7 +39,7 @@ class VerifierIntegriteFiscaleTest extends TestCase
      */
     private function magasinQuiAVendu(array $attributs = []): Magasin
     {
-        $magasin = Magasin::factory()->create($attributs);
+        $magasin = Magasin::factory()->create(['code' => 'LYON1', ...$attributs]);
 
         app(TenantContext::class)->runAs($magasin, function (): void {
             $this->vendre();
@@ -96,7 +96,7 @@ class VerifierIntegriteFiscaleTest extends TestCase
         DB::table('sequences_documents')->where('magasin_id', $magasin->id)->where('type_document', 'ticket_caisse')->update(['prochain_numero' => 3]);
 
         $this->artisan('caisse:verifier')
-            ->expectsOutputToContain('Boutique Lefèvre [95] Série TK-2026- : 1 numéro(s) attribué(s) sans document : TK-2026-000002.')
+            ->expectsOutputToContain('Boutique Lefèvre [95] Série TK-LYON1-2026- : 1 numéro(s) attribué(s) sans document : TK-LYON1-2026-000002.')
             ->expectsOutputToContain('Intégrité de la caisse sécurisée : 1 magasin(s) en défaut.')
             ->assertFailed();
 
@@ -139,7 +139,7 @@ class VerifierIntegriteFiscaleTest extends TestCase
     public function test_la_commande_ne_verifie_que_le_magasin_designe(): void
     {
         $magasinA = $this->magasinQuiAVendu();
-        $magasinB = $this->magasinQuiAVendu();
+        $magasinB = $this->magasinQuiAVendu(['code' => 'LYON2']);
         DB::table('sequences_documents')->where('magasin_id', $magasinB->id)->where('type_document', 'ticket_caisse')->update(['prochain_numero' => 3]);
         $registreDeB = DB::table('enregistrements_fiscaux')->where('magasin_id', $magasinB->id)->count();
 

@@ -3,14 +3,14 @@
 namespace App\Domain\Facturation\Enums;
 
 /**
- * Clé de numérotation (table sequences_documents). Chaque type a sa propre
- * séquence, indépendante par magasin ET par type -- un devis et une
- * facture du même magasin peuvent porter le même numéro sans collision.
- * Sert aussi, au-delà des documents fiscaux à proprement parler, à toute
- * entité ayant besoin d'une suite numérique fiable par magasin (voir
- * Produit, dont la référence se génère automatiquement si elle n'est pas
- * saisie) : DocumentNumberingService n'est qu'un compteur générique
- * sûr en concurrence, pas une notion exclusivement fiscale.
+ * Clé de numérotation (table sequences_documents) : chaque type a sa
+ * propre série dans chaque magasin, et chaque année pour les documents
+ * (voir DocumentNumberingService) -- un devis et une facture du même
+ * magasin ont chacun leur rang 000001, distingués par le code de leur
+ * type. Sert aussi aux références de produits (PRD-000001), générées
+ * quand elles ne sont pas saisies, une suite par magasin jamais remise à
+ * zéro : DocumentNumberingService n'est qu'un compteur sûr en
+ * concurrence, pas une notion exclusivement fiscale.
  */
 enum TypeDocument: string
 {
@@ -30,7 +30,8 @@ enum TypeDocument: string
     case Produit = 'produit';
 
     /**
-     * Le code par lequel commence chaque numéro de la série (voir
+     * Le premier segment de chaque numéro de la série, avant le code du
+     * magasin et l'année (TK dans TK-LYON1-2026-000001, voir
      * DocumentNumberingService) : il dit pour toujours dans quelle série
      * un document a été numéroté (voir Facture::serie()).
      */

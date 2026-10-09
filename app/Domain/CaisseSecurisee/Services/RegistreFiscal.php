@@ -62,10 +62,11 @@ use LogicException;
  *
  * Les verrous se prennent toujours dans cet ordre : le registre, puis la
  * ligne du document, puis sequences_documents (voir
- * DocumentNumberingService) ; un autre ordre exposerait deux ventes
- * simultanées à un interblocage. Le registre se verrouille donc en tête de
- * toute transaction qui écrit au registre, y compris celle d'une action qui
- * modifie un paramètre ayant un impact sur la conformité (voir
+ * DocumentNumberingService, qui relit aussi la ligne du magasin sous un
+ * verrou partagé quand il crée une série) ; un autre ordre exposerait deux
+ * ventes simultanées à un interblocage. Le registre se verrouille donc en
+ * tête de toute transaction qui écrit au registre, y compris celle d'une
+ * action qui modifie un paramètre ayant un impact sur la conformité (voir
  * sousVerrou()).
  *
  * Lié en scoped() (voir AppServiceProvider) : l'instant que donne le verrou

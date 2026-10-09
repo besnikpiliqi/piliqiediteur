@@ -8,10 +8,13 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
+use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Models\User;
 use Database\Factories\MagasinFactory;
 use Filament\Models\Contracts\HasName;
@@ -35,6 +38,10 @@ use LogicException;
  * journal des événements du magasin (JET 270, voir
  * JournaliseSesParametresDeConformite).
  *
+ * Son code court (voir CodeMagasin) figure dans tous les numéros de ses
+ * documents : proposé depuis son nom s'il n'est pas choisi, il ne change
+ * plus dès son premier document (voir codeEstDefinitif()).
+ *
  * Son statut (voir StatutMagasin) ne vient jamais d'un formulaire du
  * magasin : actif à la création, il ne changera que par l'administration
  * de l'éditeur (étape 13 de la feuille de route). Un magasin ne se
@@ -54,6 +61,7 @@ class Magasin extends Model implements HasName
 
     protected $fillable = [
         'nom',
+        'code',
         'raison_sociale',
         'forme_juridique',
         'siren',
@@ -87,6 +95,7 @@ class Magasin extends Model implements HasName
     {
         static::creating(function (Magasin $magasin) {
             $magasin->uuid ??= (string) Str::uuid();
+            $magasin->code ??= CodeMagasin::proposer($magasin->nom);
             $magasin->statut ??= StatutMagasin::Active;
             $magasin->pays ??= 'FR';
             $magasin->option_debits_tva ??= false;
@@ -95,6 +104,48 @@ class Magasin extends Model implements HasName
             $magasin->relances_automatiques ??= false;
             $magasin->delais_relance ??= self::DELAIS_RELANCE_PAR_DEFAUT;
         });
+
+        static::updating(function (Magasin $magasin) {
+            if ($magasin->isDirty('code')) {
+                $magasin->verifierQueSonCodePeutChanger();
+            }
+        });
+    }
+
+    /**
+     * Le code est-il définitif ? Il l'est dès qu'une série de numérotation
+     * de document existe pour le magasin, la première s'étant créée avec
+     * son premier numéro, code compris (voir DocumentNumberingService). Les
+     * références de produits (PRD-000001), qui ne portent pas le code, ne
+     * comptent pas. sequences_documents n'a pas de MagasinScope : le
+     * filtre par magasin est explicite.
+     */
+    public function codeEstDefinitif(): bool
+    {
+        return SequenceDocument::query()
+            ->where('magasin_id', $this->getKey())
+            ->where('type_document', '!=', TypeDocument::Produit->value)
+            ->exists();
+    }
+
+    /**
+     * Refuse le changement d'un code définitif. La ligne du magasin se
+     * verrouille d'abord : dans la transaction du changement (voir
+     * IdentiteMagasin::save()), une première série de numérotation qui se
+     * crée en même temps, et relit le code sous un verrou partagé, attend
+     * que le changement soit validé et prend le nouveau code ; ou bien le
+     * changement attend la fin de la transaction qui a créé la série, et
+     * la voit.
+     *
+     * @throws LogicException
+     */
+    private function verifierQueSonCodePeutChanger(): void
+    {
+        static::withTrashed()->whereKey($this->getKey())->lockForUpdate()->value($this->getKeyName());
+
+        if ($this->codeEstDefinitif()) {
+            throw new LogicException('Le code du magasin figure déjà dans les numéros de ses documents : il ne change plus.');
+        }
     }
 
     /**
@@ -141,6 +192,20 @@ class Magasin extends Model implements HasName
     protected function magasinIdDesParametres(): int
     {
         return $this->getKey();
+    }
+
+    /**
+     * Le code s'enregistre toujours en majuscules, sans espace autour ;
+     * laissé vide à la création, il est proposé depuis le nom (voir
+     * booted()).
+     *
+     * @return Attribute<string, string|null>
+     */
+    protected function code(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $code): ?string => $code === null ? null : CodeMagasin::normaliser($code),
+        );
     }
 
     /**

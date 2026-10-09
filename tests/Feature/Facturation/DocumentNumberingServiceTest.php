@@ -6,6 +6,7 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Tenancy\Models\Magasin;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class DocumentNumberingServiceTest extends TestCase
@@ -14,66 +15,130 @@ class DocumentNumberingServiceTest extends TestCase
 
     public function test_la_numerotation_est_sequentielle_pour_un_meme_magasin_et_type(): void
     {
-        $magasin = Magasin::factory()->create();
+        $magasin = Magasin::factory()->create(['code' => 'LYON1']);
         $service = app(DocumentNumberingService::class);
 
         $numero1 = $service->suivant($magasin, TypeDocument::Facture, '2026');
         $numero2 = $service->suivant($magasin, TypeDocument::Facture, '2026');
         $numero3 = $service->suivant($magasin, TypeDocument::Facture, '2026');
 
-        $this->assertSame('FAC-2026-000001', $numero1);
-        $this->assertSame('FAC-2026-000002', $numero2);
-        $this->assertSame('FAC-2026-000003', $numero3);
+        $this->assertSame('FAC-LYON1-2026-000001', $numero1);
+        $this->assertSame('FAC-LYON1-2026-000002', $numero2);
+        $this->assertSame('FAC-LYON1-2026-000003', $numero3);
     }
 
-    public function test_deux_magasins_ont_des_sequences_independantes_et_peuvent_partager_le_meme_numero(): void
+    /**
+     * @return array<string, array{TypeDocument, string}>
+     */
+    public static function documentsNumerotes(): array
     {
-        $magasinA = Magasin::factory()->create();
-        $magasinB = Magasin::factory()->create();
+        return [
+            'devis' => [TypeDocument::Devis, 'DEV-LYON1-2026-000001'],
+            'facture' => [TypeDocument::Facture, 'FAC-LYON1-2026-000001'],
+            'ticket de caisse' => [TypeDocument::TicketCaisse, 'TK-LYON1-2026-000001'],
+            'avoir' => [TypeDocument::Avoir, 'AV-LYON1-2026-000001'],
+            'facture d\'achat' => [TypeDocument::FactureAchat, 'FA-LYON1-2026-000001'],
+            'avoir fournisseur' => [TypeDocument::AvoirFournisseur, 'AF-LYON1-2026-000001'],
+            'clôture de caisse' => [TypeDocument::ClotureCaisse, 'Z-LYON1-2026-000001'],
+            'soumission d\'e-reporting' => [TypeDocument::SoumissionEReporting, 'ER-LYON1-2026-000001'],
+        ];
+    }
+
+    /**
+     * Chaque numéro de document porte le code de son type, le code du
+     * magasin et l'année.
+     */
+    #[DataProvider('documentsNumerotes')]
+    public function test_un_numero_de_document_porte_le_code_du_magasin_et_l_annee(TypeDocument $type, string $numeroAttendu): void
+    {
+        $magasin = Magasin::factory()->create(['code' => 'LYON1']);
+
+        $numero = app(DocumentNumberingService::class)->suivant($magasin, $type, '2026');
+
+        $this->assertSame($numeroAttendu, $numero);
+    }
+
+    /**
+     * Une référence de produit n'est pas un numéro de document : ni code
+     * de magasin ni année.
+     */
+    public function test_une_reference_de_produit_ne_porte_ni_code_de_magasin_ni_annee(): void
+    {
+        $magasin = Magasin::factory()->create(['code' => 'LYON1']);
+
+        $reference = app(DocumentNumberingService::class)->suivant($magasin, TypeDocument::Produit);
+
+        $this->assertSame('PRD-000001', $reference);
+    }
+
+    /**
+     * Deux magasins d'une même société ont chacun leurs séries, et leurs
+     * codes distinguent leurs numéros : la plateforme, qui contrôle
+     * l'unicité sur le SIREN, le numéro et l'année, n'en voit jamais deux
+     * pareils.
+     */
+    public function test_deux_magasins_du_meme_siren_ont_chacun_leur_serie_et_des_numeros_distincts(): void
+    {
+        $lyon1 = Magasin::factory()->create(['code' => 'LYON1', 'siren' => '732829320', 'siret' => '73282932000074']);
+        $lyon2 = Magasin::factory()->create(['code' => 'LYON2', 'siren' => '732829320', 'siret' => '73282932000082']);
         $service = app(DocumentNumberingService::class);
 
-        $numeroA1 = $service->suivant($magasinA, TypeDocument::Facture, '2026');
-        $numeroB1 = $service->suivant($magasinB, TypeDocument::Facture, '2026');
-        $numeroA2 = $service->suivant($magasinA, TypeDocument::Facture, '2026');
+        $numeroLyon1 = $service->suivant($lyon1, TypeDocument::Facture, '2026');
+        $numeroLyon2 = $service->suivant($lyon2, TypeDocument::Facture, '2026');
+        $secondNumeroLyon1 = $service->suivant($lyon1, TypeDocument::Facture, '2026');
 
-        $this->assertSame('FAC-2026-000001', $numeroA1);
-        $this->assertSame('FAC-2026-000001', $numeroB1, 'Deux magasins peuvent avoir le même numéro sans collision.');
-        $this->assertSame('FAC-2026-000002', $numeroA2);
+        $this->assertSame('FAC-LYON1-2026-000001', $numeroLyon1);
+        $this->assertSame('FAC-LYON2-2026-000001', $numeroLyon2);
+        $this->assertSame('FAC-LYON1-2026-000002', $secondNumeroLyon1);
     }
 
     public function test_devis_et_facture_ont_des_sequences_independantes_dans_le_meme_magasin(): void
     {
-        $magasin = Magasin::factory()->create();
+        $magasin = Magasin::factory()->create(['code' => 'LYON1']);
         $service = app(DocumentNumberingService::class);
 
         $numeroDevis = $service->suivant($magasin, TypeDocument::Devis, '2026');
         $numeroFacture = $service->suivant($magasin, TypeDocument::Facture, '2026');
 
-        $this->assertSame('DEV-2026-000001', $numeroDevis);
-        $this->assertSame('FAC-2026-000001', $numeroFacture);
+        $this->assertSame('DEV-LYON1-2026-000001', $numeroDevis);
+        $this->assertSame('FAC-LYON1-2026-000001', $numeroFacture);
     }
 
     public function test_ticket_caisse_et_facture_ont_des_sequences_independantes_dans_le_meme_magasin(): void
     {
-        $magasin = Magasin::factory()->create();
+        $magasin = Magasin::factory()->create(['code' => 'LYON1']);
         $service = app(DocumentNumberingService::class);
 
         $numeroTicket = $service->suivant($magasin, TypeDocument::TicketCaisse, '2026');
         $numeroFacture = $service->suivant($magasin, TypeDocument::Facture, '2026');
 
-        $this->assertSame('TK-2026-000001', $numeroTicket);
-        $this->assertSame('FAC-2026-000001', $numeroFacture);
+        $this->assertSame('TK-LYON1-2026-000001', $numeroTicket);
+        $this->assertSame('FAC-LYON1-2026-000001', $numeroFacture);
     }
 
     public function test_une_periode_differente_redemarre_la_sequence(): void
     {
-        $magasin = Magasin::factory()->create();
+        $magasin = Magasin::factory()->create(['code' => 'LYON1']);
         $service = app(DocumentNumberingService::class);
 
         $numero2026 = $service->suivant($magasin, TypeDocument::Facture, '2026');
         $numero2027 = $service->suivant($magasin, TypeDocument::Facture, '2027');
 
-        $this->assertSame('FAC-2026-000001', $numero2026);
-        $this->assertSame('FAC-2027-000001', $numero2027);
+        $this->assertSame('FAC-LYON1-2026-000001', $numero2026);
+        $this->assertSame('FAC-LYON1-2027-000001', $numero2027);
+    }
+
+    /**
+     * La première série prend le code enregistré du magasin, même quand
+     * l'objet qui la demande a été chargé avant un changement de code.
+     */
+    public function test_une_premiere_serie_prend_le_code_enregistre_du_magasin(): void
+    {
+        $magasin = Magasin::factory()->create(['code' => 'LYON1']);
+        Magasin::query()->findOrFail($magasin->id)->update(['code' => 'LYON9']);
+
+        $numero = app(DocumentNumberingService::class)->suivant($magasin, TypeDocument::Facture, '2026');
+
+        $this->assertSame('FAC-LYON9-2026-000001', $numero);
     }
 }

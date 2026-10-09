@@ -186,7 +186,7 @@ class RegistreFiscalTest extends TestCase
         $facture = Facture::factory()->create();
         $cleId = $this->cleIdDe($this->clePubliqueDeTest());
 
-        $enregistrement = $this->enregistrer(ChaineFiscale::Vente, 'facture', ['numero' => 'FAC-2026-000001', 'total_ttc_centimes' => 12000, 'acompte' => null, 'professionnel' => true], $facture);
+        $enregistrement = $this->enregistrer(ChaineFiscale::Vente, 'facture', ['numero' => 'FAC-LYON1-2026-000001', 'total_ttc_centimes' => 12000, 'acompte' => null, 'professionnel' => true], $facture);
 
         $initialisation = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->sole();
         $this->assertSame([
@@ -203,7 +203,7 @@ class RegistreFiscalTest extends TestCase
             'signature_precedente' => null,
             'gt' => ['montant' => 12000, 'perpetuel_reel' => 12000, 'perpetuel_absolu' => 12000],
             'document' => ['type' => 'facture', 'id' => $facture->id],
-            'donnees' => ['numero' => 'FAC-2026-000001', 'total_ttc_centimes' => 12000, 'acompte' => null, 'professionnel' => true],
+            'donnees' => ['numero' => 'FAC-LYON1-2026-000001', 'total_ttc_centimes' => 12000, 'acompte' => null, 'professionnel' => true],
         ], $this->contenu($enregistrement));
         $this->assertStringContainsString('"nom":"Zoé Lefèvre"', $enregistrement->contenu);
         $this->assertSame(1, openssl_verify($enregistrement->contenu, base64_decode(strtr($enregistrement->signature, '-_', '+/')), $this->clePubliqueDeTest(), OPENSSL_ALGO_SHA256));

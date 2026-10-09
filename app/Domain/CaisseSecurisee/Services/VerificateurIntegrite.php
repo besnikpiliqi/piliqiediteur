@@ -1248,8 +1248,8 @@ class VerificateurIntegrite
     }
 
     /**
-     * Le préfixe et le rang d'un numéro (« TK-2026- » et 12 pour
-     * TK-2026-000012), ou null s'il ne finit pas par un rang.
+     * Le préfixe et le rang d'un numéro (« TK-LYON1-2026- » et 12 pour
+     * TK-LYON1-2026-000012), ou null s'il ne finit pas par un rang.
      *
      * @return array{0: string, 1: int}|null
      */
@@ -1264,9 +1264,9 @@ class VerificateurIntegrite
 
     /**
      * La façon dont le message désigne un document : « Le ticket
-     * TK-2026-000001 », « La facture FAC-2026-000001 », « L'avoir
-     * AV-2026-000001 », « Le paiement (identifiant interne 12) », ou par
-     * son identifiant interne un document sans numéro.
+     * TK-LYON1-2026-000001 », « La facture FAC-LYON1-2026-000001 »,
+     * « L'avoir AV-LYON1-2026-000001 », « Le paiement (identifiant interne
+     * 12) », ou par son identifiant interne un document sans numéro.
      */
     private static function libelleDuDocument(string $alias, ?int $documentId, ?string $numero): string
     {

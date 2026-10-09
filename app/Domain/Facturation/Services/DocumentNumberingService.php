@@ -9,8 +9,23 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Numérotation légale des documents : indépendante par magasin ET par
- * type de document, jamais de trou ni de doublon même sous concurrence.
+ * Numérotation légale des documents : une série par magasin, par type de
+ * document et par année, jamais de trou ni de doublon même sous
+ * concurrence.
+ *
+ * Chaque numéro porte le code du type, le code du magasin (voir
+ * CodeMagasin) et l'année : FAC-LYON1-2026-000001, 26 caractères au plus
+ * jusqu'au rang 999999, sous la limite de 35 du numéro de facture (BT-1).
+ * La plateforme contrôle l'unicité d'un numéro sur le SIREN du vendeur,
+ * le numéro et l'année : deux magasins d'une même société, qui ont chacun
+ * leurs séries, ne produisent donc jamais le même numéro, leurs codes
+ * étant différents. Les références de produits (PRD-000001), qui ne sont
+ * pas des numéros de document, ne portent ni code de magasin ni année.
+ *
+ * Le préfixe d'une série s'écrit à sa création, avec le code du magasin
+ * relu en base sous un verrou partagé : un changement de code en cours
+ * (voir Magasin::codeEstDefinitif()) est attendu et pris en compte, et le
+ * code ne change plus une fois la première série créée.
  *
  * Deux races gérées explicitement :
  *  1. Deux magasins (ou deux types) n'entrent jamais en collision : clé
@@ -62,7 +77,7 @@ class DocumentNumberingService
 
         try {
             SequenceDocument::query()->createOrFirst($critere, [
-                'prefixe' => $this->prefixe($type, $periodKey),
+                'prefixe' => $this->prefixe($magasin, $type, $periodKey),
                 'prochain_numero' => 1,
                 'rembourrage' => 6,
             ]);
@@ -77,8 +92,18 @@ class DocumentNumberingService
         return SequenceDocument::query()->where($critere)->lockForUpdate()->firstOrFail();
     }
 
-    private function prefixe(TypeDocument $type, string $periodKey): string
+    /**
+     * « FAC-LYON1-2026- » pour un document, « PRD- » pour une référence de
+     * produit.
+     */
+    private function prefixe(Magasin $magasin, TypeDocument $type, string $periodKey): string
     {
-        return $periodKey !== '' ? "{$type->code()}-{$periodKey}-" : "{$type->code()}-";
+        if ($type === TypeDocument::Produit) {
+            return "{$type->code()}-";
+        }
+
+        $codeDuMagasin = Magasin::withTrashed()->whereKey($magasin->getKey())->sharedLock()->value('code');
+
+        return "{$type->code()}-{$codeDuMagasin}-{$periodKey}-";
     }
 }

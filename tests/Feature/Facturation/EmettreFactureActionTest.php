@@ -8,6 +8,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -24,7 +25,7 @@ class EmettreFactureActionTest extends TestCase
     {
         parent::setUp();
 
-        app(TenantContext::class)->set(Magasin::factory()->create());
+        app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'LYON1']));
     }
 
     public function test_emettre_une_facture_lui_attribue_un_numero_et_change_son_statut(): void
@@ -120,6 +121,25 @@ class EmettreFactureActionTest extends TestCase
         $this->assertStringStartsWith('FAC-', $facture->numero);
     }
 
+    /**
+     * Le premier segment du numéro dit pour toujours dans quelle série la
+     * vente a été numérotée, quel que soit le code du magasin qui suit.
+     */
+    public function test_la_serie_se_lit_dans_le_premier_segment_du_numero(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $creerEtEmettre = fn (Client $client) => app(EmettreFactureAction::class)->handle(
+            app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]])
+        );
+
+        $ticket = $creerEtEmettre(Client::factory()->create());
+        $facture = $creerEtEmettre(Client::factory()->create(['type_client' => TypeClient::Professionnel]));
+
+        $this->assertSame(['TK-LYON1-2026-000001', TypeDocument::TicketCaisse], [$ticket->numero, $ticket->serie()]);
+        $this->assertSame(['FAC-LYON1-2026-000001', TypeDocument::Facture], [$facture->numero, $facture->serie()]);
+    }
+
     public function test_les_tickets_et_les_factures_ont_des_numerotations_independantes(): void
     {
         $clientParticulier = Client::factory()->create();
@@ -135,9 +155,9 @@ class EmettreFactureActionTest extends TestCase
         $ticket2 = $creerEtEmettre($clientParticulier);
 
         $annee = now()->format('Y');
-        $this->assertSame("TK-{$annee}-000001", $ticket1->numero);
-        $this->assertSame("FAC-{$annee}-000001", $facture1->numero);
-        $this->assertSame("TK-{$annee}-000002", $ticket2->numero);
+        $this->assertSame("TK-LYON1-{$annee}-000001", $ticket1->numero);
+        $this->assertSame("FAC-LYON1-{$annee}-000001", $facture1->numero);
+        $this->assertSame("TK-LYON1-{$annee}-000002", $ticket2->numero);
     }
 
     /**
@@ -155,7 +175,7 @@ class EmettreFactureActionTest extends TestCase
 
         $facture = app(EmettreFactureAction::class)->handle($facture);
 
-        $this->assertSame('TK-2027-000001', $facture->numero);
+        $this->assertSame('TK-LYON1-2027-000001', $facture->numero);
         $this->assertSame('2027-01-01 00:30', $facture->fresh()->date_emission->format('Y-m-d H:i'));
     }
 

@@ -140,7 +140,7 @@ class EnregistrementFiscal extends Model
 
     /**
      * Le document que référence le contenu signé, ou null : une vente par
-     * sa nature et son numéro légal (« Ticket TK-2026-000001 ») ; un
+     * sa nature et son numéro légal (« Ticket TK-LYON1-2026-000001 ») ; un
      * paiement, ou le document d'un événement technique (un produit), par
      * son identifiant interne, nommé comme tel (« Produit (identifiant
      * interne 12) ») pour ne jamais passer pour un numéro légal.

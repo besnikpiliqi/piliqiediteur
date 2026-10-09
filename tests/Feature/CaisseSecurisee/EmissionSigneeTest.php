@@ -43,7 +43,7 @@ class EmissionSigneeTest extends TestCase
 
     private function magasinActif(array $attributs = []): Magasin
     {
-        $magasin = Magasin::factory()->create($attributs);
+        $magasin = Magasin::factory()->create(['code' => 'LYON1', ...$attributs]);
         app(TenantContext::class)->set($magasin);
 
         return $magasin;
@@ -208,7 +208,7 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame([['evenement', 1, '260'], ['encaissement', 1, 'paiement'], ['vente', 1, 'ticket']], $this->registre());
         $this->assertSame([
             'document' => [
-                'numero' => 'TK-2026-000001',
+                'numero' => 'TK-LYON1-2026-000001',
                 'date_emission' => '2026-10-09T10:15:30+02:00',
                 'client_id' => $client->id,
                 'cree_par' => $vendeuse->id,
@@ -255,7 +255,7 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame([
             'paiement' => ['client_id' => $client->id, 'mode' => 'carte_bancaire', 'montant' => 2950, 'reference' => 'TRX-42', 'notes' => null, 'recu_le' => '2026-10-09', 'cree_par' => $vendeuse->id],
             'client' => $copieDuClient,
-            'allocations' => [['facture_id' => $ticket->id, 'numero' => 'TK-2026-000001', 'montant' => 2950]],
+            'allocations' => [['facture_id' => $ticket->id, 'numero' => 'TK-LYON1-2026-000001', 'montant' => 2950]],
         ], $this->contenu($encaissement)['donnees']);
         $this->assertSignatureValide($vente);
         $this->assertSignatureValide($encaissement);
@@ -281,7 +281,7 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame('2027-01-01 00:30:12', $ticket->date_emission->format('Y-m-d H:i:s'));
         $this->assertTrue($ticket->date_emission->equalTo($vente->horodatage));
         $this->assertSame('20261231233012Z', $this->contenu($vente)['horodatage']);
-        $this->assertSame('TK-2027-000001', $ticket->numero);
+        $this->assertSame('TK-LYON1-2027-000001', $ticket->numero);
     }
 
     /**
@@ -323,7 +323,7 @@ class EmissionSigneeTest extends TestCase
 
         $donnees = $this->contenu($this->enregistrementDe($facture, ChaineFiscale::Vente))['donnees'];
         $this->assertSame([['evenement', 1, '260'], ['vente', 1, 'facture']], $this->registre());
-        $this->assertSame('FAC-2026-000001', $donnees['document']['numero']);
+        $this->assertSame('FAC-LYON1-2026-000001', $donnees['document']['numero']);
         $this->assertSame(['2026-11-08', 'Paiement à 30 jours', 'Livraison au dépôt'], [$donnees['document']['date_echeance'], $donnees['document']['conditions_paiement'], $donnees['document']['notes']]);
         $this->assertSame(['ht' => 10000, 'tva' => 2000, 'ttc' => 12000], $donnees['document']['totaux']);
         $this->assertSame(['professionnel', '73282932000074', 'FR44732829320'], [$donnees['contexte']['client']['type_client'], $donnees['contexte']['client']['siret'], $donnees['contexte']['client']['numero_tva']]);
@@ -378,16 +378,16 @@ class EmissionSigneeTest extends TestCase
         $donnees = $this->contenu($vente)['donnees'];
         $this->assertSame([['evenement', 1, '260'], ['encaissement', 1, 'paiement'], ['vente', 1, 'ticket'], ['vente', 2, 'avoir'], ['evenement', 2, '190']], $this->registre());
         $this->assertSame([
-            'numero' => 'AV-2026-000001',
+            'numero' => 'AV-LYON1-2026-000001',
             'date_emission' => '2026-10-09T10:15:30+02:00',
             'client_id' => $client->id,
             'cree_par' => $vendeuse->id,
             'devise' => 'EUR',
             'motif' => 'Article abîmé',
             'corrige' => 'ticket',
-            'documents_corriges' => ['TK-2026-000001'],
+            'documents_corriges' => ['TK-LYON1-2026-000001'],
             'lignes' => [
-                ['ordre' => 0, 'nature' => 'bien', 'produit_id' => $produit->id, 'reference' => 'A-020', 'description' => 'Article à 20 €', 'quantite' => -1, 'prix_unitaire_ht' => 1667, 'prix_unitaire_ttc' => 2000, 'taux_tva' => 2000, 'remise' => 0, 'ht' => -1667, 'tva' => -333, 'ttc' => -2000, 'origine' => ['ligne_facture_id' => $ligne->id, 'facture_id' => $ticket->id, 'numero' => 'TK-2026-000001']],
+                ['ordre' => 0, 'nature' => 'bien', 'produit_id' => $produit->id, 'reference' => 'A-020', 'description' => 'Article à 20 €', 'quantite' => -1, 'prix_unitaire_ht' => 1667, 'prix_unitaire_ttc' => 2000, 'taux_tva' => 2000, 'remise' => 0, 'ht' => -1667, 'tva' => -333, 'ttc' => -2000, 'origine' => ['ligne_facture_id' => $ligne->id, 'facture_id' => $ticket->id, 'numero' => 'TK-LYON1-2026-000001']],
             ],
             'ventilation' => [['taux' => 2000, 'ht' => -1667, 'tva' => -333, 'ttc' => -2000]],
             'totaux' => ['ht' => -1667, 'tva' => -333, 'ttc' => -2000],
@@ -397,7 +397,7 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame([
             'code' => 190,
             'libelle' => 'Annulation de ticket (avoir sur des tickets de caisse)',
-            'details' => ['avoir' => 'AV-2026-000001', 'tickets' => ['TK-2026-000001'], 'montant_ttc' => -2000, 'sequence_vente' => 2, 'motif' => 'Article abîmé'],
+            'details' => ['avoir' => 'AV-LYON1-2026-000001', 'tickets' => ['TK-LYON1-2026-000001'], 'montant_ttc' => -2000, 'sequence_vente' => 2, 'motif' => 'Article abîmé'],
             'ip' => null,
             'agent_utilisateur' => null,
         ], $this->contenu($annulation)['donnees']);
@@ -421,8 +421,8 @@ class EmissionSigneeTest extends TestCase
         $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
 
         $donnees = $this->contenu($this->enregistrementDe($avoir, ChaineFiscale::Vente))['donnees'];
-        $this->assertSame(['facture', ['FAC-2026-000001']], [$donnees['document']['corrige'], $donnees['document']['documents_corriges']]);
-        $this->assertSame([['facture_id' => $facture->id, 'numero' => 'FAC-2026-000001', 'montant' => 2000]], $donnees['contexte']['imputations']);
+        $this->assertSame(['facture', ['FAC-LYON1-2026-000001']], [$donnees['document']['corrige'], $donnees['document']['documents_corriges']]);
+        $this->assertSame([['facture_id' => $facture->id, 'numero' => 'FAC-LYON1-2026-000001', 'montant' => 2000]], $donnees['contexte']['imputations']);
         $this->assertSame([['evenement', 1, '260'], ['vente', 1, 'facture'], ['vente', 2, 'avoir']], $this->registre());
     }
 
@@ -442,7 +442,7 @@ class EmissionSigneeTest extends TestCase
         $ticket = $this->encaisser($client, [[$produit, 1]]);
 
         $contexte = $this->contenu($this->enregistrementDe($ticket, ChaineFiscale::Vente))['donnees']['contexte'];
-        $this->assertSame([['avoir_id' => $avoir->id, 'numero' => 'AV-2026-000001', 'montant' => 6000]], $contexte['credits_avoir']);
+        $this->assertSame([['avoir_id' => $avoir->id, 'numero' => 'AV-LYON1-2026-000001', 'montant' => 6000]], $contexte['credits_avoir']);
         $this->assertSame([], $contexte['reglements']);
         $this->assertSame(1, Paiement::query()->count());
         $this->assertSame(1, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Encaissement->value)->count());
@@ -467,9 +467,9 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame(1, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Encaissement->value)->count());
         $this->assertSame(['mode' => 'virement', 'montant' => 12000, 'reference' => 'VIR-7'], Arr::only($this->contenu($encaissement)['donnees']['paiement'], ['mode', 'montant', 'reference']));
         $this->assertSame([
-            ['facture_id' => $factures[0]->id, 'numero' => 'FAC-2026-000001', 'montant' => 2000],
-            ['facture_id' => $factures[1]->id, 'numero' => 'FAC-2026-000002', 'montant' => 4000],
-            ['facture_id' => $factures[2]->id, 'numero' => 'FAC-2026-000003', 'montant' => 6000],
+            ['facture_id' => $factures[0]->id, 'numero' => 'FAC-LYON1-2026-000001', 'montant' => 2000],
+            ['facture_id' => $factures[1]->id, 'numero' => 'FAC-LYON1-2026-000002', 'montant' => 4000],
+            ['facture_id' => $factures[2]->id, 'numero' => 'FAC-LYON1-2026-000003', 'montant' => 6000],
         ], $this->contenu($encaissement)['donnees']['allocations']);
         $this->assertArrayNotHasKey('gt', $this->contenu($encaissement));
         $this->assertSignatureValide($encaissement);
@@ -515,7 +515,7 @@ class EmissionSigneeTest extends TestCase
     public function test_une_vente_n_ecrit_que_dans_le_registre_de_son_magasin(): void
     {
         $this->freezeTime();
-        $magasinB = $this->magasinActif();
+        $magasinB = $this->magasinActif(['code' => 'LYON2']);
         $this->encaisser(Client::factory()->create(), [[$this->produit('B-050', 'Article de B', 50), 1]]);
         $registreDeB = fn (): array => DB::table('enregistrements_fiscaux')->where('magasin_id', $magasinB->id)->orderBy('id')->get()->map(fn (object $ligne): array => (array) $ligne)->all();
         $teteDeB = fn (): ?string => DB::table('tetes_registre_fiscal')->where('magasin_id', $magasinB->id)->value('chaines');

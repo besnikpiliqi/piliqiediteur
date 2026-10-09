@@ -37,7 +37,7 @@ class VerifierIntegriteActionTest extends TestCase
 
     private function magasinActif(): Magasin
     {
-        $magasin = Magasin::factory()->create();
+        $magasin = Magasin::factory()->create(['code' => 'LYON1']);
         app(TenantContext::class)->set($magasin);
 
         return $magasin;
@@ -131,13 +131,13 @@ class VerifierIntegriteActionTest extends TestCase
             ->map(static fn (EnregistrementFiscal $evenement): array => $evenement->contenuSigne()['donnees']['details'])
             ->all();
         $this->assertSame([
-            ['controle' => 'document', 'message' => 'Le ticket TK-2026-000001 ne correspond plus à ce qui a été signé à son émission (lignes).', 'chaine' => 'vente', 'sequence' => 1, 'document' => 'facture', 'document_id' => $ticket->id],
-            ['controle' => 'numerotation', 'message' => 'Série TK-2026- : 1 numéro(s) attribué(s) sans document : TK-2026-000002.', 'serie' => 'TK-2026-'],
+            ['controle' => 'document', 'message' => 'Le ticket TK-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (lignes).', 'chaine' => 'vente', 'sequence' => 1, 'document' => 'facture', 'document_id' => $ticket->id],
+            ['controle' => 'numerotation', 'message' => 'Série TK-LYON1-2026- : 1 numéro(s) attribué(s) sans document : TK-LYON1-2026-000002.', 'serie' => 'TK-LYON1-2026-'],
         ], $anomalies);
         $this->assertSame(['resultat' => 'anomalies', 'nombre_anomalies' => 2], Arr::only($this->detailsDuDernierControle(), ['resultat', 'nombre_anomalies']));
         Log::shouldHaveReceived('critical')->once()->withArgs(static fn (string $message, array $contexte): bool => $contexte['magasin_id'] === $magasin->id
             && $contexte['nombre_anomalies'] === 2
-            && $contexte['anomalies'][1] === '[95] Série TK-2026- : 1 numéro(s) attribué(s) sans document : TK-2026-000002.');
+            && $contexte['anomalies'][1] === '[95] Série TK-LYON1-2026- : 1 numéro(s) attribué(s) sans document : TK-LYON1-2026-000002.');
     }
 
     /**

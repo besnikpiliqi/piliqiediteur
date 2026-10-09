@@ -82,7 +82,7 @@ class InalterabiliteTest extends TestCase
         return [
             'total' => [static fn (): array => ['total_ttc' => '1.00'], 'total_ttc'],
             'client' => [static fn (): array => ['client_id' => Client::factory()->create()->id], 'client_id'],
-            'numéro' => [static fn (): array => ['numero' => 'TK-2026-999999'], 'numero'],
+            'numéro' => [static fn (): array => ['numero' => 'TK-LYON1-2026-999999'], 'numero'],
             'date d\'émission' => [static fn (): array => ['date_emission' => CarbonImmutable::parse('2020-01-01 00:00:00', 'UTC')], 'date_emission'],
             'notes' => [static fn (): array => ['notes' => 'Réécrite après coup'], 'notes'],
         ];

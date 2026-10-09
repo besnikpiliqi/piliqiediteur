@@ -12,9 +12,11 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -34,6 +36,95 @@ class CreerMagasinActionTest extends TestCase
         $this->assertSame(StatutMagasin::Active, $magasin->statut);
         $this->assertTrue($proprietaire->appartientA($magasin));
         $this->assertSame([$proprietaire->id], $magasin->proprietaires()->get()->modelKeys());
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function nomsEtCodesProposes(): array
+    {
+        return [
+            'nom de deux mots' => ['Ma Boutique', 'MABOUT'],
+            'nom accentué avec des chiffres' => ['Été 2026', 'ETE202'],
+            'nom sans lettre ni chiffre' => ['#', 'MAG'],
+        ];
+    }
+
+    /**
+     * Sans code choisi, le magasin reçoit celui que propose son nom : ses
+     * six premières lettres ou chiffres, sans accent, en majuscules.
+     */
+    #[DataProvider('nomsEtCodesProposes')]
+    public function test_un_magasin_sans_code_choisi_recoit_le_code_propose_par_son_nom(string $nom, string $codeAttendu): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => $nom], User::factory()->create());
+
+        $this->assertSame($codeAttendu, $magasin->fresh()->code);
+    }
+
+    /**
+     * Un code proposé déjà pris, même par un magasin supprimé, reçoit le
+     * premier suffixe libre.
+     */
+    public function test_un_code_propose_deja_pris_recoit_le_premier_suffixe_libre(): void
+    {
+        $premier = app(CreerMagasinAction::class)->handle(['nom' => 'Piliqi Store'], User::factory()->create());
+        $premier->delete();
+
+        $second = app(CreerMagasinAction::class)->handle(['nom' => 'Piliqi Store'], User::factory()->create());
+
+        $this->assertSame('PILIQI', $premier->fresh()->code);
+        $this->assertSame('PILIQI2', $second->fresh()->code);
+    }
+
+    public function test_un_code_choisi_s_enregistre_en_majuscules(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'code' => ' lyon1 '], User::factory()->create());
+
+        $this->assertSame('LYON1', $magasin->fresh()->code);
+    }
+
+    /**
+     * Une création simultanée sous le même nom prend le code proposé avant
+     * l'enregistrement : la création recommence avec le code suivant.
+     */
+    public function test_un_code_propose_pris_par_une_creation_simultanee_passe_au_code_suivant(): void
+    {
+        $this->creationSimultaneeAvecLeMemeCode(fois: 1);
+        $proprietaire = User::factory()->create();
+
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Piliqi Store'], $proprietaire);
+
+        $this->assertSame('PILIQI2', $magasin->fresh()->code);
+        $this->assertSame([$proprietaire->id], $magasin->proprietaires()->get()->modelKeys());
+    }
+
+    /**
+     * Trois essais au plus : au troisième code pris, la création est
+     * refusée, sans rien laisser en base.
+     */
+    public function test_la_creation_est_refusee_quand_trois_codes_proposes_sont_pris_de_suite(): void
+    {
+        $this->creationSimultaneeAvecLeMemeCode(fois: 3);
+        $proprietaire = User::factory()->create();
+
+        $this->assertThrows(fn () => app(CreerMagasinAction::class)->handle(['nom' => 'Piliqi Store'], $proprietaire), UniqueConstraintViolationException::class);
+
+        $this->assertSame(0, Magasin::withTrashed()->count());
+        $this->assertFalse($proprietaire->magasins()->exists());
+    }
+
+    /**
+     * Un code choisi ne se remplace jamais en silence : déjà pris, la
+     * création est refusée.
+     */
+    public function test_un_code_choisi_deja_pris_est_refuse_sans_autre_essai(): void
+    {
+        $autreMagasin = Magasin::factory()->create(['code' => 'LYON1']);
+
+        $this->assertThrows(fn () => app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'code' => 'LYON1'], User::factory()->create()), UniqueConstraintViolationException::class);
+
+        $this->assertSame([$autreMagasin->id], Magasin::query()->pluck('id')->all());
     }
 
     /**
@@ -136,5 +227,26 @@ class CreerMagasinActionTest extends TestCase
         $this->actingAs($proprietaireA);
         app(TenantContext::class)->set($magasinB);
         $this->assertFalse($proprietaireA->can(PermissionRegistry::CLIENT_VIEW), 'Le propriétaire de A ne doit rien pouvoir faire dans B.');
+    }
+
+    /**
+     * Les $fois prochaines créations de magasin voient un autre magasin
+     * prendre leur code juste avant leur enregistrement, comme une
+     * création simultanée.
+     */
+    private function creationSimultaneeAvecLeMemeCode(int $fois): void
+    {
+        $concurrentEnCours = false;
+
+        Magasin::creating(function (Magasin $magasin) use (&$fois, &$concurrentEnCours): void {
+            if ($concurrentEnCours || $fois === 0) {
+                return;
+            }
+
+            $fois--;
+            $concurrentEnCours = true;
+            Magasin::factory()->create(['code' => $magasin->code]);
+            $concurrentEnCours = false;
+        });
     }
 }

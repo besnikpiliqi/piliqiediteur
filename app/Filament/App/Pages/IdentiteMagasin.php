@@ -4,6 +4,9 @@ namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Rules\CodeMagasinLibre;
+use App\Domain\Tenancy\Services\CodeMagasin;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Closure;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Section;
@@ -14,6 +17,7 @@ use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\DB;
 
 /**
  * L'identité légale du magasin, imprimée en tête de ses devis, factures et
@@ -22,16 +26,20 @@ use Filament\Pages\Page;
  * avec « Paramètres du magasin » (PermissionRegistry::PARAMETRES_GERER),
  * comme les paramètres fiscaux : même responsabilité de configuration
  * légale du magasin, que le propriétaire détient et délègue à qui il veut.
+ *
+ * Le code du magasin, qui figure dans les numéros de tous ses documents, se
+ * modifie ici jusqu'au premier document ; le champ se désactive ensuite
+ * (voir Magasin::codeEstDefinitif()).
  */
 class IdentiteMagasin extends Page implements HasForms
 {
-    use InteractsWithForms;
+    use GereLesExceptionsMetier, InteractsWithForms;
 
     /**
      * Les champs de la page, tous enregistrés tels quels sur le magasin.
      */
     private const CHAMPS = [
-        'nom', 'raison_sociale', 'forme_juridique', 'siren', 'siret', 'numero_tva',
+        'nom', 'code', 'raison_sociale', 'forme_juridique', 'siren', 'siret', 'numero_tva',
         'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays',
         'email', 'telephone',
     ];
@@ -50,6 +58,11 @@ class IdentiteMagasin extends Page implements HasForms
      * @var array<string, mixed>
      */
     public array $data = [];
+
+    /**
+     * Lu une fois par requête (voir codeEstDefinitif()).
+     */
+    private ?bool $codeDefinitif = null;
 
     public static function canAccess(): bool
     {
@@ -71,6 +84,20 @@ class IdentiteMagasin extends Page implements HasForms
                         ->label('Nom commercial')
                         ->required()
                         ->maxLength(150),
+                    TextInput::make('code')
+                        ->label('Code du magasin')
+                        ->helperText(fn (): string => $this->codeEstDefinitif()
+                            ? 'Il figure dans les numéros de vos documents : il ne change plus.'
+                            : 'Il figurera dans les numéros de tous vos documents (ex. FAC-LYON1-2026-000001) et ne changera plus après votre premier document.')
+                        ->required()
+                        ->maxLength(CodeMagasin::LONGUEUR_MAXIMALE)
+                        ->extraInputAttributes(['style' => 'text-transform: uppercase'])
+                        // Comme pour le SIRET, seule l'existence du code chez
+                        // un autre magasin est lue, magasins supprimés compris
+                        // (voir CodeMagasin::estPris()).
+                        ->rule(fn (): CodeMagasinLibre => new CodeMagasinLibre($this->magasin()))
+                        ->dehydrateStateUsing(fn (string $state): string => CodeMagasin::normaliser($state))
+                        ->disabled(fn (): bool => $this->codeEstDefinitif()),
                     TextInput::make('raison_sociale')
                         ->label('Raison sociale')
                         ->maxLength(200),
@@ -96,8 +123,8 @@ class IdentiteMagasin extends Page implements HasForms
                                 $fail('Le SIRET commence par les 9 chiffres du SIREN.');
                             }
                         })
-                        // Seule lecture volontaire de toute la table magasins,
-                        // limitée à l'existence de ce SIRET : un établissement
+                        // Lecture de toute la table magasins limitée, comme pour
+                        // le code, à l'existence de ce SIRET : un établissement
                         // n'appartient qu'à un seul magasin du logiciel, et le
                         // SIRET d'un magasin supprimé, qui reste en base, ne
                         // sert jamais à un autre (voir l'index unique de
@@ -145,14 +172,34 @@ class IdentiteMagasin extends Page implements HasForms
         ])->statePath('data');
     }
 
+    /**
+     * Le magasin se modifie dans une transaction : un changement de code y
+     * verrouille la ligne du magasin jusqu'à son enregistrement (voir
+     * Magasin::codeEstDefinitif()). Un code devenu définitif depuis
+     * l'ouverture de la page n'est plus enregistré, son champ étant
+     * désactivé, et le formulaire montre ensuite ce qui est enregistré ;
+     * devenu définitif pendant l'enregistrement même, il est refusé, et
+     * l'écran dit pourquoi.
+     */
     public function save(): void
     {
-        $this->magasin()->update($this->form->getState());
+        $donnees = $this->form->getState();
 
-        Notification::make()
-            ->title('Identité du magasin enregistrée')
-            ->success()
-            ->send();
+        static::executerSansCasser(function () use ($donnees): void {
+            DB::transaction(fn () => $this->magasin()->update($donnees));
+
+            $this->form->fill($this->magasin()->only(self::CHAMPS));
+
+            Notification::make()
+                ->title('Identité du magasin enregistrée')
+                ->success()
+                ->send();
+        });
+    }
+
+    private function codeEstDefinitif(): bool
+    {
+        return $this->codeDefinitif ??= $this->magasin()->codeEstDefinitif();
     }
 
     private function magasin(): Magasin

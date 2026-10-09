@@ -43,9 +43,9 @@ class VerificateurIntegriteTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function magasinActif(): Magasin
+    private function magasinActif(string $code = 'LYON1'): Magasin
     {
-        $magasin = Magasin::factory()->create();
+        $magasin = Magasin::factory()->create(['code' => $code]);
         app(TenantContext::class)->set($magasin);
 
         return $magasin;
@@ -59,12 +59,12 @@ class VerificateurIntegriteTest extends TestCase
     /**
      * Une matinée du magasin actif où naît chaque sorte de document et
      * d'imputation, le 9 octobre 2026 à 10 h, heure de Paris :
-     * - TK-2026-000001 (29,50 €, payé par carte, paiement n° 1) ;
-     * - AV-2026-000001, retour d'un café de ce ticket (12,00 €) : déjà
+     * - TK-LYON1-2026-000001 (29,50 €, payé par carte, paiement n° 1) ;
+     * - AV-LYON1-2026-000001, retour d'un café de ce ticket (12,00 €) : déjà
      *   payé, il devient un crédit du client ;
-     * - TK-2026-000002 (24,00 €), réglé par ce crédit et 12,00 € en
+     * - TK-LYON1-2026-000002 (24,00 €), réglé par ce crédit et 12,00 € en
      *   espèces (paiement n° 2) ;
-     * - FAC-2026-000001 à un professionnel (60,00 €), puis AV-2026-000002
+     * - FAC-LYON1-2026-000001 à un professionnel (60,00 €), puis AV-LYON1-2026-000002
      *   (12,00 €), imputé sur elle, et un virement du reste, 48,00 €
      *   (paiement n° 3).
      *
@@ -195,7 +195,7 @@ class VerificateurIntegriteTest extends TestCase
         DB::table('lignes_facture')->where('magasin_id', $magasin->id)->where('id', $ligne->id)->update(['montant_ttc' => '1.00']);
 
         $this->assertSame([
-            [90, 'Le ticket TK-2026-000001 ne correspond plus à ce qui a été signé à son émission (lignes, ventilation).'],
+            [90, 'Le ticket TK-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (lignes, ventilation).'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -207,8 +207,8 @@ class VerificateurIntegriteTest extends TestCase
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['date_emission' => '2026-10-09 08:00:01']);
 
         $this->assertSame([
-            [90, 'La facture FAC-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
-            [90, 'La facture FAC-2026-000001 porte la date d\'émission du 09/10/2026 à 10:00:01, qui n\'est pas l\'instant de sa signature (09/10/2026 à 10:00:00).'],
+            [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
+            [90, 'La facture FAC-LYON1-2026-000001 porte la date d\'émission du 09/10/2026 à 10:00:01, qui n\'est pas l\'instant de sa signature (09/10/2026 à 10:00:00).'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -227,7 +227,7 @@ class VerificateurIntegriteTest extends TestCase
 
         $this->assertSame([
             [95, 'Rupture de séquence de la chaîne des ventes : l\'enregistrement n° 2 manque avant l\'enregistrement n° 3.'],
-            [90, 'L\'avoir AV-2026-000001 n\'a aucun enregistrement de la chaîne des ventes.'],
+            [90, 'L\'avoir AV-LYON1-2026-000001 n\'a aucun enregistrement de la chaîne des ventes.'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -378,7 +378,7 @@ class VerificateurIntegriteTest extends TestCase
 
         $this->assertSame([
             [90, 'Enregistrement n° 2 de la chaîne des ventes : sa signature précédente n\'est pas la signature de l\'enregistrement n° 1.'],
-            [90, 'Le ticket TK-2026-000001 est enregistré comme « facture » alors que son numéro le place dans la série des tickets.'],
+            [90, 'Le ticket TK-LYON1-2026-000001 est enregistré comme « facture » alors que son numéro le place dans la série des tickets.'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -471,7 +471,7 @@ class VerificateurIntegriteTest extends TestCase
             [90, 'Enregistrement n° 1 de la chaîne des encaissements : l\'en-tête signé diffère de ses colonnes (document).'],
             [90, "Le paiement (identifiant interne {$paiement->id}) n'a aucun enregistrement de la chaîne des encaissements."],
             [90, 'Enregistrement n° 1 de la chaîne des encaissements : il désigne un paiement introuvable (identifiant interne 999999).'],
-            [90, "L'imputation du paiement (identifiant interne {$paiement->id}) sur le ticket TK-2026-000001 (29,50 €) ne figure dans aucun contenu signé."],
+            [90, "L'imputation du paiement (identifiant interne {$paiement->id}) sur le ticket TK-LYON1-2026-000001 (29,50 €) ne figure dans aucun contenu signé."],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -500,7 +500,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->assertSame([
             [90, "Enregistrement n° 1 de la chaîne des ventes : l'en-tête signé diffère de ses colonnes ({$ecart})."],
             [90, $anomalie],
-            [90, 'Le ticket TK-2026-000001 n\'a aucun enregistrement de la chaîne des ventes.'],
+            [90, 'Le ticket TK-LYON1-2026-000001 n\'a aucun enregistrement de la chaîne des ventes.'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -568,11 +568,11 @@ class VerificateurIntegriteTest extends TestCase
         $this->activite();
         $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit('THE', 8)->id, 'quantite' => 1]]);
 
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-2026-000003', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-LYON1-2026-000003', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
 
         $this->assertSame([
-            [90, 'Le ticket TK-2026-000003 n\'a aucun enregistrement de la chaîne des ventes.'],
-            [95, 'Série TK-2026- : TK-2026-000003 hors des numéros qu\'elle a attribués (de TK-2026-000001 à TK-2026-000002).'],
+            [90, 'Le ticket TK-LYON1-2026-000003 n\'a aucun enregistrement de la chaîne des ventes.'],
+            [95, 'Série TK-LYON1-2026- : TK-LYON1-2026-000003 hors des numéros qu\'elle a attribués (de TK-LYON1-2026-000001 à TK-LYON1-2026-000002).'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -586,8 +586,8 @@ class VerificateurIntegriteTest extends TestCase
     public static function documentsEnregistresDeuxFois(): array
     {
         return [
-            'ticket' => ['ticket', ChaineFiscale::Vente, 6, 'Le ticket TK-2026-000001 a 2 enregistrements de la chaîne des ventes (séquences 1, 6) au lieu d\'un seul.'],
-            'avoir' => ['avoir', ChaineFiscale::Vente, 6, 'L\'avoir AV-2026-000001 a 2 enregistrements de la chaîne des ventes (séquences 2, 6) au lieu d\'un seul.'],
+            'ticket' => ['ticket', ChaineFiscale::Vente, 6, 'Le ticket TK-LYON1-2026-000001 a 2 enregistrements de la chaîne des ventes (séquences 1, 6) au lieu d\'un seul.'],
+            'avoir' => ['avoir', ChaineFiscale::Vente, 6, 'L\'avoir AV-LYON1-2026-000001 a 2 enregistrements de la chaîne des ventes (séquences 2, 6) au lieu d\'un seul.'],
             'paiement' => ['virement', ChaineFiscale::Encaissement, 4, 'Le paiement (identifiant interne %d) a 2 enregistrements de la chaîne des encaissements (séquences 3, 4) au lieu d\'un seul.'],
         ];
     }
@@ -609,7 +609,7 @@ class VerificateurIntegriteTest extends TestCase
     }
 
     /**
-     * Le second ticket renuméroté TK-2026-000025, dernier numéro de la
+     * Le second ticket renuméroté TK-LYON1-2026-000025, dernier numéro de la
      * série : les vingt-trois numéros qui le précèdent manquent, le message
      * énumère les vingt premiers.
      */
@@ -617,12 +617,12 @@ class VerificateurIntegriteTest extends TestCase
     {
         $magasin = $this->magasinActif();
         $documents = $this->activite();
-        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['ticketAvecCredit']->id)->update(['numero' => 'TK-2026-000025']);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['ticketAvecCredit']->id)->update(['numero' => 'TK-LYON1-2026-000025']);
 
         DB::table('sequences_documents')->where('magasin_id', $magasin->id)->where('type_document', 'ticket_caisse')->update(['prochain_numero' => 26]);
 
-        $enumeres = implode(', ', array_map(static fn (int $numero): string => sprintf('TK-2026-%06d', $numero), range(2, 21)));
-        $this->assertContains([95, "Série TK-2026- : 23 numéro(s) attribué(s) sans document : {$enumeres}…."], $this->anomalies($this->verifier()));
+        $enumeres = implode(', ', array_map(static fn (int $numero): string => sprintf('TK-LYON1-2026-%06d', $numero), range(2, 21)));
+        $this->assertContains([95, "Série TK-LYON1-2026- : 23 numéro(s) attribué(s) sans document : {$enumeres}…."], $this->anomalies($this->verifier()));
     }
 
     /**
@@ -632,7 +632,7 @@ class VerificateurIntegriteTest extends TestCase
     {
         return [
             'série inconnue' => ['RC-2026-000001', 'Le numéro RC-2026-000001 n\'appartient à aucune série de numérotation du magasin.'],
-            'écriture d\'une autre série' => ['TK-2026-03', 'Le numéro TK-2026-03 n\'est pas écrit comme sa série écrit ses numéros (TK-2026-000003).'],
+            'écriture d\'une autre série' => ['TK-LYON1-2026-03', 'Le numéro TK-LYON1-2026-03 n\'est pas écrit comme sa série écrit ses numéros (TK-LYON1-2026-000003).'],
         ];
     }
 
@@ -660,7 +660,7 @@ class VerificateurIntegriteTest extends TestCase
         DB::table('sequences_documents')->where('magasin_id', $magasin->id)->where('type_document', 'ticket_caisse')->update(['prochain_numero' => 4]);
 
         $this->assertSame([
-            [95, 'Série TK-2026- : 1 numéro(s) attribué(s) sans document : TK-2026-000003.'],
+            [95, 'Série TK-LYON1-2026- : 1 numéro(s) attribué(s) sans document : TK-LYON1-2026-000003.'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -679,7 +679,7 @@ class VerificateurIntegriteTest extends TestCase
         ]);
 
         $this->assertSame([
-            [90, 'L\'imputation de l\'avoir AV-2026-000001 sur la facture FAC-2026-000001 (1,00 €) ne figure dans aucun contenu signé.'],
+            [90, 'L\'imputation de l\'avoir AV-LYON1-2026-000001 sur la facture FAC-LYON1-2026-000001 (1,00 €) ne figure dans aucun contenu signé.'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -703,7 +703,7 @@ class VerificateurIntegriteTest extends TestCase
 
         $this->assertSame([
             [90, "Le paiement (identifiant interne {$documents['virement']->id}) ne correspond plus à ce qui a été signé à son enregistrement (allocations)."],
-            [90, "L'imputation du paiement (identifiant interne {$documents['virement']->id}) sur le ticket TK-2026-000001 (1,00 €) ne figure dans aucun contenu signé."],
+            [90, "L'imputation du paiement (identifiant interne {$documents['virement']->id}) sur le ticket TK-LYON1-2026-000001 (1,00 €) ne figure dans aucun contenu signé."],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -722,7 +722,7 @@ class VerificateurIntegriteTest extends TestCase
         ]);
 
         $this->assertSame([
-            [90, 'L\'imputation de l\'avoir AV-2026-000002 sur le ticket TK-2026-000001 (montant illisible) ne figure dans aucun contenu signé.'],
+            [90, 'L\'imputation de l\'avoir AV-LYON1-2026-000002 sur le ticket TK-LYON1-2026-000001 (montant illisible) ne figure dans aucun contenu signé.'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -737,12 +737,12 @@ class VerificateurIntegriteTest extends TestCase
 
         $this->reecrireEtResigner(
             $this->enregistrementDe($documents['ticketAvecCredit'], ChaineFiscale::Vente),
-            static fn (string $contenu): string => str_replace('"numero":"AV-2026-000001","montant":1200', '"numero":"AV-2026-000001","montant":1100', $contenu),
+            static fn (string $contenu): string => str_replace('"numero":"AV-LYON1-2026-000001","montant":1200', '"numero":"AV-LYON1-2026-000001","montant":1100', $contenu),
         );
 
         $this->assertSame([
             [90, 'Enregistrement n° 4 de la chaîne des ventes : sa signature précédente n\'est pas la signature de l\'enregistrement n° 3.'],
-            [90, 'L\'imputation de l\'avoir AV-2026-000001 sur le ticket TK-2026-000002 : 12,00 € en base, 11,00 € dans son contenu signé.'],
+            [90, 'L\'imputation de l\'avoir AV-LYON1-2026-000001 sur le ticket TK-LYON1-2026-000002 : 12,00 € en base, 11,00 € dans son contenu signé.'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -755,7 +755,7 @@ class VerificateurIntegriteTest extends TestCase
         DB::table('avoir_allocations')->where('magasin_id', $magasin->id)->where('avoir_id', $documents['avoir']->id)->delete();
 
         $this->assertSame([
-            [90, 'L\'imputation de l\'avoir AV-2026-000001 sur le ticket TK-2026-000002, signée, est introuvable en base.'],
+            [90, 'L\'imputation de l\'avoir AV-LYON1-2026-000001 sur le ticket TK-LYON1-2026-000002, signée, est introuvable en base.'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -771,9 +771,9 @@ class VerificateurIntegriteTest extends TestCase
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['ticket']->id)->update(['date_emission' => '2025-12-31 12:00:00']);
 
         $this->assertSame([
-            [90, 'Le ticket TK-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
-            [90, 'Le ticket TK-2026-000001 porte la date d\'émission du 31/12/2025 à 13:00:00, qui n\'est pas l\'instant de sa signature (09/10/2026 à 10:00:00).'],
-            [90, 'Le ticket TK-2026-000001 est numéroté dans l\'année 2026 mais émis le 31/12/2025 à 13:00:00.'],
+            [90, 'Le ticket TK-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
+            [90, 'Le ticket TK-LYON1-2026-000001 porte la date d\'émission du 31/12/2025 à 13:00:00, qui n\'est pas l\'instant de sa signature (09/10/2026 à 10:00:00).'],
+            [90, 'Le ticket TK-LYON1-2026-000001 est numéroté dans l\'année 2026 mais émis le 31/12/2025 à 13:00:00.'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -800,7 +800,7 @@ class VerificateurIntegriteTest extends TestCase
             array_values(Arr::map($reprise->pointsDeReprise(), static fn (array $pointDeReprise): int => $pointDeReprise['sequence'])),
         );
         $this->assertSame([
-            [90, 'Le ticket TK-2026-000001 ne correspond plus à ce qui a été signé à son émission (lignes, ventilation).'],
+            [90, 'Le ticket TK-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (lignes, ventilation).'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -851,7 +851,7 @@ class VerificateurIntegriteTest extends TestCase
 
         $this->assertSame([
             [95, 'L\'enregistrement n° 5 de la chaîne des ventes, dernier vérifié par la vérification précédente, a disparu.'],
-            [90, 'L\'avoir AV-2026-000002 n\'a aucun enregistrement de la chaîne des ventes.'],
+            [90, 'L\'avoir AV-LYON1-2026-000002 n\'a aucun enregistrement de la chaîne des ventes.'],
         ], $this->anomalies($this->verifier($pointsDeReprise)));
     }
 
@@ -882,7 +882,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->falsifierLEnregistrement($dernier, ['contenu' => str_replace('"motif":null', '"motif":"Geste commercial"', $dernier->contenu)]);
         $anomalies = [
             [90, 'Enregistrement n° 5 de la chaîne des ventes : sa signature ne correspond pas à son contenu signé.'],
-            [90, 'L\'avoir AV-2026-000002 ne correspond plus à ce qui a été signé à son émission (motif).'],
+            [90, 'L\'avoir AV-LYON1-2026-000002 ne correspond plus à ce qui a été signé à son émission (motif).'],
         ];
 
         $complete = $this->verifier();
@@ -931,7 +931,7 @@ class VerificateurIntegriteTest extends TestCase
     public function test_un_enregistrement_et_un_document_de_deux_magasins_ne_se_correspondent_jamais(): void
     {
         $this->travelTo('2026-10-09 10:00:00');
-        $magasinB = $this->magasinActif();
+        $magasinB = $this->magasinActif('LYON2');
         $ticketDeB = $this->encaisser(Client::factory()->create(), [[$this->produit('THE', 8), 1]], ModePaiement::Especes);
         $enregistrementDeB = $this->enregistrementDe($ticketDeB, ChaineFiscale::Vente);
         $magasinA = $this->magasinActif();
@@ -944,7 +944,7 @@ class VerificateurIntegriteTest extends TestCase
 
         $this->assertSame([
             [90, 'Enregistrement n° 1 de la chaîne des ventes : l\'en-tête signé diffère de ses colonnes (document).'],
-            [90, 'Le ticket TK-2026-000001 n\'a aucun enregistrement de la chaîne des ventes.'],
+            [90, 'Le ticket TK-LYON1-2026-000001 n\'a aucun enregistrement de la chaîne des ventes.'],
             [90, "Enregistrement n° 1 de la chaîne des ventes : il désigne une facture introuvable ou jamais numérotée (identifiant interne {$ticketDeB->id})."],
         ], $this->anomalies($this->verifier()));
     }
@@ -956,7 +956,7 @@ class VerificateurIntegriteTest extends TestCase
      */
     public function test_la_verification_d_un_magasin_n_inspecte_jamais_le_registre_d_un_autre(): void
     {
-        $magasinB = $this->magasinActif();
+        $magasinB = $this->magasinActif('LYON2');
         $documentsDeB = $this->activite();
         DB::table('lignes_facture')->where('magasin_id', $magasinB->id)->where('id', $documentsDeB['ticket']->lignes->first()->id)->update(['montant_ttc' => '1.00']);
         DB::table('sequences_documents')->where('magasin_id', $magasinB->id)->where('type_document', 'ticket_caisse')->update(['prochain_numero' => 9]);

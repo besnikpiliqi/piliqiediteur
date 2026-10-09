@@ -379,15 +379,15 @@ class Facture extends Model implements DocumentEnvoyable
      * La série dans laquelle la facture a été numérotée à son émission :
      * tickets de caisse ou factures (voir EmettreFactureAction), chacune
      * avec son propre circuit fiscal (clôture de caisse et e-reporting,
-     * ou facture électronique). Son numéro la porte pour toujours, même si
-     * le type du client change depuis. Un brouillon n'a encore aucune
-     * série.
+     * ou facture électronique). Le premier segment de son numéro la porte
+     * pour toujours (TK-LYON1-2026-000001 est un ticket), même si le type
+     * du client change depuis. Un brouillon n'a encore aucune série.
      */
     public function serie(): ?TypeDocument
     {
         return match (true) {
             $this->numero === null => null,
-            str_starts_with($this->numero, TypeDocument::TicketCaisse->code().'-') => TypeDocument::TicketCaisse,
+            strstr($this->numero, '-', true) === TypeDocument::TicketCaisse->code() => TypeDocument::TicketCaisse,
             default => TypeDocument::Facture,
         };
     }

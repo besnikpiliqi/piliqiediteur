@@ -14,11 +14,14 @@ use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\ClientResource\Pages\CreateClient;
+use App\Filament\App\Resources\ClientResource\Pages\EditClient;
 use App\Filament\App\Resources\ClientResource\Pages\ListClients;
 use App\Models\User;
+use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -189,5 +192,119 @@ class ClientResourceTest extends TestCase
             ->call('callMountedTableBulkAction');
 
         $clients->each(fn (Client $client) => $this->assertNotSoftDeleted($client));
+    }
+
+    private function connecterLeProprietaire(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+    }
+
+    /**
+     * Le client comptoir garde son nom et son type (voir
+     * Client::estComptoir()) : ses champs sont désactivés, et une valeur
+     * forcée n'est pas enregistrée. Il ne se supprime pas non plus.
+     */
+    public function test_le_client_comptoir_ne_se_renomme_ni_ne_change_de_type_ni_ne_se_supprime(): void
+    {
+        $this->connecterLeProprietaire();
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+
+        Livewire::test(EditClient::class, ['record' => $comptoir->getRouteKey()])
+            ->assertFormFieldIsDisabled('nom')
+            ->assertFormFieldIsDisabled('type_client')
+            ->assertActionHidden(DeleteAction::class)
+            ->fillForm(['nom' => 'Vente comptoir', 'type_client' => TypeClient::Professionnel->value, 'notes' => 'Ventes anonymes'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $comptoir->refresh();
+        $this->assertSame(['Client comptoir', TypeClient::Particulier, 'Ventes anonymes'], [$comptoir->nom, $comptoir->type_client, $comptoir->notes]);
+    }
+
+    public function test_la_suppression_en_masse_garde_le_client_comptoir(): void
+    {
+        $this->connecterLeProprietaire();
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $client = Client::factory()->create();
+
+        Livewire::test(ListClients::class)
+            ->callTableBulkAction('delete', [$comptoir, $client])
+            ->assertNotified('1 ligne cochée n\'a pas été supprimée');
+
+        $this->assertNotSoftDeleted($comptoir);
+        $this->assertSoftDeleted($client);
+    }
+
+    /**
+     * Facultatif, mais un SIRET saisi compte 14 chiffres.
+     */
+    public function test_un_siret_qui_ne_compte_pas_14_chiffres_est_refuse(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value, 'siret' => 'abc'])
+            ->call('create')
+            ->assertHasFormErrors(['siret' => 'Le SIRET compte 14 chiffres, sans espace.']);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Acme Corp']);
+    }
+
+    public function test_un_client_professionnel_s_enregistre_sans_siret(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('clients', ['nom' => 'Acme Corp', 'siret' => null]);
+    }
+
+    /**
+     * Ses champs disparaissent du formulaire : ils ne restent pas en base
+     * pour s'imprimer encore sur ses factures.
+     */
+    public function test_un_client_repasse_en_particulier_perd_son_siret_et_son_numero_de_tva(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->professionnel()->create(['telephone' => '0102030405']);
+
+        Livewire::test(EditClient::class, ['record' => $client->getRouteKey()])
+            ->fillForm(['type_client' => TypeClient::Particulier->value])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $client->refresh();
+        $this->assertSame([TypeClient::Particulier, null, null], [$client->type_client, $client->siret, $client->numero_tva]);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function delaisDePaiementInvalides(): array
+    {
+        return [
+            'négatif' => ['-5', 'min'],
+            'au-delà d\'un an' => ['366', 'max'],
+            'décimal' => ['1.5', 'integer'],
+        ];
+    }
+
+    #[DataProvider('delaisDePaiementInvalides')]
+    public function test_un_delai_de_paiement_hors_de_0_a_365_jours_entiers_est_refuse(string $delai, string $regle): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Jean Dupont', 'type_client' => TypeClient::Particulier->value, 'delai_paiement_jours' => $delai])
+            ->call('create')
+            ->assertHasFormErrors(['delai_paiement_jours' => $regle]);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Jean Dupont']);
     }
 }

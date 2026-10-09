@@ -162,6 +162,23 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
+     * Un produit supprimé depuis sa vente rentre quand même en stock à son
+     * retour, avec son mouvement (voir LigneAvoir::produit()).
+     */
+    public function test_emettre_un_avoir_restaure_le_stock_d_un_produit_supprime_depuis_la_vente(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $facture = $this->emettreFacture($client, $produit, 3);
+        $produit->delete();
+
+        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture)));
+
+        $this->assertSame(10, $produit->fresh()->stock_quantite);
+        $this->assertDatabaseHas('mouvements_stock', ['produit_id' => $produit->id, 'type' => 'retour_client', 'quantite' => 3]);
+    }
+
+    /**
      * Seule la quantité réellement créditée restaure du stock, pas
      * l'intégralité de la ligne d'origine.
      */

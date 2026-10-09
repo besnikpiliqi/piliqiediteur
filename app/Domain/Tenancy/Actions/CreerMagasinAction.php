@@ -47,12 +47,14 @@ class CreerMagasinAction
             // Vente au comptoir (particulier anonyme, sans coordonnées
             // saisies) : plutôt que de forcer un nom à chaque vente, un
             // client générique réutilisable existe dès la création du
-            // magasin. Les clients particuliers nommés (fidélité, retour
-            // produit...) restent des fiches à part entière, créées au
-            // besoin via le "+" du formulaire de devis/facture.
-            Client::create([
+            // magasin, reconnu à est_comptoir (voir Client::estComptoir()).
+            // Les clients particuliers nommés (fidélité, retour produit...)
+            // restent des fiches à part entière, créées au besoin via le
+            // "+" du formulaire de devis/facture.
+            Client::forceCreate([
                 'nom' => Client::NOM_COMPTOIR,
                 'type_client' => TypeClient::Particulier,
+                'est_comptoir' => true,
             ]);
 
             $magasin->utilisateurs()->attach($proprietaire->getKey(), [

@@ -157,6 +157,24 @@ class DevisResourceTest extends TestCase
         $this->assertNotNull($devis->fresh()->numero);
     }
 
+    /**
+     * Un client désactivé (« Actif » décoché) n'est plus proposé pour un
+     * nouveau devis.
+     */
+    public function test_un_client_desactive_n_est_plus_propose_pour_un_nouveau_devis(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $actif = Client::factory()->create(['nom' => 'Client actif']);
+        $desactive = Client::factory()->create(['nom' => 'Client désactivé', 'actif' => false]);
+
+        Livewire::test(CreateDevis::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => array_key_exists($actif->id, $champ->getOptions())
+                && ! array_key_exists($desactive->id, $champ->getOptions()));
+    }
+
     private function envoyerDevis(Client $client, Produit $produit): Devis
     {
         Livewire::test(CreateDevis::class)->fillForm([

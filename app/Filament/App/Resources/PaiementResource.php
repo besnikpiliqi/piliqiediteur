@@ -65,7 +65,9 @@ class PaiementResource extends Resource
             Section::make('Paiement')->schema([
                 Select::make('client_id')
                     ->label('Client')
-                    ->relationship('client', 'nom')
+                    // Un client archivé ne règle plus rien de nouveau, même si
+                    // ses paiements le gardent (voir Paiement::client()).
+                    ->relationship('client', 'nom', fn (Builder $query): Builder => $query->withoutTrashed())
                     ->searchable()
                     ->preload()
                     ->live()

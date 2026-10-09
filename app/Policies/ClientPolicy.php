@@ -28,9 +28,16 @@ class ClientPolicy extends MagasinPolicy
         return $this->appartientAuMagasinActif($client) && $user->can(PermissionRegistry::CLIENT_UPDATE);
     }
 
+    /**
+     * Jamais le client comptoir : toutes les ventes anonymes du magasin
+     * le portent, et la caisse le propose par défaut (voir
+     * Client::estComptoir()).
+     */
     public function delete(User $user, Client $client): bool
     {
-        return $this->appartientAuMagasinActif($client) && $user->can(PermissionRegistry::CLIENT_DELETE);
+        return $this->appartientAuMagasinActif($client)
+            && ! $client->estComptoir()
+            && $user->can(PermissionRegistry::CLIENT_DELETE);
     }
 
     /**

@@ -4,6 +4,7 @@ namespace App\Domain\Contacts\Models;
 
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Concerns\ProposableSiActif;
 use App\Domain\Contacts\Enums\SourceFournisseur;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -16,7 +17,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Fournisseur extends Model
 {
     /** @use HasFactory<FournisseurFactory> */
-    use BelongsToMagasin, HasFactory, SoftDeletes;
+    use BelongsToMagasin, HasFactory, ProposableSiActif, SoftDeletes;
 
     protected $fillable = [
         'nom',

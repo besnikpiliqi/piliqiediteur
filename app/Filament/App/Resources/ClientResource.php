@@ -71,6 +71,19 @@ class ClientResource extends Resource
     }
 
     /**
+     * Facultatif, mais un SIRET saisi compte toujours 14 chiffres.
+     */
+    private static function champSiret(): TextInput
+    {
+        return TextInput::make('siret')
+            ->label('SIRET')
+            ->maxLength(14)
+            ->regex('/^\d{14}$/')
+            ->validationMessages(['regex' => 'Le SIRET compte 14 chiffres, sans espace.'])
+            ->visible(static::visibleSiProfessionnel());
+    }
+
+    /**
      * L'adresse à laquelle partent ses factures et ses relances (voir
      * EnvoyerDocumentAction) : sans commentaire, guillemets ni domaine sans
      * point, que le serveur d'envoi refuserait.
@@ -101,7 +114,7 @@ class ClientResource extends Resource
         return [
             TextInput::make('nom')->required()->maxLength(150)->columnSpanFull(),
             self::champTypeClient(),
-            TextInput::make('siret')->label('SIRET')->maxLength(14)->visible($visibleSiProfessionnel),
+            self::champSiret(),
             TextInput::make('numero_tva')->label('N° TVA intracommunautaire')->maxLength(20)->visible($visibleSiProfessionnel),
             TextInput::make('adresse')->maxLength(255)->columnSpanFull()->visible($visibleSiProfessionnel),
             TextInput::make('complement_adresse')->label('Complément d\'adresse')->maxLength(255)->columnSpanFull()->visible($visibleSiProfessionnel),
@@ -113,16 +126,26 @@ class ClientResource extends Resource
         ];
     }
 
+    /**
+     * Le client comptoir (voir Client::estComptoir()) garde son nom et son
+     * type : un champ désactivé n'est jamais enregistré.
+     */
     public static function form(Form $form): Form
     {
+        $estComptoir = fn (?Client $record): bool => $record?->estComptoir() ?? false;
+
         return $form->schema([
             Section::make('Identité')->schema([
-                TextInput::make('nom')->required()->maxLength(150)->columnSpanFull(),
-                self::champTypeClient(),
-                TextInput::make('siret')
-                    ->label('SIRET')
-                    ->maxLength(14)
-                    ->visible(static::visibleSiProfessionnel()),
+                TextInput::make('nom')
+                    ->required()
+                    ->maxLength(150)
+                    ->columnSpanFull()
+                    ->disabled($estComptoir)
+                    ->helperText(fn (?Client $record): ?string => $record?->estComptoir()
+                        ? 'La fiche des ventes anonymes au comptoir : elle ne se renomme pas, reste un particulier et ne se supprime pas.'
+                        : null),
+                self::champTypeClient()->disabled($estComptoir),
+                self::champSiret(),
                 TextInput::make('numero_tva')
                     ->label('N° TVA intracommunautaire')
                     ->maxLength(20)
@@ -140,7 +163,7 @@ class ClientResource extends Resource
             ])->columns(2),
 
             Section::make('Paiement et notes')->schema([
-                TextInput::make('delai_paiement_jours')->label('Délai de paiement (jours)')->numeric(),
+                TextInput::make('delai_paiement_jours')->label('Délai de paiement (jours)')->integer()->minValue(0)->maxValue(365),
                 TextInput::make('mode_paiement_prefere')->label('Mode de paiement préféré')->maxLength(30),
                 Textarea::make('notes')->columnSpanFull(),
                 Toggle::make('actif')->default(true),

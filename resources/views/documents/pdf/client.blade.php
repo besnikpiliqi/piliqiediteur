@@ -11,7 +11,7 @@
     @if($client->code_postal || $client->ville)
         {{ $client->code_postal }} {{ $client->ville }}<br>
     @endif
-    @if($client->siret)
+    @if($client->estProfessionnel() && $client->siret)
         SIRET : {{ $client->siret }}
     @endif
 </div>

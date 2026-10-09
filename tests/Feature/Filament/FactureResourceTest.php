@@ -643,6 +643,43 @@ class FactureResourceTest extends TestCase
                 && ! array_key_exists($archive->id, $champ->getOptions()));
     }
 
+    /**
+     * Un client désactivé (« Actif » décoché) n'est plus proposé pour une
+     * nouvelle facture.
+     */
+    public function test_un_client_desactive_n_est_plus_propose_pour_une_nouvelle_facture(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $actif = Client::factory()->create(['nom' => 'Client actif']);
+        $desactive = Client::factory()->create(['nom' => 'Client désactivé', 'actif' => false]);
+
+        Livewire::test(CreateFacture::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => array_key_exists($actif->id, $champ->getOptions())
+                && ! array_key_exists($desactive->id, $champ->getOptions()));
+    }
+
+    /**
+     * Le client d'un brouillon désactivé depuis reste affiché sur sa
+     * modification, sans être proposé aux autres.
+     */
+    public function test_le_client_desactive_d_un_brouillon_reste_affiche_a_sa_modification(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create(['nom' => 'Client désactivé']);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $client->update(['actif' => false]);
+
+        Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getOptionLabel() === 'Client désactivé');
+    }
+
     public function test_lecheance_est_prereplie_a_aujourdhui_par_defaut(): void
     {
         $proprietaire = User::factory()->create();

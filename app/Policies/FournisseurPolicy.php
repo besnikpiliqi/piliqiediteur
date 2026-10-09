@@ -41,4 +41,13 @@ class FournisseurPolicy extends MagasinPolicy
     {
         return $user->can(PermissionRegistry::FOURNISSEUR_DELETE);
     }
+
+    /**
+     * Restaurer un fournisseur supprimé défait sa suppression : la même
+     * permission que pour le supprimer.
+     */
+    public function restore(User $user, Fournisseur $fournisseur): bool
+    {
+        return $this->appartientAuMagasinActif($fournisseur) && $user->can(PermissionRegistry::FOURNISSEUR_DELETE);
+    }
 }

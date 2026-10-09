@@ -21,6 +21,7 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -297,5 +298,117 @@ class ProduitResourceTest extends TestCase
             ->call('callMountedTableBulkAction');
 
         $produits->each(fn (Produit $produit) => $this->assertNotSoftDeleted($produit));
+    }
+
+    /**
+     * Un taux vidé n'est ni 0 % ni le taux par défaut : il est demandé,
+     * plutôt que d'échouer sur la base.
+     */
+    public function test_un_taux_de_tva_vide_est_demande_a_la_creation(): void
+    {
+        $this->connecterProprietaire();
+
+        Livewire::test(CreateProduit::class)
+            ->fillForm(['nom' => 'Écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 12, 'taux_tva' => ''])
+            ->call('create')
+            ->assertHasFormErrors(['taux_tva' => 'required']);
+
+        $this->assertSame(0, Produit::query()->count());
+    }
+
+    public function test_un_taux_de_tva_vide_est_demande_a_la_modification(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->fillForm(['taux_tva' => ''])
+            ->call('save')
+            ->assertHasFormErrors(['taux_tva' => 'required']);
+
+        $this->assertSame('20.00', $produit->fresh()->taux_tva);
+    }
+
+    /**
+     * Le détail HT et TVA du prix de vente ne se calcule pas tant que la
+     * TVA est vide.
+     */
+    public function test_le_detail_du_prix_de_vente_attend_le_taux_de_tva(): void
+    {
+        $this->connecterProprietaire();
+
+        Livewire::test(CreateProduit::class)
+            ->fillForm(['prix_vente_ttc' => '12', 'taux_tva' => '20'])
+            ->assertSee('Soit 10,00 € HT + 2,00 € de TVA')
+            ->fillForm(['taux_tva' => ''])
+            ->assertDontSee('€ de TVA');
+    }
+
+    /**
+     * @return array<string, array{string, string, string}>
+     */
+    public static function prixHorsLimites(): array
+    {
+        return [
+            'prix de vente négatif' => ['prix_vente_ttc', '-12', 'min'],
+            'prix de vente démesuré' => ['prix_vente_ttc', '99999999999', 'max'],
+            'prix d\'achat négatif' => ['cmup_ht', '-5', 'min'],
+            'prix d\'achat démesuré' => ['cmup_ht', '99999999999', 'max'],
+        ];
+    }
+
+    #[DataProvider('prixHorsLimites')]
+    public function test_un_prix_negatif_ou_demesure_est_refuse(string $champ, string $prix, string $regle): void
+    {
+        $this->connecterProprietaire();
+
+        Livewire::test(CreateProduit::class)
+            ->fillForm(['nom' => 'Écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 12, 'taux_tva' => 20, $champ => $prix])
+            ->call('create')
+            ->assertHasFormErrors([$champ => $regle]);
+
+        $this->assertSame(0, Produit::query()->count());
+    }
+
+    /**
+     * Un produit qui ne suit pas son stock n'est ni « En stock » ni
+     * « Épuisé », comme dans le widget de la liste -- même s'il gardait une
+     * quantité d'avant l'arrêt du suivi.
+     */
+    public function test_le_statut_du_stock_ne_retient_que_les_produits_suivis(): void
+    {
+        $this->connecterProprietaire();
+        $enStock = Produit::factory()->create(['suivi_stock' => true, 'stock_quantite' => 5]);
+        $epuise = Produit::factory()->create(['suivi_stock' => true, 'stock_quantite' => 0]);
+        $sansSuiviAZero = Produit::factory()->create(['suivi_stock' => false, 'stock_quantite' => 0]);
+        $sansSuiviAvecQuantite = Produit::factory()->create(['suivi_stock' => false, 'stock_quantite' => 3]);
+
+        Livewire::test(ListProduits::class)
+            ->filterTable('statut_stock', 'epuise')
+            ->assertCanSeeTableRecords([$epuise])
+            ->assertCanNotSeeTableRecords([$enStock, $sansSuiviAZero, $sansSuiviAvecQuantite])
+            ->filterTable('statut_stock', 'en_stock')
+            ->assertCanSeeTableRecords([$enStock])
+            ->assertCanNotSeeTableRecords([$epuise, $sansSuiviAZero, $sansSuiviAvecQuantite]);
+    }
+
+    /**
+     * Sa référence reste prise (voir Produit::verifierQueSaReferenceEstLibre()) :
+     * un produit supprimé se retrouve et se restaure depuis la liste.
+     */
+    public function test_un_produit_supprime_se_retrouve_et_se_restaure_depuis_la_liste(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create();
+        $produit->delete();
+
+        Livewire::test(ListProduits::class)
+            ->assertCanNotSeeTableRecords([$produit])
+            ->filterTable('trashed', false)
+            ->assertCanSeeTableRecords([$produit])
+            ->assertTableActionHidden('edit', $produit)
+            ->callTableAction('restore', $produit);
+
+        $this->assertNotSoftDeleted($produit);
     }
 }

@@ -42,6 +42,15 @@ class ProduitPolicy extends MagasinPolicy
         return $user->can(PermissionRegistry::PRODUIT_DELETE);
     }
 
+    /**
+     * Restaurer un produit supprimé défait sa suppression : la même
+     * permission que pour le supprimer.
+     */
+    public function restore(User $user, Produit $produit): bool
+    {
+        return $this->appartientAuMagasinActif($produit) && $user->can(PermissionRegistry::PRODUIT_DELETE);
+    }
+
     public function ajusterStock(User $user, Produit $produit): bool
     {
         return $this->appartientAuMagasinActif($produit) && $user->can(PermissionRegistry::PRODUIT_AJUSTER_STOCK);

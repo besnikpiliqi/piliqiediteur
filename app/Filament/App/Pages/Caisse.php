@@ -85,7 +85,7 @@ class Caisse extends Page implements HasForms
     private function remplirFormulaireVide(): void
     {
         $this->form->fill([
-            'client_id' => Client::query()->where('nom', Client::NOM_COMPTOIR)->value('id'),
+            'client_id' => Client::query()->proposables()->where('est_comptoir', true)->value('id'),
             'lignes' => [],
             'mode_paiement' => ModePaiement::Especes->value,
             'montant_recu' => null,
@@ -103,12 +103,15 @@ class Caisse extends Page implements HasForms
                     ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id'))
                         ?? 'Par défaut : le client comptoir générique, pour une vente anonyme.')
                     ->searchable()
+                    // Un client désactivé n'est plus proposé pour une vente
+                    // (voir ProposableSiActif).
                     ->getSearchResultsUsing(fn (string $search) => Client::query()
+                        ->proposables()
                         ->where('nom', 'like', "%{$search}%")
                         ->limit(50)
                         ->pluck('nom', 'id'))
                     ->getOptionLabelUsing(fn ($value) => Client::find($value)?->nom)
-                    ->rule(fn (): Exists => Client::regleExisteDansLeMagasin())
+                    ->rule(fn (): Exists => Client::regleExisteDansLeMagasin()->where('actif', true))
                     // Form explicitement modelé sur Client : ce Select
                     // n'utilise pas relationship(), voir le commentaire
                     // équivalent dans DevisResource::ligneSchema().

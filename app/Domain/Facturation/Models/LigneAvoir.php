@@ -54,8 +54,13 @@ class LigneAvoir extends Model
         return $this->belongsTo(LigneFacture::class);
     }
 
+    /**
+     * Une ligne garde son produit, même archivé depuis (voir les
+     * SoftDeletes de Produit) : le retour le remet quand même en stock
+     * (voir RestaurerStockApresEmissionAvoir).
+     */
     public function produit(): BelongsTo
     {
-        return $this->belongsTo(Produit::class);
+        return $this->belongsTo(Produit::class)->withTrashed();
     }
 }

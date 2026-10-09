@@ -200,11 +200,13 @@ class StockLedgerService
     /**
      * Verrou pessimiste : sérialise les écritures concurrentes sur ce
      * produit (ex: deux ventes simultanées de la dernière unité en stock)
-     * pour empêcher toute race condition.
+     * pour empêcher toute race condition. Archivé compris : un document
+     * émis après l'archivage de son produit le fait toujours entrer ou
+     * sortir du stock.
      */
     private function verrouiller(Produit $produit): Produit
     {
-        return Produit::query()->whereKey($produit->getKey())->lockForUpdate()->firstOrFail();
+        return Produit::withTrashed()->whereKey($produit->getKey())->lockForUpdate()->firstOrFail();
     }
 
     private function changerLeCmup(Produit $produit, Produit $produitVerrouille, float $cmup): void

@@ -27,6 +27,7 @@ use App\Filament\App\Resources\FactureAchatResource\Pages\ViewFactureAchat;
 use App\Models\User;
 use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -294,6 +295,30 @@ class FactureAchatResourceTest extends TestCase
     }
 
     /**
+     * Une TVA vidée n'est pas un taux de 0 % : le barème ne propose rien
+     * (2 € d'achat + 15 € de bénéfice donneraient 17,00 € au lieu de
+     * 20,40 € TTC), et la ligne la demande avant d'être ajoutée.
+     */
+    public function test_une_tva_videe_ne_fait_rien_proposer_et_est_demandee(): void
+    {
+        $this->connecterLeProprietaire()->update(['prix_vente_automatique' => true]);
+
+        $component = Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->setFormComponentActionData(['origine' => 'nouveau', 'nom' => 'Câble USB-C', 'taux_tva' => ''])
+            ->setFormComponentActionData(['prix_unitaire_ht' => '2'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => null])
+            ->setFormComponentActionData(['taux_tva' => '20'])
+            ->assertFormComponentActionDataSet(['prix_vente_ttc' => '20.40'])
+            ->setFormComponentActionData(['taux_tva' => ''])
+            ->callMountedFormComponentAction()
+            ->assertHasFormComponentActionErrors(['taux_tva' => 'required']);
+
+        $this->assertSame([], $component->get('data.lignes'));
+    }
+
+    /**
      * Au-delà du dernier palier, sans bénéfice prévu, le barème ne propose
      * rien : une proposition faite pour un prix d'achat précédent est
      * retirée (vide pour un nouveau produit, prix de sa fiche pour un
@@ -424,6 +449,47 @@ class FactureAchatResourceTest extends TestCase
 
         Livewire::test(CreateFactureAchat::class)
             ->assertFormComponentActionDoesNotExist('fournisseur_id', 'createOption');
+    }
+
+    /**
+     * Un fournisseur désactivé (« Actif » décoché) ou supprimé n'est plus
+     * proposé pour une nouvelle facture d'achat.
+     */
+    public function test_un_fournisseur_desactive_ou_supprime_n_est_plus_propose(): void
+    {
+        $this->connecterLeProprietaire();
+        $actif = Fournisseur::factory()->create();
+        $desactive = Fournisseur::factory()->create(['actif' => false]);
+        $supprime = Fournisseur::factory()->create();
+        $supprime->delete();
+
+        Livewire::test(CreateFactureAchat::class)
+            ->assertFormFieldExists('fournisseur_id', fn (Select $champ): bool => array_keys($champ->getOptions()) === [$actif->id]);
+    }
+
+    /**
+     * Une facture d'achat garde son fournisseur supprimé depuis (voir
+     * FactureAchat::fournisseur()) : sa fiche l'affiche, et sa
+     * modification le garde.
+     */
+    public function test_le_fournisseur_supprime_reste_celui_de_sa_facture_dachat(): void
+    {
+        $this->connecterLeProprietaire();
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste fermé']);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 5],
+        ]);
+        $fournisseur->delete();
+
+        Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
+            ->assertSee('Grossiste fermé');
+        Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
+            ->assertFormFieldExists('fournisseur_id', fn (Select $champ): bool => $champ->getOptionLabel() === 'Grossiste fermé')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame($fournisseur->id, $factureAchat->fresh()->fournisseur_id);
     }
 
     /**

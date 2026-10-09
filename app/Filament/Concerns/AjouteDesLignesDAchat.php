@@ -130,11 +130,16 @@ trait AjouteDesLignesDAchat
                 }
 
                 $vente = self::montantEnTexte((float) $get('produit.prix_vente_ttc')).' TTC l\'article';
+                $tauxTva = ProduitResource::tauxDeTvaSaisi($get('produit.taux_tva')) ?? ProduitResource::tauxDeTvaSaisi($get('taux_tva'));
+
+                if ($tauxTva === null) {
+                    return $vente;
+                }
 
                 try {
                     $calculateur = app(CalculateurLigne::class);
                     $benefice = $calculateur->beneficeUnitaire(
-                        $calculateur->prixUnitaireHtDepuisTtc((float) $get('produit.prix_vente_ttc'), (float) ($get('produit.taux_tva') ?? $get('taux_tva') ?? 20)),
+                        $calculateur->prixUnitaireHtDepuisTtc((float) $get('produit.prix_vente_ttc'), $tauxTva),
                         self::prixDAchatNet($get),
                     );
                 } catch (InvalidArgumentException) {
@@ -297,19 +302,21 @@ trait AjouteDesLignesDAchat
      * Le barème du magasin (voir BaremePrixDeVente) propose le prix de vente
      * TTC dès que le prix d'achat, sa remise ou la TVA changent ; la
      * personne qui enregistre la facture d'achat reste libre de le changer
-     * ensuite. Rien ne change sur une fiche qu'elle ne peut pas modifier.
+     * ensuite. Rien ne change sur une fiche qu'elle ne peut pas modifier,
+     * ni tant que la TVA est vide.
      */
     private static function appliquerLeBareme(Closure $ficheNonModifiable): Closure
     {
         return function (Get $get, Set $set) use ($ficheNonModifiable): void {
             $bareme = app(TenantContext::class)->magasin()->baremePrixDeVenteActif();
+            $tauxTva = ProduitResource::tauxDeTvaSaisi($get('taux_tva'));
 
-            if ($bareme === null || $ficheNonModifiable($get) || blank($get('prix_unitaire_ht'))) {
+            if ($bareme === null || $ficheNonModifiable($get) || blank($get('prix_unitaire_ht')) || $tauxTva === null) {
                 return;
             }
 
             try {
-                $prix = $bareme->prixDeVente(self::prixDAchatNet($get), (float) ($get('taux_tva') ?? 20));
+                $prix = $bareme->prixDeVente(self::prixDAchatNet($get), $tauxTva);
             } catch (InvalidArgumentException) {
                 // Saisie pas encore valable (remise ou TVA hors limites).
                 return;
@@ -343,15 +350,16 @@ trait AjouteDesLignesDAchat
     private static function detailDuPrixDeVente(Get $get): ?string
     {
         $detail = ProduitResource::detailPrixDeVente($get);
+        $tauxTva = ProduitResource::tauxDeTvaSaisi($get('taux_tva'));
 
-        if ($detail === null || blank($get('prix_unitaire_ht'))) {
+        if ($detail === null || $tauxTva === null || blank($get('prix_unitaire_ht'))) {
             return $detail;
         }
 
         try {
             $calculateur = app(CalculateurLigne::class);
             $benefice = $calculateur->beneficeUnitaire(
-                $calculateur->prixUnitaireHtDepuisTtc((float) $get('prix_vente_ttc'), (float) ($get('taux_tva') ?? 20)),
+                $calculateur->prixUnitaireHtDepuisTtc((float) $get('prix_vente_ttc'), $tauxTva),
                 self::prixDAchatNet($get),
             );
         } catch (InvalidArgumentException) {

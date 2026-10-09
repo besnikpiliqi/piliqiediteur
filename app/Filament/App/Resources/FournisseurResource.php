@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Contacts\Enums\SourceFournisseur;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FournisseurResource\Pages;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Filament\Forms\Components\Section;
@@ -13,6 +14,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Validation\Rules\Unique;
 
 class FournisseurResource extends Resource
 {
@@ -33,7 +35,22 @@ class FournisseurResource extends Resource
         return $form->schema([
             Section::make('Identité')->schema([
                 TextInput::make('nom')->required()->maxLength(150)->columnSpanFull(),
-                TextInput::make('siret')->label('SIRET')->maxLength(14),
+                TextInput::make('siret')
+                    ->label('SIRET')
+                    ->maxLength(14)
+                    ->regex('/^\d{14}$/')
+                    // Archivés compris, comme l'index unique de la table : un
+                    // fournisseur archivé se retrouve et se restaure depuis la
+                    // liste plutôt que d'être recréé.
+                    ->unique(
+                        table: Fournisseur::class,
+                        ignoreRecord: true,
+                        modifyRuleUsing: fn (Unique $rule): Unique => $rule->where('magasin_id', app(TenantContext::class)->id()),
+                    )
+                    ->validationMessages([
+                        'regex' => 'Le SIRET compte 14 chiffres, sans espace.',
+                        'unique' => 'Ce SIRET est déjà celui d\'un autre fournisseur du magasin, peut-être supprimé. Affichez les enregistrements supprimés de la liste pour le restaurer.',
+                    ]),
                 TextInput::make('numero_tva')->label('N° TVA intracommunautaire')->maxLength(20),
             ])->columns(2),
 
@@ -64,9 +81,11 @@ class FournisseurResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('source')->options(SourceFournisseur::class),
                 Tables\Filters\TernaryFilter::make('actif'),
+                Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\EditAction::make()->hidden(fn (Fournisseur $record): bool => $record->trashed()),
+                Tables\Actions\RestoreAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

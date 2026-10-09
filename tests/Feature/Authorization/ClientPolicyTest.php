@@ -55,6 +55,20 @@ class ClientPolicyTest extends TestCase
         $this->assertSame($peutSupprimer, $membre->can('delete', $client));
     }
 
+    /**
+     * Toutes les ventes anonymes du magasin le portent : même le
+     * propriétaire ne le supprime pas.
+     */
+    public function test_personne_ne_supprime_le_client_comptoir(): void
+    {
+        $proprietaire = User::factory()->create();
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+
+        $this->assertFalse($proprietaire->can('delete', $comptoir));
+        $this->assertTrue($proprietaire->can('update', $comptoir));
+    }
+
     public function test_la_permission_est_scopee_par_magasin_et_le_modele_doit_appartenir_au_contexte_actif(): void
     {
         $contexte = app(TenantContext::class);

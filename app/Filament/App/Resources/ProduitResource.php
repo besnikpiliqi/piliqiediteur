@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ProduitResource\Pages;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
@@ -65,7 +66,7 @@ class ProduitResource extends Resource
                     ignorable: $produitModifie,
                     modifyRuleUsing: fn (Unique $rule): Unique => $rule->where('magasin_id', app(TenantContext::class)->id()),
                 )
-                ->validationMessages(['unique' => 'Cette référence est déjà celle d\'un autre produit.']),
+                ->validationMessages(['unique' => 'Cette référence est déjà celle d\'un autre produit, peut-être supprimé. Affichez les enregistrements supprimés de la liste des produits pour le restaurer.']),
             TextInput::make('code_barres')->label('Code-barres')->maxLength(50),
             TextInput::make('nom')->required()->maxLength(200)->columnSpanFull(),
             TextInput::make('taille')->maxLength(20),
@@ -126,6 +127,8 @@ class ProduitResource extends Resource
             TextInput::make('prix_vente_ttc')
                 ->label('Prix de vente TTC')
                 ->numeric()
+                ->minValue(0)
+                ->maxValue(Caisse::MONTANT_MAXIMUM)
                 ->prefix('€')
                 ->required()
                 ->saisieEnDirect()
@@ -135,10 +138,21 @@ class ProduitResource extends Resource
                 ->numeric()
                 ->minValue(0)
                 ->maxValue(100)
+                ->required()
                 ->default(20)
                 ->formatStateUsing(fn (mixed $state): mixed => blank($state) ? $state : DevisResource::pourcentageEnTexte($state))
                 ->saisieEnDirect(),
         ];
+    }
+
+    /**
+     * Le taux de TVA saisi, ou null tant que le champ est vide : un champ
+     * vidé n'est ni un taux de 0 % ni le taux par défaut, et rien ne se
+     * calcule sans lui.
+     */
+    public static function tauxDeTvaSaisi(mixed $taux): ?float
+    {
+        return filled($taux) ? (float) $taux : null;
     }
 
     /**
@@ -147,7 +161,9 @@ class ProduitResource extends Resource
      */
     public static function detailPrixDeVente(Get $get): ?string
     {
-        if (blank($get('prix_vente_ttc'))) {
+        $tauxTva = self::tauxDeTvaSaisi($get('taux_tva'));
+
+        if (blank($get('prix_vente_ttc')) || $tauxTva === null) {
             return null;
         }
 
@@ -155,7 +171,7 @@ class ProduitResource extends Resource
 
         try {
             $prixUnitaireTtc = $calculateur->arrondirAuCentime((float) $get('prix_vente_ttc'));
-            $prixUnitaireHt = $calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, (float) ($get('taux_tva') ?? 20));
+            $prixUnitaireHt = $calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, $tauxTva);
         } catch (InvalidArgumentException) {
             return null;
         }
@@ -200,6 +216,8 @@ class ProduitResource extends Resource
                 TextInput::make('cmup_ht')
                     ->label(fn (string $operation): string => $operation === 'create' ? 'Prix d\'achat HT' : 'Coût moyen pondéré (CMUP) HT')
                     ->numeric()
+                    ->minValue(0)
+                    ->maxValue(Caisse::MONTANT_MAXIMUM)
                     ->prefix('€')
                     ->required()
                     ->formatStateUsing(fn (mixed $state): mixed => blank($state) ? $state : number_format((float) $state, 2, '.', ''))
@@ -247,22 +265,25 @@ class ProduitResource extends Resource
                 Tables\Filters\SelectFilter::make('fournisseur_id')
                     ->label('Fournisseur')
                     ->relationship('fournisseur', 'nom'),
+                // Seulement les produits qui suivent leur stock, comme le
+                // widget de la liste (voir ValeurStockApercu) : les autres
+                // n'en ont pas.
                 Tables\Filters\SelectFilter::make('statut_stock')
                     ->label('Statut du stock')
                     ->options([
                         'en_stock' => 'En stock',
                         'epuise' => 'Épuisé',
                     ])
-                    ->query(function (Builder $query, array $data): Builder {
-                        return match ($data['value'] ?? null) {
-                            'en_stock' => $query->where('stock_quantite', '>', 0),
-                            'epuise' => $query->where('stock_quantite', '<=', 0),
-                            default => $query,
-                        };
+                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                        'en_stock' => $query->where('suivi_stock', true)->where('stock_quantite', '>', 0),
+                        'epuise' => $query->where('suivi_stock', true)->where('stock_quantite', '<=', 0),
+                        default => $query,
                     }),
+                Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\EditAction::make()->hidden(fn (Produit $record): bool => $record->trashed()),
+                Tables\Actions\RestoreAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

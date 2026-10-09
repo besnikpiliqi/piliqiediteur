@@ -18,6 +18,7 @@ use App\Filament\App\Resources\PaiementResource\Pages\CreatePaiement;
 use App\Filament\App\Resources\PaiementResource\Pages\ListPaiements;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
@@ -371,5 +372,31 @@ class PaiementResourceTest extends TestCase
         Livewire::test(ListPaiements::class)
             ->assertCanSeeTableRecords([$paiementB])
             ->assertCanNotSeeTableRecords([$paiementA]);
+    }
+
+    /**
+     * Un paiement garde son client, même archivé depuis (voir
+     * Paiement::client()) ; ce client n'est plus proposé pour un nouveau
+     * paiement.
+     */
+    public function test_le_client_archive_reste_affiche_sur_ses_paiements_sans_etre_propose(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create(['nom' => 'Jeanne Archivée']);
+        $paiement = Paiement::create([
+            'client_id' => $client->id,
+            'mode_paiement' => ModePaiement::Especes,
+            'montant' => 10,
+            'recu_le' => now()->toDateString(),
+        ]);
+        $client->delete();
+
+        Livewire::test(ListPaiements::class)
+            ->assertTableColumnStateSet('client.nom', 'Jeanne Archivée', $paiement);
+        Livewire::test(CreatePaiement::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => ! array_key_exists($client->id, $champ->getOptions()));
     }
 }

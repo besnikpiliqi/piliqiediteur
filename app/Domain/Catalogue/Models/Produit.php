@@ -67,22 +67,13 @@ class Produit extends Model
         // NULL en base, jamais question de la laisser vide après coup.
         static::saving(function (Produit $produit) {
             $produit->verifierQueSaReferenceEstLibre();
-
-            // La référence reste libre à la saisie (manuelle ou future
-            // intégration API) : si elle n'est pas fournie, elle est
-            // générée automatiquement, par magasin, jamais remise à zéro
-            // (pas de periodKey, contrairement aux documents fiscaux qui
-            // se réinitialisent chaque année) -- un catalogue produit n'a
-            // pas de notion d'exercice.
-            if (blank($produit->reference)) {
-                $produit->reference = app(DocumentNumberingService::class)->suivant(
-                    app(TenantContext::class)->magasin(),
-                    TypeDocument::Produit,
-                );
-            }
-
             $produit->synchroniserPrixDeVente();
             $produit->arrondirLeCmup();
+            $produit->verifierQueSesPrixNeSontPasNegatifs();
+
+            if (blank($produit->reference)) {
+                $produit->reference = $produit->referenceAutomatiqueLibre();
+            }
         });
     }
 
@@ -177,6 +168,43 @@ class Produit extends Model
 
         if ($dejaPrise) {
             throw new InvalidArgumentException("La référence « {$this->reference} » est déjà celle d'un autre produit.");
+        }
+    }
+
+    /**
+     * La référence reste libre à la saisie (manuelle ou future intégration
+     * API) : si elle n'est pas fournie, elle est générée automatiquement,
+     * par magasin, jamais remise à zéro (pas de periodKey, contrairement
+     * aux documents fiscaux qui se réinitialisent chaque année) -- un
+     * catalogue produit n'a pas de notion d'exercice. Une référence saisie
+     * à la main peut déjà porter ce format (PRD-000001) : le numéro suivant
+     * est alors pris, jusqu'au premier qu'aucun produit du magasin ne
+     * porte, archivés compris.
+     */
+    private function referenceAutomatiqueLibre(): string
+    {
+        do {
+            $reference = app(DocumentNumberingService::class)->suivant(
+                app(TenantContext::class)->magasin(),
+                TypeDocument::Produit,
+            );
+        } while (static::withTrashed()->where('reference', $reference)->exists());
+
+        return $reference;
+    }
+
+    /**
+     * Un prix de vente ou un coût d'achat négatif n'a pas de sens, quel que
+     * soit le chemin d'enregistrement (formulaire, facture d'achat, API).
+     */
+    private function verifierQueSesPrixNeSontPasNegatifs(): void
+    {
+        if ((float) $this->prix_vente_ttc < 0 || (float) $this->prix_vente_ht < 0) {
+            throw new InvalidArgumentException('Le prix de vente d\'un produit ne peut pas être négatif.');
+        }
+
+        if ((float) $this->cmup_ht < 0) {
+            throw new InvalidArgumentException('Le coût d\'achat d\'un produit ne peut pas être négatif.');
         }
     }
 

@@ -45,9 +45,13 @@ class Paiement extends Model
         });
     }
 
+    /**
+     * Un paiement garde son client, même archivé depuis (voir les
+     * SoftDeletes de Client), comme les factures qu'il règle.
+     */
     public function client(): BelongsTo
     {
-        return $this->belongsTo(Client::class);
+        return $this->belongsTo(Client::class)->withTrashed();
     }
 
     public function creePar(): BelongsTo

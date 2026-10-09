@@ -40,6 +40,53 @@ class FacturePdfGeneratorTest extends TestCase
     }
 
     /**
+     * Le client archivé depuis doit toujours sa facture : elle se
+     * réimprime (voir Facture::client()).
+     */
+    public function test_genere_le_pdf_de_la_facture_d_un_client_archive(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $client = Client::factory()->create(['nom' => 'Jeanne Archivée']);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]));
+        $client->delete();
+        $facture = $facture->fresh();
+
+        $generateur = app(FacturePdfGenerator::class);
+
+        $this->assertStringStartsWith('%PDF', $generateur->generer($facture)->output());
+        $this->assertSame("ticket-{$facture->numero}.pdf", $generateur->nomFichier($facture));
+        $this->assertStringContainsString('Jeanne Archivée', view('factures.pdf', [
+            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
+        ])->render());
+    }
+
+    /**
+     * Une mise à jour groupée ne passe pas par le modèle, qui retire le
+     * SIRET d'un particulier : le document ne l'imprime de toute façon que
+     * pour un professionnel.
+     */
+    public function test_le_siret_du_client_ne_s_imprime_que_pour_un_professionnel(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $client = Client::factory()->professionnel()->create(['siret' => '12345678900012']);
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]));
+        $rendu = fn (): string => view('factures.pdf', [
+            'facture' => $facture->fresh()->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
+        ])->render();
+        $this->assertStringContainsString('SIRET : 12345678900012', $rendu());
+
+        Client::query()->whereKey($client->id)->update(['type_client' => 'particulier']);
+
+        $this->assertStringNotContainsString('12345678900012', $rendu());
+    }
+
+    /**
      * @return array<string, array{bool}>
      */
     public static function choixDeLoptionPourLesDebits(): array

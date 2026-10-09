@@ -21,6 +21,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\Caisse;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -756,6 +757,51 @@ class CaisseTest extends TestCase
             ->assertHasFormErrors(['client_id' => 'exists']);
 
         $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * Un client désactivé (« Actif » décoché) n'est plus proposé pour une
+     * vente, ni accepté par une requête forgée.
+     */
+    public function test_un_client_desactive_n_est_plus_propose_a_la_caisse(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $actif = Client::factory()->create(['nom' => 'Martin actif']);
+        Client::factory()->create(['nom' => 'Martin désactivé', 'actif' => false]);
+
+        Livewire::test(Caisse::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('Martin') === [$actif->id => 'Martin actif']);
+    }
+
+    public function test_un_client_desactive_est_refuse_a_l_encaissement(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $desactive = Client::factory()->create(['actif' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(Caisse::class)
+            ->fillForm([
+                'client_id' => $desactive->id,
+                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+                'mode_paiement' => ModePaiement::CarteBancaire->value,
+            ])
+            ->call('encaisser')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * Le client comptoir se reconnaît à son marqueur (voir
+     * Client::estComptoir()) : désactivé, il n'est plus proposé par défaut.
+     */
+    public function test_le_client_comptoir_desactive_n_est_plus_propose_par_defaut(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        Client::query()->where('est_comptoir', true)->sole()->update(['actif' => false]);
+
+        Livewire::test(Caisse::class)
+            ->assertFormSet(['client_id' => null]);
     }
 
     private function ouvrirLaCaisseDUnMagasin(): Magasin

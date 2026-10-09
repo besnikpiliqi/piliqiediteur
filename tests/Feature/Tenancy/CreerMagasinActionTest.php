@@ -49,6 +49,7 @@ class CreerMagasinActionTest extends TestCase
         $comptoir = Client::query()->where('nom', 'Client comptoir')->first();
         $this->assertNotNull($comptoir);
         $this->assertSame(TypeClient::Particulier, $comptoir->type_client);
+        $this->assertTrue($comptoir->estComptoir());
     }
 
     public function test_les_cinq_roles_par_defaut_sont_crees_et_scopes_a_ce_magasin(): void

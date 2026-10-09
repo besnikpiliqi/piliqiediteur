@@ -53,9 +53,14 @@ class LigneFacture extends Model
         return $this->belongsTo(Facture::class);
     }
 
+    /**
+     * Une ligne garde son produit, même archivé depuis (voir les
+     * SoftDeletes de Produit) : la vente émise ensuite le sort quand même
+     * du stock (voir DecrementerStockApresEmissionFacture).
+     */
     public function produit(): BelongsTo
     {
-        return $this->belongsTo(Produit::class);
+        return $this->belongsTo(Produit::class)->withTrashed();
     }
 
     /**

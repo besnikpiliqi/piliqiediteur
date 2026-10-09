@@ -55,6 +55,26 @@ class EmettreFactureActionTest extends TestCase
         $this->assertSame(7, $produit->fresh()->stock_quantite);
     }
 
+    /**
+     * Un produit supprimé après avoir été mis dans un brouillon sort quand
+     * même du stock à l'émission, avec son mouvement (voir
+     * LigneFacture::produit()).
+     */
+    public function test_emettre_decremente_le_stock_d_un_produit_supprime_depuis_le_brouillon(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 5, 'suivi_stock' => true]);
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 2],
+        ]);
+        $produit->delete();
+
+        app(EmettreFactureAction::class)->handle($facture);
+
+        $this->assertSame(3, $produit->fresh()->stock_quantite);
+        $this->assertDatabaseHas('mouvements_stock', ['produit_id' => $produit->id, 'type' => 'vente', 'quantite' => 2]);
+    }
+
     public function test_emettre_ne_touche_pas_au_stock_dun_produit_sans_suivi(): void
     {
         $client = Client::factory()->create();

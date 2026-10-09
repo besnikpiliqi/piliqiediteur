@@ -90,9 +90,10 @@ class FactureResource extends Resource
             FormSection::make('Facture')->schema([
                 Select::make('client_id')
                     ->label('Client')
-                    // Un client archivé ne reçoit plus de nouveau document, même
-                    // si ceux qu'il a déjà le gardent (voir Facture::client()).
-                    ->relationship('client', 'nom', fn (Builder $query): Builder => $query->withoutTrashed())
+                    // Un client désactivé ou archivé ne reçoit plus de nouveau
+                    // document, même si ceux qu'il a déjà le gardent (voir
+                    // Facture::client() et ProposableSiActif).
+                    ->relationship('client', 'nom', fn (Builder $query, ?Facture $record): Builder => $query->proposables($record?->client_id))
                     ->searchable()
                     ->preload()
                     ->required()

@@ -71,9 +71,14 @@ class FactureAchat extends Model
         });
     }
 
+    /**
+     * Une facture d'achat garde son fournisseur, même archivé depuis (voir
+     * les SoftDeletes de Fournisseur) : elle s'affiche et se retrouve
+     * toujours avec lui.
+     */
     public function fournisseur(): BelongsTo
     {
-        return $this->belongsTo(Fournisseur::class);
+        return $this->belongsTo(Fournisseur::class)->withTrashed();
     }
 
     public function creePar(): BelongsTo

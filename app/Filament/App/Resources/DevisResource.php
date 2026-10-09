@@ -61,9 +61,10 @@ class DevisResource extends Resource
             Section::make('Devis')->schema([
                 Select::make('client_id')
                     ->label('Client')
-                    // Un client archivé ne reçoit plus de nouveau document, même
-                    // si ceux qu'il a déjà le gardent (voir Devis::client()).
-                    ->relationship('client', 'nom', fn (Builder $query): Builder => $query->withoutTrashed())
+                    // Un client désactivé ou archivé ne reçoit plus de nouveau
+                    // document, même si ceux qu'il a déjà le gardent (voir
+                    // Devis::client() et ProposableSiActif).
+                    ->relationship('client', 'nom', fn (Builder $query, ?Devis $record): Builder => $query->proposables($record?->client_id))
                     ->searchable()
                     ->preload()
                     ->required()

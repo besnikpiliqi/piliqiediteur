@@ -130,6 +130,27 @@ class CloturerCaisseActionTest extends TestCase
         ], $cloture->ventilation_par_nature);
     }
 
+    /**
+     * Un client archivé le jour même garde ses ventes et ses retours dans
+     * la clôture (voir Facture::client() et Avoir::client()).
+     */
+    public function test_les_ventes_et_les_retours_d_un_client_archive_restent_dans_la_cloture(): void
+    {
+        $client = Client::factory()->create();
+        $this->emettreFacturePour($client, 100); // 120 TTC
+        $venteRendue = $this->emettreFacturePour($client, 50); // 60 TTC
+        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $venteRendue->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]));
+        $client->delete();
+
+        $cloture = app(CloturerCaisseAction::class)->handle($this->magasin, now());
+
+        $this->assertSame(2, $cloture->nombre_ventes);
+        $this->assertSame(1, $cloture->nombre_avoirs);
+        $this->assertSame('120.00', $cloture->total_ttc);
+    }
+
     public function test_un_avoir_a_un_professionnel_nest_jamais_deduit_de_la_cloture(): void
     {
         $professionnel = Client::factory()->professionnel()->create();

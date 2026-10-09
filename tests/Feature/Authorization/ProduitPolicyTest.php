@@ -42,4 +42,19 @@ class ProduitPolicyTest extends TestCase
         $this->assertSame($peutSupprimer, $membre->can('deleteAny', Produit::class));
         $this->assertSame($peutSupprimer, $membre->can('delete', $produit));
     }
+
+    /**
+     * Restaurer défait une suppression : les mêmes rôles que pour
+     * supprimer.
+     */
+    #[DataProvider('roles')]
+    public function test_restaurer_des_produits_selon_le_role(RoleMagasin $role, bool $peutRestaurer): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $produit = Produit::factory()->create();
+        $produit->delete();
+
+        $this->assertSame($peutRestaurer, $membre->can('restore', $produit));
+    }
 }

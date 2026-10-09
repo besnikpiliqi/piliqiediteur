@@ -25,9 +25,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Pas de page "edit" ni d'action de suppression : un paiement enregistré
- * ne se modifie ni ne se supprime jamais (voir PaiementPolicy et le
- * commentaire sur Paiement::$fillable). Une erreur se corrige en
- * enregistrant un nouveau paiement.
+ * ne se modifie ni ne se supprime jamais (voir PaiementPolicy et
+ * ProtegeLesDonneesValidees). Une erreur se corrige en enregistrant un
+ * nouveau paiement.
  */
 class PaiementResource extends Resource
 {

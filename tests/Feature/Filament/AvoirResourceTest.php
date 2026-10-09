@@ -6,6 +6,9 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
@@ -355,16 +358,23 @@ class AvoirResourceTest extends TestCase
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeurA = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
         $vendeurB = $this->vendeurQuiVoitLesAvoirs($magasin, 'jean@example.test');
-        $this->actingAs($vendeurA);
-        $avoirDeA = Avoir::factory()->create();
-        $this->actingAs($vendeurB);
+        $avoirDeA = $this->emettreUnAvoirEnTantQue($vendeurA);
+        $avoirDeB = $this->emettreUnAvoirEnTantQue($vendeurB);
         Filament::setTenant($magasin);
-        $avoirDeB = Avoir::factory()->create();
 
         $liste = Livewire::test(ListAvoirs::class);
 
         $liste->assertCanSeeTableRecords([$avoirDeB])
             ->assertCanNotSeeTableRecords([$avoirDeA]);
+    }
+
+    private function emettreUnAvoirEnTantQue(User $auteur): Avoir
+    {
+        $this->actingAs($auteur);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
+
+        return app(EnregistrerAvoirAction::class)->handle($facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]);
     }
 
     private function vendeurQuiVoitLesAvoirs(Magasin $magasin, string $email): User

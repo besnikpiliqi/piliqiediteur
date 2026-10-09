@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
@@ -12,9 +13,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
 use Carbon\CarbonInterface;
-use Database\Factories\AvoirFactory;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -29,12 +28,14 @@ use Illuminate\Support\Collection;
  *
  * PAS de SoftDeletes ici, volontairement : au même titre qu'une facture,
  * un avoir est un document fiscal dont la loi impose la conservation
- * (voir AvoirPolicy et la migration create_avoirs_table).
+ * (voir AvoirPolicy et la migration create_avoirs_table). Une fois
+ * numéroté, il ne se modifie plus du tout (voir
+ * ProtegeLesDonneesValidees) : il est signé tel qu'émis au registre fiscal
+ * (voir EmettreAvoirAction).
  */
 class Avoir extends Model implements DocumentEnvoyable
 {
-    /** @use HasFactory<AvoirFactory> */
-    use BelongsToMagasin, EstEnvoyeParEmail, HasFactory, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
 
     protected $table = 'avoirs';
 
@@ -62,6 +63,19 @@ class Avoir extends Model implements DocumentEnvoyable
             $avoir->devise ??= 'EUR';
             $avoir->cree_par ??= auth()->id();
         });
+    }
+
+    /**
+     * Numéroté en base, donc émis.
+     */
+    public function estValidee(): bool
+    {
+        return $this->exists && $this->documentNumeroteEnBase(self::class, [$this->getKey()]);
+    }
+
+    protected function regleDInalterabilite(): string
+    {
+        return 'Un avoir émis ne se modifie plus.';
     }
 
     /**

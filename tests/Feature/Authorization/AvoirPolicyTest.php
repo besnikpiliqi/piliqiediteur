@@ -73,10 +73,8 @@ class AvoirPolicyTest extends TestCase
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $vendeurA = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
         $vendeurB = $this->vendeurQuiVoitLesAvoirs($magasin, 'jean@example.test');
-        $this->actingAs($vendeurA);
-        $avoirDeA = Avoir::factory()->create();
-        $this->actingAs($vendeurB);
-        $avoirDeB = Avoir::factory()->create();
+        $avoirDeA = $this->emettreUnAvoirEnTantQue($vendeurA);
+        $avoirDeB = $this->emettreUnAvoirEnTantQue($vendeurB);
 
         $this->assertTrue($vendeurB->can('view', $avoirDeB));
         $this->assertFalse($vendeurB->can('view', $avoirDeA));
@@ -87,8 +85,7 @@ class AvoirPolicyTest extends TestCase
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $vendeur = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
         $comptable = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Comptable', 'email' => 'comptable@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Comptable);
-        $this->actingAs($vendeur);
-        $avoirDuVendeur = Avoir::factory()->create();
+        $avoirDuVendeur = $this->emettreUnAvoirEnTantQue($vendeur);
 
         $this->assertTrue($comptable->can('view', $avoirDuVendeur));
     }

@@ -66,6 +66,10 @@ class CloturerCaisseAction
                 'cloturee_a' => now(),
             ])->save();
 
+            // Seule écriture, avec le statut, encore faite sur des documents
+            // émis : un update() en masse, qui ne passe pas par
+            // ProtegeLesDonneesValidees. L'étape des clôtures, calculées
+            // depuis le registre fiscal, la supprimera.
             if ($ventes->isNotEmpty()) {
                 Facture::query()
                     ->whereIn('id', $ventes->pluck('id'))

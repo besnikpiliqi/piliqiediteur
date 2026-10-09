@@ -2,15 +2,21 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * La ligne d'un avoir : ses montants s'arrêtent à l'émission (voir
+ * EmettreAvoirAction), puis elle est figée (voir
+ * ProtegeLesDonneesValidees).
+ */
 class LigneAvoir extends Model
 {
-    use BelongsToMagasin;
+    use BelongsToMagasin, ProtegeLesDonneesValidees;
 
     protected $table = 'lignes_avoir';
 
@@ -43,6 +49,20 @@ class LigneAvoir extends Model
         'montant_tva' => 'decimal:2',
         'montant_ttc' => 'decimal:2',
     ];
+
+    /**
+     * Son avoir, avant comme après la modification, est numéroté en base :
+     * la ligne appartient à un document émis.
+     */
+    public function estValidee(): bool
+    {
+        return $this->documentNumeroteEnBase(Avoir::class, [$this->getRawOriginal('avoir_id'), $this->getAttribute('avoir_id')]);
+    }
+
+    protected function regleDInalterabilite(): string
+    {
+        return 'Les lignes d\'un avoir émis ne se modifient plus.';
+    }
 
     public function avoir(): BelongsTo
     {

@@ -105,7 +105,7 @@ final class PermissionRegistry
     public const EQUIPE_MODIFIER = 'equipe.modifier';
 
     // Paiements -- ni modification ni suppression après coup (voir
-    // Paiement::$fillable et PaiementPolicy) : une erreur de saisie se
+    // ProtegeLesDonneesValidees et PaiementPolicy) : une erreur de saisie se
     // corrige par un nouveau paiement, jamais en réécrivant l'historique
     // d'encaissement.
     public const PAIEMENT_VIEW = 'paiement.view';

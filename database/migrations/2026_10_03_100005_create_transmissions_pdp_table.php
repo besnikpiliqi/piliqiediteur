@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('transmissions_pdp', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             // Polymorphique : une facture ou une soumission d'e-reporting
             // (voir les morphMany transmissionsPdp()) -- même mécanique de
             // suivi/historique pour toutes.

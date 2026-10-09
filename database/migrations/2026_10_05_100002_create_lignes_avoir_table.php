@@ -10,13 +10,17 @@ return new class extends Migration
     {
         Schema::create('lignes_avoir', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            // La ligne d'un avoir émis ne se réécrit ni ne disparaît (voir
+            // ProtegeLesDonneesValidees) : restrictOnDelete partout, sauf
+            // vers l'avoir, dont seul un brouillon disparaît, avec ses
+            // lignes.
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             $table->foreignId('avoir_id')->constrained('avoirs')->cascadeOnDelete();
             // Trace la ligne de facture créditée, sans dépendre d'elle pour
             // les montants : comme pour lignes_facture, tout est un
             // snapshot figé au moment de la création de l'avoir.
-            $table->foreignId('ligne_facture_id')->nullable()->constrained('lignes_facture')->nullOnDelete();
-            $table->foreignId('produit_id')->nullable()->constrained('produits')->nullOnDelete();
+            $table->foreignId('ligne_facture_id')->nullable()->constrained('lignes_facture')->restrictOnDelete();
+            $table->foreignId('produit_id')->nullable()->constrained('produits')->restrictOnDelete();
             // Reprise de la ligne de facture créditée (voir NatureLigne).
             $table->string('nature', 10);
             $table->string('description', 255);

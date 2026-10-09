@@ -51,11 +51,16 @@ class RegistreFiscalTest extends TestCase
     }
 
     /**
+     * Un enregistrement dans sa propre transaction ; une vente y porte pour
+     * montant son total_ttc_centimes.
+     *
      * @param  array<array-key, mixed>  $donnees
      */
     private function enregistrer(ChaineFiscale $chaine = ChaineFiscale::Vente, string $type = 'ticket', array $donnees = ['total_ttc_centimes' => 1250], ?Model $document = null): EnregistrementFiscal
     {
-        return DB::transaction(fn (): EnregistrementFiscal => app(RegistreFiscal::class)->enregistrer($chaine, $type, $donnees, $document));
+        return DB::transaction(fn (): EnregistrementFiscal => $chaine === ChaineFiscale::Vente
+            ? app(RegistreFiscal::class)->enregistrerVente($type, $donnees['total_ttc_centimes'] ?? 0, $donnees, $document)
+            : app(RegistreFiscal::class)->enregistrer($chaine, $type, $donnees, $document));
     }
 
     /**
@@ -196,6 +201,7 @@ class RegistreFiscalTest extends TestCase
             'version_module' => ModuleFiscal::VERSION,
             'cle_id' => $cleId,
             'signature_precedente' => null,
+            'gt' => ['montant' => 12000, 'perpetuel_reel' => 12000, 'perpetuel_absolu' => 12000],
             'document' => ['type' => 'facture', 'id' => $facture->id],
             'donnees' => ['numero' => 'FAC-2026-000001', 'total_ttc_centimes' => 12000, 'acompte' => null, 'professionnel' => true],
         ], $this->contenu($enregistrement));
@@ -230,7 +236,7 @@ class RegistreFiscalTest extends TestCase
                 $instant = $registre->verrouiller($magasin);
                 $this->travel(5)->seconds();
 
-                return [$instant, $registre->enregistrer(ChaineFiscale::Vente, 'ticket', [])];
+                return [$instant, $registre->enregistrerVente('ticket', 0, [])];
             });
             $this->travel(5)->seconds();
             $encaissement = $registre->enregistrer(ChaineFiscale::Encaissement, 'paiement', []);
@@ -261,13 +267,13 @@ class RegistreFiscalTest extends TestCase
         $vente = DB::transaction(function (): EnregistrementFiscal {
             $registre = app(RegistreFiscal::class);
             rescue(fn () => DB::transaction(function () use ($registre): never {
-                $registre->enregistrer(ChaineFiscale::Vente, 'ticket', []);
+                $registre->enregistrerVente('ticket', 0, []);
 
                 throw new RuntimeException('Vente abandonnée.');
             }), report: false);
             $this->travel(5)->seconds();
 
-            return $registre->enregistrer(ChaineFiscale::Vente, 'ticket', []);
+            return $registre->enregistrerVente('ticket', 0, []);
         });
         $this->travelTo('2026-10-09 10:15:29');
 
@@ -292,7 +298,7 @@ class RegistreFiscalTest extends TestCase
         Model::unguarded(fn (): TeteRegistreFiscal => TeteRegistreFiscal::create([
             'chaines' => [
                 'evenement' => ['sequence' => 1, 'signature' => 'signature-de-l-initialisation'],
-                'vente' => ['sequence' => 4, 'signature' => 'signature-de-la-quatrieme-vente'],
+                'vente' => ['sequence' => 4, 'signature' => 'signature-de-la-quatrieme-vente', 'gt_reel' => 50000, 'gt_absolu' => 70000],
             ],
             'version_module' => ModuleFiscal::VERSION,
             'cle_id' => $this->cleIdDe($this->clePubliqueDeTest()),
@@ -303,6 +309,32 @@ class RegistreFiscalTest extends TestCase
         $this->assertSame([['vente', 5, 'ticket']], $this->registre());
         $this->assertSame('signature-de-la-quatrieme-vente', $vente->signature_precedente);
         $this->assertSame('signature-de-la-quatrieme-vente', $this->contenu($vente)['signature_precedente']);
+        $this->assertSame(['montant' => 1250, 'perpetuel_reel' => 51250, 'perpetuel_absolu' => 71250], $this->contenu($vente)['gt']);
+    }
+
+    /**
+     * Le réel somme les montants, l'absolu leurs valeurs absolues : un
+     * avoir diminue l'un et augmente l'autre. Seule la chaîne des ventes
+     * les porte, et chaque magasin a les siens.
+     */
+    public function test_chaque_vente_fait_avancer_les_grands_totaux_reel_et_absolu_du_magasin(): void
+    {
+        $magasinA = $this->magasinActif();
+        $premiere = $this->enregistrer(ChaineFiscale::Vente, 'facture', ['total_ttc_centimes' => 12000]);
+        $encaissement = $this->enregistrer(ChaineFiscale::Encaissement, 'paiement', ['montant' => 12000]);
+        $deuxieme = $this->enregistrer(ChaineFiscale::Vente, 'ticket', ['total_ttc_centimes' => 5000]);
+        $avoir = $this->enregistrer(ChaineFiscale::Vente, 'avoir', ['total_ttc_centimes' => -2000]);
+        $this->magasinActif();
+
+        $premiereDeB = $this->enregistrer(ChaineFiscale::Vente, 'ticket', ['total_ttc_centimes' => 700]);
+
+        $this->assertSame(['montant' => 700, 'perpetuel_reel' => 700, 'perpetuel_absolu' => 700], $this->contenu($premiereDeB)['gt']);
+        app(TenantContext::class)->set($magasinA);
+        $this->assertSame(['montant' => 12000, 'perpetuel_reel' => 12000, 'perpetuel_absolu' => 12000], $this->contenu($premiere)['gt']);
+        $this->assertSame(['montant' => 5000, 'perpetuel_reel' => 17000, 'perpetuel_absolu' => 17000], $this->contenu($deuxieme)['gt']);
+        $this->assertSame(['montant' => -2000, 'perpetuel_reel' => 15000, 'perpetuel_absolu' => 19000], $this->contenu($avoir)['gt']);
+        $this->assertArrayNotHasKey('gt', $this->contenu($encaissement));
+        $this->assertSame(['sequence' => 3, 'signature' => $avoir->signature, 'gt_reel' => 15000, 'gt_absolu' => 19000], TeteRegistreFiscal::query()->sole()->chaines['vente']);
     }
 
     public function test_le_registre_refuse_d_ecrire_hors_transaction(): void
@@ -310,7 +342,7 @@ class RegistreFiscalTest extends TestCase
         $this->magasinActif();
 
         $this->assertThrows(
-            fn () => app(RegistreFiscal::class)->enregistrer(ChaineFiscale::Vente, 'ticket', []),
+            fn () => app(RegistreFiscal::class)->enregistrerVente('ticket', 0, []),
             LogicException::class,
             'Le registre fiscal ne se verrouille que dans une transaction',
         );
@@ -352,7 +384,7 @@ class RegistreFiscalTest extends TestCase
         Log::spy();
 
         $this->assertRefuseAvantDEcrire(
-            fn (RegistreFiscal $registre) => $registre->enregistrer(ChaineFiscale::Vente, 'ticket', []),
+            fn (RegistreFiscal $registre) => $registre->enregistrerVente('ticket', 0, []),
             HorlogeRegressiveException::class,
             "L'horloge du serveur a reculé : il est 09/10/2026 08:00:04 UTC, mais le registre fiscal du magasin n°{$magasin->id} a déjà été verrouillé à 09/10/2026 08:00:05 UTC.",
             fn () => $this->assertSame([['evenement', 1, '260'], ['vente', 1, 'ticket']], $this->registre()),
@@ -369,7 +401,7 @@ class RegistreFiscalTest extends TestCase
         $this->travelTo('2026-10-09 10:00:04');
 
         $this->assertRefuseAvantDEcrire(
-            fn (RegistreFiscal $registre) => $registre->enregistrer(ChaineFiscale::Vente, 'ticket', []),
+            fn (RegistreFiscal $registre) => $registre->enregistrerVente('ticket', 0, []),
             HorlogeRegressiveException::class,
             "le registre fiscal du magasin n°{$magasin->id} a déjà été verrouillé à 09/10/2026 08:00:05 UTC.",
             fn () => $this->assertDatabaseCount('enregistrements_fiscaux', 0),
@@ -491,6 +523,17 @@ class RegistreFiscalTest extends TestCase
         );
     }
 
+    public function test_une_vente_ne_s_inscrit_qu_avec_son_montant(): void
+    {
+        $this->magasinActif();
+
+        $this->assertRefuseSansRienEcrire(
+            fn (RegistreFiscal $registre) => $registre->enregistrer(ChaineFiscale::Vente, 'ticket', ['total_ttc_centimes' => 1250]),
+            LogicException::class,
+            'Une vente s\'inscrit par enregistrerVente(), avec son montant',
+        );
+    }
+
     /**
      * @return array<string, array{0: array<array-key, mixed>, 1: string}>
      */
@@ -512,7 +555,7 @@ class RegistreFiscalTest extends TestCase
         $this->magasinActif();
 
         $this->assertRefuseSansRienEcrire(
-            fn (RegistreFiscal $registre) => $registre->enregistrer(ChaineFiscale::Vente, 'ticket', $donnees),
+            fn (RegistreFiscal $registre) => $registre->enregistrerVente('ticket', 0, $donnees),
             InvalidArgumentException::class,
             $message,
         );
@@ -525,7 +568,7 @@ class RegistreFiscalTest extends TestCase
         $this->magasinActif();
 
         $this->assertRefuseSansRienEcrire(
-            fn (RegistreFiscal $registre) => $registre->enregistrer(ChaineFiscale::Vente, 'facture', [], $factureDUnAutreMagasin),
+            fn (RegistreFiscal $registre) => $registre->enregistrerVente('facture', 0, [], $factureDUnAutreMagasin),
             LogicException::class,
             'Le registre fiscal n\'enregistre qu\'un document déjà enregistré du magasin actif.',
         );

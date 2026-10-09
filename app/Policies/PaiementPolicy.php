@@ -8,7 +8,7 @@ use App\Models\User;
 
 /**
  * Un paiement enregistré ne se modifie ni ne se supprime jamais (voir
- * Paiement::$fillable) : une erreur de saisie se corrige par un nouveau
+ * ProtegeLesDonneesValidees) : une erreur de saisie se corrige par un nouveau
  * paiement, jamais en réécrivant l'historique d'encaissement -- même
  * logique que l'interdiction de suppression des factures.
  *

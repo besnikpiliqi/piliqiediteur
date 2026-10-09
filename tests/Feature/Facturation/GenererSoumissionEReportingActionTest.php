@@ -46,8 +46,10 @@ class GenererSoumissionEReportingActionTest extends TestCase
         $facture = app(CreerFactureAction::class)->handle($client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
+        // La vente s'émet le jour clôturé : elle se date à l'instant du
+        // registre fiscal (voir EmettreFactureAction), sans retour possible.
+        $this->travelTo("{$date} 10:00:00");
         app(EmettreFactureAction::class)->handle($facture);
-        $facture->forceFill(['date_emission' => $date])->save();
 
         return app(CloturerCaisseAction::class)->handle($this->magasin, $date);
     }

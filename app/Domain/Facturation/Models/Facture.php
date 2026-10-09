@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -36,11 +37,15 @@ use LogicException;
  * une correction passe par un avoir (voir EnregistrerAvoirAction). Un
  * brouillon, sans numéro ni existence légale, peut en revanche être
  * supprimé définitivement (voir FacturePolicy::delete()).
+ *
+ * Une fois numérotée, elle ne se modifie plus que dans son statut de
+ * règlement (voir ProtegeLesDonneesValidees) : elle est signée telle
+ * qu'émise au registre fiscal (voir EmettreFactureAction).
  */
 class Facture extends Model implements DocumentEnvoyable
 {
     /** @use HasFactory<FactureFactory> */
-    use BelongsToMagasin, EstEnvoyeParEmail, HasFactory, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, HasFactory, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
 
     protected $table = 'factures';
 
@@ -75,6 +80,31 @@ class Facture extends Model implements DocumentEnvoyable
             // vendeur (voir FacturePolicy) ne puisse pas être usurpée.
             $facture->cree_par ??= auth()->id();
         });
+    }
+
+    /**
+     * Numérotée en base, donc émise.
+     */
+    public function estValidee(): bool
+    {
+        return $this->exists && $this->documentNumeroteEnBase(self::class, [$this->getKey()]);
+    }
+
+    /**
+     * Son statut suit ses règlements (voir constaterUnReglement()), son
+     * envoi (voir EnvoyerDocumentAction) et son échéance (voir
+     * MarquerFacturesEnRetard).
+     *
+     * @return list<string>
+     */
+    protected function colonnesModifiablesUneFoisValidee(): array
+    {
+        return ['statut', 'updated_at'];
+    }
+
+    protected function regleDInalterabilite(): string
+    {
+        return 'Une facture ou un ticket émis ne se modifie plus : seul son statut de règlement évolue, et une correction passe par un avoir.';
     }
 
     /**

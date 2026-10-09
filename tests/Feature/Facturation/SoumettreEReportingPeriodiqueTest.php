@@ -32,8 +32,11 @@ class SoumettreEReportingPeriodiqueTest extends TestCase
             $facture = app(CreerFactureAction::class)->handle($client, [
                 ['produit_id' => $produit->id, 'quantite' => 1],
             ]);
+            // Une vente d'il y a vingt jours s'émet il y a vingt jours (voir
+            // EmettreFactureAction).
+            $this->travel(-20)->days();
             app(EmettreFactureAction::class)->handle($facture);
-            $facture->forceFill(['date_emission' => now()->subDays(20)])->save();
+            $this->travelBack();
             app(CloturerCaisseAction::class)->handle($magasin, now()->subDays(20));
         });
 

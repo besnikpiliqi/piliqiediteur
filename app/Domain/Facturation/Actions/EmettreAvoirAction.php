@@ -2,6 +2,11 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
+use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\AvoirEmis;
@@ -15,18 +20,42 @@ use LogicException;
 /**
  * Même logique que EmettreFactureAction : l'avoir ne reçoit son numéro
  * légal qu'à l'émission, moment où le stock est restauré (voir
- * AvoirEmis/RestaurerStockApresEmissionAvoir).
+ * AvoirEmis/RestaurerStockApresEmissionAvoir), et dans la même
+ * transaction, dans cet ordre :
+ *  1. le registre fiscal du magasin est verrouillé, avant l'avoir et la
+ *     numérotation (voir RegistreFiscal) ; il donne l'instant de
+ *     l'émission ;
+ *  2. l'avoir, relu verrouillé, arrête ses montants, reçoit son numéro,
+ *     dans l'année de cet instant à l'heure de Paris, et cet instant pour
+ *     date d'émission ;
+ *  3. AvoirEmis rend le stock et impute l'avoir sur ses factures ;
+ *  4. l'avoir est signé en négatif dans la chaîne des ventes (voir
+ *     ContenuFiscal), avec les lignes et les numéros des documents qu'il
+ *     corrige et ses imputations : il diminue le grand total réel et
+ *     augmente le grand total absolu ;
+ *  5. un avoir sur des tickets de caisse inscrit en plus une annulation de
+ *     ticket au journal des événements (JET 190).
+ * Sans clé de signature, ou si l'horloge du serveur a reculé, rien de tout
+ * cela n'a lieu.
  */
 class EmettreAvoirAction
 {
     public function __construct(
         private readonly DocumentNumberingService $numerotation,
         private readonly CalculateurLigne $calculateur,
+        private readonly RegistreFiscal $registre,
+        private readonly ContenuFiscal $contenuFiscal,
     ) {}
 
+    /**
+     * @throws LogicException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
     public function handle(Avoir $avoir): Avoir
     {
         return DB::transaction(function () use ($avoir) {
+            $instant = $this->registre->verrouiller($avoir->magasin);
             $avoir = Avoir::query()->whereKey($avoir->getKey())->lockForUpdate()->firstOrFail();
 
             if (! $avoir->statut->peutTransitionnerVers(StatutAvoir::Emise)) {
@@ -35,17 +64,31 @@ class EmettreAvoirAction
 
             $this->arreterLesMontants($avoir);
 
-            $numero = $this->numerotation->suivant($avoir->magasin, TypeDocument::Avoir, now()->format('Y'));
+            $numero = $this->numerotation->suivant($avoir->magasin, TypeDocument::Avoir, $instant->enHeureLocale()->format('Y'));
 
             $avoir->forceFill([
                 'numero' => $numero,
                 'statut' => StatutAvoir::Emise,
-                'date_emission' => now(),
+                'date_emission' => $instant->enHeureLocale(),
             ])->save();
 
             // Synchrone et dans la même transaction, voir le commentaire
             // de AvoirEmis.
             AvoirEmis::dispatch($avoir);
+
+            $avoir = $avoir->fresh();
+            $contenu = $this->contenuFiscal->document($avoir);
+            $enregistrement = $this->registre->enregistrerVente('avoir', $contenu['document']['totaux']['ttc'], $contenu, $avoir);
+
+            if ($contenu['document']['corrige'] === 'ticket') {
+                $this->registre->journaliser(CodeEvenement::AnnulationDeTicket, [
+                    'avoir' => $avoir->numero,
+                    'tickets' => $contenu['document']['documents_corriges'],
+                    'montant_ttc' => $contenu['document']['totaux']['ttc'],
+                    'sequence_vente' => $enregistrement->sequence,
+                    'motif' => $avoir->motif,
+                ], $avoir);
+            }
 
             return $avoir;
         });

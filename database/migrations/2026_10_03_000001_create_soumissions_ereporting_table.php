@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('soumissions_ereporting', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             $table->string('numero', 40)->nullable();
             // Bornes de la période couverte (ex: une décade, un mois, un
             // bimestre selon le régime de TVA -- voir

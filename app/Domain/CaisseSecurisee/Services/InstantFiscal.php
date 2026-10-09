@@ -23,4 +23,14 @@ final readonly class InstantFiscal
     {
         return $this->utc->format('YmdHis').'Z';
     }
+
+    /**
+     * Le même instant à l'heure de l'application (Europe/Paris) : la date
+     * d'émission d'un document, son année de numérotation, le jour de
+     * réception d'un règlement.
+     */
+    public function enHeureLocale(): CarbonImmutable
+    {
+        return $this->utc->setTimezone(config('app.timezone'));
+    }
 }

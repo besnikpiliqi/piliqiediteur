@@ -3,8 +3,8 @@
 namespace App\Domain\CaisseSecurisee\Models;
 
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
+use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
-use App\Domain\CaisseSecurisee\Exceptions\DonneeFiscaleInalterableException;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -15,8 +15,8 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 /**
  * Une ligne du registre fiscal, écrite seulement par RegistreFiscal. Elle
  * ne se modifie ni ne se supprime : le modèle lève
- * DonneeFiscaleInalterableException, et les déclencheurs de la table
- * refusent ce qui ne passe pas par lui.
+ * DonneeFiscaleInalterableException (voir ProtegeLesDonneesValidees), et
+ * les déclencheurs de la table refusent ce qui ne passe pas par lui.
  *
  * `contenu` est le JSON exact qui est signé : il se relit tel quel pour
  * vérifier la signature, jamais après un décodage suivi d'un nouvel
@@ -28,7 +28,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  */
 class EnregistrementFiscal extends Model
 {
-    use BelongsToMagasin;
+    use BelongsToMagasin, ProtegeLesDonneesValidees;
 
     protected $table = 'enregistrements_fiscaux';
 
@@ -42,15 +42,14 @@ class EnregistrementFiscal extends Model
         'horodatage' => HorodatageUtc::class,
     ];
 
-    protected static function booted(): void
+    public function estValidee(): bool
     {
-        static::updating(static function (): never {
-            throw DonneeFiscaleInalterableException::enregistrementFiscal();
-        });
+        return $this->exists;
+    }
 
-        static::deleting(static function (): never {
-            throw DonneeFiscaleInalterableException::enregistrementFiscal();
-        });
+    protected function regleDInalterabilite(): string
+    {
+        return 'Un enregistrement du registre fiscal ne se modifie ni ne se supprime : une correction s\'inscrit par un nouvel enregistrement.';
     }
 
     public function operateur(): BelongsTo

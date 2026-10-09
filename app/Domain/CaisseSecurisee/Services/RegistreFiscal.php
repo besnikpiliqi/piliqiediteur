@@ -36,6 +36,11 @@ use LogicException;
  *   opérateur, version du module, clé, signature précédente, document) et
  *   ses données, où rien ne s'écrit en nombre à virgule flottante : un
  *   montant s'écrit en centimes entiers.
+ * - Chaque enregistrement de la chaîne des ventes porte en plus, dans son
+ *   en-tête, son montant TTC (négatif pour un avoir) et les grands totaux
+ *   perpétuels du magasin qu'il fait avancer (voir enregistrerVente()) :
+ *   le réel, somme des montants, et l'absolu, somme de leurs valeurs
+ *   absolues. Ils ne repartent jamais de zéro.
  * - Les événements techniques (JET, chaîne des événements) qu'exige une
  *   écriture s'inscrivent d'eux-mêmes juste avant elle : l'initialisation
  *   (260) au tout premier enregistrement du magasin, le changement de
@@ -45,8 +50,9 @@ use LogicException;
  * Toutes les écritures fiscales d'un magasin se sérialisent sur sa ligne de
  * tetes_registre_fiscal (voir verrouiller()), qui tient aussi l'état de ses
  * chaînes : la séquence et la signature du dernier enregistrement de
- * chacune, la version du module et la clé du dernier enregistrement du
- * magasin. Cet état ne se lit que sur cette ligne, verrouillée, jamais dans
+ * chacune, les grands totaux de la chaîne des ventes, la version du module
+ * et la clé du dernier enregistrement du magasin. Cet état ne se lit que
+ * sur cette ligne, verrouillée, jamais dans
  * enregistrements_fiscaux : sous MySQL et MariaDB (REPEATABLE READ), une
  * lecture sans verrou relit la photo prise à la première lecture de la
  * transaction et ignorerait ce qu'une autre caisse a inscrit depuis, et une
@@ -109,8 +115,8 @@ class RegistreFiscal
     /**
      * Inscrit un enregistrement signé dans une chaîne du registre du
      * magasin actif, sous son verrou (voir verrouiller()), après les
-     * événements techniques qu'il rend nécessaires. Un événement technique
-     * s'inscrit par journaliser().
+     * événements techniques qu'il rend nécessaires. Une vente s'inscrit
+     * par enregistrerVente(), un événement technique par journaliser().
      *
      * @param  array<array-key, mixed>  $donnees  null, booléens, entiers, chaînes et tableaux seulement
      * @param  Model|null  $document  le document enregistré, du magasin actif
@@ -124,7 +130,29 @@ class RegistreFiscal
             throw new LogicException('Un événement technique s\'inscrit par journaliser(), avec son code.');
         }
 
-        return $this->ecrire($chaine, $type, $donnees, $document);
+        if ($chaine === ChaineFiscale::Vente) {
+            throw new LogicException('Une vente s\'inscrit par enregistrerVente(), avec son montant : il fait avancer les grands totaux.');
+        }
+
+        return $this->ecrire($chaine, $type, $donnees, $document, null);
+    }
+
+    /**
+     * Inscrit un ticket, une facture ou un avoir dans la chaîne des ventes,
+     * comme enregistrer(), avec son montant TTC en centimes (négatif pour
+     * un avoir) : l'en-tête signé porte ce montant et les grands totaux
+     * perpétuels du magasin après lui, le réel (précédent + montant) et
+     * l'absolu (précédent + valeur absolue du montant).
+     *
+     * @param  array<array-key, mixed>  $donnees  null, booléens, entiers, chaînes et tableaux seulement
+     * @param  Model|null  $document  le document enregistré, du magasin actif
+     *
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function enregistrerVente(string $type, int $montantTtcCentimes, array $donnees, ?Model $document = null): EnregistrementFiscal
+    {
+        return $this->ecrire(ChaineFiscale::Vente, $type, $donnees, $document, $montantTtcCentimes);
     }
 
     /**
@@ -139,13 +167,14 @@ class RegistreFiscal
      */
     public function journaliser(CodeEvenement $code, array $details = [], ?Model $document = null): EnregistrementFiscal
     {
-        return $this->ecrire(ChaineFiscale::Evenement, (string) $code->value, $this->evenement($code, $details), $document);
+        return $this->ecrire(ChaineFiscale::Evenement, (string) $code->value, $this->evenement($code, $details), $document, null);
     }
 
     /**
      * @param  array<array-key, mixed>  $donnees
+     * @param  int|null  $montantVente  le montant TTC en centimes d'un enregistrement de la chaîne des ventes, null pour toute autre chaîne
      */
-    private function ecrire(ChaineFiscale $chaine, string $type, array $donnees, ?Model $document): EnregistrementFiscal
+    private function ecrire(ChaineFiscale $chaine, string $type, array $donnees, ?Model $document, ?int $montantVente): EnregistrementFiscal
     {
         self::refuserCeQuiNeSeSignePas($donnees, 'donnees');
 
@@ -158,10 +187,10 @@ class RegistreFiscal
         [$tete, $instant] = $this->verrou($magasin);
 
         foreach ($this->evenementsAutomatiques($tete) as [$code, $details]) {
-            $this->inscrire($magasin, $tete, $instant, ChaineFiscale::Evenement, (string) $code->value, $this->evenement($code, $details), null);
+            $this->inscrire($magasin, $tete, $instant, ChaineFiscale::Evenement, (string) $code->value, $this->evenement($code, $details), null, null);
         }
 
-        return $this->inscrire($magasin, $tete, $instant, $chaine, $type, $donnees, $document);
+        return $this->inscrire($magasin, $tete, $instant, $chaine, $type, $donnees, $document, $montantVente);
     }
 
     /**
@@ -276,18 +305,26 @@ class RegistreFiscal
     /**
      * Inscrit l'enregistrement à la suite de la tête de sa chaîne, puis
      * avance cette tête sur la ligne de verrou, dans la même transaction :
-     * un point de sauvegarde annulé efface l'un et l'autre.
+     * un point de sauvegarde annulé efface l'un et l'autre. Un
+     * enregistrement de la chaîne des ventes y avance aussi les grands
+     * totaux.
      *
      * @param  array<array-key, mixed>  $donnees
      */
-    private function inscrire(Magasin $magasin, TeteRegistreFiscal $tete, InstantFiscal $instant, ChaineFiscale $chaine, string $type, array $donnees, ?Model $document): EnregistrementFiscal
+    private function inscrire(Magasin $magasin, TeteRegistreFiscal $tete, InstantFiscal $instant, ChaineFiscale $chaine, string $type, array $donnees, ?Model $document, ?int $montantVente): EnregistrementFiscal
     {
         $chaines = $tete->chaines ?? [];
-        $sequence = ($chaines[$chaine->value]['sequence'] ?? 0) + 1;
-        $signaturePrecedente = $chaines[$chaine->value]['signature'] ?? null;
+        $teteDeLaChaine = $chaines[$chaine->value] ?? ['sequence' => 0, 'signature' => null];
+        $sequence = $teteDeLaChaine['sequence'] + 1;
+        $signaturePrecedente = $teteDeLaChaine['signature'];
         /** @var User|null $operateur */
         $operateur = auth()->user();
         $cleId = $this->signataire->cleId();
+        $grandsTotaux = $montantVente === null ? null : [
+            'montant' => $montantVente,
+            'perpetuel_reel' => ($teteDeLaChaine['gt_reel'] ?? 0) + $montantVente,
+            'perpetuel_absolu' => ($teteDeLaChaine['gt_absolu'] ?? 0) + abs($montantVente),
+        ];
 
         $contenu = json_encode([
             'format' => self::FORMAT,
@@ -301,6 +338,7 @@ class RegistreFiscal
             'version_module' => $this->versionDuModule,
             'cle_id' => $cleId,
             'signature_precedente' => $signaturePrecedente,
+            ...($grandsTotaux === null ? [] : ['gt' => $grandsTotaux]),
             'document' => $document === null ? null : ['type' => $document->getMorphClass(), 'id' => $document->getKey()],
             'donnees' => $donnees,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
@@ -323,7 +361,10 @@ class RegistreFiscal
         ]);
         $enregistrement->save();
 
-        $chaines[$chaine->value] = ['sequence' => $sequence, 'signature' => $signature];
+        $chaines[$chaine->value] = ['sequence' => $sequence, 'signature' => $signature, ...($grandsTotaux === null ? [] : [
+            'gt_reel' => $grandsTotaux['perpetuel_reel'],
+            'gt_absolu' => $grandsTotaux['perpetuel_absolu'],
+        ])];
         $tete->forceFill(['chaines' => $chaines, 'version_module' => $this->versionDuModule, 'cle_id' => $cleId])->save();
 
         return $enregistrement;

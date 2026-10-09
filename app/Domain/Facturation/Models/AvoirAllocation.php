@@ -2,16 +2,19 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
-use Database\Factories\AvoirAllocationFactory;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Ce qu'un avoir crédite d'une facture : né pendant l'émission de l'un ou
+ * de l'autre et signé avec lui, jamais modifié ni supprimé (voir
+ * ProtegeLesDonneesValidees et les déclencheurs de la table).
+ */
 class AvoirAllocation extends Model
 {
-    /** @use HasFactory<AvoirAllocationFactory> */
-    use BelongsToMagasin, HasFactory;
+    use BelongsToMagasin, ProtegeLesDonneesValidees;
 
     protected $table = 'avoir_allocations';
 
@@ -24,6 +27,16 @@ class AvoirAllocation extends Model
     protected $casts = [
         'montant_alloue' => 'decimal:2',
     ];
+
+    public function estValidee(): bool
+    {
+        return $this->exists;
+    }
+
+    protected function regleDInalterabilite(): string
+    {
+        return 'Ce qu\'un avoir crédite d\'une facture ne se modifie ni ne se supprime.';
+    }
 
     public function avoir(): BelongsTo
     {

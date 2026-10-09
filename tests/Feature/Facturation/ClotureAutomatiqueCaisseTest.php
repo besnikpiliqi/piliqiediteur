@@ -33,11 +33,13 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $facture = app(CreerFactureAction::class)->handle($client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
-        $facture = app(EmettreFactureAction::class)->handle($facture);
 
-        // L'émission se fait "maintenant" (voir EmettreFactureAction) :
-        // on recule la date d'émission pour simuler une vente d'hier.
-        $facture->forceFill(['date_emission' => now()->subDay()])->save();
+        // L'émission se date à l'instant du registre fiscal (voir
+        // EmettreFactureAction), et une facture émise ne se modifie plus :
+        // une vente d'hier s'émet hier.
+        $this->travel(-1)->days();
+        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $this->travelBack();
 
         return $facture;
     }
@@ -74,8 +76,9 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $facture = app(CreerFactureAction::class)->handle($client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
+        $this->travel(-1)->days();
         $facture = app(EmettreFactureAction::class)->handle($facture);
-        $facture->forceFill(['date_emission' => now()->subDay()])->save();
+        $this->travelBack();
 
         // Le vendeur n'a jamais fermé sa caisse personnelle : il apparaîtrait
         // comme "en attente" si on le vérifiait (voir

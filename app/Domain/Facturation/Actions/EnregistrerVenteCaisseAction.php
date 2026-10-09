@@ -2,62 +2,53 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
+use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\ReglementComptant;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Point d'entrée unique de la caisse (voir app/Filament/App/Pages/Caisse.php) :
  * une vente comptoir est toujours payée intégralement et immédiatement,
  * contrairement à une facture B2B classique qui peut rester impayée ou se
- * régler plus tard. Compose donc en une seule transaction la création, puis
- * l'émission (numérotation + décrément de stock, voir EmettreFactureAction)
- * et enfin l'encaissement intégral (voir EnregistrerPaiementAction) de la
- * facture.
+ * régler plus tard. Compose donc en une seule transaction la création puis
+ * l'émission de la facture avec son règlement comptant (voir
+ * EmettreFactureAction) : le ticket signé au registre fiscal porte ce
+ * règlement, ou le crédit d'avoir qui l'a couvert.
+ *
+ * Le registre fiscal du magasin se verrouille avant la création du
+ * brouillon (voir RegistreFiscal) : sans clé de signature, rien n'est
+ * créé.
  */
 class EnregistrerVenteCaisseAction
 {
     public function __construct(
+        private readonly RegistreFiscal $registre,
         private readonly CreerFactureAction $creerFacture,
         private readonly EmettreFactureAction $emettreFacture,
-        private readonly EnregistrerPaiementAction $enregistrerPaiement,
     ) {}
 
     /**
      * @param  list<array<string, mixed>>  $lignes
+     *
+     * @throws LogicException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
      */
     public function handle(Client $client, array $lignes, ModePaiement $modePaiement, ?string $reference = null): Facture
     {
         return DB::transaction(function () use ($client, $lignes, $modePaiement, $reference) {
-            $facture = $this->creerFacture->handle($client, $lignes);
-            // ->fresh() : le crédit disponible du client peut déjà avoir
-            // couvert tout ou partie de la facture à l'émission (voir
-            // AppliquerAvoirsDisponiblesAction, déclenchée en synchrone sur
-            // FactureEmise) -- il faut relire montantRestant() après coup,
-            // jamais se fier à l'objet en mémoire d'avant l'émission.
-            $facture = $this->emettreFacture->handle($facture)->fresh();
+            $this->registre->verrouiller($client->magasin);
 
-            $montantRestant = $facture->montantRestant();
-
-            // Rien à encaisser si le crédit du client a déjà tout couvert, ou
-            // si la vente ne coûte rien (remise de 100 %) : une vente
-            // comptoir reste toujours soldée immédiatement, mais pas
-            // forcément par un encaissement en espèces/CB.
-            if ($montantRestant > 0) {
-                $this->enregistrerPaiement->handle(
-                    $client,
-                    [
-                        'mode_paiement' => $modePaiement->value,
-                        'montant' => $montantRestant,
-                        'reference' => $reference,
-                        'recu_le' => now()->toDateString(),
-                    ],
-                    [['facture_id' => $facture->id, 'montant' => $montantRestant]],
-                );
-            } else {
-                $facture->constaterUnReglement();
-            }
+            $facture = $this->emettreFacture->handle(
+                $this->creerFacture->handle($client, $lignes),
+                new ReglementComptant($modePaiement, $reference),
+            );
 
             return $facture->fresh('lignes');
         });

@@ -10,13 +10,17 @@ return new class extends Migration
     {
         Schema::create('lignes_facture', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            // La ligne d'une facture émise ne se réécrit ni ne disparaît (voir
+            // ProtegeLesDonneesValidees) : restrictOnDelete partout, sauf
+            // vers la facture, dont seul un brouillon se supprime, avec ses
+            // lignes.
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             $table->foreignId('facture_id')->constrained('factures')->cascadeOnDelete();
-            $table->foreignId('produit_id')->nullable()->constrained('produits')->nullOnDelete();
+            $table->foreignId('produit_id')->nullable()->constrained('produits')->restrictOnDelete();
             // Une ligne vend un produit du catalogue ou un service du magasin
             // (voir Service), jamais les deux ni une ligne libre (voir
             // ConstructeurLigneDocument).
-            $table->foreignId('service_id')->nullable()->constrained('services')->nullOnDelete();
+            $table->foreignId('service_id')->nullable()->constrained('services')->restrictOnDelete();
             // Bien ou service (voir NatureLigne) : la catégorie d'opération de
             // la facture et l'e-reporting en dépendent.
             $table->string('nature', 10);

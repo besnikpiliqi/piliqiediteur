@@ -13,6 +13,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\ClotureCaisse;
@@ -88,8 +89,6 @@ class TenantIsolationTest extends TestCase
      * @var list<class-string<Model>>
      */
     private const MODELES_AVEC_FABRIQUE = [
-        Avoir::class,
-        AvoirAllocation::class,
         AvoirFournisseur::class,
         Client::class,
         ClotureCaisse::class,
@@ -99,21 +98,23 @@ class TenantIsolationTest extends TestCase
         Facture::class,
         FactureAchat::class,
         Fournisseur::class,
-        Paiement::class,
-        PaiementAllocation::class,
         Produit::class,
         Service::class,
     ];
 
     /**
-     * Modèles de magasin qui n'ont pas de fabrique. Seuls
-     * EnregistrementFiscal, SoumissionEReporting et TeteRegistreFiscal sont
-     * aussi dans modelesCrees() : create() les enregistre sans autre
-     * enregistrement à préparer.
+     * Modèles de magasin qui n'ont pas de fabrique : les documents fiscaux
+     * et le registre ne s'écrivent que signés, par leurs actions. Avoir,
+     * AvoirAllocation, EnregistrementFiscal, Paiement, PaiementAllocation,
+     * SoumissionEReporting et TeteRegistreFiscal sont aussi dans
+     * modelesCrees(), écrits directement par ces tests (voir
+     * creerEnregistrement()).
      *
      * @var list<class-string<Model>>
      */
     private const MODELES_SANS_FABRIQUE = [
+        Avoir::class,
+        AvoirAllocation::class,
         EnregistrementFiscal::class,
         LigneAchat::class,
         LigneAvoir::class,
@@ -121,6 +122,8 @@ class TenantIsolationTest extends TestCase
         LigneDevis::class,
         LigneFacture::class,
         MouvementStock::class,
+        Paiement::class,
+        PaiementAllocation::class,
         SoumissionEReporting::class,
         TeteRegistreFiscal::class,
         TransmissionPdp::class,
@@ -155,8 +158,7 @@ class TenantIsolationTest extends TestCase
      * Les modèles de magasin que ces tests créent, chacun avec la création
      * d'un enregistrement aux attributs imposés, même hors $fillable comme
      * le permet une fabrique : par sa fabrique, ou par
-     * creerEnregistrementFiscal(), creerSoumissionEReporting() ou
-     * creerTeteRegistreFiscal().
+     * creerEnregistrement() avec les attributs qu'exige sa table.
      *
      * @return array<string, array{0: class-string<Model>, 1: Closure(array<string, mixed>=): Model}>
      */
@@ -167,18 +169,11 @@ class TenantIsolationTest extends TestCase
                 $modele,
                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
             ]])
-            ->put('EnregistrementFiscal', [
-                EnregistrementFiscal::class,
-                static fn (array $attributs = []): Model => self::creerEnregistrementFiscal($attributs),
-            ])
-            ->put('SoumissionEReporting', [
-                SoumissionEReporting::class,
-                static fn (array $attributs = []): Model => self::creerSoumissionEReporting($attributs),
-            ])
-            ->put('TeteRegistreFiscal', [
-                TeteRegistreFiscal::class,
-                static fn (array $attributs = []): Model => self::creerTeteRegistreFiscal($attributs),
-            ])
+            ->merge(collect([Avoir::class, AvoirAllocation::class, EnregistrementFiscal::class, Paiement::class, PaiementAllocation::class, SoumissionEReporting::class, TeteRegistreFiscal::class])
+                ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
+                    $modele,
+                    static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
+                ]]))
             ->all();
     }
 
@@ -276,7 +271,7 @@ class TenantIsolationTest extends TestCase
     {
         return [
             'avoir fournisseur, détail' => [AvoirFournisseurResource::class, 'view', static fn (): Model => AvoirFournisseur::factory()->create()],
-            'avoir, détail' => [AvoirResource::class, 'view', static fn (): Model => Avoir::factory()->create()],
+            'avoir, détail' => [AvoirResource::class, 'view', static fn (): Model => self::creerEnregistrement(Avoir::class)],
             'client, modification' => [ClientResource::class, 'edit', static fn (): Model => Client::factory()->create()],
             'clôture de caisse, détail' => [ClotureCaisseResource::class, 'view', static fn (): Model => ClotureCaisse::factory()->create()],
             'devis, détail' => [DevisResource::class, 'view', static fn (): Model => Devis::factory()->create()],
@@ -290,7 +285,7 @@ class TenantIsolationTest extends TestCase
                 ->where('user_id', app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur)->getKey())
                 ->firstOrFail()],
             'produit, modification' => [ProduitResource::class, 'edit', static fn (): Model => Produit::factory()->create()],
-            'soumission e-reporting, détail' => [SoumissionEReportingResource::class, 'view', static fn (): Model => self::creerSoumissionEReporting()],
+            'soumission e-reporting, détail' => [SoumissionEReportingResource::class, 'view', static fn (): Model => self::creerEnregistrement(SoumissionEReporting::class)],
         ];
     }
 
@@ -323,55 +318,57 @@ class TenantIsolationTest extends TestCase
     }
 
     /**
-     * Un enregistrement du registre fiscal du magasin actif, écrit sans
-     * RegistreFiscal, qui inscrirait aussi l'événement d'initialisation du
-     * magasin. Comme une fabrique, il accepte des attributs hors $fillable.
+     * Un enregistrement du magasin actif d'un modèle sans fabrique, écrit
+     * directement, sans l'action qui l'écrit d'ordinaire : un avoir
+     * brouillon, un paiement ou une imputation non signés, une ligne du
+     * registre fiscal sans l'événement d'initialisation du magasin, une
+     * ligne de verrou, une soumission d'e-reporting sans clôture. Seule
+     * l'isolation est vérifiée ici. Comme une fabrique, il accepte des
+     * attributs hors $fillable.
      *
+     * @param  class-string<Model>  $modele
      * @param  array<string, mixed>  $attributs
      */
-    private static function creerEnregistrementFiscal(array $attributs = []): EnregistrementFiscal
+    private static function creerEnregistrement(string $modele, array $attributs = []): Model
     {
-        return Model::unguarded(static fn (): EnregistrementFiscal => EnregistrementFiscal::create([
-            'chaine' => ChaineFiscale::Vente,
-            'sequence' => 1,
-            'type' => 'ticket',
-            'horodatage' => CarbonImmutable::parse('2026-10-09 08:00:00', 'UTC'),
-            'contenu' => '{"format":1}',
-            'signature' => 'signature',
-            'algorithme' => 'ES256',
-            'cle_id' => str_repeat('0', 64),
-            'version_module' => '1.0',
-            ...$attributs,
-        ]));
-    }
+        $exiges = match ($modele) {
+            Avoir::class => ['client_id' => Client::factory()->create()->getKey()],
+            AvoirAllocation::class => [
+                'avoir_id' => self::creerEnregistrement(Avoir::class)->getKey(),
+                'facture_id' => Facture::factory()->create()->getKey(),
+                'montant_alloue' => '20.00',
+            ],
+            EnregistrementFiscal::class => [
+                'chaine' => ChaineFiscale::Vente,
+                'sequence' => 1,
+                'type' => 'ticket',
+                'horodatage' => CarbonImmutable::parse('2026-10-09 08:00:00', 'UTC'),
+                'contenu' => '{"format":1}',
+                'signature' => 'signature',
+                'algorithme' => 'ES256',
+                'cle_id' => str_repeat('0', 64),
+                'version_module' => '1.0',
+            ],
+            Paiement::class => [
+                'client_id' => Client::factory()->create()->getKey(),
+                'mode_paiement' => ModePaiement::Virement,
+                'montant' => '120.00',
+                'recu_le' => '2026-10-09',
+            ],
+            PaiementAllocation::class => [
+                'paiement_id' => self::creerEnregistrement(Paiement::class)->getKey(),
+                'facture_id' => Facture::factory()->create()->getKey(),
+                'montant_alloue' => '120.00',
+            ],
+            SoumissionEReporting::class => [
+                'periode_debut' => '2026-09-01',
+                'periode_fin' => '2026-09-30',
+                'date_limite_transmission' => '2026-10-10',
+            ],
+            TeteRegistreFiscal::class => [],
+        };
 
-    /**
-     * La ligne de verrou du registre fiscal du magasin actif, créée sans
-     * RegistreFiscal. Comme une fabrique, elle accepte des attributs hors
-     * $fillable.
-     *
-     * @param  array<string, mixed>  $attributs
-     */
-    private static function creerTeteRegistreFiscal(array $attributs = []): TeteRegistreFiscal
-    {
-        return Model::unguarded(static fn (): TeteRegistreFiscal => TeteRegistreFiscal::create($attributs));
-    }
-
-    /**
-     * Une soumission d'e-reporting du magasin actif, enregistrée sans
-     * GenererSoumissionEReportingAction. Comme une fabrique, elle accepte
-     * des attributs hors $fillable.
-     *
-     * @param  array<string, mixed>  $attributs
-     */
-    private static function creerSoumissionEReporting(array $attributs = []): SoumissionEReporting
-    {
-        return Model::unguarded(static fn (): SoumissionEReporting => SoumissionEReporting::create([
-            'periode_debut' => '2026-09-01',
-            'periode_fin' => '2026-09-30',
-            'date_limite_transmission' => '2026-10-10',
-            ...$attributs,
-        ]));
+        return Model::unguarded(static fn (): Model => $modele::create([...$exiges, ...$attributs]));
     }
 
     /**

@@ -10,18 +10,24 @@ return new class extends Migration
     {
         Schema::create('factures', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            // restrictOnDelete partout : une facture émise ne se réécrit ni
+            // ne disparaît (art. 286 I-3° bis du CGI, voir
+            // ProtegeLesDonneesValidees), pas même par la suppression d'une
+            // fiche qu'elle référence.
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
-            $table->foreignId('devis_id')->nullable()->constrained('devis')->nullOnDelete();
+            $table->foreignId('devis_id')->nullable()->constrained('devis')->restrictOnDelete();
             // Clôture de caisse qui a agrégé cette vente à un particulier
             // pour l'e-reporting (voir CloturerCaisseAction) -- jamais
             // renseignée pour un client professionnel, qui relève de la
             // facture électronique (voir Facture::relevantDeLeInvoicing).
+            // Seule colonne, avec le statut, encore écrite sur une facture
+            // émise : l'étape des clôtures la supprimera.
             $table->foreignId('cloture_caisse_id')->nullable()->constrained('clotures_caisse')->nullOnDelete();
             // Qui a créé la facture : nécessaire pour restreindre la
             // visibilité d'un vendeur à ses propres ventes par défaut
             // (voir FacturePolicy et FACTURE_VIEW_TOUTES).
-            $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
             $table->string('numero', 40)->nullable();
             $table->string('statut', 20)->default('brouillon');
             $table->timestamp('date_emission')->nullable();

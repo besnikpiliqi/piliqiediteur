@@ -2,6 +2,9 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
+use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Avoir;
 use Illuminate\Support\Facades\DB;
@@ -16,13 +19,17 @@ use LogicException;
  * un avoir n'existe qu'une fois émis. C'est le seul chemin de l'interface
  * (voir CreateAvoir et l'action « Avoir » de FactureResource).
  *
- * Les lignes de facture verrouillées par CreerAvoirAction le restent
- * jusqu'à la fin de l'émission : un second retour sur les mêmes lignes
- * attend, puis est refusé dès sa création s'il dépasse ce qui reste.
+ * Le registre fiscal du magasin se verrouille avant tout (voir
+ * RegistreFiscal), avant même les lignes de facture que verrouille
+ * CreerAvoirAction : sans clé de signature, rien n'est créé. Ces lignes
+ * restent verrouillées jusqu'à la fin de l'émission : un second retour sur
+ * les mêmes lignes attend, puis est refusé dès sa création s'il dépasse ce
+ * qui reste.
  */
 class EnregistrerAvoirAction
 {
     public function __construct(
+        private readonly RegistreFiscal $registre,
         private readonly CreerAvoirAction $creerAvoir,
         private readonly EmettreAvoirAction $emettreAvoir,
     ) {}
@@ -31,11 +38,15 @@ class EnregistrerAvoirAction
      * @param  list<array{ligne_facture_id: int|string, quantite: int|string}>  $lignesSelectionnees
      *
      * @throws LogicException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
      */
     public function handle(Client $client, array $lignesSelectionnees, ?string $motif = null): Avoir
     {
-        return DB::transaction(fn (): Avoir => $this->emettreAvoir->handle(
-            $this->creerAvoir->handle($client, $lignesSelectionnees, $motif),
-        ));
+        return DB::transaction(function () use ($client, $lignesSelectionnees, $motif): Avoir {
+            $this->registre->verrouiller($client->magasin);
+
+            return $this->emettreAvoir->handle($this->creerAvoir->handle($client, $lignesSelectionnees, $motif));
+        });
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Facturation\Enums\NatureLigne;
@@ -12,9 +13,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * La ligne d'une facture ou d'un ticket : modifiable, supprimable et
+ * ajoutable tant que sa facture est un brouillon, figée dès qu'elle est
+ * émise (voir ProtegeLesDonneesValidees).
+ */
 class LigneFacture extends Model
 {
-    use BelongsToMagasin;
+    use BelongsToMagasin, ProtegeLesDonneesValidees;
 
     protected $table = 'lignes_facture';
 
@@ -47,6 +53,20 @@ class LigneFacture extends Model
         'montant_tva' => 'decimal:2',
         'montant_ttc' => 'decimal:2',
     ];
+
+    /**
+     * Sa facture, avant comme après la modification, est numérotée en
+     * base : la ligne appartient à un document émis.
+     */
+    public function estValidee(): bool
+    {
+        return $this->documentNumeroteEnBase(Facture::class, [$this->getRawOriginal('facture_id'), $this->getAttribute('facture_id')]);
+    }
+
+    protected function regleDInalterabilite(): string
+    {
+        return 'Les lignes d\'une facture ou d\'un ticket émis ne se modifient plus : une correction passe par un avoir.';
+    }
 
     public function facture(): BelongsTo
     {

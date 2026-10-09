@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('sequences_documents', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
+            $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             // Une valeur de TypeDocument : devis, facture, ticket_caisse,
             // avoir, facture_achat, avoir_fournisseur, cloture_caisse,
             // soumission_ereporting, produit.

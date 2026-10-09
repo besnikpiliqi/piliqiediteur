@@ -10,15 +10,31 @@ use Filament\Support\Contracts\HasLabel;
  * NF525 R19, avec un libellé en français. Un code n'y figure qu'une fois
  * que le logiciel l'inscrit.
  *
- * Ceux-ci, RegistreFiscal les inscrit de lui-même avant l'enregistrement
- * qui les rend nécessaires : l'initialisation au tout premier
- * enregistrement du magasin, le changement de version du module fiscal
- * (ModuleFiscal::VERSION) et celui de la clé de signature. L'annulation de
- * ticket suit l'émission d'un avoir sur des tickets de caisse (voir
- * EmettreAvoirAction).
+ * - RegistreFiscal inscrit de lui-même, avant l'enregistrement qui les
+ *   rend nécessaires, l'initialisation au tout premier enregistrement du
+ *   magasin, le changement de version du module fiscal
+ *   (ModuleFiscal::VERSION) et celui de la clé de signature (270).
+ * - L'ouverture de session suit le premier accès d'une session au panneau
+ *   d'un magasin (JournaliserOuvertureDeSession), et la fin de session la
+ *   déconnexion, dans chaque magasin ouvert par la session
+ *   (JournaliserFinDeSession).
+ * - L'export de données suit chaque export du journal des événements
+ *   (ExporterJournalDesEvenementsAction).
+ * - La modification des droits suit la création, la modification et le
+ *   retrait d'un membre de l'équipe, et chaque changement de ses
+ *   permissions supplémentaires (JournalDesDroits).
+ * - Un paramètre ayant un impact sur la conformité suit aussi le
+ *   changement du régime de TVA du magasin, de son option pour les débits
+ *   et du taux de TVA d'un produit (JournaliseSesParametresDeConformite).
+ * - L'annulation de ticket suit l'émission d'un avoir sur des tickets de
+ *   caisse (voir EmettreAvoirAction).
  */
 enum CodeEvenement: int implements HasLabel
 {
+    case FinDeSession = 40;
+    case OuvertureDeSession = 80;
+    case ExportDeDonnees = 110;
+    case ModificationDesDroits = 130;
     case AnnulationDeTicket = 190;
     case VersionMajeure = 250;
     case VersionMineure = 255;
@@ -28,11 +44,24 @@ enum CodeEvenement: int implements HasLabel
     public function getLabel(): string
     {
         return match ($this) {
+            self::FinDeSession => 'Fin de session (déconnexion)',
+            self::OuvertureDeSession => 'Ouverture de session dans le magasin',
+            self::ExportDeDonnees => 'Export de données',
+            self::ModificationDesDroits => 'Modification des droits d\'un utilisateur',
             self::AnnulationDeTicket => 'Annulation de ticket (avoir sur des tickets de caisse)',
             self::VersionMajeure => 'Changement de version majeure du module fiscal',
             self::VersionMineure => 'Changement de version mineure du module fiscal',
             self::Initialisation => 'Initialisation du registre fiscal du magasin',
             self::ParametreDeConformite => 'Modification d\'un paramètre ayant un impact sur la conformité',
         };
+    }
+
+    /**
+     * Le code suivi de son libellé, tel que l'écran et l'export du journal
+     * l'affichent : « 270 – Modification d'un paramètre... ».
+     */
+    public function libelleAvecCode(): string
+    {
+        return "{$this->value} – {$this->getLabel()}";
     }
 }

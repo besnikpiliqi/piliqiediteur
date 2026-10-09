@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Rules\EmailLibrePourUnNouveauMembre;
+use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -23,9 +24,14 @@ use LogicException;
  * C'est toujours un NOUVEAU compte : une adresse déjà utilisée par un
  * compte est refusée (voir EmailLibrePourUnNouveauMembre), et le nom ou le
  * mot de passe d'un compte existant ne sont jamais réécrits ici.
+ *
+ * Les droits donnés au nouveau membre s'inscrivent au journal des
+ * événements du magasin (JET 130, voir JournalDesDroits).
  */
 class CreerMembreMagasinAction
 {
+    public function __construct(private readonly JournalDesDroits $journalDesDroits) {}
+
     /**
      * @param  array{name: string, email: string, password: string}  $donnees
      *
@@ -40,6 +46,15 @@ class CreerMembreMagasinAction
         Validator::make($donnees, ['email' => [new EmailLibrePourUnNouveauMembre($magasin)]])->validate();
 
         return DB::transaction(function () use ($magasin, $donnees, $role) {
+            // Défensif : le propriétaire agit normalement déjà depuis le
+            // panneau de CE magasin (TenantContext déjà positionné dessus
+            // par Filament), mais une Action ne doit jamais supposer le
+            // contexte ambiant d'un appelant qu'elle ne contrôle pas : le
+            // rôle Spatie et le journal des événements sont ceux du
+            // magasin actif.
+            app(TenantContext::class)->set($magasin);
+            $avant = $this->journalDesDroits->avant($magasin, null);
+
             $utilisateur = User::create([
                 'name' => $donnees['name'],
                 'email' => $donnees['email'],
@@ -59,12 +74,8 @@ class CreerMembreMagasinAction
                 'joined_at' => now(),
             ]);
 
-            // Défensif : le propriétaire agit normalement déjà depuis le
-            // panneau de CE magasin (TenantContext déjà positionné dessus
-            // par Filament), mais une Action ne doit jamais supposer le
-            // contexte ambiant d'un appelant qu'elle ne contrôle pas.
-            app(TenantContext::class)->set($magasin);
             $utilisateur->assignRole($role->value);
+            $this->journalDesDroits->apres($magasin, $utilisateur, $avant);
 
             return $utilisateur;
         });

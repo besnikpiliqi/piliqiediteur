@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class SeedMagasinRolesActionTest extends TestCase
@@ -44,5 +45,38 @@ class SeedMagasinRolesActionTest extends TestCase
 
         $this->actingAs($proprietaire);
         $this->assertTrue($proprietaire->can(PermissionRegistry::CLOTURE_CAISSE_GERER));
+    }
+
+    /**
+     * La caisse sécurisée (registre fiscal et journal des événements) se
+     * consulte par défaut par le propriétaire, l'administrateur et le
+     * comptable, qui la présentent à l'administration ; ni le vendeur ni
+     * l'observateur.
+     *
+     * @return array<string, array{0: RoleMagasin, 1: bool}>
+     */
+    public static function consultationDeLaCaisseSecurisee(): array
+    {
+        return [
+            'administrateur' => [RoleMagasin::Administrateur, true],
+            'comptable' => [RoleMagasin::Comptable, true],
+            'vendeur' => [RoleMagasin::Vendeur, false],
+            'observateur' => [RoleMagasin::Observateur, false],
+        ];
+    }
+
+    #[DataProvider('consultationDeLaCaisseSecurisee')]
+    public function test_la_caisse_securisee_se_consulte_selon_le_role(RoleMagasin $role, bool $consulte): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Camille',
+            'email' => 'camille@example.test',
+            'password' => 'mot-de-passe-sur',
+        ], $role);
+
+        $this->assertSame($consulte, $membre->can(PermissionRegistry::CAISSE_SECURISEE_CONSULTER));
+        $this->assertTrue($proprietaire->fresh()->can(PermissionRegistry::CAISSE_SECURISEE_CONSULTER));
     }
 }

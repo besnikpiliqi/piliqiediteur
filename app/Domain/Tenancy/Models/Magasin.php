@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\CaisseSecurisee\Concerns\JournaliseSesParametresDeConformite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
@@ -27,11 +28,16 @@ use InvalidArgumentException;
  * Le tenant. Volontairement PAS de BelongsToMagasin ici : un magasin ne
  * s'appartient pas à lui-même, et ce modèle doit rester accessible sans
  * contexte tenant résolu (ex: l'écran de sélection du magasin actif).
+ *
+ * Son régime de TVA et son option pour les débits sont des paramètres
+ * ayant un impact sur la conformité : chaque changement s'inscrit au
+ * journal des événements du magasin (JET 270, voir
+ * JournaliseSesParametresDeConformite).
  */
 class Magasin extends Model implements HasName
 {
     /** @use HasFactory<MagasinFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, JournaliseSesParametresDeConformite, SoftDeletes;
 
     /**
      * L'exemple proposé au magasin qui active les relances (Paramètres >
@@ -77,11 +83,22 @@ class Magasin extends Model implements HasName
             $magasin->uuid ??= (string) Str::uuid();
             $magasin->statut ??= StatutMagasin::EnAttenteVerification;
             $magasin->pays ??= 'FR';
+            $magasin->option_debits_tva ??= false;
             $magasin->prix_vente_automatique ??= false;
             $magasin->bareme_prix_vente ??= BaremePrixDeVente::parDefaut();
             $magasin->relances_automatiques ??= false;
             $magasin->delais_relance ??= self::DELAIS_RELANCE_PAR_DEFAUT;
         });
+    }
+
+    protected function parametresDeConformite(): array
+    {
+        return ['regime_tva', 'option_debits_tva'];
+    }
+
+    protected function magasinIdDesParametres(): int
+    {
+        return $this->getKey();
     }
 
     /**

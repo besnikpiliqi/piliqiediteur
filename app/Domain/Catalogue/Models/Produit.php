@@ -6,6 +6,7 @@ use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\CaisseSecurisee\Concerns\JournaliseSesParametresDeConformite;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -22,10 +23,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use InvalidArgumentException;
 
+/**
+ * Son taux de TVA est un paramètre ayant un impact sur la conformité :
+ * chaque changement s'inscrit au journal des événements du magasin (JET
+ * 270, voir JournaliseSesParametresDeConformite).
+ */
 class Produit extends Model
 {
     /** @use HasFactory<ProduitFactory> */
-    use BelongsToMagasin, HasFactory, SoftDeletes;
+    use BelongsToMagasin, HasFactory, JournaliseSesParametresDeConformite, SoftDeletes;
 
     protected $fillable = [
         'fournisseur_id',
@@ -92,6 +98,29 @@ class Produit extends Model
     public function fournisseur(): BelongsTo
     {
         return $this->belongsTo(Fournisseur::class);
+    }
+
+    protected function parametresDeConformite(): array
+    {
+        return ['taux_tva'];
+    }
+
+    protected function magasinIdDesParametres(): int
+    {
+        return (int) $this->magasin_id;
+    }
+
+    /**
+     * @return array{produit: array{id: int, reference: string, nom: string}}
+     */
+    protected function identiteDansLeJournal(): array
+    {
+        return ['produit' => ['id' => $this->getKey(), 'reference' => $this->reference, 'nom' => $this->nom]];
+    }
+
+    protected function documentDuJournal(): Model
+    {
+        return $this;
     }
 
     public function mouvementsStock(): HasMany

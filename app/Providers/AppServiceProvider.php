@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
@@ -26,6 +27,7 @@ use App\Policies\ClientPolicy;
 use App\Policies\ClotureCaissePersonnellePolicy;
 use App\Policies\ClotureCaissePolicy;
 use App\Policies\DevisPolicy;
+use App\Policies\EnregistrementFiscalPolicy;
 use App\Policies\FactureAchatPolicy;
 use App\Policies\FacturePolicy;
 use App\Policies\FournisseurPolicy;
@@ -96,6 +98,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(FactureAchat::class, FactureAchatPolicy::class);
         Gate::policy(AvoirFournisseur::class, AvoirFournisseurPolicy::class);
         Gate::policy(SoumissionEReporting::class, SoumissionEReportingPolicy::class);
+        Gate::policy(EnregistrementFiscal::class, EnregistrementFiscalPolicy::class);
 
         $this->nommerLesModelesPolymorphes();
         $this->declarerLaSaisieEnDirect();
@@ -125,6 +128,7 @@ class AppServiceProvider extends ServiceProvider
             'facture_achat' => FactureAchat::class,
             'ligne_avoir' => LigneAvoir::class,
             'paiement' => Paiement::class,
+            'produit' => Produit::class,
             'soumission_ereporting' => SoumissionEReporting::class,
             'utilisateur' => User::class,
         ]);

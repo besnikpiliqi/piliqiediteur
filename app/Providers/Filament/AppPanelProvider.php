@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\App\Pages\Auth\RegisterMagasin;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
+use App\Http\Middleware\JournaliserOuvertureDeSession;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -35,6 +36,9 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * TenantContext -- seule source de vérité utilisée par MagasinScope, les
  * policies et le resolver de permissions Spatie (voir
  * app/Domain/Tenancy/Services/MagasinTeamResolver.php).
+ * JournaliserOuvertureDeSession le suit : une fois le magasin actif
+ * positionné, il inscrit l'ouverture de session (JET 80) au journal des
+ * événements de ce magasin.
  */
 class AppPanelProvider extends PanelProvider
 {
@@ -57,6 +61,7 @@ class AppPanelProvider extends PanelProvider
             ->tenant(Magasin::class, slugAttribute: 'uuid')
             ->tenantMiddleware([
                 BindTenantContextFromFilamentTenant::class,
+                JournaliserOuvertureDeSession::class,
             ], isPersistent: true)
             ->colors([
                 'primary' => Color::Indigo,

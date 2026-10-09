@@ -4,6 +4,7 @@ namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\MagasinUser;
+use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -16,21 +17,32 @@ use LogicException;
  * mode teams ne touche qu'à celles du magasin du TenantContext) -- et ses
  * notifications à propos de ce magasin (voir NotificationDuMagasin), qui
  * ne le regardent plus.
+ *
+ * Le retrait s'inscrit au journal des événements du magasin, avec les
+ * droits que le membre perd (JET 130, voir JournalDesDroits).
  */
 class RetirerMembreMagasinAction
 {
+    public function __construct(private readonly JournalDesDroits $journalDesDroits) {}
+
     public function handle(MagasinUser $membre): void
     {
         if ($membre->role === RoleMagasin::Proprietaire) {
             throw new LogicException("Le propriétaire ne peut pas être retiré de l'équipe.");
         }
 
-        DB::transaction(function () use ($membre) {
-            app(TenantContext::class)->set($membre->magasin);
-            $membre->utilisateur->removeRole($membre->role->value);
-            $membre->utilisateur->syncPermissions([]);
-            $membre->utilisateur->effacerLesNotificationsDu($membre->magasin);
+        DB::transaction(function () use ($membre): void {
+            $magasin = $membre->magasin;
+            $utilisateur = $membre->utilisateur;
+            app(TenantContext::class)->set($magasin);
+            $avant = $this->journalDesDroits->avant($magasin, $utilisateur);
+
+            $utilisateur->removeRole($membre->role->value);
+            $utilisateur->syncPermissions([]);
+            $utilisateur->effacerLesNotificationsDu($magasin);
             $membre->delete();
+
+            $this->journalDesDroits->apres($magasin, $utilisateur, $avant);
         });
     }
 }

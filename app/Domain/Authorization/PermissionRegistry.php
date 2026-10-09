@@ -145,6 +145,13 @@ final class PermissionRegistry
     public const AVOIR_FOURNISSEUR_CREER = 'avoir_fournisseur.creer';
 
     /**
+     * Consulter la caisse sécurisée (registre fiscal signé, journal des
+     * événements) et exporter le journal (voir EnregistrementFiscalPolicy) :
+     * de quoi la montrer à l'administration fiscale.
+     */
+    public const CAISSE_SECURISEE_CONSULTER = 'caisse_securisee.consulter';
+
+    /**
      * @return list<string>
      */
     public static function toutes(): array
@@ -162,6 +169,7 @@ final class PermissionRegistry
             self::CLOTURE_CAISSE_VIEW, self::CLOTURE_CAISSE_VIEW_TOUTES, self::CLOTURE_CAISSE_GERER,
             self::FACTURE_ACHAT_VIEW, self::FACTURE_ACHAT_CREER, self::FACTURE_ACHAT_VALIDER,
             self::AVOIR_FOURNISSEUR_VIEW, self::AVOIR_FOURNISSEUR_CREER,
+            self::CAISSE_SECURISEE_CONSULTER,
         ];
     }
 
@@ -218,6 +226,7 @@ final class PermissionRegistry
             self::FACTURE_ACHAT_VALIDER => 'Factures d\'achat : valider',
             self::AVOIR_FOURNISSEUR_VIEW => 'Avoirs fournisseur : voir',
             self::AVOIR_FOURNISSEUR_CREER => 'Avoirs fournisseur : créer',
+            self::CAISSE_SECURISEE_CONSULTER => 'Caisse sécurisée : consulter le registre et exporter le journal des événements',
         ];
     }
 }

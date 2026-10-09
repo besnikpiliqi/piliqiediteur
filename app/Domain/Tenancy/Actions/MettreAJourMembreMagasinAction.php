@@ -5,6 +5,7 @@ namespace App\Domain\Tenancy\Actions;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\MagasinUser;
+use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -18,9 +19,14 @@ use LogicException;
  * Un membre qui n'est plus actif (suspendu) perd aussi ses notifications
  * à propos de ce magasin, comme s'il l'avait quitté (voir
  * RetirerMembreMagasinAction).
+ *
+ * Un changement de rôle ou de statut s'inscrit au journal des événements
+ * du magasin (JET 130, voir JournalDesDroits).
  */
 class MettreAJourMembreMagasinAction
 {
+    public function __construct(private readonly JournalDesDroits $journalDesDroits) {}
+
     public function handle(MagasinUser $membre, RoleMagasin $nouveauRole, StatutMembreMagasin $nouveauStatut): MagasinUser
     {
         if ($membre->role === RoleMagasin::Proprietaire || $nouveauRole === RoleMagasin::Proprietaire) {
@@ -28,8 +34,11 @@ class MettreAJourMembreMagasinAction
         }
 
         return DB::transaction(function () use ($membre, $nouveauRole, $nouveauStatut) {
-            $ancienRole = $membre->role;
+            $magasin = $membre->magasin;
             $utilisateur = $membre->utilisateur;
+            app(TenantContext::class)->set($magasin);
+            $avant = $this->journalDesDroits->avant($magasin, $utilisateur);
+            $ancienRole = $membre->role;
 
             $membre->update([
                 'role' => $nouveauRole->value,
@@ -37,14 +46,15 @@ class MettreAJourMembreMagasinAction
             ]);
 
             if ($ancienRole !== $nouveauRole) {
-                app(TenantContext::class)->set($membre->magasin);
                 $utilisateur->removeRole($ancienRole->value);
                 $utilisateur->assignRole($nouveauRole->value);
             }
 
             if ($nouveauStatut !== StatutMembreMagasin::Actif) {
-                $utilisateur->effacerLesNotificationsDu($membre->magasin);
+                $utilisateur->effacerLesNotificationsDu($magasin);
             }
+
+            $this->journalDesDroits->apres($magasin, $utilisateur, $avant);
 
             return $membre;
         });

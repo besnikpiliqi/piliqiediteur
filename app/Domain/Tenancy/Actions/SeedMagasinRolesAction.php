@@ -69,6 +69,9 @@ class SeedMagasinRolesAction
                 PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK,
                 PermissionRegistry::CLOTURE_CAISSE_VIEW,
                 PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES,
+                // Le registre fiscal et le journal des événements, qu'il
+                // présente à l'administration avec le propriétaire.
+                PermissionRegistry::CAISSE_SECURISEE_CONSULTER,
             ],
             // Un vendeur crée/émet ses propres devis et factures, mais ne
             // voit que celles qu'il a lui-même créées (voir FacturePolicy)

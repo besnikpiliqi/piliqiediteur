@@ -5,6 +5,7 @@ namespace App\Filament\App\Pages;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
@@ -21,10 +22,16 @@ use Filament\Pages\Page;
  * app:soumettre-ereporting-periodique). Réservé à qui a la permission
  * mandat_pdp.gerer (le propriétaire par défaut, voir
  * SeedMagasinRolesAction) : la configuration fiscale du magasin.
+ *
+ * Le régime de TVA et l'option pour les débits ont un impact sur la
+ * conformité : chaque changement s'inscrit au journal des événements du
+ * magasin, avec l'ancienne et la nouvelle valeur (voir
+ * JournaliseSesParametresDeConformite). Quand le registre fiscal ne peut
+ * pas l'inscrire, rien n'est enregistré et l'écran dit pourquoi.
  */
 class ParametresFiscaux extends Page implements HasForms
 {
-    use InteractsWithForms;
+    use GereLesExceptionsMetier, InteractsWithForms;
 
     protected static ?string $navigationIcon = 'heroicon-o-scale';
 
@@ -78,14 +85,16 @@ class ParametresFiscaux extends Page implements HasForms
         /** @var Magasin $magasin */
         $magasin = Filament::getTenant();
 
-        $magasin->update([
-            'regime_tva' => $data['regime_tva'],
-            'option_debits_tva' => $data['option_debits_tva'],
-        ]);
+        static::executerSansCasser(function () use ($magasin, $data): void {
+            $magasin->update([
+                'regime_tva' => $data['regime_tva'],
+                'option_debits_tva' => $data['option_debits_tva'],
+            ]);
 
-        Notification::make()
-            ->title('Paramètres fiscaux enregistrés')
-            ->success()
-            ->send();
+            Notification::make()
+                ->title('Paramètres fiscaux enregistrés')
+                ->success()
+                ->send();
+        });
     }
 }

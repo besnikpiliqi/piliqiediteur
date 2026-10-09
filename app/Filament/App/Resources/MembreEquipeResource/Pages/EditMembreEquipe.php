@@ -17,6 +17,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Form;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class EditMembreEquipe extends EditRecord
 {
@@ -65,12 +66,17 @@ class EditMembreEquipe extends EditRecord
         return $data;
     }
 
+    /**
+     * Le rôle, le statut et les permissions supplémentaires s'enregistrent
+     * ensemble ou pas du tout : chaque changement s'inscrit au journal des
+     * événements du magasin (JET 130), dans la même transaction.
+     */
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
         /** @var MagasinUser $record */
         $permissionsSupplementaires = $data['permissions_supplementaires'] ?? null;
 
-        return static::executerOuInterrompre(function () use ($record, $data, $permissionsSupplementaires) {
+        return static::executerOuInterrompre(fn () => DB::transaction(function () use ($record, $data, $permissionsSupplementaires) {
             $record = app(MettreAJourMembreMagasinAction::class)->handle(
                 $record,
                 RoleMagasin::from($data['role']),
@@ -84,6 +90,6 @@ class EditMembreEquipe extends EditRecord
             }
 
             return $record;
-        });
+        }));
     }
 }

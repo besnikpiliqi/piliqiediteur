@@ -41,6 +41,7 @@ use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\App\Resources\DevisResource;
+use App\Filament\App\Resources\EnregistrementFiscalResource;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FournisseurResource;
@@ -272,6 +273,7 @@ class TenantIsolationTest extends TestCase
         return [
             'avoir fournisseur, détail' => [AvoirFournisseurResource::class, 'view', static fn (): Model => AvoirFournisseur::factory()->create()],
             'avoir, détail' => [AvoirResource::class, 'view', static fn (): Model => self::creerEnregistrement(Avoir::class)],
+            'caisse sécurisée, détail' => [EnregistrementFiscalResource::class, 'view', static fn (): Model => self::creerEnregistrement(EnregistrementFiscal::class)],
             'client, modification' => [ClientResource::class, 'edit', static fn (): Model => Client::factory()->create()],
             'clôture de caisse, détail' => [ClotureCaisseResource::class, 'view', static fn (): Model => ClotureCaisse::factory()->create()],
             'devis, détail' => [DevisResource::class, 'view', static fn (): Model => Devis::factory()->create()],

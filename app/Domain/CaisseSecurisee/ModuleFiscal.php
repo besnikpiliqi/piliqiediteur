@@ -13,8 +13,14 @@ namespace App\Domain\CaisseSecurisee;
  * incidence sur les conditions d'inaltérabilité, de sécurisation, de
  * conservation et d'archivage, la majeure sinon. Une version majeure ne se
  * note jamais comme une mineure.
+ *
+ * La référence légale qu'affiche l'écran de la caisse sécurisée est elle
+ * aussi une constante du code : sa mise à jour (renumérotation du code
+ * général des impôts) passe par une nouvelle version mineure.
  */
 final class ModuleFiscal
 {
     public const VERSION = '1.0';
+
+    public const REFERENCE_LEGALE = 'Article 286, I, 3° bis du code général des impôts';
 }

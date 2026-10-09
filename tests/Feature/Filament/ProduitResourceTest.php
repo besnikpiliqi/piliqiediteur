@@ -5,6 +5,7 @@ namespace Tests\Feature\Filament;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -103,6 +104,26 @@ class ProduitResourceTest extends TestCase
 
         $this->assertSame('12.00', $produit->fresh()->prix_vente_ttc);
         $this->assertSame('11.37', $produit->fresh()->prix_vente_ht);
+    }
+
+    /**
+     * Le taux de TVA a un impact sur la conformité : sans clé de signature,
+     * son changement ne peut pas s'inscrire au journal des événements,
+     * donc ne s'enregistre pas, et l'écran dit pourquoi.
+     */
+    public function test_sans_cle_de_signature_le_taux_de_tva_ne_change_pas_et_l_ecran_dit_pourquoi(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
+        config(['caisse_securisee.cle_privee' => null]);
+        $this->app->forgetInstance(RegistreFiscal::class);
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->fillForm(['taux_tva' => 5.5])
+            ->call('save')
+            ->assertNotified('Caisse sécurisée non configurée : la clé privée de signature (CAISSE_SECURISEE_CLE_PRIVEE) est absente.');
+
+        $this->assertSame('20.00', $produit->fresh()->taux_tva);
     }
 
     /**

@@ -12,6 +12,7 @@ use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Filament\App\Resources\DevisResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDeVente;
+use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitLesPrixDeLigne;
 use Filament\Forms\Components\Actions\Action;
@@ -31,10 +32,12 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class DevisResource extends Resource
 {
     use AjouteDesLignesDeVente;
+    use EnvoieLesDocuments;
     use GereLesExceptionsMetier;
     use SaisitLesPrixDeLigne;
 
@@ -56,7 +59,9 @@ class DevisResource extends Resource
             Section::make('Devis')->schema([
                 Select::make('client_id')
                     ->label('Client')
-                    ->relationship('client', 'nom')
+                    // Un client archivé ne reçoit plus de nouveau document, même
+                    // si ceux qu'il a déjà le gardent (voir Devis::client()).
+                    ->relationship('client', 'nom', fn (Builder $query): Builder => $query->withoutTrashed())
                     ->searchable()
                     ->preload()
                     ->required()
@@ -165,6 +170,8 @@ class DevisResource extends Resource
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
                 FactureResource::ventilationTvaEntry(),
             ])->columns(3),
+
+            self::envoisSection(),
         ]);
     }
 
@@ -189,11 +196,16 @@ class DevisResource extends Resource
                 // Devis::estModifiable() et DevisPolicy::update().
                 Tables\Actions\EditAction::make()
                     ->visible(fn (Devis $record) => $record->estModifiable()),
+                self::telechargerLePdf(Tables\Actions\Action::make('telecharger_pdf')),
+                self::envoyerParEmail(Tables\Actions\Action::make('envoyer_par_email')),
+                // Remis en main propre, par exemple : le devis reçoit son
+                // numéro sans partir par e-mail.
                 Tables\Actions\Action::make('envoyer')
-                    ->label('Envoyer')
+                    ->label('Numéroter sans e-mail')
                     ->icon('heroicon-o-paper-airplane')
-                    ->color('success')
+                    ->color('gray')
                     ->requiresConfirmation()
+                    ->modalDescription('Le devis reçoit son numéro et passe au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.')
                     ->visible(fn (Devis $record) => $record->statut === StatutDevis::Brouillon && auth()->user()->can('envoyer', $record))
                     ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(EmettreDevisAction::class)->handle($record))),
                 Tables\Actions\Action::make('accepter')

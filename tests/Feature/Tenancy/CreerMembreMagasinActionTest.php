@@ -3,6 +3,7 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Actions\MettreAJourMembreMagasinAction;
@@ -13,6 +14,7 @@ use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use LogicException;
 use Tests\TestCase;
 
@@ -133,6 +135,49 @@ class CreerMembreMagasinActionTest extends TestCase
 
         $this->assertNotNull(User::find($vendeur->id), 'Le compte utilisateur doit survivre.');
         $this->assertFalse($vendeur->fresh()->appartientA($magasin));
+    }
+
+    /**
+     * Un comptable qui quitte un magasin perd ses notifications à propos de
+     * ce magasin, qui ne le regardent plus, et garde celles des autres.
+     */
+    public function test_retirer_un_membre_efface_ses_notifications_de_ce_magasin_seulement(): void
+    {
+        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
+        $donnees = ['name' => 'Claire', 'email' => 'claire@cabinet.test', 'password' => 'mot-de-passe-sur'];
+        $comptable = app(CreerMembreMagasinAction::class)->handle($magasinA, $donnees, RoleMagasin::Comptable);
+        app(CreerMembreMagasinAction::class)->handle($magasinB, $donnees, RoleMagasin::Comptable);
+        Notification::send($comptable, new FacturesPasseesEnRetard($magasinA, ['F-A-1']));
+        Notification::send($comptable, new FacturesPasseesEnRetard($magasinB, ['F-B-1']));
+
+        app(RetirerMembreMagasinAction::class)->handle($magasinA->membres()->where('user_id', $comptable->id)->firstOrFail());
+
+        $this->assertSame([$magasinB->id], $comptable->notifications()->get()->pluck('data.magasin_id')->all());
+    }
+
+    /**
+     * Suspendu dans un magasin, un comptable ne peut plus l'ouvrir : sa
+     * cloche, commune à ses magasins, n'en montre plus rien. Un simple
+     * changement de rôle ne touche pas à ses notifications.
+     */
+    public function test_suspendre_un_membre_efface_ses_notifications_de_ce_magasin_seulement(): void
+    {
+        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
+        $donnees = ['name' => 'Claire', 'email' => 'claire@cabinet.test', 'password' => 'mot-de-passe-sur'];
+        $comptable = app(CreerMembreMagasinAction::class)->handle($magasinA, $donnees, RoleMagasin::Comptable);
+        app(CreerMembreMagasinAction::class)->handle($magasinB, $donnees, RoleMagasin::Comptable);
+        Notification::send($comptable, new FacturesPasseesEnRetard($magasinA, ['F-A-1']));
+        Notification::send($comptable, new FacturesPasseesEnRetard($magasinB, ['F-B-1']));
+        $membreDeA = $magasinA->membres()->where('user_id', $comptable->id)->firstOrFail();
+
+        app(MettreAJourMembreMagasinAction::class)->handle($membreDeA, RoleMagasin::Administrateur, StatutMembreMagasin::Actif);
+        $this->assertSame(2, $comptable->notifications()->count());
+
+        app(MettreAJourMembreMagasinAction::class)->handle($membreDeA->fresh(), RoleMagasin::Administrateur, StatutMembreMagasin::Suspendu);
+
+        $this->assertSame([$magasinB->id], $comptable->notifications()->get()->pluck('data.magasin_id')->all());
     }
 
     public function test_impossible_de_retirer_le_proprietaire(): void

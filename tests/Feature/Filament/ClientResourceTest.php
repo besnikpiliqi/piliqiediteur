@@ -67,6 +67,30 @@ class ClientResourceTest extends TestCase
     }
 
     /**
+     * Ses factures et ses relances partent à cette adresse : une adresse
+     * que le serveur d'envoi refuserait (avec un commentaire) est refusée
+     * dès la fiche.
+     */
+    public function test_une_adresse_e_mail_que_le_serveur_d_envoi_refuserait_est_refusee(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateClient::class)
+            ->fillForm([
+                'nom' => 'Jean Dupont',
+                'type_client' => TypeClient::Particulier->value,
+                'email' => 'jean(bureau)@example.com',
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['email' => 'Cette adresse e-mail n\'est pas valide.']);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Jean Dupont']);
+    }
+
+    /**
      * Non-régression : $get('type_client') renvoie l'instance de l'enum
      * (pas sa valeur scalaire) une fois le Select live interagi, ce qui
      * rendait silencieusement invisibles -- et donc jamais enregistrés --

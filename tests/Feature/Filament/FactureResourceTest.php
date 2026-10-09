@@ -28,6 +28,7 @@ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
@@ -621,6 +622,25 @@ class FactureResourceTest extends TestCase
 
         $this->assertSame('80.00', $ligne->montant_ttc);
         $this->assertSame('80.00', $facture->total_ttc);
+    }
+
+    /**
+     * Un client archivé garde ses factures (voir Facture::client()), mais
+     * n'est plus proposé pour une nouvelle.
+     */
+    public function test_un_client_archive_n_est_plus_propose_pour_une_nouvelle_facture(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $actif = Client::factory()->create(['nom' => 'Client actif']);
+        $archive = Client::factory()->create(['nom' => 'Client archivé']);
+        $archive->delete();
+
+        Livewire::test(CreateFacture::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => array_key_exists($actif->id, $champ->getOptions())
+                && ! array_key_exists($archive->id, $champ->getOptions()));
     }
 
     public function test_lecheance_est_prereplie_a_aujourdhui_par_defaut(): void

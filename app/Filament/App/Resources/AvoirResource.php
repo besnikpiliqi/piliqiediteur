@@ -6,8 +6,9 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\LigneFacture;
-use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Filament\App\Resources\AvoirResource\Pages;
+use App\Filament\Concerns\EnvoieLesDocuments;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
@@ -36,6 +37,8 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class AvoirResource extends Resource
 {
+    use EnvoieLesDocuments;
+    use GereLesExceptionsMetier;
     use SaisitUneQuantiteRetournee;
 
     protected static ?string $model = Avoir::class;
@@ -70,7 +73,9 @@ class AvoirResource extends Resource
         return $form->schema([
             Select::make('client_id')
                 ->label('Client')
-                ->relationship('client', 'nom')
+                // Un client archivé ne reçoit plus de nouveau document, même
+                // si ceux qu'il a déjà le gardent (voir Avoir::client()).
+                ->relationship('client', 'nom', fn (Builder $query): Builder => $query->withoutTrashed())
                 ->searchable()
                 ->preload()
                 ->required()
@@ -142,6 +147,8 @@ class AvoirResource extends Resource
                         ])
                         ->columns(2),
                 ]),
+
+            self::envoisSection(),
         ]);
     }
 
@@ -183,17 +190,8 @@ class AvoirResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
-                Tables\Actions\Action::make('telecharger_pdf')
-                    ->label('PDF')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->action(function (Avoir $record) {
-                        $generateur = app(AvoirPdfGenerator::class);
-
-                        return response()->streamDownload(
-                            fn () => print ($generateur->generer($record)->output()),
-                            $generateur->nomFichier($record),
-                        );
-                    }),
+                self::telechargerLePdf(Tables\Actions\Action::make('telecharger_pdf')),
+                self::envoyerParEmail(Tables\Actions\Action::make('envoyer_par_email')),
             ])
             // Aucune action de suppression, ni unitaire ni groupée : un
             // avoir émis ne se supprime jamais (voir AvoirPolicy::delete()).

@@ -2,6 +2,7 @@
 
 use App\Console\Commands\ClotureAutomatiqueCaisse;
 use App\Console\Commands\MarquerFacturesEnRetard;
+use App\Console\Commands\RelancerFacturesImpayees;
 use App\Console\Commands\SoumettreEReportingPeriodique;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
@@ -33,6 +34,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // tardif laisse le temps à une clôture manuelle de la veille
         // d'être faite avant l'agrégation.
         $schedule->command(SoumettreEReportingPeriodique::class)->dailyAt('01:00');
+        // Les relances écrivent aux clients : en matinée plutôt qu'en pleine
+        // nuit, et bien après le passage en retard des factures de la veille.
+        $schedule->command(RelancerFacturesImpayees::class)->dailyAt('09:00');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

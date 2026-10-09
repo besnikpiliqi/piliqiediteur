@@ -5,6 +5,7 @@ namespace App\Domain\Stock\Services;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Stock\Enums\TypeMouvementStock;
+use App\Domain\Stock\Events\StockPasseSousLeSeuilDAlerte;
 use App\Domain\Stock\Models\MouvementStock;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,9 @@ use LogicException;
  * receptionner()) : toute sortie (vente, retour fournisseur) et toute
  * autre entrée (retour client, ajustement) se fait au CMUP du moment, qui
  * ne change donc pas.
+ *
+ * Seul à voir chaque mouvement, il signale aussi le passage d'un produit
+ * à son seuil d'alerte (voir StockPasseSousLeSeuilDAlerte).
  */
 class StockLedgerService
 {
@@ -179,8 +183,15 @@ class StockLedgerService
                 'note' => $note,
             ]);
 
+            $etaitEnAlerte = $produitVerrouille->enAlerteStock();
             $produitVerrouille->forceFill(['stock_quantite' => $nouvelleQuantite])->save();
             $produit->setAttribute('stock_quantite', $nouvelleQuantite)->syncOriginalAttribute('stock_quantite');
+
+            // Une seule alerte au passage du seuil, pas une à chaque vente
+            // tant que le stock reste bas.
+            if (! $etaitEnAlerte && $produitVerrouille->enAlerteStock()) {
+                StockPasseSousLeSeuilDAlerte::dispatch($produitVerrouille);
+            }
 
             return $mouvement;
         });

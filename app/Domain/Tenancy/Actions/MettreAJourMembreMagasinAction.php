@@ -14,6 +14,10 @@ use LogicException;
  * Spatie réel pour ce magasin -- mettre à jour uniquement la colonne
  * `role` du pivot sans toucher à l'assignation Spatie laisserait les
  * permissions effectives désynchronisées de ce qui est affiché à l'écran.
+ *
+ * Un membre qui n'est plus actif (suspendu) perd aussi ses notifications
+ * à propos de ce magasin, comme s'il l'avait quitté (voir
+ * RetirerMembreMagasinAction).
  */
 class MettreAJourMembreMagasinAction
 {
@@ -36,6 +40,10 @@ class MettreAJourMembreMagasinAction
                 app(TenantContext::class)->set($membre->magasin);
                 $utilisateur->removeRole($ancienRole->value);
                 $utilisateur->assignRole($nouveauRole->value);
+            }
+
+            if ($nouveauStatut !== StatutMembreMagasin::Actif) {
+                $utilisateur->effacerLesNotificationsDu($membre->magasin);
             }
 
             return $membre;

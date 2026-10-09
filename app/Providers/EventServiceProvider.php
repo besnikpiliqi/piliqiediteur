@@ -17,6 +17,8 @@ use App\Domain\Facturation\Listeners\DecrementerStockApresEmissionFacture;
 use App\Domain\Facturation\Listeners\ImputerAvoirSurSesFacturesApresEmission;
 use App\Domain\Facturation\Listeners\RestaurerStockApresAnnulationFacture;
 use App\Domain\Facturation\Listeners\RestaurerStockApresEmissionAvoir;
+use App\Domain\Stock\Events\StockPasseSousLeSeuilDAlerte;
+use App\Domain\Stock\Listeners\NotifierLeStockSousLeSeuilDAlerte;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -40,5 +42,6 @@ class EventServiceProvider extends ServiceProvider
         Event::listen(SoumissionEReportingGeneree::class, DeclencherTransmissionPdpApresSoumissionEReporting::class);
         Event::listen(FactureAchatValidee::class, IncrementerStockApresValidationFactureAchat::class);
         Event::listen(AvoirFournisseurEmis::class, DecrementerStockApresEmissionAvoirFournisseur::class);
+        Event::listen(StockPasseSousLeSeuilDAlerte::class, NotifierLeStockSousLeSeuilDAlerte::class);
     }
 }

@@ -55,12 +55,17 @@ class SeedMagasinRolesAction
             )),
             // Le comptable voit l'intégralité des factures du magasin
             // (indispensable pour son travail), pas seulement les siennes.
+            // Il suit aussi les impayés : il envoie et relance factures et
+            // avoirs, sans régler les relances automatiques, qui écrivent
+            // aux clients au nom du magasin.
             RoleMagasin::Comptable->value => [
                 ...$permissionsLecture,
                 PermissionRegistry::FACTURE_VIEW_TOUTES,
+                PermissionRegistry::FACTURE_ENVOYER,
                 PermissionRegistry::PAIEMENT_VIEW,
                 PermissionRegistry::PAIEMENT_CREER,
                 PermissionRegistry::AVOIR_VIEW,
+                PermissionRegistry::AVOIR_ENVOYER,
                 PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK,
                 PermissionRegistry::CLOTURE_CAISSE_VIEW,
                 PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES,
@@ -81,6 +86,9 @@ class SeedMagasinRolesAction
                 PermissionRegistry::FACTURE_VIEW,
                 PermissionRegistry::FACTURE_CREATE,
                 PermissionRegistry::FACTURE_EMETTRE,
+                // Envoyer par e-mail, et relancer, les factures qu'il voit,
+                // donc les siennes (voir FacturePolicy::envoyer()).
+                PermissionRegistry::FACTURE_ENVOYER,
                 PermissionRegistry::PAIEMENT_VIEW,
                 PermissionRegistry::PAIEMENT_CREER,
                 // Clôturer LA JOURNÉE DU MAGASIN (ClotureCaisse, le

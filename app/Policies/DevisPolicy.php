@@ -34,9 +34,13 @@ class DevisPolicy extends MagasinPolicy
             && $user->can(PermissionRegistry::DEVIS_UPDATE);
     }
 
+    /**
+     * Le numéroter, et l'envoyer par e-mail à son client (voir
+     * EnvoyerDocumentAction).
+     */
     public function envoyer(User $user, Devis $devis): bool
     {
-        return $this->appartientAuMagasinActif($devis) && $user->can(PermissionRegistry::DEVIS_ENVOYER);
+        return $this->view($user, $devis) && $user->can(PermissionRegistry::DEVIS_ENVOYER);
     }
 
     public function accepter(User $user, Devis $devis): bool

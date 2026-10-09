@@ -62,6 +62,8 @@ final class PermissionRegistry
 
     public const DEVIS_UPDATE = 'devis.update';
 
+    // Envoyer un devis : le numéroter, et l'envoyer par e-mail à son
+    // client (voir EnvoyerDocumentAction).
     public const DEVIS_ENVOYER = 'devis.envoyer';
 
     // Factures
@@ -77,6 +79,17 @@ final class PermissionRegistry
     public const FACTURE_EMETTRE = 'facture.emettre';
 
     public const FACTURE_ANNULER = 'facture.annuler';
+
+    // Envoyer une facture émise par e-mail et relancer une facture
+    // impayée (voir EnvoyerDocumentAction), parmi celles que
+    // l'utilisateur voit (voir FacturePolicy::envoyer()).
+    public const FACTURE_ENVOYER = 'facture.envoyer';
+
+    /**
+     * Régler les relances automatiques des factures impayées (Paramètres >
+     * Relances) : elles écrivent aux clients au nom du magasin.
+     */
+    public const RELANCES_REGLER = 'relances.regler';
 
     // Mandat PDP -- réservé au propriétaire, voir SeedMagasinRolesAction
     public const MANDAT_PDP_GERER = 'mandat_pdp.gerer';
@@ -101,6 +114,8 @@ final class PermissionRegistry
     public const AVOIR_VIEW = 'avoir.view';
 
     public const AVOIR_CREER = 'avoir.creer';
+
+    public const AVOIR_ENVOYER = 'avoir.envoyer';
 
     // Clôture de la journée du magasin (e-reporting agrégé B2C). Sans
     // cloture_caisse.view_toutes, un membre ne voit que les clôtures qu'il
@@ -137,11 +152,11 @@ final class PermissionRegistry
             self::FOURNISSEUR_VIEW, self::FOURNISSEUR_CREATE, self::FOURNISSEUR_UPDATE, self::FOURNISSEUR_DELETE,
             self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_DELETE, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK, self::PRIX_VENTE_REGLER,
             self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
-            self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ANNULER,
+            self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ANNULER, self::FACTURE_ENVOYER, self::RELANCES_REGLER,
             self::MANDAT_PDP_GERER,
             self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
             self::PAIEMENT_VIEW, self::PAIEMENT_CREER,
-            self::AVOIR_VIEW, self::AVOIR_CREER,
+            self::AVOIR_VIEW, self::AVOIR_CREER, self::AVOIR_ENVOYER,
             self::CLOTURE_CAISSE_VIEW, self::CLOTURE_CAISSE_VIEW_TOUTES, self::CLOTURE_CAISSE_GERER,
             self::FACTURE_ACHAT_VIEW, self::FACTURE_ACHAT_CREER, self::FACTURE_ACHAT_VALIDER,
             self::AVOIR_FOURNISSEUR_VIEW, self::AVOIR_FOURNISSEUR_CREER,
@@ -177,12 +192,14 @@ final class PermissionRegistry
             self::DEVIS_VIEW => 'Devis : voir',
             self::DEVIS_CREATE => 'Devis : créer',
             self::DEVIS_UPDATE => 'Devis : modifier',
-            self::DEVIS_ENVOYER => 'Devis : envoyer',
+            self::DEVIS_ENVOYER => 'Devis : envoyer (numéroter, envoyer par e-mail)',
             self::FACTURE_VIEW => 'Factures : voir (les siennes)',
             self::FACTURE_VIEW_TOUTES => 'Factures : voir celles de toute l\'équipe',
             self::FACTURE_CREATE => 'Factures : créer',
             self::FACTURE_EMETTRE => 'Factures : émettre',
             self::FACTURE_ANNULER => 'Factures : annuler',
+            self::FACTURE_ENVOYER => 'Factures : envoyer par e-mail et relancer',
+            self::RELANCES_REGLER => 'Relances : régler les relances automatiques',
             self::MANDAT_PDP_GERER => 'Mandat PDP : gérer',
             self::EQUIPE_VIEW => 'Équipe : voir',
             self::EQUIPE_CREER => 'Équipe : créer des comptes',
@@ -191,6 +208,7 @@ final class PermissionRegistry
             self::PAIEMENT_CREER => 'Paiements : enregistrer',
             self::AVOIR_VIEW => 'Avoirs : voir',
             self::AVOIR_CREER => 'Avoirs : créer',
+            self::AVOIR_ENVOYER => 'Avoirs : envoyer par e-mail',
             self::CLOTURE_CAISSE_VIEW => 'Clôture de caisse : voir (les siennes)',
             self::CLOTURE_CAISSE_VIEW_TOUTES => 'Clôture de caisse : voir celles de toute l\'équipe',
             self::CLOTURE_CAISSE_GERER => 'Clôture de caisse : clôturer manuellement',

@@ -58,6 +58,15 @@ class FacturePolicy extends MagasinPolicy
         return $this->view($user, $facture) && $user->can(PermissionRegistry::FACTURE_EMETTRE);
     }
 
+    /**
+     * Envoyer par e-mail ou relancer : seulement une facture que
+     * l'utilisateur voit (confidentialité par vendeur, voir view()).
+     */
+    public function envoyer(User $user, Facture $facture): bool
+    {
+        return $this->view($user, $facture) && $user->can(PermissionRegistry::FACTURE_ENVOYER);
+    }
+
     public function annuler(User $user, Facture $facture): bool
     {
         return $this->appartientAuMagasinActif($facture) && $user->can(PermissionRegistry::FACTURE_ANNULER);

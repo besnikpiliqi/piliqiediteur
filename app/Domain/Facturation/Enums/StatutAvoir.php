@@ -7,7 +7,8 @@ use Filament\Support\Contracts\HasLabel;
 
 /**
  * Cycle de vie volontairement minimal par rapport à StatutFacture : un
- * avoir n'est jamais payé ni envoyé séparément, il est soit en cours de
+ * avoir n'est jamais payé, et son envoi par e-mail ne change pas son
+ * statut (voir EnvoiDocument). Il est soit en cours de
  * préparation (brouillon), soit émis (document fiscal définitif), soit
  * annulé (uniquement possible tant qu'il est encore un brouillon, avant
  * tout numéro légal -- voir AnnulerFactureAction pour la même logique).

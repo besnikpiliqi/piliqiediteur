@@ -4,8 +4,12 @@ namespace App\Domain\Facturation\Models;
 
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
+use App\Domain\Facturation\Contracts\DocumentEnvoyable;
+use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\StatutAvoir;
+use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -20,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Support\Carbon;
 use LogicException;
 
 /**
@@ -28,10 +33,10 @@ use LogicException;
  * create_factures_table). La loi impose sa conservation ; une correction
  * passe par un avoir, jamais par une suppression.
  */
-class Facture extends Model
+class Facture extends Model implements DocumentEnvoyable
 {
     /** @use HasFactory<FactureFactory> */
-    use BelongsToMagasin, HasFactory, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, HasFactory, VentileLaTvaParTaux;
 
     protected $table = 'factures';
 
@@ -68,9 +73,14 @@ class Facture extends Model
         });
     }
 
+    /**
+     * Un document légal garde son client, même archivé depuis (voir les
+     * SoftDeletes de Client) : la facture reste due, se réimprime et se
+     * relance, et la clôture du jour la compte.
+     */
     public function client(): BelongsTo
     {
-        return $this->belongsTo(Client::class);
+        return $this->belongsTo(Client::class)->withTrashed();
     }
 
     public function creePar(): BelongsTo
@@ -200,15 +210,19 @@ class Facture extends Model
 
     /**
      * Après un paiement ou l'imputation d'un avoir : « payée » quand plus
-     * rien n'est dû, « partiellement payée » sinon.
+     * rien n'est dû, « partiellement payée » sinon -- sauf pour une facture
+     * en retard, qui le reste tant qu'elle n'est pas soldée : son échéance
+     * est toujours dépassée (voir MarquerFacturesEnRetard).
      *
      * @throws LogicException
      */
     public function constaterUnReglement(): void
     {
-        $nouveauStatut = $this->montantRestant() <= 0.0
-            ? StatutFacture::Payee
-            : StatutFacture::PartiellementPayee;
+        $nouveauStatut = match (true) {
+            $this->montantRestant() <= 0.0 => StatutFacture::Payee,
+            $this->statut === StatutFacture::EnRetard => StatutFacture::EnRetard,
+            default => StatutFacture::PartiellementPayee,
+        };
 
         if ($this->statut === $nouveauStatut) {
             return;
@@ -219,6 +233,89 @@ class Facture extends Model
         }
 
         $this->forceFill(['statut' => $nouveauStatut])->save();
+    }
+
+    /**
+     * Une facture se relance (voir EnvoyerDocumentAction::relancer()) une
+     * fois son échéance passée, tant qu'il reste quelque chose à régler --
+     * jamais une facture payée, annulée ou soldée par un avoir.
+     */
+    public function estEchueEtImpayee(): bool
+    {
+        return $this->statut->attendUnReglement()
+            && $this->date_echeance !== null
+            && $this->date_echeance->lt(today())
+            && $this->montantRestant() > 0;
+    }
+
+    /**
+     * Les relances de cette facture parties ou en partance : une relance
+     * en échec n'a jamais atteint le client, elle ne compte pas et repart
+     * à la relance suivante de la facture (voir
+     * EnvoyerDocumentAction::relancer()).
+     */
+    public function relancesComptees(): MorphMany
+    {
+        return $this->envois()
+            ->where('nature', NatureEnvoi::Relance)
+            ->where('statut', '!=', StatutEnvoi::Echec);
+    }
+
+    /**
+     * Le niveau de la dernière relance de cette facture, 0 tant qu'elle n'a
+     * jamais été relancée.
+     */
+    public function niveauDeRelanceAtteint(): int
+    {
+        return (int) $this->relancesComptees()->max('niveau_relance');
+    }
+
+    /**
+     * Le nombre de jours depuis sa dernière relance (0 si elle a été
+     * relancée aujourd'hui), null tant qu'elle n'a jamais été relancée.
+     */
+    public function joursDepuisLaDerniereRelance(): ?int
+    {
+        $derniere = $this->relancesComptees()->max('created_at');
+
+        return $derniere === null ? null : (int) Carbon::parse($derniere)->startOfDay()->diffInDays(today());
+    }
+
+    /**
+     * Le rappel d'une relance (voir EnvoyerDocumentAction::relancer()),
+     * calculé au moment où elle part (voir EnvoyerDocumentJob) : ce qu'il
+     * reste à payer tient compte des règlements reçus entre-temps.
+     */
+    public function messageDeRelance(): string
+    {
+        $euros = fn (float $montant): string => number_format($montant, 2, ',', ' ').' €';
+        [$document, $accord] = $this->client->estProfessionnel() ? ['la facture', 'e'] : ['le ticket de caisse', ''];
+
+        return "Sauf erreur de notre part, {$document} {$this->numero} d'un montant de {$euros((float) $this->total_ttc)} TTC, "
+            ."arrivé{$accord} à échéance le {$this->date_echeance->format('d/m/Y')}, n'est pas entièrement réglé{$accord} : "
+            ."il reste {$euros($this->montantRestant())} à payer.\n"
+            .'Nous vous remercions de bien vouloir procéder à son règlement dans les meilleurs délais. '
+            ."Si vous l'avez réglé{$accord} entre-temps, merci de ne pas tenir compte de ce message.";
+    }
+
+    /**
+     * Un particulier relève de l'e-reporting agrégé (clôture de caisse),
+     * pas d'une facture transmise individuellement (voir
+     * relevantDeLeInvoicing()) : son document porte le libellé usuel
+     * « Ticket de caisse », même s'il s'agit du même enregistrement.
+     */
+    public function libelleDocument(): string
+    {
+        return $this->client->estProfessionnel() ? 'Facture' : 'Ticket de caisse';
+    }
+
+    /**
+     * Seule une facture émise existe pour son client : un brouillon n'a
+     * pas encore de numéro, une facture annulée ne vaut plus rien.
+     */
+    public function peutEtreEnvoye(): bool
+    {
+        return ! in_array($this->statut, [StatutFacture::Brouillon, StatutFacture::Annulee], true);
     }
 
     /**

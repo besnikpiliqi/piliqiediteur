@@ -68,6 +68,20 @@ class ClientResource extends Resource
     }
 
     /**
+     * L'adresse à laquelle partent ses factures et ses relances (voir
+     * EnvoyerDocumentAction) : sans commentaire, guillemets ni domaine sans
+     * point, que le serveur d'envoi refuserait.
+     */
+    private static function champEmail(): TextInput
+    {
+        return TextInput::make('email')
+            ->type('email')
+            ->rule('email:strict')
+            ->maxLength(150)
+            ->validationMessages(['email' => 'Cette adresse e-mail n\'est pas valide.']);
+    }
+
+    /**
      * Formulaire allégé utilisé dans la modale "+" du Select client_id de
      * DevisResource/FactureResource (createOptionForm) : un vendeur en
      * train de facturer n'a besoin que de l'essentiel pour créer un
@@ -92,7 +106,7 @@ class ClientResource extends Resource
             TextInput::make('ville')->maxLength(100)->visible($visibleSiProfessionnel),
             TextInput::make('pays')->label('Pays')->maxLength(2)->default('FR')->visible($visibleSiProfessionnel),
             TextInput::make('telephone')->tel()->maxLength(30),
-            TextInput::make('email')->email()->maxLength(150),
+            self::champEmail(),
         ];
     }
 
@@ -119,7 +133,7 @@ class ClientResource extends Resource
                 TextInput::make('ville')->maxLength(100),
                 TextInput::make('pays')->label('Pays')->maxLength(2)->default('FR'),
                 TextInput::make('telephone')->tel()->maxLength(30),
-                TextInput::make('email')->email()->maxLength(150),
+                self::champEmail(),
             ])->columns(2),
 
             Section::make('Paiement et notes')->schema([

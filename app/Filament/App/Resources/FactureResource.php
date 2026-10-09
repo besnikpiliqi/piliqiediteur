@@ -18,8 +18,8 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
-use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Filament\App\Resources\FactureResource\Pages;
+use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use Filament\Forms\Components\Actions\Action;
@@ -45,6 +45,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class FactureResource extends Resource
 {
+    use EnvoieLesDocuments;
     use GereLesExceptionsMetier;
     use SaisitUneQuantiteRetournee;
 
@@ -88,7 +89,9 @@ class FactureResource extends Resource
             FormSection::make('Facture')->schema([
                 Select::make('client_id')
                     ->label('Client')
-                    ->relationship('client', 'nom')
+                    // Un client archivé ne reçoit plus de nouveau document, même
+                    // si ceux qu'il a déjà le gardent (voir Facture::client()).
+                    ->relationship('client', 'nom', fn (Builder $query): Builder => $query->withoutTrashed())
                     ->searchable()
                     ->preload()
                     ->required()
@@ -265,6 +268,8 @@ class FactureResource extends Resource
                         ])
                         ->columns(3),
                 ]),
+
+            self::envoisSection(),
         ]);
     }
 
@@ -409,12 +414,7 @@ class FactureResource extends Resource
                     ])
                     ->requiresConfirmation()
                     ->visible(fn (Facture $record) => $record->montantRestant() > 0
-                        && in_array($record->statut, [
-                            StatutFacture::Emise,
-                            StatutFacture::Envoyee,
-                            StatutFacture::PartiellementPayee,
-                            StatutFacture::EnRetard,
-                        ], true)
+                        && $record->statut->attendUnReglement()
                         && auth()->user()->can(PermissionRegistry::PAIEMENT_CREER))
                     ->action(fn (Facture $record, array $data) => static::executerSansCasser(fn () => app(EnregistrerPaiementAction::class)->handle([
                         'client_id' => $record->client_id,
@@ -425,18 +425,9 @@ class FactureResource extends Resource
                     ], [
                         ['facture_id' => $record->id, 'montant' => $data['montant']],
                     ]))),
-                Tables\Actions\Action::make('telecharger_pdf')
-                    ->label('PDF')
-                    ->icon('heroicon-o-arrow-down-tray')
-                    ->visible(fn (Facture $record) => $record->statut !== StatutFacture::Brouillon)
-                    ->action(function (Facture $record) {
-                        $generateur = app(FacturePdfGenerator::class);
-
-                        return response()->streamDownload(
-                            fn () => print ($generateur->generer($record)->output()),
-                            $generateur->nomFichier($record),
-                        );
-                    }),
+                self::telechargerLePdf(Tables\Actions\Action::make('telecharger_pdf')),
+                self::envoyerParEmail(Tables\Actions\Action::make('envoyer_par_email')),
+                self::relancer(Tables\Actions\Action::make('relancer')),
                 Tables\Actions\Action::make('annuler')
                     ->label('Annuler')
                     ->icon('heroicon-o-x-circle')

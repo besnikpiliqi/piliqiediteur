@@ -83,6 +83,17 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
+     * Ses notifications à propos de ce magasin (voir
+     * NotificationDuMagasin), le jour où il n'y a plus accès -- retiré de
+     * l'équipe, suspendu : sa cloche, commune à tous ses magasins, ne
+     * montre plus rien d'un magasin qu'il ne peut plus ouvrir.
+     */
+    public function effacerLesNotificationsDu(Magasin $magasin): void
+    {
+        $this->notifications()->where('data->magasin_id', $magasin->getKey())->delete();
+    }
+
+    /**
      * Filament\Models\Contracts\HasTenants : liste des magasins affichés
      * dans le sélecteur de tenant du panneau "app". Seuls les
      * rattachements actifs apparaissent -- un accès invité ou suspendu

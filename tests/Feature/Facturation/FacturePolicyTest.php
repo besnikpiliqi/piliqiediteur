@@ -6,10 +6,16 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -93,5 +99,63 @@ class FacturePolicyTest extends TestCase
         $this->actingAs($comptable);
         $contexte->set($magasin);
         $this->assertTrue($comptable->can('view', $facture));
+    }
+
+    /**
+     * @return array<string, array{RoleMagasin, bool}>
+     */
+    public static function rolesQuiEnvoientLesFacturesDeLEquipe(): array
+    {
+        return [
+            'administrateur' => [RoleMagasin::Administrateur, true],
+            'comptable' => [RoleMagasin::Comptable, true],
+            'vendeur' => [RoleMagasin::Vendeur, false],
+            'observateur' => [RoleMagasin::Observateur, false],
+        ];
+    }
+
+    /**
+     * Envoyer ou relancer une facture : seulement celles que l'on voit
+     * (un vendeur, les siennes), et avec la permission d'envoyer.
+     */
+    #[DataProvider('rolesQuiEnvoientLesFacturesDeLEquipe')]
+    public function test_envoyer_une_facture_du_proprietaire_selon_le_role(RoleMagasin $role, bool $peutEnvoyer): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $facture = $this->emettreUneFactureEnTantQue($proprietaire, $magasin);
+
+        $this->assertSame($peutEnvoyer, $membre->can('envoyer', $facture));
+    }
+
+    public function test_un_vendeur_envoie_ses_propres_factures(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Vendeur', 'email' => 'vendeur@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+
+        $this->assertTrue($vendeur->can('envoyer', $this->emettreUneFactureEnTantQue($vendeur, $magasin)));
+    }
+
+    public function test_personne_n_envoie_la_facture_d_un_autre_magasin(): void
+    {
+        $proprietaireA = User::factory()->create();
+        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $proprietaireA);
+        $factureDeA = $this->emettreUneFactureEnTantQue($proprietaireA, $magasinA);
+        $proprietaireB = User::factory()->create();
+        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+
+        $this->assertFalse($proprietaireB->can('envoyer', $factureDeA));
+    }
+
+    private function emettreUneFactureEnTantQue(User $auteur, Magasin $magasin): Facture
+    {
+        $this->actingAs($auteur);
+        app(TenantContext::class)->set($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]));
     }
 }

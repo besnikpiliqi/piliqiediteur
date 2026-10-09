@@ -47,6 +47,12 @@ return new class extends Migration
             // réactive.
             $table->boolean('prix_vente_automatique')->default(false);
             $table->json('bareme_prix_vente');
+            // Relances des factures impayées (voir RelancerFacturesImpayees) :
+            // désactivées au départ ; les délais, en jours après l'échéance,
+            // démarrent avec l'exemple du logiciel (voir Magasin::booted())
+            // et restent gardés quand le magasin les désactive.
+            $table->boolean('relances_automatiques')->default(false);
+            $table->json('delais_relance');
             $table->timestamps();
             $table->softDeletes();
 

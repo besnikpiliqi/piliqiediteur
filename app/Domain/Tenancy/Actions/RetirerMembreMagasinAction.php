@@ -12,7 +12,9 @@ use LogicException;
  * "Supprimer" un membre ne supprime jamais son compte User (il peut
  * appartenir à d'autres magasins, ex: un comptable) : seul le
  * rattachement à CE magasin disparaît, avec nettoyage du rôle Spatie
- * correspondant pour ne pas laisser une assignation orpheline.
+ * correspondant pour ne pas laisser une assignation orpheline, et ses
+ * notifications à propos de ce magasin (voir NotificationDuMagasin), qui
+ * ne le regardent plus.
  */
 class RetirerMembreMagasinAction
 {
@@ -25,6 +27,7 @@ class RetirerMembreMagasinAction
         DB::transaction(function () use ($membre) {
             app(TenantContext::class)->set($membre->magasin);
             $membre->utilisateur->removeRole($membre->role->value);
+            $membre->utilisateur->effacerLesNotificationsDu($membre->magasin);
             $membre->delete();
         });
     }

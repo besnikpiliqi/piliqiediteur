@@ -34,7 +34,10 @@ enum StatutFacture: string implements HasColor, HasLabel
             // solde réglé (un deuxième paiement par exemple), et reste
             // détectable comme en retard si l'échéance passe entre-temps.
             self::PartiellementPayee => [self::Payee, self::EnRetard],
-            self::EnRetard => [self::PartiellementPayee, self::Payee],
+            // Une facture en retard le reste après un paiement partiel :
+            // son échéance est toujours dépassée (voir
+            // Facture::constaterUnReglement()).
+            self::EnRetard => [self::Payee],
             self::Payee, self::Annulee => [],
         };
     }
@@ -55,7 +58,15 @@ enum StatutFacture: string implements HasColor, HasLabel
      */
     public function attendUnReglement(): bool
     {
-        return in_array($this, [self::Emise, self::Envoyee, self::PartiellementPayee, self::EnRetard], true);
+        return in_array($this, self::quiAttendentUnReglement(), true);
+    }
+
+    /**
+     * @return list<self>
+     */
+    public static function quiAttendentUnReglement(): array
+    {
+        return [self::Emise, self::Envoyee, self::PartiellementPayee, self::EnRetard];
     }
 
     public function getLabel(): string

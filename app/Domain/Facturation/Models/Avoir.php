@@ -4,7 +4,9 @@ namespace App\Domain\Facturation\Models;
 
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
+use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -29,10 +31,10 @@ use Illuminate\Support\Collection;
  * un avoir est un document fiscal dont la loi impose la conservation
  * (voir AvoirPolicy et la migration create_avoirs_table).
  */
-class Avoir extends Model
+class Avoir extends Model implements DocumentEnvoyable
 {
     /** @use HasFactory<AvoirFactory> */
-    use BelongsToMagasin, HasFactory, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, HasFactory, VentileLaTvaParTaux;
 
     protected $table = 'avoirs';
 
@@ -61,9 +63,13 @@ class Avoir extends Model
         });
     }
 
+    /**
+     * Un document légal garde son client, même archivé depuis (voir les
+     * SoftDeletes de Client) : il se réimprime et se renvoie.
+     */
     public function client(): BelongsTo
     {
-        return $this->belongsTo(Client::class);
+        return $this->belongsTo(Client::class)->withTrashed();
     }
 
     /**
@@ -109,6 +115,19 @@ class Avoir extends Model
             ->filter()
             ->unique('id')
             ->values();
+    }
+
+    public function libelleDocument(): string
+    {
+        return 'Avoir';
+    }
+
+    /**
+     * Seul un avoir émis existe pour son client, comme une facture.
+     */
+    public function peutEtreEnvoye(): bool
+    {
+        return $this->statut === StatutAvoir::Emise;
     }
 
     public function allocations(): HasMany

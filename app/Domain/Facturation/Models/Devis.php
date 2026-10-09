@@ -3,7 +3,9 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
+use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\DevisFactory;
@@ -13,10 +15,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Devis extends Model
+class Devis extends Model implements DocumentEnvoyable
 {
     /** @use HasFactory<DevisFactory> */
-    use BelongsToMagasin, HasFactory, SoftDeletes, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, HasFactory, SoftDeletes, VentileLaTvaParTaux;
 
     protected $table = 'devis';
 
@@ -48,9 +50,13 @@ class Devis extends Model
         });
     }
 
+    /**
+     * Un document légal garde son client, même archivé depuis (voir les
+     * SoftDeletes de Client) : il se réimprime et se renvoie.
+     */
     public function client(): BelongsTo
     {
-        return $this->belongsTo(Client::class);
+        return $this->belongsTo(Client::class)->withTrashed();
     }
 
     public function lignes(): HasMany
@@ -61,6 +67,21 @@ class Devis extends Model
     public function factures(): HasMany
     {
         return $this->hasMany(Facture::class);
+    }
+
+    public function libelleDocument(): string
+    {
+        return 'Devis';
+    }
+
+    /**
+     * Quel que soit son statut : un brouillon reçoit son numéro au moment
+     * de partir (voir EnvoyerDocumentAction), un devis déjà envoyé, accepté
+     * ou refusé peut toujours être renvoyé à son client.
+     */
+    public function peutEtreEnvoye(): bool
+    {
+        return true;
     }
 
     /**

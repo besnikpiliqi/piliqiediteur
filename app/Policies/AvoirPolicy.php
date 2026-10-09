@@ -41,6 +41,11 @@ class AvoirPolicy extends MagasinPolicy
         return $user->can(PermissionRegistry::AVOIR_CREER);
     }
 
+    public function envoyer(User $user, Avoir $avoir): bool
+    {
+        return $this->view($user, $avoir) && $user->can(PermissionRegistry::AVOIR_ENVOYER);
+    }
+
     public function update(User $user, Avoir $avoir): bool
     {
         return false;

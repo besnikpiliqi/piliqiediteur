@@ -394,9 +394,10 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
-     * Deux retours du même article saisis en même temps : le second
-     * brouillon a été créé avant l'émission du premier, mais au moment
-     * d'être émis il ne trouve plus rien à créditer.
+     * Garde d'EmettreAvoirAction appelée directement, hors
+     * EnregistrerAvoirAction : deux brouillons créés à part sur le même
+     * article ; le second, émis après le premier, ne trouve plus rien à
+     * créditer.
      */
     public function test_un_avoir_ne_credite_jamais_une_ligne_creditee_entre_temps_par_un_autre(): void
     {
@@ -418,10 +419,11 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
-     * Les deux retours d'une ligne remisée sont saisis avant toute
-     * émission : chacun vaut alors 30,00 € HT, mais celui qui est émis en
-     * dernier finit de créditer la ligne et en prend le solde exact
-     * (29,99 € HT), comme s'il avait été saisi après le premier.
+     * Garde d'EmettreAvoirAction appelée directement, hors
+     * EnregistrerAvoirAction : les deux brouillons d'une ligne remisée sont
+     * créés avant toute émission et valent chacun 30,00 € HT, mais celui
+     * qui est émis en dernier finit de créditer la ligne et en prend le
+     * solde exact (29,99 € HT), comme s'il avait été créé après le premier.
      */
     public function test_le_dernier_avoir_emis_sur_une_ligne_en_credite_le_solde_exact_meme_saisi_avant(): void
     {
@@ -448,9 +450,10 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
-     * Un brouillon d'avoir saisi avant que sa facture soit entièrement
-     * corrigée par un avoir total ne s'émet plus : il n'a plus rien à
-     * créditer, et le stock n'est rendu qu'une fois.
+     * Garde d'EmettreAvoirAction appelée directement : un brouillon créé à
+     * part, avant que sa facture soit entièrement corrigée par
+     * EnregistrerAvoirAction, ne s'émet plus. Il n'a plus rien à créditer,
+     * et le stock n'est rendu qu'une fois.
      */
     public function test_un_brouillon_d_avoir_ne_s_emet_plus_apres_la_correction_totale_de_sa_facture(): void
     {

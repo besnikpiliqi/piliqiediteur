@@ -182,10 +182,13 @@ class FermerSaCaisseActionTest extends TestCase
     }
 
     /**
-     * Une vente corrigée par un avoir avant la fermeture reste une vente
-     * émise du vendeur : le relevé la compte. L'avoir, document à part, ne
-     * rend aucun argent (il reste un crédit du client) et n'entre pas dans
-     * le relevé.
+     * Comportement constaté, pas une règle arrêtée : le relevé compte en
+     * entier une vente reprise par un avoir avant la fermeture et ne déduit
+     * pas l'avoir, alors que la clôture de la journée le déduit (voir
+     * CloturerCaisseActionTest). Ici l'avoir total solde la vente restée
+     * impayée : aucun crédit ne reste au client, et cette vente n'a fait
+     * entrer aucun argent dans la caisse. Le contenu du relevé reste à
+     * décider par l'éditeur.
      */
     public function test_une_vente_corrigee_par_un_avoir_avant_la_fermeture_reste_comptee(): void
     {
@@ -193,13 +196,15 @@ class FermerSaCaisseActionTest extends TestCase
         $client = Client::factory()->create();
         $this->emettreFacturePour($vendeur, $client, 100);
         $venteCorrigee = Facture::query()->firstOrFail();
-        app(EnregistrerAvoirAction::class)->handle($client, [
+        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [
             ['ligne_facture_id' => $venteCorrigee->lignes->firstOrFail()->id, 'quantite' => 1],
         ], 'Erreur de saisie');
         $this->emettreFacturePour($vendeur, $client, 50);
 
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur);
 
+        $this->assertSame(0.0, $avoir->montantNonAlloue());
+        $this->assertSame(0.0, $venteCorrigee->fresh()->montantRestant());
         $this->assertSame(2, $cloture->nombre_ventes);
         $this->assertSame('180.00', $cloture->total_ttc);
         $this->assertContains($venteCorrigee->id, $cloture->factures()->pluck('factures.id')->all());

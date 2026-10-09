@@ -38,9 +38,11 @@ use Throwable;
  *
  * Le document est relu au moment de partir : une relance ne part que si
  * la facture est toujours échue et impayée, et son rappel dit ce qu'il
- * reste à payer à cet instant. Un document émis le reste pour toujours
- * (une correction est un avoir à part) : un envoi ne perd jamais son
- * objet.
+ * reste à payer à cet instant. Une facture ou un avoir émis le reste pour
+ * toujours (une correction est un avoir à part). Un devis, lui, peut avoir
+ * été supprimé entre-temps (voir DevisPolicy::delete()) : l'envoi échoue
+ * alors, le document n'existant plus (ModelNotFoundException, voir
+ * failed()).
  *
  * Idempotent : un envoi déjà envoyé ne repart jamais, même si le job est
  * rejoué. ShouldBeUnique : jamais deux exécutions du même envoi en

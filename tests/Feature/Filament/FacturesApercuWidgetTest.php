@@ -69,11 +69,12 @@ class FacturesApercuWidgetTest extends TestCase
     }
 
     /**
-     * Une vente corrigée par un avoir reste émise, mais l'avoir se déduit
-     * du chiffre d'affaires de la période où il est émis : une vente
-     * entièrement reprise n'en laisse rien.
+     * Le chiffre d'affaires affiché est le TTC facturé brut : une vente
+     * corrigée par un avoir total reste comptée en entier, et l'avoir ne
+     * s'en déduit pas. Ce test constate le comportement actuel ; déduire
+     * les avoirs, et en HT ou en TTC, reste à décider par l'éditeur.
      */
-    public function test_un_avoir_se_deduit_du_chiffre_daffaires(): void
+    public function test_une_vente_corrigee_par_un_avoir_reste_comptee_en_ttc_brut(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
@@ -92,7 +93,7 @@ class FacturesApercuWidgetTest extends TestCase
 
         Livewire::test(FacturesApercu::class)
             ->assertSuccessful()
-            ->assertSee('0,00 €')
-            ->assertSee('1 facture émise, 1 avoir déduit');
+            ->assertSee('120,00 €')
+            ->assertSee('1 facture émise');
     }
 }

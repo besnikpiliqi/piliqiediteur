@@ -4,9 +4,11 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
@@ -293,6 +295,37 @@ class AvoirResourceTest extends TestCase
         $lignes = $livewire->instance()->form->getRawState()['lignes'];
         $this->assertCount(1, $lignes, 'Seule la ligne du client sélectionné doit être proposée.');
         $this->assertSame($factureDeA->lignes->firstOrFail()->id, $lignes[0]['ligne_facture_id']);
+    }
+
+    /**
+     * Un client passé professionnel après un ticket a des lignes
+     * créditables dans les deux séries : le formulaire fait choisir la
+     * série avant de proposer des lignes, et ne préremplit donc jamais le
+     * mélange que CreerAvoirAction refuse.
+     */
+    public function test_le_formulaire_fait_choisir_tickets_ou_factures_avant_de_proposer_les_lignes(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $ticket = $this->emettreFactureDepuisLePanneau($client);
+        $client->update(['type_client' => TypeClient::Professionnel, 'siret' => '73282932000074']);
+        $this->emettreFactureDepuisLePanneau($client);
+
+        $formulaire = Livewire::test(CreateAvoir::class)
+            ->fillForm(['client_id' => $client->id, 'motif' => 'Retour du ticket']);
+
+        $this->assertSame([], $formulaire->instance()->form->getRawState()['lignes']);
+        $formulaire->call('create')->assertHasFormErrors(['serie' => 'required']);
+
+        $formulaire->fillForm(['serie' => TypeDocument::TicketCaisse->value]);
+
+        $lignesProposees = array_values($formulaire->instance()->form->getRawState()['lignes']);
+        $this->assertSame([$ticket->lignes->firstOrFail()->id], array_column($lignesProposees, 'ligne_facture_id'));
+        $formulaire->call('create')->assertHasNoFormErrors();
+        $this->assertSame([$ticket->id], Avoir::query()->firstOrFail()->facturesConcernees()->pluck('id')->all());
     }
 
     public function test_le_client_d_un_autre_magasin_est_refuse(): void

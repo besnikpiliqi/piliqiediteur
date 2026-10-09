@@ -25,10 +25,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  *
  * N'agrège PAS que les ventes aux particuliers (contrairement à
  * ClotureCaisse) : toutes les factures du vendeur comptent, l'objectif
- * étant de vérifier sa propre caisse, pas l'e-reporting. Les ventes
- * comptées sont notées dans une table à part (voir factures()), jamais sur
- * la facture elle-même : une facture déjà incluse ici reste pleinement
- * éligible à la clôture officielle de la journée.
+ * étant de vérifier sa propre caisse, pas l'e-reporting. Les avoirs n'y
+ * entrent pas : une vente reprise par un avoir y compte en entier, alors
+ * que la clôture de la journée déduit l'avoir le jour de son émission
+ * (voir CloturerCaisseAction). Les ventes comptées sont notées dans une
+ * table à part (voir factures()), jamais sur la facture elle-même : une
+ * facture déjà incluse ici reste pleinement éligible à la clôture
+ * officielle de la journée.
  */
 class ClotureCaissePersonnelle extends Model
 {

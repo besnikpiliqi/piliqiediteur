@@ -52,12 +52,17 @@ class EmettreAvoirAction
     }
 
     /**
-     * Un brouillon n'a encore aucune existence légale : entre sa création
-     * et son émission, un autre avoir a pu créditer les mêmes lignes (deux
-     * retours saisis en même temps). Ses quantités sont donc revérifiées et
-     * ses montants arrêtés au moment où il devient un document fiscal -- le
-     * dernier retour d'une ligne en prend alors le solde exact (voir
+     * Garde du domaine pour un brouillon émis par un appel direct, après
+     * sa création dans une autre transaction : entre-temps, un autre avoir
+     * a pu créditer les mêmes lignes. Ses quantités sont donc revérifiées
+     * et ses montants arrêtés au moment où il devient un document fiscal
+     * -- le dernier retour d'une ligne en prend alors le solde exact (voir
      * LigneFacture::montantsDuRetour()).
+     *
+     * Par EnregistrerAvoirAction, seul chemin de l'application, les lignes
+     * restent verrouillées depuis CreerAvoirAction jusqu'ici : cette
+     * revérification n'y refuse jamais rien et retrouve les montants déjà
+     * calculés à la création.
      *
      * @throws LogicException
      */

@@ -8,6 +8,7 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
@@ -328,6 +329,28 @@ class EnvoyerDocumentJobTest extends TestCase
 
         $this->assertSame(0, $ancienMembre->notifications()->count());
         $this->assertSame(1, $magasin->proprietaires()->sole()->notifications()->count());
+    }
+
+    /**
+     * Un devis se supprime tant qu'aucune facture n'en est issue (voir
+     * DevisPolicy::delete()) : supprimé avant le départ de son envoi, il le
+     * fait échouer, avec une explication pour le magasin.
+     */
+    public function test_un_devis_supprime_avant_le_depart_de_son_envoi_le_fait_echouer(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $devis = app(EmettreDevisAction::class)->handle($devis);
+        $envoi = EnvoiDocument::factory()->for($devis, 'document')->create(['destinataire' => 'client@exemple.fr']);
+        $devis->delete();
+
+        $this->assertThrows(fn () => EnvoyerDocumentJob::dispatchSync($magasin->id, $envoi->id), ModelNotFoundException::class);
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame('Le document n\'existe plus.', $envoi->erreur);
     }
 
     public function test_le_job_envoie_dans_le_magasin_de_l_envoi_quel_que_soit_le_contexte(): void

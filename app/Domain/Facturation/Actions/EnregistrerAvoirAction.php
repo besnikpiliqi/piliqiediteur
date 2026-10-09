@@ -10,11 +10,15 @@ use LogicException;
 /**
  * Corrige un ticket ou une facture émis : crée l'avoir (voir
  * CreerAvoirAction) et l'émet (voir EmettreAvoirAction) dans une seule
- * transaction. Un refus à l'émission -- une ligne créditée entre-temps
- * par un autre avoir, par exemple -- ne laisse donc aucun brouillon
- * d'avoir derrière lui : pour le magasin, un avoir n'existe qu'une fois
- * émis. C'est le seul chemin de l'interface (voir CreateAvoir et l'action
- * « Avoir » de FactureResource).
+ * transaction. Un échec pendant l'émission -- dans un écouteur d'AvoirEmis
+ * (retour au stock, imputation sur les factures) ou à la numérotation --
+ * ne laisse donc aucun brouillon d'avoir derrière lui : pour le magasin,
+ * un avoir n'existe qu'une fois émis. C'est le seul chemin de l'interface
+ * (voir CreateAvoir et l'action « Avoir » de FactureResource).
+ *
+ * Les lignes de facture verrouillées par CreerAvoirAction le restent
+ * jusqu'à la fin de l'émission : un second retour sur les mêmes lignes
+ * attend, puis est refusé dès sa création s'il dépasse ce qui reste.
  */
 class EnregistrerAvoirAction
 {

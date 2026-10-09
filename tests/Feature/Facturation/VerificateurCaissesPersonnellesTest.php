@@ -134,9 +134,11 @@ class VerificateurCaissesPersonnellesTest extends TestCase
     }
 
     /**
-     * Une vente émise puis corrigée le même jour par un avoir reste une
-     * vente émise que la fermeture du vendeur doit compter : elle laisse
-     * sa caisse ouverte jusqu'à cette fermeture, pas au-delà.
+     * Comportement constaté, qui suit celui du relevé (voir
+     * FermerSaCaisseActionTest) : une vente émise puis reprise le même jour
+     * par un avoir reste une vente que la fermeture du vendeur compte, et
+     * laisse donc sa caisse ouverte jusqu'à cette fermeture, pas au-delà.
+     * Le contenu du relevé reste à décider par l'éditeur.
      */
     public function test_une_vente_corrigee_par_un_avoir_laisse_la_caisse_ouverte_jusqua_sa_fermeture(): void
     {

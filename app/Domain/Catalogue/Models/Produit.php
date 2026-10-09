@@ -159,7 +159,7 @@ class Produit extends Model
 
     /**
      * La ligne de son dernier achat validé (voir achatsValides()), qui
-     * donne son fournisseur et, s'il ne suit pas son stock, son coût.
+     * donne son fournisseur.
      */
     public function dernierAchatValide(): ?LigneAchat
     {

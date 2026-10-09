@@ -713,9 +713,10 @@ class FactureAchatActionsTest extends TestCase
 
     /**
      * Ce qu'une réception a fait entrer en stock se lit dans le grand
-     * livre, pas dans ses lignes : 10 reçus, puis corrigés à 5 pendant que
-     * le produit ne suivait plus son stock (rien ne bouge). Le suivi
-     * réactivé, la réception corrigée à 7 retire 3 des 10 entrés.
+     * livre et se corrige même quand le produit ne suit plus son stock :
+     * 10 reçus, puis corrigés à 5 après que le suivi a été désactivé sur la
+     * fiche (le stock suit la facture). Le suivi réactivé, la réception
+     * corrigée à 7 en fait entrer 2 de plus.
      */
     public function test_corriger_une_reception_part_de_ce_qu_elle_a_fait_entrer_en_stock(): void
     {
@@ -726,7 +727,7 @@ class FactureAchatActionsTest extends TestCase
         $factureAchat = app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 4],
         ]);
-        $this->assertSame(10, $produit->fresh()->stock_quantite);
+        $this->assertSame(5, $produit->fresh()->stock_quantite);
         $produit->update(['suivi_stock' => true]);
 
         app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
@@ -734,6 +735,34 @@ class FactureAchatActionsTest extends TestCase
         ]);
 
         $this->assertSame(['4.0000', 7], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
+    }
+
+    /**
+     * Décocher le suivi depuis la ligne d'une réception corrigée revient au
+     * même que le désactiver sur la fiche : ce qu'elle a fait entrer se
+     * corrige, et le produit, qui ne suit plus son stock, coûte son dernier
+     * achat. 10 reçus à 2 €, puis 10 à 4 € (CMUP 3 €), la seconde réception
+     * corrigée à 5 à 6 € sans suivi : 15 en stock à 6 €, pas au CMUP
+     * rejoué de (10 x 2 + 5 x 6) / 15 = 3,33 €.
+     */
+    public function test_decocher_le_suivi_en_corrigeant_une_reception_corrige_son_stock_au_cout_du_dernier_achat(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['cmup_ht' => 2, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 2]]);
+        $seconde = $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 4]]);
+
+        app(ModifierFactureAchatAction::class)->handle($seconde, $fournisseur, [
+            ['produit_id' => $produit->id, 'produit' => ['suivi_stock' => false], 'quantite' => 5, 'prix_unitaire_ht' => 6],
+        ]);
+
+        $produit->refresh();
+        $this->assertFalse($produit->suivi_stock);
+        $this->assertSame(['6.0000', 15], [$produit->cmup_ht, $produit->stock_quantite]);
+        $this->assertSame(
+            [['ajustement_sortie', 5, $seconde->id]],
+            $produit->mouvementsStock()->whereNot('type', TypeMouvementStock::ReceptionAchat)->get()->map(fn (MouvementStock $mouvement): array => [$mouvement->type->value, $mouvement->quantite, $mouvement->source_id])->all(),
+        );
     }
 
     /**
@@ -805,6 +834,54 @@ class FactureAchatActionsTest extends TestCase
 
         $this->assertSame(['3.0000', 4], [$ajoute->fresh()->cmup_ht, $ajoute->fresh()->stock_quantite]);
         $this->assertSame(['2.0000', 10], [$recu->fresh()->cmup_ht, $recu->fresh()->stock_quantite]);
+    }
+
+    /**
+     * Un produit ajouté à une réception validée la suit comme une nouvelle
+     * réception, avec le suivi du stock que sa ligne lui donne : un produit
+     * qui ne suivait pas son stock, coché depuis la ligne, y entre.
+     */
+    public function test_un_produit_ajoute_dont_la_ligne_active_le_suivi_entre_en_stock(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $recu = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $ajoute = Produit::factory()->create(['cmup_ht' => 9, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $factureAchat = $this->recevoir($fournisseur, [['produit_id' => $recu->id, 'quantite' => 10, 'prix_unitaire_ht' => 2]]);
+
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => $recu->id, 'quantite' => 10, 'prix_unitaire_ht' => 2],
+            ['produit_id' => $ajoute->id, 'produit' => ['suivi_stock' => true], 'quantite' => 4, 'prix_unitaire_ht' => 3],
+        ]);
+
+        $ajoute->refresh();
+        $this->assertTrue($ajoute->suivi_stock);
+        $this->assertSame(['3.0000', 4], [$ajoute->cmup_ht, $ajoute->stock_quantite]);
+        $this->assertSame(
+            [['ajustement_entree', 4, $factureAchat->id]],
+            $ajoute->mouvementsStock()->get()->map(fn (MouvementStock $mouvement): array => [$mouvement->type->value, $mouvement->quantite, $mouvement->source_id])->all(),
+        );
+    }
+
+    /**
+     * À l'inverse, un produit ajouté dont la ligne décoche le suivi du
+     * stock n'y entre pas : il coûte son dernier achat, cette ligne.
+     */
+    public function test_un_produit_ajoute_dont_la_ligne_desactive_le_suivi_n_entre_pas_en_stock(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $recu = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $ajoute = Produit::factory()->create(['cmup_ht' => 9, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir($fournisseur, [['produit_id' => $recu->id, 'quantite' => 10, 'prix_unitaire_ht' => 2]]);
+
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => $recu->id, 'quantite' => 10, 'prix_unitaire_ht' => 2],
+            ['produit_id' => $ajoute->id, 'produit' => ['suivi_stock' => false], 'quantite' => 4, 'prix_unitaire_ht' => 3],
+        ]);
+
+        $ajoute->refresh();
+        $this->assertFalse($ajoute->suivi_stock);
+        $this->assertSame(['3.0000', 0], [$ajoute->cmup_ht, $ajoute->stock_quantite]);
+        $this->assertSame(0, $ajoute->mouvementsStock()->count());
     }
 
     /**

@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -13,10 +14,12 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\MagasinUser;
+use App\Models\User;
 use App\Policies\AvoirFournisseurPolicy;
 use App\Policies\AvoirPolicy;
 use App\Policies\ClientPolicy;
@@ -38,6 +41,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
@@ -48,6 +52,17 @@ use Illuminate\Validation\Validator as ValidatorDeLaravel;
 
 class AppServiceProvider extends ServiceProvider
 {
+    /**
+     * scoped() : le verrou du registre fiscal pris dans une transaction, et
+     * son instant, valent pour toutes les écritures fiscales de cette
+     * transaction (voir RegistreFiscal), et s'oublient entre deux requêtes
+     * ou deux jobs.
+     */
+    public function register(): void
+    {
+        $this->app->scoped(RegistreFiscal::class);
+    }
+
     /**
      * Bootstrap any application services.
      */
@@ -82,10 +97,37 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(AvoirFournisseur::class, AvoirFournisseurPolicy::class);
         Gate::policy(SoumissionEReporting::class, SoumissionEReportingPolicy::class);
 
+        $this->nommerLesModelesPolymorphes();
         $this->declarerLaSaisieEnDirect();
         $this->limiterLesChoixAuMagasin();
         $this->nommerLesChampsDansLesMessages();
         $this->ecrireLesDatesEnFrancaisDansLesMessages();
+    }
+
+    /**
+     * Le nom sous lequel un modèle s'écrit dans une colonne polymorphique
+     * (document_type du registre fiscal et des envois, source_type du
+     * grand livre du stock, transmissible_type, notifiable_type,
+     * model_type des rôles) : un alias stable plutôt que le nom de sa
+     * classe, qu'un déplacement de fichier changerait, alors que le
+     * registre fiscal le signe (voir RegistreFiscal). Sans
+     * enforceMorphMap() : un modèle absent de la liste garde le nom de sa
+     * classe.
+     */
+    private function nommerLesModelesPolymorphes(): void
+    {
+        Relation::morphMap([
+            'avoir' => Avoir::class,
+            'avoir_fournisseur' => AvoirFournisseur::class,
+            'cloture_caisse' => ClotureCaisse::class,
+            'devis' => Devis::class,
+            'facture' => Facture::class,
+            'facture_achat' => FactureAchat::class,
+            'ligne_avoir' => LigneAvoir::class,
+            'paiement' => Paiement::class,
+            'soumission_ereporting' => SoumissionEReporting::class,
+            'utilisateur' => User::class,
+        ]);
     }
 
     /**

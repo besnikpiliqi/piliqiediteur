@@ -6,6 +6,9 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Models\LigneAvoirFournisseur;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -45,6 +48,7 @@ use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\SoumissionEReportingResource;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Closure;
 use Filament\Resources\Resource as RessourceFilament;
 use Illuminate\Database\Eloquent\Model;
@@ -102,13 +106,15 @@ class TenantIsolationTest extends TestCase
     ];
 
     /**
-     * Modèles de magasin qui n'ont pas de fabrique. Seule
-     * SoumissionEReporting est aussi dans modelesCrees() : create()
-     * l'enregistre sans autre enregistrement à préparer.
+     * Modèles de magasin qui n'ont pas de fabrique. Seuls
+     * EnregistrementFiscal, SoumissionEReporting et TeteRegistreFiscal sont
+     * aussi dans modelesCrees() : create() les enregistre sans autre
+     * enregistrement à préparer.
      *
      * @var list<class-string<Model>>
      */
     private const MODELES_SANS_FABRIQUE = [
+        EnregistrementFiscal::class,
         LigneAchat::class,
         LigneAvoir::class,
         LigneAvoirFournisseur::class,
@@ -116,6 +122,7 @@ class TenantIsolationTest extends TestCase
         LigneFacture::class,
         MouvementStock::class,
         SoumissionEReporting::class,
+        TeteRegistreFiscal::class,
         TransmissionPdp::class,
     ];
 
@@ -148,7 +155,8 @@ class TenantIsolationTest extends TestCase
      * Les modèles de magasin que ces tests créent, chacun avec la création
      * d'un enregistrement aux attributs imposés, même hors $fillable comme
      * le permet une fabrique : par sa fabrique, ou par
-     * creerSoumissionEReporting().
+     * creerEnregistrementFiscal(), creerSoumissionEReporting() ou
+     * creerTeteRegistreFiscal().
      *
      * @return array<string, array{0: class-string<Model>, 1: Closure(array<string, mixed>=): Model}>
      */
@@ -159,9 +167,17 @@ class TenantIsolationTest extends TestCase
                 $modele,
                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
             ]])
+            ->put('EnregistrementFiscal', [
+                EnregistrementFiscal::class,
+                static fn (array $attributs = []): Model => self::creerEnregistrementFiscal($attributs),
+            ])
             ->put('SoumissionEReporting', [
                 SoumissionEReporting::class,
                 static fn (array $attributs = []): Model => self::creerSoumissionEReporting($attributs),
+            ])
+            ->put('TeteRegistreFiscal', [
+                TeteRegistreFiscal::class,
+                static fn (array $attributs = []): Model => self::creerTeteRegistreFiscal($attributs),
             ])
             ->all();
     }
@@ -304,6 +320,41 @@ class TenantIsolationTest extends TestCase
             ->get($ressource::getUrl($page, ['record' => $enregistrementDeA, 'tenant' => $magasinB]));
 
         $reponse->assertNotFound();
+    }
+
+    /**
+     * Un enregistrement du registre fiscal du magasin actif, écrit sans
+     * RegistreFiscal, qui inscrirait aussi l'événement d'initialisation du
+     * magasin. Comme une fabrique, il accepte des attributs hors $fillable.
+     *
+     * @param  array<string, mixed>  $attributs
+     */
+    private static function creerEnregistrementFiscal(array $attributs = []): EnregistrementFiscal
+    {
+        return Model::unguarded(static fn (): EnregistrementFiscal => EnregistrementFiscal::create([
+            'chaine' => ChaineFiscale::Vente,
+            'sequence' => 1,
+            'type' => 'ticket',
+            'horodatage' => CarbonImmutable::parse('2026-10-09 08:00:00', 'UTC'),
+            'contenu' => '{"format":1}',
+            'signature' => 'signature',
+            'algorithme' => 'ES256',
+            'cle_id' => str_repeat('0', 64),
+            'version_module' => '1.0',
+            ...$attributs,
+        ]));
+    }
+
+    /**
+     * La ligne de verrou du registre fiscal du magasin actif, créée sans
+     * RegistreFiscal. Comme une fabrique, elle accepte des attributs hors
+     * $fillable.
+     *
+     * @param  array<string, mixed>  $attributs
+     */
+    private static function creerTeteRegistreFiscal(array $attributs = []): TeteRegistreFiscal
+    {
+        return Model::unguarded(static fn (): TeteRegistreFiscal => TeteRegistreFiscal::create($attributs));
     }
 
     /**

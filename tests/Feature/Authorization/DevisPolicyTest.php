@@ -12,7 +12,9 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Filament\App\Resources\DevisResource;
 use App\Models\User;
+use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -93,16 +95,20 @@ class DevisPolicyTest extends TestCase
 
     /**
      * Un devis supprimé ne revient pas et ne s'efface pas de la base, même
-     * pour le propriétaire.
+     * pour le propriétaire. Vérifié par ce que Filament consulte : le Gate
+     * de Laravel refuse déjà une capacité absente de la policy, alors que
+     * Filament l'autorise (helper Filament\authorize).
      */
     public function test_personne_ne_restaure_ni_n_efface_definitivement_un_devis(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
         $devis = $this->creerUnDevis();
 
-        $this->assertFalse($proprietaire->can('restore', $devis));
-        $this->assertFalse($proprietaire->can('forceDelete', $devis));
+        $this->assertFalse(DevisResource::canRestore($devis));
+        $this->assertFalse(DevisResource::canForceDelete($devis));
     }
 
     public function test_personne_ne_supprime_le_devis_d_un_autre_magasin(): void

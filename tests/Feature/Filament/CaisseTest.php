@@ -13,6 +13,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -25,6 +26,7 @@ use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Role;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class CaisseTest extends TestCase
@@ -147,8 +149,9 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * Une méthode Livewire s'appelle directement : la caisse ouverte avant
-     * le retrait d'une permission n'encaisse plus rien après.
+     * La caisse ouverte avant le retrait d'une permission n'encaisse plus
+     * rien après : Filament revérifie canAccess() à chaque requête Livewire
+     * de la page, avant même d'appeler encaisser().
      */
     public function test_encaisser_est_refuse_des_que_le_vendeur_perd_une_permission_de_la_caisse(): void
     {
@@ -168,6 +171,36 @@ class CaisseTest extends TestCase
         $caisse->call('encaisser')->assertForbidden();
 
         $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * encaisser() revérifie elle-même les permissions de la caisse, sans
+     * dépendre de la vérification de Filament à chaque requête Livewire :
+     * appelée directement sur la caisse déjà remplie, elle refuse sans rien
+     * émettre ni encaisser.
+     */
+    public function test_encaisser_reverifie_les_permissions_de_la_caisse_sans_dependre_de_filament(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm([
+            'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+            'mode_paiement' => ModePaiement::CarteBancaire->value,
+        ])->instance();
+        Role::findByName(RoleMagasin::Vendeur->value, 'web')->revokePermissionTo(PermissionRegistry::FACTURE_EMETTRE);
+
+        $this->assertThrows(
+            fn () => $caisse->encaisser(),
+            fn (HttpException $exception): bool => $exception->getStatusCode() === 403,
+        );
+
+        $this->assertSame(0, Facture::query()->count());
+        $this->assertSame(0, Paiement::query()->count());
     }
 
     public function test_encaisser_sans_aucune_ligne_est_refuse(): void

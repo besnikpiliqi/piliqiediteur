@@ -10,10 +10,13 @@ use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureAchatResource;
@@ -446,6 +449,51 @@ class FactureAchatResourceTest extends TestCase
             ->assertSee('Reçu sur une facture d\'achat récupérée automatiquement');
     }
 
+    /**
+     * Sans droit sur les produits, la ligne reprend la fiche telle quelle :
+     * la facture s'enregistre sans rien refuser.
+     */
+    public function test_sans_droit_sur_les_produits_un_produit_du_catalogue_s_achete_tel_quel(): void
+    {
+        $this->connecterUnMembreQuiSaisitLesAchatsSansDroitProduit();
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['nom' => 'Coque iPhone 15', 'cmup_ht' => 2.1, 'prix_vente_ttc' => 15, 'taux_tva' => 20, 'seuil_alerte' => 3]);
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => $fournisseur->id])
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: ['produit_id' => $produit->id, 'quantite' => 4])
+            ->assertHasNoFormComponentActionErrors()
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame($produit->id, FactureAchat::query()->sole()->lignes->sole()->produit_id);
+        $produit->refresh();
+        $this->assertSame(['Coque iPhone 15', '15.00', 3], [$produit->nom, $produit->prix_vente_ttc, $produit->seuil_alerte]);
+    }
+
+    /**
+     * Une ligne forgée qui change la fiche d'un produit est refusée, avec un
+     * message, quand la personne ne peut pas modifier les produits.
+     */
+    public function test_une_ligne_forgee_ne_change_pas_le_prix_d_un_produit_sans_droit_de_le_modifier(): void
+    {
+        $this->connecterUnMembreQuiSaisitLesAchatsSansDroitProduit();
+        $produit = Produit::factory()->create(['nom' => 'Écran iPhone 13', 'prix_vente_ttc' => 150, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm([
+                'fournisseur_id' => Fournisseur::factory()->create()->id,
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'produit' => ['nom' => 'Écran iPhone 13', 'prix_vente_ttc' => '1.00'], 'quantite' => 1, 'prix_unitaire_ht' => '40.00', 'remise_pourcentage' => 0, 'taux_tva' => '20'],
+                ],
+            ])
+            ->call('create')
+            ->assertNotified('Vous ne pouvez pas modifier la fiche du produit « Écran iPhone 13 » : seule la ligne se modifie ici.');
+
+        $this->assertSame('150.00', $produit->fresh()->prix_vente_ttc);
+        $this->assertSame(0, FactureAchat::query()->count());
+    }
+
     public function test_creer_une_facture_dachat_depuis_le_panneau(): void
     {
         $proprietaire = User::factory()->create();
@@ -707,5 +755,20 @@ class FactureAchatResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         return $magasin;
+    }
+
+    /**
+     * Un observateur à qui le propriétaire a confié la saisie des achats,
+     * sans aucun droit de créer ou de modifier les produits.
+     */
+    private function connecterUnMembreQuiSaisitLesAchatsSansDroitProduit(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Observateur);
+        $membre->givePermissionTo(PermissionRegistry::FACTURE_ACHAT_CREER);
+        $this->actingAs($membre);
+        Filament::setTenant($magasin);
     }
 }

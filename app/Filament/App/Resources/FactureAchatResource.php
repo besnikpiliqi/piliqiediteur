@@ -15,6 +15,7 @@ use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDAchat;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
+use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
@@ -31,7 +32,6 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Enregistre les factures reçues des fournisseurs (réception de
@@ -45,6 +45,7 @@ class FactureAchatResource extends Resource
     use AjouteDesLignesDAchat;
     use GereLesExceptionsMetier;
     use SaisitUneQuantiteRetournee;
+    use SupprimeEnMasseLigneParLigne;
 
     protected static ?string $model = FactureAchat::class;
 
@@ -232,12 +233,7 @@ class FactureAchatResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make()
-                        ->action(function (Collection $records) {
-                            $records
-                                ->filter(fn (FactureAchat $record) => auth()->user()->can('delete', $record))
-                                ->each(fn (FactureAchat $record) => $record->delete());
-                        }),
+                    static::suppressionEnMasse(),
                 ]),
             ]);
     }

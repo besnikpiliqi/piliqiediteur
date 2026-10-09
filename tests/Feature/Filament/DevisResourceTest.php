@@ -16,6 +16,8 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\DevisResource;
@@ -520,5 +522,54 @@ class DevisResourceTest extends TestCase
             ->assertHasFormErrors(['client_id' => 'exists']);
 
         $this->assertSame($client->id, $devis->fresh()->client_id);
+    }
+
+    /**
+     * L'observateur, en lecture seule, n'a pas le bouton de suppression en
+     * masse, et une requête forgée ne supprime aucun devis.
+     */
+    public function test_un_observateur_ne_supprime_pas_de_devis_en_masse(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $observateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Observateur);
+        $this->actingAs($observateur);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
+        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        Livewire::test(ListDevis::class)
+            ->assertTableBulkActionHidden('delete')
+            ->call('mountTableBulkAction', 'delete', [$devis->getKey()])
+            ->call('callMountedTableBulkAction');
+
+        $this->assertNotSoftDeleted($devis);
+    }
+
+    /**
+     * Chaque devis coché repasse par la policy : celui déjà converti en
+     * facture reste, et l'utilisateur est prévenu.
+     */
+    public function test_la_suppression_en_masse_garde_le_devis_deja_converti_en_facture(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
+        $devisBrouillon = app(CreerDevisAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $devisConverti = $this->envoyerDevis($client, $produit);
+        Livewire::test(ListDevis::class)->callTableAction('accepter', $devisConverti);
+        Livewire::test(ListDevis::class)->callTableAction('convertir', $devisConverti->fresh());
+
+        Livewire::test(ListDevis::class)
+            ->callTableBulkAction('delete', [$devisBrouillon, $devisConverti->fresh()])
+            ->assertNotified('1 ligne cochée n\'a pas été supprimée');
+
+        $this->assertSoftDeleted($devisBrouillon);
+        $this->assertNotSoftDeleted($devisConverti);
+        $this->assertSame($devisConverti->id, Facture::query()->sole()->devisOrigine->id);
     }
 }

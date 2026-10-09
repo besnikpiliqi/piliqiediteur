@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Filament\App\Resources\ClientResource\Pages;
+use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Radio;
@@ -22,6 +23,8 @@ use Illuminate\Support\HtmlString;
 
 class ClientResource extends Resource
 {
+    use SupprimeEnMasseLigneParLigne;
+
     protected static ?string $model = Client::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-users';
@@ -178,7 +181,7 @@ class ClientResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    static::suppressionEnMasse(),
                 ]),
             ]);
     }

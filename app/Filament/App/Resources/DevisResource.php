@@ -15,6 +15,7 @@ use App\Filament\Concerns\AjouteDesLignesDeVente;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitLesPrixDeLigne;
+use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DatePicker;
@@ -40,6 +41,7 @@ class DevisResource extends Resource
     use EnvoieLesDocuments;
     use GereLesExceptionsMetier;
     use SaisitLesPrixDeLigne;
+    use SupprimeEnMasseLigneParLigne;
 
     protected static ?string $model = Devis::class;
 
@@ -235,7 +237,7 @@ class DevisResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    static::suppressionEnMasse(),
                 ]),
             ]);
     }

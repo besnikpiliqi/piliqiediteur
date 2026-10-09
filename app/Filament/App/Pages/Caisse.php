@@ -37,10 +37,10 @@ use LogicException;
  * « Ajouter un service », voir AjouteDesLignesDeVente) : aucune raison de
  * dupliquer cette logique pour un troisième formulaire de lignes.
  *
- * Accessible à quiconque peut créer une facture (voir canAccess()) : la
- * caisse n'introduit aucune permission dédiée, elle n'est qu'une façon
- * plus rapide de faire ce qu'un vendeur peut déjà faire via le
- * formulaire complet.
+ * La caisse n'introduit aucune permission dédiée : elle n'est qu'une façon
+ * plus rapide de faire ce qu'un vendeur peut déjà faire ailleurs, créer
+ * une facture, l'émettre et enregistrer son paiement. Elle exige donc ces
+ * trois permissions (voir canAccess()).
  */
 class Caisse extends Page implements HasForms
 {
@@ -70,7 +70,11 @@ class Caisse extends Page implements HasForms
 
     public static function canAccess(): bool
     {
-        return auth()->user()?->can(PermissionRegistry::FACTURE_CREATE) ?? false;
+        return auth()->user()?->can([
+            PermissionRegistry::FACTURE_CREATE,
+            PermissionRegistry::FACTURE_EMETTRE,
+            PermissionRegistry::PAIEMENT_CREER,
+        ]) ?? false;
     }
 
     public function mount(): void
@@ -169,8 +173,16 @@ class Caisse extends Page implements HasForms
         ])->statePath('data');
     }
 
+    /**
+     * Une méthode Livewire s'appelle directement, page déjà ouverte :
+     * Filament revérifie canAccess() à chaque requête, et la caisse le
+     * revérifie elle-même avant d'émettre et d'encaisser, sans dépendre de
+     * ce comportement du panneau.
+     */
     public function encaisser(): void
     {
+        abort_unless(static::canAccess(), 403);
+
         $data = $this->form->getState();
 
         $client = Client::query()->findOrFail($data['client_id']);

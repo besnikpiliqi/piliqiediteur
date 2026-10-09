@@ -10,6 +10,8 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\ClientResource\Pages\CreateClient;
 use App\Filament\App\Resources\ClientResource\Pages\ListClients;
@@ -165,5 +167,27 @@ class ClientResourceTest extends TestCase
         $this->actingAs($proprietaireB)
             ->get("/app/{$magasinA->uuid}/clients")
             ->assertNotFound();
+    }
+
+    /**
+     * L'observateur, en lecture seule, n'a pas le bouton de suppression en
+     * masse, et une requête forgée ne supprime aucun client.
+     */
+    public function test_un_observateur_ne_supprime_pas_de_clients_en_masse(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $observateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Observateur);
+        $this->actingAs($observateur);
+        Filament::setTenant($magasin);
+        $clients = Client::factory()->count(2)->create();
+
+        Livewire::test(ListClients::class)
+            ->assertTableBulkActionHidden('delete')
+            ->call('mountTableBulkAction', 'delete', $clients->modelKeys())
+            ->call('callMountedTableBulkAction');
+
+        $clients->each(fn (Client $client) => $this->assertNotSoftDeleted($client));
     }
 }

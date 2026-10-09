@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -22,6 +23,8 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class CaisseTest extends TestCase
@@ -107,6 +110,64 @@ class CaisseTest extends TestCase
 
         $facture = Facture::query()->where('cree_par', $vendeur->id)->latest('id')->firstOrFail();
         $this->assertSame(StatutFacture::Payee, $facture->statut);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function permissionsDeLaCaisse(): array
+    {
+        return [
+            'sans créer de facture' => [PermissionRegistry::FACTURE_CREATE],
+            'sans émettre de facture' => [PermissionRegistry::FACTURE_EMETTRE],
+            'sans enregistrer de paiement' => [PermissionRegistry::PAIEMENT_CREER],
+        ];
+    }
+
+    /**
+     * Encaisser crée, émet et règle une facture : la caisse demande les
+     * trois permissions, pas seulement celle de créer une facture.
+     */
+    #[DataProvider('permissionsDeLaCaisse')]
+    public function test_la_caisse_est_refusee_sans_l_une_de_ses_trois_permissions(string $permissionManquante): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $observateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Observateur);
+        $observateur->givePermissionTo(array_values(array_diff([
+            PermissionRegistry::FACTURE_CREATE,
+            PermissionRegistry::FACTURE_EMETTRE,
+            PermissionRegistry::PAIEMENT_CREER,
+        ], [$permissionManquante])));
+        $this->actingAs($observateur);
+        Filament::setTenant($magasin);
+
+        Livewire::test(Caisse::class)->assertForbidden();
+    }
+
+    /**
+     * Une méthode Livewire s'appelle directement : la caisse ouverte avant
+     * le retrait d'une permission n'encaisse plus rien après.
+     */
+    public function test_encaisser_est_refuse_des_que_le_vendeur_perd_une_permission_de_la_caisse(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm([
+            'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+            'mode_paiement' => ModePaiement::CarteBancaire->value,
+        ]);
+        Role::findByName(RoleMagasin::Vendeur->value, 'web')->revokePermissionTo(PermissionRegistry::FACTURE_EMETTRE);
+
+        $caisse->call('encaisser')->assertForbidden();
+
+        $this->assertSame(0, Facture::query()->count());
     }
 
     public function test_encaisser_sans_aucune_ligne_est_refuse(): void

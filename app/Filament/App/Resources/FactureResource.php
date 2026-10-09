@@ -22,6 +22,7 @@ use App\Filament\App\Resources\FactureResource\Pages;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
+use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
@@ -40,7 +41,6 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
 class FactureResource extends Resource
@@ -48,6 +48,7 @@ class FactureResource extends Resource
     use EnvoieLesDocuments;
     use GereLesExceptionsMetier;
     use SaisitUneQuantiteRetournee;
+    use SupprimeEnMasseLigneParLigne;
 
     protected static ?string $model = Facture::class;
 
@@ -491,22 +492,11 @@ class FactureResource extends Resource
                         app(EmettreAvoirAction::class)->handle($avoir);
                     })),
             ])
-            // Pour corriger une erreur déjà émise, on émet un avoir (voir
-            // l'action "avoir" ci-dessus et AvoirResource) : la suppression
-            // en masse ne doit jamais pouvoir toucher une facture déjà
-            // numérotée. DeleteBulkAction de Filament ne revérifie PAS la
-            // policy par enregistrement sélectionné (seulement au niveau du
-            // bouton via deleteAny()) : sans ce filtre explicite, un
-            // utilisateur pourrait sélectionner un mélange de brouillons et
-            // de factures émises et supprimer ces dernières aussi.
+            // Seuls les brouillons partent : une facture déjà émise se
+            // corrige par un avoir (voir l'action "avoir" ci-dessus).
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make()
-                        ->action(function (Collection $records) {
-                            $records
-                                ->filter(fn (Facture $record) => auth()->user()->can('delete', $record))
-                                ->each(fn (Facture $record) => $record->delete());
-                        }),
+                    static::suppressionEnMasse(),
                 ]),
             ]);
     }

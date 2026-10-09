@@ -10,12 +10,17 @@ use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use LogicException;
@@ -233,6 +238,50 @@ class FactureAchatActionsTest extends TestCase
         app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit_id' => $produit->id, 'produit' => ['nom' => 'Écran renommé'], 'quantite' => 1],
         ]);
+    }
+
+    /**
+     * L'état du formulaire se forge : corriger la fiche d'un produit depuis
+     * une ligne demande le droit de modifier les produits, même à qui peut
+     * en créer.
+     */
+    public function test_sans_droit_de_modifier_les_produits_une_ligne_ne_corrige_pas_leur_fiche(): void
+    {
+        $this->connecterUnMembreQuiSaisitLesAchats([PermissionRegistry::PRODUIT_CREATE]);
+        $produit = Produit::factory()->create(['nom' => 'Écran iPhone 13', 'prix_vente_ttc' => 150, 'taux_tva' => 20]);
+
+        try {
+            app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+                ['produit_id' => $produit->id, 'produit' => ['prix_vente_ttc' => '1.00'], 'quantite' => 1, 'prix_unitaire_ht' => 40],
+            ]);
+            $this->fail('La fiche du produit ne doit pas être corrigée sans le droit de la modifier.');
+        } catch (LogicException $exception) {
+            $this->assertSame('Vous ne pouvez pas modifier la fiche du produit « Écran iPhone 13 » : seule la ligne se modifie ici.', $exception->getMessage());
+        }
+
+        $this->assertSame('150.00', $produit->fresh()->prix_vente_ttc);
+        $this->assertSame(0, FactureAchat::query()->count());
+    }
+
+    /**
+     * Créer un produit depuis une ligne demande le droit de créer des
+     * produits, même à qui peut en modifier.
+     */
+    public function test_sans_droit_de_creer_des_produits_une_ligne_ne_cree_pas_de_produit(): void
+    {
+        $this->connecterUnMembreQuiSaisitLesAchats([PermissionRegistry::PRODUIT_UPDATE]);
+
+        try {
+            app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+                ['produit' => ['nom' => 'Câble USB-C', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 0.47],
+            ]);
+            $this->fail('Aucun produit ne doit être créé sans le droit d\'en créer.');
+        } catch (LogicException $exception) {
+            $this->assertSame('Vous ne pouvez pas créer de produit : « Câble USB-C » doit d\'abord être ajouté au catalogue.', $exception->getMessage());
+        }
+
+        $this->assertSame(0, Produit::query()->count());
+        $this->assertSame(0, FactureAchat::query()->count());
     }
 
     public function test_une_quantite_achetee_non_entiere_est_refusee(): void
@@ -591,5 +640,21 @@ class FactureAchatActionsTest extends TestCase
         app(ModifierFactureAchatAction::class)->handle($factureAchat->fresh(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
+    }
+
+    /**
+     * Un observateur à qui le propriétaire a confié la saisie des achats,
+     * avec les droits produit donnés.
+     *
+     * @param  list<string>  $droitsProduit
+     */
+    private function connecterUnMembreQuiSaisitLesAchats(array $droitsProduit): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Observateur);
+        $membre->givePermissionTo([PermissionRegistry::FACTURE_ACHAT_CREER, ...$droitsProduit]);
+        $this->actingAs($membre);
     }
 }

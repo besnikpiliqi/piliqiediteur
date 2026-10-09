@@ -4,10 +4,14 @@ namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -22,6 +26,34 @@ use Tests\TestCase;
 class ClientPolicyTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * @return array<string, array{RoleMagasin, bool}>
+     */
+    public static function roles(): array
+    {
+        return [
+            'administrateur' => [RoleMagasin::Administrateur, true],
+            'comptable' => [RoleMagasin::Comptable, false],
+            'vendeur' => [RoleMagasin::Vendeur, false],
+            'observateur' => [RoleMagasin::Observateur, false],
+        ];
+    }
+
+    /**
+     * Un par un ou en masse : seulement ceux qui ont la permission de
+     * supprimer les clients -- pas le vendeur, qui en crée et en modifie.
+     */
+    #[DataProvider('roles')]
+    public function test_supprimer_des_clients_selon_le_role(RoleMagasin $role, bool $peutSupprimer): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $membre = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $client = Client::factory()->create();
+
+        $this->assertSame($peutSupprimer, $membre->can('deleteAny', Client::class));
+        $this->assertSame($peutSupprimer, $membre->can('delete', $client));
+    }
 
     public function test_la_permission_est_scopee_par_magasin_et_le_modele_doit_appartenir_au_contexte_actif(): void
     {

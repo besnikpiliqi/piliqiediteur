@@ -2,8 +2,12 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\FournisseurResource\Pages\CreateFournisseur;
+use App\Filament\App\Resources\FournisseurResource\Pages\ListFournisseurs;
 use App\Filament\App\Resources\ProduitResource\Pages\CreateProduit;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -64,5 +68,27 @@ class FournisseurProduitResourceTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertDatabaseHas('produits', ['reference' => 'REF-001', 'magasin_id' => $magasin->id, 'prix_vente_ttc' => 18, 'prix_vente_ht' => 15]);
+    }
+
+    /**
+     * L'observateur, en lecture seule, n'a pas le bouton de suppression en
+     * masse, et une requête forgée ne supprime aucun fournisseur.
+     */
+    public function test_un_observateur_ne_supprime_pas_de_fournisseurs_en_masse(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $observateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Observateur);
+        $this->actingAs($observateur);
+        Filament::setTenant($magasin);
+        $fournisseurs = Fournisseur::factory()->count(2)->create();
+
+        Livewire::test(ListFournisseurs::class)
+            ->assertTableBulkActionHidden('delete')
+            ->call('mountTableBulkAction', 'delete', $fournisseurs->modelKeys())
+            ->call('callMountedTableBulkAction');
+
+        $fournisseurs->each(fn (Fournisseur $fournisseur) => $this->assertNotSoftDeleted($fournisseur));
     }
 }

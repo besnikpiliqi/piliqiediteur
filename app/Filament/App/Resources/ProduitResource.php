@@ -6,6 +6,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ProduitResource\Pages;
+use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Section;
@@ -24,6 +25,8 @@ use InvalidArgumentException;
 
 class ProduitResource extends Resource
 {
+    use SupprimeEnMasseLigneParLigne;
+
     protected static ?string $model = Produit::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-cube';
@@ -263,7 +266,7 @@ class ProduitResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    static::suppressionEnMasse(),
                 ]),
             ]);
     }

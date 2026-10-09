@@ -32,4 +32,13 @@ class ClientPolicy extends MagasinPolicy
     {
         return $this->appartientAuMagasinActif($client) && $user->can(PermissionRegistry::CLIENT_DELETE);
     }
+
+    /**
+     * Le bouton de suppression en masse ; chaque ligne cochée repasse
+     * ensuite par delete() (voir SupprimeEnMasseLigneParLigne).
+     */
+    public function deleteAny(User $user): bool
+    {
+        return $user->can(PermissionRegistry::CLIENT_DELETE);
+    }
 }

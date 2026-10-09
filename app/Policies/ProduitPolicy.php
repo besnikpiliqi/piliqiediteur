@@ -33,6 +33,15 @@ class ProduitPolicy extends MagasinPolicy
         return $this->appartientAuMagasinActif($produit) && $user->can(PermissionRegistry::PRODUIT_DELETE);
     }
 
+    /**
+     * Le bouton de suppression en masse ; chaque ligne cochée repasse
+     * ensuite par delete() (voir SupprimeEnMasseLigneParLigne).
+     */
+    public function deleteAny(User $user): bool
+    {
+        return $user->can(PermissionRegistry::PRODUIT_DELETE);
+    }
+
     public function ajusterStock(User $user, Produit $produit): bool
     {
         return $this->appartientAuMagasinActif($produit) && $user->can(PermissionRegistry::PRODUIT_AJUSTER_STOCK);

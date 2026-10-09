@@ -28,6 +28,12 @@ use LogicException;
  * prix distincts : le prix de vente ne change jamais le prix d'achat, et
  * seul le barème du magasin, s'il l'a activé, donne son prix de vente à un
  * nouveau produit reçu sans prix (voir BaremePrixDeVente).
+ *
+ * Créer ou corriger un produit depuis une ligne suit les droits de la page
+ * Produits (voir ProduitPolicy), vérifiés ici et non seulement dans le
+ * formulaire, dont l'état se forge. Sans utilisateur connecté (facture
+ * récupérée automatiquement chez le fournisseur), il n'y a aucun droit à
+ * vérifier.
  */
 class ConstructeurLigneAchat
 {
@@ -115,6 +121,7 @@ class ConstructeurLigneAchat
         }
 
         if (! $produit->exists || $produit->isDirty()) {
+            $this->verifierLeDroitDEnregistrer($produit);
             $produit->save();
         }
 
@@ -129,6 +136,23 @@ class ConstructeurLigneAchat
             'ordre' => $ordre,
             ...$this->calculateur->montantsDAchat($prixUnitaireHt, $tauxTva, $quantite, $remise),
         ]);
+    }
+
+    private function verifierLeDroitDEnregistrer(Produit $produit): void
+    {
+        $utilisateur = auth()->user();
+
+        if ($utilisateur === null) {
+            return;
+        }
+
+        if (! $produit->exists && $utilisateur->cannot('create', Produit::class)) {
+            throw new LogicException("Vous ne pouvez pas créer de produit : « {$produit->nom} » doit d'abord être ajouté au catalogue.");
+        }
+
+        if ($produit->exists && $utilisateur->cannot('update', $produit)) {
+            throw new LogicException("Vous ne pouvez pas modifier la fiche du produit « {$produit->getOriginal('nom')} » : seule la ligne se modifie ici.");
+        }
     }
 
     /**

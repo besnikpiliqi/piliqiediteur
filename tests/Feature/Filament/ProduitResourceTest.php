@@ -10,9 +10,12 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\ProduitResource\Pages\CreateProduit;
 use App\Filament\App\Resources\ProduitResource\Pages\EditProduit;
+use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -259,5 +262,40 @@ class ProduitResourceTest extends TestCase
             ->assertHasFormErrors(['fournisseur_id' => 'exists']);
 
         $this->assertNull($produit->fresh()->fournisseur_id);
+    }
+
+    public function test_le_proprietaire_supprime_des_produits_en_masse(): void
+    {
+        $this->connecterProprietaire();
+        $produits = Produit::factory()->count(2)->create();
+
+        Livewire::test(ListProduits::class)
+            ->callTableBulkAction('delete', $produits)
+            ->assertNotified('Supprimé(e)s');
+
+        $produits->each(fn (Produit $produit) => $this->assertSoftDeleted($produit));
+    }
+
+    /**
+     * Sans la permission de supprimer les produits, le vendeur n'a pas le
+     * bouton de suppression en masse, et une requête forgée ne supprime
+     * rien.
+     */
+    public function test_un_vendeur_ne_supprime_pas_de_produits_en_masse(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        Filament::setTenant($magasin);
+        $produits = Produit::factory()->count(2)->create();
+
+        Livewire::test(ListProduits::class)
+            ->assertTableBulkActionHidden('delete')
+            ->call('mountTableBulkAction', 'delete', $produits->modelKeys())
+            ->call('callMountedTableBulkAction');
+
+        $produits->each(fn (Produit $produit) => $this->assertNotSoftDeleted($produit));
     }
 }

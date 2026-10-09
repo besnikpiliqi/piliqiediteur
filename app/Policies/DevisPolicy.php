@@ -35,6 +35,34 @@ class DevisPolicy extends MagasinPolicy
     }
 
     /**
+     * Comme le modifier (voir update()) : jamais un devis qui a servi à
+     * créer une facture, qui garde ainsi son devis d'origine.
+     */
+    public function delete(User $user, Devis $devis): bool
+    {
+        return $this->update($user, $devis);
+    }
+
+    /**
+     * Le bouton de suppression en masse ; chaque devis coché repasse
+     * ensuite par delete() (voir SupprimeEnMasseLigneParLigne).
+     */
+    public function deleteAny(User $user): bool
+    {
+        return $user->can(PermissionRegistry::DEVIS_UPDATE);
+    }
+
+    public function forceDelete(User $user, Devis $devis): bool
+    {
+        return false;
+    }
+
+    public function restore(User $user, Devis $devis): bool
+    {
+        return false;
+    }
+
+    /**
      * Le numéroter, et l'envoyer par e-mail à son client (voir
      * EnvoyerDocumentAction).
      */

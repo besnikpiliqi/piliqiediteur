@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Contacts\Enums\SourceFournisseur;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Filament\App\Resources\FournisseurResource\Pages;
+use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -15,6 +16,8 @@ use Filament\Tables\Table;
 
 class FournisseurResource extends Resource
 {
+    use SupprimeEnMasseLigneParLigne;
+
     protected static ?string $model = Fournisseur::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-truck';
@@ -67,7 +70,7 @@ class FournisseurResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    static::suppressionEnMasse(),
                 ]),
             ]);
     }

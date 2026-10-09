@@ -377,7 +377,10 @@ class InalterabiliteTest extends TestCase
         $facture = app(EmettreFactureAction::class)->handle($brouillon);
         $referencee = $fiche($facture);
 
-        $this->assertThrows(fn () => method_exists($referencee, 'forceDelete') ? $referencee->forceDelete() : $referencee->delete(), QueryException::class);
+        // La base refuse d'elle-même, quel que soit le code qui le tente : la
+        // requête passe outre les garde-fous des modèles (un magasin refuse
+        // déjà toute suppression définitive, voir Magasin::forceDelete()).
+        $this->assertThrows(fn () => $referencee->newQueryWithoutScopes()->whereKey($referencee->getKey())->delete(), QueryException::class);
 
         $this->assertModelExists($referencee);
         $this->assertSame($facture->numero, $facture->fresh()->numero);

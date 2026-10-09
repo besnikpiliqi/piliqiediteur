@@ -5,6 +5,7 @@ namespace Tests\Feature\Tenancy;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
@@ -29,6 +30,23 @@ class AccesAuxPanneauxTest extends TestCase
 
         $this->assertTrue($proprietaire->canAccessPanel(Filament::getPanel('app')));
         $this->assertFalse($proprietaire->canAccessPanel(Panel::make()->id('editeur')));
+    }
+
+    /**
+     * Un magasin suspendu reste consultable : son propriétaire l'ouvre
+     * toujours, en lecture seule (voir ControleDesDroits).
+     */
+    public function test_le_proprietaire_d_un_magasin_suspendu_l_ouvre_toujours(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin->forceFill(['statut' => StatutMagasin::Suspendu])->save();
+
+        $reponse = $this->actingAs($proprietaire)->get("/app/{$magasin->uuid}");
+
+        $reponse->assertOk();
+        $this->assertTrue($proprietaire->canAccessPanel(Filament::getPanel('app')));
+        $this->assertTrue($proprietaire->canAccessTenant($magasin));
     }
 
     /**

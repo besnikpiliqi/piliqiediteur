@@ -7,6 +7,7 @@ use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\App\Pages\Auth\RegisterMagasin;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
 use App\Http\Middleware\JournaliserOuvertureDeSession;
+use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -96,6 +97,9 @@ class AppPanelProvider extends PanelProvider
             ])
             // Avant les scripts de Filament/Livewire : le script doit
             // s'abonner à "livewire:init" avant que Livewire ne démarre.
-            ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.app.saisie-protegee'));
+            ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.app.saisie-protegee'))
+            // En tête de chaque page d'un magasin suspendu ou fermé : ce
+            // qui lui reste possible (voir ControleDesDroits).
+            ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.app.magasin-en-lecture-seule', ['magasin' => Filament::getTenant()]));
     }
 }

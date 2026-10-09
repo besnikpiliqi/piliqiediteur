@@ -96,9 +96,12 @@ class IdentiteMagasin extends Page implements HasForms
                                 $fail('Le SIRET commence par les 9 chiffres du SIREN.');
                             }
                         })
-                        // Toute la table, magasins supprimés compris, comme son
-                        // index unique : un établissement n'appartient qu'à un
-                        // seul magasin du logiciel.
+                        // Seule lecture volontaire de toute la table magasins,
+                        // limitée à l'existence de ce SIRET : un établissement
+                        // n'appartient qu'à un seul magasin du logiciel, et le
+                        // SIRET d'un magasin supprimé, qui reste en base, ne
+                        // sert jamais à un autre (voir l'index unique de
+                        // magasins.siret et Magasin::forceDelete()).
                         ->unique(table: Magasin::class, ignorable: fn (): Magasin => $this->magasin())
                         ->validationMessages([
                             'regex' => 'Le SIRET compte 14 chiffres, sans espace.',

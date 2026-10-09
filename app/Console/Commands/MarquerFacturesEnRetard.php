@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Console\Attributes\Description;
@@ -19,7 +18,9 @@ use Illuminate\Support\Facades\Notification;
  * factures impayées dont l'échéance est dépassée, magasin par magasin --
  * le global scope MagasinScope exige un TenantContext positionné, une
  * commande n'en a par nature aucun au démarrage -- puis prévient le
- * propriétaire de chaque magasin concerné.
+ * propriétaire de chaque magasin concerné. Un magasin suspendu ou fermé
+ * est traité comme les autres : les statuts de ses factures continuent
+ * de suivre leurs échéances. Seul un magasin supprimé n'est plus traité.
  */
 #[Signature('app:marquer-factures-en-retard')]
 #[Description("Passe au statut 'en_retard' les factures impayées dont l'échéance est dépassée")]
@@ -30,7 +31,6 @@ class MarquerFacturesEnRetard extends Command
         $totalMarquees = 0;
 
         Magasin::query()
-            ->where('statut', StatutMagasin::Active)
             ->each(function (Magasin $magasin) use ($tenantContext, &$totalMarquees) {
                 $totalMarquees += $tenantContext->runAs($magasin, fn (): int => $this->marquerLesFacturesDe($magasin));
             });

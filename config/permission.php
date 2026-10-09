@@ -103,9 +103,14 @@ return [
     /*
      * When set to true, the method for checking permissions will be registered on the gate.
      * Set this to false if you want to implement custom logic for checking permissions.
+     *
+     * Désactivé : App\Domain\Authorization\ControleDesDroits le remplace
+     * (même vérification des permissions, plus la lecture seule d'un
+     * magasin suspendu ou fermé). Celui de Spatie répondrait « oui » à une
+     * permission détenue avant tout autre rappel de la Gate.
      */
 
-    'register_permission_check_method' => true,
+    'register_permission_check_method' => false,
 
     /*
      * When set to true, Laravel\Octane\Events\OperationTerminated event listener will be registered

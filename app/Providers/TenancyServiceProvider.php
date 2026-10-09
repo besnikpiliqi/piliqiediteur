@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Domain\Authorization\ControleDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
 class TenancyServiceProvider extends ServiceProvider
@@ -17,5 +19,17 @@ class TenancyServiceProvider extends ServiceProvider
         // -- fuite de tenant silencieuse entre deux jobs sur le même
         // worker. scoped() rend cette classe d'erreur impossible.
         $this->app->scoped(TenantContext::class);
+    }
+
+    /**
+     * Le seul rappel exécuté avant les policies : les permissions du
+     * membre dans le magasin actif, et la lecture seule d'un magasin
+     * suspendu ou fermé (voir ControleDesDroits). Il passe en closure pour
+     * que la Gate lise ses paramètres : sans utilisateur connecté, elle ne
+     * l'appelle pas.
+     */
+    public function boot(): void
+    {
+        Gate::before((new ControleDesDroits)(...));
     }
 }

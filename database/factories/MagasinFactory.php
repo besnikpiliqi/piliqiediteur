@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -28,12 +27,6 @@ class MagasinFactory extends Factory
             'pays' => 'FR',
             'email' => fake()->unique()->companyEmail(),
             'telephone' => fake()->phoneNumber(),
-            'statut' => StatutMagasin::Active,
         ];
-    }
-
-    public function enAttenteVerification(): static
-    {
-        return $this->state(fn () => ['statut' => StatutMagasin::EnAttenteVerification]);
     }
 }

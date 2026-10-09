@@ -106,7 +106,11 @@ class MarquerFacturesEnRetardTest extends TestCase
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
     }
 
-    public function test_un_magasin_suspendu_nest_pas_traite(): void
+    /**
+     * Suspendu, le magasin ne vend plus, mais les statuts de ses factures
+     * continuent de suivre leurs échéances.
+     */
+    public function test_un_magasin_suspendu_est_traite(): void
     {
         $magasin = Magasin::factory()->create();
         $facture = $this->emettreFacture($magasin, now()->subDays(2)->toDateString());
@@ -115,7 +119,7 @@ class MarquerFacturesEnRetardTest extends TestCase
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
-        $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
+        $this->assertSame(StatutFacture::EnRetard, $facture->fresh()->statut);
     }
 
     /**

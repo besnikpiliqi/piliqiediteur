@@ -23,6 +23,7 @@ use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -203,6 +204,28 @@ class EnvoyerDocumentJobTest extends TestCase
         Mail::assertNothingSent();
         $relance->refresh();
         $this->assertSame([StatutEnvoi::Echec, 'La facture a été réglée ou soldée par un avoir entre-temps : la relance n\'est pas partie.'], [$relance->statut, $relance->erreur]);
+        $this->assertSame(1, $magasin->proprietaires()->sole()->notifications()->count());
+    }
+
+    /**
+     * L'envoi a été programmé, puis le magasin suspendu avant qu'il ne
+     * parte (file d'attente chargée, nouvelle tentative) : un magasin en
+     * lecture seule n'écrit plus à ses clients, et il sait pourquoi.
+     */
+    public function test_un_envoi_ne_part_pas_si_le_magasin_a_ete_suspendu_entre_temps(): void
+    {
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $facture = $this->emettreFacture(Client::factory()->create());
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $envoi = app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, null);
+        $magasin->forceFill(['statut' => StatutMagasin::Suspendu])->save();
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame([StatutEnvoi::Echec, 'Le magasin est suspendu : il n\'écrit plus à ses clients, l\'e-mail n\'est pas parti.'], [$envoi->statut, $envoi->erreur]);
         $this->assertSame(1, $magasin->proprietaires()->sole()->notifications()->count());
     }
 

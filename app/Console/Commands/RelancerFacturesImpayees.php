@@ -16,8 +16,10 @@ use LogicException;
 
 /**
  * Relances automatiques des factures impayées (voir bootstrap/app.php),
- * pour chaque magasin qui les a activées (Paramètres > Relances), magasin
- * par magasin : une commande n'a aucun TenantContext au démarrage.
+ * pour chaque magasin actif qui les a activées (Paramètres > Relances),
+ * magasin par magasin : une commande n'a aucun TenantContext au démarrage.
+ * Un magasin suspendu ou fermé n'écrit plus à ses clients (voir
+ * Magasin::verifierQuIlEstOuvert()) : il n'est pas traité.
  *
  * Une facture échue, pas entièrement réglée, dont le client a une adresse
  * e-mail -- même archivé, il doit toujours la facture --, reçoit la

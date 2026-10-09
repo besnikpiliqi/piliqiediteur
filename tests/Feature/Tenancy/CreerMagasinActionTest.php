@@ -8,9 +8,11 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use LogicException;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -30,6 +32,20 @@ class CreerMagasinActionTest extends TestCase
         $this->assertSame(StatutMagasin::Active, $magasin->statut);
         $this->assertTrue($proprietaire->appartientA($magasin));
         $this->assertSame([$proprietaire->id], $magasin->proprietaires()->get()->modelKeys());
+    }
+
+    /**
+     * Supprimé, un magasin reste en base avec ses documents et son SIRET,
+     * qui ne servira jamais à un autre magasin : rien ne l'en efface.
+     */
+    public function test_un_magasin_ne_se_supprime_jamais_definitivement(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'siren' => '123456789', 'siret' => '12345678900012'], User::factory()->create());
+        $magasin->delete();
+
+        $this->assertThrows(fn () => $magasin->forceDelete(), LogicException::class, 'Un magasin ne se supprime jamais définitivement : ses documents sont conservés et son SIRET ne servira jamais à un autre magasin.');
+
+        $this->assertSame('12345678900012', Magasin::withTrashed()->find($magasin->id)?->siret);
     }
 
     /**

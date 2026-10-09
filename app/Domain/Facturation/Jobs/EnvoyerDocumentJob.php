@@ -44,6 +44,9 @@ use Throwable;
  * alors, le document n'existant plus (ModelNotFoundException, voir
  * failed()).
  *
+ * Un magasin suspendu ou fermé entre-temps n'écrit plus à ses clients :
+ * l'envoi échoue sans partir (voir Magasin::verifierQuIlEstOuvert()).
+ *
  * Idempotent : un envoi déjà envoyé ne repart jamais, même si le job est
  * rejoué. ShouldBeUnique : jamais deux exécutions du même envoi en
  * parallèle. Le PDF est généré à chaque tentative, depuis les données
@@ -79,6 +82,13 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
         $envoi = EnvoiDocument::query()->findOrFail($this->envoiId);
 
         if ($envoi->statut === StatutEnvoi::Envoye) {
+            return;
+        }
+
+        if ($envoi->magasin->statut->estEnLectureSeule()) {
+            $statut = mb_strtolower($envoi->magasin->statut->getLabel());
+            $this->echouer($envoi, "Le magasin est {$statut} : il n'écrit plus à ses clients, l'e-mail n'est pas parti.");
+
             return;
         }
 

@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Console\Attributes\Description;
@@ -17,8 +16,10 @@ use LogicException;
  * laisser une journée de ventes aux particuliers sans e-reporting. Cette
  * commande planifiée à minuit, heure de Paris (voir bootstrap/app.php,
  * avant le marquage des factures en retard à 00:15), clôture la VEILLE
- * pour chaque magasin actif qui ne l'a pas déjà fait lui-même -- jamais le
- * jour même, qui n'est pas encore terminé au moment où elle tourne.
+ * pour chaque magasin qui ne l'a pas déjà fait lui-même -- jamais le
+ * jour même, qui n'est pas encore terminé au moment où elle tourne. Un
+ * magasin suspendu ou fermé est clôturé comme les autres : ses clôtures
+ * continuent jusqu'au bout. Seul un magasin supprimé n'est plus traité.
  */
 #[Signature('app:cloturer-caisses-automatiquement')]
 #[Description("Clôture automatiquement la caisse de la veille pour les magasins qui ne l'ont pas fait eux-mêmes")]
@@ -30,7 +31,6 @@ class ClotureAutomatiqueCaisse extends Command
         $totalClotures = 0;
 
         Magasin::query()
-            ->where('statut', StatutMagasin::Active)
             ->each(function (Magasin $magasin) use ($tenantContext, $cloturerCaisse, $hier, &$totalClotures) {
                 $tenantContext->runAs($magasin, function () use ($cloturerCaisse, $magasin, $hier, &$totalClotures) {
                     try {

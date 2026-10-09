@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Le tenant. Volontairement PAS de BelongsToMagasin ici : un magasin ne
@@ -33,6 +34,11 @@ use InvalidArgumentException;
  * ayant un impact sur la conformité : chaque changement s'inscrit au
  * journal des événements du magasin (JET 270, voir
  * JournaliseSesParametresDeConformite).
+ *
+ * Son statut (voir StatutMagasin) ne vient jamais d'un formulaire du
+ * magasin : actif à la création, il ne changera que par l'administration
+ * de l'éditeur (étape 13 de la feuille de route). Un magasin ne se
+ * supprime jamais définitivement (voir forceDelete()).
  */
 class Magasin extends Model implements HasName
 {
@@ -59,7 +65,6 @@ class Magasin extends Model implements HasName
         'pays',
         'email',
         'telephone',
-        'statut',
         'regime_tva',
         'option_debits_tva',
         'prix_vente_automatique',
@@ -81,7 +86,7 @@ class Magasin extends Model implements HasName
     {
         static::creating(function (Magasin $magasin) {
             $magasin->uuid ??= (string) Str::uuid();
-            $magasin->statut ??= StatutMagasin::EnAttenteVerification;
+            $magasin->statut ??= StatutMagasin::Active;
             $magasin->pays ??= 'FR';
             $magasin->option_debits_tva ??= false;
             $magasin->prix_vente_automatique ??= false;
@@ -89,6 +94,39 @@ class Magasin extends Model implements HasName
             $magasin->relances_automatiques ??= false;
             $magasin->delais_relance ??= self::DELAIS_RELANCE_PAR_DEFAUT;
         });
+    }
+
+    /**
+     * Un magasin ne s'efface jamais de la base, même sans événements de
+     * modèle (forceDeleteQuietly()) : ses documents se conservent dix ans,
+     * même après sa résiliation, et son SIRET ne sert jamais à un autre
+     * magasin (voir l'index unique de magasins.siret). Supprimé, il reste
+     * en base avec deleted_at.
+     *
+     * @throws LogicException
+     */
+    public function forceDelete(): never
+    {
+        throw new LogicException('Un magasin ne se supprime jamais définitivement : ses documents sont conservés et son SIRET ne servira jamais à un autre magasin.');
+    }
+
+    /**
+     * Garde métier de ce que le magasin fait encore, quel que soit l'écran
+     * ou la commande qui le demande : suspendu ou fermé, il n'émet plus
+     * rien, n'encaisse plus, ne valide plus d'achat et n'écrit plus à ses
+     * clients (voir RegistreFiscal et les actions qui l'appellent). Ses
+     * clôtures, les statuts de ses factures et ses déclarations, eux,
+     * continuent.
+     *
+     * @throws LogicException
+     */
+    public function verifierQuIlEstOuvert(): void
+    {
+        if ($this->statut->estEnLectureSeule()) {
+            $statut = mb_strtolower($this->statut->getLabel());
+
+            throw new LogicException("Ce magasin est {$statut} : seules la consultation et les téléchargements restent possibles.");
+        }
     }
 
     public static function parametresDeConformite(): array

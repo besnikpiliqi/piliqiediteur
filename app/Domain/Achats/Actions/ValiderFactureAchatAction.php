@@ -15,16 +15,21 @@ use LogicException;
  * reçoit son numéro interne qu'à la validation, moment où le stock est
  * incrémenté (voir FactureAchatValidee/IncrementerStockApresValidationFactureAchat).
  * Chacun de ses produits doit encore être au catalogue : une réception ne
- * se perd jamais en silence.
+ * se perd jamais en silence. Un magasin suspendu ou fermé ne valide plus
+ * d'achat (voir Magasin::verifierQuIlEstOuvert()).
  */
 class ValiderFactureAchatAction
 {
     public function __construct(private readonly DocumentNumberingService $numerotation) {}
 
+    /**
+     * @throws LogicException
+     */
     public function handle(FactureAchat $factureAchat): FactureAchat
     {
         return DB::transaction(function () use ($factureAchat) {
             $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->firstOrFail();
+            $factureAchat->magasin->verifierQuIlEstOuvert();
 
             if (! $factureAchat->statut->peutTransitionnerVers(StatutFactureAchat::Validee)) {
                 throw new LogicException("Impossible de valider une facture d'achat au statut [{$factureAchat->statut->value}].");

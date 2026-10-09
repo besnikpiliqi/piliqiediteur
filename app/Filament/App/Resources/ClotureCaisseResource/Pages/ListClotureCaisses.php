@@ -2,7 +2,6 @@
 
 namespace App\Filament\App\Resources\ClotureCaisseResource\Pages;
 
-use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
@@ -68,7 +67,7 @@ class ListClotureCaisses extends ListRecords
                 ->modalHeading('Clôturer la journée du '.$veille->translatedFormat('d/m/Y').' ?')
                 ->modalDescription($modalDescription)
                 ->modalSubmitActionLabel('Oui, clôturer définitivement')
-                ->visible(fn () => auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_GERER)
+                ->visible(fn () => auth()->user()->can('cloturer', ClotureCaisse::class)
                     && ClotureCaisse::query()->whereDate('date_cloture', $veille)->doesntExist())
                 ->disabled($vendeursEnAttente->isNotEmpty())
                 ->tooltip($vendeursEnAttente->isNotEmpty()

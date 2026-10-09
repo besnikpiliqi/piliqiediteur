@@ -26,7 +26,9 @@ return new class extends Migration
             $table->string('pays', 2)->default('FR');
             $table->string('email', 150)->nullable();
             $table->string('telephone', 30)->nullable();
-            $table->string('statut', 30)->default('pending_verification');
+            // Actif, suspendu ou fermé (voir StatutMagasin) : suspendu ou
+            // fermé, le magasin passe en lecture seule.
+            $table->string('statut', 30)->default('active');
             // Nullable : tant que le propriétaire n'a pas configuré son
             // régime (voir ParametresFiscaux), la soumission périodique
             // d'e-reporting (voir SoumettreEReportingPeriodique) ignore ce
@@ -52,6 +54,10 @@ return new class extends Migration
             $table->timestamps();
             $table->softDeletes();
 
+            // Un SIRET ne sert jamais à un autre magasin, magasins supprimés
+            // compris : un magasin ne s'efface jamais de cette table (voir
+            // Magasin::booted()), ses documents restent conservés et son
+            // établissement reste le sien.
             $table->unique('siret');
             $table->index(['statut']);
         });

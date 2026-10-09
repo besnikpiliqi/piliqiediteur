@@ -9,14 +9,23 @@ use App\Domain\Facturation\Services\DocumentNumberingService;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
+/**
+ * Le devis reçoit son numéro quand il part (voir EnvoyerDocumentAction).
+ * Un magasin suspendu ou fermé n'en envoie plus (voir
+ * Magasin::verifierQuIlEstOuvert()).
+ */
 class EmettreDevisAction
 {
     public function __construct(private readonly DocumentNumberingService $numerotation) {}
 
+    /**
+     * @throws LogicException
+     */
     public function handle(Devis $devis): Devis
     {
         return DB::transaction(function () use ($devis) {
             $devis = Devis::query()->whereKey($devis->getKey())->lockForUpdate()->firstOrFail();
+            $devis->magasin->verifierQuIlEstOuvert();
 
             if (! $devis->statut->peutTransitionnerVers(StatutDevis::Envoye)) {
                 throw new LogicException("Impossible d'envoyer un devis au statut [{$devis->statut->value}].");

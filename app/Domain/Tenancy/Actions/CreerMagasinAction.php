@@ -5,7 +5,6 @@ namespace App\Domain\Tenancy\Actions;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -20,8 +19,8 @@ use Illuminate\Support\Facades\DB;
  * laisserait un magasin dans un état incohérent (rôle manquant, personne
  * n'y ayant accès...).
  *
- * Le statut est mis directement à `active` : aucune vérification du
- * SIRET (API Sirene de l'INSEE) ne précède l'activation d'un magasin.
+ * Le magasin est actif dès sa création (voir Magasin::booted()) : aucune
+ * vérification du SIRET (API Sirene de l'INSEE) ne précède son activation.
  */
 class CreerMagasinAction
 {
@@ -33,10 +32,7 @@ class CreerMagasinAction
     public function handle(array $donneesMagasin, User $proprietaire): Magasin
     {
         return DB::transaction(function () use ($donneesMagasin, $proprietaire) {
-            $magasin = Magasin::create([
-                ...$donneesMagasin,
-                'statut' => StatutMagasin::Active,
-            ]);
+            $magasin = Magasin::create($donneesMagasin);
 
             app(TenantContext::class)->set($magasin);
 

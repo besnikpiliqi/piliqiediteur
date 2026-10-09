@@ -33,6 +33,9 @@ use LogicException;
  * magasin, afin qu'aucun compte ne puisse en faire un relais d'envoi en
  * masse. Les relances automatiques, déjà bornées par les délais du
  * magasin, n'y sont pas soumises.
+ *
+ * Un magasin suspendu ou fermé n'écrit plus à ses clients (voir
+ * Magasin::verifierQuIlEstOuvert()) : ni envoi ni relance.
  */
 class EnvoyerDocumentAction
 {
@@ -57,6 +60,7 @@ class EnvoyerDocumentAction
 
         return DB::transaction(function () use ($document, $destinataire, $message, $expediteur) {
             $document = $this->verrouiller($document);
+            $document->magasin->verifierQuIlEstOuvert();
             $this->verifierLeDebit($document, $expediteur);
 
             if ($document instanceof Devis && $document->statut === StatutDevis::Brouillon) {
@@ -101,6 +105,7 @@ class EnvoyerDocumentAction
 
         return DB::transaction(function () use ($facture, $destinataire, $expediteur) {
             $facture = $this->verrouiller($facture);
+            $facture->magasin->verifierQuIlEstOuvert();
             $this->verifierLeDebit($facture, $expediteur);
 
             if (! $facture->estEchueEtImpayee()) {

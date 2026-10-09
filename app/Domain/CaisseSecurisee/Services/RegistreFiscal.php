@@ -209,14 +209,25 @@ class RegistreFiscal
     }
 
     /**
+     * Un magasin suspendu ou fermé n'inscrit plus ni vente ni encaissement
+     * (voir Magasin::verifierQuIlEstOuvert()) : la transaction de l'écriture
+     * refusée annule ce qui la précède. Ses événements techniques, eux,
+     * continuent.
+     *
      * @param  array<array-key, mixed>  $donnees
      * @param  int|null  $montantVente  le montant TTC en centimes d'un enregistrement de la chaîne des ventes, null pour toute autre chaîne
+     *
+     * @throws LogicException
      */
     private function ecrire(ChaineFiscale $chaine, string $type, array $donnees, ?Model $document, ?int $montantVente): EnregistrementFiscal
     {
         self::refuserCeQuiNeSeSignePas($donnees, 'donnees');
 
         $magasin = app(TenantContext::class)->magasin();
+
+        if ($chaine !== ChaineFiscale::Evenement) {
+            $magasin->verifierQuIlEstOuvert();
+        }
 
         if ($document !== null && (! $document->exists || (int) $document->getAttribute('magasin_id') !== $magasin->getKey())) {
             throw new LogicException('Le registre fiscal n\'enregistre qu\'un document déjà enregistré du magasin actif.');

@@ -16,6 +16,8 @@ use LogicException;
  * Même logique que EmettreAvoirAction côté vente : l'avoir fournisseur ne
  * reçoit son numéro qu'à l'émission, moment où le stock est décrémenté
  * (voir AvoirFournisseurEmis/DecrementerStockApresEmissionAvoirFournisseur).
+ * Un magasin suspendu ou fermé n'en émet plus (voir
+ * Magasin::verifierQuIlEstOuvert()).
  */
 class EmettreAvoirFournisseurAction
 {
@@ -24,10 +26,14 @@ class EmettreAvoirFournisseurAction
         private readonly CalculateurLigne $calculateur,
     ) {}
 
+    /**
+     * @throws LogicException
+     */
     public function handle(AvoirFournisseur $avoirFournisseur): AvoirFournisseur
     {
         return DB::transaction(function () use ($avoirFournisseur) {
             $avoirFournisseur = AvoirFournisseur::query()->whereKey($avoirFournisseur->getKey())->lockForUpdate()->firstOrFail();
+            $avoirFournisseur->magasin->verifierQuIlEstOuvert();
 
             if (! $avoirFournisseur->statut->peutTransitionnerVers(StatutAvoirFournisseur::Emise)) {
                 throw new LogicException("Impossible d'émettre un avoir fournisseur au statut [{$avoirFournisseur->statut->value}].");

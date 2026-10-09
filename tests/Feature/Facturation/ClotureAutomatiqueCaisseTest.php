@@ -164,16 +164,21 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $this->assertTrue($evenementsDus->contains(fn (Event $evenement): bool => str_contains((string) $evenement->command, 'app:cloturer-caisses-automatiquement')));
     }
 
-    public function test_un_magasin_suspendu_nest_pas_traite(): void
+    /**
+     * Suspendu, le magasin ne vend plus, mais ses clôtures continuent
+     * jusqu'au bout : la journée de ses dernières ventes est clôturée.
+     */
+    public function test_un_magasin_suspendu_est_cloture(): void
     {
         $magasin = Magasin::factory()->create();
-        $this->emettreFactureHier($magasin);
+        $facture = $this->emettreFactureHier($magasin);
         $magasin->forceFill(['statut' => StatutMagasin::Suspendu])->save();
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
         app(TenantContext::class)->set($magasin);
-        $this->assertSame(0, ClotureCaisse::query()->count());
+        $this->assertSame(1, ClotureCaisse::query()->count());
+        $this->assertNotNull($facture->fresh()->cloture_caisse_id);
     }
 
     public function test_traite_plusieurs_magasins_independamment(): void

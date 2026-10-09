@@ -17,7 +17,7 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->can(PermissionRegistry::FACTURE_CREATE) || $user->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES);
+        return $this->vendDansLeMagasin($user) || $user->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES);
     }
 
     public function view(User $user, ClotureCaissePersonnelle $cloture): bool
@@ -31,7 +31,7 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
 
     public function fermer(User $user): bool
     {
-        return $user->can(PermissionRegistry::FACTURE_CREATE);
+        return $this->vendDansLeMagasin($user);
     }
 
     public function update(User $user, ClotureCaissePersonnelle $cloture): bool
@@ -57,5 +57,16 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
     public function restore(User $user, ClotureCaissePersonnelle $cloture): bool
     {
         return false;
+    }
+
+    /**
+     * Le droit de vendre du membre, lu sur ses permissions plutôt que
+     * demandé à la Gate : dans un magasin suspendu ou fermé, celle-ci
+     * refuse facture.create (voir ControleDesDroits), mais le vendeur
+     * ferme toujours sa caisse et consulte toujours ses relevés.
+     */
+    private function vendDansLeMagasin(User $user): bool
+    {
+        return $user->checkPermissionTo(PermissionRegistry::FACTURE_CREATE);
     }
 }

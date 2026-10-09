@@ -190,6 +190,33 @@ final class PermissionRegistry
     }
 
     /**
+     * Les autorisations qui restent permises quand le magasin est suspendu
+     * ou fermé (voir ControleDesDroits) : tout consulter, clôturer la
+     * journée et gérer l'équipe, pour couper un accès. Une nouvelle
+     * autorisation de consultation s'ajoute ici ; oubliée, elle est
+     * refusée en lecture seule, ce qui reste sûr.
+     *
+     * @return list<string>
+     */
+    public static function permisesEnLectureSeule(): array
+    {
+        return [
+            self::CLIENT_VIEW,
+            self::FOURNISSEUR_VIEW,
+            self::PRODUIT_VIEW, self::PRODUIT_VOIR_VALEUR_STOCK,
+            self::DEVIS_VIEW,
+            self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES,
+            self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
+            self::PAIEMENT_VIEW,
+            self::AVOIR_VIEW,
+            self::CLOTURE_CAISSE_VIEW, self::CLOTURE_CAISSE_VIEW_TOUTES, self::CLOTURE_CAISSE_GERER,
+            self::FACTURE_ACHAT_VIEW,
+            self::AVOIR_FOURNISSEUR_VIEW,
+            self::CAISSE_SECURISEE_CONSULTER,
+        ];
+    }
+
+    /**
      * Les autorisations cochées pour un membre, refusées dès que l'une
      * d'elles est inconnue.
      *

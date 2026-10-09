@@ -5,9 +5,12 @@ namespace App\Domain\Tenancy\Actions;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Rules\EmailLibrePourUnNouveauMembre;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use LogicException;
 
 /**
@@ -16,11 +19,17 @@ use LogicException;
  * d'auto-inscription, pas de lien de vérification par email. L'adresse
  * email n'a besoin d'être confirmée par personne -- c'est le magasin qui
  * se porte garant de la personne, pas une boîte mail.
+ *
+ * C'est toujours un NOUVEAU compte : une adresse déjà utilisée par un
+ * compte est refusée (voir EmailLibrePourUnNouveauMembre), et le nom ou le
+ * mot de passe d'un compte existant ne sont jamais réécrits ici.
  */
 class CreerMembreMagasinAction
 {
     /**
      * @param  array{name: string, email: string, password: string}  $donnees
+     *
+     * @throws ValidationException quand l'adresse e-mail est déjà utilisée par un compte
      */
     public function handle(Magasin $magasin, array $donnees, RoleMagasin $role): User
     {
@@ -28,39 +37,21 @@ class CreerMembreMagasinAction
             throw new LogicException('Le rôle propriétaire ne peut pas être attribué via la gestion d\'équipe.');
         }
 
+        Validator::make($donnees, ['email' => [new EmailLibrePourUnNouveauMembre($magasin)]])->validate();
+
         return DB::transaction(function () use ($magasin, $donnees, $role) {
-            $utilisateur = User::firstWhere('email', $donnees['email']);
+            $utilisateur = User::create([
+                'name' => $donnees['name'],
+                'email' => $donnees['email'],
+                'password' => $donnees['password'],
+            ]);
 
-            if ($utilisateur === null) {
-                $utilisateur = User::create([
-                    'name' => $donnees['name'],
-                    'email' => $donnees['email'],
-                    'password' => $donnees['password'],
-                ]);
-
-                // email_verified_at n'est pas mass-assignable (hors de
-                // $fillable, volontairement, pour qu'une requête
-                // utilisateur ne puisse jamais s'auto-vérifier). Vérifié
-                // immédiatement ici : c'est le propriétaire qui crée ce
-                // compte et transmet les identifiants lui-même, il n'y a
-                // rien à confirmer par email.
-                $utilisateur->forceFill(['email_verified_at' => now()])->save();
-            } elseif ($utilisateur->appartientA($magasin)) {
-                throw new LogicException('Cette personne fait déjà partie de votre équipe.');
-            } else {
-                // Le compte existe déjà ailleurs (ex: un comptable qui
-                // intervient sur plusieurs magasins) : on l'attache quand
-                // même à CE magasin, mais en appliquant le nom et le mot de
-                // passe saisis ici, exactement comme pour une création --
-                // jamais de comportement silencieusement différent qui
-                // laisserait deviner au propriétaire que ce compte existe
-                // par ailleurs. Vu de ce magasin, c'est un compte qui lui
-                // est dédié.
-                $utilisateur->forceFill([
-                    'name' => $donnees['name'],
-                    'password' => $donnees['password'],
-                ])->save();
-            }
+            // email_verified_at n'est pas mass-assignable (hors de
+            // $fillable, volontairement, pour qu'une requête utilisateur ne
+            // puisse jamais s'auto-vérifier). Vérifié immédiatement ici :
+            // c'est le propriétaire qui crée ce compte et transmet les
+            // identifiants lui-même, il n'y a rien à confirmer par email.
+            $utilisateur->forceFill(['email_verified_at' => now()])->save();
 
             $magasin->utilisateurs()->attach($utilisateur->getKey(), [
                 'role' => $role->value,

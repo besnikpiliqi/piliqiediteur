@@ -4,7 +4,10 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Actions\DefinirPermissionsSupplementairesMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\MembreEquipeResource;
 use App\Filament\App\Resources\MembreEquipeResource\Pages\CreateMembreEquipe;
@@ -13,6 +16,7 @@ use App\Filament\App\Resources\MembreEquipeResource\Pages\ListMembreEquipes;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -40,6 +44,156 @@ class MembreEquipeResourceTest extends TestCase
         $vendeur = User::where('email', 'paul@example.test')->firstOrFail();
         $this->assertNotNull($vendeur->email_verified_at);
         $this->assertTrue($vendeur->appartientA($magasin));
+    }
+
+    /**
+     * Le propriétaire de B saisissait l'adresse du propriétaire de A avec
+     * un mot de passe de son choix, puis ouvrait le magasin A avec.
+     */
+    public function test_ladresse_du_compte_dun_autre_magasin_est_refusee_sur_le_champ_email(): void
+    {
+        $alice = User::factory()->create(['email' => 'alice@boutique-a.test', 'password' => 'mot-de-passe-dalice']);
+        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $alice);
+        $proprietaireB = User::factory()->create();
+        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+        $this->actingAs($proprietaireB);
+        Filament::setTenant($magasinB);
+        app(TenantContext::class)->set($magasinB);
+
+        Livewire::test(CreateMembreEquipe::class)
+            ->fillForm([
+                'name' => 'Pirate',
+                'email' => 'alice@boutique-a.test',
+                'password' => 'choisi-par-b',
+                'role' => RoleMagasin::Observateur->value,
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['email' => 'Cette adresse e-mail ne peut pas être utilisée pour un nouveau membre.']);
+
+        $this->assertTrue(Hash::check('mot-de-passe-dalice', $alice->fresh()->password));
+        $this->assertSame(1, $magasinB->membres()->count());
+    }
+
+    public function test_un_mot_de_passe_trop_court_est_refuse_a_la_creation(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateMembreEquipe::class)
+            ->fillForm([
+                'name' => 'Paul Vendeur',
+                'email' => 'paul@example.test',
+                'password' => '1',
+                'role' => RoleMagasin::Vendeur->value,
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['password']);
+
+        $this->assertFalse(User::where('email', 'paul@example.test')->exists());
+    }
+
+    public function test_le_proprietaire_donne_un_nouveau_mot_de_passe_a_un_vendeur(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'ancien-mot-de-passe',
+        ], RoleMagasin::Vendeur);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(ListMembreEquipes::class)
+            ->callTableAction('reinitialiser_mot_de_passe', $magasin->membres()->where('user_id', $vendeur->id)->firstOrFail(), data: [
+                'nouveau_mot_de_passe' => 'nouveau-mot-de-passe',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertTrue(Hash::check('nouveau-mot-de-passe', $vendeur->fresh()->password));
+    }
+
+    public function test_un_nouveau_mot_de_passe_trop_court_est_refuse(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'ancien-mot-de-passe',
+        ], RoleMagasin::Vendeur);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(ListMembreEquipes::class)
+            ->callTableAction('reinitialiser_mot_de_passe', $magasin->membres()->where('user_id', $vendeur->id)->firstOrFail(), data: [
+                'nouveau_mot_de_passe' => '1',
+            ])
+            ->assertHasTableActionErrors(['nouveau_mot_de_passe']);
+
+        $this->assertTrue(Hash::check('ancien-mot-de-passe', $vendeur->fresh()->password));
+    }
+
+    /**
+     * Le refus de ReinitialiserMotDePasseMembreAction s'affiche en
+     * notification, sans page d'erreur. Plus aucun écran ne rattache un
+     * compte existant à un second magasin : ce compte partagé est construit
+     * directement.
+     */
+    public function test_nouveau_mot_de_passe_dun_compte_rattache_a_un_autre_magasin_est_refuse(): void
+    {
+        $comptable = User::factory()->create(['password' => 'mot-de-passe-de-claire']);
+        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Cabinet de Claire'], $comptable);
+        $proprietaireB = User::factory()->create();
+        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+        $magasinB->utilisateurs()->attach($comptable->id, ['role' => RoleMagasin::Comptable->value, 'statut' => StatutMembreMagasin::Actif->value, 'joined_at' => now()]);
+        $this->actingAs($proprietaireB);
+        Filament::setTenant($magasinB);
+        app(TenantContext::class)->set($magasinB);
+
+        Livewire::test(ListMembreEquipes::class)
+            ->callTableAction('reinitialiser_mot_de_passe', $magasinB->membres()->where('user_id', $comptable->id)->firstOrFail(), data: [
+                'nouveau_mot_de_passe' => 'choisi-par-b',
+            ])
+            ->assertNotified('Ce mot de passe ne se réinitialise pas depuis l\'équipe : la personne utilise « Mot de passe oublié » sur la page de connexion.');
+
+        $this->assertTrue(Hash::check('mot-de-passe-de-claire', $comptable->fresh()->password));
+        $this->assertTrue($comptable->fresh()->appartientA($magasinA));
+    }
+
+    /**
+     * « Équipe : voir » ne donne pas « Équipe : modifier » : ni nouveau mot
+     * de passe (qui ouvrirait le compte de l'administrateur), ni retrait,
+     * même en appelant les actions masquées par une requête forgée.
+     */
+    public function test_un_membre_qui_voit_seulement_lequipe_ne_change_pas_le_mot_de_passe_dun_administrateur_ni_ne_le_retire(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $administrateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Admin', 'email' => 'admin@example.test', 'password' => 'mot-de-passe-admin',
+        ], RoleMagasin::Administrateur);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Vendeur);
+        app(DefinirPermissionsSupplementairesMembreAction::class)->handle(
+            $magasin->membres()->where('user_id', $vendeur->id)->firstOrFail(),
+            [PermissionRegistry::EQUIPE_VIEW],
+        );
+        $membreAdministrateur = $magasin->membres()->where('user_id', $administrateur->id)->firstOrFail();
+        $this->actingAs($vendeur);
+        Filament::setTenant($magasin);
+
+        Livewire::test(ListMembreEquipes::class)
+            ->assertCanSeeTableRecords([$membreAdministrateur])
+            ->assertTableActionHidden('reinitialiser_mot_de_passe', $membreAdministrateur)
+            ->assertTableActionHidden('retirer', $membreAdministrateur)
+            ->call('mountTableAction', 'reinitialiser_mot_de_passe', (string) $membreAdministrateur->getKey())
+            ->set('mountedTableActionsData.0.nouveau_mot_de_passe', 'pris-par-le-vendeur')
+            ->call('callMountedTableAction')
+            ->call('mountTableAction', 'retirer', (string) $membreAdministrateur->getKey())
+            ->call('callMountedTableAction');
+
+        $this->assertTrue(Hash::check('mot-de-passe-admin', $administrateur->fresh()->password));
+        $this->assertModelExists($membreAdministrateur);
     }
 
     /**

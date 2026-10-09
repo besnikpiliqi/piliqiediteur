@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Domain\Tenancy\Models\Magasin;
+use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\App\Pages\Auth\RegisterMagasin;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
 use Filament\Http\Middleware\Authenticate;
@@ -45,6 +46,13 @@ class AppPanelProvider extends PanelProvider
             ->path('app')
             ->login()
             ->registration(RegisterMagasin::class)
+            // « Mot de passe oublié » envoie un lien par e-mail (voir
+            // MAIL_MAILER) ; le profil permet à chacun de changer son propre
+            // mot de passe. Le magasin ne réinitialise depuis l'équipe que
+            // les comptes qui n'appartiennent qu'à lui (voir
+            // ReinitialiserMotDePasseMembreAction).
+            ->passwordReset()
+            ->profile(ModifierProfil::class)
             ->tenant(Magasin::class, slugAttribute: 'uuid')
             ->tenantMiddleware([
                 BindTenantContextFromFilamentTenant::class,

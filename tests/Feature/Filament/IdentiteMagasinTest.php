@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -44,11 +45,12 @@ class IdentiteMagasinTest extends TestCase
     }
 
     /**
-     * L'identité imprimée sur tous les documents engage le magasin : seul
-     * son propriétaire la règle.
+     * L'identité imprimée sur tous les documents engage le magasin : elle
+     * se règle avec « Paramètres du magasin », qu'aucun modèle de rôle ne
+     * coche d'office.
      */
     #[DataProvider('rolesSansAccesALIdentite')]
-    public function test_seul_le_proprietaire_accede_a_l_identite_du_magasin(RoleMagasin $role): void
+    public function test_un_membre_sans_les_parametres_du_magasin_n_accede_pas_a_l_identite(RoleMagasin $role): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $membre = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Membre', 'email' => 'membre@ma-boutique.fr', 'password' => 'mot-de-passe-sur'], $role);
@@ -56,6 +58,23 @@ class IdentiteMagasinTest extends TestCase
         $this->actingAs($membre)
             ->get(IdentiteMagasin::getUrl(tenant: $magasin))
             ->assertForbidden();
+    }
+
+    /**
+     * Le propriétaire coche « Paramètres du magasin » pour son
+     * administrateur : celui-ci règle alors l'identité.
+     */
+    public function test_un_administrateur_a_qui_le_proprietaire_coche_les_parametres_accede_a_l_identite(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $administrateur = $this->membre($magasin, RoleMagasin::Administrateur, [
+            ...RoleMagasin::Administrateur->permissionsParDefaut(),
+            PermissionRegistry::PARAMETRES_GERER,
+        ]);
+
+        $this->actingAs($administrateur)
+            ->get(IdentiteMagasin::getUrl(tenant: $magasin))
+            ->assertSee('Identité légale');
     }
 
     public function test_le_proprietaire_ouvre_la_page_de_l_identite(): void

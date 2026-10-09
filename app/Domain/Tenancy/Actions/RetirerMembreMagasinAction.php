@@ -10,13 +10,14 @@ use Illuminate\Support\Facades\DB;
 use LogicException;
 
 /**
- * "Supprimer" un membre ne supprime jamais son compte User (il peut
- * appartenir à d'autres magasins, ex: un comptable) : seul le
- * rattachement à CE magasin disparaît, avec tout ce qu'il donnait dans ce
- * magasin -- son rôle Spatie, ses permissions supplémentaires (Spatie en
- * mode teams ne touche qu'à celles du magasin du TenantContext) -- et ses
- * notifications à propos de ce magasin (voir NotificationDuMagasin), qui
- * ne le regardent plus.
+ * « Retirer » un membre ne supprime jamais son compte User : ses factures,
+ * ses paiements, ses avoirs et le registre fiscal le désignent encore.
+ * Seul son rattachement au magasin disparaît, avec tout ce qu'il donnait :
+ * ses autorisations (Spatie en mode teams ne touche qu'à celles du magasin
+ * du TenantContext) et ses notifications à propos du magasin (voir
+ * NotificationDuMagasin). Un compte n'appartenant qu'à un seul magasin, il
+ * n'ouvre alors plus rien, et son adresse e-mail ne sert jamais à un
+ * nouveau membre (voir EmailLibrePourUnNouveauMembre).
  *
  * Le retrait s'inscrit au journal des événements du magasin, avec les
  * droits que le membre perd (JET 130, voir JournalDesDroits).
@@ -37,7 +38,6 @@ class RetirerMembreMagasinAction
             app(TenantContext::class)->set($magasin);
             $avant = $this->journalDesDroits->avant($magasin, $utilisateur);
 
-            $utilisateur->removeRole($membre->role->value);
             $utilisateur->syncPermissions([]);
             $utilisateur->effacerLesNotificationsDu($magasin);
             $membre->delete();

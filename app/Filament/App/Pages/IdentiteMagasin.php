@@ -18,9 +18,10 @@ use Filament\Pages\Page;
 /**
  * L'identité légale du magasin, imprimée en tête de ses devis, factures et
  * avoirs (voir documents/pdf/en-tete.blade.php), et ses coordonnées, qui
- * signent les e-mails de ses documents (voir DocumentMail). Réservée au
- * propriétaire, comme les paramètres fiscaux : même responsabilité de
- * configuration légale du magasin.
+ * signent les e-mails de ses documents (voir DocumentMail). Elle se règle
+ * avec « Paramètres du magasin » (PermissionRegistry::PARAMETRES_GERER),
+ * comme les paramètres fiscaux : même responsabilité de configuration
+ * légale du magasin, que le propriétaire détient et délègue à qui il veut.
  */
 class IdentiteMagasin extends Page implements HasForms
 {
@@ -52,7 +53,7 @@ class IdentiteMagasin extends Page implements HasForms
 
     public static function canAccess(): bool
     {
-        return auth()->user()?->can(PermissionRegistry::MANDAT_PDP_GERER) ?? false;
+        return auth()->user()?->can(PermissionRegistry::PARAMETRES_GERER) ?? false;
     }
 
     public function mount(): void

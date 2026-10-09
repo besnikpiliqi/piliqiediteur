@@ -2,6 +2,8 @@
 
 namespace App\Domain\Authorization;
 
+use InvalidArgumentException;
+
 /**
  * Liste centrale des permissions de l'application. Aucune chaîne magique
  * ne doit être écrite ailleurs ("client.create", ...) : on référence
@@ -10,7 +12,11 @@ namespace App\Domain\Authorization;
  *
  * Ces permissions sont scopées par magasin (Spatie Permission en mode
  * teams, voir config/permission.php) : accorder "client.create" à un
- * rôle dans le magasin A n'accorde rien dans le magasin B.
+ * membre dans le magasin A n'accorde rien dans le magasin B. Le
+ * propriétaire les a toutes, par son rôle 'owner' (voir
+ * SeedMagasinRolesAction) ; un membre de l'équipe a celles que le
+ * propriétaire coche pour lui parmi cochables(), à partir du modèle de
+ * son rôle (voir RoleMagasin::permissionsParDefaut()).
  */
 final class PermissionRegistry
 {
@@ -49,8 +55,9 @@ final class PermissionRegistry
 
     // Un vendeur voit le prix/stock de chaque produit (nécessaire pour
     // vendre), mais pas la valorisation globale du stock du magasin --
-    // information sensible réservée par défaut au propriétaire/admin,
-    // voir SeedMagasinRolesAction et ProduitResource.
+    // information sensible : parmi les membres, cochée d'office pour
+    // l'administrateur et le comptable seulement (voir
+    // RoleMagasin::permissionsParDefaut() et ProduitResource).
     public const PRODUIT_VOIR_VALEUR_STOCK = 'produit.voir_valeur_stock';
 
     /**
@@ -93,11 +100,24 @@ final class PermissionRegistry
      */
     public const RELANCES_REGLER = 'relances.regler';
 
-    // Mandat PDP -- réservé au propriétaire, voir SeedMagasinRolesAction
+    /**
+     * Gérer le mandat de transmission à la plateforme agréée (PDP) :
+     * réservé au propriétaire, jamais coché pour un membre (voir
+     * reserveesAuProprietaire()).
+     */
     public const MANDAT_PDP_GERER = 'mandat_pdp.gerer';
 
-    // Équipe (membres du magasin) -- réservé au propriétaire et à
-    // l'administrateur, voir SeedMagasinRolesAction
+    /**
+     * Régler les paramètres du magasin : son identité légale
+     * (IdentiteMagasin) et sa TVA (ParametresFiscaux). Aucun modèle de
+     * rôle ne la coche d'office : le propriétaire la détient, et la coche
+     * pour le membre de son choix.
+     */
+    public const PARAMETRES_GERER = 'parametres.gerer';
+
+    // Équipe (membres du magasin) -- cochée d'office pour l'administrateur
+    // (voir RoleMagasin::permissionsParDefaut()). Seul le propriétaire
+    // coche les autorisations d'un membre (voir MembreEquipeResource).
     public const EQUIPE_VIEW = 'equipe.view';
 
     public const EQUIPE_CREER = 'equipe.creer';
@@ -162,7 +182,7 @@ final class PermissionRegistry
             self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_DELETE, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK, self::PRIX_VENTE_REGLER,
             self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ENVOYER, self::RELANCES_REGLER,
-            self::MANDAT_PDP_GERER,
+            self::MANDAT_PDP_GERER, self::PARAMETRES_GERER,
             self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
             self::PAIEMENT_VIEW, self::PAIEMENT_CREER,
             self::AVOIR_VIEW, self::AVOIR_CREER, self::AVOIR_ENVOYER,
@@ -174,10 +194,52 @@ final class PermissionRegistry
     }
 
     /**
-     * Libellés français affichés dans l'éditeur de permissions
-     * individuelles d'un membre (voir MembreEquipeResource) -- le
-     * propriétaire n'a jamais à lire une chaîne technique comme
-     * "avoir.view".
+     * Les permissions que seul le propriétaire détient, par son rôle, et
+     * qu'il ne coche jamais pour un membre : la connexion du magasin à la
+     * plateforme agréée de facturation électronique l'engage auprès d'elle.
+     *
+     * @return list<string>
+     */
+    public static function reserveesAuProprietaire(): array
+    {
+        return [self::MANDAT_PDP_GERER];
+    }
+
+    /**
+     * Les permissions que le propriétaire peut cocher pour un membre de
+     * son équipe : toutes, sauf celles qui lui sont réservées.
+     *
+     * @return list<string>
+     */
+    public static function cochables(): array
+    {
+        return array_values(array_diff(self::toutes(), self::reserveesAuProprietaire()));
+    }
+
+    /**
+     * Les permissions cochées pour un membre, refusées dès que l'une
+     * d'elles n'est pas cochable : inconnue, ou réservée au propriétaire.
+     *
+     * @param  array<array-key, mixed>  $permissions
+     * @return list<string>
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function verifierCochables(array $permissions): array
+    {
+        foreach ($permissions as $permission) {
+            if (! is_string($permission) || ! in_array($permission, self::cochables(), true)) {
+                throw new InvalidArgumentException('Autorisation inconnue ou réservée au propriétaire : '.(is_scalar($permission) ? $permission : get_debug_type($permission)));
+            }
+        }
+
+        return array_values($permissions);
+    }
+
+    /**
+     * Libellés français affichés dans la liste des autorisations d'un
+     * membre (voir MembreEquipeResource) -- le propriétaire n'a jamais à
+     * lire une chaîne technique comme "avoir.view".
      *
      * @return array<string, string>
      */
@@ -210,6 +272,7 @@ final class PermissionRegistry
             self::FACTURE_ENVOYER => 'Factures : envoyer par e-mail et relancer',
             self::RELANCES_REGLER => 'Relances : régler les relances automatiques',
             self::MANDAT_PDP_GERER => 'Mandat PDP : gérer',
+            self::PARAMETRES_GERER => 'Paramètres du magasin : identité et TVA',
             self::EQUIPE_VIEW => 'Équipe : voir',
             self::EQUIPE_CREER => 'Équipe : créer des comptes',
             self::EQUIPE_MODIFIER => 'Équipe : modifier',

@@ -7,10 +7,10 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Notifications en base de Laravel, affichées dans la cloche du panneau
  * (voir AppPanelProvider::databaseNotifications()). Elles appartiennent à
- * un utilisateur, qui peut travailler pour plusieurs magasins : chacune
- * nomme son magasin et retient son identifiant dans `data` (voir
- * NotificationDuMagasin), pour être effacée quand l'utilisateur quitte ce
- * magasin (voir RetirerMembreMagasinAction).
+ * un utilisateur, membre d'un seul magasin : chacune nomme ce magasin et
+ * retient son identifiant dans `data` (voir NotificationDuMagasin), pour
+ * être effacée quand l'utilisateur est retiré de l'équipe ou suspendu
+ * (voir RetirerMembreMagasinAction et MettreAJourMembreMagasinAction).
  */
 return new class extends Migration
 {

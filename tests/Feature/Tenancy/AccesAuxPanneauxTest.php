@@ -32,20 +32,18 @@ class AccesAuxPanneauxTest extends TestCase
     }
 
     /**
-     * Membre actif d'un autre magasin, il entre dans le panneau, mais ce
-     * magasin-ci ne s'ouvre pas et ne figure pas dans son sélecteur.
+     * Suspendu, un membre n'a plus de magasin à ouvrir : le sien ne figure
+     * plus parmi ceux que le panneau lui propose, et ne s'ouvre plus.
      */
     public function test_un_membre_suspendu_n_ouvre_pas_ce_magasin(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $membre = $this->membreSuspendu($magasin);
-        $autreMagasin = app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
-        $autreMagasin->utilisateurs()->attach($membre->getKey(), ['role' => RoleMagasin::Vendeur->value, 'statut' => StatutMembreMagasin::Actif->value]);
 
-        $reponse = $this->actingAs($membre)->get("/app/{$magasin->uuid}");
+        $magasins = $membre->getTenants(Filament::getPanel('app'));
 
-        $reponse->assertNotFound();
-        $this->assertSame([$autreMagasin->getKey()], $membre->getTenants(Filament::getPanel('app'))->modelKeys());
+        $this->assertSame([], $magasins->modelKeys());
+        $this->assertFalse($membre->canAccessTenant($magasin));
     }
 
     public function test_sans_aucun_magasin_actif_le_panneau_est_refuse(): void

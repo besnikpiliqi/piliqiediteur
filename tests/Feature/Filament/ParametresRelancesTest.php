@@ -162,7 +162,8 @@ class ParametresRelancesTest extends TestCase
 
     /**
      * Les relances écrivent aux clients au nom du magasin : leur réglage
-     * est réservé au propriétaire et à l'administrateur.
+     * n'est coché d'office que pour l'administrateur, jamais pour un
+     * vendeur.
      */
     public function test_un_vendeur_n_accede_pas_aux_relances(): void
     {

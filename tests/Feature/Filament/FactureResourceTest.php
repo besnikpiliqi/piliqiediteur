@@ -18,9 +18,8 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
-use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\MandatPdp;
-use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -33,8 +32,6 @@ use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Exceptions;
 use Livewire\Livewire;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class FactureResourceTest extends TestCase
@@ -1068,21 +1065,9 @@ class FactureResourceTest extends TestCase
 
     public function test_la_liste_ne_montre_que_les_factures_du_vendeur_sans_vue_totale(): void
     {
-        $magasin = Magasin::factory()->create();
-        app(TenantContext::class)->set($magasin);
-
-        Permission::findOrCreate(PermissionRegistry::FACTURE_VIEW, 'web');
-        Permission::findOrCreate(PermissionRegistry::FACTURE_CREATE, 'web');
-        $roleVendeur = Role::findOrCreate('employee', 'web');
-        $roleVendeur->givePermissionTo([PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
-
-        $vendeurA = User::factory()->create();
-        $vendeurB = User::factory()->create();
-        $vendeurA->assignRole($roleVendeur);
-        $vendeurB->assignRole($roleVendeur);
-        foreach ([$vendeurA, $vendeurB] as $vendeur) {
-            $magasin->utilisateurs()->attach($vendeur->id, ['role' => 'employee', 'statut' => 'active', 'joined_at' => now()]);
-        }
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
+        $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 10, 'taux_tva' => 20]);

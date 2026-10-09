@@ -3,7 +3,11 @@
 namespace Tests;
 
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Testing\TestResponse;
@@ -38,6 +42,23 @@ abstract class TestCase extends BaseTestCase
         ]);
 
         return $app;
+    }
+
+    /**
+     * Un nouveau membre de l'équipe du magasin, créé comme le propriétaire
+     * le crée (voir CreerMembreMagasinAction) : avec les autorisations
+     * données, ou, sans liste, celles du modèle de son rôle. Le magasin
+     * reste ensuite le magasin actif.
+     *
+     * @param  list<string>|null  $permissions
+     */
+    protected function membre(Magasin $magasin, RoleMagasin $role, ?array $permissions = null): User
+    {
+        return app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => fake()->name(),
+            'email' => fake()->unique()->safeEmail(),
+            'password' => 'mot-de-passe-sur',
+        ], $role, $permissions);
     }
 
     /**

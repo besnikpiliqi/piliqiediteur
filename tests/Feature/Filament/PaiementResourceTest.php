@@ -11,8 +11,8 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\PaiementResource\Pages\CreatePaiement;
@@ -24,8 +24,6 @@ use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Exceptions;
 use Livewire\Livewire;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class PaiementResourceTest extends TestCase
@@ -449,28 +447,15 @@ class PaiementResourceTest extends TestCase
 
     public function test_un_vendeur_sans_vue_totale_ne_voit_que_ses_propres_paiements(): void
     {
-        $magasin = Magasin::factory()->create();
-        app(TenantContext::class)->set($magasin);
-
-        Permission::findOrCreate(PermissionRegistry::FACTURE_VIEW, 'web');
-        Permission::findOrCreate(PermissionRegistry::FACTURE_CREATE, 'web');
-        Permission::findOrCreate(PermissionRegistry::PAIEMENT_VIEW, 'web');
-        Permission::findOrCreate(PermissionRegistry::PAIEMENT_CREER, 'web');
-        $roleVendeur = Role::findOrCreate('employee', 'web');
-        $roleVendeur->givePermissionTo([
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $autorisations = [
             PermissionRegistry::FACTURE_VIEW,
             PermissionRegistry::FACTURE_CREATE,
             PermissionRegistry::PAIEMENT_VIEW,
             PermissionRegistry::PAIEMENT_CREER,
-        ]);
-
-        $vendeurA = User::factory()->create();
-        $vendeurB = User::factory()->create();
-        $vendeurA->assignRole($roleVendeur);
-        $vendeurB->assignRole($roleVendeur);
-        foreach ([$vendeurA, $vendeurB] as $vendeur) {
-            $magasin->utilisateurs()->attach($vendeur->id, ['role' => 'employee', 'statut' => 'active', 'joined_at' => now()]);
-        }
+        ];
+        $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
+        $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
 
         $client = Client::factory()->create();
 

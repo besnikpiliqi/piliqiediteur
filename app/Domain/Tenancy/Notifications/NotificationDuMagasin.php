@@ -8,13 +8,11 @@ use Illuminate\Notifications\Notification;
 
 /**
  * Notification en base, affichée dans la cloche du panneau (voir
- * AppPanelProvider::databaseNotifications()), à propos d'un seul magasin.
- *
- * Un utilisateur peut travailler pour plusieurs magasins, et sa cloche
- * les mélange : chaque notification nomme donc son magasin en tête de
- * titre, ne parle que de lui, et retient son identifiant (`magasin_id`)
- * pour disparaître le jour où l'utilisateur le quitte ou y est suspendu
- * (voir User::effacerLesNotificationsDu()).
+ * AppPanelProvider::databaseNotifications()), à propos d'un seul magasin :
+ * elle nomme le magasin en tête de son titre, ne parle que de lui, et
+ * retient son identifiant (`magasin_id`), qui sert à effacer les
+ * notifications d'un membre retiré de l'équipe ou suspendu (voir
+ * User::effacerLesNotificationsDu()).
  */
 abstract class NotificationDuMagasin extends Notification
 {

@@ -12,13 +12,14 @@ return new class extends Migration
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
-            $table->string('role', 30)->default('employee');
+            $table->string('role', 30);
             $table->string('statut', 20);
             $table->timestamp('joined_at')->nullable();
             $table->timestamps();
 
-            $table->unique(['magasin_id', 'user_id']);
-            $table->index(['user_id']);
+            // Un compte n'appartient qu'à un seul magasin : l'index refuse
+            // un second rattachement.
+            $table->unique('user_id');
             $table->index(['magasin_id', 'statut']);
         });
     }

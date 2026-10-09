@@ -3,31 +3,35 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
-use App\Domain\Tenancy\Actions\DefinirPermissionsSupplementairesMembreAction;
 use App\Domain\Tenancy\Actions\MettreAJourMembreMagasinAction;
 use App\Domain\Tenancy\Actions\ReinitialiserMotDePasseMembreAction;
 use App\Domain\Tenancy\Actions\RetirerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Models\MagasinUser;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
  * Le propriétaire crée lui-même les comptes de ses vendeurs/salariés et
  * leur communique les identifiants directement -- pas d'auto-inscription,
- * pas de vérification d'email.
+ * pas de vérification d'email. Chaque compte n'appartient qu'à son
+ * magasin, et n'y a que les autorisations cochées pour lui.
  */
 class CreerMembreMagasinActionTest extends TestCase
 {
@@ -67,10 +71,130 @@ class CreerMembreMagasinActionTest extends TestCase
     }
 
     /**
-     * Un compte est global : le propriétaire de B qui saisit l'adresse du
-     * propriétaire de A ne doit ni changer son mot de passe (il ouvrirait
-     * alors le magasin A avec), ni l'attacher à B, ni apprendre à quel
-     * magasin cette adresse appartient.
+     * Sans liste, le membre reçoit exactement les autorisations du modèle
+     * de son rôle, données directement : aucun rôle Spatie.
+     */
+    public function test_sans_liste_un_vendeur_recoit_exactement_le_modele_de_son_role(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Vendeur);
+
+        $this->assertSame([
+            'client.create', 'client.update', 'client.view',
+            'devis.create', 'devis.envoyer', 'devis.update', 'devis.view',
+            'facture.create', 'facture.emettre', 'facture.envoyer', 'facture.view',
+            'paiement.creer', 'paiement.view',
+            'produit.view',
+        ], $this->autorisations($vendeur, $magasin));
+        $this->assertSame([], $vendeur->fresh()->getRoleNames()->all());
+    }
+
+    /**
+     * Le propriétaire a décoché l'envoi par e-mail et coché la création
+     * d'avoirs : le vendeur n'a que ce qui est coché, rien de plus du
+     * modèle de son rôle.
+     */
+    public function test_avec_une_liste_le_membre_n_a_que_les_autorisations_cochees(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::AVOIR_CREER]);
+
+        $this->assertSame(['avoir.creer', 'facture.view'], $this->autorisations($vendeur, $magasin));
+        $this->assertTrue($vendeur->can(PermissionRegistry::AVOIR_CREER));
+        $this->assertFalse($vendeur->can(PermissionRegistry::FACTURE_ENVOYER));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function autorisationsQueLeProprietaireNeCochePas(): array
+    {
+        return [
+            'inconnue' => ['facture.tout'],
+            'réservée au propriétaire' => [PermissionRegistry::MANDAT_PDP_GERER],
+        ];
+    }
+
+    #[DataProvider('autorisationsQueLeProprietaireNeCochePas')]
+    public function test_une_autorisation_inconnue_ou_reservee_au_proprietaire_est_refusee(string $autorisation): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+
+        $this->assertThrows(
+            fn () => app(CreerMembreMagasinAction::class)->handle($magasin, [
+                'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
+            ], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, $autorisation]),
+            InvalidArgumentException::class,
+            "Autorisation inconnue ou réservée au propriétaire : {$autorisation}",
+        );
+
+        $this->assertDatabaseMissing('users', ['email' => 'paul@example.test']);
+        $this->assertSame(1, $magasin->membres()->count());
+    }
+
+    /**
+     * Chaque compte n'appartient qu'à son magasin : ce qui est coché pour
+     * le membre de A n'existe pas dans B, ni l'inverse.
+     */
+    public function test_les_autorisations_donnees_dans_un_magasin_n_existent_pas_dans_un_autre(): void
+    {
+        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
+        $membreDeA = $this->membre($magasinA, RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_VIEW]);
+        $membreDeB = $this->membre($magasinB, RoleMagasin::Comptable);
+
+        $this->assertSame([], $this->autorisations($membreDeA, $magasinB));
+        $this->assertSame([], $this->autorisations($membreDeB, $magasinA));
+        $this->assertSame(['avoir.view'], $this->autorisations($membreDeA, $magasinA));
+        app(TenantContext::class)->set($magasinB);
+        $this->assertFalse($membreDeA->fresh()->can(PermissionRegistry::AVOIR_VIEW));
+    }
+
+    /**
+     * Un compte n'appartient qu'à un seul magasin : la base refuse un
+     * second rattachement, et la gestion d'équipe d'un autre magasin
+     * refuse son adresse sans toucher au compte.
+     */
+    public function test_un_compte_ne_se_rattache_jamais_a_un_second_magasin(): void
+    {
+        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
+        $comptable = app(CreerMembreMagasinAction::class)->handle($magasinA, [
+            'name' => 'Claire', 'email' => 'claire@cabinet.test', 'password' => 'mot-de-passe-de-claire',
+        ], RoleMagasin::Comptable);
+        $hashDuMotDePasse = $comptable->password;
+
+        $this->assertThrows(
+            fn () => $magasinB->utilisateurs()->attach($comptable->getKey(), [
+                'role' => RoleMagasin::Comptable->value,
+                'statut' => StatutMembreMagasin::Actif->value,
+                'joined_at' => now(),
+            ]),
+            UniqueConstraintViolationException::class,
+        );
+        $this->assertThrows(
+            fn () => app(CreerMembreMagasinAction::class)->handle($magasinB, [
+                'name' => 'Claire', 'email' => 'claire@cabinet.test', 'password' => 'choisi-par-b',
+            ], RoleMagasin::Comptable),
+            ValidationException::class,
+            'Cette adresse e-mail ne peut pas être utilisée pour un nouveau membre.',
+        );
+
+        $this->assertSame([$magasinA->id], $comptable->magasins()->pluck('magasins.id')->all());
+        $this->assertSame($hashDuMotDePasse, $comptable->fresh()->password);
+    }
+
+    /**
+     * Le propriétaire de B qui saisit l'adresse du propriétaire de A ne
+     * doit ni changer son mot de passe (il ouvrirait alors le magasin A
+     * avec), ni l'attacher à B, ni apprendre à quel magasin cette adresse
+     * appartient.
      */
     public function test_ladresse_du_compte_dun_autre_magasin_est_refusee_sans_toucher_a_ce_compte(): void
     {
@@ -138,6 +262,28 @@ class CreerMembreMagasinActionTest extends TestCase
         $this->assertFalse($vendeur->can(PermissionRegistry::FACTURE_CREATE), 'L\'ancien rôle (vendeur) ne doit plus donner de permissions.');
     }
 
+    /**
+     * Refusée, la modification ne change rien : ni le rôle, ni les
+     * autorisations, ni le journal des événements.
+     */
+    public function test_modifier_un_membre_avec_une_autorisation_reservee_au_proprietaire_est_refuse_sans_rien_changer(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $membre = $magasin->membres()->where('user_id', $vendeur->id)->firstOrFail();
+        $evenementsAvant = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->count();
+
+        $this->assertThrows(
+            fn () => app(MettreAJourMembreMagasinAction::class)->handle($membre, RoleMagasin::Administrateur, StatutMembreMagasin::Actif, [PermissionRegistry::MANDAT_PDP_GERER]),
+            InvalidArgumentException::class,
+            'Autorisation inconnue ou réservée au propriétaire : mandat_pdp.gerer',
+        );
+
+        $this->assertSame(RoleMagasin::Vendeur, $membre->fresh()->role);
+        $this->assertSame(['facture.view'], $this->autorisations($vendeur, $magasin));
+        $this->assertSame($evenementsAvant, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->count());
+    }
+
     public function test_reinitialiser_le_mot_de_passe_dun_membre(): void
     {
         $proprietaire = User::factory()->create();
@@ -171,29 +317,6 @@ class CreerMembreMagasinActionTest extends TestCase
         );
 
         $this->assertTrue(Hash::check('mot-de-passe-admin', $administrateur->fresh()->password));
-    }
-
-    /**
-     * Le mot de passe d'un comptable rattaché aux magasins A et B ouvre
-     * les deux : le propriétaire de B qui le changerait ouvrirait A.
-     */
-    public function test_reinitialiser_le_mot_de_passe_dun_compte_rattache_a_un_autre_magasin_est_refuse(): void
-    {
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
-        $proprietaireB = User::factory()->create();
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
-        $comptable = app(CreerMembreMagasinAction::class)->handle($magasinA, [
-            'name' => 'Claire', 'email' => 'claire@cabinet.test', 'password' => 'mot-de-passe-de-claire',
-        ], RoleMagasin::Comptable);
-        $membreDeB = $this->rattacherAussi($comptable, $magasinB, RoleMagasin::Comptable);
-
-        $this->assertThrows(
-            fn () => app(ReinitialiserMotDePasseMembreAction::class)->handle($proprietaireB, $membreDeB, 'choisi-par-b'),
-            LogicException::class,
-            'Ce mot de passe ne se réinitialise pas depuis l\'équipe',
-        );
-
-        $this->assertTrue(Hash::check('mot-de-passe-de-claire', $comptable->fresh()->password));
     }
 
     public function test_reinitialiser_le_mot_de_passe_du_proprietaire_est_refuse(): void
@@ -230,71 +353,60 @@ class CreerMembreMagasinActionTest extends TestCase
     }
 
     /**
-     * Sans ce nettoyage, ses permissions supplémentaires restaient en base
-     * et revenaient dès qu'il était de nouveau rattaché à ce magasin. Celles
-     * d'un autre magasin ne le regardent pas.
+     * Sans ce nettoyage, ses autorisations restaient en base et
+     * revenaient dès qu'il était de nouveau rattaché au magasin : aucune
+     * ne reste.
      */
-    public function test_retirer_un_membre_retire_ses_permissions_supplementaires_de_ce_magasin_seulement(): void
+    public function test_retirer_un_membre_retire_ses_autorisations(): void
     {
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasinA, [
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, [
             'name' => 'Paul', 'email' => 'paul5@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Vendeur);
-        $membreDeA = $magasinA->membres()->where('user_id', $vendeur->id)->firstOrFail();
-        $membreDeB = $this->rattacherAussi($vendeur, $magasinB, RoleMagasin::Vendeur);
-        app(DefinirPermissionsSupplementairesMembreAction::class)->handle($membreDeA, [PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::EQUIPE_VIEW]);
-        app(DefinirPermissionsSupplementairesMembreAction::class)->handle($membreDeB, [PermissionRegistry::AVOIR_VIEW]);
+        ], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::EQUIPE_VIEW]);
 
-        app(RetirerMembreMagasinAction::class)->handle($membreDeA);
+        app(RetirerMembreMagasinAction::class)->handle($magasin->membres()->where('user_id', $vendeur->id)->firstOrFail());
 
-        $this->assertSame([], $this->permissionsSupplementaires($vendeur, $magasinA));
-        $this->assertSame([PermissionRegistry::AVOIR_VIEW], $this->permissionsSupplementaires($vendeur, $magasinB));
+        $this->assertDatabaseMissing('model_has_permissions', ['model_type' => $vendeur->getMorphClass(), 'model_id' => $vendeur->id]);
     }
 
     /**
-     * Un comptable qui quitte un magasin perd ses notifications à propos de
-     * ce magasin, qui ne le regardent plus, et garde celles des autres.
+     * Retiré de l'équipe, il perd ses notifications à propos du magasin,
+     * qui ne le regardent plus.
      */
-    public function test_retirer_un_membre_efface_ses_notifications_de_ce_magasin_seulement(): void
+    public function test_retirer_un_membre_efface_ses_notifications(): void
     {
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
-        $comptable = app(CreerMembreMagasinAction::class)->handle($magasinA, [
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $comptable = app(CreerMembreMagasinAction::class)->handle($magasin, [
             'name' => 'Claire', 'email' => 'claire@cabinet.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Comptable);
-        $this->rattacherAussi($comptable, $magasinB, RoleMagasin::Comptable);
-        Notification::send($comptable, new FacturesPasseesEnRetard($magasinA, ['F-A-1']));
-        Notification::send($comptable, new FacturesPasseesEnRetard($magasinB, ['F-B-1']));
+        Notification::send($comptable, new FacturesPasseesEnRetard($magasin, ['F-A-1']));
 
-        app(RetirerMembreMagasinAction::class)->handle($magasinA->membres()->where('user_id', $comptable->id)->firstOrFail());
+        app(RetirerMembreMagasinAction::class)->handle($magasin->membres()->where('user_id', $comptable->id)->firstOrFail());
 
-        $this->assertSame([$magasinB->id], $comptable->notifications()->get()->pluck('data.magasin_id')->all());
+        $this->assertSame(0, $comptable->notifications()->count());
     }
 
     /**
-     * Suspendu dans un magasin, un comptable ne peut plus l'ouvrir : sa
-     * cloche, commune à ses magasins, n'en montre plus rien. Un simple
-     * changement de rôle ne touche pas à ses notifications.
+     * Suspendu, un comptable ne peut plus ouvrir le magasin : sa cloche
+     * n'en montre plus rien. Un simple changement de rôle ne touche pas à
+     * ses notifications.
      */
-    public function test_suspendre_un_membre_efface_ses_notifications_de_ce_magasin_seulement(): void
+    public function test_suspendre_un_membre_efface_ses_notifications(): void
     {
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
-        $comptable = app(CreerMembreMagasinAction::class)->handle($magasinA, [
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $comptable = app(CreerMembreMagasinAction::class)->handle($magasin, [
             'name' => 'Claire', 'email' => 'claire@cabinet.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Comptable);
-        $this->rattacherAussi($comptable, $magasinB, RoleMagasin::Comptable);
-        Notification::send($comptable, new FacturesPasseesEnRetard($magasinA, ['F-A-1']));
-        Notification::send($comptable, new FacturesPasseesEnRetard($magasinB, ['F-B-1']));
-        $membreDeA = $magasinA->membres()->where('user_id', $comptable->id)->firstOrFail();
+        Notification::send($comptable, new FacturesPasseesEnRetard($magasin, ['F-A-1']));
+        Notification::send($comptable, new FacturesPasseesEnRetard($magasin, ['F-A-2']));
+        $membre = $magasin->membres()->where('user_id', $comptable->id)->firstOrFail();
 
-        app(MettreAJourMembreMagasinAction::class)->handle($membreDeA, RoleMagasin::Administrateur, StatutMembreMagasin::Actif);
+        app(MettreAJourMembreMagasinAction::class)->handle($membre, RoleMagasin::Administrateur, StatutMembreMagasin::Actif);
         $this->assertSame(2, $comptable->notifications()->count());
 
-        app(MettreAJourMembreMagasinAction::class)->handle($membreDeA->fresh(), RoleMagasin::Administrateur, StatutMembreMagasin::Suspendu);
+        app(MettreAJourMembreMagasinAction::class)->handle($membre->fresh(), RoleMagasin::Administrateur, StatutMembreMagasin::Suspendu);
 
-        $this->assertSame([$magasinB->id], $comptable->notifications()->get()->pluck('data.magasin_id')->all());
+        $this->assertSame(0, $comptable->notifications()->count());
     }
 
     public function test_impossible_de_retirer_le_proprietaire(): void
@@ -308,27 +420,12 @@ class CreerMembreMagasinActionTest extends TestCase
     }
 
     /**
-     * Plus aucun écran ne rattache un compte existant à un second magasin
-     * (voir EmailLibrePourUnNouveauMembre) : un compte présent dans deux
-     * magasins se construit donc ici directement, pour vérifier ce que les
-     * actions font d'un tel compte.
-     */
-    private function rattacherAussi(User $utilisateur, Magasin $magasin, RoleMagasin $role): MagasinUser
-    {
-        $magasin->utilisateurs()->attach($utilisateur->getKey(), [
-            'role' => $role->value,
-            'statut' => StatutMembreMagasin::Actif->value,
-            'joined_at' => now(),
-        ]);
-        app(TenantContext::class)->runAs($magasin, fn () => $utilisateur->assignRole($role->value));
-
-        return $magasin->membres()->where('user_id', $utilisateur->getKey())->firstOrFail();
-    }
-
-    /**
+     * Les autorisations données directement à l'utilisateur dans ce
+     * magasin, par ordre alphabétique.
+     *
      * @return list<string>
      */
-    private function permissionsSupplementaires(User $utilisateur, Magasin $magasin): array
+    private function autorisations(User $utilisateur, Magasin $magasin): array
     {
         return app(TenantContext::class)->runAs(
             $magasin,

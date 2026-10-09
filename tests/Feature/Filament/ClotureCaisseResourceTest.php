@@ -15,8 +15,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
-use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ViewClotureCaisse;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -25,8 +24,6 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ClotureCaisseResourceTest extends TestCase
@@ -193,16 +190,8 @@ class ClotureCaisseResourceTest extends TestCase
 
     public function test_laction_cloturer_nest_pas_visible_pour_un_vendeur(): void
     {
-        $magasin = Magasin::factory()->create();
-        app(TenantContext::class)->set($magasin);
-
-        Permission::findOrCreate(PermissionRegistry::CLOTURE_CAISSE_VIEW, 'web');
-        $roleVendeur = Role::findOrCreate('employee', 'web');
-        $roleVendeur->givePermissionTo([PermissionRegistry::CLOTURE_CAISSE_VIEW]);
-
-        $vendeur = User::factory()->create();
-        $vendeur->assignRole($roleVendeur);
-        $magasin->utilisateurs()->attach($vendeur->id, ['role' => 'employee', 'statut' => 'active', 'joined_at' => now()]);
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW]);
 
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
@@ -266,18 +255,8 @@ class ClotureCaisseResourceTest extends TestCase
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
 
-        Permission::findOrCreate(PermissionRegistry::CLOTURE_CAISSE_VIEW, 'web');
-        Permission::findOrCreate(PermissionRegistry::CLOTURE_CAISSE_GERER, 'web');
-        $roleVendeur = Role::findOrCreate('employee', 'web');
-        $roleVendeur->givePermissionTo([PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
-
-        $vendeurA = User::factory()->create();
-        $vendeurB = User::factory()->create();
-        $vendeurA->assignRole($roleVendeur);
-        $vendeurB->assignRole($roleVendeur);
-        foreach ([$vendeurA, $vendeurB] as $vendeur) {
-            $magasin->utilisateurs()->attach($vendeur->id, ['role' => 'employee', 'statut' => 'active', 'joined_at' => now()]);
-        }
+        $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
+        $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
 
         $this->actingAs($vendeurA);
         Filament::setTenant($magasin);

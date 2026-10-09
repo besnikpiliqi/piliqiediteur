@@ -8,8 +8,9 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
-use App\Domain\Tenancy\Actions\DefinirPermissionsSupplementairesMembreAction;
+use App\Domain\Tenancy\Actions\MettreAJourMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -45,9 +46,11 @@ class EnregistrementFiscalPolicyTest extends TestCase
         $this->assertFalse($vendeur->can('viewAny', EnregistrementFiscal::class));
         $this->assertFalse($vendeur->can('view', $evenement));
 
-        app(DefinirPermissionsSupplementairesMembreAction::class)->handle(
+        app(MettreAJourMembreMagasinAction::class)->handle(
             $magasin->membres()->where('user_id', $vendeur->getKey())->firstOrFail(),
-            [PermissionRegistry::CAISSE_SECURISEE_CONSULTER],
+            RoleMagasin::Vendeur,
+            StatutMembreMagasin::Actif,
+            [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CAISSE_SECURISEE_CONSULTER],
         );
 
         $this->assertTrue($vendeur->fresh()->can('viewAny', EnregistrementFiscal::class));

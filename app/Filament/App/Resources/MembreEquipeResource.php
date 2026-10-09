@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\ReinitialiserMotDePasseMembreAction;
 use App\Domain\Tenancy\Actions\RetirerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -11,13 +12,16 @@ use App\Domain\Tenancy\Rules\EmailLibrePourUnNouveauMembre;
 use App\Filament\App\Resources\MembreEquipeResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
+use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Arr;
 use Illuminate\Validation\Rules\Password;
 
 /**
@@ -30,6 +34,9 @@ use Illuminate\Validation\Rules\Password;
  * supprimable ici -- un seul chemin mène à ce rôle, la création du magasin.
  * « Nouveau mot de passe » n'apparaît pas non plus sur sa propre ligne
  * (voir ReinitialiserMotDePasseMembreAction).
+ *
+ * Le rôle choisi coche d'office les autorisations de son modèle ; seul le
+ * propriétaire les coche ou les décoche ensuite (voir champAutorisations()).
  */
 class MembreEquipeResource extends Resource
 {
@@ -71,14 +78,59 @@ class MembreEquipeResource extends Resource
                     ->required()
                     ->rule(Password::default())
                     ->helperText('À communiquer vous-même à la personne concernée -- aucun email ne lui sera envoyé.'),
-                Select::make('role')
-                    ->label('Rôle')
-                    ->options(collect(RoleMagasin::assignables())->mapWithKeys(
-                        fn (RoleMagasin $role) => [$role->value => $role->getLabel()]
-                    ))
-                    ->required(),
+                static::champRole(),
+                static::champAutorisations()->columnSpanFull(),
             ])->columns(2),
         ]);
+    }
+
+    /**
+     * Le rôle du membre : un libellé, et le modèle d'autorisations que
+     * l'écran coche de nouveau à chaque changement de rôle.
+     */
+    public static function champRole(): Select
+    {
+        return Select::make('role')
+            ->label('Rôle')
+            ->options(collect(RoleMagasin::assignables())->mapWithKeys(
+                fn (RoleMagasin $role) => [$role->value => $role->getLabel()]
+            ))
+            ->required()
+            ->live()
+            ->afterStateUpdated(fn (Set $set, ?string $state) => $set(
+                'permissions',
+                RoleMagasin::tryFrom((string) $state)?->permissionsParDefaut() ?? [],
+            ));
+    }
+
+    /**
+     * Les autorisations du membre, parmi celles que le propriétaire peut
+     * cocher (jamais celles qui lui sont réservées). Seul le propriétaire
+     * les coche ou les décoche : un autre membre qui gère l'équipe les voit
+     * sans pouvoir les changer, et ne les envoie pas. Le membre reçoit
+     * alors le modèle de son rôle à sa création ou à un changement de
+     * rôle, jamais plus, et garde sinon celles que le propriétaire a
+     * cochées.
+     */
+    public static function champAutorisations(): CheckboxList
+    {
+        return CheckboxList::make('permissions')
+            ->label('Autorisations')
+            ->helperText('Cochées d\'après le rôle choisi : cochez ou décochez ce que ce membre peut voir et faire.')
+            ->options(Arr::only(PermissionRegistry::libelles(), PermissionRegistry::cochables()))
+            ->columns(2)
+            ->bulkToggleable()
+            ->disabled(fn (): bool => ! static::proprietaireConnecte());
+    }
+
+    /**
+     * Le propriétaire du magasin actif est-il celui qui agit ? Son rôle
+     * Spatie, 'owner', ne vaut que dans son magasin (voir
+     * MagasinTeamResolver).
+     */
+    private static function proprietaireConnecte(): bool
+    {
+        return auth()->user()?->hasRole(RoleMagasin::Proprietaire->value) ?? false;
     }
 
     public static function table(Table $table): Table

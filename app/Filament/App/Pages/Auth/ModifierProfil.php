@@ -7,17 +7,25 @@ use Filament\Forms\Components\Component;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Pages\Auth\EditProfile;
+use Illuminate\Support\Facades\DB;
 
 /**
- * Chacun change ici son mot de passe en donnant l'actuel : une caisse
- * restée ouverte ne suffit pas à s'approprier le compte. S'il l'a oublié,
- * il passe par « Mot de passe oublié » sur la page de connexion. Ce sont
- * les seuls chemins pour un compte que le magasin ne réinitialise pas
- * lui-même depuis l'équipe (propriétaire, compte rattaché à plusieurs
- * magasins, membre qui agit sur son propre compte).
+ * Chacun change ici son nom, son adresse e-mail de connexion et son mot
+ * de passe, en donnant toujours son mot de passe actuel : une caisse
+ * restée ouverte ne suffit pas à s'approprier le compte. Le magasin ne
+ * les change jamais ; depuis l'équipe, il ne peut que donner un nouveau
+ * mot de passe à un membre (voir ReinitialiserMotDePasseMembreAction).
+ * Qui a oublié son mot de passe passe par « Mot de passe oublié » sur la
+ * page de connexion.
  *
- * Le nom et l'adresse e-mail de connexion n'y sont pas modifiables : ils
- * restent ceux saisis à la création du compte.
+ * Le nouveau mot de passe est facultatif : laissé vide, l'ancien reste.
+ * L'adresse e-mail est unique parmi tous les comptes, supprimés compris,
+ * et le refus ne dit pas à qui elle appartient. Une fois l'adresse
+ * changée, un lien « Mot de passe oublié » déjà envoyé à l'ancienne ne
+ * sert plus.
+ *
+ * Le registre fiscal fige le nom de l'opérateur dans le contenu signé de
+ * chaque enregistrement : un changement de nom n'y réécrit rien.
  *
  * Après un changement de mot de passe, AuthenticateSession déconnecte les
  * autres sessions du compte ; celle-ci reste ouverte.
@@ -33,6 +41,8 @@ class ModifierProfil extends EditProfile
             'form' => $this->form(
                 $this->makeForm()
                     ->schema([
+                        $this->getNameFormComponent(),
+                        $this->getEmailFormComponent(),
                         $this->getPasswordFormComponent(),
                         $this->getPasswordConfirmationFormComponent(),
                         $this->getMotDePasseActuelFormComponent(),
@@ -45,12 +55,11 @@ class ModifierProfil extends EditProfile
         ];
     }
 
-    protected function getPasswordFormComponent(): Component
+    protected function getEmailFormComponent(): Component
     {
-        return parent::getPasswordFormComponent()
-            ->required()
+        return parent::getEmailFormComponent()
             ->validationMessages([
-                'required' => 'Saisissez le nouveau mot de passe.',
+                'unique' => 'Cette adresse e-mail ne peut pas être utilisée.',
             ]);
     }
 
@@ -73,10 +82,22 @@ class ModifierProfil extends EditProfile
     /**
      * Filament vide les champs du nouveau mot de passe après
      * l'enregistrement ; le mot de passe actuel ne doit pas rester saisi
-     * non plus.
+     * non plus. Quand l'adresse a changé, le jeton « Mot de passe oublié »
+     * de l'ancienne adresse est effacé : le lien déjà envoyé ne sert plus,
+     * même si l'adresse sert un jour à un autre compte. La table des
+     * jetons appartient aux comptes, pas à un magasin : elle se filtre par
+     * adresse.
      */
     protected function afterSave(): void
     {
         $this->data['mot_de_passe_actuel'] = null;
+
+        $utilisateur = $this->getUser();
+
+        if ($utilisateur->wasChanged('email')) {
+            DB::table(config('auth.passwords.'.config('auth.defaults.passwords').'.table'))
+                ->where('email', $utilisateur->getPrevious()['email'])
+                ->delete();
+        }
     }
 }

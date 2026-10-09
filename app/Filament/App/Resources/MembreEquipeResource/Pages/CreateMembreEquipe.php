@@ -16,8 +16,13 @@ use Illuminate\Database\Eloquent\Model;
  * name/email/password ne sont pas des colonnes du pivot magasin_user : ce
  * formulaire ne construit jamais un MagasinUser directement, il délègue
  * entièrement à CreerMembreMagasinAction (création du compte sans
- * vérification email + rattachement + rôle Spatie), puis renvoie la ligne
- * de rattachement créée pour que Filament puisse rediriger normalement.
+ * vérification email + rattachement + autorisations), puis renvoie la
+ * ligne de rattachement créée pour que Filament puisse rediriger
+ * normalement.
+ *
+ * Les autorisations cochées ne sont transmises que par le propriétaire ;
+ * sans elles (un administrateur, dont la liste n'est pas envoyée), le
+ * membre reçoit le modèle de son rôle.
  */
 class CreateMembreEquipe extends CreateRecord
 {
@@ -35,7 +40,7 @@ class CreateMembreEquipe extends CreateRecord
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'password' => $data['password'],
-            ], RoleMagasin::from($data['role']));
+            ], RoleMagasin::from($data['role']), $data['permissions'] ?? null);
 
             return $magasin->membres()->where('user_id', $utilisateur->getKey())->firstOrFail();
         });

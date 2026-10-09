@@ -9,7 +9,7 @@ use App\Models\User;
 /**
  * Le registre fiscal (caisse sécurisée) se consulte avec
  * caisse_securisee.consulter : le propriétaire, l'administrateur et le
- * comptable par défaut (voir SeedMagasinRolesAction), sans
+ * comptable par défaut (voir RoleMagasin::permissionsParDefaut()), sans
  * confidentialité par vendeur, puisqu'il retrace l'activité de tout le
  * magasin. La permission est celle du magasin actif (voir
  * MagasinTeamResolver) : sans magasin actif, aucune ne s'applique, et un

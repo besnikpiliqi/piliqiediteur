@@ -6,7 +6,6 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
-use App\Domain\Tenancy\Actions\DefinirPermissionsSupplementairesMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
@@ -49,12 +48,11 @@ class ClotureCaissePolicyTest extends TestCase
 
     private function vendeurQuiVoitLesClotures(Magasin $magasin, string $email): User
     {
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => $email, 'email' => $email, 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
-        app(DefinirPermissionsSupplementairesMembreAction::class)->handle(
-            $magasin->membres()->where('user_id', $vendeur->getKey())->firstOrFail(),
-            [PermissionRegistry::CLOTURE_CAISSE_VIEW],
+        return app(CreerMembreMagasinAction::class)->handle(
+            $magasin,
+            ['name' => $email, 'email' => $email, 'password' => 'mot-de-passe-sur'],
+            RoleMagasin::Vendeur,
+            [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW],
         );
-
-        return $vendeur;
     }
 }

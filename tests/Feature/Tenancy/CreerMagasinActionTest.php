@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -49,7 +50,11 @@ class CreerMagasinActionTest extends TestCase
         $this->assertTrue($comptoir->estComptoir());
     }
 
-    public function test_les_cinq_roles_par_defaut_sont_crees_et_scopes_a_ce_magasin(): void
+    /**
+     * Le rôle du propriétaire est le seul rôle Spatie du magasin : les
+     * membres de l'équipe reçoivent leurs autorisations directement.
+     */
+    public function test_seul_le_role_du_proprietaire_est_cree_et_scope_a_ce_magasin(): void
     {
         $proprietaire = User::factory()->create();
 
@@ -57,20 +62,17 @@ class CreerMagasinActionTest extends TestCase
 
         $roles = Role::where('magasin_id', $magasin->id)->pluck('name')->sort()->values();
 
-        $this->assertSame(['accountant', 'admin', 'employee', 'owner', 'viewer'], $roles->all());
+        $this->assertSame(['owner'], $roles->all());
     }
 
     public function test_le_proprietaire_a_la_permission_de_gerer_le_mandat_pdp_mais_pas_ladministrateur(): void
     {
         $proprietaire = User::factory()->create();
-        $admin = User::factory()->create();
 
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $admin = $this->membre($magasin, RoleMagasin::Administrateur);
 
         $contexte = app(TenantContext::class);
-        $contexte->set($magasin);
-        $admin->assignRole('admin');
-
         $this->actingAs($proprietaire);
         $contexte->set($magasin);
         $this->assertTrue($proprietaire->can(PermissionRegistry::MANDAT_PDP_GERER));

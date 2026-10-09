@@ -19,9 +19,9 @@ use Filament\Pages\Page;
  * Seul endroit où le régime de TVA du magasin se configure : en dépend
  * directement la cadence de transmission de l'e-reporting (voir
  * CalculateurPeriodeEReporting et la commande planifiée
- * app:soumettre-ereporting-periodique). Réservé à qui a la permission
- * mandat_pdp.gerer (le propriétaire par défaut, voir
- * SeedMagasinRolesAction) : la configuration fiscale du magasin.
+ * app:soumettre-ereporting-periodique). Réservé à qui a « Paramètres du
+ * magasin » (PermissionRegistry::PARAMETRES_GERER) : le propriétaire, et
+ * le membre pour qui il la coche.
  *
  * Le régime de TVA et l'option pour les débits ont un impact sur la
  * conformité : chaque changement s'inscrit au journal des événements du
@@ -50,7 +50,7 @@ class ParametresFiscaux extends Page implements HasForms
 
     public static function canAccess(): bool
     {
-        return auth()->user()?->can(PermissionRegistry::MANDAT_PDP_GERER) ?? false;
+        return auth()->user()?->can(PermissionRegistry::PARAMETRES_GERER) ?? false;
     }
 
     public function mount(): void

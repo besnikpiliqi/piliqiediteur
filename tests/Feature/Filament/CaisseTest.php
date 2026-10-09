@@ -29,7 +29,6 @@ use Illuminate\Support\Facades\Exceptions;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
-use Spatie\Permission\Models\Role;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
@@ -85,8 +84,9 @@ class CaisseTest extends TestCase
     /**
      * Exigence explicite : chaque vendeur a sa propre caisse -- un vendeur
      * avec les permissions par défaut (donc sans aucune permission de
-     * clôture de la journée du magasin, voir SeedMagasinRolesAction) doit
-     * tout de même pouvoir encaisser une vente comptoir.
+     * clôture de la journée du magasin, voir
+     * RoleMagasin::permissionsParDefaut()) doit tout de même pouvoir
+     * encaisser une vente comptoir.
      */
     public function test_un_vendeur_avec_les_permissions_par_defaut_peut_encaisser_une_vente(): void
     {
@@ -170,7 +170,7 @@ class CaisseTest extends TestCase
             'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
             'mode_paiement' => ModePaiement::CarteBancaire->value,
         ]);
-        Role::findByName(RoleMagasin::Vendeur->value, 'web')->revokePermissionTo(PermissionRegistry::FACTURE_EMETTRE);
+        $vendeur->revokePermissionTo(PermissionRegistry::FACTURE_EMETTRE);
 
         $caisse->call('encaisser')->assertForbidden();
 
@@ -196,7 +196,7 @@ class CaisseTest extends TestCase
             'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
             'mode_paiement' => ModePaiement::CarteBancaire->value,
         ])->instance();
-        Role::findByName(RoleMagasin::Vendeur->value, 'web')->revokePermissionTo(PermissionRegistry::FACTURE_EMETTRE);
+        $vendeur->revokePermissionTo(PermissionRegistry::FACTURE_EMETTRE);
 
         $this->assertThrows(
             fn () => $caisse->encaisser(),

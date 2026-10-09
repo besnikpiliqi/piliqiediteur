@@ -25,10 +25,10 @@ use Illuminate\Support\Number;
  * 0,045 € valent 90,00 €, pas 100,00 €).
  *
  * Information sensible (elle révèle la trésorerie immobilisée en stock) :
- * réservée par défaut au propriétaire/administrateur/comptable
- * via produit.voir_valeur_stock (voir SeedMagasinRolesAction), un vendeur
- * continue de voir le prix et la quantité de chaque produit dans le
- * tableau, juste pas ce total agrégé.
+ * réservée par défaut au propriétaire/administrateur/comptable via
+ * produit.voir_valeur_stock (voir RoleMagasin::permissionsParDefaut()),
+ * un vendeur continue de voir le prix et la quantité de chaque produit
+ * dans le tableau, juste pas ce total agrégé.
  *
  * PAS de tuile "valeur des produits épuisés" : la valeur d'un stock est
  * quantité × prix, donc un produit à quantité 0 vaut TOUJOURS 0 € --

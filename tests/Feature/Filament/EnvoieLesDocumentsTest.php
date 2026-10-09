@@ -33,7 +33,6 @@ use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -265,8 +264,12 @@ class EnvoieLesDocumentsTest extends TestCase
     {
         $this->travelTo('2026-10-15 10:00:00');
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
-        Role::findByName(RoleMagasin::Vendeur->value, 'web')->revokePermissionTo(PermissionRegistry::FACTURE_ENVOYER);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle(
+            $magasin,
+            ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'mot-de-passe-sur'],
+            RoleMagasin::Vendeur,
+            array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [PermissionRegistry::FACTURE_ENVOYER])),
+        );
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         app(TenantContext::class)->set($magasin);

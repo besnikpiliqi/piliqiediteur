@@ -11,8 +11,8 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\GenererSoumissionEReportingAction;
 use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\SoumissionEReportingResource\Pages\ListSoumissionsEReporting;
 use App\Filament\App\Resources\SoumissionEReportingResource\Pages\ViewSoumissionEReporting;
 use App\Integrations\Pdp\Contracts\PeriodeEReporting;
@@ -21,8 +21,6 @@ use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class SoumissionEReportingResourceTest extends TestCase
@@ -71,16 +69,8 @@ class SoumissionEReportingResourceTest extends TestCase
 
     public function test_un_vendeur_sans_vue_totale_ne_voit_pas_la_resource(): void
     {
-        $magasin = Magasin::factory()->create();
-        app(TenantContext::class)->set($magasin);
-
-        Permission::findOrCreate(PermissionRegistry::CLOTURE_CAISSE_VIEW, 'web');
-        $roleVendeur = Role::findOrCreate('employee', 'web');
-        $roleVendeur->givePermissionTo(PermissionRegistry::CLOTURE_CAISSE_VIEW);
-
-        $vendeur = User::factory()->create();
-        $vendeur->assignRole($roleVendeur);
-        $magasin->utilisateurs()->attach($vendeur->id, ['role' => 'employee', 'statut' => 'active', 'joined_at' => now()]);
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW]);
 
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);

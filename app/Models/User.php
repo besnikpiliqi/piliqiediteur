@@ -44,12 +44,11 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Tous les magasins auxquels cet utilisateur a accès (propriétaire,
-     * salarié, ou comptable multi-magasins), avec son rôle "de base" sur
-     * chacun. C'est volontairement une relation many-to-many : un
-     * utilisateur (typiquement un comptable) peut appartenir à plusieurs
-     * magasins (voir app/Domain/Tenancy/Concerns/BelongsToMagasin.php pour
-     * le pourquoi).
+     * Le magasin de ce compte, avec son rôle et son statut (voir
+     * MagasinUser) : un compte n'appartient qu'à un seul magasin (index
+     * unique sur magasin_user.user_id). La relation reste une
+     * BelongsToMany parce que Filament (HasTenants) attend une liste de
+     * magasins.
      */
     public function magasins(): BelongsToMany
     {
@@ -68,10 +67,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Ses notifications à propos de ce magasin (voir
-     * NotificationDuMagasin), le jour où il n'y a plus accès -- retiré de
-     * l'équipe, suspendu : sa cloche, commune à tous ses magasins, ne
-     * montre plus rien d'un magasin qu'il ne peut plus ouvrir.
+     * Efface ses notifications à propos de ce magasin (voir
+     * NotificationDuMagasin) le jour où il n'y a plus accès : retiré de
+     * l'équipe ou suspendu, il ne voit plus rien du magasin dans sa
+     * cloche.
      */
     public function effacerLesNotificationsDu(Magasin $magasin): void
     {
@@ -79,10 +78,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Filament\Models\Contracts\HasTenants : liste des magasins affichés
-     * dans le sélecteur de tenant du panneau "app". Seuls les
-     * rattachements actifs apparaissent -- un accès suspendu n'ouvre pas
-     * la porte.
+     * Filament\Models\Contracts\HasTenants : le magasin que le panneau
+     * « app » ouvre à ce compte, dans la liste qu'attend Filament ; vide
+     * quand son rattachement n'est pas actif : un accès suspendu n'ouvre
+     * pas la porte.
      */
     public function getTenants(Panel $panel): array|Collection
     {
@@ -100,8 +99,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * Sans cette implémentation explicite, Filament se rabat sur
      * `config('app.env') === 'local'` pour autoriser l'accès à un panneau :
      * l'accès ne doit jamais dépendre de l'environnement. Seul le panneau
-     * des magasins existe, ouvert à qui est membre actif d'au moins un
-     * magasin ; tout autre panneau reste fermé, jusqu'à ce que
+     * des magasins existe, ouvert à qui est membre actif de son magasin ;
+     * tout autre panneau reste fermé, jusqu'à ce que
      * l'administration de l'éditeur (étape 13 de la feuille de route)
      * définisse le sien.
      */

@@ -12,8 +12,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -73,17 +71,13 @@ class ClientPolicyTest extends TestCase
     {
         $contexte = app(TenantContext::class);
 
-        $magasinA = Magasin::factory()->create();
+        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
         $magasinB = Magasin::factory()->create();
-        $user = User::factory()->create();
-        $this->actingAs($user);
 
         // La permission n'est accordée à l'utilisateur QUE dans le magasin A.
+        $user = $this->membre($magasinA, RoleMagasin::Vendeur, [PermissionRegistry::CLIENT_VIEW]);
+        $this->actingAs($user);
         $contexte->set($magasinA);
-        Permission::findOrCreate(PermissionRegistry::CLIENT_VIEW, 'web');
-        $role = Role::findOrCreate('vendeur', 'web');
-        $role->givePermissionTo(PermissionRegistry::CLIENT_VIEW);
-        $user->assignRole($role);
 
         $clientA = Client::factory()->create();
 

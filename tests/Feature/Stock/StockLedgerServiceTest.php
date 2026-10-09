@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Stock;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
@@ -136,6 +137,29 @@ class StockLedgerServiceTest extends TestCase
         $this->assertSame($magasin->id, $notification->data['magasin_id']);
         $this->assertSame(0, $vendeur->notifications()->count());
         $this->assertSame(0, $proprietaireAutreMagasin->notifications()->count());
+    }
+
+    /**
+     * Les destinataires suivent les autorisations cochées : l'administrateur,
+     * qui gère le stock d'office, et le vendeur à qui le propriétaire l'a
+     * cochée sont prévenus ; un vendeur sans cette case ne l'est pas.
+     */
+    public function test_l_alerte_previent_les_membres_a_qui_la_gestion_du_stock_est_cochee(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $administrateur = $this->membre($magasin, RoleMagasin::Administrateur);
+        $vendeurQuiGereLeStock = $this->membre($magasin, RoleMagasin::Vendeur, [
+            ...RoleMagasin::Vendeur->permissionsParDefaut(),
+            PermissionRegistry::PRODUIT_AJUSTER_STOCK,
+        ]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $produit = Produit::factory()->create(['stock_quantite' => 7, 'seuil_alerte' => 5]);
+
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+
+        $this->assertSame(1, $administrateur->notifications()->count());
+        $this->assertSame(1, $vendeurQuiGereLeStock->notifications()->count());
+        $this->assertSame(0, $vendeur->notifications()->count());
     }
 
     /**

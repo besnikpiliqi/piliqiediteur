@@ -11,7 +11,6 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
-use App\Domain\Tenancy\Actions\DefinirPermissionsSupplementairesMembreAction;
 use App\Domain\Tenancy\Actions\MettreAJourMembreMagasinAction;
 use App\Domain\Tenancy\Actions\RetirerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
@@ -96,22 +95,9 @@ class JournalEvenementsTest extends TestCase
             ->all());
     }
 
-    private function membre(Magasin $magasin, User $utilisateur): MagasinUser
+    private function rattachement(Magasin $magasin, User $utilisateur): MagasinUser
     {
         return $magasin->membres()->where('user_id', $utilisateur->getKey())->firstOrFail();
-    }
-
-    /**
-     * Fait d'un utilisateur un membre d'un autre magasin, sans passer par
-     * la gestion d'équipe, qui ne crée que de nouveaux comptes.
-     */
-    private function rattacher(User $utilisateur, Magasin $magasin): void
-    {
-        $magasin->utilisateurs()->attach($utilisateur->getKey(), [
-            'role' => RoleMagasin::Comptable->value,
-            'statut' => StatutMembreMagasin::Actif->value,
-            'joined_at' => now(),
-        ]);
     }
 
     /**
@@ -147,22 +133,6 @@ class JournalEvenementsTest extends TestCase
         ], $contenu['donnees']);
     }
 
-    public function test_chaque_magasin_ouvert_par_la_session_note_son_ouverture_une_seule_fois(): void
-    {
-        $alice = User::factory()->create();
-        $magasinA = $this->magasinDe($alice, 'Boutique A');
-        $magasinB = $this->magasinDe(User::factory()->create(), 'Boutique B');
-        $this->rattacher($alice, $magasinB);
-        $this->actingAs($alice);
-
-        $this->get("/app/{$magasinA->uuid}")->assertSuccessful();
-        $this->get("/app/{$magasinB->uuid}")->assertSuccessful();
-        $this->get("/app/{$magasinA->uuid}")->assertSuccessful();
-
-        $this->assertSame(['260', '80'], $this->codes($magasinA));
-        $this->assertSame(['260', '80'], $this->codes($magasinB));
-    }
-
     /**
      * Fermé par défaut : sans clé de signature, la session n'entre pas
      * dans le magasin, et rien n'est noté dans la session, si bien que la
@@ -190,42 +160,44 @@ class JournalEvenementsTest extends TestCase
         $this->assertSame(['260', '80'], $this->codes($magasin));
     }
 
-    public function test_la_deconnexion_inscrit_la_fin_de_session_dans_chaque_magasin_ouvert(): void
+    public function test_la_deconnexion_inscrit_la_fin_de_session_dans_le_magasin_ouvert(): void
     {
         $alice = User::factory()->create(['name' => 'Alice Martin']);
-        $magasinA = $this->magasinDe($alice, 'Boutique A');
-        $magasinB = $this->magasinDe(User::factory()->create(), 'Boutique B');
-        $magasinC = $this->magasinDe(User::factory()->create(), 'Boutique C');
-        $this->rattacher($alice, $magasinB);
-        $this->rattacher($alice, $magasinC);
+        $magasin = $this->magasinDe($alice, 'Boutique A');
+        $autreMagasin = $this->magasinDe(User::factory()->create(), 'Boutique B');
         $this->actingAs($alice);
-        $this->get("/app/{$magasinA->uuid}")->assertSuccessful();
-        $this->get("/app/{$magasinB->uuid}")->assertSuccessful();
+        $this->get("/app/{$magasin->uuid}")->assertSuccessful();
 
         $this->post(route('filament.app.auth.logout'));
 
         $this->assertGuest();
-        $this->assertSame(['260', '80', '40'], $this->codes($magasinA));
-        $this->assertSame(['260', '80', '40'], $this->codes($magasinB));
-        $this->assertSame([], $this->codes($magasinC));
-        $this->assertSame(['id' => $alice->id, 'nom' => 'Alice Martin'], $this->dernier($magasinB, CodeEvenement::FinDeSession)->contenuSigne()['operateur']);
+        $this->assertSame(['260', '80', '40'], $this->codes($magasin));
+        $this->assertSame([], $this->codes($autreMagasin));
+        $this->assertSame(['id' => $alice->id, 'nom' => 'Alice Martin'], $this->dernier($magasin, CodeEvenement::FinDeSession)->contenuSigne()['operateur']);
     }
 
+    /**
+     * Retiré de l'équipe, il n'ouvre plus le panneau, dont la déconnexion
+     * passe par la même porte : sa session ne se ferme que par une autre
+     * voie, comme ici, et n'inscrit plus rien dans le magasin.
+     */
     public function test_un_membre_retire_entre_temps_n_inscrit_plus_rien_dans_ce_magasin(): void
     {
-        $alice = User::factory()->create();
-        $magasinA = $this->magasinDe($alice, 'Boutique A');
-        $magasinB = $this->magasinDe(User::factory()->create(), 'Boutique B');
-        $this->rattacher($alice, $magasinB);
-        $this->actingAs($alice);
-        $this->get("/app/{$magasinA->uuid}")->assertSuccessful();
-        $this->get("/app/{$magasinB->uuid}")->assertSuccessful();
-        $magasinB->utilisateurs()->detach($alice->getKey());
+        Route::middleware('web')->post('/test/fermer-la-session', function (): string {
+            auth()->logout();
 
-        $this->post(route('filament.app.auth.logout'));
+            return 'fermée';
+        });
+        $magasin = $this->magasinDe(User::factory()->create());
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        $this->get("/app/{$magasin->uuid}")->assertSuccessful();
+        $magasin->utilisateurs()->detach($vendeur->getKey());
 
-        $this->assertSame(['260', '80', '40'], $this->codes($magasinA));
-        $this->assertSame(['260', '80'], $this->codes($magasinB));
+        $this->post('/test/fermer-la-session');
+
+        $this->assertGuest();
+        $this->assertSame(['260', '130', '80'], $this->codes($magasin));
     }
 
     public function test_la_fermeture_de_la_session_de_cet_appareil_inscrit_aussi_la_fin_de_session(): void
@@ -284,71 +256,75 @@ class JournalEvenementsTest extends TestCase
         $autreMagasin = $this->magasinDe(User::factory()->create(), 'Autre boutique');
         $this->actingAs($proprietaire);
 
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul Vendeur', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul Vendeur', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
 
         $this->assertSame(['260', '130'], $this->codes($magasin));
         $this->assertSame([], $this->codes($autreMagasin));
         $this->assertSame([
             'membre' => ['id' => $vendeur->id, 'nom' => 'Paul Vendeur'],
             'avant' => null,
-            'apres' => ['role' => 'employee', 'statut' => 'active', 'permissions_supplementaires' => []],
+            'apres' => ['role' => 'employee', 'statut' => 'active', 'permissions' => ['facture.create', 'facture.view']],
         ], $this->details($magasin, CodeEvenement::ModificationDesDroits));
         $this->assertSame(['id' => $proprietaire->id, 'nom' => 'Alice Martin'], $this->dernier($magasin, CodeEvenement::ModificationDesDroits)->contenuSigne()['operateur']);
     }
 
+    /**
+     * Sans liste, un changement de rôle donne le modèle du nouveau rôle :
+     * les droits d'avant et d'après s'inscrivent ensemble.
+     */
     public function test_un_changement_de_role_ou_de_statut_inscrit_les_droits_avant_et_apres(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
 
-        app(MettreAJourMembreMagasinAction::class)->handle($this->membre($magasin, $vendeur), RoleMagasin::Comptable, StatutMembreMagasin::Suspendu);
+        app(MettreAJourMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur), RoleMagasin::Observateur, StatutMembreMagasin::Suspendu);
 
         $this->assertSame(['260', '130', '130'], $this->codes($magasin));
         $this->assertSame([
             'membre' => ['id' => $vendeur->id, 'nom' => 'Paul'],
-            'avant' => ['role' => 'employee', 'statut' => 'active', 'permissions_supplementaires' => []],
-            'apres' => ['role' => 'accountant', 'statut' => 'suspended', 'permissions_supplementaires' => []],
+            'avant' => ['role' => 'employee', 'statut' => 'active', 'permissions' => ['facture.view']],
+            'apres' => ['role' => 'viewer', 'statut' => 'suspended', 'permissions' => [
+                'avoir_fournisseur.view', 'client.view', 'devis.view', 'facture.view', 'facture_achat.view', 'fournisseur.view', 'produit.view',
+            ]],
         ], $this->details($magasin, CodeEvenement::ModificationDesDroits));
     }
 
     public function test_une_mise_a_jour_qui_ne_change_rien_n_inscrit_rien(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
 
-        app(MettreAJourMembreMagasinAction::class)->handle($this->membre($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif);
-        app(DefinirPermissionsSupplementairesMembreAction::class)->handle($this->membre($magasin, $vendeur), []);
+        app(MettreAJourMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif);
+        app(MettreAJourMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif, [PermissionRegistry::FACTURE_VIEW]);
 
         $this->assertSame(['260', '130'], $this->codes($magasin));
     }
 
-    public function test_les_permissions_supplementaires_s_inscrivent_avant_et_apres(): void
+    public function test_les_autorisations_cochees_s_inscrivent_avant_et_apres(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
-        app(DefinirPermissionsSupplementairesMembreAction::class)->handle($this->membre($magasin, $vendeur), [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK]);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK]);
 
-        app(DefinirPermissionsSupplementairesMembreAction::class)->handle($this->membre($magasin, $vendeur), [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK, PermissionRegistry::AVOIR_VIEW]);
+        app(MettreAJourMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif, [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK, PermissionRegistry::AVOIR_VIEW]);
 
-        $this->assertSame(['260', '130', '130', '130'], $this->codes($magasin));
+        $this->assertSame(['260', '130', '130'], $this->codes($magasin));
         $this->assertSame([
             'membre' => ['id' => $vendeur->id, 'nom' => 'Paul'],
-            'avant' => ['role' => 'employee', 'statut' => 'active', 'permissions_supplementaires' => ['produit.voir_valeur_stock']],
-            'apres' => ['role' => 'employee', 'statut' => 'active', 'permissions_supplementaires' => ['avoir.view', 'produit.voir_valeur_stock']],
+            'avant' => ['role' => 'employee', 'statut' => 'active', 'permissions' => ['produit.voir_valeur_stock']],
+            'apres' => ['role' => 'employee', 'statut' => 'active', 'permissions' => ['avoir.view', 'produit.voir_valeur_stock']],
         ], $this->details($magasin, CodeEvenement::ModificationDesDroits));
     }
 
     public function test_le_retrait_d_un_membre_inscrit_les_droits_qu_il_perd(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
-        app(DefinirPermissionsSupplementairesMembreAction::class)->handle($this->membre($magasin, $vendeur), [PermissionRegistry::AVOIR_VIEW]);
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_VIEW]);
 
-        app(RetirerMembreMagasinAction::class)->handle($this->membre($magasin, $vendeur));
+        app(RetirerMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur));
 
         $this->assertSame([
             'membre' => ['id' => $vendeur->id, 'nom' => 'Paul'],
-            'avant' => ['role' => 'employee', 'statut' => 'active', 'permissions_supplementaires' => ['avoir.view']],
+            'avant' => ['role' => 'employee', 'statut' => 'active', 'permissions' => ['avoir.view']],
             'apres' => null,
         ], $this->details($magasin, CodeEvenement::ModificationDesDroits));
     }
@@ -360,11 +336,11 @@ class JournalEvenementsTest extends TestCase
         $this->retirerLaCleDeSignature();
 
         $this->assertThrows(
-            fn () => app(MettreAJourMembreMagasinAction::class)->handle($this->membre($magasin, $vendeur), RoleMagasin::Comptable, StatutMembreMagasin::Actif),
+            fn () => app(MettreAJourMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur), RoleMagasin::Comptable, StatutMembreMagasin::Actif),
             ModuleFiscalNonConfigureException::class,
         );
 
-        $this->assertSame(RoleMagasin::Vendeur, $this->membre($magasin, $vendeur)->role);
+        $this->assertSame(RoleMagasin::Vendeur, $this->rattachement($magasin, $vendeur)->role);
         $this->assertSame(['260', '130'], $this->codes($magasin));
     }
 

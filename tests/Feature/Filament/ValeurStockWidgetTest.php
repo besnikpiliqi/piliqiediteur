@@ -5,16 +5,13 @@ namespace Tests\Feature\Filament;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
-use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
 use App\Filament\App\Resources\ProduitResource\Widgets\ValeurStockApercu;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ValeurStockWidgetTest extends TestCase
@@ -65,16 +62,8 @@ class ValeurStockWidgetTest extends TestCase
 
     public function test_un_vendeur_sans_la_permission_ne_voit_pas_le_widget(): void
     {
-        $magasin = Magasin::factory()->create();
-        app(TenantContext::class)->set($magasin);
-
-        Permission::findOrCreate(PermissionRegistry::PRODUIT_VIEW, 'web');
-        $roleVendeur = Role::findOrCreate('employee', 'web');
-        $roleVendeur->givePermissionTo([PermissionRegistry::PRODUIT_VIEW]);
-
-        $vendeur = User::factory()->create();
-        $vendeur->assignRole($roleVendeur);
-        $magasin->utilisateurs()->attach($vendeur->id, ['role' => 'employee', 'statut' => 'active', 'joined_at' => now()]);
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::PRODUIT_VIEW]);
 
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);

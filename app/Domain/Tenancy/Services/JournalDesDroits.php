@@ -12,7 +12,7 @@ use App\Models\User;
 /**
  * Inscrit chaque modification des droits d'un membre de l'équipe (JET 130)
  * au journal des événements du magasin, avec ses droits avant et après :
- * son rôle, son statut et ses permissions supplémentaires dans ce
+ * son rôle, son statut et les autorisations cochées pour lui dans ce
  * magasin, ou null quand il n'en est pas membre (avant sa création, après
  * son retrait).
  *
@@ -31,7 +31,7 @@ class JournalDesDroits
      * une fois le registre du magasin verrouillé ; null pour un compte qui
      * reste à créer.
      *
-     * @return array{role: string, statut: string, permissions_supplementaires: list<string>}|null
+     * @return array{role: string, statut: string, permissions: list<string>}|null
      *
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
@@ -47,7 +47,7 @@ class JournalDesDroits
      * Inscrit la modification, si les droits de l'utilisateur ne sont plus
      * ceux d'avant : une modification qui ne change rien n'en est pas une.
      *
-     * @param  array{role: string, statut: string, permissions_supplementaires: list<string>}|null  $avant  ce qu'a donné avant()
+     * @param  array{role: string, statut: string, permissions: list<string>}|null  $avant  ce qu'a donné avant()
      *
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
@@ -71,7 +71,7 @@ class JournalDesDroits
      * Ses droits tels que la base les donne, dans le magasin actif, celui
      * des permissions de Spatie (voir MagasinTeamResolver).
      *
-     * @return array{role: string, statut: string, permissions_supplementaires: list<string>}|null
+     * @return array{role: string, statut: string, permissions: list<string>}|null
      */
     private function droits(Magasin $magasin, User $utilisateur): ?array
     {
@@ -84,7 +84,7 @@ class JournalDesDroits
         return [
             'role' => $membre->role->value,
             'statut' => $membre->statut->value,
-            'permissions_supplementaires' => $utilisateur->permissions()->orderBy('permissions.name')->pluck('permissions.name')->all(),
+            'permissions' => $utilisateur->permissions()->orderBy('permissions.name')->pluck('permissions.name')->all(),
         ];
     }
 }

@@ -15,14 +15,14 @@ use Filament\Support\Contracts\HasLabel;
  *   magasin, le changement de version du module fiscal
  *   (ModuleFiscal::VERSION) et celui de la clé de signature (270).
  * - L'ouverture de session suit le premier accès d'une session au panneau
- *   d'un magasin (JournaliserOuvertureDeSession), et la fin de session la
- *   déconnexion, dans chaque magasin ouvert par la session
+ *   de son magasin (JournaliserOuvertureDeSession), et la fin de session
+ *   la déconnexion, dans le magasin ouvert par la session
  *   (JournaliserFinDeSession).
  * - L'export de données suit chaque export du journal des événements
  *   (ExporterJournalDesEvenementsAction).
- * - La modification des droits suit la création, la modification et le
- *   retrait d'un membre de l'équipe, et chaque changement de ses
- *   permissions supplémentaires (JournalDesDroits).
+ * - La modification des droits suit la création, la modification (rôle,
+ *   statut, autorisations) et le retrait d'un membre de l'équipe
+ *   (JournalDesDroits).
  * - Un paramètre ayant un impact sur la conformité suit aussi le
  *   changement du régime de TVA du magasin, de son option pour les débits
  *   et du taux de TVA d'un produit (JournaliseSesParametresDeConformite).

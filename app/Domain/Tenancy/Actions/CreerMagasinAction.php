@@ -14,10 +14,11 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Point d'entrée unique pour la création d'un magasin : l'enregistrement
- * seul ne suffit jamais, il faut toujours dans la même transaction semer
- * ses rôles par défaut, créer son client comptoir et rattacher le
- * propriétaire. Oublier une de ces étapes laisserait un magasin dans un
- * état incohérent (rôles manquants, personne n'y ayant accès...).
+ * seul ne suffit jamais, il faut toujours dans la même transaction créer
+ * le rôle de son propriétaire (voir SeedMagasinRolesAction), créer son
+ * client comptoir et rattacher le propriétaire. Oublier une de ces étapes
+ * laisserait un magasin dans un état incohérent (rôle manquant, personne
+ * n'y ayant accès...).
  *
  * Le statut est mis directement à `active` : aucune vérification du
  * SIRET (API Sirene de l'INSEE) ne précède l'activation d'un magasin.

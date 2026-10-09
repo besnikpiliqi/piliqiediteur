@@ -5,22 +5,47 @@ namespace Tests\Feature\Tenancy;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Actions\SeedMagasinRolesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
+/**
+ * Le seul rôle Spatie d'un magasin est celui du propriétaire, qui porte
+ * toutes les autorisations ; un membre reçoit d'office le modèle de son
+ * rôle (voir RoleMagasin::permissionsParDefaut()), que le propriétaire
+ * coche ou décoche ensuite.
+ */
 class SeedMagasinRolesActionTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_seul_le_role_du_proprietaire_existe_et_il_porte_toutes_les_autorisations(): void
+    {
+        $magasin = Magasin::factory()->create();
+        app(TenantContext::class)->set($magasin);
+
+        app(SeedMagasinRolesAction::class)->handle($magasin);
+
+        $role = Role::query()->where('magasin_id', $magasin->id)->sole();
+        $autorisations = $role->permissions->pluck('name')->sort()->values()->all();
+        $toutes = PermissionRegistry::toutes();
+        sort($toutes);
+        $this->assertSame('owner', $role->name);
+        $this->assertSame($toutes, $autorisations);
+    }
+
     /**
      * Un vendeur ne doit jamais pouvoir clôturer la journée du magasin
      * (document fiscal d'e-reporting) sans que le propriétaire le lui
-     * accorde explicitement -- seule la fermeture de sa propre caisse
+     * coche explicitement -- seule la fermeture de sa propre caisse
      * (ClotureCaissePersonnelle) lui reste toujours ouverte, sans
-     * permission dédiée.
+     * autorisation dédiée.
      */
     public function test_un_vendeur_na_pas_la_permission_de_cloturer_la_journee_par_defaut(): void
     {
@@ -78,5 +103,54 @@ class SeedMagasinRolesActionTest extends TestCase
 
         $this->assertSame($consulte, $membre->can(PermissionRegistry::CAISSE_SECURISEE_CONSULTER));
         $this->assertTrue($proprietaire->fresh()->can(PermissionRegistry::CAISSE_SECURISEE_CONSULTER));
+    }
+
+    /**
+     * Ce que chaque modèle de rôle coche d'office : le vendeur vend,
+     * envoie ses documents et encaisse, sans voir les factures de
+     * l'équipe, créer d'avoir ni clôturer la journée ; le comptable suit
+     * toutes les factures et les impayés.
+     *
+     * @return array<string, array{RoleMagasin, string, bool}>
+     */
+    public static function autorisationsCocheesDOffice(): array
+    {
+        return [
+            'le vendeur envoie ses factures' => [RoleMagasin::Vendeur, PermissionRegistry::FACTURE_ENVOYER, true],
+            'le vendeur encaisse' => [RoleMagasin::Vendeur, PermissionRegistry::PAIEMENT_CREER, true],
+            'le vendeur envoie ses devis' => [RoleMagasin::Vendeur, PermissionRegistry::DEVIS_ENVOYER, true],
+            'le vendeur ne voit pas les factures de l\'équipe' => [RoleMagasin::Vendeur, PermissionRegistry::FACTURE_VIEW_TOUTES, false],
+            'le vendeur ne crée pas d\'avoir' => [RoleMagasin::Vendeur, PermissionRegistry::AVOIR_CREER, false],
+            'le vendeur ne clôture pas la journée' => [RoleMagasin::Vendeur, PermissionRegistry::CLOTURE_CAISSE_GERER, false],
+            'le comptable voit les factures de l\'équipe' => [RoleMagasin::Comptable, PermissionRegistry::FACTURE_VIEW_TOUTES, true],
+            'le comptable envoie les factures' => [RoleMagasin::Comptable, PermissionRegistry::FACTURE_ENVOYER, true],
+            'le comptable envoie les avoirs' => [RoleMagasin::Comptable, PermissionRegistry::AVOIR_ENVOYER, true],
+        ];
+    }
+
+    #[DataProvider('autorisationsCocheesDOffice')]
+    public function test_un_membre_recoit_d_office_le_modele_de_son_role(RoleMagasin $role, string $autorisation, bool $accordee): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+
+        $membre = $this->membre($magasin, $role);
+
+        $this->assertSame($accordee, $membre->can($autorisation));
+    }
+
+    /**
+     * L'administrateur reçoit d'office tout ce qu'un membre peut recevoir,
+     * sauf les paramètres du magasin (identité et TVA) ; le mandat PDP
+     * reste au propriétaire.
+     */
+    public function test_l_administrateur_recoit_d_office_tout_sauf_les_parametres_et_le_mandat(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+
+        $administrateur = $this->membre($magasin, RoleMagasin::Administrateur);
+
+        $manquantes = array_values(array_diff(PermissionRegistry::toutes(), $administrateur->getDirectPermissions()->pluck('name')->all()));
+        sort($manquantes);
+        $this->assertSame(['mandat_pdp.gerer', 'parametres.gerer'], $manquantes);
     }
 }

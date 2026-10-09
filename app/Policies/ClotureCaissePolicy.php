@@ -10,10 +10,11 @@ use App\Models\User;
  * Même confidentialité par membre que FacturePolicy : un membre à qui le
  * propriétaire a délégué la clôture de la journée (cloture_caisse.gerer)
  * ne voit que les clôtures qu'il a lui-même déclenchées, sans
- * cloture_caisse.view_toutes -- accordée par défaut au propriétaire, à
- * l'administrateur et au comptable (voir SeedMagasinRolesAction), ou
- * individuellement via les permissions supplémentaires d'un membre. Un
- * vendeur ferme sa propre caisse ailleurs (voir ClotureCaissePersonnelle).
+ * cloture_caisse.view_toutes -- détenue par le propriétaire, cochée
+ * d'office pour l'administrateur et le comptable (voir
+ * RoleMagasin::permissionsParDefaut()), et pour tout membre à qui le
+ * propriétaire la coche. Un vendeur ferme sa propre caisse ailleurs (voir
+ * ClotureCaissePersonnelle).
  *
  * Document fiscal au même titre qu'une facture : jamais modifiable ni
  * supprimable une fois créée (voir ClotureCaisse::class).

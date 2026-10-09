@@ -16,8 +16,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
@@ -31,18 +29,10 @@ class FacturePolicyTest extends TestCase
 
     public function test_un_vendeur_sans_vue_totale_ne_voit_que_ses_propres_factures(): void
     {
-        $magasin = Magasin::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $contexte = app(TenantContext::class);
-        $contexte->set($magasin);
-
-        Permission::findOrCreate(PermissionRegistry::FACTURE_VIEW, 'web');
-        $roleVendeur = Role::findOrCreate('employee', 'web');
-        $roleVendeur->givePermissionTo(PermissionRegistry::FACTURE_VIEW);
-
-        $vendeurA = User::factory()->create();
-        $vendeurB = User::factory()->create();
-        $vendeurA->assignRole($roleVendeur);
-        $vendeurB->assignRole($roleVendeur);
+        $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 10, 'taux_tva' => 20]);
@@ -70,22 +60,10 @@ class FacturePolicyTest extends TestCase
 
     public function test_avec_la_permission_vue_totale_un_role_voit_toutes_les_factures(): void
     {
-        $magasin = Magasin::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $contexte = app(TenantContext::class);
-        $contexte->set($magasin);
-
-        Permission::findOrCreate(PermissionRegistry::FACTURE_VIEW, 'web');
-        Permission::findOrCreate(PermissionRegistry::FACTURE_VIEW_TOUTES, 'web');
-        $roleComptable = Role::findOrCreate('accountant', 'web');
-        $roleComptable->givePermissionTo([PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES]);
-
-        $vendeur = User::factory()->create();
-        $comptable = User::factory()->create();
-        $roleVendeur = Role::findOrCreate('employee', 'web');
-        Permission::findOrCreate(PermissionRegistry::FACTURE_VIEW, 'web');
-        $roleVendeur->givePermissionTo(PermissionRegistry::FACTURE_VIEW);
-        $vendeur->assignRole($roleVendeur);
-        $comptable->assignRole($roleComptable);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $comptable = $this->membre($magasin, RoleMagasin::Comptable, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES]);
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 10, 'taux_tva' => 20]);

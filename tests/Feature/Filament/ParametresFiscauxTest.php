@@ -8,15 +8,12 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
-use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Pages\ParametresFiscaux;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
-use Spatie\Permission\Models\Permission;
-use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class ParametresFiscauxTest extends TestCase
@@ -116,21 +113,41 @@ class ParametresFiscauxTest extends TestCase
 
     public function test_un_vendeur_sans_la_permission_ne_peut_pas_acceder_a_la_page(): void
     {
-        $magasin = Magasin::factory()->create();
-        app(TenantContext::class)->set($magasin);
-
-        Permission::findOrCreate(PermissionRegistry::FACTURE_VIEW, 'web');
-        $roleVendeur = Role::findOrCreate('employee', 'web');
-        $roleVendeur->givePermissionTo(PermissionRegistry::FACTURE_VIEW);
-
-        $vendeur = User::factory()->create();
-        $vendeur->assignRole($roleVendeur);
-        $magasin->utilisateurs()->attach($vendeur->id, ['role' => 'employee', 'statut' => 'active', 'joined_at' => now()]);
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
 
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
 
         $this->assertFalse(ParametresFiscaux::canAccess());
+    }
+
+    /**
+     * Aucun modèle de rôle ne coche « Paramètres du magasin » : même un
+     * administrateur n'entre pas, tant que le propriétaire ne la lui coche
+     * pas.
+     */
+    public function test_un_administrateur_n_accede_pas_aux_parametres_fiscaux(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $administrateur = $this->membre($magasin, RoleMagasin::Administrateur);
+
+        $this->actingAs($administrateur)
+            ->get(ParametresFiscaux::getUrl(tenant: $magasin))
+            ->assertForbidden();
+    }
+
+    public function test_un_administrateur_a_qui_le_proprietaire_coche_les_parametres_y_accede(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $administrateur = $this->membre($magasin, RoleMagasin::Administrateur, [
+            ...RoleMagasin::Administrateur->permissionsParDefaut(),
+            PermissionRegistry::PARAMETRES_GERER,
+        ]);
+
+        $this->actingAs($administrateur)
+            ->get(ParametresFiscaux::getUrl(tenant: $magasin))
+            ->assertSee('Régime de TVA');
     }
 
     /**

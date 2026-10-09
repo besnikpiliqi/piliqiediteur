@@ -2,52 +2,74 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\MagasinUser;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use LogicException;
 
 /**
- * Changer le rôle d'un membre doit TOUJOURS re-synchroniser son rôle
- * Spatie réel pour ce magasin -- mettre à jour uniquement la colonne
- * `role` du pivot sans toucher à l'assignation Spatie laisserait les
- * permissions effectives désynchronisées de ce qui est affiché à l'écran.
+ * Change le rôle, le statut et les autorisations d'un membre, ensemble ou
+ * pas du tout. Une liste d'autorisations fournie remplace les siennes ;
+ * sans liste, un changement de rôle lui donne le modèle du nouveau rôle
+ * (voir RoleMagasin::permissionsParDefaut()), et ses autorisations ne
+ * changent pas sinon : changer seulement son statut garde celles que le
+ * propriétaire a cochées. Une autorisation inconnue ou réservée au
+ * propriétaire n'est jamais donnée (voir PermissionRegistry::cochables()).
  *
- * Un membre qui n'est plus actif (suspendu) perd aussi ses notifications
- * à propos de ce magasin, comme s'il l'avait quitté (voir
+ * Le rôle d'avant est relu sous le verrou du registre, qui sérialise les
+ * modifications des droits du magasin : deux modifications simultanées ne
+ * se fondent jamais sur un rôle périmé.
+ *
+ * Un membre qui n'est plus actif (suspendu) perd aussi ses notifications à
+ * propos de ce magasin, comme s'il l'avait quitté (voir
  * RetirerMembreMagasinAction).
  *
- * Un changement de rôle ou de statut s'inscrit au journal des événements
- * du magasin (JET 130, voir JournalDesDroits).
+ * La modification s'inscrit au journal des événements du magasin, en un
+ * seul événement avec les droits d'avant et d'après (JET 130, voir
+ * JournalDesDroits).
  */
 class MettreAJourMembreMagasinAction
 {
     public function __construct(private readonly JournalDesDroits $journalDesDroits) {}
 
-    public function handle(MagasinUser $membre, RoleMagasin $nouveauRole, StatutMembreMagasin $nouveauStatut): MagasinUser
+    /**
+     * @param  list<string>|null  $permissions  les autorisations cochées ; null : le modèle du nouveau rôle s'il change, les siennes sinon
+     *
+     * @throws InvalidArgumentException quand une autorisation est inconnue ou réservée au propriétaire
+     */
+    public function handle(MagasinUser $membre, RoleMagasin $nouveauRole, StatutMembreMagasin $nouveauStatut, ?array $permissions = null): MagasinUser
     {
         if ($membre->role === RoleMagasin::Proprietaire || $nouveauRole === RoleMagasin::Proprietaire) {
             throw new LogicException('Le rôle propriétaire ne se modifie pas via la gestion d\'équipe.');
         }
 
-        return DB::transaction(function () use ($membre, $nouveauRole, $nouveauStatut) {
+        if ($permissions !== null) {
+            $permissions = PermissionRegistry::verifierCochables($permissions);
+        }
+
+        return DB::transaction(function () use ($membre, $nouveauRole, $nouveauStatut, $permissions) {
             $magasin = $membre->magasin;
             $utilisateur = $membre->utilisateur;
             app(TenantContext::class)->set($magasin);
             $avant = $this->journalDesDroits->avant($magasin, $utilisateur);
-            $ancienRole = $membre->role;
+            $ancienRole = $membre->refresh()->role;
 
             $membre->update([
                 'role' => $nouveauRole->value,
                 'statut' => $nouveauStatut->value,
             ]);
 
-            if ($ancienRole !== $nouveauRole) {
-                $utilisateur->removeRole($ancienRole->value);
-                $utilisateur->assignRole($nouveauRole->value);
+            if ($permissions === null && $ancienRole !== $nouveauRole) {
+                $permissions = $nouveauRole->permissionsParDefaut();
+            }
+
+            if ($permissions !== null) {
+                $utilisateur->syncPermissions($permissions);
             }
 
             if ($nouveauStatut !== StatutMembreMagasin::Actif) {

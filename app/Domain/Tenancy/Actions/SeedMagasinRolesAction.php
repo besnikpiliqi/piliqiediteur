@@ -6,109 +6,35 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use LogicException;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 /**
- * Crée les 5 rôles Spatie par défaut pour un magasin, avec une matrice de
- * permissions raisonnable par défaut, exploitable dès sa création. Le
- * propriétaire affine ensuite les droits de chaque membre par ses
- * permissions supplémentaires (voir EditMembreEquipe).
+ * Prépare les autorisations d'un nouveau magasin : chaque permission de
+ * l'application (voir PermissionRegistry), commune à tous les magasins,
+ * et le seul rôle Spatie du magasin, celui du propriétaire ('owner'), qui
+ * les porte toutes. Un membre de l'équipe n'a pas de rôle Spatie : il
+ * reçoit directement, dans ce magasin, les autorisations que le
+ * propriétaire coche pour lui (voir CreerMembreMagasinAction).
  *
  * Exige que TenantContext soit déjà positionné sur le magasin concerné
- * (Spatie scope automatiquement les rôles créés par team via le resolver,
- * voir MagasinTeamResolver).
+ * (Spatie rattache le rôle créé au magasin actif par le resolver, voir
+ * MagasinTeamResolver).
  */
 class SeedMagasinRolesAction
 {
     public function handle(Magasin $magasin): void
     {
         if (app(TenantContext::class)->id() !== $magasin->getKey()) {
-            throw new \LogicException('TenantContext doit être positionné sur le magasin avant de semer ses rôles.');
+            throw new LogicException('TenantContext doit être positionné sur le magasin avant de semer ses rôles.');
         }
 
-        $toutesLesPermissions = PermissionRegistry::toutes();
-
-        foreach ($toutesLesPermissions as $permission) {
+        foreach (PermissionRegistry::toutes() as $permission) {
             Permission::findOrCreate($permission, 'web');
         }
 
-        $permissionsLecture = [
-            PermissionRegistry::CLIENT_VIEW,
-            PermissionRegistry::FOURNISSEUR_VIEW,
-            PermissionRegistry::PRODUIT_VIEW,
-            PermissionRegistry::DEVIS_VIEW,
-            PermissionRegistry::FACTURE_VIEW,
-            // Les achats sont des documents de coût internes, pas des
-            // documents de vente : pas de confidentialité par créateur
-            // (voir PermissionRegistry), donc une simple permission de
-            // lecture d'équipe suffit pour le comptable et l'observateur.
-            PermissionRegistry::FACTURE_ACHAT_VIEW,
-            PermissionRegistry::AVOIR_FOURNISSEUR_VIEW,
-        ];
-
-        $matrice = [
-            RoleMagasin::Proprietaire->value => $toutesLesPermissions,
-            RoleMagasin::Administrateur->value => array_values(array_diff(
-                $toutesLesPermissions,
-                [PermissionRegistry::MANDAT_PDP_GERER]
-            )),
-            // Le comptable voit l'intégralité des factures du magasin
-            // (indispensable pour son travail), pas seulement les siennes.
-            // Il suit aussi les impayés : il envoie et relance factures et
-            // avoirs, sans régler les relances automatiques, qui écrivent
-            // aux clients au nom du magasin.
-            RoleMagasin::Comptable->value => [
-                ...$permissionsLecture,
-                PermissionRegistry::FACTURE_VIEW_TOUTES,
-                PermissionRegistry::FACTURE_ENVOYER,
-                PermissionRegistry::PAIEMENT_VIEW,
-                PermissionRegistry::PAIEMENT_CREER,
-                PermissionRegistry::AVOIR_VIEW,
-                PermissionRegistry::AVOIR_ENVOYER,
-                PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK,
-                PermissionRegistry::CLOTURE_CAISSE_VIEW,
-                PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES,
-                // Le registre fiscal et le journal des événements, qu'il
-                // présente à l'administration avec le propriétaire.
-                PermissionRegistry::CAISSE_SECURISEE_CONSULTER,
-            ],
-            // Un vendeur crée/émet ses propres devis et factures, mais ne
-            // voit que celles qu'il a lui-même créées (voir FacturePolicy)
-            // et ne les corrige pas par un avoir -- ça reste une action de
-            // supervision réservée à l'admin/propriétaire par défaut.
-            RoleMagasin::Vendeur->value => [
-                PermissionRegistry::CLIENT_VIEW,
-                PermissionRegistry::CLIENT_CREATE,
-                PermissionRegistry::CLIENT_UPDATE,
-                PermissionRegistry::PRODUIT_VIEW,
-                PermissionRegistry::DEVIS_VIEW,
-                PermissionRegistry::DEVIS_CREATE,
-                PermissionRegistry::DEVIS_UPDATE,
-                PermissionRegistry::DEVIS_ENVOYER,
-                PermissionRegistry::FACTURE_VIEW,
-                PermissionRegistry::FACTURE_CREATE,
-                PermissionRegistry::FACTURE_EMETTRE,
-                // Envoyer par e-mail, et relancer, les factures qu'il voit,
-                // donc les siennes (voir FacturePolicy::envoyer()).
-                PermissionRegistry::FACTURE_ENVOYER,
-                PermissionRegistry::PAIEMENT_VIEW,
-                PermissionRegistry::PAIEMENT_CREER,
-                // Clôturer LA JOURNÉE DU MAGASIN (ClotureCaisse, le
-                // document fiscal d'e-reporting) reste une action de
-                // supervision réservée au propriétaire par défaut -- il
-                // peut la déléguer individuellement via les permissions
-                // supplémentaires d'un membre. Un vendeur garde en
-                // revanche toujours le droit de fermer SA PROPRE caisse
-                // (voir ClotureCaissePersonnelle/FermerSaCaisseAction),
-                // qui ne nécessite aucune permission dédiée puisqu'elle ne
-                // concerne que ses propres ventes.
-            ],
-            RoleMagasin::Observateur->value => $permissionsLecture,
-        ];
-
-        foreach ($matrice as $nomRole => $permissions) {
-            Role::findOrCreate($nomRole, 'web')->syncPermissions($permissions);
-        }
+        Role::findOrCreate(RoleMagasin::Proprietaire->value, 'web')
+            ->syncPermissions(RoleMagasin::Proprietaire->permissionsParDefaut());
     }
 }

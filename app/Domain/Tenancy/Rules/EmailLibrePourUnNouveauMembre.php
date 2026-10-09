@@ -8,11 +8,11 @@ use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
 /**
- * Un compte User est global : il ouvre tous les magasins auxquels il est
- * rattaché. Un magasin ne crée donc un membre qu'avec une adresse e-mail
- * qu'aucun compte n'utilise encore, même supprimé (l'adresse reste unique
- * en base) : sinon il suffirait de connaître l'adresse d'un compte pour se
- * l'approprier avec les magasins qu'il ouvre.
+ * Un nouveau membre a toujours un compte neuf, qui n'appartiendra qu'à ce
+ * magasin (voir CreerMembreMagasinAction) : un magasin ne crée donc un
+ * membre qu'avec une adresse e-mail qu'aucun compte n'utilise encore, même
+ * supprimé (l'adresse reste unique en base). Une adresse prise ne fait
+ * jamais entrer son compte dans un autre magasin.
  *
  * Le refus ne dit rien des autres magasins. Seule une personne déjà
  * rattachée à CE magasin, quel que soit son statut, est désignée comme

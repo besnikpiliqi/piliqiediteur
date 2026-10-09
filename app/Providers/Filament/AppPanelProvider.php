@@ -53,9 +53,10 @@ class AppPanelProvider extends PanelProvider
             // « Mot de passe oublié » envoie un lien par e-mail (voir
             // MAIL_MAILER ; textes dans lang/fr/passwords.php et
             // lang/fr.json) ; le profil permet à chacun de changer son
-            // propre mot de passe. Le magasin ne réinitialise depuis
-            // l'équipe que les comptes qui n'appartiennent qu'à lui (voir
-            // ReinitialiserMotDePasseMembreAction).
+            // nom, son adresse de connexion et son mot de passe (voir
+            // ModifierProfil). Depuis l'équipe, le magasin donne un
+            // nouveau mot de passe à ses membres, jamais au propriétaire ni
+            // à celui qui agit (voir ReinitialiserMotDePasseMembreAction).
             ->passwordReset()
             ->profile(ModifierProfil::class)
             ->tenant(Magasin::class, slugAttribute: 'uuid')
@@ -68,8 +69,7 @@ class AppPanelProvider extends PanelProvider
             ])
             // La cloche des notifications en base (voir
             // NotificationDuMagasin) : envois échoués, factures passées en
-            // retard, stocks bas. Elle mélange les magasins de
-            // l'utilisateur, d'où leur nom en tête de chaque notification.
+            // retard, stocks bas.
             ->databaseNotifications()
             ->discoverResources(in: app_path('Filament/App/Resources'), for: 'App\\Filament\\App\\Resources')
             ->discoverPages(in: app_path('Filament/App/Pages'), for: 'App\\Filament\\App\\Pages')

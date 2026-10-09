@@ -5,7 +5,7 @@ namespace App\Http\Middleware;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
-use App\Domain\CaisseSecurisee\Support\MagasinsOuvertsParLaSession;
+use App\Domain\CaisseSecurisee\Support\MagasinOuvertParLaSession;
 use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
@@ -15,8 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Inscrit l'ouverture de session (JET 80) au journal des événements du
  * magasin, au premier accès de la session à son panneau : une seule fois
- * par session et par magasin (voir MagasinsOuvertsParLaSession), même
- * quand l'utilisateur passe d'un magasin à l'autre et revient.
+ * par session (voir MagasinOuvertParLaSession), quel que soit le nombre de
+ * pages ouvertes ensuite.
  *
  * Déclaré dans ->tenantMiddleware() du panneau, après
  * BindTenantContextFromFilamentTenant : l'utilisateur est authentifié,
@@ -43,7 +43,7 @@ class JournaliserOuvertureDeSession
         $magasinId = $contexte->id();
         $session = $request->session();
 
-        if (! MagasinsOuvertsParLaSession::contient($session, $magasinId)) {
+        if (MagasinOuvertParLaSession::de($session) !== $magasinId) {
             try {
                 DB::transaction(fn () => app(RegistreFiscal::class)->journaliser(CodeEvenement::OuvertureDeSession));
             } catch (RefusFiscalException $refus) {
@@ -52,7 +52,7 @@ class JournaliserOuvertureDeSession
                 abort(Response::HTTP_SERVICE_UNAVAILABLE, $refus->getMessage());
             }
 
-            MagasinsOuvertsParLaSession::noter($session, $magasinId);
+            MagasinOuvertParLaSession::noter($session, $magasinId);
         }
 
         return $next($request);

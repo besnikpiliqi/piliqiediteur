@@ -287,9 +287,17 @@ class InalterabiliteTest extends TestCase
     }
 
     /**
+     * @return array<string, array{0: class-string<Model>, 1: string, 2: string}>
+     */
+    public static function tablesEnAjoutSeul(): array
+    {
+        return array_map(static fn (array $donnees): array => array_slice($donnees, 0, 3), self::donneesEnAjoutSeul());
+    }
+
+    /**
      * @param  class-string<Model>  $modele
      */
-    #[DataProvider('donneesEnAjoutSeul')]
+    #[DataProvider('tablesEnAjoutSeul')]
     public function test_la_base_refuse_de_modifier_ou_de_supprimer_un_paiement_ou_une_imputation(string $modele, string $table, string $montant): void
     {
         $this->reglerEtCorrigerUneFacture();

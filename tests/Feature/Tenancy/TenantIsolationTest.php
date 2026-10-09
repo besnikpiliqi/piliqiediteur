@@ -57,14 +57,17 @@ use Symfony\Component\Finder\SplFileInfo;
 use Tests\TestCase;
 
 /**
- * Pour chaque modèle qui utilise BelongsToMagasin, un magasin ne doit
- * jamais lire, trouver par son identifiant, ni créer en le rattachant à un
- * autre magasin, un enregistrement d'un autre magasin ; sans magasin actif,
- * toute lecture échoue au lieu de tout renvoyer.
+ * Isolation des magasins sur les modèles qui utilisent BelongsToMagasin.
  *
- * modelesTenant() liste les modèles qui ont une fabrique,
- * MODELES_SANS_FABRIQUE les autres : un nouveau modèle de magasin qui
- * n'apparaît dans aucune des deux listes fait échouer
+ * Sans magasin actif, toute lecture échoue au lieu de tout renvoyer : vérifié
+ * sur chaque modèle de magasin (modelesDeMagasin()). Un magasin ne lit ni ne
+ * trouve par son identifiant un enregistrement d'un autre magasin, et un
+ * enregistrement créé avec le magasin_id d'un autre magasin reste rattaché
+ * au magasin actif : vérifié sur chaque modèle que ces tests créent
+ * (modelesCrees()).
+ *
+ * Un nouveau modèle de magasin qui n'apparaît ni dans MODELES_AVEC_FABRIQUE
+ * ni dans MODELES_SANS_FABRIQUE fait échouer
  * test_chaque_modele_de_magasin_est_liste_ici().
  *
  * Côté panneau, chaque ressource dont un enregistrement a sa propre URL
@@ -76,11 +79,32 @@ class TenantIsolationTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * Modèles de magasin sans fabrique, créés seulement par les actions
-     * métier : lignes avec leur document, mouvements avec leur produit,
-     * soumission d'e-reporting et transmission PDP par leur action. Ils
-     * utilisent le même trait que ceux de modelesTenant(), mais ces tests
-     * ne savent pas les créer seuls.
+     * Modèles de magasin qui ont une fabrique.
+     *
+     * @var list<class-string<Model>>
+     */
+    private const MODELES_AVEC_FABRIQUE = [
+        Avoir::class,
+        AvoirAllocation::class,
+        AvoirFournisseur::class,
+        Client::class,
+        ClotureCaisse::class,
+        ClotureCaissePersonnelle::class,
+        Devis::class,
+        EnvoiDocument::class,
+        Facture::class,
+        FactureAchat::class,
+        Fournisseur::class,
+        Paiement::class,
+        PaiementAllocation::class,
+        Produit::class,
+        Service::class,
+    ];
+
+    /**
+     * Modèles de magasin qui n'ont pas de fabrique. Seule
+     * SoumissionEReporting est aussi dans modelesCrees() : create()
+     * l'enregistre sans autre enregistrement à préparer.
      *
      * @var list<class-string<Model>>
      */
@@ -108,50 +132,62 @@ class TenantIsolationTest extends TestCase
     }
 
     /**
+     * Tous les modèles de magasin, pour les tests qui ne créent aucun
+     * enregistrement.
+     *
      * @return array<string, array{0: class-string<Model>}>
      */
-    public static function modelesTenant(): array
+    public static function modelesDeMagasin(): array
     {
-        return [
-            'Avoir' => [Avoir::class],
-            'AvoirAllocation' => [AvoirAllocation::class],
-            'AvoirFournisseur' => [AvoirFournisseur::class],
-            'Client' => [Client::class],
-            'ClotureCaisse' => [ClotureCaisse::class],
-            'ClotureCaissePersonnelle' => [ClotureCaissePersonnelle::class],
-            'Devis' => [Devis::class],
-            'EnvoiDocument' => [EnvoiDocument::class],
-            'Facture' => [Facture::class],
-            'FactureAchat' => [FactureAchat::class],
-            'Fournisseur' => [Fournisseur::class],
-            'Paiement' => [Paiement::class],
-            'PaiementAllocation' => [PaiementAllocation::class],
-            'Produit' => [Produit::class],
-            'Service' => [Service::class],
-        ];
+        return collect([...self::MODELES_AVEC_FABRIQUE, ...self::MODELES_SANS_FABRIQUE])
+            ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [$modele]])
+            ->all();
+    }
+
+    /**
+     * Les modèles de magasin que ces tests créent, chacun avec la création
+     * d'un enregistrement aux attributs imposés, même hors $fillable comme
+     * le permet une fabrique : par sa fabrique, ou par
+     * creerSoumissionEReporting().
+     *
+     * @return array<string, array{0: class-string<Model>, 1: Closure(array<string, mixed>=): Model}>
+     */
+    public static function modelesCrees(): array
+    {
+        return collect(self::MODELES_AVEC_FABRIQUE)
+            ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
+                $modele,
+                static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
+            ]])
+            ->put('SoumissionEReporting', [
+                SoumissionEReporting::class,
+                static fn (array $attributs = []): Model => self::creerSoumissionEReporting($attributs),
+            ])
+            ->all();
     }
 
     public function test_chaque_modele_de_magasin_est_liste_ici(): void
     {
-        $modelesListes = [
-            ...array_column(self::modelesTenant(), 0),
-            ...self::MODELES_SANS_FABRIQUE,
-        ];
+        $modelesListes = [...self::MODELES_AVEC_FABRIQUE, ...self::MODELES_SANS_FABRIQUE];
         sort($modelesListes);
 
         $this->assertSame($this->modelesQuiUtilisentBelongsToMagasin(), $modelesListes);
     }
 
-    #[DataProvider('modelesTenant')]
-    public function test_un_magasin_ne_voit_pas_les_enregistrements_dun_autre(string $modelClass): void
+    /**
+     * @param  class-string<Model>  $modelClass
+     * @param  Closure(array<string, mixed>=): Model  $creer
+     */
+    #[DataProvider('modelesCrees')]
+    public function test_un_magasin_ne_voit_pas_les_enregistrements_dun_autre(string $modelClass, Closure $creer): void
     {
         $contexte = app(TenantContext::class);
 
         $contexte->set($this->magasinA);
-        $enregistrementA = $modelClass::factory()->create();
+        $enregistrementA = $creer();
 
         $contexte->set($this->magasinB);
-        $enregistrementB = $modelClass::factory()->create();
+        $enregistrementB = $creer();
 
         // Sous le contexte B, seule la liste de B doit apparaître.
         $ids = $modelClass::query()->pluck('id')->all();
@@ -164,8 +200,12 @@ class TenantIsolationTest extends TestCase
         $modelClass::findOrFail($enregistrementA->id);
     }
 
-    #[DataProvider('modelesTenant')]
-    public function test_magasin_id_est_toujours_force_par_le_contexte_actif(string $modelClass): void
+    /**
+     * @param  class-string<Model>  $modelClass
+     * @param  Closure(array<string, mixed>=): Model  $creer
+     */
+    #[DataProvider('modelesCrees')]
+    public function test_magasin_id_est_toujours_force_par_le_contexte_actif(string $modelClass, Closure $creer): void
     {
         $contexte = app(TenantContext::class);
         $contexte->set($this->magasinA);
@@ -173,12 +213,15 @@ class TenantIsolationTest extends TestCase
         // Même si on tente de forcer magasin_id vers B via le payload
         // (simulant un payload HTTP malveillant), le trait BelongsToMagasin
         // doit l'écraser par le tenant réellement actif.
-        $enregistrement = $modelClass::factory()->create(['magasin_id' => $this->magasinB->id]);
+        $enregistrement = $creer(['magasin_id' => $this->magasinB->id]);
 
         $this->assertSame($this->magasinA->id, $enregistrement->fresh()->magasin_id);
     }
 
-    #[DataProvider('modelesTenant')]
+    /**
+     * @param  class-string<Model>  $modelClass
+     */
+    #[DataProvider('modelesDeMagasin')]
     public function test_acces_sans_contexte_tenant_echoue_fermee(string $modelClass): void
     {
         app(TenantContext::class)->clear();
@@ -231,11 +274,7 @@ class TenantIsolationTest extends TestCase
                 ->where('user_id', app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur)->getKey())
                 ->firstOrFail()],
             'produit, modification' => [ProduitResource::class, 'edit', static fn (): Model => Produit::factory()->create()],
-            'soumission e-reporting, détail' => [SoumissionEReportingResource::class, 'view', static fn (): Model => SoumissionEReporting::create([
-                'periode_debut' => '2026-09-01',
-                'periode_fin' => '2026-09-30',
-                'date_limite_transmission' => '2026-10-10',
-            ])],
+            'soumission e-reporting, détail' => [SoumissionEReportingResource::class, 'view', static fn (): Model => self::creerSoumissionEReporting()],
         ];
     }
 
@@ -265,6 +304,23 @@ class TenantIsolationTest extends TestCase
             ->get($ressource::getUrl($page, ['record' => $enregistrementDeA, 'tenant' => $magasinB]));
 
         $reponse->assertNotFound();
+    }
+
+    /**
+     * Une soumission d'e-reporting du magasin actif, enregistrée sans
+     * GenererSoumissionEReportingAction. Comme une fabrique, elle accepte
+     * des attributs hors $fillable.
+     *
+     * @param  array<string, mixed>  $attributs
+     */
+    private static function creerSoumissionEReporting(array $attributs = []): SoumissionEReporting
+    {
+        return Model::unguarded(static fn (): SoumissionEReporting => SoumissionEReporting::create([
+            'periode_debut' => '2026-09-01',
+            'periode_fin' => '2026-09-30',
+            'date_limite_transmission' => '2026-10-10',
+            ...$attributs,
+        ]));
     }
 
     /**

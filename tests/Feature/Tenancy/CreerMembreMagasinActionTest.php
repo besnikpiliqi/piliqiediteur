@@ -147,9 +147,30 @@ class CreerMembreMagasinActionTest extends TestCase
         ], RoleMagasin::Vendeur);
         $membre = $magasin->membres()->where('user_id', $vendeur->id)->firstOrFail();
 
-        app(ReinitialiserMotDePasseMembreAction::class)->handle($membre, 'nouveau-mot-de-passe');
+        app(ReinitialiserMotDePasseMembreAction::class)->handle($proprietaire, $membre, 'nouveau-mot-de-passe');
 
         $this->assertTrue(Hash::check('nouveau-mot-de-passe', $vendeur->fresh()->password));
+    }
+
+    /**
+     * Ce formulaire ne demande pas le mot de passe actuel : une session
+     * d'administrateur restée ouverte suffirait sinon à prendre son compte.
+     */
+    public function test_reinitialiser_son_propre_mot_de_passe_depuis_lequipe_est_refuse(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $administrateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Admin', 'email' => 'admin@example.test', 'password' => 'mot-de-passe-admin',
+        ], RoleMagasin::Administrateur);
+        $membre = $magasin->membres()->where('user_id', $administrateur->id)->firstOrFail();
+
+        $this->assertThrows(
+            fn () => app(ReinitialiserMotDePasseMembreAction::class)->handle($administrateur, $membre, 'pris-sur-la-caisse-ouverte'),
+            LogicException::class,
+            'Changez votre propre mot de passe depuis votre profil, avec votre mot de passe actuel.',
+        );
+
+        $this->assertTrue(Hash::check('mot-de-passe-admin', $administrateur->fresh()->password));
     }
 
     /**
@@ -159,14 +180,15 @@ class CreerMembreMagasinActionTest extends TestCase
     public function test_reinitialiser_le_mot_de_passe_dun_compte_rattache_a_un_autre_magasin_est_refuse(): void
     {
         $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
+        $proprietaireB = User::factory()->create();
+        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
         $comptable = app(CreerMembreMagasinAction::class)->handle($magasinA, [
             'name' => 'Claire', 'email' => 'claire@cabinet.test', 'password' => 'mot-de-passe-de-claire',
         ], RoleMagasin::Comptable);
         $membreDeB = $this->rattacherAussi($comptable, $magasinB, RoleMagasin::Comptable);
 
         $this->assertThrows(
-            fn () => app(ReinitialiserMotDePasseMembreAction::class)->handle($membreDeB, 'choisi-par-b'),
+            fn () => app(ReinitialiserMotDePasseMembreAction::class)->handle($proprietaireB, $membreDeB, 'choisi-par-b'),
             LogicException::class,
             'Ce mot de passe ne se réinitialise pas depuis l\'équipe',
         );
@@ -178,11 +200,15 @@ class CreerMembreMagasinActionTest extends TestCase
     {
         $proprietaire = User::factory()->create(['password' => 'mot-de-passe-du-patron']);
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $administrateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Admin', 'email' => 'admin@example.test', 'password' => 'mot-de-passe-admin',
+        ], RoleMagasin::Administrateur);
         $membre = $magasin->membres()->where('user_id', $proprietaire->id)->firstOrFail();
 
         $this->assertThrows(
-            fn () => app(ReinitialiserMotDePasseMembreAction::class)->handle($membre, 'nouveau-mot-de-passe'),
+            fn () => app(ReinitialiserMotDePasseMembreAction::class)->handle($administrateur, $membre, 'nouveau-mot-de-passe'),
             LogicException::class,
+            'Ce mot de passe ne se réinitialise pas depuis l\'équipe',
         );
 
         $this->assertTrue(Hash::check('mot-de-passe-du-patron', $proprietaire->fresh()->password));

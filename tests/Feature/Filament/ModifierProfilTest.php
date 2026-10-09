@@ -13,9 +13,10 @@ use Livewire\Livewire;
 use Tests\TestCase;
 
 /**
- * Chacun change lui-même son mot de passe : c'est le seul chemin pour le
- * propriétaire, dont le mot de passe ne se réinitialise pas depuis
- * l'équipe.
+ * Chacun change lui-même son mot de passe en connaissant l'actuel ; s'il
+ * l'a oublié, il passe par « Mot de passe oublié » (voir
+ * MotDePasseOublieTest). Ce sont les seuls chemins pour le propriétaire,
+ * dont le mot de passe ne se réinitialise pas depuis l'équipe.
  */
 class ModifierProfilTest extends TestCase
 {
@@ -58,7 +59,20 @@ class ModifierProfilTest extends TestCase
                 'passwordConfirmation' => 'nouveau-mot-de-passe',
             ])
             ->call('save')
-            ->assertHasFormErrors(['mot_de_passe_actuel' => 'Saisissez votre mot de passe actuel pour changer l\'adresse e-mail ou le mot de passe.']);
+            ->assertHasFormErrors(['mot_de_passe_actuel' => 'Saisissez votre mot de passe actuel.']);
+
+        $this->assertTrue(Hash::check('ancien-mot-de-passe', $vendeur->fresh()->password));
+    }
+
+    public function test_enregistrer_sans_nouveau_mot_de_passe_est_refuse(): void
+    {
+        $vendeur = $this->creerVendeur();
+        $this->actingAs($vendeur);
+
+        Livewire::test(ModifierProfil::class)
+            ->fillForm(['mot_de_passe_actuel' => 'ancien-mot-de-passe'])
+            ->call('save')
+            ->assertHasFormErrors(['password' => 'Saisissez le nouveau mot de passe.']);
 
         $this->assertTrue(Hash::check('ancien-mot-de-passe', $vendeur->fresh()->password));
     }
@@ -81,33 +95,30 @@ class ModifierProfilTest extends TestCase
     }
 
     /**
-     * L'adresse e-mail est l'identifiant de connexion et reçoit le lien
-     * « Mot de passe oublié » : la changer revient à prendre le compte.
+     * Le profil ne sert qu'au mot de passe : le nom, affiché sur les
+     * documents et dans l'équipe, et l'adresse de connexion restent ceux
+     * de la création du compte, même par une requête forgée.
      */
-    public function test_changer_son_adresse_email_sans_le_mot_de_passe_actuel_est_refuse(): void
+    public function test_le_profil_ne_change_ni_le_nom_ni_ladresse_email(): void
     {
         $vendeur = $this->creerVendeur();
         $this->actingAs($vendeur);
 
         Livewire::test(ModifierProfil::class)
-            ->fillForm(['email' => 'autre@example.test'])
-            ->call('save')
-            ->assertHasFormErrors(['mot_de_passe_actuel' => 'Saisissez votre mot de passe actuel pour changer l\'adresse e-mail ou le mot de passe.']);
-
-        $this->assertSame('paul@example.test', $vendeur->fresh()->email);
-    }
-
-    public function test_changer_seulement_son_nom_ne_demande_pas_le_mot_de_passe_actuel(): void
-    {
-        $vendeur = $this->creerVendeur();
-        $this->actingAs($vendeur);
-
-        Livewire::test(ModifierProfil::class)
-            ->fillForm(['name' => 'Paul Martin'])
+            ->set('data.name', 'Marie Dupont')
+            ->set('data.email', 'autre@example.test')
+            ->fillForm([
+                'password' => 'nouveau-mot-de-passe',
+                'passwordConfirmation' => 'nouveau-mot-de-passe',
+                'mot_de_passe_actuel' => 'ancien-mot-de-passe',
+            ])
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertSame('Paul Martin', $vendeur->fresh()->name);
+        $vendeur->refresh();
+        $this->assertSame('Paul', $vendeur->name);
+        $this->assertSame('paul@example.test', $vendeur->email);
+        $this->assertTrue(Hash::check('nouveau-mot-de-passe', $vendeur->password));
     }
 
     private function creerVendeur(): User

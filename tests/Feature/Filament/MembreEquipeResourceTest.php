@@ -133,6 +133,30 @@ class MembreEquipeResourceTest extends TestCase
     }
 
     /**
+     * « Nouveau mot de passe » ne demande pas le mot de passe actuel : sur
+     * sa propre ligne, une session d'administrateur restée ouverte
+     * suffirait à prendre son compte, même par une requête forgée.
+     */
+    public function test_un_administrateur_ne_change_pas_son_propre_mot_de_passe_depuis_lequipe(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $administrateur = app(CreerMembreMagasinAction::class)->handle($magasin, [
+            'name' => 'Admin', 'email' => 'admin@example.test', 'password' => 'mot-de-passe-admin',
+        ], RoleMagasin::Administrateur);
+        $membreAdministrateur = $magasin->membres()->where('user_id', $administrateur->id)->firstOrFail();
+        $this->actingAs($administrateur);
+        Filament::setTenant($magasin);
+
+        Livewire::test(ListMembreEquipes::class)
+            ->assertTableActionHidden('reinitialiser_mot_de_passe', $membreAdministrateur)
+            ->call('mountTableAction', 'reinitialiser_mot_de_passe', (string) $membreAdministrateur->getKey())
+            ->set('mountedTableActionsData.0.nouveau_mot_de_passe', 'pris-sur-la-caisse-ouverte')
+            ->call('callMountedTableAction');
+
+        $this->assertTrue(Hash::check('mot-de-passe-admin', $administrateur->fresh()->password));
+    }
+
+    /**
      * Le refus de ReinitialiserMotDePasseMembreAction s'affiche en
      * notification, sans page d'erreur. Plus aucun écran ne rattache un
      * compte existant à un second magasin : ce compte partagé est construit

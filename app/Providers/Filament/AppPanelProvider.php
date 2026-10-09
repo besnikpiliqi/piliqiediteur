@@ -47,9 +47,10 @@ class AppPanelProvider extends PanelProvider
             ->login()
             ->registration(RegisterMagasin::class)
             // « Mot de passe oublié » envoie un lien par e-mail (voir
-            // MAIL_MAILER) ; le profil permet à chacun de changer son propre
-            // mot de passe. Le magasin ne réinitialise depuis l'équipe que
-            // les comptes qui n'appartiennent qu'à lui (voir
+            // MAIL_MAILER ; textes dans lang/fr/passwords.php et
+            // lang/fr.json) ; le profil permet à chacun de changer son
+            // propre mot de passe. Le magasin ne réinitialise depuis
+            // l'équipe que les comptes qui n'appartiennent qu'à lui (voir
             // ReinitialiserMotDePasseMembreAction).
             ->passwordReset()
             ->profile(ModifierProfil::class)

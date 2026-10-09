@@ -28,6 +28,8 @@ use Illuminate\Validation\Rules\Password;
  * « Retirer » passent par MembreEquipePolicy (update, delete) : il faut
  * « Équipe : modifier », et le propriétaire n'est jamais modifiable ni
  * supprimable ici -- un seul chemin mène à ce rôle, la création du magasin.
+ * « Nouveau mot de passe » n'apparaît pas non plus sur sa propre ligne
+ * (voir ReinitialiserMotDePasseMembreAction).
  */
 class MembreEquipeResource extends Resource
 {
@@ -108,8 +110,9 @@ class MembreEquipeResource extends Resource
                             ->rule(Password::default()),
                     ])
                     ->authorize('update')
+                    ->hidden(fn (MagasinUser $record): bool => $record->utilisateur->is(auth()->user()))
                     ->action(fn (MagasinUser $record, array $data) => static::executerSansCasser(fn () => app(ReinitialiserMotDePasseMembreAction::class)
-                        ->handle($record, $data['nouveau_mot_de_passe']))),
+                        ->handle(auth()->user(), $record, $data['nouveau_mot_de_passe']))),
                 Tables\Actions\Action::make('retirer')
                     ->label('Retirer')
                     ->icon('heroicon-o-user-minus')

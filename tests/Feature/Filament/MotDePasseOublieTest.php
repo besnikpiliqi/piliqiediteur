@@ -42,6 +42,28 @@ class MotDePasseOublieTest extends TestCase
         Notification::assertSentTo($proprietaire, LienDeReinitialisation::class);
     }
 
+    public function test_la_demande_et_le_lien_recu_sont_rediges_en_francais(): void
+    {
+        Notification::fake();
+        $proprietaire = User::factory()->create(['email' => 'patron@boutique.test']);
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+
+        Livewire::test(RequestPasswordReset::class)
+            ->fillForm(['email' => 'patron@boutique.test'])
+            ->call('request')
+            ->assertNotified('Le lien de réinitialisation du mot de passe a été envoyé par e-mail.');
+
+        $email = Notification::sent($proprietaire, LienDeReinitialisation::class)->sole()->toMail($proprietaire);
+        $contenu = (string) $email->render();
+        $this->assertSame('Réinitialisation de votre mot de passe', $email->subject);
+        $this->assertStringContainsString('Vous recevez cet e-mail car une réinitialisation du mot de passe de votre compte a été demandée.', $contenu);
+        $this->assertStringContainsString('Choisir un nouveau mot de passe', $contenu);
+        $this->assertStringContainsString('Ce lien expire dans 60 minutes.', $contenu);
+        $this->assertStringContainsString('Cordialement,', $contenu);
+        $this->assertStringNotContainsString('Reset Password', $contenu);
+        $this->assertStringNotContainsString('Regards', $contenu);
+    }
+
     public function test_le_lien_recu_permet_de_choisir_un_nouveau_mot_de_passe(): void
     {
         $proprietaire = User::factory()->create(['email' => 'patron@boutique.test', 'password' => 'mot-de-passe-oublie']);
@@ -57,5 +79,21 @@ class MotDePasseOublieTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertTrue(Hash::check('nouveau-mot-de-passe', $proprietaire->fresh()->password));
+    }
+
+    public function test_un_lien_invalide_est_refuse_avec_un_message_en_francais(): void
+    {
+        $proprietaire = User::factory()->create(['email' => 'patron@boutique.test', 'password' => 'mot-de-passe-actuel']);
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+
+        Livewire::test(ResetPassword::class, ['email' => 'patron@boutique.test', 'token' => 'jeton-invente'])
+            ->fillForm([
+                'password' => 'nouveau-mot-de-passe',
+                'passwordConfirmation' => 'nouveau-mot-de-passe',
+            ])
+            ->call('resetPassword')
+            ->assertNotified('Ce lien de réinitialisation du mot de passe n\'est pas valide ou a expiré.');
+
+        $this->assertTrue(Hash::check('mot-de-passe-actuel', $proprietaire->fresh()->password));
     }
 }

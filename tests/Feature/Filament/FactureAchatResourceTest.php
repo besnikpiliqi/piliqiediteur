@@ -468,6 +468,29 @@ class FactureAchatResourceTest extends TestCase
     }
 
     /**
+     * Une requête forgée qui envoie malgré tout un fournisseur désactivé
+     * est refusée, et aucune facture d'achat n'est créée.
+     */
+    public function test_un_fournisseur_desactive_est_refuse_a_la_creation_d_une_facture_dachat(): void
+    {
+        $this->connecterLeProprietaire();
+        $desactive = Fournisseur::factory()->create(['actif' => false]);
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm([
+                'fournisseur_id' => $desactive->id,
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['fournisseur_id' => 'exists']);
+
+        $this->assertSame(0, FactureAchat::query()->count());
+    }
+
+    /**
      * Une facture d'achat garde son fournisseur supprimé depuis (voir
      * FactureAchat::fournisseur()) : sa fiche l'affiche, et sa
      * modification le garde.

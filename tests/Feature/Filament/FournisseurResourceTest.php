@@ -6,6 +6,7 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Filament\App\Resources\FournisseurResource;
 use App\Filament\App\Resources\FournisseurResource\Pages\CreateFournisseur;
 use App\Filament\App\Resources\FournisseurResource\Pages\EditFournisseur;
 use App\Filament\App\Resources\FournisseurResource\Pages\ListFournisseurs;
@@ -122,6 +123,26 @@ class FournisseurResourceTest extends TestCase
             ->callTableAction('restore', $fournisseur);
 
         $this->assertNotSoftDeleted($fournisseur);
+    }
+
+    /**
+     * Sa page de modification ne trouve plus un fournisseur supprimé (voir
+     * FournisseurPolicy::update()) : sa ligne n'y mène pas.
+     */
+    public function test_la_ligne_d_un_fournisseur_supprime_ne_mene_a_aucune_page(): void
+    {
+        $this->connecterLeProprietaire();
+        $fournisseur = Fournisseur::factory()->create();
+        $supprime = Fournisseur::factory()->create();
+        $supprime->delete();
+
+        $table = Livewire::test(ListFournisseurs::class)
+            ->filterTable('trashed', false)
+            ->instance()
+            ->getTable();
+
+        $this->assertSame(FournisseurResource::getUrl('edit', ['record' => $fournisseur]), $table->getRecordUrl($fournisseur));
+        $this->assertNull($table->getRecordUrl($supprime));
     }
 
     /**

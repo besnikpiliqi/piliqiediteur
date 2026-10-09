@@ -32,7 +32,6 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Enregistre les factures reçues des fournisseurs (réception de
@@ -68,10 +67,10 @@ class FactureAchatResource extends Resource
                 // FournisseurResource), jamais depuis une facture d'achat.
                 // Désactivé ou archivé, il n'est plus proposé ; celui de la
                 // facture modifiée reste affiché (voir FactureAchat::fournisseur()
-                // et ProposableSiActif).
+                // et AppServiceProvider::limiterLesChoixAuMagasin()).
                 Select::make('fournisseur_id')
                     ->label('Fournisseur')
-                    ->relationship('fournisseur', 'nom', fn (Builder $query, ?FactureAchat $record): Builder => $query->proposables($record?->fournisseur_id))
+                    ->relationProposable('fournisseur', 'nom')
                     ->searchable()
                     ->preload()
                     ->required(),

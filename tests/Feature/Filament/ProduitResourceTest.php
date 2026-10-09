@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
+use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ProduitResource\Pages\CreateProduit;
 use App\Filament\App\Resources\ProduitResource\Pages\EditProduit;
 use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
@@ -410,5 +411,25 @@ class ProduitResourceTest extends TestCase
             ->callTableAction('restore', $produit);
 
         $this->assertNotSoftDeleted($produit);
+    }
+
+    /**
+     * Sa page de modification ne trouve plus un produit supprimé (voir
+     * ProduitPolicy::update()) : sa ligne n'y mène pas.
+     */
+    public function test_la_ligne_d_un_produit_supprime_ne_mene_a_aucune_page(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create();
+        $supprime = Produit::factory()->create();
+        $supprime->delete();
+
+        $table = Livewire::test(ListProduits::class)
+            ->filterTable('trashed', false)
+            ->instance()
+            ->getTable();
+
+        $this->assertSame(ProduitResource::getUrl('edit', ['record' => $produit]), $table->getRecordUrl($produit));
+        $this->assertNull($table->getRecordUrl($supprime));
     }
 }

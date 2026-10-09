@@ -282,7 +282,7 @@ class ProduitResource extends Resource
                 Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make()->hidden(fn (Produit $record): bool => $record->trashed()),
+                Tables\Actions\EditAction::make(),
                 Tables\Actions\RestoreAction::make(),
             ])
             ->bulkActions([

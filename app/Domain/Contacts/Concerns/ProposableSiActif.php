@@ -3,12 +3,15 @@
 namespace App\Domain\Contacts\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\Rules\Exists;
 
 /**
  * Une fiche désactivée (« Actif » décoché) ou archivée n'est plus proposée
  * pour un nouveau document, sans disparaître pour autant : les documents
  * qui la portent déjà la gardent, et celle déjà rattachée au document
  * modifié reste affichée et conservée.
+ *
+ * À utiliser avec BelongsToMagasin et SoftDeletes.
  */
 trait ProposableSiActif
 {
@@ -27,5 +30,16 @@ trait ProposableSiActif
                 ->where($this->qualifyColumn('actif'), true)
                 ->whereNull($this->getQualifiedDeletedAtColumn()))
             ->when(filled($dejaRattachee), fn (Builder $fiches): Builder => $fiches->orWhere($this->getQualifiedKeyName(), $dejaRattachee)));
+    }
+
+    /**
+     * La règle « exists » d'une fiche choisie pour un nouveau document :
+     * une fiche active du magasin, non archivée (voir
+     * BelongsToMagasin::regleExisteDansLeMagasin()). Elle refuse une fiche
+     * désactivée qu'une requête forgée enverrait malgré les options.
+     */
+    public static function regleProposableDansLeMagasin(): Exists
+    {
+        return static::regleExisteDansLeMagasin()->where('actif', true);
     }
 }

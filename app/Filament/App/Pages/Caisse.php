@@ -111,7 +111,7 @@ class Caisse extends Page implements HasForms
                         ->limit(50)
                         ->pluck('nom', 'id'))
                     ->getOptionLabelUsing(fn ($value) => Client::find($value)?->nom)
-                    ->rule(fn (): Exists => Client::regleExisteDansLeMagasin()->where('actif', true))
+                    ->rule(fn (): Exists => Client::regleProposableDansLeMagasin())
                     // Form explicitement modelé sur Client : ce Select
                     // n'utilise pas relationship(), voir le commentaire
                     // équivalent dans DevisResource::ligneSchema().

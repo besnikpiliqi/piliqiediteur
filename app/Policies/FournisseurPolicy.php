@@ -23,9 +23,17 @@ class FournisseurPolicy extends MagasinPolicy
         return $user->can(PermissionRegistry::FOURNISSEUR_CREATE);
     }
 
+    /**
+     * Un fournisseur supprimé se restaure avant de se modifier : sa page de
+     * modification ne le trouve plus. Ce refus retire aussi, dans la liste
+     * des enregistrements supprimés, le bouton « Modifier » et le lien de
+     * sa ligne (voir FournisseurResource::table()).
+     */
     public function update(User $user, Fournisseur $fournisseur): bool
     {
-        return $this->appartientAuMagasinActif($fournisseur) && $user->can(PermissionRegistry::FOURNISSEUR_UPDATE);
+        return $this->appartientAuMagasinActif($fournisseur)
+            && ! $fournisseur->trashed()
+            && $user->can(PermissionRegistry::FOURNISSEUR_UPDATE);
     }
 
     public function delete(User $user, Fournisseur $fournisseur): bool

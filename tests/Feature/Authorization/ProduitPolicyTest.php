@@ -57,4 +57,20 @@ class ProduitPolicyTest extends TestCase
 
         $this->assertSame($peutRestaurer, $membre->can('restore', $produit));
     }
+
+    /**
+     * Sa page de modification ne trouve plus un produit supprimé : il se
+     * restaure d'abord.
+     */
+    public function test_un_produit_supprime_ne_se_modifie_pas_avant_sa_restauration(): void
+    {
+        $proprietaire = User::factory()->create();
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $produit = Produit::factory()->create();
+        $supprime = Produit::factory()->create();
+        $supprime->delete();
+
+        $this->assertTrue($proprietaire->can('update', $produit));
+        $this->assertFalse($proprietaire->can('update', $supprime));
+    }
 }

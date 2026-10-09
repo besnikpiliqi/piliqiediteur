@@ -92,8 +92,8 @@ class FactureResource extends Resource
                     ->label('Client')
                     // Un client désactivé ou archivé ne reçoit plus de nouveau
                     // document, même si ceux qu'il a déjà le gardent (voir
-                    // Facture::client() et ProposableSiActif).
-                    ->relationship('client', 'nom', fn (Builder $query, ?Facture $record): Builder => $query->proposables($record?->client_id))
+                    // Facture::client() et AppServiceProvider::limiterLesChoixAuMagasin()).
+                    ->relationProposable('client', 'nom')
                     ->searchable()
                     ->preload()
                     ->required()

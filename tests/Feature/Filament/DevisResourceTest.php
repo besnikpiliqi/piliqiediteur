@@ -175,6 +175,30 @@ class DevisResourceTest extends TestCase
                 && ! array_key_exists($desactive->id, $champ->getOptions()));
     }
 
+    /**
+     * Une requête forgée qui envoie malgré tout un client désactivé est
+     * refusée, et aucun devis n'est créé.
+     */
+    public function test_un_client_desactive_est_refuse_a_la_creation_d_un_devis(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $desactive = Client::factory()->create(['actif' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20]);
+
+        Livewire::test(CreateDevis::class)
+            ->fillForm([
+                'client_id' => $desactive->id,
+                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+
+        $this->assertSame(0, Devis::query()->count());
+    }
+
     private function envoyerDevis(Client $client, Produit $produit): Devis
     {
         Livewire::test(CreateDevis::class)->fillForm([

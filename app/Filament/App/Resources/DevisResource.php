@@ -33,7 +33,6 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 
 class DevisResource extends Resource
 {
@@ -63,8 +62,8 @@ class DevisResource extends Resource
                     ->label('Client')
                     // Un client désactivé ou archivé ne reçoit plus de nouveau
                     // document, même si ceux qu'il a déjà le gardent (voir
-                    // Devis::client() et ProposableSiActif).
-                    ->relationship('client', 'nom', fn (Builder $query, ?Devis $record): Builder => $query->proposables($record?->client_id))
+                    // Devis::client() et AppServiceProvider::limiterLesChoixAuMagasin()).
+                    ->relationProposable('client', 'nom')
                     ->searchable()
                     ->preload()
                     ->required()

@@ -57,4 +57,20 @@ class FournisseurPolicyTest extends TestCase
 
         $this->assertSame($peutRestaurer, $membre->can('restore', $fournisseur));
     }
+
+    /**
+     * Sa page de modification ne trouve plus un fournisseur supprimé : il
+     * se restaure d'abord.
+     */
+    public function test_un_fournisseur_supprime_ne_se_modifie_pas_avant_sa_restauration(): void
+    {
+        $proprietaire = User::factory()->create();
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $fournisseur = Fournisseur::factory()->create();
+        $supprime = Fournisseur::factory()->create();
+        $supprime->delete();
+
+        $this->assertTrue($proprietaire->can('update', $fournisseur));
+        $this->assertFalse($proprietaire->can('update', $supprime));
+    }
 }

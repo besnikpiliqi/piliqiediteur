@@ -84,7 +84,7 @@ class FournisseurResource extends Resource
                 Tables\Filters\TrashedFilter::make(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make()->hidden(fn (Fournisseur $record): bool => $record->trashed()),
+                Tables\Actions\EditAction::make(),
                 Tables\Actions\RestoreAction::make(),
             ])
             ->bulkActions([

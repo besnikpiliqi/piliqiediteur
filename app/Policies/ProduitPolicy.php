@@ -23,9 +23,17 @@ class ProduitPolicy extends MagasinPolicy
         return $user->can(PermissionRegistry::PRODUIT_CREATE);
     }
 
+    /**
+     * Un produit supprimé se restaure avant de se modifier : sa page de
+     * modification ne le trouve plus. Ce refus retire aussi, dans la liste
+     * des enregistrements supprimés, le bouton « Modifier » et le lien de
+     * sa ligne (voir ProduitResource::table()).
+     */
     public function update(User $user, Produit $produit): bool
     {
-        return $this->appartientAuMagasinActif($produit) && $user->can(PermissionRegistry::PRODUIT_UPDATE);
+        return $this->appartientAuMagasinActif($produit)
+            && ! $produit->trashed()
+            && $user->can(PermissionRegistry::PRODUIT_UPDATE);
     }
 
     public function delete(User $user, Produit $produit): bool

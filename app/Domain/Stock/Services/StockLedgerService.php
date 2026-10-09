@@ -200,9 +200,10 @@ class StockLedgerService
     /**
      * Verrou pessimiste : sérialise les écritures concurrentes sur ce
      * produit (ex: deux ventes simultanées de la dernière unité en stock)
-     * pour empêcher toute race condition. Archivé compris : un document
-     * émis après l'archivage de son produit le fait toujours entrer ou
-     * sortir du stock.
+     * pour empêcher toute race condition. Archivé compris : une facture ou
+     * un avoir de vente émis après l'archivage de son produit le fait
+     * toujours sortir ou entrer en stock (voir LigneFacture::produit() et
+     * LigneAvoir::produit()).
      */
     private function verrouiller(Produit $produit): Produit
     {

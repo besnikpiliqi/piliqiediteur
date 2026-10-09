@@ -422,7 +422,7 @@ class FactureAchatActionsTest extends TestCase
             ['produit_id' => $produitInitial->id, 'quantite' => 5],
         ]);
 
-        $factureAchat = app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+        $factureAchat = app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
             ['produit_id' => $nouveauProduit->id, 'quantite' => 2],
         ]);
 
@@ -453,7 +453,7 @@ class FactureAchatActionsTest extends TestCase
         $this->assertSame(8, $produit->fresh()->stock_quantite);
 
         // Correction d'une erreur de saisie : 5 reçus en réalité, pas 8.
-        $factureAchat = app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+        $factureAchat = app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 8, 'prix_unitaire_ht' => 22],
         ]);
 
@@ -478,12 +478,12 @@ class FactureAchatActionsTest extends TestCase
         ]));
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 9);
 
-        $factureAchat = app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+        $factureAchat = app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 6],
         ]);
         $this->assertSame(['6.0000', 1], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
 
-        app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 12, 'prix_unitaire_ht' => 6],
         ]);
         $this->assertSame(['6.0000', 3], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
@@ -507,7 +507,7 @@ class FactureAchatActionsTest extends TestCase
         ]));
         $this->assertSame('9.0000', $sansSuivi->fresh()->cmup_ht);
 
-        app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
             ['produit_id' => $autre->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
         ]);
 
@@ -530,7 +530,7 @@ class FactureAchatActionsTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 6],
         ]);
 
-        app(ModifierFactureAchatAction::class)->handle($ancienne, [
+        app(ModifierFactureAchatAction::class)->handle($ancienne, $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5.5],
         ]);
 
@@ -545,7 +545,7 @@ class FactureAchatActionsTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 50],
         ]));
 
-        app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 50],
         ], ['escompte_pourcentage' => 3]);
 
@@ -564,7 +564,7 @@ class FactureAchatActionsTest extends TestCase
         $this->assertFalse($factureAchat->estModifiable(), 'Même en brouillon, une facture API ne doit jamais être modifiable.');
 
         $this->expectException(LogicException::class);
-        app(ModifierFactureAchatAction::class)->handle($factureAchat, [
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
     }
@@ -588,7 +588,7 @@ class FactureAchatActionsTest extends TestCase
         $this->assertFalse($factureAchat->fresh()->estModifiable());
 
         $this->expectException(LogicException::class);
-        app(ModifierFactureAchatAction::class)->handle($factureAchat->fresh(), [
+        app(ModifierFactureAchatAction::class)->handle($factureAchat->fresh(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
     }

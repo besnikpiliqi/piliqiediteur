@@ -1134,4 +1134,74 @@ class FactureResourceTest extends TestCase
 
         Livewire::test(ViewFacture::class, ['record' => $avecRemise->getRouteKey()])->assertSee('12,5 %');
     }
+
+    /**
+     * La règle « exists » qu'un Select relationship() ajoute seule
+     * interroge la table entière : le client d'un autre magasin, envoyé par
+     * une requête forgée, doit être refusé par la limite au magasin.
+     */
+    public function test_le_client_d_un_autre_magasin_est_refuse_a_la_modification_d_un_brouillon(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $clientDUnAutreMagasin = Client::factory()->create();
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
+            ->fillForm(['client_id' => $clientDUnAutreMagasin->id])
+            ->call('save')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+
+        $this->assertSame($client->id, $facture->fresh()->client_id);
+    }
+
+    public function test_un_client_archive_ne_peut_pas_etre_choisi_pour_un_brouillon(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $clientArchive = Client::factory()->create();
+        $clientArchive->delete();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
+            ->fillForm(['client_id' => $clientArchive->id])
+            ->call('save')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+
+        $this->assertSame($client->id, $facture->fresh()->client_id);
+    }
+
+    /**
+     * Le client déjà rattaché n'est pas choisi dans le formulaire : archivé
+     * depuis, il reste celui du brouillon, que l'on peut toujours corriger.
+     */
+    public function test_le_client_archive_deja_rattache_reste_celui_du_brouillon_modifie(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $client->delete();
+
+        Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
+            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'quantite' => 3, 'taux_tva' => 20, 'remise_pourcentage' => 0]]])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $facture->refresh();
+        $this->assertSame($client->id, $facture->client_id);
+        $this->assertSame('120.00', $facture->total_ttc);
+    }
 }

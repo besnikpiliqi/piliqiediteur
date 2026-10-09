@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources\PaiementResource\Pages;
 
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Filament\App\Resources\PaiementResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -24,6 +25,7 @@ class CreatePaiement extends CreateRecord
 
     protected function handleRecordCreation(array $data): Model
     {
+        $client = Client::query()->findOrFail($data['client_id']);
         $allocations = array_map(fn (array $allocation) => [
             'facture_id' => (int) $allocation['facture_id'],
             'montant' => (float) $allocation['montant'],
@@ -33,8 +35,7 @@ class CreatePaiement extends CreateRecord
         // via maxValue() : ce garde-fou ne se déclenche qu'en cas de
         // changement du solde entre l'affichage du formulaire et sa
         // soumission (ex : un autre paiement ou avoir appliqué entre-temps).
-        return static::executerOuInterrompre(fn () => app(EnregistrerPaiementAction::class)->handle([
-            'client_id' => $data['client_id'],
+        return static::executerOuInterrompre(fn () => app(EnregistrerPaiementAction::class)->handle($client, [
             'mode_paiement' => $data['mode_paiement'],
             'montant' => $data['montant'],
             'reference' => $data['reference'] ?? null,

@@ -6,6 +6,9 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 
 /**
  * À appliquer sur tout modèle appartenant à un magasin (Produit, Client,
@@ -21,6 +24,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * magasin_id ne doit JAMAIS figurer dans $fillable des modèles qui
  * utilisent ce trait.
+ *
+ * Un identifiant choisi dans un formulaire se valide avec
+ * regleExisteDansLeMagasin(), jamais avec une règle « exists » nue.
  */
 trait BelongsToMagasin
 {
@@ -36,5 +42,23 @@ trait BelongsToMagasin
     public function magasin(): BelongsTo
     {
         return $this->belongsTo(Magasin::class);
+    }
+
+    /**
+     * La règle « exists » d'un identifiant de ce modèle choisi dans un
+     * formulaire : une fiche du magasin actif, et pas une fiche archivée.
+     * La validation interroge la table sans passer par MagasinScope : une
+     * règle « exists » nue accepterait l'identifiant d'une fiche d'un autre
+     * magasin, et révélerait lesquels existent.
+     */
+    public static function regleExisteDansLeMagasin(): Exists
+    {
+        $modele = new static;
+        $regle = Rule::exists($modele->getTable(), $modele->getKeyName())
+            ->where('magasin_id', app(TenantContext::class)->id());
+
+        return in_array(SoftDeletes::class, class_uses_recursive(static::class), true)
+            ? $regle->whereNull($modele->getDeletedAtColumn())
+            : $regle;
     }
 }

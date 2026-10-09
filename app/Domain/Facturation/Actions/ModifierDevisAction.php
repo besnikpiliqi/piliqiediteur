@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
@@ -15,6 +16,9 @@ use LogicException;
  * corriger ou de relancer un devis non encore transformé en vente réelle.
  * Dès qu'une facture en a été créée (voir CreerFactureDepuisDevisAction),
  * il devient définitivement figé : voir Devis::estModifiable().
+ *
+ * Comme CreerDevisAction, elle reçoit le client déjà résolu par une
+ * requête limitée au magasin, jamais un client_id brut venu du formulaire.
  */
 class ModifierDevisAction
 {
@@ -27,14 +31,14 @@ class ModifierDevisAction
      * @param  list<array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs
      */
-    public function handle(Devis $devis, array $lignes, array $attributs = []): Devis
+    public function handle(Devis $devis, Client $client, array $lignes, array $attributs = []): Devis
     {
         if (! $devis->estModifiable()) {
             throw new LogicException('Ce devis ne peut plus être modifié : il a déjà été transformé en facture.');
         }
 
-        return DB::transaction(function () use ($devis, $lignes, $attributs) {
-            $devis->update($attributs);
+        return DB::transaction(function () use ($devis, $client, $lignes, $attributs) {
+            $devis->update([...$attributs, 'client_id' => $client->getKey()]);
             $devis->lignes()->delete();
 
             $lignesConstruites = $this->constructeurLigne->construireToutes($lignes);

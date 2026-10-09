@@ -642,6 +642,28 @@ class CaisseTest extends TestCase
             ->assertSee('Total HT 0,00 € · TVA 0,00 € · Total TTC 0,00 €');
     }
 
+    public function test_le_client_d_un_autre_magasin_est_refuse_a_l_encaissement(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $clientDUnAutreMagasin = Client::factory()->create();
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(Caisse::class)
+            ->fillForm([
+                'client_id' => $clientDUnAutreMagasin->id,
+                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+                'mode_paiement' => ModePaiement::CarteBancaire->value,
+            ])
+            ->call('encaisser')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
     private function ouvrirLaCaisseDUnMagasin(): Magasin
     {
         $proprietaire = User::factory()->create();

@@ -7,6 +7,7 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Stock\Services\StockLedgerService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -28,6 +29,10 @@ use LogicException;
  * (voir IncrementerStockApresValidationFactureAchat) : toute modification
  * de ses lignes recalcule donc l'écart de stock produit par produit plutôt
  * que de réappliquer la réception en aveugle.
+ *
+ * Comme CreerFactureAchatAction, elle reçoit le fournisseur déjà résolu par
+ * une requête limitée au magasin, jamais un fournisseur_id brut venu du
+ * formulaire : il est recopié sur les produits reçus.
  */
 class ModifierFactureAchatAction
 {
@@ -40,13 +45,13 @@ class ModifierFactureAchatAction
      * @param  list<array<string, mixed>>  $lignes  voir ConstructeurLigneAchat::enregistrer()
      * @param  array<string, mixed>  $attributs
      */
-    public function handle(FactureAchat $factureAchat, array $lignes, array $attributs = []): FactureAchat
+    public function handle(FactureAchat $factureAchat, Fournisseur $fournisseur, array $lignes, array $attributs = []): FactureAchat
     {
         if ($lignes === []) {
             throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
         }
 
-        return DB::transaction(function () use ($factureAchat, $lignes, $attributs) {
+        return DB::transaction(function () use ($factureAchat, $fournisseur, $lignes, $attributs) {
             // Verrouillée comme à sa validation (voir
             // ValiderFactureAchatAction) : une validation simultanée ne peut
             // ni être ignorée ni être appliquée deux fois.
@@ -61,7 +66,7 @@ class ModifierFactureAchatAction
             // aussi de l'ancien escompte de la facture.
             $lotsAvant = $estValidee ? $this->lotsParProduit($factureAchat->lignes) : [];
 
-            $factureAchat->update($attributs);
+            $factureAchat->update([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]);
             $factureAchat->lignes()->delete();
 
             $this->constructeurLignes->enregistrer($factureAchat, $lignes);

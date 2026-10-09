@@ -40,8 +40,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
 
     private function encaisser(Facture $facture, float $montant): void
     {
-        app(EnregistrerPaiementAction::class)->handle([
-            'client_id' => $facture->client_id,
+        app(EnregistrerPaiementAction::class)->handle($facture->client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => $montant,
             'recu_le' => now()->toDateString(),

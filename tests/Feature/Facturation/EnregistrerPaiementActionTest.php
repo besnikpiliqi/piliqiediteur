@@ -48,8 +48,7 @@ class EnregistrerPaiementActionTest extends TestCase
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDe($client, 100); // total TTC 120
 
-        $paiement = app(EnregistrerPaiementAction::class)->handle([
-            'client_id' => $client->id,
+        $paiement = app(EnregistrerPaiementAction::class)->handle($client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 120,
             'recu_le' => now()->toDateString(),
@@ -70,8 +69,7 @@ class EnregistrerPaiementActionTest extends TestCase
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDe($client, 100); // total TTC 120
 
-        app(EnregistrerPaiementAction::class)->handle([
-            'client_id' => $client->id,
+        app(EnregistrerPaiementAction::class)->handle($client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 50,
             'recu_le' => now()->toDateString(),
@@ -83,8 +81,7 @@ class EnregistrerPaiementActionTest extends TestCase
         $this->assertSame(StatutFacture::PartiellementPayee, $facture->statut);
         $this->assertSame(70.0, $facture->montantRestant());
 
-        app(EnregistrerPaiementAction::class)->handle([
-            'client_id' => $client->id,
+        app(EnregistrerPaiementAction::class)->handle($client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 70,
             'recu_le' => now()->toDateString(),
@@ -103,8 +100,7 @@ class EnregistrerPaiementActionTest extends TestCase
         $factureA = $this->emettreFactureDe($client, 100 / 1.2); // total TTC 100
         $factureB = $this->emettreFactureDe($client, 20 / 1.2); // total TTC 20
 
-        app(EnregistrerPaiementAction::class)->handle([
-            'client_id' => $client->id,
+        app(EnregistrerPaiementAction::class)->handle($client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 120,
             'recu_le' => now()->toDateString(),
@@ -124,8 +120,7 @@ class EnregistrerPaiementActionTest extends TestCase
 
         $this->expectException(LogicException::class);
 
-        app(EnregistrerPaiementAction::class)->handle([
-            'client_id' => $client->id,
+        app(EnregistrerPaiementAction::class)->handle($client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 200,
             'recu_le' => now()->toDateString(),
@@ -141,8 +136,7 @@ class EnregistrerPaiementActionTest extends TestCase
         $factureB = $this->emettreFactureDe($client, 100); // total TTC 120
 
         try {
-            app(EnregistrerPaiementAction::class)->handle([
-                'client_id' => $client->id,
+            app(EnregistrerPaiementAction::class)->handle($client, [
                 'mode_paiement' => ModePaiement::Virement->value,
                 'montant' => 100,
                 'recu_le' => now()->toDateString(),
@@ -168,8 +162,7 @@ class EnregistrerPaiementActionTest extends TestCase
 
         $this->expectException(LogicException::class);
 
-        app(EnregistrerPaiementAction::class)->handle([
-            'client_id' => $clientPayeur->id,
+        app(EnregistrerPaiementAction::class)->handle($clientPayeur, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 50,
             'recu_le' => now()->toDateString(),
@@ -188,8 +181,7 @@ class EnregistrerPaiementActionTest extends TestCase
 
         $this->expectException(LogicException::class);
 
-        app(EnregistrerPaiementAction::class)->handle([
-            'client_id' => $client->id,
+        app(EnregistrerPaiementAction::class)->handle($client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => 50,
             'recu_le' => now()->toDateString(),

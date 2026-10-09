@@ -36,9 +36,9 @@ class ModifierDevisActionTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        $devis = app(ModifierDevisAction::class)->handle($devis, [
+        $devis = app(ModifierDevisAction::class)->handle($devis, $autreClient, [
             ['produit_id' => $produit->id, 'quantite' => 3],
-        ], ['client_id' => $autreClient->id]);
+        ]);
 
         $this->assertSame($autreClient->id, $devis->client_id);
         $this->assertSame('150.00', $devis->total_ht);
@@ -59,7 +59,7 @@ class ModifierDevisActionTest extends TestCase
         $devis = app(EmettreDevisAction::class)->handle($devis);
         $devis = app(AccepterDevisAction::class)->handle($devis);
 
-        $devis = app(ModifierDevisAction::class)->handle($devis, [
+        $devis = app(ModifierDevisAction::class)->handle($devis, $client, [
             ['produit_id' => $produit->id, 'quantite' => 2],
         ]);
 
@@ -76,7 +76,7 @@ class ModifierDevisActionTest extends TestCase
         $devis = app(EmettreDevisAction::class)->handle($devis);
         $devis = app(RefuserDevisAction::class)->handle($devis);
 
-        $devis = app(ModifierDevisAction::class)->handle($devis, [
+        $devis = app(ModifierDevisAction::class)->handle($devis, $client, [
             ['produit_id' => $produit->id, 'quantite' => 4],
         ]);
 
@@ -97,7 +97,7 @@ class ModifierDevisActionTest extends TestCase
         $this->assertFalse($devis->fresh()->estModifiable());
 
         $this->expectException(LogicException::class);
-        app(ModifierDevisAction::class)->handle($devis->fresh(), [
+        app(ModifierDevisAction::class)->handle($devis->fresh(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 9],
         ]);
     }

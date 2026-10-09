@@ -77,6 +77,61 @@ class PaiementResourceTest extends TestCase
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
     }
 
+    /**
+     * Le navigateur envoie les identifiants choisis sous forme de chaînes
+     * ("5") : le paiement est enregistré pour ce client et règle sa
+     * facture, au lieu d'être refusé comme s'il visait la facture d'un
+     * autre client.
+     */
+    public function test_un_paiement_aux_identifiants_envoyes_en_chaines_regle_la_facture_du_client(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client);
+
+        Livewire::test(CreatePaiement::class)
+            ->fillForm([
+                'client_id' => (string) $client->id,
+                'mode_paiement' => ModePaiement::Virement->value,
+                'montant' => '120',
+                'recu_le' => now()->toDateString(),
+                'allocations' => [
+                    ['facture_id' => (string) $facture->id, 'montant' => '120'],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors()
+            ->assertNotNotified();
+
+        $this->assertSame($client->id, Paiement::query()->sole()->client_id);
+        $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
+    }
+
+    public function test_le_client_d_un_autre_magasin_est_refuse(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $clientDUnAutreMagasin = Client::factory()->create();
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreatePaiement::class)
+            ->fillForm([
+                'client_id' => $clientDUnAutreMagasin->id,
+                'mode_paiement' => ModePaiement::Virement->value,
+                'montant' => 120,
+                'recu_le' => now()->toDateString(),
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+
+        $this->assertSame(0, Paiement::query()->count());
+    }
+
     public function test_repartir_un_paiement_sur_plusieurs_factures_depuis_le_panneau(): void
     {
         $proprietaire = User::factory()->create();

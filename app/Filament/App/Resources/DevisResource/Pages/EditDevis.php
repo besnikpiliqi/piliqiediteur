@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources\DevisResource\Pages;
 
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -47,8 +48,12 @@ class EditDevis extends EditRecord
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        return static::executerOuInterrompre(fn () => app(ModifierDevisAction::class)->handle($record, $data['lignes'], [
-            'client_id' => $data['client_id'],
+        // Limité au magasin par MagasinScope ; withTrashed() garde le client
+        // déjà rattaché s'il a été archivé depuis (voir
+        // AppServiceProvider::limiterLesChoixAuMagasin()).
+        $client = Client::withTrashed()->findOrFail($data['client_id']);
+
+        return static::executerOuInterrompre(fn () => app(ModifierDevisAction::class)->handle($record, $client, $data['lignes'], [
             'date_validite' => $data['date_validite'] ?? null,
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,

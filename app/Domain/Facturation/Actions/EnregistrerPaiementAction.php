@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
@@ -18,20 +19,24 @@ use LogicException;
  * paiement n'a pas à être intégralement alloué dès sa création (voir
  * Paiement::montantNonAlloue) : le solde non affecté pourra être imputé
  * plus tard sur une facture future.
+ *
+ * Le client arrive déjà résolu par une requête limitée au magasin, jamais
+ * en client_id brut : chaque facture allouée doit appartenir à CE client.
  */
 class EnregistrerPaiementAction
 {
     public function __construct(private readonly CalculateurLigne $calculateur) {}
 
     /**
-     * @param  array{client_id: int, mode_paiement: string, montant: float, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement
-     * @param  array<int, array{facture_id: int, montant: float}>  $allocations
+     * @param  array{mode_paiement: string, montant: float|string, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement
+     * @param  array<int, array{facture_id: int|string, montant: float|string}>  $allocations
      */
-    public function handle(array $donneesPaiement, array $allocations): Paiement
+    public function handle(Client $client, array $donneesPaiement, array $allocations): Paiement
     {
-        return DB::transaction(function () use ($donneesPaiement, $allocations) {
+        return DB::transaction(function () use ($client, $donneesPaiement, $allocations) {
             $paiement = Paiement::create([
                 ...$donneesPaiement,
+                'client_id' => $client->getKey(),
                 'montant' => $this->calculateur->arrondirAuCentime((float) $donneesPaiement['montant']),
             ]);
 
@@ -46,7 +51,7 @@ class EnregistrerPaiementAction
 
                 $facture = Facture::query()->whereKey($allocation['facture_id'])->lockForUpdate()->firstOrFail();
 
-                if ($facture->client_id !== $paiement->client_id) {
+                if ((int) $facture->client_id !== $client->getKey()) {
                     throw new LogicException("La facture {$facture->numero} n'appartient pas au client de ce paiement.");
                 }
 

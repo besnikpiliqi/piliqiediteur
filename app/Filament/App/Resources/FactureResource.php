@@ -416,8 +416,7 @@ class FactureResource extends Resource
                     ->visible(fn (Facture $record) => $record->montantRestant() > 0
                         && $record->statut->attendUnReglement()
                         && auth()->user()->can(PermissionRegistry::PAIEMENT_CREER))
-                    ->action(fn (Facture $record, array $data) => static::executerSansCasser(fn () => app(EnregistrerPaiementAction::class)->handle([
-                        'client_id' => $record->client_id,
+                    ->action(fn (Facture $record, array $data) => static::executerSansCasser(fn () => app(EnregistrerPaiementAction::class)->handle($record->client, [
                         'mode_paiement' => $data['mode_paiement'],
                         'montant' => $data['montant'],
                         'reference' => $data['reference'] ?? null,

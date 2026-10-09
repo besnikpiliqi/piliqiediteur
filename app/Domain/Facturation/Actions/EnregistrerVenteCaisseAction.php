@@ -45,8 +45,8 @@ class EnregistrerVenteCaisseAction
             // pas forcément par un encaissement en espèces/CB.
             if ($montantRestant > 0) {
                 $this->enregistrerPaiement->handle(
+                    $client,
                     [
-                        'client_id' => $client->getKey(),
                         'mode_paiement' => $modePaiement->value,
                         'montant' => $montantRestant,
                         'reference' => $reference,

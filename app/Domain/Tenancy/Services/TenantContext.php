@@ -7,12 +7,14 @@ use App\Domain\Tenancy\Models\Magasin;
 
 /**
  * Source unique de vérité pour "quel magasin est actif", quel que soit le
- * point d'entrée : panneau Filament tenant, API (token Sanctum scopé), job
- * de queue (contexte restauré depuis le payload sérialisé), commande
+ * point d'entrée : panneau Filament (magasin de l'URL, voir
+ * BindTenantContextFromFilamentTenant), job de queue (contexte restauré
+ * depuis le payload sérialisé, voir WithTenantContext), commande
  * Artisan/seeder (positionné explicitement).
  *
- * Ce service est bindé en singleton (voir TenancyServiceProvider) : une
- * instance par requête/job, jamais partagée entre deux exécutions.
+ * Lié en scoped() et non en singleton (voir TenancyServiceProvider) : une
+ * instance par requête ou par job, oubliée entre deux jobs d'un même
+ * worker -- jamais le magasin d'une exécution précédente.
  */
 class TenantContext
 {

@@ -15,6 +15,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\SoumissionEReporting;
+use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\MagasinUser;
 use App\Policies\AvoirFournisseurPolicy;
 use App\Policies\AvoirPolicy;
@@ -30,10 +31,13 @@ use App\Policies\PaiementPolicy;
 use App\Policies\ProduitPolicy;
 use App\Policies\ServicePolicy;
 use App\Policies\SoumissionEReportingPolicy;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Exists;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -80,6 +84,40 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(SoumissionEReporting::class, SoumissionEReportingPolicy::class);
 
         $this->declarerLaSaisieEnDirect();
+        $this->limiterLesChoixAuMagasin();
+    }
+
+    /**
+     * Un Select relationship() ne valide son choix qu'avec une règle
+     * « exists » sur toute la table (voir Select::relationship()) : une
+     * requête Livewire forgée y ferait passer le client ou le fournisseur
+     * d'un autre magasin. Chaque Select qui pointe vers un modèle de
+     * magasin exige donc en plus BelongsToMagasin::regleExisteDansLeMagasin(),
+     * sans qu'aucun formulaire puisse l'oublier.
+     *
+     * La valeur déjà enregistrée sur la fiche modifiée n'est pas revérifiée
+     * : elle n'a pas été choisie dans ce formulaire, et une fiche archivée
+     * depuis reste rattachée telle quelle.
+     */
+    private function limiterLesChoixAuMagasin(): void
+    {
+        Select::configureUsing(function (Select $select): void {
+            $select->rule(
+                static fn (Select $component): Exists => $component->getRelationship()->getRelated()::regleExisteDansLeMagasin(),
+                static function (Select $component): bool {
+                    $relation = $component->getRelationship();
+
+                    if (! $relation instanceof BelongsTo || ! in_array(BelongsToMagasin::class, class_uses_recursive($relation->getRelated()), true)) {
+                        return false;
+                    }
+
+                    $fiche = $relation->getParent();
+
+                    return ! $fiche->exists
+                        || (string) $component->getState() !== (string) $fiche->getOriginal($relation->getForeignKeyName());
+                },
+            );
+        });
     }
 
     /**

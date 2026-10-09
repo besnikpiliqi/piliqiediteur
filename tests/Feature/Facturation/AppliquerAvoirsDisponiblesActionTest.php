@@ -118,8 +118,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $this->assertSame(0.0, $client->soldeCrediteur());
 
         // Le reliquat se règle ensuite normalement, comme un paiement classique.
-        app(EnregistrerPaiementAction::class)->handle([
-            'client_id' => $client->id,
+        app(EnregistrerPaiementAction::class)->handle($client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 30,
             'recu_le' => now()->toDateString(),

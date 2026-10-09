@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources\FactureResource\Pages;
 
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\FactureResource;
@@ -50,8 +51,12 @@ class EditFacture extends EditRecord
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        return static::executerOuInterrompre(fn () => app(ModifierFactureAction::class)->handle($record, $data['lignes'], [
-            'client_id' => $data['client_id'],
+        // Limité au magasin par MagasinScope ; withTrashed() garde le client
+        // déjà rattaché s'il a été archivé depuis (voir
+        // AppServiceProvider::limiterLesChoixAuMagasin()).
+        $client = Client::withTrashed()->findOrFail($data['client_id']);
+
+        return static::executerOuInterrompre(fn () => app(ModifierFactureAction::class)->handle($record, $client, $data['lignes'], [
             'date_echeance' => $data['date_echeance'] ?? null,
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,

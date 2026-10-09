@@ -501,4 +501,24 @@ class DevisResourceTest extends TestCase
             ->assertSee('20 %')
             ->assertSee('0 %');
     }
+
+    public function test_le_client_d_un_autre_magasin_est_refuse_a_la_modification_d_un_devis(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $clientDUnAutreMagasin = Client::factory()->create();
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20]);
+        $devis = app(CreerDevisAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        Livewire::test(EditDevis::class, ['record' => $devis->getRouteKey()])
+            ->fillForm(['client_id' => $clientDUnAutreMagasin->id])
+            ->call('save')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+
+        $this->assertSame($client->id, $devis->fresh()->client_id);
+    }
 }

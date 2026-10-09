@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\FactureAchatResource\Pages;
 
 use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
@@ -41,8 +42,12 @@ class EditFactureAchat extends EditRecord
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        return static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle($record, array_values($data['lignes']), [
-            'fournisseur_id' => $data['fournisseur_id'],
+        // Limité au magasin par MagasinScope ; withTrashed() garde le
+        // fournisseur déjà rattaché s'il a été archivé depuis (voir
+        // AppServiceProvider::limiterLesChoixAuMagasin()).
+        $fournisseur = Fournisseur::withTrashed()->findOrFail($data['fournisseur_id']);
+
+        return static::executerOuInterrompre(fn () => app(ModifierFactureAchatAction::class)->handle($record, $fournisseur, array_values($data['lignes']), [
             'numero_fournisseur' => $data['numero_fournisseur'] ?? null,
             'date_facture' => $data['date_facture'] ?? null,
             'escompte_pourcentage' => $data['escompte_pourcentage'] ?? 0,

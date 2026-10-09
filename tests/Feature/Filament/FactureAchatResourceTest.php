@@ -22,6 +22,7 @@ use App\Filament\App\Resources\FactureAchatResource\Pages\EditFactureAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
 use App\Filament\App\Resources\FactureAchatResource\Pages\ViewFactureAchat;
 use App\Models\User;
+use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -652,6 +653,50 @@ class FactureAchatResourceTest extends TestCase
             'prix_vente_ht' => 150,
             'seuil_alerte' => 1,
         ]);
+    }
+
+    /**
+     * Le fournisseur de la facture est recopié sur les produits reçus : le
+     * fournisseur d'un autre magasin, envoyé par une requête forgée, est
+     * refusé et rien ne change, ni sur la facture ni sur le produit.
+     */
+    public function test_le_fournisseur_d_un_autre_magasin_est_refuse_a_la_modification(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $fournisseurDUnAutreMagasin = Fournisseur::factory()->create();
+        $this->connecterLeProprietaire();
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 5],
+        ]));
+
+        Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
+            ->fillForm(['fournisseur_id' => $fournisseurDUnAutreMagasin->id])
+            ->call('save')
+            ->assertHasFormErrors(['fournisseur_id' => 'exists']);
+
+        $this->assertSame($fournisseur->id, $factureAchat->fresh()->fournisseur_id);
+        $this->assertSame($fournisseur->id, $produit->fresh()->fournisseur_id);
+    }
+
+    /**
+     * Sur sa page de modification, seul FactureAchatPolicy::delete() cache
+     * le bouton Supprimer : une facture validée, dont le stock est déjà
+     * entré, ne se supprime pas.
+     */
+    public function test_une_facture_dachat_validee_ne_se_supprime_pas_depuis_sa_modification(): void
+    {
+        $this->connecterLeProprietaire();
+        $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 5],
+        ]));
+
+        Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
+            ->assertActionHidden(DeleteAction::class);
+
+        $this->assertFalse(auth()->user()->can('delete', $factureAchat));
     }
 
     private function connecterLeProprietaire(): Magasin

@@ -145,6 +145,21 @@ class ServiceResourceTest extends TestCase
             ->assertTableActionHidden('edit', $service);
     }
 
+    /**
+     * Un service n'a pas de page à lui : on le modifie depuis la liste. Le
+     * service d'un autre magasin, visé par son identifiant, n'y a pas
+     * d'action « Modifier ».
+     */
+    public function test_le_service_d_un_autre_magasin_ne_se_modifie_pas_depuis_la_liste(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre Boutique'], User::factory()->create());
+        $serviceAutreMagasin = Service::factory()->create(['nom' => 'Service de la concurrence']);
+        $this->connecterProprietaire();
+
+        Livewire::test(ManageServices::class)
+            ->assertTableActionHidden('edit', $serviceAutreMagasin->getKey());
+    }
+
     private function connecterProprietaire(): Magasin
     {
         $proprietaire = User::factory()->create();

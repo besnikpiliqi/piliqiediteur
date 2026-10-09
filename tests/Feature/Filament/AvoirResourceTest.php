@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutAvoir;
@@ -9,6 +10,10 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Actions\DefinirPermissionsSupplementairesMembreAction;
+use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\AvoirResource\Pages\CreateAvoir;
 use App\Filament\App\Resources\AvoirResource\Pages\ListAvoirs;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -238,5 +243,55 @@ class AvoirResourceTest extends TestCase
         $lignes = $livewire->instance()->form->getRawState()['lignes'];
         $this->assertCount(1, $lignes, 'Seule la ligne du client sélectionné doit être proposée.');
         $this->assertSame($factureDeA->lignes->firstOrFail()->id, $lignes[0]['ligne_facture_id']);
+    }
+
+    public function test_le_client_d_un_autre_magasin_est_refuse(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $clientDUnAutreMagasin = Client::factory()->create();
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateAvoir::class)
+            ->fillForm(['client_id' => $clientDUnAutreMagasin->id, 'motif' => 'Retour'])
+            ->call('create')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+
+        $this->assertSame(0, Avoir::query()->count());
+    }
+
+    /**
+     * Même confidentialité que les factures : sans facture.view_toutes, la
+     * liste ne montre que les avoirs que l'on a soi-même créés.
+     */
+    public function test_un_vendeur_sans_vue_totale_ne_voit_que_ses_propres_avoirs(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $vendeurA = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
+        $vendeurB = $this->vendeurQuiVoitLesAvoirs($magasin, 'jean@example.test');
+        $this->actingAs($vendeurA);
+        $avoirDeA = Avoir::factory()->create();
+        $this->actingAs($vendeurB);
+        Filament::setTenant($magasin);
+        $avoirDeB = Avoir::factory()->create();
+
+        $liste = Livewire::test(ListAvoirs::class);
+
+        $liste->assertCanSeeTableRecords([$avoirDeB])
+            ->assertCanNotSeeTableRecords([$avoirDeA]);
+    }
+
+    private function vendeurQuiVoitLesAvoirs(Magasin $magasin, string $email): User
+    {
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => $email, 'email' => $email, 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        app(DefinirPermissionsSupplementairesMembreAction::class)->handle(
+            $magasin->membres()->where('user_id', $vendeur->getKey())->firstOrFail(),
+            [PermissionRegistry::AVOIR_VIEW],
+        );
+
+        return $vendeur;
     }
 }

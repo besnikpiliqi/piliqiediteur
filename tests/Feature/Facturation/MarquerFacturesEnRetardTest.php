@@ -168,8 +168,7 @@ class MarquerFacturesEnRetardTest extends TestCase
 
         $this->travelTo('2026-10-02 15:00:00');
         app(TenantContext::class)->set($magasin);
-        app(EnregistrerPaiementAction::class)->handle([
-            'client_id' => $facture->client_id,
+        app(EnregistrerPaiementAction::class)->handle($facture->client, [
             'mode_paiement' => ModePaiement::Especes,
             'montant' => 20,
             'recu_le' => today()->toDateString(),

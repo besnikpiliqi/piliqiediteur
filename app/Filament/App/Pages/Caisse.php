@@ -21,6 +21,7 @@ use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Validation\Rules\Exists;
 use InvalidArgumentException;
 use LogicException;
 
@@ -103,6 +104,7 @@ class Caisse extends Page implements HasForms
                         ->limit(50)
                         ->pluck('nom', 'id'))
                     ->getOptionLabelUsing(fn ($value) => Client::find($value)?->nom)
+                    ->rule(fn (): Exists => Client::regleExisteDansLeMagasin())
                     // Form explicitement modelé sur Client : ce Select
                     // n'utilise pas relationship(), voir le commentaire
                     // équivalent dans DevisResource::ligneSchema().

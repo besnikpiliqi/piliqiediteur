@@ -231,4 +231,33 @@ class ProduitResourceTest extends TestCase
 
         $this->assertSame(1, Produit::query()->count());
     }
+
+    public function test_le_fournisseur_d_un_autre_magasin_est_refuse_a_la_creation(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $fournisseurDUnAutreMagasin = Fournisseur::factory()->create();
+        $this->connecterProprietaire();
+
+        Livewire::test(CreateProduit::class)
+            ->fillForm(['nom' => 'Écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20, 'fournisseur_id' => $fournisseurDUnAutreMagasin->id])
+            ->call('create')
+            ->assertHasFormErrors(['fournisseur_id' => 'exists']);
+
+        $this->assertSame(0, Produit::query()->count());
+    }
+
+    public function test_le_fournisseur_d_un_autre_magasin_est_refuse_a_la_modification(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $fournisseurDUnAutreMagasin = Fournisseur::factory()->create();
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->create();
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->fillForm(['fournisseur_id' => $fournisseurDUnAutreMagasin->id])
+            ->call('save')
+            ->assertHasFormErrors(['fournisseur_id' => 'exists']);
+
+        $this->assertNull($produit->fresh()->fournisseur_id);
+    }
 }

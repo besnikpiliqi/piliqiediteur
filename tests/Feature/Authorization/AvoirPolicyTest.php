@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Authorization;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
@@ -11,15 +12,18 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Actions\DefinirPermissionsSupplementairesMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Envoyer un avoir par e-mail : seulement un avoir que l'on voit (voir
- * AvoirPolicy::view()), avec la permission d'envoyer les avoirs.
+ * Voir un avoir : sans facture.view_toutes, seulement ceux que l'on a
+ * créés. L'envoyer par e-mail : seulement un avoir que l'on voit, avec la
+ * permission d'envoyer les avoirs.
  */
 class AvoirPolicyTest extends TestCase
 {
@@ -58,6 +62,46 @@ class AvoirPolicyTest extends TestCase
         app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
 
         $this->assertFalse($proprietaireB->can('envoyer', $avoirDeA));
+    }
+
+    /**
+     * Sans facture.view_toutes, on ne voit que les avoirs que l'on a
+     * soi-même créés, même avec la permission de voir les avoirs.
+     */
+    public function test_sans_vue_totale_un_membre_ne_voit_que_ses_propres_avoirs(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeurA = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
+        $vendeurB = $this->vendeurQuiVoitLesAvoirs($magasin, 'jean@example.test');
+        $this->actingAs($vendeurA);
+        $avoirDeA = Avoir::factory()->create();
+        $this->actingAs($vendeurB);
+        $avoirDeB = Avoir::factory()->create();
+
+        $this->assertTrue($vendeurB->can('view', $avoirDeB));
+        $this->assertFalse($vendeurB->can('view', $avoirDeA));
+    }
+
+    public function test_avec_la_vue_totale_un_membre_voit_les_avoirs_de_toute_l_equipe(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
+        $comptable = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => 'Comptable', 'email' => 'comptable@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Comptable);
+        $this->actingAs($vendeur);
+        $avoirDuVendeur = Avoir::factory()->create();
+
+        $this->assertTrue($comptable->can('view', $avoirDuVendeur));
+    }
+
+    private function vendeurQuiVoitLesAvoirs(Magasin $magasin, string $email): User
+    {
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($magasin, ['name' => $email, 'email' => $email, 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        app(DefinirPermissionsSupplementairesMembreAction::class)->handle(
+            $magasin->membres()->where('user_id', $vendeur->getKey())->firstOrFail(),
+            [PermissionRegistry::AVOIR_VIEW],
+        );
+
+        return $vendeur;
     }
 
     private function emettreUnAvoirEnTantQue(User $auteur): Avoir

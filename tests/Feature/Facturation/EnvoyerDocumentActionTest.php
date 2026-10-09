@@ -494,8 +494,7 @@ class EnvoyerDocumentActionTest extends TestCase
 
     private function payer(Facture $facture, float $montant): void
     {
-        app(EnregistrerPaiementAction::class)->handle([
-            'client_id' => $facture->client_id,
+        app(EnregistrerPaiementAction::class)->handle($facture->client, [
             'mode_paiement' => ModePaiement::Especes,
             'montant' => $montant,
             'recu_le' => today()->toDateString(),

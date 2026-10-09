@@ -38,10 +38,13 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
+use Illuminate\Validation\Validator as ValidatorDeLaravel;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -90,13 +93,15 @@ class AppServiceProvider extends ServiceProvider
         $this->declarerLaSaisieEnDirect();
         $this->limiterLesChoixAuMagasin();
         $this->nommerLesChampsDansLesMessages();
+        $this->ecrireLesDatesEnFrancaisDansLesMessages();
     }
 
     /**
      * Un message de validation (voir lang/fr/validation.php) nomme le champ
      * par son libellé, en minuscule au milieu de la phrase (« Le champ nom
-     * est obligatoire. »), sauf un sigle, qui garde ses majuscules (« Le
-     * champ PU TTC... », jamais « pU TTC »).
+     * est obligatoire. », « Le champ e-mail... »), sauf quand il commence
+     * par un sigle, qui garde ses majuscules (« Le champ PU TTC... », jamais
+     * « pU TTC »).
      */
     private function nommerLesChampsDansLesMessages(): void
     {
@@ -104,9 +109,31 @@ class AppServiceProvider extends ServiceProvider
             $champ->validationAttribute(static function (Field $component): string {
                 $libelle = strip_tags((string) $component->getLabel());
 
-                return preg_match('/^\p{Lu}\p{Ll}/u', $libelle) === 1 ? Str::lcfirst($libelle) : $libelle;
+                return preg_match('/^\p{Lu}{2,}(?!\p{Ll})/u', $libelle) === 1 ? $libelle : Str::lcfirst($libelle);
             });
         });
+    }
+
+    /**
+     * Le message d'une règle de date (after, before...) écrit la date
+     * comparée comme on l'écrit en français (« postérieure ou égale au
+     * 09/10/2026 », suivie de l'heure si elle en a une), jamais sous sa
+     * forme technique « 2026-10-09 00:00:00 ». Une règle qui compare à un
+     * autre champ nomme ce champ par son libellé, comme le fait Laravel.
+     */
+    private function ecrireLesDatesEnFrancaisDansLesMessages(): void
+    {
+        foreach (['after', 'after_or_equal', 'before', 'before_or_equal', 'date_equals'] as $regle) {
+            Validator::replacer($regle, static function (string $message, string $attribute, string $rule, array $parameters, ValidatorDeLaravel $validator): string {
+                if (strtotime($parameters[0]) === false) {
+                    return str_replace(':date', $validator->getDisplayableAttribute($parameters[0]), $message);
+                }
+
+                $date = Carbon::parse($parameters[0]);
+
+                return str_replace(':date', $date->format($date->isStartOfDay() ? 'd/m/Y' : 'd/m/Y à H:i'), $message);
+            });
+        }
     }
 
     /**

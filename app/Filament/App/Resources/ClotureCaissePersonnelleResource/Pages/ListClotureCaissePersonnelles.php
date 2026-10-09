@@ -20,7 +20,7 @@ class ListClotureCaissePersonnelles extends ListRecords
                 ->icon('heroicon-o-lock-closed')
                 ->color('primary')
                 ->requiresConfirmation()
-                ->modalDescription('Enregistre un relevé de vos ventes depuis votre dernière fermeture de caisse (ou depuis le début de la journée si c\'est la première). Ceci ne clôture pas la journée du magasin.')
+                ->modalDescription('Enregistre un relevé de vos ventes qu\'aucune fermeture n\'a encore comptées, y compris celles d\'un jour précédent. Il part de votre dernière fermeture de caisse (ou du début de la journée si c\'est la première), ou de votre plus ancienne vente non comptée si elle est antérieure. Ceci ne clôture pas la journée du magasin.')
                 ->visible(fn () => auth()->user()->can('fermer', ClotureCaissePersonnelle::class))
                 ->action(fn () => app(FermerSaCaisseAction::class)->handle(auth()->user())),
         ];

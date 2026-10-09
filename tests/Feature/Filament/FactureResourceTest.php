@@ -693,10 +693,12 @@ class FactureResourceTest extends TestCase
 
     /**
      * Une échéance dans le passé n'a pas de sens pour un document qui vient
-     * d'être créé : seule une date à partir d'aujourd'hui est acceptée.
+     * d'être créé : seule une date à partir d'aujourd'hui est acceptée, et
+     * le message écrit la date comme on l'écrit en français.
      */
     public function test_impossible_de_choisir_une_echeance_dans_le_passe(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
@@ -708,13 +710,13 @@ class FactureResourceTest extends TestCase
         Livewire::test(CreateFacture::class)
             ->fillForm([
                 'client_id' => $client->id,
-                'date_echeance' => now()->subDay()->toDateString(),
+                'date_echeance' => '2026-10-08',
                 'lignes' => [
                     ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
             ])
             ->call('create')
-            ->assertHasFormErrors(['date_echeance']);
+            ->assertHasFormErrors(['date_echeance' => 'Le champ échéance doit être une date postérieure ou égale au 09/10/2026.']);
 
         $this->assertSame(0, Facture::query()->count());
     }

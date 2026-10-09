@@ -11,13 +11,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
- * Relevé personnel des ventes d'UN vendeur sur une fenêtre de temps (depuis
- * sa dernière clôture personnelle, ou depuis le début de la journée s'il
- * n'y en a aucune) : un outil de réconciliation de fin de service, PAS un
- * document fiscal. Contrairement à ClotureCaisse (la clôture officielle de
- * la journée du magasin, réservée au propriétaire ou à qui il en délègue
- * la permission), un vendeur peut toujours fermer SA PROPRE caisse, sans
- * permission spéciale -- voir FermerSaCaisseAction.
+ * Relevé personnel des ventes d'UN vendeur : toutes celles qu'aucune de ses
+ * fermetures n'a encore comptées, y compris celles d'un jour précédent. Sa
+ * période (periode_debut) part de sa dernière fermeture, ou du début de la
+ * journée s'il n'en a encore fait aucune, ou de sa plus ancienne vente
+ * comptée si elle est antérieure.
+ *
+ * Un outil de réconciliation de fin de service, PAS un document fiscal.
+ * Contrairement à ClotureCaisse (la clôture officielle de la journée du
+ * magasin, réservée au propriétaire ou à qui il en délègue la permission),
+ * un vendeur peut toujours fermer SA PROPRE caisse, sans permission
+ * spéciale -- voir FermerSaCaisseAction.
  *
  * N'agrège PAS que les ventes aux particuliers (contrairement à
  * ClotureCaisse) : toutes les factures du vendeur comptent, l'objectif

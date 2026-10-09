@@ -80,6 +80,7 @@ class IdentiteMagasinTest extends TestCase
             'n° de TVA avec espaces' => [['numero_tva' => 'FR 12 123456789'], 'numero_tva', 'Le n° de TVA commence par les deux lettres du pays (FR...), suivies de chiffres ou de lettres, sans espace.'],
             'pays en minuscules' => [['pays' => 'fr'], 'pays', 'Le code du pays compte deux lettres majuscules : FR, BE, CH...'],
             'e-mail sans domaine' => [['email' => 'contact@'], 'email', 'Cette adresse e-mail n\'est pas valide.'],
+            'e-mail de 151 caractères' => [['email' => 'contact@'.str_repeat('a', 63).'.'.str_repeat('b', 63).'.'.str_repeat('c', 12).'.fr'], 'email', 'Le champ e-mail ne doit pas dépasser 150 caractères.'],
         ];
     }
 

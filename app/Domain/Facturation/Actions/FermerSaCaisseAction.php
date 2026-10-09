@@ -10,13 +10,11 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Permet à un vendeur de fermer SA PROPRE caisse (relevé de ses ventes
- * qu'aucune de ses fermetures n'a encore comptées, depuis sa dernière
- * clôture personnelle ou le début de la journée s'il n'en a encore fait
- * aucune, ou depuis sa plus ancienne vente comptée si elle est antérieure)
- * -- jamais la clôture officielle de la journée du magasin (voir
- * CloturerCaisseAction, réservée à cloture_caisse.gerer). Voir le docblock
- * de ClotureCaissePersonnelle pour ce qui distingue les deux.
+ * Permet à un vendeur de fermer SA PROPRE caisse -- jamais la clôture
+ * officielle de la journée du magasin (voir CloturerCaisseAction, réservée
+ * à cloture_caisse.gerer). Le docblock de ClotureCaissePersonnelle décrit
+ * les ventes que compte le relevé, la période qu'il couvre et ce qui le
+ * distingue de la clôture de la journée.
  *
  * Aucune condition de blocage : contrairement à CloturerCaisseAction, un
  * vendeur peut fermer sa caisse aussi souvent qu'il le souhaite, y compris

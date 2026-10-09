@@ -384,6 +384,61 @@ class EnregistrementFiscalResourceTest extends TestCase
         $this->assertSame([], $this->types());
     }
 
+    public function test_verifier_l_integrite_depuis_l_ecran_inscrit_le_controle_et_le_dit(): void
+    {
+        $this->connecterProprietaire();
+        $this->vendre();
+
+        Livewire::test(ListEnregistrementsFiscaux::class)
+            ->callAction('verifier_integrite', ['complet' => true])
+            ->assertNotified('Intégrité vérifiée : aucune anomalie');
+
+        $controle = EnregistrementFiscal::query()->where('type', '280')->sole();
+        $this->assertSame(auth()->id(), $controle->operateur_id);
+        $this->assertSame(
+            ['verification' => 'complete', 'declenchement' => 'ecran', 'resultat' => 'conforme'],
+            Arr::only($controle->contenuSigne()['donnees']['details'], ['verification', 'declenchement', 'resultat']),
+        );
+    }
+
+    public function test_l_ecran_affiche_les_anomalies_relevees_par_la_verification(): void
+    {
+        $magasin = $this->connecterProprietaire();
+        $this->vendre();
+        DB::table('sequences_documents')->where('magasin_id', $magasin->id)->where('type_document', 'ticket_caisse')->update(['prochain_numero' => 3]);
+
+        Livewire::test(ListEnregistrementsFiscaux::class)
+            ->callAction('verifier_integrite', ['complet' => true])
+            ->assertNotified('Intégrité : 1 anomalie(s) relevée(s)');
+
+        $this->assertSame(['95', '280'], EnregistrementFiscal::query()->whereIn('type', ['90', '95', '280'])->orderBy('id')->pluck('type')->all());
+    }
+
+    public function test_sans_cle_de_signature_la_verification_est_refusee_et_l_ecran_dit_pourquoi(): void
+    {
+        $this->connecterProprietaire();
+        config(['caisse_securisee.cle_privee' => null]);
+        $this->app->forgetInstance(RegistreFiscal::class);
+
+        Livewire::test(ListEnregistrementsFiscaux::class)
+            ->callAction('verifier_integrite', ['complet' => false])
+            ->assertNotified('Caisse sécurisée non configurée : la clé privée de signature (CAISSE_SECURISEE_CLE_PRIVEE) est absente.');
+
+        $this->assertSame(0, EnregistrementFiscal::query()->where('type', '280')->count());
+    }
+
+    public function test_le_widget_conformite_montre_la_derniere_verification(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-20 03:00:00', 'Europe/Paris'));
+        $this->connecterProprietaire();
+        Livewire::test(ConformiteApercu::class)->assertSee('Jamais');
+
+        Livewire::test(ListEnregistrementsFiscaux::class)->callAction('verifier_integrite', ['complet' => true]);
+
+        Livewire::test(ConformiteApercu::class)
+            ->assertSeeInOrder(['Dernière vérification', 'Conforme', 'Vérification complète du 20/10/2026 à 03:00:00']);
+    }
+
     public function test_le_widget_conformite_montre_la_version_la_cle_et_les_grands_totaux_de_la_derniere_vente(): void
     {
         $this->connecterProprietaire();

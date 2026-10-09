@@ -49,7 +49,22 @@ class ContenuFiscal
      */
     public function document(Facture|Avoir $document): array
     {
-        return $document instanceof Facture ? $this->facture($document) : $this->avoir($document);
+        return [
+            'document' => $this->blocDocument($document),
+            'contexte' => $document instanceof Facture ? $this->contexteDeLaFacture($document) : $this->contexteDeLAvoir($document),
+        ];
+    }
+
+    /**
+     * Le seul bloc « document », recalculé depuis les colonnes figées du
+     * document et de ses lignes : celui que la vérification de l'intégrité
+     * (voir VerificateurIntegrite) compare au bloc signé à l'émission.
+     *
+     * @return array<string, mixed>
+     */
+    public function blocDocument(Facture|Avoir $document): array
+    {
+        return $document instanceof Facture ? $this->blocDeLaFacture($document) : $this->blocDeLAvoir($document);
     }
 
     /**
@@ -82,83 +97,97 @@ class ContenuFiscal
     }
 
     /**
-     * @return array{document: array<string, mixed>, contexte: array<string, mixed>}
+     * @return array<string, mixed>
      */
-    private function facture(Facture $facture): array
+    private function blocDeLaFacture(Facture $facture): array
     {
-        $facture->load(['lignes', 'client', 'magasin', 'allocationsPaiement.paiement', 'allocationsAvoir.avoir']);
+        $facture->load('lignes');
 
         return [
-            'document' => [
-                'numero' => $facture->numero,
-                'date_emission' => $facture->date_emission->toIso8601String(),
-                'client_id' => (int) $facture->client_id,
-                'cree_par' => $this->identifiant($facture->cree_par),
-                'devis_id' => $this->identifiant($facture->devis_id),
-                'devise' => $facture->devise,
-                'date_echeance' => $facture->date_echeance?->toDateString(),
-                'conditions_paiement' => $facture->conditions_paiement,
-                'notes' => $facture->notes,
-                ...$this->lignesEtTotaux($facture->lignes, $facture, 1),
-            ],
-            'contexte' => [
-                'emetteur' => $this->emetteur($facture->magasin),
-                'client' => $this->client($facture->client),
-                'categorie_operation' => CategorieOperation::depuisNatures($facture->lignes->pluck('nature'))->value,
-                'reglements' => $facture->allocationsPaiement->sortBy('id')
-                    ->map(fn (PaiementAllocation $allocation): array => [
-                        'paiement_id' => (int) $allocation->paiement_id,
-                        'mode' => $allocation->paiement->mode_paiement->value,
-                        'reference' => $allocation->paiement->reference,
-                        'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
-                    ])
-                    ->values()
-                    ->all(),
-                'credits_avoir' => $facture->allocationsAvoir->sortBy('id')
-                    ->map(fn (AvoirAllocation $allocation): array => [
-                        'avoir_id' => (int) $allocation->avoir_id,
-                        'numero' => $allocation->avoir->numero,
-                        'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
-                    ])
-                    ->values()
-                    ->all(),
-            ],
+            'numero' => $facture->numero,
+            'date_emission' => $facture->date_emission->toIso8601String(),
+            'client_id' => (int) $facture->client_id,
+            'cree_par' => $this->identifiant($facture->cree_par),
+            'devis_id' => $this->identifiant($facture->devis_id),
+            'devise' => $facture->devise,
+            'date_echeance' => $facture->date_echeance?->toDateString(),
+            'conditions_paiement' => $facture->conditions_paiement,
+            'notes' => $facture->notes,
+            ...$this->lignesEtTotaux($facture->lignes, $facture, 1),
         ];
     }
 
     /**
-     * @return array{document: array<string, mixed>, contexte: array<string, mixed>}
+     * @return array<string, mixed>
      */
-    private function avoir(Avoir $avoir): array
+    private function contexteDeLaFacture(Facture $facture): array
     {
-        $avoir->load(['lignes.ligneFacture.facture', 'client', 'magasin', 'allocations.facture']);
+        $facture->load(['lignes', 'client', 'magasin', 'allocationsPaiement.paiement', 'allocationsAvoir.avoir']);
+
+        return [
+            'emetteur' => $this->emetteur($facture->magasin),
+            'client' => $this->client($facture->client),
+            'categorie_operation' => CategorieOperation::depuisNatures($facture->lignes->pluck('nature'))->value,
+            'reglements' => $facture->allocationsPaiement->sortBy('id')
+                ->map(fn (PaiementAllocation $allocation): array => [
+                    'paiement_id' => (int) $allocation->paiement_id,
+                    'mode' => $allocation->paiement->mode_paiement->value,
+                    'reference' => $allocation->paiement->reference,
+                    'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
+                ])
+                ->values()
+                ->all(),
+            'credits_avoir' => $facture->allocationsAvoir->sortBy('id')
+                ->map(fn (AvoirAllocation $allocation): array => [
+                    'avoir_id' => (int) $allocation->avoir_id,
+                    'numero' => $allocation->avoir->numero,
+                    'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
+                ])
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function blocDeLAvoir(Avoir $avoir): array
+    {
+        $avoir->load('lignes.ligneFacture.facture');
         $documentsCorriges = $avoir->facturesConcernees();
 
         return [
-            'document' => [
-                'numero' => $avoir->numero,
-                'date_emission' => $avoir->date_emission->toIso8601String(),
-                'client_id' => (int) $avoir->client_id,
-                'cree_par' => $this->identifiant($avoir->cree_par),
-                'devise' => $avoir->devise,
-                'motif' => $avoir->motif,
-                'corrige' => $documentsCorriges->first()?->serie() === TypeDocument::TicketCaisse ? 'ticket' : 'facture',
-                'documents_corriges' => $documentsCorriges->pluck('numero')->all(),
-                ...$this->lignesEtTotaux($avoir->lignes, $avoir, -1),
-            ],
-            'contexte' => [
-                'emetteur' => $this->emetteur($avoir->magasin),
-                'client' => $this->client($avoir->client),
-                'categorie_operation' => CategorieOperation::depuisNatures($avoir->lignes->pluck('nature'))->value,
-                'imputations' => $avoir->allocations->sortBy('id')
-                    ->map(fn (AvoirAllocation $allocation): array => [
-                        'facture_id' => (int) $allocation->facture_id,
-                        'numero' => $allocation->facture->numero,
-                        'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
-                    ])
-                    ->values()
-                    ->all(),
-            ],
+            'numero' => $avoir->numero,
+            'date_emission' => $avoir->date_emission->toIso8601String(),
+            'client_id' => (int) $avoir->client_id,
+            'cree_par' => $this->identifiant($avoir->cree_par),
+            'devise' => $avoir->devise,
+            'motif' => $avoir->motif,
+            'corrige' => $documentsCorriges->first()?->serie() === TypeDocument::TicketCaisse ? 'ticket' : 'facture',
+            'documents_corriges' => $documentsCorriges->pluck('numero')->all(),
+            ...$this->lignesEtTotaux($avoir->lignes, $avoir, -1),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function contexteDeLAvoir(Avoir $avoir): array
+    {
+        $avoir->load(['lignes', 'client', 'magasin', 'allocations.facture']);
+
+        return [
+            'emetteur' => $this->emetteur($avoir->magasin),
+            'client' => $this->client($avoir->client),
+            'categorie_operation' => CategorieOperation::depuisNatures($avoir->lignes->pluck('nature'))->value,
+            'imputations' => $avoir->allocations->sortBy('id')
+                ->map(fn (AvoirAllocation $allocation): array => [
+                    'facture_id' => (int) $allocation->facture_id,
+                    'numero' => $allocation->facture->numero,
+                    'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
+                ])
+                ->values()
+                ->all(),
         ];
     }
 

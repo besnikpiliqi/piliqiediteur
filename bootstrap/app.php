@@ -4,6 +4,7 @@ use App\Console\Commands\ClotureAutomatiqueCaisse;
 use App\Console\Commands\MarquerFacturesEnRetard;
 use App\Console\Commands\RelancerFacturesImpayees;
 use App\Console\Commands\SoumettreEReportingPeriodique;
+use App\Console\Commands\VerifierIntegriteFiscale;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -29,6 +30,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // les clôtures de la période : il passe donc après la clôture
         // automatique de minuit, qui a clôturé sa dernière journée.
         $schedule->command(SoumettreEReportingPeriodique::class)->dailyAt('01:00');
+        // À 3 h, une fois ces traitements de la nuit terminés : la
+        // vérification de l'intégrité de la caisse sécurisée de chaque
+        // magasin, incrémentale, complète une fois par mois à un jour
+        // propre à chaque magasin (voir VerifierIntegriteFiscale).
+        $schedule->command(VerifierIntegriteFiscale::class)->dailyAt('03:00');
         // Les relances écrivent aux clients : en matinée plutôt qu'en pleine
         // nuit, et bien après le passage en retard des factures de la veille.
         $schedule->command(RelancerFacturesImpayees::class)->dailyAt('09:00');

@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources\EnregistrementFiscalResource\Widgets;
 
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
@@ -17,9 +18,11 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  * ListEnregistrementsFiscaux::getHeaderWidgets().
  *
  * La conformité du module en un coup d'œil : sa version et la référence
- * légale, l'empreinte de la clé qui signe, et les grands totaux perpétuels
+ * légale, l'empreinte de la clé qui signe, les grands totaux perpétuels
  * réel et absolu tels que les signe le dernier enregistrement de la chaîne
- * des ventes du magasin.
+ * des ventes du magasin, et la dernière vérification de l'intégrité du
+ * registre, telle que l'inscrit son opération de contrôle (JET 280, voir
+ * VerifierIntegriteAction).
  */
 class ConformiteApercu extends BaseWidget
 {
@@ -49,7 +52,39 @@ class ConformiteApercu extends BaseWidget
             Stat::make('Grand total perpétuel absolu', self::enEuros($grandsTotaux['perpetuel_absolu'] ?? 0))
                 ->description($origine)
                 ->color('success'),
+            $this->derniereVerification(),
         ];
+    }
+
+    /**
+     * Le résultat de la dernière vérification de l'intégrité du registre,
+     * et quand elle a eu lieu.
+     */
+    private function derniereVerification(): Stat
+    {
+        $controle = EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', (string) CodeEvenement::OperationDeControle->value)
+            ->orderByDesc('sequence')
+            ->first();
+
+        if ($controle === null) {
+            return Stat::make('Dernière vérification', 'Jamais')
+                ->description('Aucune vérification de l\'intégrité du registre')
+                ->color('warning');
+        }
+
+        $details = $controle->contenuSigne()['donnees']['details'] ?? [];
+        $anomalies = (int) ($details['nombre_anomalies'] ?? 0);
+        $quand = sprintf(
+            'Vérification %s du %s',
+            ($details['verification'] ?? null) === 'complete' ? 'complète' : 'incrémentale',
+            $controle->horodatage->setTimezone(config('app.timezone'))->format('d/m/Y à H:i:s'),
+        );
+
+        return $anomalies === 0
+            ? Stat::make('Dernière vérification', 'Conforme')->description($quand)->color('success')
+            : Stat::make('Dernière vérification', "{$anomalies} anomalie(s)")->description($quand)->color('danger');
     }
 
     /**

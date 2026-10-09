@@ -28,11 +28,18 @@ use Filament\Support\Contracts\HasLabel;
  *   et du taux de TVA d'un produit (JournaliseSesParametresDeConformite).
  * - L'annulation de ticket suit l'émission d'un avoir sur des tickets de
  *   caisse (voir EmettreAvoirAction).
+ * - Chaque vérification de l'intégrité du registre (voir
+ *   VerifierIntegriteAction) inscrit ses anomalies, une rupture de
+ *   séquence ou de numérotation (95) ou un autre défaut d'intégrité (90),
+ *   puis l'opération de contrôle elle-même (280), dont les points de
+ *   reprise servent de départ à la vérification incrémentale suivante.
  */
 enum CodeEvenement: int implements HasLabel
 {
     case FinDeSession = 40;
     case OuvertureDeSession = 80;
+    case DefautDIntegrite = 90;
+    case RuptureDeSequence = 95;
     case ExportDeDonnees = 110;
     case ModificationDesDroits = 130;
     case AnnulationDeTicket = 190;
@@ -40,12 +47,15 @@ enum CodeEvenement: int implements HasLabel
     case VersionMineure = 255;
     case Initialisation = 260;
     case ParametreDeConformite = 270;
+    case OperationDeControle = 280;
 
     public function getLabel(): string
     {
         return match ($this) {
             self::FinDeSession => 'Fin de session (déconnexion)',
             self::OuvertureDeSession => 'Ouverture de session dans le magasin',
+            self::DefautDIntegrite => 'Défaut d\'intégrité détecté par la vérification',
+            self::RuptureDeSequence => 'Rupture de séquence ou de numérotation détectée par la vérification',
             self::ExportDeDonnees => 'Export de données',
             self::ModificationDesDroits => 'Modification des droits d\'un utilisateur',
             self::AnnulationDeTicket => 'Annulation de ticket (avoir sur des tickets de caisse)',
@@ -53,6 +63,7 @@ enum CodeEvenement: int implements HasLabel
             self::VersionMineure => 'Changement de version mineure du module fiscal',
             self::Initialisation => 'Initialisation du registre fiscal du magasin',
             self::ParametreDeConformite => 'Modification d\'un paramètre ayant un impact sur la conformité',
+            self::OperationDeControle => 'Opération de contrôle (vérification de l\'intégrité)',
         };
     }
 

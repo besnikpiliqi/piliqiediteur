@@ -3,12 +3,19 @@
 namespace App\Filament\App\Resources\EnregistrementFiscalResource\Pages;
 
 use App\Domain\CaisseSecurisee\Actions\ExporterJournalDesEvenementsAction;
+use App\Domain\CaisseSecurisee\Actions\VerifierIntegriteAction;
+use App\Domain\CaisseSecurisee\Enums\DeclenchementVerification;
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
+use App\Domain\CaisseSecurisee\Services\AnomalieFiscale;
+use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\EnregistrementFiscalResource;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Widgets\ConformiteApercu;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use LogicException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -27,15 +34,51 @@ class ListEnregistrementsFiscaux extends ListRecords
     }
 
     /**
+     * « Vérifier l'intégrité » : relit le registre fiscal du magasin
+     * (chaînes signées, documents, numérotation) et inscrit la vérification
+     * au journal des événements (JET 280, et 90 ou 95 pour chaque anomalie,
+     * voir VerifierIntegriteAction), depuis la dernière vérification ou,
+     * sur demande, depuis le premier enregistrement.
+     *
      * « Exporter le journal (CSV) » : le journal des événements de la
      * période choisie, que l'export inscrit d'abord au journal (JET 110,
-     * voir ExporterJournalDesEvenementsAction). Ouvert à qui consulte la
-     * caisse sécurisée (voir EnregistrementFiscalPolicy) : de quoi remettre
-     * le journal à l'administration.
+     * voir ExporterJournalDesEvenementsAction).
+     *
+     * L'une et l'autre sont ouvertes à qui consulte la caisse sécurisée
+     * (voir EnregistrementFiscalPolicy) : de quoi montrer ou remettre à
+     * l'administration l'état du registre et son journal.
      */
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('verifier_integrite')
+                ->label('Vérifier l\'intégrité')
+                ->icon('heroicon-o-shield-check')
+                ->modalHeading('Vérifier l\'intégrité de la caisse sécurisée')
+                ->modalDescription('La vérification relit le registre fiscal du magasin : chaînes signées, documents et numérotation. Elle s\'inscrit elle-même au journal des événements, avec chaque anomalie relevée.')
+                ->modalSubmitActionLabel('Vérifier')
+                ->form([
+                    Toggle::make('complet')
+                        ->label('Vérification complète')
+                        ->helperText('Tout le registre depuis son premier enregistrement, au lieu de ce qui s\'y est inscrit depuis la dernière vérification : plus long.')
+                        ->default(false),
+                ])
+                ->authorize(static fn (): bool => EnregistrementFiscalResource::canViewAny())
+                ->action(function (array $data): void {
+                    try {
+                        $rapport = app(VerifierIntegriteAction::class)->handle(
+                            app(TenantContext::class)->magasin(),
+                            (bool) ($data['complet'] ?? false),
+                            DeclenchementVerification::Ecran,
+                        );
+                    } catch (LogicException|RefusFiscalException $refus) {
+                        static::notifierLeRefus($refus);
+
+                        return;
+                    }
+
+                    static::notifierLeRapport($rapport);
+                }),
             Actions\Action::make('exporter_journal')
                 ->label('Exporter le journal (CSV)')
                 ->icon('heroicon-o-arrow-down-tray')
@@ -63,5 +106,35 @@ class ListEnregistrementsFiscaux extends ListRecords
                     );
                 }),
         ];
+    }
+
+    /**
+     * Le résultat de la vérification : le nombre d'enregistrements
+     * vérifiés, ou ses anomalies (les premières, toutes étant au journal
+     * des événements), qui restent affichées jusqu'à ce qu'on les ferme.
+     */
+    protected static function notifierLeRapport(RapportIntegrite $rapport): void
+    {
+        $verification = $rapport->complet ? 'complète' : 'depuis la dernière vérification';
+
+        if ($rapport->estConforme()) {
+            Notification::make()
+                ->title('Intégrité vérifiée : aucune anomalie')
+                ->body(sprintf('%d enregistrement(s) vérifié(s), vérification %s.', $rapport->nombreDEnregistrementsVerifies(), $verification))
+                ->success()
+                ->send();
+
+            return;
+        }
+
+        $anomalies = $rapport->anomalies();
+        $premieres = array_map(static fn (AnomalieFiscale $anomalie): string => e($anomalie->message), array_slice($anomalies, 0, 5));
+
+        Notification::make()
+            ->title(sprintf('Intégrité : %d anomalie(s) relevée(s)', count($anomalies)))
+            ->body(implode('<br>', [...$premieres, e("Vérification {$verification}. Les anomalies sont inscrites au journal des événements.")]))
+            ->danger()
+            ->persistent()
+            ->send();
     }
 }

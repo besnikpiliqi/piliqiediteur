@@ -5,6 +5,7 @@ namespace Tests\Feature\Tenancy;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Exceptions\ReglagesCommunsDifferentsException;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ReglagesCommunsDeLaSociete;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
@@ -92,6 +93,25 @@ class DesignerMagasinPrincipalTest extends TestCase
         $designe->update(['siren' => '552100554', 'siret' => '55210055400013']);
 
         $this->assertNull($designe->fresh()->designe_principal);
+    }
+
+    /**
+     * Un magasin désigné rejoint une société qui a déjà son magasin
+     * désigné : il perd sa désignation en prenant le nouveau SIREN, même
+     * chargé avant elle, et le magasin désigné de cette société reste son
+     * principal, bien que plus récent que lui.
+     */
+    public function test_un_magasin_designe_rejoint_une_societe_qui_a_deja_son_magasin_designe(): void
+    {
+        $designeAilleurs = $this->magasinDeLaSociete();
+        $designeIci = Magasin::factory()->create(['siren' => '552100554', 'siret' => '55210055400013', 'regime_tva' => RegimeTva::ReelNormalTrimestriel]);
+        $this->artisan('app:designer-magasin-principal', ['magasin' => $designeAilleurs->id, '--force' => true])->assertSuccessful();
+        $this->artisan('app:designer-magasin-principal', ['magasin' => $designeIci->id, '--force' => true])->assertSuccessful();
+
+        app(TenantContext::class)->runAs($designeAilleurs, fn () => $designeAilleurs->update(['siren' => '552100554', 'siret' => '55210055400021', ...$designeIci->only(array_keys(ReglagesCommunsDeLaSociete::CHAMPS))]));
+
+        $this->assertSame(['552100554', null, true], [$designeAilleurs->fresh()->siren, $designeAilleurs->fresh()->designe_principal, $designeIci->fresh()->designe_principal]);
+        $this->assertSame($designeIci->id, app(ReglagesCommunsDeLaSociete::class)->idDuMagasinPrincipal('552100554'));
     }
 
     public function test_un_magasin_sans_siren_n_est_pas_designe(): void

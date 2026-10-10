@@ -177,7 +177,12 @@ class ParametresFiscauxTest extends TestCase
         $this->assertSame(0, EnregistrementFiscal::query()->withoutGlobalScopes()->where('magasin_id', $magasin->id)->where('chaine', ChaineFiscale::Evenement->value)->where('type', '270')->count());
     }
 
-    public function test_un_autre_magasin_attend_le_regime_que_le_principal_n_a_pas_encore_choisi(): void
+    /**
+     * Tant que le magasin principal n'a pas choisi son régime de TVA, un
+     * autre magasin de la société choisit le sien ; dès que le principal a
+     * choisi, la page de l'autre magasin dit le régime à prendre.
+     */
+    public function test_un_autre_magasin_choisit_son_regime_tant_que_le_principal_n_a_pas_choisi_le_sien(): void
     {
         $principal = $this->principalDeLaSociete(['regime_tva' => null]);
         $magasin = $this->connecterUnMagasinDeLaSociete($principal);
@@ -185,10 +190,12 @@ class ParametresFiscauxTest extends TestCase
         Livewire::test(ParametresFiscaux::class)
             ->fillForm(['regime_tva' => RegimeTva::FranchiseEnBase->value, 'option_debits_tva' => false])
             ->call('save')
-            ->assertHasFormErrors(['regime_tva'])
-            ->assertSee('Réglage commun à tous les magasins de votre société (SIREN 732829320), fixé par son magasin principal, qui ne l\'a pas encore choisi : il le choisit en premier.');
+            ->assertHasNoFormErrors();
+        app(TenantContext::class)->runAs($principal, fn () => $principal->update(['regime_tva' => RegimeTva::ReelNormalMensuel]));
 
-        $this->assertNull($magasin->fresh()->regime_tva);
+        Livewire::test(ParametresFiscaux::class)
+            ->assertSee('Ce magasin n\'émet ni facture ni ticket tant que ses réglages communs ne sont pas ceux du magasin principal de votre société (SIREN 732829320) ; à prendre : régime de TVA « Réel normal (déclaration mensuelle) » (Paramètres fiscaux).');
+        $this->assertSame(RegimeTva::FranchiseEnBase, $magasin->fresh()->regime_tva);
     }
 
     /**

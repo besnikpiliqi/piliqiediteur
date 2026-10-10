@@ -16,8 +16,8 @@ use Illuminate\Support\Facades\Log;
  * feuille de route) : désigne le magasin principal d'une société (K5),
  * celui qui fixe seul les réglages communs aux magasins de son SIREN (voir
  * ReglagesCommunsDeLaSociete) et qui recevra les factures adressées au
- * SIREN seul (J4). Sans désignation, le principal est le magasin qui porte
- * ce SIREN depuis le plus longtemps ; l'éditeur en désigne un autre à la
+ * SIREN seul (J4). Sans désignation, le principal est le plus ancien
+ * magasin non supprimé du SIREN ; l'éditeur en désigne un autre à la
  * demande de la société, par exemple quand son principal est fermé.
  *
  * Avant de désigner, la commande dit quels autres magasins du SIREN n'ont

@@ -28,21 +28,19 @@ class ReglagesCommunsDeLaSocieteTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * Le message dit chaque réglage qui diffère avec la valeur du
-     * principal, sans rien dire d'autre du magasin principal (ni son nom,
-     * ni son adresse e-mail) ni répéter la valeur refusée (« Franchise »).
+     * Un magasin qui prend le SIREN d'une société n'en est pas encore : le
+     * refus nomme chaque réglage qui diffère et la page où il se change,
+     * sans aucune valeur du principal (ni son régime, ni son n° de TVA, ni
+     * sa raison sociale...) ni rien d'autre de lui.
      */
-    public function test_un_magasin_qui_prend_le_siren_d_une_societe_doit_avoir_tous_les_reglages_de_son_principal(): void
+    public function test_un_magasin_qui_prend_le_siren_d_une_societe_doit_avoir_tous_les_reglages_de_son_principal_sans_les_apprendre(): void
     {
         $this->magasinPrincipal();
         $magasin = Magasin::factory()->sansIdentiteLegale()->create(['regime_tva' => RegimeTva::FranchiseEnBase]);
 
         $refus = $this->refusDe(fn () => $magasin->update(['siren' => '732829320', 'siret' => '73282932000082']));
 
-        $this->assertSame('Ces réglages sont communs à tous les magasins de votre société (SIREN 732829320) et fixés par son magasin principal ; à prendre : régime de TVA « Réel normal (déclaration mensuelle) », n° de TVA intracommunautaire « FR44732829320 », raison sociale « Dupont SARL », forme juridique « SARL », capital social « 10 000,00 € », immatriculation « RCS Lyon ».', $refus->getMessage());
-        $this->assertStringNotContainsString('Bellecour', $refus->getMessage());
-        $this->assertStringNotContainsString('bellecour@dupont.fr', $refus->getMessage());
-        $this->assertStringNotContainsString('Franchise', $refus->getMessage());
+        $this->assertSame('Avant d\'indiquer ce SIREN, prenez les réglages communs du magasin principal de cette société : régime de TVA (Paramètres fiscaux), n° de TVA intracommunautaire (Identité du magasin), raison sociale (Identité du magasin), forme juridique (Identité du magasin), capital social (Identité du magasin), immatriculation (Identité du magasin).', $refus->getMessage());
         $this->assertSame([null, null], [$magasin->fresh()->siren, $magasin->fresh()->siret]);
     }
 
@@ -95,24 +93,72 @@ class ReglagesCommunsDeLaSocieteTest extends TestCase
     }
 
     /**
-     * Le principal est le magasin qui porte le SIREN depuis le plus
-     * longtemps, pas le premier inscrit : un magasin plus ancien qui prend
-     * ensuite le SIREN d'une société ne fixe pas ses réglages à la place
-     * de son principal.
+     * Le principal est le plus ancien magasin du SIREN (K5), même quand il
+     * a saisi ce SIREN après un magasin inscrit plus tard : lui seul fixe
+     * les réglages communs.
      */
-    public function test_le_principal_est_le_magasin_qui_porte_le_siren_depuis_le_plus_longtemps(): void
+    public function test_le_principal_est_le_plus_ancien_magasin_du_siren_meme_s_il_a_saisi_le_siren_apres_les_autres(): void
     {
-        $inscritLePremier = Magasin::factory()->sansIdentiteLegale()->create(['regime_tva' => RegimeTva::ReelNormalMensuel]);
+        $siege = Magasin::factory()->sansIdentiteLegale()->create(['regime_tva' => RegimeTva::ReelNormalMensuel]);
         $this->travel(1)->day();
-        $principal = $this->magasinPrincipal();
+        $annexe = Magasin::factory()->sansIdentiteLegale()->create(['regime_tva' => RegimeTva::ReelNormalMensuel]);
         $this->travel(1)->day();
-        $inscritLePremier->update([...$principal->only(array_keys(ReglagesCommunsDeLaSociete::CHAMPS)), 'siren' => '732829320', 'siret' => '73282932000082']);
+        $annexe->update(['siren' => '732829320', 'siret' => '73282932000082']);
+        $this->travel(1)->day();
+        $siege->update(['siren' => '732829320', 'siret' => '73282932000074']);
 
-        $refus = $this->refusDe(fn () => $this->changerSonRegime($inscritLePremier, RegimeTva::FranchiseEnBase));
-        $this->changerSonRegime($principal, RegimeTva::ReelNormalTrimestriel);
+        $refus = $this->refusDe(fn () => $this->changerSonRegime($annexe, RegimeTva::FranchiseEnBase));
+        $this->changerSonRegime($siege, RegimeTva::ReelNormalTrimestriel);
 
         $this->assertSame('Ces réglages sont communs à tous les magasins de votre société (SIREN 732829320) et fixés par son magasin principal ; à prendre : régime de TVA « Réel normal (déclaration mensuelle) ».', $refus->getMessage());
-        $this->assertSame(RegimeTva::ReelNormalTrimestriel, $principal->fresh()->regime_tva);
+        $this->assertSame([RegimeTva::ReelNormalTrimestriel, RegimeTva::ReelNormalMensuel], [$siege->fresh()->regime_tva, $annexe->fresh()->regime_tva]);
+    }
+
+    /**
+     * @return array<string, array{array<string, string|null>}>
+     */
+    public static function sirensQuittes(): array
+    {
+        return [
+            'SIREN effacé' => [['siren' => null, 'siret' => null]],
+            'SIREN d\'une autre société' => [['siren' => '552100554', 'siret' => '55210055400013']],
+        ];
+    }
+
+    /**
+     * Laissé derrière par son principal, un magasin ne quitte pas sa
+     * société, en effaçant ou en changeant son SIREN : il échapperait au
+     * refus d'émettre (K5). Le refus dit ce qu'il doit d'abord prendre ;
+     * son SIREN reste.
+     *
+     * @param  array<string, string|null>  $sirenQuitte
+     */
+    #[DataProvider('sirensQuittes')]
+    public function test_un_magasin_que_le_principal_a_laisse_derriere_lui_ne_quitte_pas_sa_societe(array $sirenQuitte): void
+    {
+        $principal = $this->magasinPrincipal();
+        $autre = Magasin::factory()->deLaSocieteDe($principal)->create();
+        $this->changerSonRegime($principal, RegimeTva::ReelNormalTrimestriel);
+
+        $refus = $this->refusDe(fn () => $autre->update($sirenQuitte));
+
+        $this->assertSame('Ce magasin ne quitte pas votre société (SIREN 732829320) tant qu\'il n\'a pas enregistré les réglages communs de son magasin principal ; à prendre d\'abord : régime de TVA « Réel normal (déclaration trimestrielle) » (Paramètres fiscaux).', $refus->getMessage());
+        $this->assertSame('732829320', $autre->fresh()->siren);
+    }
+
+    /**
+     * Aligné sur son principal, un magasin quitte sa société : sans SIREN,
+     * il fixe de nouveau seul ses réglages.
+     */
+    public function test_un_magasin_aligne_sur_son_principal_quitte_sa_societe(): void
+    {
+        $principal = $this->magasinPrincipal();
+        $autre = Magasin::factory()->deLaSocieteDe($principal)->create();
+
+        $autre->update(['siren' => null, 'siret' => null]);
+        $this->changerSonRegime($autre, RegimeTva::FranchiseEnBase);
+
+        $this->assertSame([null, RegimeTva::FranchiseEnBase], [$autre->fresh()->siren, $autre->fresh()->regime_tva]);
     }
 
     /**

@@ -56,11 +56,10 @@ use LogicException;
  * Sa raison sociale, sa forme juridique, son capital, son
  * immatriculation, son n° de TVA, son régime de TVA et son option pour les
  * débits sont communs aux magasins de son SIREN : le magasin principal de
- * la société les fixe, un autre magasin n'enregistre que ses valeurs et
- * n'émet ni facture ni ticket tant qu'il ne les a pas (voir
- * ReglagesCommunsDeLaSociete et booted()). Un changement de SIREN note
- * depuis quand il le porte, qui désigne le magasin principal par défaut,
- * et efface la désignation de l'éditeur.
+ * la société les fixe, un autre magasin n'enregistre que ses valeurs,
+ * n'émet ni facture ni ticket tant qu'il ne les a pas, et ne quitte pas
+ * la société avant de les avoir (voir ReglagesCommunsDeLaSociete et
+ * booted()). Un changement de SIREN efface la désignation de l'éditeur.
  *
  * Son statut (voir StatutMagasin) ne vient jamais d'un formulaire du
  * magasin : actif à la création, il ne changera que par l'administration
@@ -136,7 +135,6 @@ class Magasin extends Model implements HasName
         'bareme_prix_vente' => BaremePrixDeVente::class,
         'relances_automatiques' => 'boolean',
         'delai_paiement_jours' => 'integer',
-        'siren_renseigne_le' => 'datetime',
         'designe_principal' => 'boolean',
     ];
 
@@ -160,23 +158,13 @@ class Magasin extends Model implements HasName
 
         static::saving(function (Magasin $magasin) {
             app(ReglagesCommunsDeLaSociete::class)->refuserUnEcartAEnregistrer($magasin);
-
-            if ($magasin->isDirty('siren')) {
-                $magasin->siren_renseigne_le = blank($magasin->siren) ? null : now();
-            }
-        });
-
-        // La désignation de l'éditeur ne vaut que pour le SIREN qu'il a vu
-        // (voir app:designer-magasin-principal) : elle s'efface en base,
-        // même quand ce modèle, chargé avant elle, ne la connaît pas.
-        static::updated(function (Magasin $magasin) {
-            if ($magasin->wasChanged('siren')) {
-                static::withTrashed()->whereKey($magasin->getKey())->where('designe_principal', true)->update(['designe_principal' => null]);
-                $magasin->forceFill(['designe_principal' => null])->syncOriginalAttribute('designe_principal');
-            }
         });
 
         static::updating(function (Magasin $magasin) {
+            if ($magasin->isDirty('siren')) {
+                $magasin->oublierLaDesignationDeLEditeur();
+            }
+
             if ($magasin->isDirty('code')) {
                 $magasin->verifierQueSonCodePeutChanger();
             }
@@ -217,6 +205,22 @@ class Magasin extends Model implements HasName
         if ($this->codeEstDefinitif()) {
             throw new LogicException('Le code du magasin figure déjà dans les numéros de ses documents : il ne change plus.');
         }
+    }
+
+    /**
+     * La désignation de l'éditeur ne vaut que pour le SIREN qu'il a vu
+     * (voir app:designer-magasin-principal) : elle s'efface avant que la
+     * ligne du magasin ne prenne son nouveau SIREN, sans quoi l'index
+     * unique (siren, designe_principal) la heurterait à celle du magasin
+     * désigné de ce SIREN. Elle s'efface en base, même quand ce modèle,
+     * chargé avant elle, ne la connaît pas ; IdentiteMagasin, qui change
+     * le SIREN, enregistre le magasin dans une transaction : la
+     * désignation reste si le changement échoue.
+     */
+    private function oublierLaDesignationDeLEditeur(): void
+    {
+        static::withTrashed()->whereKey($this->getKey())->where('designe_principal', true)->update(['designe_principal' => null]);
+        $this->forceFill(['designe_principal' => null])->syncOriginalAttribute('designe_principal');
     }
 
     /**

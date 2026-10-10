@@ -32,16 +32,13 @@ return new class extends Migration
             $table->string('forme_juridique', 100)->nullable();
             $table->decimal('capital_social', 14, 2)->nullable();
             $table->string('siren', 9)->nullable();
-            // Depuis quand le magasin porte ce SIREN (voir Magasin::booted()) :
-            // le magasin principal de la société est celui qui le porte
-            // depuis le plus longtemps, sauf désignation par l'éditeur (voir
-            // ReglagesCommunsDeLaSociete).
-            $table->timestamp('siren_renseigne_le')->nullable();
             // Vrai seulement pour le magasin que l'éditeur désigne comme
             // principal de son SIREN (voir app:designer-magasin-principal),
             // null pour tous les autres : l'index unique (siren,
-            // designe_principal) n'en admet qu'un par SIREN. Un changement de
-            // SIREN efface la désignation.
+            // designe_principal) n'en admet qu'un par SIREN. Sans
+            // désignation, le principal est le plus ancien magasin non
+            // supprimé du SIREN (voir ReglagesCommunsDeLaSociete). Un
+            // changement de SIREN efface la désignation.
             $table->boolean('designe_principal')->nullable();
             $table->string('siret', 14)->nullable();
             $table->string('immatriculation', 100)->nullable();

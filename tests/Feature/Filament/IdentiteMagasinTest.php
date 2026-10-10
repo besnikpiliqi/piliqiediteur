@@ -18,6 +18,7 @@ use App\Filament\App\Pages\IdentiteMagasin;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use LogicException;
@@ -510,13 +511,14 @@ class IdentiteMagasinTest extends TestCase
 
     /**
      * Un SIREN que portent déjà d'autres magasins ne s'enregistre qu'avec
-     * les réglages communs du magasin principal de leur société (J2, K5) :
-     * chaque champ commun en écart dit la valeur à prendre, et le SIREN
-     * dit les paramètres fiscaux à prendre. Rien n'est enregistré.
+     * les réglages communs du magasin principal de leur société (J2, K5).
+     * Le magasin qui le saisit n'en est pas encore : chaque champ commun
+     * en écart le signale et le SIREN nomme ce qui diffère, sans aucune
+     * valeur du principal. Rien n'est enregistré.
      */
-    public function test_un_siren_deja_porte_ne_s_enregistre_qu_avec_les_reglages_du_principal_de_la_societe(): void
+    public function test_un_siren_deja_porte_ne_s_enregistre_qu_avec_les_reglages_du_principal_de_la_societe_sans_les_reveler(): void
     {
-        $this->principalDeLaSociete();
+        $this->principalDeLaSociete(['immatriculation' => 'RCS Villefranche-sur-Saône']);
         $magasin = $this->connecterLeProprietaire();
 
         Livewire::test(IdentiteMagasin::class)
@@ -524,12 +526,67 @@ class IdentiteMagasinTest extends TestCase
             ->call('save')
             ->assertHasFormErrors(['raison_sociale', 'capital_social', 'immatriculation', 'siren'])
             ->assertHasNoFormErrors(['forme_juridique', 'numero_tva'])
-            ->assertSee('Réglage commun à tous les magasins de votre société (SIREN 732829320), fixé par son magasin principal : prenez « Dupont SARL ».')
-            ->assertSee('Réglage commun à tous les magasins de votre société (SIREN 732829320), fixé par son magasin principal : prenez « 10 000,00 € ».')
-            ->assertSee('Réglage commun à tous les magasins de votre société (SIREN 732829320), fixé par son magasin principal : prenez « RCS Lyon ».')
-            ->assertSee('Avant d\'indiquer ce SIREN, prenez dans Paramètres fiscaux les réglages du magasin principal de cette société : régime de TVA « Réel normal (déclaration mensuelle) ».');
+            ->assertSee('Réglage commun aux magasins de cette société, fixé par son magasin principal : le sien est différent.')
+            ->assertSee('Avant d\'indiquer ce SIREN, prenez les réglages communs du magasin principal de cette société : régime de TVA (Paramètres fiscaux), raison sociale (Identité du magasin), capital social (Identité du magasin), immatriculation (Identité du magasin).')
+            ->assertDontSee('Dupont SARL')
+            ->assertDontSee('10 000,00')
+            ->assertDontSee('Villefranche-sur-Saône')
+            ->assertDontSee('Réel normal');
 
         $this->assertSame([null, 'Ma Boutique'], [$magasin->fresh()->siren, $magasin->fresh()->nom]);
+    }
+
+    /**
+     * Un magasin qui prend le SIREN d'une société n'a que dix refus par
+     * heure : le onzième essai est refusé, même avec tous les réglages du
+     * principal, pour que le contrôle ne serve pas à deviner ceux d'une
+     * autre société. Une heure plus tard, il rejoint la société.
+     */
+    public function test_le_onzieme_essai_dans_l_heure_de_prendre_le_siren_d_une_societe_est_refuse(): void
+    {
+        $this->principalDeLaSociete();
+        $magasin = $this->connecterLeProprietaire();
+        app(TenantContext::class)->runAs($magasin, fn () => $magasin->update(['regime_tva' => RegimeTva::ReelNormalMensuel]));
+        $page = Livewire::test(IdentiteMagasin::class);
+        $avecLeSirenDeLaSociete = [...$this->identiteComplete(), 'siren' => '732829320', 'siret' => '73282932000082'];
+        $avecLesReglagesDuPrincipal = [...$avecLeSirenDeLaSociete, 'raison_sociale' => 'Dupont SARL', 'capital_social' => '10000', 'immatriculation' => 'RCS Lyon', 'numero_tva' => 'FR44732829320'];
+
+        for ($essai = 1; $essai <= 10; $essai++) {
+            $page->fillForm($avecLeSirenDeLaSociete)
+                ->call('save')
+                ->assertSee('Avant d\'indiquer ce SIREN, prenez les réglages communs du magasin principal de cette société : n° de TVA intracommunautaire (Identité du magasin), raison sociale (Identité du magasin), capital social (Identité du magasin), immatriculation (Identité du magasin).');
+        }
+
+        $page->fillForm($avecLesReglagesDuPrincipal)
+            ->call('save')
+            ->assertHasFormErrors(['siren'])
+            ->assertSee('Trop d\'essais : réessayez dans une heure.');
+        $this->assertNull($magasin->fresh()->siren);
+
+        $this->travel(1)->hour();
+        $page->fillForm($avecLesReglagesDuPrincipal)
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $this->assertSame('732829320', $magasin->fresh()->siren);
+    }
+
+    /**
+     * Tant que le magasin principal n'a pas choisi son régime de TVA, un
+     * magasin qui a déjà le sien rejoint la société sans avoir à le vider,
+     * ce que Paramètres fiscaux ne permet pas.
+     */
+    public function test_un_magasin_rejoint_une_societe_dont_le_principal_n_a_pas_encore_choisi_son_regime(): void
+    {
+        $this->principalDeLaSociete(['regime_tva' => null]);
+        $magasin = $this->connecterLeProprietaire();
+        app(TenantContext::class)->runAs($magasin, fn () => $magasin->update(['regime_tva' => RegimeTva::ReelNormalMensuel]));
+
+        Livewire::test(IdentiteMagasin::class)
+            ->fillForm([...$this->identiteComplete(), 'siren' => '732829320', 'siret' => '73282932000082', 'raison_sociale' => 'Dupont SARL', 'forme_juridique' => 'SARL', 'capital_social' => '10000', 'immatriculation' => 'RCS Lyon', 'numero_tva' => 'FR44732829320'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(['732829320', RegimeTva::ReelNormalMensuel], [$magasin->fresh()->siren, $magasin->fresh()->regime_tva]);
     }
 
     /**
@@ -559,19 +616,22 @@ class IdentiteMagasinTest extends TestCase
         $this->assertSame(['732829320', 'dupont sarl', '10000.00'], [$magasin->fresh()->siren, $magasin->fresh()->raison_sociale, $magasin->fresh()->capital_social]);
     }
 
+    /**
+     * Un magasin de la société ne renseigne pas un réglage commun que le
+     * principal n'a pas : la page lui dit de le laisser vide.
+     */
     public function test_un_reglage_commun_que_le_principal_n_a_pas_se_laisse_vide(): void
     {
-        $this->principalDeLaSociete(['capital_social' => null]);
-        $magasin = $this->connecterLeProprietaire();
-        app(TenantContext::class)->runAs($magasin, fn () => $magasin->update(['regime_tva' => RegimeTva::ReelNormalMensuel]));
+        $principal = $this->principalDeLaSociete(['capital_social' => null]);
+        $magasin = $this->connecterUnMagasinDeLaSociete($principal);
 
         Livewire::test(IdentiteMagasin::class)
-            ->fillForm([...$this->identiteComplete(), 'siren' => '732829320', 'siret' => '73282932000082', 'raison_sociale' => 'Dupont SARL', 'forme_juridique' => 'SARL', 'immatriculation' => 'RCS Lyon', 'numero_tva' => 'FR44732829320', 'capital_social' => '5000'])
+            ->fillForm(['capital_social' => '5000'])
             ->call('save')
             ->assertHasFormErrors(['capital_social'])
             ->assertSee('Réglage commun à tous les magasins de votre société (SIREN 732829320), fixé par son magasin principal, qui ne l\'a pas renseigné : laissez-le vide.');
 
-        $this->assertNull($magasin->fresh()->siren);
+        $this->assertNull($magasin->fresh()->capital_social);
     }
 
     /**
@@ -611,6 +671,45 @@ class IdentiteMagasinTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertSame(['Dupont Frères', '04 72 00 00 00', RegimeTva::ReelNormalMensuel], [$magasin->fresh()->raison_sociale, $magasin->fresh()->telephone, $magasin->fresh()->regime_tva]);
+    }
+
+    /**
+     * Laissé derrière par son principal, le magasin n'efface pas son SIREN
+     * : le SIREN dit ce qu'il doit d'abord prendre, et rien n'est
+     * enregistré.
+     */
+    public function test_un_magasin_laisse_derriere_n_efface_pas_son_siren(): void
+    {
+        $principal = $this->principalDeLaSociete();
+        $magasin = $this->connecterUnMagasinDeLaSociete($principal);
+        app(TenantContext::class)->runAs($principal, fn () => $principal->update(['regime_tva' => RegimeTva::ReelNormalTrimestriel]));
+
+        Livewire::test(IdentiteMagasin::class)
+            ->fillForm(['siren' => null, 'siret' => null])
+            ->call('save')
+            ->assertHasFormErrors(['siren'])
+            ->assertSee('Ce magasin ne quitte pas votre société (SIREN 732829320) tant qu\'il n\'a pas enregistré les réglages communs de son magasin principal ; à prendre d\'abord : régime de TVA « Réel normal (déclaration trimestrielle) » (Paramètres fiscaux).');
+
+        $this->assertSame(['732829320', '73282932000082'], [$magasin->fresh()->siren, $magasin->fresh()->siret]);
+    }
+
+    /**
+     * Un doublon qui n'est ni celui du code ni celui du SIRET n'est
+     * attribué à aucun champ : l'écran ne répond pas à tort « Ce code est
+     * déjà utilisé », et rien n'est enregistré.
+     */
+    public function test_un_autre_doublon_n_est_pas_attribue_au_code(): void
+    {
+        $autreMagasin = Magasin::factory()->create();
+        $magasin = $this->connecterLeProprietaire();
+        Magasin::updating(fn (Magasin $enregistre) => $enregistre->forceFill(['uuid' => $autreMagasin->uuid]));
+
+        $this->assertThrows(
+            fn () => Livewire::test(IdentiteMagasin::class)->fillForm(['telephone' => '04 72 00 00 00'])->call('save'),
+            UniqueConstraintViolationException::class,
+        );
+
+        $this->assertNull($magasin->fresh()->telephone);
     }
 
     /**

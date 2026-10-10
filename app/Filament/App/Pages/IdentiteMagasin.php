@@ -46,8 +46,10 @@ use Illuminate\Validation\ValidationException;
  * La raison sociale, la forme juridique, le capital, l'immatriculation et
  * le n° de TVA sont communs aux magasins d'un même SIREN : un magasin qui
  * n'est pas le principal de sa société n'enregistre que les valeurs du
- * principal, et un SIREN déjà porté par d'autres magasins ne s'enregistre
- * qu'avec tous les réglages communs de leur principal (J2, K5, voir
+ * principal, et n'efface ni ne change son SIREN tant qu'il ne les a pas ;
+ * un SIREN déjà porté par d'autres magasins ne s'enregistre qu'avec tous
+ * les réglages communs de leur principal, dont la page ne dit pas les
+ * valeurs, avec au plus dix refus par heure (J2, K5, voir
  * AligneLesReglagesCommuns et ReglagesCommunsDeLaSociete).
  *
  * Le logiciel ne gère pour l'instant que les magasins établis en France,
@@ -296,14 +298,21 @@ class IdentiteMagasin extends Page implements HasForms
      * refuse alors la modification, et l'écran le dit comme la validation
      * l'aurait dit. Le message du pilote de la base, sans la requête, nomme
      * l'index refusé (magasins.siret, magasins_siret_unique...) ; un code
-     * s'écrit en majuscules et un SIRET en chiffres : « siret » en
-     * minuscules n'y désigne que l'index du SIRET.
+     * s'écrit en majuscules et un SIRET en chiffres : « siret » et « code »
+     * en minuscules n'y désignent que leur index. Un autre doublon n'est
+     * attribué à aucun champ : l'exception remonte telle quelle.
+     *
+     * @throws UniqueConstraintViolationException
      */
     private function refusDuDoublon(UniqueConstraintViolationException $exception): ValidationException
     {
-        return str_contains((string) ($exception->errorInfo[2] ?? ''), 'siret')
-            ? ValidationException::withMessages(['data.siret' => self::MESSAGE_SIRET_DEJA_UTILISE])
-            : ValidationException::withMessages(['data.code' => CodeMagasinLibre::MESSAGE_DEJA_UTILISE]);
+        $indexRefuse = (string) ($exception->errorInfo[2] ?? '');
+
+        return match (true) {
+            str_contains($indexRefuse, 'siret') => ValidationException::withMessages(['data.siret' => self::MESSAGE_SIRET_DEJA_UTILISE]),
+            str_contains($indexRefuse, 'code') => ValidationException::withMessages(['data.code' => CodeMagasinLibre::MESSAGE_DEJA_UTILISE]),
+            default => throw $exception,
+        };
     }
 
     private function codeEstDefinitif(): bool

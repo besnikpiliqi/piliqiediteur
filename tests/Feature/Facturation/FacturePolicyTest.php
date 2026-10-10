@@ -189,6 +189,44 @@ class FacturePolicyTest extends TestCase
         $this->assertFalse($vendeur->can('encaisser', $facture));
     }
 
+    /**
+     * @return array<string, array{list<string>, list<string>}>
+     */
+    public static function facturesVisiblesSelonLesAutorisations(): array
+    {
+        return [
+            'sans voir les factures' => [[PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER], []],
+            'voir les siennes' => [[PermissionRegistry::FACTURE_VIEW], ['la sienne']],
+            'voir celles de toute l\'équipe' => [[PermissionRegistry::FACTURE_VIEW_TOUTES], ['la sienne', 'celle du collègue']],
+        ];
+    }
+
+    /**
+     * Les listes de factures (Facture::scopeVisiblesPar()) montrent
+     * exactement celles que FacturePolicy::view() laisse voir : une facture
+     * proposée dans un formulaire n'est jamais refusée à l'enregistrement.
+     *
+     * @param  list<string>  $autorisations
+     * @param  list<string>  $attendues
+     */
+    #[DataProvider('facturesVisiblesSelonLesAutorisations')]
+    public function test_les_listes_de_factures_suivent_la_policy(array $autorisations, array $attendues): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $collegue = $this->membre($magasin, RoleMagasin::Vendeur);
+        $membre = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
+        $factures = [
+            'la sienne' => $this->emettreUneFactureEnTantQue($membre, $magasin),
+            'celle du collègue' => $this->emettreUneFactureEnTantQue($collegue, $magasin),
+        ];
+
+        $listees = Facture::query()->visiblesPar($membre)->orderBy('id')->pluck('id')->all();
+        $autorisees = array_keys(array_filter($factures, fn (Facture $facture): bool => $membre->can('view', $facture)));
+
+        $this->assertSame(array_map(fn (string $facture): int => $factures[$facture]->id, $attendues), $listees);
+        $this->assertSame($attendues, $autorisees);
+    }
+
     private function emettreUneFactureEnTantQue(User $auteur, Magasin $magasin): Facture
     {
         $this->actingAs($auteur);

@@ -23,8 +23,10 @@ use Illuminate\Support\Collection;
  * parte pas en retard. Une vente est de la journée de son émission, un
  * encaissement de celle où il est reçu, une contre-passation comprise,
  * qui revient au vendeur du paiement qu'elle corrige (voir
- * Paiement::scopeNonFermesParLeVendeur()). La clôture automatique de
- * minuit (voir ClotureAutomatiqueCaisse) ne le consulte jamais : une
+ * Paiement::scopeNonFermesParLeVendeur()). Quiconque enregistre un
+ * paiement peut aussi fermer sa caisse, le comptable comme le vendeur
+ * (voir ClotureCaissePersonnellePolicy::fermer()). La clôture automatique
+ * de minuit (voir ClotureAutomatiqueCaisse) ne le consulte jamais : une
  * journée est toujours clôturée, même si personne n'intervient.
  */
 class VerificateurCaissesPersonnelles

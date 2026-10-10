@@ -13,8 +13,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
- * Relevé « Fermer ma caisse » d'UN vendeur (voir FermerSaCaisseAction), en
- * quatre rubriques séparées (B18) :
+ * Relevé « Fermer ma caisse » d'UN vendeur (voir FermerSaCaisseAction) --
+ * tout membre qui vend ou encaisse, le comptable compris --, en quatre
+ * rubriques séparées (B18) :
  *  - les ventes : celles qu'il a émises et qu'aucune de ses fermetures
  *    n'a encore comptées, y compris celles d'un jour précédent ; leur
  *    nombre et leur TTC vendu, avec le HT et la TVA (total_ttc, total_ht,
@@ -38,8 +39,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * Un outil de réconciliation de fin de service, PAS un document fiscal.
  * Contrairement à ClotureCaisse (la clôture officielle de la journée du
  * magasin, réservée au propriétaire ou à qui il en délègue la permission),
- * un vendeur peut toujours fermer SA PROPRE caisse, sans permission
- * spéciale. Toutes ses ventes comptent, aux particuliers comme aux
+ * quiconque vend ou encaisse peut toujours fermer SA PROPRE caisse, sans
+ * permission dédiée (voir ClotureCaissePersonnellePolicy::fermer()).
+ * Toutes ses ventes comptent, aux particuliers comme aux
  * professionnels : l'objectif est de vérifier sa propre caisse, pas
  * l'e-reporting. Les ventes et les paiements comptés sont notés dans des
  * tables à part (voir factures() et paiements()), jamais sur les documents

@@ -506,6 +506,27 @@ class PaiementResourceTest extends TestCase
         ]);
     }
 
+    /**
+     * Sans « Factures : voir (les siennes) », un membre ne se voit proposer
+     * aucune facture, pas même son propre ticket de 12,00 €, dont il ne
+     * peut pas lire le reste dû (voir FacturePolicy::view()).
+     */
+    public function test_sans_voir_ses_factures_aucune_facture_n_est_proposee(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $membre = $this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(
+            RoleMagasin::Vendeur->permissionsParDefaut(),
+            [PermissionRegistry::FACTURE_VIEW],
+        )));
+        $client = Client::factory()->create();
+        $this->emettreUnTicketEnTantQue($membre, $client, 12);
+        Filament::setTenant($magasin);
+
+        $formulaire = Livewire::test(CreatePaiement::class)->fillForm(['client_id' => $client->id, 'allocations' => [['facture_id' => null]]]);
+
+        $formulaire->assertFormFieldExists('allocations.0.facture_id', fn (Select $champ): bool => collect($champ->getOptions())->isEmpty());
+    }
+
     public function test_le_proprietaire_se_voit_proposer_les_factures_de_toute_l_equipe(): void
     {
         ['magasin' => $magasin, 'client' => $client, 'factureDeA' => $factureDeA, 'factureDeB' => $factureDeB] = $this->clientQuiDoitAuxDeuxVendeurs();

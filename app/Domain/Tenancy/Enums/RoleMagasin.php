@@ -82,7 +82,8 @@ enum RoleMagasin: string implements HasLabel
             // Il suit aussi les impayés : il envoie et relance factures et
             // avoirs, sans régler les relances automatiques, qui écrivent
             // aux clients au nom du magasin, et contre-passe un paiement
-            // saisi par erreur.
+            // saisi par erreur. Il ferme SA PROPRE caisse pour les paiements
+            // qu'il enregistre (voir ClotureCaissePersonnellePolicy).
             self::Comptable => [
                 ...$lecture,
                 PermissionRegistry::FACTURE_VIEW_TOUTES,
@@ -105,7 +106,8 @@ enum RoleMagasin: string implements HasLabel
             // MAGASIN (ClotureCaisse) ne lui est pas coché non plus ; il
             // ferme en revanche toujours SA PROPRE caisse (voir
             // FermerSaCaisseAction), sans autorisation dédiée puisqu'elle
-            // ne concerne que ses propres ventes.
+            // ne concerne que ses propres ventes et encaissements (voir
+            // ClotureCaissePersonnellePolicy).
             self::Vendeur => [
                 PermissionRegistry::CLIENT_VIEW,
                 PermissionRegistry::CLIENT_CREATE,

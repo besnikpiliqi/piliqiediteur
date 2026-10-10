@@ -15,9 +15,10 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Permet à un vendeur de fermer SA PROPRE caisse -- jamais la clôture
- * officielle de la journée du magasin (voir CloturerCaisseAction, réservée
- * à cloture_caisse.gerer). Le docblock de ClotureCaissePersonnelle décrit
+ * Permet à un vendeur -- tout membre qui vend ou encaisse, voir
+ * ClotureCaissePersonnellePolicy::fermer() -- de fermer SA PROPRE caisse,
+ * jamais la clôture officielle de la journée du magasin (voir
+ * CloturerCaisseAction, réservée à cloture_caisse.gerer). Le docblock de ClotureCaissePersonnelle décrit
  * les quatre rubriques du relevé (B18) : les ventes et leur TTC vendu, les
  * encaissements par mode de paiement, le crédit d'avoir utilisé et le
  * reste dû, la période qu'il couvre et ce qui le distingue de la clôture

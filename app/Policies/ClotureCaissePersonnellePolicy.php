@@ -7,17 +7,20 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Models\User;
 
 /**
- * Aucune permission spéciale n'est nécessaire pour fermer SA PROPRE
- * caisse : quiconque peut vendre (facture.create) peut la fermer, voir le
- * docblock de ClotureCaissePersonnelle. Le propriétaire et quiconque a
- * cloture_caisse.view_toutes (comptable...) peuvent voir les relevés de
- * toute l'équipe, pour la réconciliation de fin de journée.
+ * Aucune permission dédiée n'est nécessaire pour fermer SA PROPRE caisse :
+ * quiconque vend (facture.create) ou encaisse (paiement.creer) la ferme et
+ * consulte ses relevés, voir le docblock de ClotureCaissePersonnelle. Un
+ * encaissement non fermé bloque la clôture manuelle de la journée (voir
+ * VerificateurCaissesPersonnelles) : qui peut encaisser doit donc pouvoir
+ * le fermer, le comptable comme le vendeur. Le propriétaire et quiconque a
+ * cloture_caisse.view_toutes (comptable...) voient les relevés de toute
+ * l'équipe, pour la réconciliation de fin de journée.
  */
 class ClotureCaissePersonnellePolicy extends MagasinPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->vendDansLeMagasin($user) || $user->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES);
+        return $this->tientUneCaisse($user) || $user->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES);
     }
 
     public function view(User $user, ClotureCaissePersonnelle $cloture): bool
@@ -31,7 +34,7 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
 
     public function fermer(User $user): bool
     {
-        return $this->vendDansLeMagasin($user);
+        return $this->tientUneCaisse($user);
     }
 
     public function update(User $user, ClotureCaissePersonnelle $cloture): bool
@@ -60,13 +63,15 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
     }
 
     /**
-     * Le droit de vendre du membre, lu sur ses permissions plutôt que
-     * demandé à la Gate : dans un magasin suspendu ou fermé, celle-ci
-     * refuse facture.create (voir ControleDesDroits), mais le vendeur
-     * ferme toujours sa caisse et consulte toujours ses relevés.
+     * Le droit de vendre ou d'encaisser du membre, lu sur ses permissions
+     * plutôt que demandé à la Gate : dans un magasin suspendu ou fermé,
+     * celle-ci refuse facture.create et paiement.creer (voir
+     * ControleDesDroits), mais le membre ferme toujours sa caisse et
+     * consulte toujours ses relevés.
      */
-    private function vendDansLeMagasin(User $user): bool
+    private function tientUneCaisse(User $user): bool
     {
-        return $user->checkPermissionTo(PermissionRegistry::FACTURE_CREATE);
+        return $user->checkPermissionTo(PermissionRegistry::FACTURE_CREATE)
+            || $user->checkPermissionTo(PermissionRegistry::PAIEMENT_CREER);
     }
 }

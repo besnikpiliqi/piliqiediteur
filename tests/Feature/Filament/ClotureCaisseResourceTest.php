@@ -10,15 +10,19 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages\ListClotureCaissePersonnelles;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ViewClotureCaisse;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -231,6 +235,45 @@ class ClotureCaisseResourceTest extends TestCase
 
         app(FermerSaCaisseAction::class)->handle($vendeur);
 
+        Livewire::test(ListClotureCaisses::class)
+            ->assertActionEnabled('cloturer');
+    }
+
+    /**
+     * Le comptable, avec les autorisations de son rôle, encaisse sans
+     * vendre : son encaissement du jour bloque la clôture manuelle et le
+     * bouton le nomme, puis il ferme lui-même sa caisse (12,00 € en
+     * espèces) et le bouton redevient actif.
+     */
+    public function test_le_comptable_qui_encaisse_ferme_sa_caisse_et_debloque_la_cloture(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $magasin = $this->ouvrirLeMagasin();
+        $ticket = $this->vendreUnTicket();
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
+        $comptable = $this->membre($magasin, RoleMagasin::Comptable);
+        $comptable->forceFill(['name' => 'Claire Compta'])->save();
+        $this->actingAs($comptable);
+        app(EnregistrerPaiementAction::class)->handle($ticket->client, [
+            'mode_paiement' => ModePaiement::Especes->value,
+            'montant' => 12,
+            'recu_le' => today()->toDateString(),
+        ], [['facture_id' => $ticket->id, 'montant' => 12]]);
+        $this->actingAs($this->proprietaireDe($magasin));
+
+        $page = Livewire::test(ListClotureCaisses::class)
+            ->assertActionDisabled('cloturer');
+
+        $this->assertSame('Caisses personnelles non fermées : Claire Compta', $page->instance()->getAction('cloturer')->getTooltip());
+
+        $this->actingAs($comptable);
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->assertActionVisible('fermer_ma_caisse')
+            ->callAction('fermer_ma_caisse');
+        $releve = ClotureCaissePersonnelle::query()->where('cree_par', $comptable->id)->sole();
+        $this->assertSame([0, ['especes' => '12.00']], [$releve->nombre_ventes, $releve->encaissements]);
+
+        $this->actingAs($this->proprietaireDe($magasin));
         Livewire::test(ListClotureCaisses::class)
             ->assertActionEnabled('cloturer');
     }

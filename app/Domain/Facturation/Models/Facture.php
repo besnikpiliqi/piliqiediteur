@@ -196,17 +196,21 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Les factures que cet utilisateur voit (B16, voir FacturePolicy::view()) :
-     * toutes avec l'autorisation « voir celles de toute l'équipe », sinon
-     * seulement celles qu'il a créées. Toute liste de factures, de leurs
-     * lignes ou de ce qu'il en reste dû passe par ici : un montant visible
-     * dans un tableau ou un menu est déjà une fuite.
+     * Les factures que cet utilisateur voit (B16), exactement comme
+     * FacturePolicy::view() : toutes avec l'autorisation « voir celles de
+     * toute l'équipe », celles qu'il a créées avec « voir (les siennes) »,
+     * aucune sinon. Toute liste de factures, de leurs lignes ou de ce qu'il
+     * en reste dû passe par ici : un montant visible dans un tableau ou un
+     * menu est déjà une fuite, et une facture proposée doit être acceptée à
+     * l'enregistrement.
      */
     public function scopeVisiblesPar(Builder $query, User $user): Builder
     {
-        return $user->can(PermissionRegistry::FACTURE_VIEW_TOUTES)
-            ? $query
-            : $query->where('cree_par', $user->getKey());
+        return match (true) {
+            $user->can(PermissionRegistry::FACTURE_VIEW_TOUTES) => $query,
+            $user->can(PermissionRegistry::FACTURE_VIEW) => $query->where('cree_par', $user->getKey()),
+            default => $query->whereRaw('1 = 0'),
+        };
     }
 
     /**

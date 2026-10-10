@@ -18,7 +18,6 @@ use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
@@ -38,11 +37,10 @@ use Throwable;
  *
  * Le document est relu au moment de partir : une relance ne part que si
  * la facture est toujours échue et impayée, et son rappel dit ce qu'il
- * reste à payer à cet instant. Une facture ou un avoir émis le reste pour
- * toujours (une correction est un avoir à part). Un devis, lui, peut avoir
- * été supprimé entre-temps (voir DevisPolicy::delete()) : l'envoi échoue
- * alors, le document n'existant plus (ModelNotFoundException, voir
- * failed()).
+ * reste à payer à cet instant. Il existe toujours : une facture ou un
+ * avoir émis le reste pour toujours (une correction est un avoir à part),
+ * et un devis, numéroté dès son premier envoi, ne se supprime plus (voir
+ * Devis::estSupprimable()).
  *
  * Un magasin suspendu ou fermé entre-temps n'écrit plus à ses clients :
  * l'envoi échoue sans partir (voir Magasin::verifierQuIlEstOuvert()).
@@ -92,7 +90,7 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $document = $envoi->document ?? throw new ModelNotFoundException("Le document de l'envoi [{$envoi->id}] n'existe plus.");
+        $document = $envoi->document;
 
         if ($document instanceof Facture && $envoi->nature === NatureEnvoi::Relance) {
             if (! $document->estEchueEtImpayee()) {
@@ -150,7 +148,6 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 
         $this->echouer($envoi, match (true) {
             $exception instanceof TransportExceptionInterface => "Le serveur d'envoi des e-mails n'a pas accepté le message : vérifiez l'adresse du destinataire, puis {$this->consigne($envoi)}.",
-            $exception instanceof ModelNotFoundException => 'Le document n\'existe plus.',
             default => "Une erreur inattendue a empêché l'envoi : {$this->consigne($envoi)}, et contactez le support si elle se répète.",
         });
     }

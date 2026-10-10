@@ -66,6 +66,67 @@ class DevisConversionTest extends TestCase
         $this->assertSame(StatutDevis::Refuse, $devis->statut);
     }
 
+    /**
+     * La date de validité est le dernier jour pour accepter (B15) : le
+     * 09/10, le devis valable jusqu'au 08/10 ne s'accepte plus, même
+     * avant son passage à « Expiré » dans la nuit, et reste « Envoyé ».
+     */
+    public function test_un_devis_dont_la_validite_est_depassee_ne_s_accepte_plus(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-05 10:00:00', 'Europe/Paris'));
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
+        $devis = app(EmettreDevisAction::class)->handle(app(CreerDevisAction::class)->handle(Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ], ['date_validite' => '2026-10-08']));
+        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+
+        $this->assertThrows(
+            fn () => app(AccepterDevisAction::class)->handle($devis),
+            LogicException::class,
+            'La date de validité de ce devis est dépassée (08/10/2026) : il ne peut plus être accepté.',
+        );
+
+        $this->assertSame(StatutDevis::Envoye, $devis->fresh()->statut);
+    }
+
+    public function test_un_devis_s_accepte_encore_le_dernier_jour_de_sa_validite(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-05 10:00:00', 'Europe/Paris'));
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
+        $devis = app(EmettreDevisAction::class)->handle(app(CreerDevisAction::class)->handle(Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ], ['date_validite' => '2026-10-08']));
+        $this->travelTo(Carbon::parse('2026-10-08 23:59:00', 'Europe/Paris'));
+
+        $devis = app(AccepterDevisAction::class)->handle($devis);
+
+        $this->assertSame(StatutDevis::Accepte, $devis->statut);
+    }
+
+    /**
+     * Un devis que son client ne pourrait plus accepter ne part pas : sa
+     * date de validité est à changer d'abord. Il reste brouillon, sans
+     * numéro consommé.
+     */
+    public function test_un_devis_dont_la_validite_est_depassee_ne_part_pas(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
+        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ], ['date_validite' => '2026-10-08']);
+
+        $this->assertThrows(
+            fn () => app(EmettreDevisAction::class)->handle($devis),
+            LogicException::class,
+            'La date de validité de ce devis est dépassée (08/10/2026) : changez-la avant de l\'envoyer.',
+        );
+
+        $devis->refresh();
+        $this->assertSame([StatutDevis::Brouillon, null, null], [$devis->statut, $devis->numero, $devis->date_emission]);
+        $this->assertDatabaseCount('sequences_documents', 0);
+    }
+
     public function test_impossible_daccepter_un_devis_encore_en_brouillon(): void
     {
         $client = Client::factory()->create();

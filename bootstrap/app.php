@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\ClotureAutomatiqueCaisse;
+use App\Console\Commands\ExpirerDevis;
 use App\Console\Commands\MarquerFacturesEnRetard;
 use App\Console\Commands\RelancerFacturesImpayees;
 use App\Console\Commands\SoumettreEReportingPeriodique;
@@ -26,6 +27,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // en retard.
         $schedule->command(ClotureAutomatiqueCaisse::class)->dailyAt('00:00');
         $schedule->command(MarquerFacturesEnRetard::class)->dailyAt('00:15');
+        // Les devis envoyés dont la date de validité était la veille
+        // expirent : leur client ne peut plus les accepter (voir
+        // ExpirerDevis).
+        $schedule->command(ExpirerDevis::class)->dailyAt('00:30');
         // L'e-reporting n'est transmis que par période entière déjà
         // terminée (décade, mois ou bimestre selon le régime de TVA, voir
         // CalculateurPeriodeEReporting), jamais quotidiennement. Il agrège

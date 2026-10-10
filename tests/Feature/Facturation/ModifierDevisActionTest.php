@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Console\Commands\ExpirerDevis;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
@@ -10,6 +11,8 @@ use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
+use App\Domain\Facturation\Enums\StatutDevis;
+use App\Domain\Facturation\Models\Devis;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -24,7 +27,7 @@ class ModifierDevisActionTest extends TestCase
     {
         parent::setUp();
 
-        app(TenantContext::class)->set(Magasin::factory()->create());
+        app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'MABOUT']));
     }
 
     public function test_un_devis_brouillon_est_modifiable(): void
@@ -46,59 +49,138 @@ class ModifierDevisActionTest extends TestCase
     }
 
     /**
-     * Exigence explicite : un devis reste modifiable même envoyé/accepté/
-     * refusé, tant qu'aucune facture n'en a été créée.
+     * Le client ne s'est engagé que sur la version qu'il a reçue (B15) :
+     * modifié, le devis DEV-MABOUT-2026-000003 repasse en brouillon, garde
+     * son numéro et perd sa date d'émission ; renvoyé, il repart sous le
+     * même numéro, sans en consommer un autre : le devis suivant reçoit
+     * DEV-MABOUT-2026-000004.
      */
-    public function test_un_devis_accepte_reste_modifiable(): void
+    public function test_un_devis_envoye_modifie_repasse_en_brouillon_et_repart_sous_son_numero(): void
     {
+        $this->travelTo('2026-10-05 10:00:00');
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $devis = app(CreerDevisAction::class)->handle($client, [
-            ['produit_id' => $produit->id, 'quantite' => 1],
-        ]);
-        $devis = app(EmettreDevisAction::class)->handle($devis);
-        $devis = app(AccepterDevisAction::class)->handle($devis);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
+        $this->envoyerUnDevis($client, $produit);
+        $this->envoyerUnDevis($client, $produit);
+        $devis = $this->envoyerUnDevis($client, $produit);
+        $this->travelTo('2026-10-07 15:00:00');
 
-        $devis = app(ModifierDevisAction::class)->handle($devis, $client, [
-            ['produit_id' => $produit->id, 'quantite' => 2],
-        ]);
+        $modifie = app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
 
-        $this->assertSame('100.00', $devis->total_ht);
+        $this->assertSame(['DEV-MABOUT-2026-000003', StatutDevis::Brouillon, null], [$modifie->numero, $modifie->statut, $modifie->date_emission]);
+        $this->assertSame(['100.00', '20.00', '120.00'], [$modifie->total_ht, $modifie->total_tva, $modifie->total_ttc]);
+
+        $renvoye = app(EmettreDevisAction::class)->handle($modifie);
+        $suivant = $this->envoyerUnDevis($client, $produit);
+
+        $this->assertSame(['DEV-MABOUT-2026-000003', StatutDevis::Envoye, '2026-10-07 15:00'], [$renvoye->numero, $renvoye->statut, $renvoye->date_emission->format('Y-m-d H:i')]);
+        $this->assertSame('DEV-MABOUT-2026-000004', $suivant->numero);
     }
 
-    public function test_un_devis_refuse_reste_modifiable(): void
+    /**
+     * Un devis accepté se modifie comme un devis envoyé (K8) : il repasse
+     * en brouillon, son acceptation effacée, et ne se convertit plus en
+     * facture tant que son client n'a pas accepté la nouvelle version.
+     */
+    public function test_un_devis_accepte_modifie_repasse_en_brouillon_et_perd_son_acceptation(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $devis = app(CreerDevisAction::class)->handle($client, [
-            ['produit_id' => $produit->id, 'quantite' => 1],
-        ]);
-        $devis = app(EmettreDevisAction::class)->handle($devis);
-        $devis = app(RefuserDevisAction::class)->handle($devis);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
+        $devis = app(AccepterDevisAction::class)->handle($this->envoyerUnDevis($client, $produit));
 
-        $devis = app(ModifierDevisAction::class)->handle($devis, $client, [
-            ['produit_id' => $produit->id, 'quantite' => 4],
-        ]);
+        $modifie = app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
 
-        $this->assertSame('200.00', $devis->total_ht);
+        $this->assertSame([StatutDevis::Brouillon, $devis->numero, '120.00'], [$modifie->statut, $modifie->numero, $modifie->total_ttc]);
+        $this->assertThrows(
+            fn () => app(CreerFactureDepuisDevisAction::class)->handle($modifie),
+            LogicException::class,
+            'Seul un devis accepté peut être converti en facture (statut actuel : [brouillon]).',
+        );
+    }
+
+    /**
+     * Refusé ou expiré, un devis reste tel quel : une nouvelle proposition
+     * passe par un nouveau devis.
+     */
+    public function test_un_devis_refuse_n_est_plus_modifiable(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
+        $devis = app(RefuserDevisAction::class)->handle($this->envoyerUnDevis($client, $produit));
+
+        $this->assertThrows(
+            fn () => app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 4]]),
+            LogicException::class,
+            'Ce devis ne peut plus être modifié : un devis refusé reste tel quel, établissez-en un nouveau.',
+        );
+
+        $devis->refresh();
+        $this->assertSame([StatutDevis::Refuse, '60.00', 1], [$devis->statut, $devis->total_ttc, $devis->lignes->sole()->quantite]);
+    }
+
+    public function test_un_devis_expire_n_est_plus_modifiable(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
+        $devis = $this->envoyerUnDevis($client, $produit, '2026-10-08');
+        $this->travelTo('2026-10-09 00:30:00');
+        $this->artisan(ExpirerDevis::class)->assertSuccessful();
+        app(TenantContext::class)->set($devis->magasin);
+
+        $this->assertThrows(
+            fn () => app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 4]], ['date_validite' => '2026-11-30']),
+            LogicException::class,
+            'Ce devis ne peut plus être modifié : un devis expiré reste tel quel, établissez-en un nouveau.',
+        );
+
+        $devis->refresh();
+        $this->assertSame([StatutDevis::Expire, '2026-10-08', '60.00'], [$devis->statut, $devis->date_validite->toDateString(), $devis->total_ttc]);
+    }
+
+    /**
+     * Le lendemain du dernier jour de sa validité, un devis envoyé est
+     * expiré, même avant que le passage de la nuit l'ait écrit.
+     */
+    public function test_un_devis_envoye_a_la_validite_depassee_n_est_plus_modifiable_avant_meme_son_expiration(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
+        $devis = $this->envoyerUnDevis($client, $produit, '2026-10-08');
+        $this->travelTo('2026-10-09 00:10:00');
+
+        $this->assertThrows(
+            fn () => app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 4]], ['date_validite' => '2026-11-30']),
+            LogicException::class,
+            'Ce devis ne peut plus être modifié : un devis expiré reste tel quel, établissez-en un nouveau.',
+        );
+
+        $devis->refresh();
+        $this->assertSame([StatutDevis::Envoye, '2026-10-08', '60.00'], [$devis->statut, $devis->date_validite->toDateString(), $devis->total_ttc]);
     }
 
     public function test_un_devis_deja_converti_en_facture_nest_plus_modifiable(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $devis = app(CreerDevisAction::class)->handle($client, [
-            ['produit_id' => $produit->id, 'quantite' => 1],
-        ]);
-        $devis = app(EmettreDevisAction::class)->handle($devis);
-        $devis = app(AccepterDevisAction::class)->handle($devis);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
+        $devis = app(AccepterDevisAction::class)->handle($this->envoyerUnDevis($client, $produit));
         app(CreerFactureDepuisDevisAction::class)->handle($devis);
 
-        $this->assertFalse($devis->fresh()->estModifiable());
+        $this->assertThrows(
+            fn () => app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 9]]),
+            LogicException::class,
+            'Ce devis ne peut plus être modifié : il a déjà été transformé en facture.',
+        );
 
-        $this->expectException(LogicException::class);
-        app(ModifierDevisAction::class)->handle($devis->fresh(), $client, [
-            ['produit_id' => $produit->id, 'quantite' => 9],
-        ]);
+        $devis->refresh();
+        $this->assertSame([StatutDevis::Accepte, '60.00'], [$devis->statut, $devis->total_ttc]);
+    }
+
+    private function envoyerUnDevis(Client $client, Produit $produit, ?string $dateValidite = null): Devis
+    {
+        $devis = app(CreerDevisAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => $dateValidite]);
+
+        return app(EmettreDevisAction::class)->handle($devis);
     }
 }

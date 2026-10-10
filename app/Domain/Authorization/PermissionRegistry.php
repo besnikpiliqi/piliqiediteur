@@ -275,7 +275,7 @@ final class PermissionRegistry
             self::PRIX_VENTE_REGLER => 'Prix de vente : régler le barème automatique',
             self::DEVIS_VIEW => 'Devis : voir',
             self::DEVIS_CREATE => 'Devis : créer',
-            self::DEVIS_UPDATE => 'Devis : modifier',
+            self::DEVIS_UPDATE => 'Devis : modifier, et supprimer un brouillon jamais envoyé',
             self::DEVIS_ENVOYER => 'Devis : envoyer (numéroter, envoyer par e-mail)',
             self::FACTURE_VIEW => 'Factures : voir (les siennes)',
             self::FACTURE_VIEW_TOUTES => 'Factures : voir celles de toute l\'équipe',

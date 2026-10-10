@@ -12,16 +12,18 @@ use LogicException;
 /**
  * La suppression en masse de Filament ne consulte la policy qu'une fois,
  * pour afficher son bouton (deleteAny()), jamais pour chaque ligne cochée :
- * sans ce filtre, cocher une facture émise ou un devis déjà converti à
+ * sans ce filtre, cocher une facture émise ou un devis déjà numéroté à
  * côté d'un brouillon les supprimerait aussi. Chaque ligne repasse donc
  * par delete() ; celles qu'il refuse restent, et l'utilisateur le sait.
  * Une ligne dont le modèle refuse la suppression reste aussi : le journal
  * des événements qui ne s'écrit pas pour un brouillon de facture (voir
- * Facture::delete()), le client comptoir qui ne s'archive jamais (voir
+ * Facture::delete()), le devis numéroté entre-temps (voir
+ * Devis::booted()), le client comptoir qui ne s'archive jamais (voir
  * Client::booted()), un incident du serveur alors signalé au journal de
  * l'application (voir GereLesExceptionsMetier).
  *
- * Un brouillon de facture ou de devis se supprime (suppressionEnMasse()) ;
+ * Un brouillon de facture ou de devis jamais numéroté se supprime
+ * (suppressionEnMasse()) ;
  * un client, un produit ou un fournisseur s'archive (archivageEnMasse()),
  * avec le même filtre : delete() d'un modèle SoftDeletes l'archive, et la
  * fiche se restaure depuis la liste des archivés.

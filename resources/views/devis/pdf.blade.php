@@ -6,11 +6,18 @@
     @include('documents.pdf.styles')
 </head>
 <body>
+    {{-- Un devis modifié depuis son envoi est un brouillon qui garde son
+         numéro (voir ModifierDevisAction) : cette version n'a pas encore
+         été émise. --}}
     @include('documents.pdf.en-tete', [
         'magasin' => $devis->magasin,
         'titre' => 'Devis',
         'details' => array_filter([
-            $devis->numero ?? 'Brouillon (non envoyé)',
+            match (true) {
+                $devis->numero === null => 'Brouillon (non envoyé)',
+                $devis->statut === \App\Domain\Facturation\Enums\StatutDevis::Brouillon => "{$devis->numero} (brouillon, modifié depuis son envoi)",
+                default => $devis->numero,
+            },
             $devis->date_emission ? 'Émis le '.$devis->date_emission->format('d/m/Y') : null,
             $devis->date_validite ? 'Valable jusqu\'au '.$devis->date_validite->format('d/m/Y') : null,
         ]),

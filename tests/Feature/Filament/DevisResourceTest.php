@@ -8,6 +8,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
@@ -297,10 +298,11 @@ class DevisResourceTest extends TestCase
     }
 
     /**
-     * Un devis reste modifiable, lignes comprises, tant qu'il n'a pas été
-     * transformé en facture -- y compris une fois accepté.
+     * Un devis accepté pas encore transformé en facture se modifie, lignes
+     * comprises (K8) : il repasse en brouillon, son acceptation effacée, et
+     * garde son numéro.
      */
-    public function test_modifier_un_devis_accepte_remplace_les_lignes_et_recalcule_les_totaux(): void
+    public function test_modifier_un_devis_accepte_remplace_les_lignes_recalcule_les_totaux_et_le_repasse_en_brouillon(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
@@ -327,10 +329,74 @@ class DevisResourceTest extends TestCase
             // à la liste.
             ->assertRedirect(DevisResource::getUrl('index'));
 
+        $numero = $devis->numero;
         $devis->refresh();
         $this->assertSame($autreClient->id, $devis->client_id);
         $this->assertSame(1, $devis->lignes()->count());
         $this->assertSame('250.00', $devis->total_ht);
+        $this->assertSame([StatutDevis::Brouillon, $numero], [$devis->statut, $devis->numero]);
+    }
+
+    /**
+     * La page prévient, avant l'enregistrement, qu'un devis envoyé ou
+     * accepté repasse en brouillon ; un brouillon n'a rien à annoncer.
+     */
+    public function test_la_page_de_modification_annonce_le_retour_en_brouillon_d_un_devis_envoye_ou_accepte(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
+        $brouillon = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $envoye = $this->envoyerDevis(Client::factory()->create(), $produit);
+        $accepte = $this->envoyerDevis(Client::factory()->create(), $produit);
+        Livewire::test(ListDevis::class)->callTableAction('accepter', $accepte);
+
+        Livewire::test(EditDevis::class, ['record' => $envoye->getRouteKey()])
+            ->assertSee('Modifier un devis envoyé le repasse en brouillon : renvoyez-le ensuite à votre client.');
+        Livewire::test(EditDevis::class, ['record' => $accepte->getRouteKey()])
+            ->assertSee('Modifier un devis accepté le repasse en brouillon et efface son acceptation : renvoyez-le ensuite à votre client.');
+        Livewire::test(EditDevis::class, ['record' => $brouillon->getRouteKey()])
+            ->assertDontSee('le repasse en brouillon');
+    }
+
+    /**
+     * Refusé, un devis reste tel quel : la liste ne propose plus de le
+     * modifier, et sa page de modification ne s'ouvre pas.
+     */
+    public function test_un_devis_refuse_ne_se_modifie_plus(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $devis = $this->envoyerDevis(Client::factory()->create(), Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]));
+        Livewire::test(ListDevis::class)->callTableAction('refuser', $devis);
+
+        Livewire::test(ListDevis::class)->assertTableActionHidden('edit', $devis->fresh());
+        $this->get(DevisResource::getUrl('edit', ['record' => $devis], tenant: $magasin))->assertForbidden();
+    }
+
+    /**
+     * Le lendemain du dernier jour de sa validité, un devis envoyé ne
+     * propose plus « Accepter », même avant son passage à « Expiré » dans
+     * la nuit ; « Refuser » reste possible.
+     */
+    public function test_accepter_n_est_plus_propose_une_fois_la_validite_depassee(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
+        $devis = app(EmettreDevisAction::class)->handle(app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-08']));
+        $this->travelTo('2026-10-09 10:00:00');
+
+        Livewire::test(ListDevis::class)
+            ->assertTableActionHidden('accepter', $devis)
+            ->assertTableActionVisible('refuser', $devis);
     }
 
     public function test_enregistrer_un_devis_garde_le_service_de_ses_lignes_de_service(): void

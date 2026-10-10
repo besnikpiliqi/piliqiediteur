@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use LogicException;
 
 class Devis extends Model implements DocumentEnvoyable
 {
@@ -52,6 +53,14 @@ class Devis extends Model implements DocumentEnvoyable
         static::creating(function (Devis $devis) {
             $devis->statut ??= StatutDevis::Brouillon;
             $devis->devise ??= 'EUR';
+        });
+
+        // Le dernier rempart, derrière DevisPolicy::delete() : un devis
+        // numéroté reste, quel que soit le chemin qui tente de le supprimer.
+        static::deleting(function (Devis $devis): void {
+            if (! $devis->estSupprimable()) {
+                throw new LogicException('Ce devis ne peut pas être supprimé : seul un brouillon jamais envoyé se supprime, un devis numéroté reste.');
+            }
         });
     }
 
@@ -98,9 +107,10 @@ class Devis extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Quel que soit son statut : un brouillon reçoit son numéro au moment
-     * de partir (voir EnvoyerDocumentAction), un devis déjà envoyé, accepté
-     * ou refusé peut toujours être renvoyé à son client.
+     * Quel que soit son statut : un brouillon part au statut « Envoyé »
+     * (voir EnvoyerDocumentAction et EmettreDevisAction), un devis déjà
+     * envoyé, accepté, refusé ou expiré peut toujours être renvoyé à son
+     * client tel qu'il l'a reçu.
      */
     public function peutEtreEnvoye(): bool
     {
@@ -108,15 +118,50 @@ class Devis extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Un devis reste modifiable quel que soit son propre statut
-     * (brouillon, envoyé, accepté, refusé...) tant qu'il n'a jamais servi
-     * à créer une facture (voir CreerFactureDepuisDevisAction) : rien
-     * n'empêche légalement de corriger ou de relancer un devis qui n'a pas
-     * encore donné lieu à une vente réelle. Une fois converti, il devient
-     * définitivement figé, "validé" par cette conversion elle-même.
+     * Un brouillon se modifie, et un devis envoyé ou accepté aussi : il
+     * repasse alors en brouillon, son acceptation effacée, et garde son
+     * numéro (voir StatutDevis::transitionsAutorisees() et
+     * ModifierDevisAction). Un devis refusé ou expiré reste tel quel : une
+     * nouvelle proposition passe par un nouveau devis. Un devis transformé
+     * en facture (voir CreerFactureDepuisDevisAction) aussi : la facture
+     * reprend ses lignes et ses montants.
      */
     public function estModifiable(): bool
     {
-        return $this->factures()->doesntExist();
+        return ($this->statut === StatutDevis::Brouillon || $this->statut->peutTransitionnerVers(StatutDevis::Brouillon))
+            && ! $this->estExpire()
+            && $this->factures()->doesntExist();
+    }
+
+    /**
+     * Expiré, ou envoyé et à la validité déjà dépassée : il le sera au
+     * prochain passage de la nuit (voir ExpirerLesDevisAction), qui ne fait
+     * qu'écrire ce statut.
+     */
+    public function estExpire(): bool
+    {
+        return $this->statut === StatutDevis::Expire
+            || ($this->statut === StatutDevis::Envoye && $this->validiteDepassee());
+    }
+
+    /**
+     * Seul un brouillon jamais envoyé, donc jamais numéroté : un devis qui
+     * a reçu son numéro reste, même repassé en brouillon, refusé ou
+     * expiré, et sa série ne présente aucun trou.
+     */
+    public function estSupprimable(): bool
+    {
+        return $this->statut === StatutDevis::Brouillon && $this->numero === null;
+    }
+
+    /**
+     * La date de validité est le dernier jour où le client peut accepter le
+     * devis, à l'heure de Paris : il ne peut plus l'être le lendemain (voir
+     * AccepterDevisAction), et un devis envoyé expire alors (voir
+     * ExpirerLesDevisAction).
+     */
+    public function validiteDepassee(): bool
+    {
+        return $this->date_validite !== null && $this->date_validite->lt(today());
     }
 }

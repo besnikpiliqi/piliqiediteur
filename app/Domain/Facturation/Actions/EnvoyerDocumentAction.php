@@ -46,9 +46,10 @@ class EnvoyerDocumentAction
     public function __construct(private readonly EmettreDevisAction $emettreDevis) {}
 
     /**
-     * Un devis encore brouillon reçoit son numéro en partant (voir
-     * EmettreDevisAction) ; une facture émise devient « envoyée », sans
-     * qu'aucun autre statut ne change.
+     * Un devis brouillon part au statut « Envoyé », avec le numéro qu'il
+     * reçoit, ou celui qu'il a gardé s'il a été modifié depuis son dernier
+     * envoi (voir EmettreDevisAction) ; une facture émise devient
+     * « envoyée », sans qu'aucun autre statut ne change.
      *
      * @param  Facture|Devis|Avoir  $document
      *

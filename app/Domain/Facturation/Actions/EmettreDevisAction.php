@@ -11,15 +11,21 @@ use Illuminate\Support\Facades\DB;
 use LogicException;
 
 /**
- * Le devis reçoit son numéro quand il part (voir EnvoyerDocumentAction).
- * Un magasin suspendu ou fermé n'en envoie plus (voir
- * Magasin::verifierQuIlEstOuvert()). Comme une facture à son émission (voir
- * EmettreFactureAction), un devis enregistré avant que son client change
- * de type, ou que le magasin entre en franchise en base ou en sorte, ne
- * part pas tant qu'il n'est pas recalculé : le client accepterait un prix
- * que la facture tirée du devis ne reprendrait pas (voir
- * ContexteDeVente::refuserSiLeTypeDeClientAChange() et
- * ContexteDeVente::refuserSiLeRegimeAChange()).
+ * Un brouillon part au statut « Envoyé » (voir EnvoyerDocumentAction) : il
+ * reçoit son numéro à son premier envoi, et garde le sien, sans en
+ * consommer un autre, quand il repart après avoir été modifié (voir
+ * ModifierDevisAction). Sa date d'émission est celle de cet envoi. Un
+ * magasin suspendu ou fermé n'en envoie plus (voir
+ * Magasin::verifierQuIlEstOuvert()). Un devis dont la date de validité est
+ * déjà dépassée ne part pas : son client ne pourrait plus l'accepter (voir
+ * AccepterDevisAction).
+ *
+ * Comme une facture à son émission (voir EmettreFactureAction), un devis
+ * enregistré avant que son client change de type, ou que le magasin entre
+ * en franchise en base ou en sorte, ne part pas tant qu'il n'est pas
+ * recalculé : le client accepterait un prix que la facture tirée du devis
+ * ne reprendrait pas (voir ContexteDeVente::refuserSiLeTypeDeClientAChange()
+ * et ContexteDeVente::refuserSiLeRegimeAChange()).
  */
 class EmettreDevisAction
 {
@@ -42,13 +48,15 @@ class EmettreDevisAction
                 throw new LogicException('Impossible d\'envoyer un devis sans lignes.');
             }
 
+            if ($devis->validiteDepassee()) {
+                throw new LogicException("La date de validité de ce devis est dépassée ({$devis->date_validite->format('d/m/Y')}) : changez-la avant de l'envoyer.");
+            }
+
             ContexteDeVente::refuserSiLeTypeDeClientAChange($devis);
             ContexteDeVente::refuserSiLeRegimeAChange($devis);
 
-            $numero = $this->numerotation->suivant($devis->magasin, TypeDocument::Devis, now()->format('Y'));
-
             $devis->forceFill([
-                'numero' => $numero,
+                'numero' => $devis->numero ?? $this->numerotation->suivant($devis->magasin, TypeDocument::Devis, now()->format('Y')),
                 'statut' => StatutDevis::Envoye,
                 'date_emission' => now(),
             ])->save();

@@ -71,10 +71,9 @@ class DevisResource extends Resource
             ])->columns(2),
 
             Section::make('Lignes')->schema([
-                // Lignes modifiables tant que le devis n'est pas converti en
-                // facture, quel que soit son statut (voir
-                // Devis::estModifiable()) : cette page n'est accessible que
-                // dans ce cas (voir DevisPolicy::update()).
+                // La page de modification n'est ouverte qu'à un devis
+                // modifiable (voir Devis::estModifiable() et
+                // DevisPolicy::update()), lignes comprises.
                 ...self::lignesDeVente(),
                 self::totauxDuDocument(),
             ]),
@@ -82,9 +81,10 @@ class DevisResource extends Resource
     }
 
     /**
-     * Un devis transformé en facture n'est plus modifiable : sans cette
-     * fiche, ses lignes et ses totaux ne seraient plus visibles nulle part.
-     * Mêmes colonnes que la facture (voir FactureResource::lignesEntry()).
+     * Un devis refusé, expiré ou transformé en facture n'est plus
+     * modifiable : sans cette fiche, ses lignes et ses totaux ne seraient
+     * plus visibles nulle part. Mêmes colonnes que la facture (voir
+     * FactureResource::lignesEntry()).
      */
     public static function infolist(Infolist $infolist): Infolist
     {
@@ -128,23 +128,28 @@ class DevisResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
-                // Un devis reste modifiable (lignes comprises) tant qu'il
-                // n'a pas été transformé en facture, voir
-                // Devis::estModifiable() et DevisPolicy::update().
-                Tables\Actions\EditAction::make()
-                    ->visible(fn (Devis $record) => $record->estModifiable()),
+                // Affichée et autorisée par DevisPolicy::update() (voir
+                // ListRecords::configureEditAction()) : un brouillon, ou un
+                // devis envoyé ou accepté pas encore transformé en facture.
+                Tables\Actions\EditAction::make(),
                 self::telechargerLePdf(Tables\Actions\Action::make('telecharger_pdf')),
                 self::envoyerParEmail(Tables\Actions\Action::make('envoyer_par_email')),
-                // Remis en main propre, par exemple : le devis reçoit son
-                // numéro sans partir par e-mail.
+                // Remis en main propre, par exemple : le devis part sans
+                // e-mail, avec le numéro qu'il reçoit, ou celui qu'il a gardé
+                // s'il a été modifié depuis son envoi (voir
+                // EmettreDevisAction).
                 Tables\Actions\Action::make('envoyer')
-                    ->label('Numéroter sans e-mail')
+                    ->label(fn (Devis $record): string => $record->numero === null ? 'Numéroter sans e-mail' : 'Marquer envoyé sans e-mail')
                     ->icon('heroicon-o-paper-airplane')
                     ->color('gray')
                     ->requiresConfirmation()
-                    ->modalDescription('Le devis reçoit son numéro et passe au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.')
+                    ->modalDescription(fn (Devis $record): string => $record->numero === null
+                        ? 'Le devis reçoit son numéro et passe au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.'
+                        : "Le devis garde son numéro {$record->numero} et repasse au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.")
                     ->visible(fn (Devis $record) => $record->statut === StatutDevis::Brouillon && auth()->user()->can('envoyer', $record))
                     ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(EmettreDevisAction::class)->handle($record))),
+                // Masquée une fois la date de validité dépassée (voir
+                // DevisPolicy::accepter()).
                 Tables\Actions\Action::make('accepter')
                     ->label('Accepter')
                     ->icon('heroicon-o-check-circle')

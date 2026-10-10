@@ -33,6 +33,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
+use LogicException;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
 
@@ -151,6 +152,7 @@ class EnvoyerDocumentJobTest extends TestCase
 
     public function test_le_devis_part_avec_son_pdf_et_sa_date_de_validite(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         Mail::fake();
         $this->magasin();
         $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], ['date_validite' => '2026-12-31']);
@@ -382,25 +384,23 @@ class EnvoyerDocumentJobTest extends TestCase
     }
 
     /**
-     * Un devis se supprime tant qu'aucune facture n'en est issue (voir
-     * DevisPolicy::delete()) : supprimé avant le départ de son envoi, il le
-     * fait échouer, avec une explication pour le magasin.
+     * Un devis, numéroté dès son premier envoi, ne se supprime plus (voir
+     * Devis::estSupprimable()) : la suppression tentée avant le départ de
+     * son envoi est refusée, et l'e-mail part.
      */
-    public function test_un_devis_supprime_avant_le_depart_de_son_envoi_le_fait_echouer(): void
+    public function test_un_devis_qui_attend_le_depart_de_son_envoi_ne_se_supprime_pas_et_l_envoi_part(): void
     {
         Mail::fake();
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         $devis = app(EmettreDevisAction::class)->handle($devis);
         $envoi = EnvoiDocument::factory()->for($devis, 'document')->create(['destinataire' => 'client@exemple.fr']);
-        $devis->delete();
+        $this->assertThrows(fn () => $devis->delete(), LogicException::class, 'Ce devis ne peut pas être supprimé : seul un brouillon jamais envoyé se supprime, un devis numéroté reste.');
 
-        $this->assertThrows(fn () => EnvoyerDocumentJob::dispatchSync($magasin->id, $envoi->id), ModelNotFoundException::class);
+        EnvoyerDocumentJob::dispatchSync($magasin->id, $envoi->id);
 
-        Mail::assertNothingSent();
-        $envoi->refresh();
-        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
-        $this->assertSame('Le document n\'existe plus.', $envoi->erreur);
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('client@exemple.fr'));
+        $this->assertSame(StatutEnvoi::Envoye, $envoi->fresh()->statut);
     }
 
     public function test_le_job_envoie_dans_le_magasin_de_l_envoi_quel_que_soit_le_contexte(): void

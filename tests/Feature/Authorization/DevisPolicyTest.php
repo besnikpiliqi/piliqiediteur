@@ -8,6 +8,10 @@ use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
+use App\Domain\Facturation\Actions\ExpirerLesDevisAction;
+use App\Domain\Facturation\Actions\ModifierDevisAction;
+use App\Domain\Facturation\Actions\RefuserDevisAction;
+use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
@@ -16,6 +20,7 @@ use App\Filament\App\Resources\DevisResource;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -64,11 +69,11 @@ class DevisPolicyTest extends TestCase
     }
 
     /**
-     * Supprimer, un par un ou en masse : ceux qui modifient les devis,
-     * jamais l'observateur en lecture seule.
+     * Supprimer un brouillon jamais envoyé, un par un ou en masse : ceux
+     * qui modifient les devis, jamais l'observateur en lecture seule.
      */
     #[DataProvider('rolesQuiModifientLesDevis')]
-    public function test_supprimer_des_devis_selon_le_role(RoleMagasin $role, bool $peutSupprimer): void
+    public function test_supprimer_un_brouillon_jamais_envoye_selon_le_role(RoleMagasin $role, bool $peutSupprimer): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
@@ -76,6 +81,67 @@ class DevisPolicyTest extends TestCase
 
         $this->assertSame($peutSupprimer, $membre->can('deleteAny', Devis::class));
         $this->assertSame($peutSupprimer, $membre->can('delete', $devis));
+    }
+
+    /**
+     * @return array<string, array{StatutDevis}>
+     */
+    public static function statutsDesDevisNumerotes(): array
+    {
+        return [
+            'envoyé' => [StatutDevis::Envoye],
+            'repassé en brouillon' => [StatutDevis::Brouillon],
+            'accepté' => [StatutDevis::Accepte],
+            'refusé' => [StatutDevis::Refuse],
+            'expiré' => [StatutDevis::Expire],
+        ];
+    }
+
+    /**
+     * Seul un brouillon jamais envoyé se supprime (B14) : un devis qui a
+     * reçu son numéro reste, quel que soit son statut, même pour le
+     * propriétaire, et même repassé en brouillon après une modification.
+     */
+    #[DataProvider('statutsDesDevisNumerotes')]
+    public function test_un_devis_numerote_ne_se_supprime_plus(StatutDevis $statut): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $proprietaire = User::factory()->create();
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $envoye = app(EmettreDevisAction::class)->handle($this->creerUnDevis(['date_validite' => '2026-10-08']));
+
+        $devis = match ($statut) {
+            StatutDevis::Envoye => $envoye,
+            StatutDevis::Brouillon => app(ModifierDevisAction::class)->handle($envoye, $envoye->client, [['produit_id' => $envoye->lignes->sole()->produit_id, 'quantite' => 2]]),
+            StatutDevis::Accepte => app(AccepterDevisAction::class)->handle($envoye),
+            StatutDevis::Refuse => app(RefuserDevisAction::class)->handle($envoye),
+            StatutDevis::Expire => $this->expirer($envoye),
+        };
+
+        $this->assertSame([$statut, 'DEV-MABOUT-2026-000001'], [$devis->statut, $devis->numero]);
+        $this->assertFalse($proprietaire->can('delete', $devis));
+        $this->assertThrows(fn () => $devis->delete(), LogicException::class, 'Ce devis ne peut pas être supprimé : seul un brouillon jamais envoyé se supprime, un devis numéroté reste.');
+        $this->assertNotSoftDeleted($devis);
+    }
+
+    /**
+     * La date de validité est le dernier jour pour accepter (B15) : le
+     * devis valable jusqu'au 08/10 s'accepte encore ce jour-là, plus le
+     * lendemain, même avant son passage à « Expiré » dans la nuit.
+     */
+    public function test_accepter_un_devis_n_est_plus_permis_une_fois_sa_validite_depassee(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $proprietaire = User::factory()->create();
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $devis = app(EmettreDevisAction::class)->handle($this->creerUnDevis(['date_validite' => '2026-10-08']));
+
+        $this->travelTo('2026-10-08 23:59:00');
+        $leDernierJour = $proprietaire->can('accepter', $devis);
+        $this->travelTo('2026-10-09 00:01:00');
+        $leLendemain = $proprietaire->can('accepter', $devis);
+
+        $this->assertSame([true, false], [$leDernierJour, $leLendemain]);
     }
 
     /**
@@ -131,10 +197,25 @@ class DevisPolicyTest extends TestCase
         $this->assertFalse($proprietaireB->can('envoyer', $devisDeA));
     }
 
-    private function creerUnDevis(): Devis
+    /**
+     * Le devis valable jusqu'au 08/10 expire au passage de la nuit suivante
+     * (voir ExpirerLesDevisAction).
+     */
+    private function expirer(Devis $devis): Devis
+    {
+        $this->travelTo('2026-10-09 00:30:00');
+        app(ExpirerLesDevisAction::class)->handle($devis->magasin);
+
+        return $devis->fresh();
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributs
+     */
+    private function creerUnDevis(array $attributs = []): Devis
     {
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
 
-        return app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        return app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], $attributs);
     }
 }

@@ -7,7 +7,9 @@ use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
+use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -96,8 +98,27 @@ class DevisPdfGeneratorTest extends TestCase
         $this->assertStringContainsString('<div class="bloc-client"><div class="titre">Établi pour</div><strong>Jean Ancien</strong><br></div>', $renduParticulier);
     }
 
+    /**
+     * Modifié depuis son envoi, le devis est un brouillon qui garde son
+     * numéro : son PDF le dit, sans date d'émission, cette version n'ayant
+     * pas encore été émise.
+     */
+    public function test_le_pdf_d_un_devis_modifie_depuis_son_envoi_le_presente_comme_un_brouillon(): void
+    {
+        $devis = $this->devisEnvoye();
+        $client = $devis->client;
+        $lignes = $devis->lignes->map(fn (LigneDevis $ligne): array => ['produit_id' => $ligne->produit_id, 'quantite' => $ligne->quantite])->all();
+        $modifie = app(ModifierDevisAction::class)->handle($devis, $client, $lignes, ['date_validite' => '2026-12-31']);
+
+        $html = view('devis.pdf', ['devis' => $modifie->load('client', 'lignes', 'magasin')])->render();
+
+        $this->assertStringContainsString("{$devis->numero} (brouillon, modifié depuis son envoi)", $html);
+        $this->assertStringNotContainsString('Émis le', $html);
+    }
+
     private function devisEnvoye(): Devis
     {
+        $this->travelTo('2026-10-09 10:00:00');
         app(TenantContext::class)->set(Magasin::factory()->create([
             'nom' => 'Boutique du Port',
             'raison_sociale' => 'Martin et Fils',

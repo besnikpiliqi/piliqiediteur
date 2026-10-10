@@ -24,8 +24,8 @@ class DevisPolicy extends MagasinPolicy
     }
 
     /**
-     * Voir Devis::estModifiable() : modifiable quel que soit son statut
-     * tant qu'aucune facture n'en a été créée, jamais après.
+     * Un brouillon, ou un devis envoyé ou accepté pas encore transformé en
+     * facture, qui repasse alors en brouillon (voir Devis::estModifiable()).
      */
     public function update(User $user, Devis $devis): bool
     {
@@ -35,12 +35,14 @@ class DevisPolicy extends MagasinPolicy
     }
 
     /**
-     * Comme le modifier (voir update()) : jamais un devis qui a servi à
-     * créer une facture, qui garde ainsi son devis d'origine.
+     * Seul un brouillon jamais envoyé (voir Devis::estSupprimable()), par
+     * ceux qui modifient les devis : jamais l'observateur.
      */
     public function delete(User $user, Devis $devis): bool
     {
-        return $this->update($user, $devis);
+        return $this->appartientAuMagasinActif($devis)
+            && $devis->estSupprimable()
+            && $user->can(PermissionRegistry::DEVIS_UPDATE);
     }
 
     /**
@@ -71,9 +73,15 @@ class DevisPolicy extends MagasinPolicy
         return $this->view($user, $devis) && $user->can(PermissionRegistry::DEVIS_ENVOYER);
     }
 
+    /**
+     * Jamais une fois sa date de validité dépassée (voir
+     * AccepterDevisAction).
+     */
     public function accepter(User $user, Devis $devis): bool
     {
-        return $this->appartientAuMagasinActif($devis) && $user->can(PermissionRegistry::DEVIS_ENVOYER);
+        return $this->appartientAuMagasinActif($devis)
+            && ! $devis->validiteDepassee()
+            && $user->can(PermissionRegistry::DEVIS_ENVOYER);
     }
 
     public function refuser(User $user, Devis $devis): bool

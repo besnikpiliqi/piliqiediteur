@@ -14,14 +14,23 @@ enum StatutDevis: string implements HasColor, HasLabel
     case Expire = 'expire';
 
     /**
+     * Un devis envoyé ou accepté repasse en brouillon quand on le modifie,
+     * et seulement alors (voir ModifierDevisAction) : son client ne s'est
+     * engagé que sur la version qu'il a reçue, l'acceptation est effacée,
+     * et la nouvelle version repart (voir EmettreDevisAction). Un devis
+     * envoyé expire de lui-même une fois sa date de validité dépassée (voir
+     * ExpirerLesDevisAction). Refusé ou expiré, il reste tel quel ; accepté
+     * puis transformé en facture aussi (voir Devis::estModifiable()).
+     *
      * @return list<self>
      */
     public function transitionsAutorisees(): array
     {
         return match ($this) {
             self::Brouillon => [self::Envoye],
-            self::Envoye => [self::Accepte, self::Refuse, self::Expire],
-            self::Accepte, self::Refuse, self::Expire => [],
+            self::Envoye => [self::Brouillon, self::Accepte, self::Refuse, self::Expire],
+            self::Accepte => [self::Brouillon],
+            self::Refuse, self::Expire => [],
         };
     }
 

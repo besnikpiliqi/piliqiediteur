@@ -27,9 +27,10 @@ use InvalidArgumentException;
 trait AjouteDesLignesDeVente
 {
     /**
+     * @param  (Closure(array<string, mixed>): void)|null  $avantLeRetrait  appelée avec une ligne renseignée (un produit ou un service choisi) que le vendeur retire, juste avant son retrait ; si elle lève Cancel, la ligne reste (voir Caisse, qui inscrit chaque retrait au journal des événements)
      * @return array<Component>
      */
-    public static function lignesDeVente(): array
+    public static function lignesDeVente(?Closure $avantLeRetrait = null): array
     {
         return [
             Repeater::make('lignes')
@@ -40,6 +41,15 @@ trait AjouteDesLignesDeVente
                 ->itemLabel(fn (array $state): string => filled($state['service_id'] ?? null) ? 'Service' : 'Produit')
                 // Remplacé par les deux boutons ci-dessous.
                 ->addable(false)
+                ->deleteAction(fn (Action $action): Action => $avantLeRetrait === null ? $action : $action->before(
+                    function (array $arguments, Repeater $component) use ($avantLeRetrait): void {
+                        $ligne = $component->getState()[$arguments['item'] ?? null] ?? null;
+
+                        if (is_array($ligne) && (filled($ligne['produit_id'] ?? null) || filled($ligne['service_id'] ?? null))) {
+                            $avantLeRetrait($ligne);
+                        }
+                    },
+                ))
                 ->required(),
             Actions::make([
                 self::actionAjouterUnProduit(),

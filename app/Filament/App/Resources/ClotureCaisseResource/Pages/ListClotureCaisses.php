@@ -2,20 +2,35 @@
 
 namespace App\Filament\App\Resources\ClotureCaisseResource\Pages;
 
-use App\Domain\Facturation\Actions\CloturerCaisseAction;
-use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Models\ClotureCaisse;
-use App\Domain\Facturation\Models\Facture;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\CaissesPersonnellesOuvertesApercu;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\VentesEnAttenteApercu;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Models\User;
+use Carbon\CarbonImmutable;
 use Filament\Actions;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Support\Collection;
+use Illuminate\Support\HtmlString;
+use Livewire\Attributes\Locked;
 
+/**
+ * Le magasin clôture lui-même sa journée en cours, le soir après sa
+ * dernière vente, par le bouton « Clôturer la journée du 09/10/2026 » ;
+ * une journée oubliée avant elle est clôturée d'abord, dans l'ordre (voir
+ * CloturerLesJourneesAction). Sans ce clic, la clôture automatique de
+ * minuit clôture la journée (voir ClotureAutomatiqueCaisse).
+ *
+ * Jamais une date choisie : la journée visée est celle du jour où la page
+ * s'est ouverte, gardée telle quelle par la page ($journee) ; une fenêtre
+ * de confirmation ouverte avant minuit et validée après ne clôture donc
+ * jamais la journée qui commence.
+ */
 class ListClotureCaisses extends ListRecords
 {
     use GereLesExceptionsMetier;
@@ -23,58 +38,139 @@ class ListClotureCaisses extends ListRecords
     protected static string $resource = ClotureCaisseResource::class;
 
     /**
-     * Clôturer la journée n'est jamais un choix de date : le magasin ne
-     * clôture que la veille (le seul jour "terminé" en attente), exactement
-     * comme le ferait la commande automatique de minuit si le propriétaire
-     * ne la déclenche pas lui-même -- voir ClotureAutomatiqueCaisse. Les
-     * deux chemins mènent donc toujours au même jour, jamais à un jour
-     * choisi arbitrairement.
+     * La journée en cours à l'ouverture de la page (AAAA-MM-JJ), que vise
+     * le bouton de clôture.
+     */
+    #[Locked]
+    public string $journee = '';
+
+    /**
+     * Les journées à clôturer et les vendeurs qui bloquent la clôture,
+     * lus une fois par requête : une propriété privée ne survit pas d'une
+     * requête Livewire à l'autre.
+     *
+     * @var Collection<int, string>|null
+     */
+    private ?Collection $journeesEnAttente = null;
+
+    /**
+     * @var Collection<int, User>|null
+     */
+    private ?Collection $vendeursEnAttente = null;
+
+    public function mount(): void
+    {
+        parent::mount();
+
+        $this->journee = today()->toDateString();
+    }
+
+    /**
+     * Visible pour qui peut clôturer (cloture_caisse.gerer, que le
+     * propriétaire coche à chaque membre), une fois la première vente du
+     * magasin faite, tant que la journée n'est pas clôturée. La fenêtre de
+     * confirmation annonce chaque journée et ce qu'elle regroupe, et
+     * prévient qu'ensuite plus aucune vente n'est possible ce jour-là (voir
+     * ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()).
+     *
+     * Seule la clôture manuelle attend les caisses personnelles : tant
+     * qu'un vendeur n'a pas fermé ses ventes de l'une de ces journées, le
+     * bouton reste désactivé et nomme les vendeurs à relancer (voir
+     * VerificateurCaissesPersonnelles). La clôture automatique de minuit,
+     * elle, clôture toujours.
      */
     protected function getHeaderActions(): array
     {
-        $veille = now()->subDay();
-
-        // Mêmes critères que CloturerCaisseAction (ventes au comptoir de la
-        // veille et avoirs du même jour, particuliers uniquement, pas déjà
-        // clôturés) : le vendeur voit avant de confirmer exactement ce qui
-        // va être regroupé, pas seulement un avertissement générique.
-        $ventesAClore = Facture::query()->enAttenteDeCloture($veille)->get();
-        $avoirsAClore = Avoir::query()->enAttenteDeCloture($veille)->get();
-        $calculateur = app(CalculateurLigne::class);
-        $totalNet = number_format($calculateur->deduire($calculateur->cumuler($ventesAClore), $calculateur->cumuler($avoirsAClore))['total_ttc'], 2, ',', ' ');
-
-        $avertissement = 'Cette action est IRRÉVERSIBLE : une fois clôturée, cette journée ne pourra plus jamais être modifiée, ni clôturée à nouveau.';
-
-        $modalDescription = match (true) {
-            $ventesAClore->isEmpty() && $avoirsAClore->isEmpty() => "Aucune vente au comptoir n'a été enregistrée ce jour-là : la clôture sera créée à zéro. {$avertissement}",
-            $avoirsAClore->isEmpty() => sprintf('%d vente(s) au comptoir pour un total de %s € seront regroupées dans cette clôture. %s', $ventesAClore->count(), $totalNet, $avertissement),
-            default => sprintf('%d vente(s) au comptoir et %d avoir(s) déduit(s), pour un total net de %s €, seront regroupés dans cette clôture. %s', $ventesAClore->count(), $avoirsAClore->count(), $totalNet, $avertissement),
-        };
-
-        // Seule la clôture manuelle attend les caisses personnelles : tant
-        // qu'un vendeur n'a pas fermé ses ventes de la journée, le bouton
-        // reste désactivé et nomme les vendeurs à relancer (voir
-        // VerificateurCaissesPersonnelles). La clôture automatique de
-        // minuit, elle, clôture toujours.
-        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte($veille);
+        $journeeVisee = CarbonImmutable::parse($this->journee);
+        $enClair = $journeeVisee->format('d/m/Y');
 
         return [
             Actions\Action::make('cloturer')
-                ->label('Clôturer une journée')
+                ->label("Clôturer la journée du {$enClair}")
                 ->icon('heroicon-o-lock-closed')
                 ->color('primary')
                 ->requiresConfirmation()
-                ->modalHeading('Clôturer la journée du '.$veille->translatedFormat('d/m/Y').' ?')
-                ->modalDescription($modalDescription)
+                ->modalHeading("Clôturer la journée du {$enClair} ?")
+                ->modalDescription(fn (): HtmlString => $this->descriptionDeLaConfirmation($this->journeesACloturer()))
                 ->modalSubmitActionLabel('Oui, clôturer définitivement')
-                ->visible(fn () => auth()->user()->can('cloturer', ClotureCaisse::class)
-                    && ClotureCaisse::query()->whereDate('date_cloture', $veille)->doesntExist())
-                ->disabled($vendeursEnAttente->isNotEmpty())
-                ->tooltip($vendeursEnAttente->isNotEmpty()
-                    ? 'Caisses personnelles non fermées : '.$vendeursEnAttente->pluck('name')->implode(', ')
+                ->visible(fn (): bool => auth()->user()->can('cloturer', ClotureCaisse::class)
+                    && $this->journeesACloturer()->isNotEmpty())
+                ->disabled(fn (): bool => $this->vendeursAvecCaisseOuverte()->isNotEmpty())
+                ->tooltip(fn (): ?string => $this->vendeursAvecCaisseOuverte()->isNotEmpty()
+                    ? 'Caisses personnelles non fermées : '.$this->vendeursAvecCaisseOuverte()->pluck('name')->implode(', ')
                     : null)
-                ->action(fn () => static::executerSansCasser(fn () => app(CloturerCaisseAction::class)->handle(Filament::getTenant(), $veille))),
+                ->action(fn () => static::executerSansCasser(function () use ($journeeVisee, $enClair): void {
+                    $clotures = app(CloturerLesJourneesAction::class)->jusquAu(Filament::getTenant(), $journeeVisee);
+                    $this->journeesEnAttente = $this->vendeursEnAttente = null;
+
+                    if ($clotures->isEmpty()) {
+                        Notification::make()->title("La journée du {$enClair} est déjà clôturée.")->warning()->send();
+
+                        return;
+                    }
+
+                    Notification::make()
+                        ->title($clotures->count() === 1
+                            ? "Journée du {$enClair} clôturée"
+                            : 'Journées du '.$clotures->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->format('d/m/Y'))->join(', ', ' et ').' clôturées')
+                        ->success()
+                        ->send();
+                })),
         ];
+    }
+
+    /**
+     * Les journées que le bouton clôturera, dans l'ordre (voir
+     * CloturerLesJourneesAction::journeesEnAttente()).
+     *
+     * @return Collection<int, string>
+     */
+    private function journeesACloturer(): Collection
+    {
+        return $this->journeesEnAttente ??= app(CloturerLesJourneesAction::class)->journeesEnAttente(CarbonImmutable::parse($this->journee));
+    }
+
+    /**
+     * Les vendeurs dont la caisse personnelle n'est pas fermée pour l'une
+     * des journées à clôturer.
+     *
+     * @return Collection<int, User>
+     */
+    private function vendeursAvecCaisseOuverte(): Collection
+    {
+        return $this->vendeursEnAttente ??= app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverteCesJours($this->journeesACloturer());
+    }
+
+    /**
+     * Le magasin voit avant de confirmer exactement ce que chaque journée
+     * regroupera (mêmes critères que CloturerCaisseAction), pas seulement
+     * un avertissement générique.
+     *
+     * @param  Collection<int, string>  $journees
+     */
+    private function descriptionDeLaConfirmation(Collection $journees): HtmlString
+    {
+        $paragraphes = [];
+
+        if ($journees->count() > 1) {
+            $paragraphes[] = 'Journées clôturées, dans l\'ordre : '.ClotureCaisseResource::libelleDesJournees($journees).'.';
+        }
+
+        foreach ($journees as $journee) {
+            $enAttente = ClotureCaisseResource::enAttenteDeCloture(collect([$journee]));
+            $total = number_format($enAttente['total_ttc'], 2, ',', ' ');
+
+            $paragraphes[] = CarbonImmutable::parse($journee)->format('d/m/Y').' : '.match (true) {
+                $enAttente['ventes'] === 0 && $enAttente['avoirs'] === 0 => 'aucune vente au comptoir, la clôture sera créée à zéro.',
+                $enAttente['avoirs'] === 0 => "{$enAttente['ventes']} vente(s) au comptoir pour un total de {$total} €.",
+                default => "{$enAttente['ventes']} vente(s) au comptoir et {$enAttente['avoirs']} avoir(s) déduit(s), pour un total net de {$total} €.",
+            };
+        }
+
+        $paragraphes[] = 'Après la clôture, vous ne pourrez plus faire de ventes aujourd\'hui.';
+        $paragraphes[] = 'Cette action est IRRÉVERSIBLE : une journée clôturée ne pourra plus jamais être modifiée, ni clôturée à nouveau.';
+
+        return new HtmlString(collect($paragraphes)->map(fn (string $paragraphe): string => e($paragraphe))->implode('<br>'));
     }
 
     protected function getHeaderWidgets(): array

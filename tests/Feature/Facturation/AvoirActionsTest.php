@@ -5,6 +5,7 @@ namespace Tests\Feature\Facturation;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
@@ -647,5 +648,40 @@ class AvoirActionsTest extends TestCase
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 2],
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 2],
         ]);
+    }
+
+    /**
+     * Une fois la journée clôturée, un retour sur un ticket attend le
+     * lendemain : chaque clôture couvre exactement sa journée.
+     */
+    public function test_un_avoir_sur_un_ticket_est_refuse_apres_la_cloture_de_sa_journee_puis_emis_le_lendemain(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $client = Client::factory()->create();
+        $ticket = $this->emettreFacture($client, Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]));
+        $this->travelTo('2026-10-09 19:00:00');
+        app(CloturerCaisseAction::class)->handle(app(TenantContext::class)->magasin(), now());
+        $retour = [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]];
+
+        $this->assertThrows(fn () => app(EnregistrerAvoirAction::class)->handle($client, $retour), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
+        $this->assertSame(0, Avoir::query()->count());
+
+        $this->travelTo('2026-10-10 00:01:00');
+        $avoir = app(EnregistrerAvoirAction::class)->handle($client, $retour);
+
+        $this->assertSame(['AV-LYON1-2026-000001', '12.00'], [$avoir->numero, $avoir->total_ttc]);
+    }
+
+    public function test_un_avoir_sur_une_facture_a_un_professionnel_s_emet_encore_apres_la_cloture_de_la_journee(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $professionnel = Client::factory()->professionnel()->create();
+        $facture = $this->emettreFacture($professionnel, Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]));
+        $this->travelTo('2026-10-09 19:00:00');
+        app(CloturerCaisseAction::class)->handle(app(TenantContext::class)->magasin(), now());
+
+        $avoir = app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
+
+        $this->assertSame('AV-LYON1-2026-000001', $avoir->numero);
     }
 }

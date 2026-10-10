@@ -3,10 +3,16 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
+use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
@@ -19,6 +25,7 @@ use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -863,6 +870,141 @@ class CaisseTest extends TestCase
             ->assertFormSet(['client_id' => null]);
     }
 
+    /**
+     * Une fois la journée clôturée, la caisse le dit avant même
+     * d'encaisser, désactive « Encaisser », et le domaine refuse le ticket
+     * ; le lendemain, elle encaisse de nouveau.
+     */
+    public function test_apres_la_cloture_de_la_journee_la_caisse_n_encaisse_plus_jusqu_a_minuit(): void
+    {
+        $this->travelTo('2026-10-09 19:00:00');
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        app(CloturerCaisseAction::class)->handle($magasin, now());
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $vente = ['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes'];
+        $this->travelTo('2026-10-09 19:30:00');
+
+        Livewire::test(Caisse::class)
+            ->assertSee('La journée du 09/10/2026 est clôturée : les ventes reprennent demain.')
+            ->assertSeeHtml('disabled="disabled" type="submit"')
+            ->fillForm($vente)
+            ->call('encaisser')
+            ->assertNotified('La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
+
+        $this->assertSame(0, Facture::query()->count());
+
+        $this->travelTo('2026-10-10 00:01:00');
+
+        Livewire::test(Caisse::class)
+            ->assertDontSee('est clôturée')
+            ->assertDontSeeHtml('disabled="disabled" type="submit"')
+            ->fillForm($vente)
+            ->call('encaisser');
+
+        $this->assertSame('TK-MABOUT-2026-000001', Facture::query()->sole()->numero);
+    }
+
+    /**
+     * Une vente abandonnée avant l'encaissement s'inscrit au journal des
+     * événements, avec son nombre de lignes et son total en centimes, et
+     * le panier se vide ; le journal reste intègre.
+     */
+    public function test_abandonner_la_vente_l_inscrit_au_journal_et_vide_le_panier(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+            ['produit_id' => $cable->id, 'description' => $cable->nom, 'quantite' => 2, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+
+        $caisse->callAction('abandonnerLaVente');
+
+        $this->assertSame([], $caisse->get('data.lignes'));
+        $this->assertSame([
+            ['260', []],
+            ['320', ['origine' => 'caisse', 'nombre_lignes' => 2, 'total_ttc' => 7200]],
+        ], $this->journalDesEvenements($magasin));
+        $this->assertSame(0, Facture::query()->count());
+        $this->assertTrue(app(VerificateurIntegrite::class)->verifier($magasin)->estConforme());
+    }
+
+    public function test_retirer_une_ligne_renseignee_du_panier_l_inscrit_au_journal(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 12.5, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 2, 'prix_unitaire_ttc' => '12.50', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+
+        $caisse->callFormComponentAction('lignes', 'delete', arguments: ['item' => array_key_first($caisse->get('data.lignes'))]);
+
+        $this->assertSame([], $caisse->get('data.lignes'));
+        $this->assertSame([
+            ['260', []],
+            ['323', ['produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 2, 'prix_unitaire_ttc' => 1250]],
+        ], $this->journalDesEvenements($magasin));
+    }
+
+    /**
+     * Une ligne encore vide n'est pas une vente commencée : la retirer
+     * n'inscrit rien, et il n'y a pas de vente à abandonner.
+     */
+    public function test_un_panier_vide_n_inscrit_rien_au_journal(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $caisse = Livewire::test(Caisse::class)
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->assertActionHidden('abandonnerLaVente');
+
+        $caisse->callFormComponentAction('lignes', 'delete', arguments: ['item' => array_key_first($caisse->get('data.lignes'))]);
+
+        $this->assertSame([], $caisse->get('data.lignes'));
+        $this->assertSame([], $this->journalDesEvenements($magasin));
+    }
+
+    /**
+     * Si le journal des événements ne s'écrit pas, la ligne reste dans le
+     * panier : aucun retrait n'échappe au journal.
+     */
+    public function test_sans_cle_de_signature_la_ligne_reste_dans_le_panier(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+        config(['caisse_securisee.cle_privee' => null]);
+        $this->app->forgetInstance(RegistreFiscal::class);
+        Exceptions::fake([ModuleFiscalNonConfigureException::class]);
+
+        $caisse->callFormComponentAction('lignes', 'delete', arguments: ['item' => array_key_first($caisse->get('data.lignes'))])
+            ->assertNotified('Caisse sécurisée non configurée : la clé privée de signature (CAISSE_SECURISEE_CLE_PRIVEE) est absente.');
+
+        $this->assertCount(1, $caisse->get('data.lignes'));
+        $this->assertSame([], $this->journalDesEvenements($magasin));
+        Exceptions::assertReported(ModuleFiscalNonConfigureException::class);
+    }
+
+    /**
+     * Le journal des événements de la caisse appartient à son magasin :
+     * l'abandon d'une vente ne s'inscrit jamais dans celui d'un autre.
+     */
+    public function test_l_abandon_d_une_vente_ne_s_inscrit_que_dans_le_journal_du_magasin(): void
+    {
+        $autreMagasin = app(CreerMagasinAction::class)->handle(['nom' => 'Autre Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(Caisse::class)
+            ->fillForm(['lignes' => [['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0]]])
+            ->callAction('abandonnerLaVente');
+
+        $this->assertSame(['260', '320'], array_column($this->journalDesEvenements($magasin), 0));
+        $this->assertSame([], $this->journalDesEvenements($autreMagasin));
+    }
+
     private function ouvrirLaCaisseDUnMagasin(): Magasin
     {
         $proprietaire = User::factory()->create();
@@ -882,5 +1024,21 @@ class CaisseTest extends TestCase
         $this->assertCount(1, $lignes);
 
         return array_values($lignes)[0];
+    }
+
+    /**
+     * Le journal des événements du magasin, dans l'ordre de sa chaîne : le
+     * code et les détails de chaque événement.
+     *
+     * @return list<array{0: string, 1: array<array-key, mixed>}>
+     */
+    private function journalDesEvenements(Magasin $magasin): array
+    {
+        return app(TenantContext::class)->runAs($magasin, fn (): array => EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->orderBy('sequence')
+            ->get()
+            ->map(fn (EnregistrementFiscal $evenement): array => [$evenement->type, $evenement->contenuSigne()['donnees']['details']])
+            ->all());
     }
 }

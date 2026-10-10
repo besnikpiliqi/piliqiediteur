@@ -3,15 +3,20 @@
 namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use Filament\Actions;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
@@ -23,6 +28,7 @@ use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Support\Exceptions\Cancel;
 use Illuminate\Validation\Rules\Exists;
 use InvalidArgumentException;
 use LogicException;
@@ -43,6 +49,12 @@ use LogicException;
  * plus rapide de faire ce qu'un vendeur peut déjà faire ailleurs, créer
  * une facture, l'émettre et enregistrer son paiement. Elle exige donc ces
  * trois permissions (voir canAccess()).
+ *
+ * Une vente qui ne va pas jusqu'à l'encaissement laisse une trace au
+ * journal des événements du magasin : son abandon (« Abandonner la
+ * vente », JET 320) et chaque ligne renseignée retirée du panier avant
+ * l'encaissement (JET 323). Une fois la journée clôturée, la caisse
+ * n'encaisse plus jusqu'à minuit (voir journeeCloturee()).
  */
 class Caisse extends Page implements HasForms
 {
@@ -127,7 +139,7 @@ class Caisse extends Page implements HasForms
             ]),
 
             Section::make('Produits et services')->schema([
-                ...DevisResource::lignesDeVente(),
+                ...DevisResource::lignesDeVente(fn (array $ligne) => $this->journaliserLeRetrait($ligne)),
                 DevisResource::totauxDuDocument(),
             ]),
 
@@ -176,6 +188,115 @@ class Caisse extends Page implements HasForms
                     ->maxLength(100),
             ])->columns(2),
         ])->statePath('data');
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Actions\Action::make('abandonnerLaVente')
+                ->label('Abandonner la vente')
+                ->icon('heroicon-o-x-circle')
+                ->color('danger')
+                ->requiresConfirmation()
+                ->modalHeading('Abandonner la vente ?')
+                ->modalDescription('Les lignes saisies sont effacées, et l\'abandon de la vente est inscrit au journal des événements de la caisse.')
+                ->modalSubmitActionLabel('Oui, abandonner la vente')
+                ->visible(fn (): bool => $this->lignesRenseignees() !== [])
+                ->action(function (): void {
+                    $lignes = $this->lignesRenseignees();
+
+                    $this->journaliser(CodeEvenement::TransactionAbandonnee, [
+                        'origine' => 'caisse',
+                        'nombre_lignes' => count($lignes),
+                        'total_ttc' => $this->enCentimes($this->totalTtc($lignes)),
+                    ]);
+
+                    $this->remplirFormulaireVide();
+
+                    Notification::make()->title('Vente abandonnée')->success()->send();
+                }),
+        ];
+    }
+
+    /**
+     * Le refus qu'opposerait la caisse à une vente maintenant, la journée
+     * étant clôturée (voir ClotureCaisse::refusDUneVente()) : affiché en
+     * tête de la caisse, « Encaisser » désactivé. Null tant que la journée
+     * est ouverte.
+     */
+    public function journeeCloturee(): ?string
+    {
+        return ClotureCaisse::refusDUneVente(now());
+    }
+
+    /**
+     * Les lignes du panier où un produit ou un service est choisi : une
+     * ligne encore vide n'est pas une vente commencée.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function lignesRenseignees(): array
+    {
+        return array_values(array_filter(
+            $this->data['lignes'] ?? [],
+            fn (mixed $ligne): bool => is_array($ligne) && (filled($ligne['produit_id'] ?? null) || filled($ligne['service_id'] ?? null)),
+        ));
+    }
+
+    /**
+     * Une ligne renseignée retirée du panier avant l'encaissement (voir
+     * AjouteDesLignesDeVente::lignesDeVente()) : ce qu'elle vendait, telle
+     * que le vendeur l'avait saisie, le prix en centimes.
+     *
+     * @param  array<string, mixed>  $ligne
+     *
+     * @throws Cancel le journal des événements ne s'écrit pas : la ligne reste
+     */
+    private function journaliserLeRetrait(array $ligne): void
+    {
+        $this->journaliser(CodeEvenement::LigneRetiree, [
+            'produit_id' => filled($ligne['produit_id'] ?? null) ? (int) $ligne['produit_id'] : null,
+            'service_id' => filled($ligne['service_id'] ?? null) ? (int) $ligne['service_id'] : null,
+            'description' => filled($ligne['description'] ?? null) ? (string) $ligne['description'] : null,
+            'quantite' => is_numeric($ligne['quantite'] ?? null) ? (int) $ligne['quantite'] : null,
+            'prix_unitaire_ttc' => is_numeric($ligne['prix_unitaire_ttc'] ?? null) ? $this->enCentimes((float) $ligne['prix_unitaire_ttc']) : null,
+        ]);
+    }
+
+    /**
+     * Inscrit l'événement au journal des événements du magasin, sous le
+     * verrou de son registre fiscal (voir RegistreFiscal::sousVerrou()). Si
+     * le journal ne s'écrit pas (clé de signature absente, horloge qui
+     * recule), le vendeur en lit la raison et le geste n'a pas lieu.
+     *
+     * @param  array<string, int|string|null>  $details
+     *
+     * @throws Cancel
+     */
+    private function journaliser(CodeEvenement $code, array $details): void
+    {
+        $registre = app(RegistreFiscal::class);
+
+        try {
+            $registre->sousVerrou(app(TenantContext::class)->magasin(), fn () => $registre->journaliser($code, $details));
+        } catch (LogicException|RefusFiscalException $refus) {
+            static::notifierLeRefus($refus);
+
+            throw new Cancel;
+        }
+    }
+
+    /**
+     * Un montant du panier en centimes, comme tout montant du registre
+     * fiscal ; null s'il est hors des limites d'un montant.
+     */
+    private function enCentimes(float $montant): ?int
+    {
+        try {
+            return app(CalculateurLigne::class)->enCentiemes(number_format($montant, 2, '.', ''));
+        } catch (InvalidArgumentException) {
+            return null;
+        }
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace Tests\Feature\CaisseSecurisee;
 
 use App\Domain\CaisseSecurisee\Exceptions\DonneeFiscaleInalterableException;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -225,7 +226,9 @@ class InalterabiliteTest extends TestCase
 
     /**
      * Un brouillon, sans numéro ni existence fiscale, se modifie puis se
-     * supprime librement, sans rien inscrire au registre fiscal.
+     * supprime librement : rien n'entre dans la chaîne des ventes, seul
+     * l'abandon de la vente s'inscrit au journal des événements (après
+     * l'initialisation du registre).
      */
     public function test_un_brouillon_se_modifie_et_se_supprime(): void
     {
@@ -238,7 +241,10 @@ class InalterabiliteTest extends TestCase
         $this->assertSame([$autreClient->id, 'Quatre articles', 4], [$modifie->client_id, $modifie->notes, $modifie->lignes->sole()->quantite]);
         $this->assertModelMissing($brouillon);
         $this->assertDatabaseCount('lignes_facture', 0);
-        $this->assertDatabaseCount('enregistrements_fiscaux', 0);
+        $this->assertSame(
+            [['evenement', '260'], ['evenement', '320']],
+            EnregistrementFiscal::query()->orderBy('id')->get()->map(fn (EnregistrementFiscal $enregistrement): array => [$enregistrement->chaine->value, $enregistrement->type])->all(),
+        );
     }
 
     /**

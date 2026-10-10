@@ -5,7 +5,10 @@ namespace App\Filament\App\Resources;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages;
+use Carbon\CarbonImmutable;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
@@ -14,10 +17,11 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 /**
- * Lecture seule : une clôture se crée uniquement via l'action "Clôturer
- * la journée" (voir ListClotureCaisses) ou la commande planifiée
+ * Lecture seule : une clôture se crée uniquement via l'action « Clôturer
+ * la journée » (voir ListClotureCaisses) ou la commande planifiée
  * app:cloturer-caisses-automatiquement, jamais via un formulaire
  * create/edit classique. Document fiscal au même titre qu'une facture :
  * jamais modifiable ni supprimable une fois créée (voir
@@ -51,6 +55,44 @@ class ClotureCaisseResource extends Resource
         }
 
         return $query;
+    }
+
+    /**
+     * « 08/10/2026 (oubliée) et 09/10/2026 » : des journées de caisse
+     * (AAAA-MM-JJ), une journée d'avant aujourd'hui encore à clôturer
+     * étant une journée oubliée.
+     *
+     * @param  Collection<int, string>  $journees
+     */
+    public static function libelleDesJournees(Collection $journees): string
+    {
+        $aujourdhui = today()->toDateString();
+
+        return $journees
+            ->map(fn (string $journee): string => CarbonImmutable::parse($journee)->format('d/m/Y').($journee < $aujourdhui ? ' (oubliée)' : ''))
+            ->join(', ', ' et ');
+    }
+
+    /**
+     * Ce que la clôture de ces journées regroupera, avec les mêmes
+     * critères que CloturerCaisseAction : les ventes au comptoir de chaque
+     * journée et les avoirs du même jour, pas encore clôturés, et leur
+     * total net TTC.
+     *
+     * @param  Collection<int, string>  $journees
+     * @return array{ventes: int, avoirs: int, total_ttc: float}
+     */
+    public static function enAttenteDeCloture(Collection $journees): array
+    {
+        $ventes = $journees->flatMap(fn (string $journee) => Facture::query()->enAttenteDeCloture($journee)->get());
+        $avoirs = $journees->flatMap(fn (string $journee) => Avoir::query()->enAttenteDeCloture($journee)->get());
+        $calculateur = app(CalculateurLigne::class);
+
+        return [
+            'ventes' => $ventes->count(),
+            'avoirs' => $avoirs->count(),
+            'total_ttc' => $calculateur->deduire($calculateur->cumuler($ventes), $calculateur->cumuler($avoirs))['total_ttc'],
+        ];
     }
 
     public static function infolist(Infolist $infolist): Infolist

@@ -12,6 +12,7 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Enums\NatureLigne;
+use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -213,10 +214,10 @@ class CloturerCaisseActionTest extends TestCase
 
     public function test_une_journee_deja_cloturee_ne_peut_pas_letre_deux_fois(): void
     {
+        $this->travelTo('2026-10-09 19:00:00');
         app(CloturerCaisseAction::class)->handle($this->magasin, now());
 
-        $this->expectException(LogicException::class);
-        app(CloturerCaisseAction::class)->handle($this->magasin, now());
+        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle($this->magasin, now()), LogicException::class, 'La journée du 09/10/2026 est déjà clôturée.');
     }
 
     public function test_deux_journees_differentes_peuvent_chacune_etre_cloturees(): void
@@ -228,5 +229,36 @@ class CloturerCaisseActionTest extends TestCase
         $clotureAujourdhui = app(CloturerCaisseAction::class)->handle($this->magasin, $aujourdhui);
 
         $this->assertNotSame($clotureHier->id, $clotureAujourdhui->id);
+    }
+
+    /**
+     * Les numéros suivent l'ordre des journées : tant que le magasin vend
+     * déjà, une journée ne se clôture qu'une fois sa veille clôturée.
+     */
+    public function test_une_journee_dont_la_veille_n_est_pas_cloturee_est_refusee(): void
+    {
+        $this->travelTo('2026-10-08 10:00:00');
+        $this->emettreFacturePour(Client::factory()->create());
+        $this->travelTo('2026-10-09 19:00:00');
+
+        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-09'), LogicException::class, "Clôturez d'abord la journée du 08/10/2026.");
+        $this->assertSame(0, ClotureCaisse::query()->count());
+    }
+
+    public function test_une_journee_pas_encore_commencee_est_refusee(): void
+    {
+        $this->travelTo('2026-10-09 19:00:00');
+
+        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-10'), LogicException::class, "La journée du 10/10/2026 n'est pas encore commencée.");
+        $this->assertSame(0, ClotureCaisse::query()->count());
+    }
+
+    public function test_une_journee_anterieure_a_la_derniere_journee_cloturee_est_refusee(): void
+    {
+        $this->travelTo('2026-10-09 19:00:00');
+        app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-09');
+
+        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-07'), LogicException::class, "La journée du 07/10/2026 précède la dernière journée clôturée, celle du 09/10/2026 : les journées se clôturent dans l'ordre.");
+        $this->assertSame(1, ClotureCaisse::query()->count());
     }
 }

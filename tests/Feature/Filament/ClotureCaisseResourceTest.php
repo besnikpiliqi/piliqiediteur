@@ -16,6 +16,8 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ViewClotureCaisse;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -52,191 +54,266 @@ class ClotureCaisseResourceTest extends TestCase
         ]));
     }
 
-    public function test_le_proprietaire_cloture_une_journee_depuis_le_panneau(): void
+    /**
+     * Un ticket de 12,00 € TTC au client particulier, émis maintenant par
+     * l'utilisateur connecté.
+     */
+    private function vendreUnTicket(): Facture
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $client = Client::factory()->create(); // particulier par défaut
-
-        // La clôture ne porte jamais sur une date choisie : uniquement sur
-        // "hier" au moment de l'action (voir
-        // ListClotureCaisses::getHeaderActions()). La facture doit donc
-        // être émise hier pour être agrégée.
-        $this->travelTo(now()->subDay());
-        $facture = $this->emettreFactureParticulier($client);
-        $this->travelBack();
-
-        // Exigence explicite : un vendeur (ici le propriétaire lui-même, qui
-        // a créé la facture) qui n'a pas fermé sa caisse personnelle pour
-        // cette journée bloque la clôture officielle -- voir
-        // VerificateurCaissesPersonnelles.
-        app(FermerSaCaisseAction::class)->handle($proprietaire);
-
-        Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
-
-        $cloture = ClotureCaisse::query()->firstOrFail();
-        $this->assertSame(1, $cloture->nombre_ventes);
-        $this->assertSame($cloture->id, $facture->fresh()->cloture_caisse_id);
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]));
     }
 
     /**
-     * Le gérant doit voir avant de confirmer exactement ce qui sera
-     * regroupé dans la clôture, pas seulement un avertissement générique
-     * (voir ListClotureCaisses::getHeaderActions()).
+     * Un magasin dont le propriétaire est connecté, sur son panneau.
      */
-    public function test_la_modale_de_confirmation_annonce_le_nombre_et_le_total_des_ventes(): void
+    private function ouvrirLeMagasin(): Magasin
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
-        $client = Client::factory()->create(); // particulier par défaut
+        return $magasin;
+    }
 
-        $this->travelTo(now()->subDay());
-        $this->emettreFactureParticulier($client); // 50 € HT, TVA 20 % => 60 € TTC
-        $this->travelBack();
-        app(FermerSaCaisseAction::class)->handle($proprietaire);
+    /**
+     * Le soir, après sa dernière vente, le magasin clôture lui-même la
+     * journée en cours ; à minuit, la commande ne clôture rien de plus pour
+     * cette journée.
+     */
+    public function test_le_proprietaire_cloture_la_journee_du_jour_depuis_le_panneau(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $this->travelTo('2026-10-09 10:00:00');
+        $facture = $this->emettreFactureParticulier(Client::factory()->create()); // 60 € TTC
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
+        $this->travelTo('2026-10-09 19:00:00');
+
+        Livewire::test(ListClotureCaisses::class)
+            ->assertActionHasLabel('cloturer', 'Clôturer la journée du 09/10/2026')
+            ->callAction('cloturer')
+            ->assertNotified('Journée du 09/10/2026 clôturée');
+
+        $cloture = ClotureCaisse::query()->sole();
+        $this->assertSame(['2026-10-09', 'Z-MABOUT-2026-000001', 1, '60.00'], [$cloture->date_cloture->toDateString(), $cloture->numero, $cloture->nombre_ventes, $cloture->total_ttc]);
+        $this->assertSame($cloture->id, $facture->fresh()->cloture_caisse_id);
+
+        $this->travelTo('2026-10-10 00:00:00');
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+
+        $this->assertSame(1, app(TenantContext::class)->runAs($magasin, fn (): int => ClotureCaisse::query()->count()));
+    }
+
+    /**
+     * Le magasin voit avant de confirmer exactement ce qui sera regroupé,
+     * et qu'il ne pourra plus vendre ensuite ce jour-là.
+     */
+    public function test_la_modale_annonce_les_ventes_du_jour_et_previent_qu_ensuite_plus_aucune_vente_n_est_possible(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $this->travelTo('2026-10-09 10:00:00');
+        $this->emettreFactureParticulier(Client::factory()->create()); // 50 € HT, TVA 20 % => 60 € TTC
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
 
         Livewire::test(ListClotureCaisses::class)
             ->mountAction('cloturer')
-            ->assertSee('1 vente(s) au comptoir pour un total de 60,00 €');
+            ->assertSee('09/10/2026 : 1 vente(s) au comptoir pour un total de 60,00 €.')
+            ->assertSee("Après la clôture, vous ne pourrez plus faire de ventes aujourd'hui.")
+            ->assertSee('Cette action est IRRÉVERSIBLE');
     }
 
-    public function test_la_modale_de_confirmation_annonce_les_avoirs_deduits_et_le_total_net(): void
+    public function test_la_modale_annonce_les_avoirs_deduits_et_le_total_net(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
+        $magasin = $this->ouvrirLeMagasin();
         $client = Client::factory()->create();
-        $this->travelTo(now()->subDay());
+        $this->travelTo('2026-10-09 10:00:00');
         $this->emettreFactureParticulier($client); // 60 € TTC
         $this->emettreAvoir($client, $this->emettreFactureParticulier($client));
-        $this->travelBack();
-        app(FermerSaCaisseAction::class)->handle($proprietaire);
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
 
         Livewire::test(ListClotureCaisses::class)
             ->mountAction('cloturer')
-            ->assertSee('2 vente(s) au comptoir et 1 avoir(s) déduit(s), pour un total net de 60,00 €');
+            ->assertSee('09/10/2026 : 2 vente(s) au comptoir et 1 avoir(s) déduit(s), pour un total net de 60,00 €.');
     }
 
     /**
-     * Exigence explicite : un vendeur qui oublie de fermer sa caisse
-     * personnelle pour la journée à clôturer doit bloquer la clôture
-     * manuelle -- jamais se fermer tout seul (voir
-     * VerificateurCaissesPersonnelles) -- et redevient possible dès qu'il
-     * la ferme.
+     * Une vente à un professionnel ouvre les journées de caisse sans
+     * entrer dans la clôture : la journée se clôture à zéro.
      */
-    public function test_laction_cloturer_est_desactivee_tant_quun_vendeur_na_pas_ferme_sa_caisse(): void
+    public function test_la_modale_previent_quand_aucune_vente_au_comptoir_n_est_en_attente(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
-
-        $client = Client::factory()->create();
-
-        $this->travelTo(now()->subDay());
-        $this->emettreFactureParticulier($client);
-        $this->travelBack();
+        $magasin = $this->ouvrirLeMagasin();
+        $this->travelTo('2026-10-09 10:00:00');
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
+        app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]));
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
 
         Livewire::test(ListClotureCaisses::class)
-            ->assertActionDisabled('cloturer')
-            ->assertSee('Caisses personnelles non fermées');
+            ->mountAction('cloturer')
+            ->assertSee('09/10/2026 : aucune vente au comptoir, la clôture sera créée à zéro.');
+    }
 
-        app(FermerSaCaisseAction::class)->handle($proprietaire);
+    /**
+     * Une journée oubliée (le 08/10, sans clôture manuelle ni passage de
+     * la commande de minuit) est annoncée puis clôturée d'abord, dans
+     * l'ordre des journées.
+     */
+    public function test_une_journee_oubliee_est_annoncee_puis_cloturee_avant_celle_du_jour(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $client = Client::factory()->create();
+        $this->travelTo('2026-10-08 10:00:00');
+        $venteDu8 = $this->emettreFactureParticulier($client);
+        $this->travelTo('2026-10-09 10:00:00');
+        $venteDu9 = $this->emettreFactureParticulier($client);
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
+        $this->travelTo('2026-10-09 19:00:00');
+
+        Livewire::test(ListClotureCaisses::class)
+            ->mountAction('cloturer')
+            ->assertSee("Journées clôturées, dans l'ordre : 08/10/2026 (oubliée) et 09/10/2026.")
+            ->callMountedAction()
+            ->assertNotified('Journées du 08/10/2026 et 09/10/2026 clôturées');
+
+        $clotures = ClotureCaisse::query()->orderBy('date_cloture')->get();
+        $this->assertSame(
+            [['2026-10-08', 'Z-MABOUT-2026-000001', '60.00'], ['2026-10-09', 'Z-MABOUT-2026-000002', '60.00']],
+            $clotures->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture->toDateString(), $cloture->numero, $cloture->total_ttc])->all(),
+        );
+        $this->assertSame([$clotures[0]->id, $clotures[1]->id], [$venteDu8->fresh()->cloture_caisse_id, $venteDu9->fresh()->cloture_caisse_id]);
+    }
+
+    /**
+     * Exigence explicite : un vendeur qui n'a pas fermé sa caisse
+     * personnelle pour la journée à clôturer bloque la clôture manuelle --
+     * jamais elle ne se ferme toute seule (voir
+     * VerificateurCaissesPersonnelles) -- et le bouton le nomme ; elle
+     * redevient possible dès qu'il la ferme.
+     */
+    public function test_le_bouton_est_desactive_et_nomme_le_vendeur_tant_qu_il_n_a_pas_ferme_sa_caisse(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $magasin = $this->ouvrirLeMagasin();
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $vendeur->forceFill(['name' => 'Paul Martin'])->save();
+        $this->actingAs($vendeur);
+        $this->vendreUnTicket();
+        $this->actingAs($this->proprietaireDe($magasin));
+
+        $page = Livewire::test(ListClotureCaisses::class)
+            ->assertActionDisabled('cloturer');
+
+        $this->assertSame('Caisses personnelles non fermées : Paul Martin', $page->instance()->getAction('cloturer')->getTooltip());
+
+        app(FermerSaCaisseAction::class)->handle($vendeur);
 
         Livewire::test(ListClotureCaisses::class)
             ->assertActionEnabled('cloturer');
     }
 
-    public function test_la_modale_de_confirmation_previent_quand_aucune_vente_nest_en_attente(): void
+    /**
+     * Un ticket Z se produit à partir de la première vente : avant elle, il
+     * n'y a aucune journée à clôturer.
+     */
+    public function test_le_bouton_est_absent_tant_que_le_magasin_n_a_rien_vendu(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
+        $this->ouvrirLeMagasin();
 
         Livewire::test(ListClotureCaisses::class)
-            ->mountAction('cloturer')
-            ->assertSee("Aucune vente au comptoir n'a été enregistrée ce jour-là");
+            ->assertActionHidden('cloturer');
     }
 
-    /**
-     * Exigence explicite : aucun choix de date -- la clôture manuelle
-     * cible toujours exactement la veille, le seul jour "terminé" en
-     * attente, et redevient indisponible dès que cette journée est
-     * clôturée (ici manuellement, mais ce serait pareil si la commande
-     * automatique l'avait fait à minuit, voir ClotureAutomatiqueCaisse).
-     */
-    public function test_laction_cloturer_disparait_une_fois_la_veille_deja_cloturee(): void
+    public function test_le_bouton_disparait_une_fois_la_journee_cloturee(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
+        $magasin = $this->ouvrirLeMagasin();
+        $this->travelTo('2026-10-09 10:00:00');
+        $this->emettreFactureParticulier(Client::factory()->create());
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
 
         Livewire::test(ListClotureCaisses::class)
-            ->assertActionVisible('cloturer')
             ->callAction('cloturer');
 
         Livewire::test(ListClotureCaisses::class)
             ->assertActionHidden('cloturer');
     }
 
-    public function test_laction_cloturer_nest_pas_visible_pour_un_vendeur(): void
+    /**
+     * La fenêtre ouverte avant minuit et confirmée après ne clôture jamais
+     * la journée qui commence : la journée visée est celle de l'ouverture
+     * de la page, déjà clôturée par la commande de minuit.
+     */
+    public function test_une_confirmation_apres_minuit_ne_cloture_jamais_la_journee_qui_commence(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW]);
+        $magasin = $this->ouvrirLeMagasin();
+        $this->travelTo('2026-10-09 10:00:00');
+        $this->emettreFactureParticulier(Client::factory()->create());
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
+        $this->travelTo('2026-10-09 23:59:00');
+        $page = Livewire::test(ListClotureCaisses::class)->mountAction('cloturer');
+        $this->travelTo('2026-10-10 00:00:00');
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+        app(TenantContext::class)->set($magasin);
+        $this->travelTo('2026-10-10 00:01:00');
 
-        $this->actingAs($vendeur);
-        Filament::setTenant($magasin);
+        $page->callMountedAction();
+
+        $this->assertSame(['2026-10-09'], ClotureCaisse::query()->get()->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->toDateString())->all());
+    }
+
+    public function test_le_bouton_est_absent_pour_un_vendeur_sans_l_autorisation_de_cloturer(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $this->vendreUnTicket();
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW]));
 
         Livewire::test(ListClotureCaisses::class)
             ->assertActionHidden('cloturer');
     }
 
+    /**
+     * Le propriétaire coche à un vendeur l'autorisation de clôturer la
+     * journée : le bouton lui apparaît.
+     */
+    public function test_le_bouton_apparait_au_vendeur_a_qui_le_proprietaire_coche_l_autorisation(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $this->vendreUnTicket();
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]));
+
+        Livewire::test(ListClotureCaisses::class)
+            ->assertActionVisible('cloturer');
+    }
+
     public function test_la_page_de_detail_affiche_les_factures_agregees(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
-
-        $client = Client::factory()->create();
-
-        $this->travelTo(now()->subDay());
-        $facture = $this->emettreFactureParticulier($client);
-        $this->travelBack();
-        app(FermerSaCaisseAction::class)->handle($proprietaire);
-
+        $magasin = $this->ouvrirLeMagasin();
+        $facture = $this->emettreFactureParticulier(Client::factory()->create());
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 
-        $cloture = ClotureCaisse::query()->firstOrFail();
+        $cloture = ClotureCaisse::query()->sole();
 
         Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])
-            ->assertSuccessful()
             ->assertSee($facture->numero);
     }
 
     public function test_la_page_de_detail_affiche_les_avoirs_deduits(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
+        $magasin = $this->ouvrirLeMagasin();
         $client = Client::factory()->create();
-        $this->travelTo(now()->subDay());
         $avoir = $this->emettreAvoir($client, $this->emettreFactureParticulier($client));
-        $this->travelBack();
-        app(FermerSaCaisseAction::class)->handle($proprietaire);
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 
-        $cloture = ClotureCaisse::query()->firstOrFail();
+        $cloture = ClotureCaisse::query()->sole();
 
         Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])
             ->assertSee('Avoirs déduits')
@@ -245,44 +322,34 @@ class ClotureCaisseResourceTest extends TestCase
     }
 
     /**
-     * Un vendeur qui clôture sa propre caisse (ex: fin de service d'un
-     * caissier) ne doit voir que ses propres clôtures, pas celles
-     * déclenchées par un autre vendeur -- même confidentialité que les
-     * factures.
+     * Un membre à qui le propriétaire a délégué la clôture de la journée
+     * ne voit que les clôtures qu'il a lui-même déclenchées, pas celles
+     * d'un autre membre -- même confidentialité que les factures.
      */
     public function test_un_vendeur_ne_voit_que_les_clotures_quil_a_lui_meme_declenchees(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-
+        $this->travelTo('2026-10-08 10:00:00');
+        $magasin = $this->ouvrirLeMagasin();
+        $proprietaire = $this->proprietaireDe($magasin);
         $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
-
+        $this->vendreUnTicket();
+        app(FermerSaCaisseAction::class)->handle($proprietaire);
+        $this->travelTo('2026-10-08 19:00:00');
         $this->actingAs($vendeurA);
-        Filament::setTenant($magasin);
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
-
-        // Un jour réel s'écoule entre les deux clôtures : l'action ne
-        // porte jamais sur une date choisie, seulement sur "hier" au
-        // moment où elle est déclenchée (voir
-        // ListClotureCaisses::getHeaderActions()).
-        $this->travelTo(now()->addDay());
-
+        $this->travelTo('2026-10-09 19:00:00');
         $this->actingAs($vendeurB);
-        Filament::setTenant($magasin);
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 
-        $this->travelBack();
-
-        $clotureA = ClotureCaisse::where('cree_par', $vendeurA->id)->firstOrFail();
-        $clotureB = ClotureCaisse::where('cree_par', $vendeurB->id)->firstOrFail();
+        $clotureA = ClotureCaisse::query()->where('cree_par', $vendeurA->id)->sole();
+        $clotureB = ClotureCaisse::query()->where('cree_par', $vendeurB->id)->sole();
 
         Livewire::test(ListClotureCaisses::class)
             ->assertCanSeeTableRecords([$clotureB])
             ->assertCanNotSeeTableRecords([$clotureA]);
 
         $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
         Livewire::test(ListClotureCaisses::class)
             ->assertCanSeeTableRecords([$clotureA, $clotureB]);
     }

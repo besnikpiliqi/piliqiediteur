@@ -9,6 +9,9 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Actions\MettreAJourMembreMagasinAction;
@@ -31,7 +34,8 @@ use Tests\TestCase;
 /**
  * Le journal des événements techniques (JET), chaîne des événements du
  * registre fiscal de chaque magasin : ouverture et fin de session,
- * modification des droits, paramètres ayant un impact sur la conformité.
+ * modification des droits, paramètres ayant un impact sur la conformité,
+ * vente abandonnée avant validation.
  * Les tests signent avec la paire éphémère que Tests\TestCase épingle.
  */
 class JournalEvenementsTest extends TestCase
@@ -453,6 +457,52 @@ class JournalEvenementsTest extends TestCase
         $this->assertNull($magasin->fresh()->regime_tva);
         $this->assertSame([], $this->codes($magasin));
         $this->assertSame([], $this->codes($autreMagasin));
+    }
+
+    /**
+     * Supprimer un brouillon de vente, c'est abandonner la vente avant
+     * validation : le journal en garde le nombre de lignes et le total TTC
+     * en centimes.
+     */
+    public function test_supprimer_un_brouillon_inscrit_la_vente_abandonnee(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12.5, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 2]]);
+
+        $brouillon->delete();
+
+        $this->assertModelMissing($brouillon);
+        $this->assertSame(['260', '320'], $this->codes($magasin));
+        $this->assertSame(['origine' => 'brouillon', 'facture_id' => $brouillon->id, 'nombre_lignes' => 1, 'total_ttc' => 2500], $this->details($magasin, CodeEvenement::TransactionAbandonnee));
+    }
+
+    public function test_sans_cle_de_signature_un_brouillon_ne_se_supprime_pas(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
+        $this->retirerLaCleDeSignature();
+
+        $this->assertThrows(fn () => $brouillon->delete(), ModuleFiscalNonConfigureException::class);
+
+        $this->assertModelExists($brouillon);
+        $this->assertSame([], $this->codes($magasin));
+    }
+
+    /**
+     * Le brouillon d'un magasin ne se supprime pas depuis un autre magasin
+     * actif : l'abandon s'inscrirait au journal d'un autre magasin.
+     */
+    public function test_un_brouillon_ne_se_supprime_pas_depuis_un_autre_magasin_actif(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
+        $autreMagasin = $this->magasinDe(User::factory()->create(), 'Autre Boutique');
+
+        $this->assertThrows(fn () => $brouillon->delete(), LogicException::class, 'Le registre fiscal ne se verrouille que pour le magasin actif.');
+
+        $this->assertSame(1, Facture::withoutGlobalScopes()->whereKey($brouillon->id)->count());
+        $this->assertSame([[], []], [$this->codes($magasin), $this->codes($autreMagasin)]);
     }
 
     public function test_les_evenements_se_signent_et_se_chainent_les_uns_aux_autres(): void

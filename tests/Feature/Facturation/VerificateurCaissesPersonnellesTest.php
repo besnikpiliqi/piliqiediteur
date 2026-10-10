@@ -18,11 +18,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Un vendeur qui oublie de fermer sa caisse personnelle ne bloque jamais
- * la clôture officielle de la journée (qui agrège directement les
- * factures, voir CloturerCaisseAction) : ce service sert uniquement à
- * alerter le propriétaire avant qu'il ne clôture manuellement -- voir
- * ListClotureCaisses::getHeaderActions().
+ * Seule la clôture manuelle de la journée attend les caisses personnelles :
+ * un vendeur qui n'a pas fermé la sienne bloque le bouton « Clôturer la
+ * journée » (voir ListClotureCaisses), jamais la clôture automatique de
+ * minuit (voir ClotureAutomatiqueCaisse), qui agrège directement les
+ * factures (voir CloturerCaisseAction).
  */
 class VerificateurCaissesPersonnellesTest extends TestCase
 {

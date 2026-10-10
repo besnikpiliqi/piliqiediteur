@@ -4,6 +4,10 @@ namespace App\Domain\Facturation\Models;
 
 use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
+use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -20,6 +24,7 @@ use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Database\Factories\FactureFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -37,7 +42,9 @@ use LogicException;
  * supprime jamais, même "doucement" -- la loi impose sa conservation, et
  * une correction passe par un avoir (voir EnregistrerAvoirAction). Un
  * brouillon, sans numéro ni existence légale, peut en revanche être
- * supprimé définitivement (voir FacturePolicy::delete()).
+ * supprimé définitivement (voir FacturePolicy::delete()) : sa suppression
+ * est une vente abandonnée avant validation, inscrite au journal des
+ * événements (voir delete()).
  *
  * Une fois numérotée, elle ne se modifie plus que dans son statut de
  * règlement (voir ProtegeLesDonneesValidees) : elle est signée telle
@@ -80,6 +87,34 @@ class Facture extends Model implements DocumentEnvoyable
             // vendeur (voir FacturePolicy) ne puisse pas être usurpée.
             $facture->cree_par ??= auth()->id();
         });
+
+        // Après la garde de ProtegeLesDonneesValidees, qui refuse la
+        // suppression d'une facture émise : seul un brouillon arrive ici.
+        static::deleting(function (Facture $facture) {
+            app(RegistreFiscal::class)->journaliser(CodeEvenement::TransactionAbandonnee, [
+                'origine' => 'brouillon',
+                'facture_id' => $facture->getKey(),
+                'nombre_lignes' => $facture->lignes()->count(),
+                'total_ttc' => app(CalculateurLigne::class)->enCentiemes($facture->total_ttc ?? '0.00'),
+            ]);
+        });
+    }
+
+    /**
+     * Supprime le brouillon et inscrit au journal des événements, dans la
+     * même transaction, sous le verrou du registre fiscal du magasin (voir
+     * RegistreFiscal::sousVerrou()), la vente abandonnée avant validation
+     * (JET 320) : son nombre de lignes et son total TTC en centimes. Si le
+     * journal ne s'écrit pas, le brouillon reste. Une facture émise ne se
+     * supprime jamais (voir ProtegeLesDonneesValidees).
+     *
+     * @throws LogicException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function delete(): ?bool
+    {
+        return app(RegistreFiscal::class)->sousVerrou($this->magasin, fn (): ?bool => parent::delete());
     }
 
     /**
@@ -140,6 +175,19 @@ class Facture extends Model implements DocumentEnvoyable
     public function scopeEmises(Builder $query): Builder
     {
         return $query->where('statut', '!=', StatutFacture::Brouillon);
+    }
+
+    /**
+     * Le jour, à l'heure de Paris (AAAA-MM-JJ), de la première facture ou
+     * du premier ticket émis par le magasin actif : sa première journée de
+     * caisse (voir CloturerLesJourneesAction). Null tant qu'il n'a rien
+     * vendu.
+     */
+    public static function jourDeLaPremiereVente(): ?string
+    {
+        $premiere = static::query()->emises()->min('date_emission');
+
+        return $premiere === null ? null : CarbonImmutable::parse($premiere, 'UTC')->setTimezone(config('app.timezone'))->toDateString();
     }
 
     /**

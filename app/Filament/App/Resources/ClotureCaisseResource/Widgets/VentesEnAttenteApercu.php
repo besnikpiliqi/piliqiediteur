@@ -3,9 +3,8 @@
 namespace App\Filament\App\Resources\ClotureCaisseResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Facturation\Models\Avoir;
-use App\Domain\Facturation\Models\Facture;
-use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
+use App\Filament\App\Resources\ClotureCaisseResource;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 
@@ -15,11 +14,12 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  * tableau de bord général) : ce widget n'a de sens que sur la liste des
  * clôtures, attaché explicitement via ListClotureCaisses::getHeaderWidgets().
  *
- * Aperçu de ce qui sera regroupé dans la PROCHAINE clôture (toujours la
- * veille -- voir ListClotureCaisses) : mêmes critères que
- * CloturerCaisseAction, ventes moins avoirs du jour, pour que le gérant
- * voie directement sur la page ce qui va être clôturé, pas seulement dans
- * la modale de confirmation au moment de cliquer.
+ * Aperçu de ce que regroupera la prochaine clôture : les journées encore
+ * ouvertes jusqu'à aujourd'hui (une journée oubliée comprise, voir
+ * CloturerLesJourneesAction), leurs ventes au comptoir et les avoirs du
+ * même jour, avec les mêmes critères que CloturerCaisseAction, pour que
+ * le gérant voie directement sur la page ce qui va être clôturé, pas
+ * seulement dans la fenêtre de confirmation au moment de cliquer.
  */
 class VentesEnAttenteApercu extends BaseWidget
 {
@@ -30,22 +30,28 @@ class VentesEnAttenteApercu extends BaseWidget
 
     protected function getStats(): array
     {
-        $veille = now()->subDay();
+        $journees = app(CloturerLesJourneesAction::class)->journeesEnAttente(today());
 
-        $ventes = Facture::query()->enAttenteDeCloture($veille)->get();
-        $avoirs = Avoir::query()->enAttenteDeCloture($veille)->get();
-        $calculateur = app(CalculateurLigne::class);
-        $totalNet = $calculateur->deduire($calculateur->cumuler($ventes), $calculateur->cumuler($avoirs))['total_ttc'];
+        if ($journees->isEmpty()) {
+            return [
+                Stat::make('Ventes en attente de clôture', '0')
+                    ->description('Aucune journée à clôturer.')
+                    ->color('gray'),
+            ];
+        }
+
+        $enAttente = ClotureCaisseResource::enAttenteDeCloture($journees);
 
         return [
-            Stat::make('Ventes en attente de clôture', (string) $ventes->count())
+            Stat::make('Ventes en attente de clôture', (string) $enAttente['ventes'])
                 ->description(sprintf(
-                    'Journée du %s · %s%s € au total',
-                    $veille->translatedFormat('d/m/Y'),
-                    $avoirs->isEmpty() ? '' : "{$avoirs->count()} avoir(s) déduit(s) · ",
-                    number_format($totalNet, 2, ',', ' '),
+                    '%s %s · %s%s € au total',
+                    $journees->count() > 1 ? 'Journées du' : 'Journée du',
+                    ClotureCaisseResource::libelleDesJournees($journees),
+                    $enAttente['avoirs'] === 0 ? '' : "{$enAttente['avoirs']} avoir(s) déduit(s) · ",
+                    number_format($enAttente['total_ttc'], 2, ',', ' '),
                 ))
-                ->color($ventes->isEmpty() && $avoirs->isEmpty() ? 'gray' : 'warning'),
+                ->color($enAttente['ventes'] === 0 && $enAttente['avoirs'] === 0 ? 'gray' : 'warning'),
         ];
     }
 }

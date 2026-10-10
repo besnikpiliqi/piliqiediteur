@@ -28,6 +28,11 @@ use Filament\Support\Contracts\HasLabel;
  *   et du taux de TVA d'un produit (JournaliseSesParametresDeConformite).
  * - L'annulation de ticket suit l'émission d'un avoir sur des tickets de
  *   caisse (voir EmettreAvoirAction).
+ * - La vente abandonnée avant validation suit la suppression d'un
+ *   brouillon de facture ou de ticket (voir Facture::delete()) et
+ *   l'abandon d'une vente à la caisse ; la ligne retirée d'une vente avant
+ *   validation, chaque ligne renseignée retirée du panier de la caisse
+ *   (voir Caisse).
  * - Chaque vérification de l'intégrité du registre (voir
  *   VerifierIntegriteAction) inscrit ses anomalies, une rupture de
  *   séquence ou de numérotation (95) ou un autre défaut d'intégrité (90),
@@ -48,6 +53,8 @@ enum CodeEvenement: int implements HasLabel
     case Initialisation = 260;
     case ParametreDeConformite = 270;
     case OperationDeControle = 280;
+    case TransactionAbandonnee = 320;
+    case LigneRetiree = 323;
 
     public function getLabel(): string
     {
@@ -64,6 +71,8 @@ enum CodeEvenement: int implements HasLabel
             self::Initialisation => 'Initialisation du registre fiscal du magasin',
             self::ParametreDeConformite => 'Modification d\'un paramètre ayant un impact sur la conformité',
             self::OperationDeControle => 'Opération de contrôle (vérification de l\'intégrité)',
+            self::TransactionAbandonnee => 'Vente abandonnée avant validation',
+            self::LigneRetiree => 'Ligne retirée d\'une vente avant validation',
         };
     }
 

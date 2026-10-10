@@ -11,6 +11,7 @@ use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
@@ -27,7 +28,9 @@ use LogicException;
  *     l'émission ;
  *  2. l'avoir, relu verrouillé, arrête ses montants, reçoit son numéro,
  *     dans l'année de cet instant à l'heure de Paris, et cet instant, en
- *     UTC, pour date d'émission (voir HorodateSonEmission) ;
+ *     UTC, pour date d'émission (voir HorodateSonEmission) -- un avoir sur
+ *     des tickets n'est plus émis une fois sa journée clôturée, jusqu'à
+ *     minuit (voir ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
  *  3. AvoirEmis rend le stock et impute l'avoir sur ses factures ;
  *  4. l'avoir est signé en négatif dans la chaîne des ventes (voir
  *     ContenuFiscal), avec les lignes et les numéros des documents qu'il
@@ -60,6 +63,10 @@ class EmettreAvoirAction
 
             if (! $avoir->statut->peutTransitionnerVers(StatutAvoir::Emise)) {
                 throw new LogicException("Impossible d'émettre un avoir au statut [{$avoir->statut->value}].");
+            }
+
+            if ($avoir->load('lignes.ligneFacture.facture')->facturesConcernees()->first()?->serie() === TypeDocument::TicketCaisse) {
+                ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($instant->utc);
             }
 
             $this->arreterLesMontants($avoir);

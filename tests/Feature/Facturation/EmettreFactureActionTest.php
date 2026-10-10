@@ -5,11 +5,13 @@ namespace Tests\Feature\Facturation;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -200,5 +202,50 @@ class EmettreFactureActionTest extends TestCase
 
         $this->expectException(LogicException::class);
         app(EmettreFactureAction::class)->handle($facture->fresh());
+    }
+
+    /**
+     * Une fois la journée clôturée, la caisse n'émet plus de ticket
+     * jusqu'à minuit : le brouillon reste intact et aucun numéro n'est
+     * consommé ; il s'émet le lendemain.
+     */
+    public function test_un_ticket_est_refuse_apres_la_cloture_de_sa_journee_puis_emis_le_lendemain(): void
+    {
+        $this->travelTo('2026-10-09 19:00:00');
+        $magasin = app(TenantContext::class)->magasin();
+        app(CloturerCaisseAction::class)->handle($magasin, now());
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+        $this->travelTo('2026-10-09 19:30:00');
+
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($brouillon), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
+
+        $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
+        $this->assertFalse(SequenceDocument::query()->where('magasin_id', $magasin->id)->where('type_document', TypeDocument::TicketCaisse->value)->exists());
+
+        $this->travelTo('2026-10-10 00:01:00');
+        $ticket = app(EmettreFactureAction::class)->handle($brouillon);
+
+        $this->assertSame('TK-LYON1-2026-000001', $ticket->numero);
+    }
+
+    /**
+     * La clôture ne compte que les tickets : une facture à un professionnel
+     * s'émet encore après la clôture de la journée.
+     */
+    public function test_une_facture_a_un_professionnel_s_emet_encore_apres_la_cloture_de_la_journee(): void
+    {
+        $this->travelTo('2026-10-09 19:00:00');
+        app(CloturerCaisseAction::class)->handle(app(TenantContext::class)->magasin(), now());
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+
+        $facture = app(EmettreFactureAction::class)->handle($facture);
+
+        $this->assertSame('FAC-LYON1-2026-000001', $facture->numero);
     }
 }

@@ -9,6 +9,7 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\FactureEmise;
+use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\ReglementComptant;
@@ -36,7 +37,9 @@ use LogicException;
  *     l'émission ;
  *  2. la facture, relue verrouillée, reçoit son numéro, dans la série et
  *     l'année de cet instant à l'heure de Paris, et cet instant, en UTC,
- *     pour date d'émission (voir HorodateSonEmission) ;
+ *     pour date d'émission (voir HorodateSonEmission) -- un ticket n'est
+ *     plus émis une fois sa journée clôturée, jusqu'à minuit (voir
+ *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
  *  3. FactureEmise sort le stock, applique le crédit d'avoir du client et
  *     prépare la transmission PDP ;
  *  4. le règlement comptant d'une vente au comptoir, s'il y en a un, paie
@@ -78,6 +81,11 @@ class EmettreFactureAction
             }
 
             $typeDocument = $facture->relevantDeLeInvoicing() ? TypeDocument::Facture : TypeDocument::TicketCaisse;
+
+            if ($typeDocument === TypeDocument::TicketCaisse) {
+                ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($instant->utc);
+            }
+
             $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, $instant->enHeureLocale()->format('Y'));
 
             $facture->forceFill([

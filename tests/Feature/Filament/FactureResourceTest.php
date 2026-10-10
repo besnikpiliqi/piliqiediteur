@@ -4,6 +4,7 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -862,6 +863,49 @@ class FactureResourceTest extends TestCase
 
         Livewire::test(ListFactures::class)->callTableAction('delete', $facture);
         $this->assertModelMissing($facture);
+    }
+
+    /**
+     * Supprimer un brouillon inscrit l'abandon de la vente au journal des
+     * événements : si le journal ne s'écrit pas, le magasin en lit la
+     * raison et le brouillon reste.
+     */
+    public function test_sans_cle_de_signature_la_suppression_d_un_brouillon_est_refusee_avec_un_message(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
+        config(['caisse_securisee.cle_privee' => null]);
+        $this->app->forgetInstance(RegistreFiscal::class);
+        Exceptions::fake([ModuleFiscalNonConfigureException::class]);
+
+        Livewire::test(ListFactures::class)
+            ->callTableAction('delete', $brouillon)
+            ->assertNotified('Caisse sécurisée non configurée : la clé privée de signature (CAISSE_SECURISEE_CLE_PRIVEE) est absente.');
+
+        $this->assertModelExists($brouillon);
+        Exceptions::assertReported(ModuleFiscalNonConfigureException::class);
+    }
+
+    public function test_sans_cle_de_signature_la_suppression_groupee_garde_le_brouillon_et_le_signale(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
+        config(['caisse_securisee.cle_privee' => null]);
+        $this->app->forgetInstance(RegistreFiscal::class);
+        Exceptions::fake([ModuleFiscalNonConfigureException::class]);
+
+        Livewire::test(ListFactures::class)
+            ->callTableBulkAction('delete', [$brouillon])
+            ->assertNotified('1 ligne cochée n\'a pas été supprimée');
+
+        $this->assertModelExists($brouillon);
+        Exceptions::assertReported(ModuleFiscalNonConfigureException::class);
     }
 
     /**

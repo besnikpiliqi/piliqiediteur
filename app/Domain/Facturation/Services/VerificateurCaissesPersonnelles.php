@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Services;
 
 use App\Domain\Facturation\Models\Facture;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
@@ -14,16 +15,31 @@ use Illuminate\Support\Collection;
  * personnels.
  *
  * Seule la clôture manuelle en tient compte : tant qu'un vendeur a des
- * ventes de la journée qu'il n'a pas fermées de son côté, le bouton
- * « Clôturer une journée » reste désactivé et nomme ces vendeurs (voir
- * ListClotureCaisses), pour que leur relevé personnel (leur outil de
- * réconciliation de fin de service) ne parte pas en retard. La clôture
- * automatique de minuit (voir ClotureAutomatiqueCaisse) ne le consulte
- * jamais : une journée est toujours clôturée, même si personne
+ * ventes de l'une des journées à clôturer qu'il n'a pas fermées de son
+ * côté, le bouton « Clôturer la journée » reste désactivé et nomme ces
+ * vendeurs (voir ListClotureCaisses), pour que leur relevé personnel (leur
+ * outil de réconciliation de fin de service) ne parte pas en retard. La
+ * clôture automatique de minuit (voir ClotureAutomatiqueCaisse) ne le
+ * consulte jamais : une journée est toujours clôturée, même si personne
  * n'intervient.
  */
 class VerificateurCaissesPersonnelles
 {
+    /**
+     * Les vendeurs dont la caisse personnelle n'est pas fermée pour l'une
+     * de ces journées (AAAA-MM-JJ), chacun une fois.
+     *
+     * @param  Collection<int, string>  $journees
+     * @return Collection<int, User>
+     */
+    public function vendeursAvecCaisseOuverteCesJours(Collection $journees): Collection
+    {
+        return $journees
+            ->flatMap(fn (string $journee): Collection => $this->vendeursAvecCaisseOuverte(CarbonImmutable::parse($journee)))
+            ->unique('id')
+            ->values();
+    }
+
     /**
      * @return Collection<int, User>
      */

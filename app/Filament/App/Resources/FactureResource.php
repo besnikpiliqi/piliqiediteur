@@ -369,14 +369,17 @@ class FactureResource extends Resource
                 Tables\Actions\ViewAction::make(),
                 // Un brouillon n'a jamais reçu de numéro légal : il reste
                 // librement modifiable (lignes comprises, voir EditFacture)
-                // et supprimable (voir FacturePolicy). Dès l'émission, ces
-                // deux actions disparaissent définitivement : une facture
-                // émise se corrige par un avoir, jamais en la modifiant ou
-                // en la supprimant.
+                // et supprimable (voir FacturePolicy), sa suppression
+                // inscrite au journal des événements (voir
+                // Facture::delete()). Dès l'émission, ces deux actions
+                // disparaissent définitivement : une facture émise se
+                // corrige par un avoir, jamais en la modifiant ou en la
+                // supprimant.
                 Tables\Actions\EditAction::make()
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
                 Tables\Actions\DeleteAction::make()
-                    ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon),
+                    ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon)
+                    ->using(fn (Facture $record): ?bool => static::executerOuInterrompre(fn (): ?bool => $record->delete())),
                 Tables\Actions\Action::make('emettre')
                     ->label('Émettre')
                     ->icon('heroicon-o-paper-airplane')

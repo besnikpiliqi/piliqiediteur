@@ -151,16 +151,14 @@ class MagasinEnLectureSeuleTest extends TestCase
     public function test_la_journee_se_cloture_toujours_a_la_main(StatutMagasin $statut): void
     {
         $magasin = $this->ouvrirLeMagasin();
-        $this->travel(-1)->days();
         $this->vendreUnTicket();
         app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
-        $this->travelBack();
         $this->passerEn($magasin, $statut);
 
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 
         $cloture = ClotureCaisse::query()->sole();
-        $this->assertSame([1, '12.00'], [$cloture->nombre_ventes, $cloture->total_ttc]);
+        $this->assertSame([today()->toDateString(), 1, '12.00'], [$cloture->date_cloture->toDateString(), $cloture->nombre_ventes, $cloture->total_ttc]);
     }
 
     /**

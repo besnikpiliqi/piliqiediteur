@@ -5,6 +5,7 @@ namespace Tests\Feature\Facturation;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
@@ -50,10 +51,12 @@ class GenererSoumissionEReportingActionTest extends TestCase
         ]);
         // La vente s'émet le jour clôturé : elle se date à l'instant du
         // registre fiscal (voir EmettreFactureAction), sans retour possible.
+        // Les journées se clôturent dans l'ordre, chaque jour depuis la
+        // première vente : celles d'avant, sans vente, le sont à zéro.
         $this->travelTo("{$date} 10:00:00");
         app(EmettreFactureAction::class)->handle($facture);
 
-        return app(CloturerCaisseAction::class)->handle($this->magasin, $date);
+        return app(CloturerLesJourneesAction::class)->jusquAu($this->magasin, CarbonImmutable::parse($date))->last();
     }
 
     public function test_agrege_toutes_les_clotures_de_la_periode(): void
@@ -89,7 +92,7 @@ class GenererSoumissionEReportingActionTest extends TestCase
         app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
             ['ligne_facture_id' => $vente->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
-        app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-07');
+        app(CloturerLesJourneesAction::class)->jusquAu($this->magasin, CarbonImmutable::parse('2026-10-07'));
         $periode = new PeriodeEReporting(
             CarbonImmutable::parse('2026-10-01'),
             CarbonImmutable::parse('2026-10-10'),

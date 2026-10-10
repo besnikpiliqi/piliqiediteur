@@ -51,8 +51,9 @@ class ModifierDevisActionTest extends TestCase
     /**
      * Le client ne s'est engagé que sur la version qu'il a reçue (B15) :
      * modifié, le devis DEV-MABOUT-2026-000003 repasse en brouillon, garde
-     * son numéro et perd sa date d'émission ; renvoyé, il repart sous le
-     * même numéro, sans en consommer un autre : le devis suivant reçoit
+     * son numéro et la date à laquelle il a été remis à son client, ici
+     * sans e-mail ; renvoyé, il repart sous le même numéro, sans en
+     * consommer un autre, à sa nouvelle date : le devis suivant reçoit
      * DEV-MABOUT-2026-000004.
      */
     public function test_un_devis_envoye_modifie_repasse_en_brouillon_et_repart_sous_son_numero(): void
@@ -67,7 +68,7 @@ class ModifierDevisActionTest extends TestCase
 
         $modifie = app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
 
-        $this->assertSame(['DEV-MABOUT-2026-000003', StatutDevis::Brouillon, null], [$modifie->numero, $modifie->statut, $modifie->date_emission]);
+        $this->assertSame(['DEV-MABOUT-2026-000003', StatutDevis::Brouillon, '2026-10-05 10:00'], [$modifie->numero, $modifie->statut, $modifie->date_emission->format('Y-m-d H:i')]);
         $this->assertSame(['100.00', '20.00', '120.00'], [$modifie->total_ht, $modifie->total_tva, $modifie->total_ttc]);
 
         $renvoye = app(EmettreDevisAction::class)->handle($modifie);

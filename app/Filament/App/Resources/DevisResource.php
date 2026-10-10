@@ -93,7 +93,9 @@ class DevisResource extends Resource
                 TextEntry::make('numero')->label('Numéro')->placeholder('Brouillon (pas encore envoyé)'),
                 TextEntry::make('statut')->badge(),
                 TextEntry::make('client.nom')->label('Client'),
-                TextEntry::make('date_emission')->label('Envoyé le')->dateTime('d/m/Y')->placeholder('—'),
+                // Repassé en brouillon par une modification, un devis garde
+                // la date de son dernier envoi (voir ModifierDevisAction).
+                TextEntry::make('date_emission')->label('Dernier envoi le')->dateTime('d/m/Y')->placeholder('—'),
                 TextEntry::make('date_validite')->label('Valide jusqu\'au')->date('d/m/Y')->placeholder('—'),
             ])->columns(3),
 

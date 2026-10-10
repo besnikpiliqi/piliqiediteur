@@ -14,8 +14,9 @@ use LogicException;
  * Un brouillon part au statut « Envoyé » (voir EnvoyerDocumentAction) : il
  * reçoit son numéro à son premier envoi, et garde le sien, sans en
  * consommer un autre, quand il repart après avoir été modifié (voir
- * ModifierDevisAction). Sa date d'émission est celle de cet envoi. Un
- * magasin suspendu ou fermé n'en envoie plus (voir
+ * ModifierDevisAction). Sa date d'émission est celle de cet envoi : elle
+ * remplace celle de l'envoi précédent, qu'il gardait depuis sa
+ * modification. Un magasin suspendu ou fermé n'en envoie plus (voir
  * Magasin::verifierQuIlEstOuvert()). Un devis dont la date de validité est
  * déjà dépassée ne part pas : son client ne pourrait plus l'accepter (voir
  * AccepterDevisAction).

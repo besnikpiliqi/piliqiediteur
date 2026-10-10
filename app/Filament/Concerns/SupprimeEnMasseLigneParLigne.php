@@ -17,10 +17,11 @@ use LogicException;
  * par delete() ; celles qu'il refuse restent, et l'utilisateur le sait.
  * Une ligne dont le modèle refuse la suppression reste aussi : le journal
  * des événements qui ne s'écrit pas pour un brouillon de facture (voir
- * Facture::delete()), le devis numéroté entre-temps (voir
- * Devis::booted()), le client comptoir qui ne s'archive jamais (voir
- * Client::booted()), un incident du serveur alors signalé au journal de
- * l'application (voir GereLesExceptionsMetier).
+ * Facture::delete()), le devis numéroté entre le chargement des lignes
+ * cochées et sa suppression, que Devis::delete() relit en base, le client
+ * comptoir qui ne s'archive jamais (voir Client::booted()), un incident du
+ * serveur alors signalé au journal de l'application (voir
+ * GereLesExceptionsMetier).
  *
  * Un brouillon de facture ou de devis jamais numéroté se supprime
  * (suppressionEnMasse()) ;

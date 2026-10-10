@@ -18,8 +18,11 @@ use LogicException;
  * Un devis envoyé ou accepté repasse en brouillon : le client ne s'est
  * engagé que sur la version qu'il a reçue, son acceptation est effacée, et
  * la nouvelle version n'a pas encore été émise. Il garde son numéro, que
- * son prochain envoi reprend (voir EmettreDevisAction) ; ses envois
- * précédents restent dans son historique (voir EnvoiDocument).
+ * son prochain envoi reprend, et la date de son dernier envoi, que ce
+ * prochain envoi remplace (voir EmettreDevisAction) : même remis en main
+ * propre, sans e-mail, il garde la trace de sa remise au client. Ses
+ * e-mails restent dans son historique (voir EnvoiDocument), et celui qui
+ * n'est pas encore parti ne part plus (voir EnvoyerDocumentJob).
  *
  * Comme CreerDevisAction, elle reçoit le client déjà résolu par une
  * requête limitée au magasin, jamais un client_id brut venu du formulaire,
@@ -57,7 +60,6 @@ class ModifierDevisAction
                 'client_id' => $client->getKey(),
                 ...$contexte->colonnes(),
                 'statut' => StatutDevis::Brouillon,
-                'date_emission' => null,
             ])->save();
             $devis->lignes()->delete();
 

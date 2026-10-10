@@ -125,6 +125,24 @@ class DevisPolicyTest extends TestCase
     }
 
     /**
+     * Chargé brouillon (lignes cochées d'une suppression en masse, autre
+     * onglet), puis numéroté par une autre requête avant d'être supprimé :
+     * la suppression relit le devis en base et le refuse, et la série
+     * reste sans trou (B14).
+     */
+    public function test_un_devis_numerote_apres_son_chargement_ne_se_supprime_pas(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $chargeBrouillon = $this->creerUnDevis();
+        app(EmettreDevisAction::class)->handle($chargeBrouillon);
+
+        $this->assertThrows(fn () => $chargeBrouillon->delete(), LogicException::class, 'Ce devis ne peut pas être supprimé : seul un brouillon jamais envoyé se supprime, un devis numéroté reste.');
+
+        $this->assertNotSoftDeleted($chargeBrouillon);
+        $this->assertSame('DEV-MABOUT-2026-000001', $chargeBrouillon->fresh()->numero);
+    }
+
+    /**
      * La date de validité est le dernier jour pour accepter (B15) : le
      * devis valable jusqu'au 08/10 s'accepte encore ce jour-là, plus le
      * lendemain, même avant son passage à « Expiré » dans la nuit.

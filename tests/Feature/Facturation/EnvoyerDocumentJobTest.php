@@ -13,7 +13,9 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
+use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Facturation\Mail\DocumentMail;
@@ -401,6 +403,63 @@ class EnvoyerDocumentJobTest extends TestCase
 
         Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('client@exemple.fr'));
         $this->assertSame(StatutEnvoi::Envoye, $envoi->fresh()->statut);
+    }
+
+    /**
+     * L'envoi a été programmé, puis le devis modifié avant qu'il ne parte
+     * (file d'attente chargée, nouvelle tentative) : repassé en brouillon,
+     * cette version n'a pas été émise (K8), le client ne la reçoit pas, et
+     * le magasin sait pourquoi.
+     */
+    public function test_un_devis_modifie_avant_le_depart_de_son_envoi_ne_part_pas(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $produit = $this->produit();
+        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-31']);
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $envoi = app(EnvoyerDocumentAction::class)->handle($devis, 'client@exemple.fr', null, null);
+        app(ModifierDevisAction::class)->handle($devis, $devis->client, [['produit_id' => $produit->id, 'quantite' => 5]]);
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame([StatutEnvoi::Echec, 'Le devis a été modifié depuis cette demande d\'envoi : l\'e-mail n\'est pas parti, envoyez sa nouvelle version à votre client si ce n\'est pas déjà fait.'], [$envoi->statut, $envoi->erreur]);
+        $this->assertSame(1, $magasin->proprietaires()->sole()->notifications()->count());
+        $devis->refresh();
+        $this->assertSame([StatutDevis::Brouillon, '600.00'], [$devis->statut, $devis->total_ttc]);
+    }
+
+    /**
+     * Modifié puis renvoyé avant le départ de son premier envoi : le
+     * premier e-mail, écrit pour la version précédente, ne part pas ; le
+     * client ne reçoit que le second, avec la version de 600,00 € TTC.
+     */
+    public function test_un_devis_modifie_puis_renvoye_ne_part_qu_avec_son_dernier_envoi(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $produit = $this->produit();
+        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-31']);
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $premier = app(EnvoyerDocumentAction::class)->handle($devis, 'client@exemple.fr', 'Voici le devis pour un article.', null);
+        $this->travelTo('2026-10-09 10:20:00');
+        $modifie = app(ModifierDevisAction::class)->handle($devis, $devis->client, [['produit_id' => $produit->id, 'quantite' => 5]]);
+        $second = app(EnvoyerDocumentAction::class)->handle($modifie, 'client@exemple.fr', 'Voici le devis pour cinq articles.', null);
+
+        (new EnvoyerDocumentJob($magasin->id, $premier->id))->handle();
+        (new EnvoyerDocumentJob($magasin->id, $second->id))->handle();
+
+        $this->assertSame([$second->id], Mail::sent(DocumentMail::class)->map(fn (DocumentMail $mail): int => $mail->envoi->id)->all());
+        $this->assertSame(
+            [StatutEnvoi::Echec, 'Le devis a été modifié depuis cette demande d\'envoi : l\'e-mail n\'est pas parti, envoyez sa nouvelle version à votre client si ce n\'est pas déjà fait.'],
+            [$premier->fresh()->statut, $premier->fresh()->erreur],
+        );
+        $this->assertSame(StatutEnvoi::Envoye, $second->fresh()->statut);
+        $this->assertStringContainsString("notre devis {$modifie->numero} d'un montant de 600,00 € TTC", (new DocumentMail($second->fresh(), '%PDF', 'devis.pdf'))->render());
     }
 
     public function test_le_job_envoie_dans_le_magasin_de_l_envoi_quel_que_soit_le_contexte(): void

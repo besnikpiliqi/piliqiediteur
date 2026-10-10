@@ -32,7 +32,7 @@ class DevisPdfGeneratorTest extends TestCase
     /**
      * Même présentation que la facture : mentions du magasin, client,
      * chaque ligne avec son PU HT, son PU TTC et sa TVA, la TVA par taux,
-     * les totaux, et la date de validité du devis.
+     * les totaux, et les dates d'émission et de validité du devis.
      */
     public function test_le_pdf_reprend_les_mentions_les_lignes_la_tva_par_taux_et_la_validite(): void
     {
@@ -43,7 +43,7 @@ class DevisPdfGeneratorTest extends TestCase
         foreach ([
             'Boutique du Port', 'Martin et Fils SARL', '12 quai des Pêcheurs', '13002 Marseille', 'SIREN : 123456789', 'SIRET : 12345678900011', 'TVA intracommunautaire : FR12123456789',
             'Établi pour', 'Atelier Martin',
-            $devis->numero, 'Valable jusqu&#039;au 31/12/2026',
+            $devis->numero, 'Émis le 09/10/2026', 'Valable jusqu&#039;au 31/12/2026',
             'Écran 15 pouces', '<td class="montant">2</td>', '<td class="montant">100,00 €</td>', '<td class="montant">120,00 €</td>', '<td class="montant">20 %</td>',
             'Câble secteur', '<td class="montant">5,5 %</td>',
             'Base HT', '<td class="montant">200,00 €</td>', '<td class="montant">40,00 €</td>',
@@ -100,8 +100,8 @@ class DevisPdfGeneratorTest extends TestCase
 
     /**
      * Modifié depuis son envoi, le devis est un brouillon qui garde son
-     * numéro : son PDF le dit, sans date d'émission, cette version n'ayant
-     * pas encore été émise.
+     * numéro et la date de son envoi : son PDF le dit, sans date
+     * d'émission, cette version n'ayant pas encore été émise.
      */
     public function test_le_pdf_d_un_devis_modifie_depuis_son_envoi_le_presente_comme_un_brouillon(): void
     {

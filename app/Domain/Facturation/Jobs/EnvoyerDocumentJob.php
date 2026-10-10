@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Jobs;
 
 use App\Domain\Facturation\Enums\NatureEnvoi;
+use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\Avoir;
@@ -42,13 +43,20 @@ use Throwable;
  * et un devis, numéroté dès son premier envoi, ne se supprime plus (voir
  * Devis::estSupprimable()).
  *
- * Un magasin suspendu ou fermé entre-temps n'écrit plus à ses clients :
- * l'envoi échoue sans partir (voir Magasin::verifierQuIlEstOuvert()).
+ * Un devis, lui, se modifie après son envoi (voir ModifierDevisAction) :
+ * modifié depuis la demande d'envoi, qu'il soit encore en brouillon ou
+ * déjà reparti dans sa nouvelle version, il ne part pas avec cet e-mail,
+ * écrit pour une version que le client ne recevrait pas. Un magasin
+ * suspendu ou fermé entre-temps n'écrit plus à ses clients (voir
+ * Magasin::verifierQuIlEstOuvert()). Dans ces cas, l'envoi échoue sans
+ * partir, et le magasin sait pourquoi.
  *
  * Idempotent : un envoi déjà envoyé ne repart jamais, même si le job est
  * rejoué. ShouldBeUnique : jamais deux exécutions du même envoi en
- * parallèle. Le PDF est généré à chaque tentative, depuis les données
- * figées du document (voir FacturePdfGenerator).
+ * parallèle. Le PDF est généré à chaque tentative depuis le document tel
+ * qu'il est enregistré : une facture ou un avoir figés à leur émission
+ * (voir FacturePdfGenerator), un devis dans la version émise que cet
+ * e-mail annonce.
  */
 class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 {
@@ -91,6 +99,12 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
         }
 
         $document = $envoi->document;
+
+        if ($document instanceof Devis && $this->devisModifieDepuisLaDemande($document, $envoi)) {
+            $this->echouer($envoi, 'Le devis a été modifié depuis cette demande d\'envoi : l\'e-mail n\'est pas parti, envoyez sa nouvelle version à votre client si ce n\'est pas déjà fait.');
+
+            return;
+        }
 
         if ($document instanceof Facture && $envoi->nature === NatureEnvoi::Relance) {
             if (! $document->estEchueEtImpayee()) {
@@ -150,6 +164,18 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             $exception instanceof TransportExceptionInterface => "Le serveur d'envoi des e-mails n'a pas accepté le message : vérifiez l'adresse du destinataire, puis {$this->consigne($envoi)}.",
             default => "Une erreur inattendue a empêché l'envoi : {$this->consigne($envoi)}, et contactez le support si elle se répète.",
         });
+    }
+
+    /**
+     * Repassé en brouillon par une modification, ou reparti depuis dans sa
+     * nouvelle version : un devis ne repart qu'après avoir été modifié
+     * (voir StatutDevis::transitionsAutorisees()), et chaque départ
+     * remplace sa date d'émission (voir EmettreDevisAction). Un envoi
+     * demandé pour la version en cours est noté à cette date ou après.
+     */
+    private function devisModifieDepuisLaDemande(Devis $devis, EnvoiDocument $envoi): bool
+    {
+        return $devis->statut === StatutDevis::Brouillon || $devis->date_emission->gt($envoi->created_at);
     }
 
     /**

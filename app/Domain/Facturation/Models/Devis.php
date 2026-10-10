@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use LogicException;
 
 class Devis extends Model implements DocumentEnvoyable
@@ -54,13 +55,31 @@ class Devis extends Model implements DocumentEnvoyable
             $devis->statut ??= StatutDevis::Brouillon;
             $devis->devise ??= 'EUR';
         });
+    }
 
-        // Le dernier rempart, derrière DevisPolicy::delete() : un devis
-        // numéroté reste, quel que soit le chemin qui tente de le supprimer.
-        static::deleting(function (Devis $devis): void {
-            if (! $devis->estSupprimable()) {
+    /**
+     * Le dernier rempart, derrière DevisPolicy::delete() : un devis
+     * numéroté reste, quel que soit le chemin qui tente de le supprimer.
+     * Son état est relu en base, sous un verrou tenu jusqu'à l'écriture de
+     * la suppression : un devis chargé brouillon (lignes cochées d'une
+     * suppression en masse, autre onglet), puis numéroté par une autre
+     * requête avant d'être supprimé, reste lui aussi (voir
+     * EmettreDevisAction, qui le relit sous le même verrou). Un devis
+     * introuvable dans le magasin actif, ou déjà supprimé, ne se supprime
+     * pas non plus.
+     *
+     * @throws LogicException
+     */
+    public function delete(): ?bool
+    {
+        return DB::transaction(function (): ?bool {
+            $enBase = static::query()->whereKey($this->getKey())->lockForUpdate()->first();
+
+            if ($enBase === null || ! $enBase->estSupprimable()) {
                 throw new LogicException('Ce devis ne peut pas être supprimé : seul un brouillon jamais envoyé se supprime, un devis numéroté reste.');
             }
+
+            return parent::delete();
         });
     }
 

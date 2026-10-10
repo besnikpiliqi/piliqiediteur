@@ -4,8 +4,10 @@ namespace Tests\Feature\Contacts;
 
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use LogicException;
@@ -159,5 +161,31 @@ class ClientTest extends TestCase
 
         $client->refresh();
         $this->assertSame(['732829320', '73282932000074', 'FR44732829320', true], [$client->siren, $client->siret, $client->numero_tva, $client->etabli_en_france]);
+    }
+
+    /**
+     * La dernière vérification VIES d'une fiche est celle de son n° actuel
+     * : après un changement de n°, celles de l'ancien ne disent plus rien.
+     */
+    public function test_la_derniere_verification_vies_est_celle_du_numero_actuel(): void
+    {
+        $this->creerMagasin();
+        $client = Client::factory()->etranger('DE', 'DE123456789')->create();
+        $verifier = fn (string $numeroTva, string $instant): ConsultationVies => ConsultationVies::forceCreate([
+            'client_id' => $client->id,
+            'numero_tva' => $numeroTva,
+            'valide' => true,
+            'consultee_le' => CarbonImmutable::parse($instant, 'Europe/Paris'),
+            'reponse' => '{"valid":true}',
+        ]);
+        $verifier('DE123456789', '2026-10-08 10:00:00');
+        $derniereDeLAncien = $verifier('DE123456789', '2026-10-09 10:00:00');
+        $verifier('DE999999999', '2026-10-09 12:00:00');
+
+        $this->assertTrue($derniereDeLAncien->is($client->derniereConsultationVies()));
+
+        $client->update(['numero_tva' => 'DE 987 654 321']);
+
+        $this->assertNull($client->derniereConsultationVies());
     }
 }

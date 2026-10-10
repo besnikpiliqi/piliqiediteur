@@ -156,6 +156,43 @@ class Client extends Model
         return $this->est_comptoir === true;
     }
 
+    /**
+     * Son n° de TVA se vérifie-t-il sur VIES (voir VerifierNumeroTvaAction) ?
+     * Oui pour un professionnel dont le n° est d'un État membre de l'Union
+     * ou d'Irlande du Nord (voir TerritoireFiscal::prefixeTvaUe()).
+     */
+    public function aUnNumeroTvaVerifiableSurVies(): bool
+    {
+        return $this->estProfessionnel() && TerritoireFiscal::prefixeTvaUe($this->numero_tva) !== null;
+    }
+
+    /**
+     * Les vérifications de ses n° de TVA sur VIES, de tous les n° qu'il a
+     * eus : chacune reste la preuve de ce qu'elle a vérifié.
+     */
+    public function consultationsVies(): HasMany
+    {
+        return $this->hasMany(ConsultationVies::class);
+    }
+
+    /**
+     * La dernière vérification sur VIES du n° de TVA qu'il a aujourd'hui,
+     * null s'il n'en a pas ou si ce n° n'a jamais été vérifié : celle d'un
+     * ancien n° ne dit rien du nouveau.
+     */
+    public function derniereConsultationVies(): ?ConsultationVies
+    {
+        if (blank($this->numero_tva)) {
+            return null;
+        }
+
+        return $this->consultationsVies()
+            ->where('numero_tva', $this->numero_tva)
+            ->latest('consultee_le')
+            ->latest('id')
+            ->first();
+    }
+
     public function avoirs(): HasMany
     {
         return $this->hasMany(Avoir::class);

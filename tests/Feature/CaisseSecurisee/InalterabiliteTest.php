@@ -337,13 +337,14 @@ class InalterabiliteTest extends TestCase
             'transmissions_pdp',
             'tetes_registre_fiscal',
             'enregistrements_fiscaux',
+            'consultations_vies',
         ], array_map(static fn (string $table): array => [$table], $tables));
     }
 
     /**
-     * Aucune donnée fiscale ne disparaît avec son magasin : la clé
-     * magasin_id de chaque table refuse la suppression du magasin au lieu
-     * de la propager. Elle se lit dans le schéma, car supprimer un magasin
+     * Aucune donnée fiscale, vérifications VIES comprises, ne disparaît
+     * avec son magasin : la clé magasin_id de chaque table refuse la
+     * suppression du magasin au lieu de la propager. Elle se lit dans le schéma, car supprimer un magasin
      * qui a émis une facture échoue de toute façon par plusieurs clés à la
      * fois (registre, séquences, clients) et par les déclencheurs ajout
      * seul : l'échec ne dirait pas que chacune de ces clés refuse.

@@ -5,6 +5,7 @@ namespace Tests\Feature\Filament;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
@@ -22,9 +23,11 @@ use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -47,6 +50,8 @@ class ClientResourceTest extends TestCase
     private const MESSAGE_PROPRE_ENTREPRISE = 'Ce SIREN est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
 
     private const MESSAGE_PROPRE_NUMERO_TVA = 'Ce n° de TVA est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
+
+    private const URL_VIES = 'https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number';
 
     public function test_un_proprietaire_peut_afficher_la_liste_des_clients_de_son_magasin(): void
     {
@@ -839,5 +844,117 @@ class ClientResourceTest extends TestCase
             ->assertHasFormErrors(['delai_paiement_jours' => $regle]);
 
         $this->assertDatabaseMissing('clients', ['nom' => 'Jean Dupont']);
+    }
+
+    /**
+     * VIES ne vérifie que les n° de TVA de l'Union (et d'Irlande du Nord)
+     * : le bouton n'apparaît, dans la liste comme sur la fiche, que pour
+     * un professionnel qui en a un.
+     */
+    public function test_le_bouton_verifier_sur_vies_n_apparait_que_pour_un_professionnel_de_l_union(): void
+    {
+        $this->connecterLeProprietaire();
+        $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
+        $particulier = Client::factory()->create();
+        $suisse = Client::factory()->etranger('CH', 'CHE123456789')->create();
+
+        Livewire::test(ListClients::class)
+            ->assertTableActionVisible('verifier_sur_vies', $allemand)
+            ->assertTableActionHidden('verifier_sur_vies', $particulier)
+            ->assertTableActionHidden('verifier_sur_vies', $suisse);
+        Livewire::test(EditClient::class, ['record' => $allemand->getRouteKey()])->assertActionVisible('verifier_sur_vies');
+        Livewire::test(EditClient::class, ['record' => $particulier->getRouteKey()])->assertActionHidden('verifier_sur_vies');
+    }
+
+    /**
+     * Vérifier conserve une preuve dans la fiche du client : sans le droit
+     * de le modifier, l'observateur n'a pas le bouton, et une requête
+     * forgée n'interroge pas VIES.
+     */
+    public function test_un_observateur_ne_verifie_pas_sur_vies(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $this->actingAs($this->membre($magasin, RoleMagasin::Observateur));
+        Filament::setTenant($magasin);
+        $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
+        Http::preventStrayRequests();
+        Http::fake([self::URL_VIES => Http::response(['valid' => true])]);
+
+        Livewire::test(ListClients::class)
+            ->assertTableActionHidden('verifier_sur_vies', $allemand)
+            ->call('mountTableAction', 'verifier_sur_vies', (string) $allemand->getKey())
+            ->call('callMountedTableAction');
+
+        Http::assertNothingSent();
+        $this->assertSame(0, ConsultationVies::query()->count());
+    }
+
+    public function test_un_numero_valide_sur_vies_est_annonce_et_apparait_dans_les_verifications_de_la_fiche(): void
+    {
+        $this->connecterLeProprietaire();
+        $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
+        $this->travelTo('2026-10-09 14:32:10');
+        Http::preventStrayRequests();
+        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '123456789', 'valid' => true, 'requestIdentifier' => 'WAPIAAAAW1234567', 'name' => 'ACME GMBH', 'address' => '---'])]);
+
+        Livewire::test(EditClient::class, ['record' => $allemand->getRouteKey()])
+            ->callAction('verifier_sur_vies')
+            ->assertNotified('N° de TVA valide sur VIES (consultation WAPIAAAAW1234567 du 09/10/2026 à 14:32).')
+            ->assertSeeText('Le n° DE123456789 est valide sur VIES selon la consultation WAPIAAAAW1234567 du 09/10/2026 à 14:32.')
+            ->assertSeeText('ACME GMBH');
+
+        $this->assertSame(1, $allemand->consultationsVies()->count());
+    }
+
+    public function test_un_numero_inconnu_de_vies_laisse_la_vente_a_la_tva_francaise(): void
+    {
+        $this->connecterLeProprietaire();
+        $allemand = Client::factory()->etranger('DE', 'DE999999999')->create();
+        Http::preventStrayRequests();
+        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '999999999', 'valid' => false])]);
+
+        Livewire::test(ListClients::class)
+            ->callTableAction('verifier_sur_vies', $allemand)
+            ->assertNotified('N° de TVA inconnu de VIES : la vente reste à la TVA française.');
+
+        $this->assertFalse($allemand->consultationsVies()->sole()->valide);
+    }
+
+    public function test_vies_indisponible_est_annonce_sans_rien_conserver(): void
+    {
+        $this->connecterLeProprietaire();
+        $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
+        Http::preventStrayRequests();
+        Http::fake([self::URL_VIES => Http::response(['actionSucceed' => false, 'errorWrappers' => [['error' => 'MS_UNAVAILABLE']]], 500)]);
+
+        Livewire::test(ListClients::class)
+            ->callTableAction('verifier_sur_vies', $allemand)
+            ->assertNotified('Le service européen VIES ne répond pas pour ce pays : réessayez dans quelques minutes. Sans n° de TVA vérifié, la vente reste à la TVA française.');
+
+        $this->assertSame(0, ConsultationVies::query()->count());
+    }
+
+    /**
+     * Le nom que renvoie VIES vient de l'extérieur : la fiche l'affiche
+     * comme du texte, jamais comme du HTML.
+     */
+    public function test_le_nom_renvoye_par_vies_s_affiche_comme_du_texte(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
+        ConsultationVies::forceCreate([
+            'client_id' => $allemand->id,
+            'numero_tva' => 'DE123456789',
+            'valide' => true,
+            'nom' => '<script>alert(1)</script>',
+            'consultee_le' => CarbonImmutable::parse('2026-10-09 12:32:10', 'UTC'),
+            'reponse' => '{"valid":true}',
+        ]);
+
+        $reponse = $this->actingAs($proprietaire)->get(ClientResource::getUrl('edit', ['record' => $allemand, 'tenant' => $magasin]));
+
+        $reponse->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false)
+            ->assertDontSee('<script>alert(1)</script>', false);
     }
 }

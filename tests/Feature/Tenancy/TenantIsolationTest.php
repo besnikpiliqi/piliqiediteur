@@ -13,6 +13,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -121,10 +122,11 @@ class TenantIsolationTest extends TestCase
 
     /**
      * Modèles de magasin qui n'ont pas de fabrique : les documents fiscaux
-     * et le registre ne s'écrivent que signés, par leurs actions. Avoir,
-     * AvoirAllocation, EnregistrementFiscal, Paiement, PaiementAllocation,
-     * SoumissionEReporting et TeteRegistreFiscal sont aussi dans
-     * modelesCrees(), écrits directement par ces tests (voir
+     * et le registre ne s'écrivent que signés, par leurs actions, et une
+     * vérification VIES, preuve, que par la sienne. Avoir,
+     * AvoirAllocation, ConsultationVies, EnregistrementFiscal, Paiement,
+     * PaiementAllocation, SoumissionEReporting et TeteRegistreFiscal sont
+     * aussi dans modelesCrees(), écrits directement par ces tests (voir
      * creerEnregistrement()).
      *
      * @var list<class-string<Model>>
@@ -132,6 +134,7 @@ class TenantIsolationTest extends TestCase
     private const MODELES_SANS_FABRIQUE = [
         Avoir::class,
         AvoirAllocation::class,
+        ConsultationVies::class,
         EnregistrementFiscal::class,
         LigneAchat::class,
         LigneAvoir::class,
@@ -186,7 +189,7 @@ class TenantIsolationTest extends TestCase
                 $modele,
                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
             ]])
-            ->merge(collect([Avoir::class, AvoirAllocation::class, EnregistrementFiscal::class, Paiement::class, PaiementAllocation::class, SoumissionEReporting::class, TeteRegistreFiscal::class])
+            ->merge(collect([Avoir::class, AvoirAllocation::class, ConsultationVies::class, EnregistrementFiscal::class, Paiement::class, PaiementAllocation::class, SoumissionEReporting::class, TeteRegistreFiscal::class])
                 ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
                     $modele,
                     static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
@@ -446,9 +449,10 @@ class TenantIsolationTest extends TestCase
     /**
      * Un enregistrement du magasin actif d'un modèle sans fabrique, écrit
      * directement, sans l'action qui l'écrit d'ordinaire : un avoir
-     * brouillon, un paiement ou une imputation non signés, une ligne du
-     * registre fiscal sans l'événement d'initialisation du magasin, une
-     * ligne de verrou, une soumission d'e-reporting sans clôture. Seule
+     * brouillon, un paiement ou une imputation non signés, une
+     * vérification VIES sans appel à VIES, une ligne du registre fiscal
+     * sans l'événement d'initialisation du magasin, une ligne de verrou,
+     * une soumission d'e-reporting sans clôture. Seule
      * l'isolation est vérifiée ici. Comme une fabrique, il accepte des
      * attributs hors $fillable.
      *
@@ -463,6 +467,13 @@ class TenantIsolationTest extends TestCase
                 'avoir_id' => self::creerEnregistrement(Avoir::class)->getKey(),
                 'facture_id' => Facture::factory()->create()->getKey(),
                 'montant_alloue' => '20.00',
+            ],
+            ConsultationVies::class => [
+                'client_id' => Client::factory()->etranger('DE', 'DE123456789')->create()->getKey(),
+                'numero_tva' => 'DE123456789',
+                'valide' => true,
+                'consultee_le' => CarbonImmutable::parse('2026-10-09 12:32:10', 'UTC'),
+                'reponse' => '{"valid":true}',
             ],
             EnregistrementFiscal::class => [
                 'chaine' => ChaineFiscale::Vente,

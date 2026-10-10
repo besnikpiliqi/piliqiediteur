@@ -2,17 +2,22 @@
 
 namespace App\Filament\App\Resources;
 
+use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Contacts\Rules\HorsDeLEntrepriseDuMagasin;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Filament\App\Resources\ClientResource\Pages;
 use App\Filament\Concerns\ArchiveLaFiche;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
+use Filament\Actions\MountableAction;
 use Filament\Forms\Components\Component;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
@@ -22,15 +27,17 @@ use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Contracts\View\View;
 use Illuminate\Support\HtmlString;
 
 class ClientResource extends Resource
 {
-    use ArchiveLaFiche, SupprimeEnMasseLigneParLigne;
+    use ArchiveLaFiche, GereLesExceptionsMetier, SupprimeEnMasseLigneParLigne;
 
     /**
      * Vendre à un autre magasin de la même société n'est pas une vente
@@ -293,7 +300,70 @@ class ClientResource extends Resource
                     ->enum(ModePaiement::class),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
+
+            self::sectionDesVerificationsVies(),
         ]);
+    }
+
+    /**
+     * Les vérifications du n° de TVA du client sur VIES, en lecture seule :
+     * ce que dit la dernière pour son n° actuel, puis toutes, de la plus
+     * récente à la plus ancienne, anciens n° compris. Relues à chaque
+     * affichage : une vérification faite depuis la page (voir
+     * verifierSurVies()) y apparaît aussitôt. Montrée dès que le n° se
+     * vérifie sur VIES, ou qu'une vérification existe.
+     */
+    private static function sectionDesVerificationsVies(): Section
+    {
+        return Section::make('Vérifications VIES')
+            ->description('Le service de la Commission européenne qui dit si un n° de TVA de l\'Union est valide. Chaque vérification est conservée comme preuve.')
+            ->schema([
+                Placeholder::make('consultations_vies')
+                    ->hiddenLabel()
+                    ->content(fn (Client $record): View => view('filament.app.clients.consultations-vies', [
+                        'numeroTva' => $record->numero_tva,
+                        'derniere' => $record->derniereConsultationVies(),
+                        'consultations' => $record->consultationsVies()->latest('consultee_le')->latest('id')->get(),
+                    ])),
+            ])
+            ->visible(fn (?Client $record): bool => $record !== null
+                && ($record->aUnNumeroTvaVerifiableSurVies() || $record->consultationsVies()->exists()));
+    }
+
+    /**
+     * Le bouton « Vérifier sur VIES », dans la liste des clients et sur la
+     * fiche (voir EditClient) : pour un professionnel dont le n° de TVA est
+     * d'un État membre de l'Union ou d'Irlande du Nord, à qui peut modifier
+     * le client (voir ClientPolicy::update()). La vérification se conserve
+     * (voir VerifierNumeroTvaAction) ; VIES indisponible, l'écran le dit, et
+     * rien n'est conservé.
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function verifierSurVies(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Vérifier sur VIES')
+            ->icon('heroicon-o-check-badge')
+            ->visible(fn (Client $record): bool => $record->aUnNumeroTvaVerifiableSurVies())
+            ->authorize('update')
+            ->action(fn (Client $record) => static::executerSansCasser(
+                fn () => static::notifierLaVerification(app(VerifierNumeroTvaAction::class)->handle($record)),
+            ));
+    }
+
+    private static function notifierLaVerification(ConsultationVies $consultation): void
+    {
+        if (! $consultation->valide) {
+            Notification::make()->title('N° de TVA inconnu de VIES : la vente reste à la TVA française.')->warning()->send();
+
+            return;
+        }
+
+        Notification::make()->title("N° de TVA valide sur VIES ({$consultation->reference()}).")->success()->send();
     }
 
     public static function table(Table $table): Table
@@ -325,6 +395,7 @@ class ClientResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                static::verifierSurVies(Tables\Actions\Action::make('verifier_sur_vies')),
                 static::actionRestaurer(),
             ])
             ->bulkActions([

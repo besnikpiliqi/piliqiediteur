@@ -10,7 +10,8 @@ use Illuminate\Support\Str;
  * lettres. Il se saisit au besoin avec les espaces, points ou tirets qui
  * en séparent souvent les chiffres, et s'enregistre sans eux (voir
  * NumeroTvaNormalise), partout de la même façon. Seul son format est
- * contrôlé (voir NumeroTvaAuFormat) : son existence se vérifie sur VIES,
+ * contrôlé à la saisie (voir NumeroTvaAuFormat) : celui d'un client se
+ * vérifie ensuite sur VIES, à la demande (voir VerifierNumeroTvaAction),
  * et un n° français n'est pas comparé au SIREN de sa propre fiche,
  * puisqu'un groupe TVA a un n° sans lien avec le SIREN de chacun de ses
  * membres.

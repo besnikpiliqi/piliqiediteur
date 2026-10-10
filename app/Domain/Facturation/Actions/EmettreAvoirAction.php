@@ -29,8 +29,10 @@ use LogicException;
  *  2. l'avoir, relu verrouillé, arrête ses montants, reçoit son numéro,
  *     dans l'année de cet instant à l'heure de Paris, et cet instant, en
  *     UTC, pour date d'émission (voir HorodateSonEmission) -- un avoir sur
- *     des tickets n'est plus émis une fois sa journée clôturée, jusqu'à
- *     minuit (voir ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
+ *     des tickets, que compte la clôture de sa journée (voir
+ *     Avoir::corrigeDesTickets()), n'est plus émis une fois cette journée
+ *     clôturée, jusqu'à minuit (voir
+ *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
  *  3. AvoirEmis rend le stock et impute l'avoir sur ses factures ;
  *  4. l'avoir est signé en négatif dans la chaîne des ventes (voir
  *     ContenuFiscal), avec les lignes et les numéros des documents qu'il
@@ -65,8 +67,8 @@ class EmettreAvoirAction
                 throw new LogicException("Impossible d'émettre un avoir au statut [{$avoir->statut->value}].");
             }
 
-            if ($avoir->load('lignes.ligneFacture.facture')->facturesConcernees()->first()?->serie() === TypeDocument::TicketCaisse) {
-                ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($instant->utc);
+            if ($avoir->corrigeDesTickets()) {
+                ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($avoir->magasin, $instant);
             }
 
             $this->arreterLesMontants($avoir);

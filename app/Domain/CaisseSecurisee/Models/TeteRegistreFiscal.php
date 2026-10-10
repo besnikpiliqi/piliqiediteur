@@ -15,12 +15,14 @@ use Illuminate\Database\Eloquent\Model;
  * chaîne des ventes, les grands totaux perpétuels réel et absolu, en
  * centimes), la version du module et la clé de signature du dernier
  * enregistrement. Ces trois dernières valeurs restent nulles tant que le
- * magasin n'a aucun enregistrement.
+ * magasin n'a aucun enregistrement. Elle note aussi la dernière journée de
+ * caisse clôturée (voir RegistreFiscal::derniereJourneeCloturee()).
  *
  * @property CarbonImmutable|null $dernier_horodatage
  * @property array<string, array{sequence: int, signature: string, gt_reel?: int, gt_absolu?: int}>|null $chaines par valeur de ChaineFiscale
  * @property string|null $version_module
  * @property string|null $cle_id
+ * @property string|null $derniere_journee_cloturee AAAA-MM-JJ
  */
 class TeteRegistreFiscal extends Model
 {

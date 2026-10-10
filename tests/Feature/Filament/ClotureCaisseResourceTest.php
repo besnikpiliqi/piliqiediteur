@@ -14,6 +14,7 @@ use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -124,6 +125,23 @@ class ClotureCaisseResourceTest extends TestCase
             ->assertSee('09/10/2026 : 1 vente(s) au comptoir pour un total de 60,00 €.')
             ->assertSee("Après la clôture, vous ne pourrez plus faire de ventes aujourd'hui.")
             ->assertSee('Cette action est IRRÉVERSIBLE');
+    }
+
+    /**
+     * Une vente restée en cours à la caisse sera abandonnée par la clôture
+     * : la fenêtre de confirmation le dit avant.
+     */
+    public function test_la_modale_annonce_les_ventes_en_cours_a_la_caisse_qu_elle_abandonnera(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $this->travelTo('2026-10-09 10:00:00');
+        $this->emettreFactureParticulier(Client::factory()->create());
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
+        PanierCaisse::factory()->create(['user_id' => $this->proprietaireDe($magasin)->id]);
+
+        Livewire::test(ListClotureCaisses::class)
+            ->mountAction('cloturer')
+            ->assertSee('1 vente(s) en cours à la caisse, jamais encaissée(s), sera(ont) abandonnée(s) et inscrite(s) au journal des événements.');
     }
 
     public function test_la_modale_annonce_les_avoirs_deduits_et_le_total_net(): void

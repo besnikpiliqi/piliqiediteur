@@ -3,7 +3,6 @@
 namespace App\Filament\Concerns;
 
 use App\Domain\Facturation\Services\CalculateurLigne;
-use App\Domain\Facturation\Services\QuantiteEntiere;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\TextInput;
@@ -18,8 +17,6 @@ use InvalidArgumentException;
  */
 trait SaisitLesPrixDeLigne
 {
-    private const AUCUN_MONTANT = ['montant_ht' => 0.0, 'montant_tva' => 0.0, 'montant_ttc' => 0.0];
-
     /**
      * PU HT, PU TTC et TVA d'une ligne de vente : seul le PU TTC se saisit
      * (le prix affiché au client, repris tel quel de la fiche du produit),
@@ -138,37 +135,16 @@ trait SaisitLesPrixDeLigne
     }
 
     /**
-     * Une ligne de vente en cours de saisie, calculée comme à
-     * l'enregistrement (voir ConstructeurLigneDocument) : depuis son PU TTC.
-     * Une saisie pas encore valable (prix vide ou négatif, quantité vide ou
-     * à virgule, taux ou remise hors de 0-100 %) ne donne aucun montant,
-     * plutôt qu'un montant faux (1,5 compté comme 1).
+     * Les montants d'une ligne de vente en cours de saisie (voir
+     * CalculateurLigne::montantsDUneVenteSaisie()), que les lignes d'achat
+     * redéfinissent (voir AjouteDesLignesDAchat).
      *
      * @param  array<string, mixed>  $ligne
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
      */
     public static function montantsDeLigneSaisie(array $ligne): array
     {
-        $calculateur = app(CalculateurLigne::class);
-
-        try {
-            $prixUnitaireTtc = $calculateur->arrondirAuCentime((float) (filled($ligne['prix_unitaire_ttc'] ?? null)
-                ? $ligne['prix_unitaire_ttc']
-                : throw new InvalidArgumentException('PU TTC à saisir.')));
-
-            if ($prixUnitaireTtc < 0) {
-                throw new InvalidArgumentException('PU TTC négatif.');
-            }
-
-            return $calculateur->montantsDeVente(
-                $calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, (float) ($ligne['taux_tva'] ?? 0)),
-                $prixUnitaireTtc,
-                QuantiteEntiere::depuisSaisie($ligne['quantite'] ?? null),
-                (float) ($ligne['remise_pourcentage'] ?? 0),
-            );
-        } catch (InvalidArgumentException) {
-            return self::AUCUN_MONTANT;
-        }
+        return app(CalculateurLigne::class)->montantsDUneVenteSaisie($ligne);
     }
 
     /**

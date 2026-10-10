@@ -943,7 +943,7 @@ class CaisseTest extends TestCase
         $this->assertSame([], $caisse->get('data.lignes'));
         $this->assertSame([
             ['260', []],
-            ['323', ['produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 2, 'prix_unitaire_ttc' => 1250]],
+            ['323', ['origine' => 'caisse', 'produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 2, 'prix_unitaire_ttc' => 1250]],
         ], $this->journalDesEvenements($magasin));
     }
 
@@ -1003,6 +1003,124 @@ class CaisseTest extends TestCase
 
         $this->assertSame(['260', '320'], array_column($this->journalDesEvenements($magasin), 0));
         $this->assertSame([], $this->journalDesEvenements($autreMagasin));
+    }
+
+    /**
+     * Le panier se garde côté serveur : recharger la page (une nouvelle
+     * instance de la caisse) reprend la vente commencée au lieu de
+     * l'effacer sans trace.
+     */
+    public function test_recharger_la_page_reprend_la_vente_commencee(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 3, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+
+        $reprise = Livewire::test(Caisse::class);
+
+        $reprise->assertNotified('Vente en cours reprise');
+        $ligne = $this->seuleLigne($reprise);
+        $this->assertSame([$ecran->id, 3, '120.00'], [$ligne['produit_id'], $ligne['quantite'], $ligne['prix_unitaire_ttc']]);
+        $this->assertSame([], $this->journalDesEvenements($magasin));
+    }
+
+    /**
+     * Une vente encaissée n'est plus en cours : son panier se vide avec
+     * l'encaissement, sans qu'aucune ligne retirée ne s'inscrive au
+     * journal, et la caisse rouverte est vide.
+     */
+    public function test_une_vente_encaissee_ne_se_reprend_pas(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        Livewire::test(Caisse::class)
+            ->fillForm([
+                'lignes' => [['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+                'mode_paiement' => 'especes',
+            ])
+            ->call('encaisser');
+
+        $reprise = Livewire::test(Caisse::class);
+
+        $reprise->assertNotNotified('Vente en cours reprise');
+        $this->assertSame([], $reprise->get('data.lignes'));
+        $this->assertSame('TK-MABOUT-2026-000001', Facture::query()->sole()->numero);
+        $this->assertSame([['260', []]], $this->journalDesEvenements($magasin));
+    }
+
+    /**
+     * Remplacer le produit d'une ligne déjà renseignée retire le premier :
+     * le journal l'inscrit avec sa quantité et son prix.
+     */
+    public function test_remplacer_le_produit_d_une_ligne_inscrit_le_produit_retire_au_journal(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'prix_vente_ttc' => 5, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 3, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+
+        $caisse->fillForm(['lignes' => [
+            ['produit_id' => $cable->id, 'description' => $cable->nom, 'quantite' => 1, 'prix_unitaire_ttc' => '5.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+
+        $this->assertSame([
+            ['260', []],
+            ['323', ['origine' => 'caisse', 'produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 3, 'prix_unitaire_ttc' => 12000]],
+        ], $this->journalDesEvenements($magasin));
+    }
+
+    /**
+     * Baisser la quantité d'une ligne retire des articles : le journal les
+     * inscrit une fois la nouvelle quantité saisie, et une quantité en
+     * cours de saisie (champ vidé) ne retire encore rien.
+     */
+    public function test_baisser_la_quantite_d_une_ligne_inscrit_les_articles_retires_au_journal(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 3, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+        $quantite = 'data.lignes.'.array_key_first($caisse->get('data.lignes')).'.quantite';
+        $caisse->set($quantite, '');
+        $this->assertSame([], $this->journalDesEvenements($magasin));
+
+        $caisse->set($quantite, '1');
+
+        $this->assertSame([
+            ['260', []],
+            ['323', ['origine' => 'caisse', 'produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 2, 'prix_unitaire_ttc' => 12000]],
+        ], $this->journalDesEvenements($magasin));
+    }
+
+    /**
+     * « Encaisser » désactivé ne suffit pas : un appel direct à encaisser()
+     * après la clôture de la journée est refusé, même pour une vente à un
+     * professionnel.
+     */
+    public function test_apres_la_cloture_un_appel_direct_a_encaisser_est_refuse_meme_pour_un_professionnel(): void
+    {
+        $this->travelTo('2026-10-09 19:00:00');
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        app(CloturerCaisseAction::class)->handle($magasin, now());
+        $professionnel = Client::factory()->professionnel()->create();
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $this->travelTo('2026-10-09 19:30:00');
+
+        Livewire::test(Caisse::class)
+            ->fillForm([
+                'client_id' => $professionnel->id,
+                'lignes' => [['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 120, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+                'mode_paiement' => 'especes',
+            ])
+            ->call('encaisser')
+            ->assertNotified('La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
+
+        $this->assertSame(0, Facture::query()->count());
     }
 
     private function ouvrirLaCaisseDUnMagasin(): Magasin

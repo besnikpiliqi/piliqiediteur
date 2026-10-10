@@ -226,8 +226,9 @@ class InalterabiliteTest extends TestCase
 
     /**
      * Un brouillon, sans numéro ni existence fiscale, se modifie puis se
-     * supprime librement : rien n'entre dans la chaîne des ventes, seul
-     * l'abandon de la vente s'inscrit au journal des événements (après
+     * supprime librement : rien n'entre dans la chaîne des ventes. Seuls
+     * le produit qu'il perd en changeant de produit (ligne retirée) puis
+     * l'abandon de la vente s'inscrivent au journal des événements (après
      * l'initialisation du registre).
      */
     public function test_un_brouillon_se_modifie_et_se_supprime(): void
@@ -242,7 +243,7 @@ class InalterabiliteTest extends TestCase
         $this->assertModelMissing($brouillon);
         $this->assertDatabaseCount('lignes_facture', 0);
         $this->assertSame(
-            [['evenement', '260'], ['evenement', '320']],
+            [['evenement', '260'], ['evenement', '323'], ['evenement', '320']],
             EnregistrementFiscal::query()->orderBy('id')->get()->map(fn (EnregistrementFiscal $enregistrement): array => [$enregistrement->chaine->value, $enregistrement->type])->all(),
         );
     }

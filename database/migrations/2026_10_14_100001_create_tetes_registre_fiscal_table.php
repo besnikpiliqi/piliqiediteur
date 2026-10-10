@@ -7,8 +7,9 @@ use Illuminate\Support\Facades\Schema;
 /**
  * La ligne de verrou du registre fiscal de chaque magasin (voir
  * RegistreFiscal::verrouiller()) : toutes ses écritures fiscales se
- * sérialisent sur elle, et elle tient l'état des chaînes du magasin, qui
- * ne se lit que sur elle, verrouillée. Aucune clé étrangère ne pointe vers
+ * sérialisent sur elle, et elle tient l'état des chaînes du magasin et sa
+ * dernière journée de caisse clôturée, qui ne se lisent que sur elle,
+ * verrouillée. Aucune clé étrangère ne pointe vers
  * cette table : son verrou exclusif ne croise jamais les verrous partagés
  * que posent, sur la ligne du magasin, les insertions dans les tables qui
  * le référencent.
@@ -32,6 +33,9 @@ return new class extends Migration
             // enregistrement du magasin.
             $table->string('version_module', 10)->nullable();
             $table->char('cle_id', 64)->nullable();
+            // La dernière journée de caisse clôturée (voir
+            // CloturerCaisseAction), que toute vente relit sous le verrou.
+            $table->date('derniere_journee_cloturee')->nullable();
             $table->timestamps();
         });
     }

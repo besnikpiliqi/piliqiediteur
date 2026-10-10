@@ -9,8 +9,10 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
@@ -503,6 +505,73 @@ class JournalEvenementsTest extends TestCase
 
         $this->assertSame(1, Facture::withoutGlobalScopes()->whereKey($brouillon->id)->count());
         $this->assertSame([[], []], [$this->codes($magasin), $this->codes($autreMagasin)]);
+    }
+
+    /**
+     * Un brouillon est une vente commencée : chaque article qu'il perd à sa
+     * modification, ligne retirée ou quantité baissée, s'inscrit au journal
+     * en ligne retirée, avec sa quantité et son prix en centimes.
+     */
+    public function test_retirer_ou_reduire_une_ligne_d_un_brouillon_l_inscrit_au_journal(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $client = Client::factory()->create();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'prix_vente_ttc' => 5, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $ecran->id, 'quantite' => 1],
+            ['produit_id' => $cable->id, 'quantite' => 3],
+        ]);
+
+        $modifie = app(ModifierFactureAction::class)->handle($brouillon, $client, [['produit_id' => $cable->id, 'quantite' => 1]]);
+
+        $this->assertSame('5.00', $modifie->total_ttc);
+        $this->assertSame(['260', '323', '323'], $this->codes($magasin));
+        $this->assertSame([
+            ['origine' => 'brouillon', 'facture_id' => $brouillon->id, 'produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 1, 'prix_unitaire_ttc' => 12000],
+            ['origine' => 'brouillon', 'facture_id' => $brouillon->id, 'produit_id' => $cable->id, 'service_id' => null, 'description' => 'Câble USB-C', 'quantite' => 2, 'prix_unitaire_ttc' => 500],
+        ], app(TenantContext::class)->runAs($magasin, fn (): array => EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', (string) CodeEvenement::LigneRetiree->value)
+            ->orderBy('sequence')
+            ->get()
+            ->map(fn (EnregistrementFiscal $evenement): array => $evenement->contenuSigne()['donnees']['details'])
+            ->all()));
+    }
+
+    /**
+     * Corriger le prix saisi d'un service, ou ajouter un article, ne
+     * retire rien : le journal n'inscrit aucune ligne retirée.
+     */
+    public function test_corriger_le_prix_d_un_service_d_un_brouillon_ne_retire_rien(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $client = Client::factory()->create();
+        $reparation = Service::factory()->create(['nom' => 'Remplacement écran']);
+        $brouillon = app(CreerFactureAction::class)->handle($client, [
+            ['service_id' => $reparation->id, 'quantite' => 1, 'prix_unitaire_ttc' => 50, 'taux_tva' => 20],
+        ]);
+
+        $modifie = app(ModifierFactureAction::class)->handle($brouillon, $client, [
+            ['service_id' => $reparation->id, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20],
+        ]);
+
+        $this->assertSame('80.00', $modifie->total_ttc);
+        $this->assertSame([], $this->codes($magasin));
+    }
+
+    public function test_sans_cle_de_signature_un_brouillon_ne_se_modifie_pas(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 2]]);
+        $this->retirerLaCleDeSignature();
+
+        $this->assertThrows(fn () => app(ModifierFactureAction::class)->handle($brouillon, $client, [['produit_id' => $produit->id, 'quantite' => 1]]), ModuleFiscalNonConfigureException::class);
+
+        $this->assertSame([2, '24.00'], [$brouillon->fresh()->lignes->sole()->quantite, $brouillon->fresh()->total_ttc]);
+        $this->assertSame([], $this->codes($magasin));
     }
 
     public function test_les_evenements_se_signent_et_se_chainent_les_uns_aux_autres(): void

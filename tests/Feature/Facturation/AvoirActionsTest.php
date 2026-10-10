@@ -684,4 +684,60 @@ class AvoirActionsTest extends TestCase
 
         $this->assertSame('AV-LYON1-2026-000001', $avoir->numero);
     }
+
+    /**
+     * La série du document corrigé, figée dans son numéro, décide à la fois
+     * du refus après la clôture et de la clôture qui compte l'avoir : un
+     * avoir sur une facture électronique n'entre dans aucune clôture de
+     * caisse, même si son client est devenu particulier depuis.
+     */
+    public function test_un_avoir_sur_une_facture_reste_hors_des_clotures_meme_si_le_client_devient_particulier(): void
+    {
+        $magasin = app(TenantContext::class)->magasin();
+        $this->travelTo('2026-10-08 10:00:00');
+        $client = Client::factory()->professionnel()->create();
+        $facture = $this->emettreFacture($client, Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]));
+        $this->travelTo('2026-10-08 19:00:00');
+        app(CloturerCaisseAction::class)->handle($magasin, now());
+        $this->travelTo('2026-10-09 18:00:00');
+        $client->update(['type_client' => TypeClient::Particulier]);
+        $this->travelTo('2026-10-09 19:00:00');
+        app(CloturerCaisseAction::class)->handle($magasin, now());
+        $this->travelTo('2026-10-09 19:30:00');
+
+        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
+
+        $this->assertSame(['FAC-LYON1-2026-000001', 'AV-LYON1-2026-000001', '120.00'], [$facture->numero, $avoir->numero, $avoir->total_ttc]);
+        $this->assertSame(0, Avoir::query()->enAttenteDeCloture('2026-10-09')->count());
+        $this->travelTo('2026-10-11 00:00:00');
+        $cloture = app(CloturerCaisseAction::class)->handle($magasin, '2026-10-10');
+        $this->assertSame([0, '0.00'], [$cloture->nombre_avoirs, $cloture->total_ttc]);
+        $this->assertNull($avoir->fresh()->cloture_caisse_id);
+    }
+
+    /**
+     * Un ticket reste un ticket : il compte dans la clôture de sa journée
+     * même si son client est devenu professionnel depuis, et un retour sur
+     * lui attend le lendemain une fois cette journée clôturée.
+     */
+    public function test_un_ticket_dont_le_client_devient_professionnel_reste_dans_sa_cloture_et_son_avoir_attend_le_lendemain(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $client = Client::factory()->create();
+        $ticket = $this->emettreFacture($client, Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]));
+        $this->travelTo('2026-10-09 15:00:00');
+        $client->update(['type_client' => TypeClient::Professionnel]);
+        $this->travelTo('2026-10-09 19:00:00');
+
+        $cloture = app(CloturerCaisseAction::class)->handle(app(TenantContext::class)->magasin(), now());
+
+        $this->assertSame(['TK-LYON1-2026-000001', 1, '12.00'], [$ticket->numero, $cloture->nombre_ventes, $cloture->total_ttc]);
+        $this->travelTo('2026-10-09 19:30:00');
+        $this->assertThrows(
+            fn () => app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]),
+            LogicException::class,
+            'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.',
+        );
+        $this->assertSame(0, Avoir::query()->count());
+    }
 }

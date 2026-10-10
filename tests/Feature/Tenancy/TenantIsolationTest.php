@@ -26,6 +26,7 @@ use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
@@ -99,6 +100,7 @@ class TenantIsolationTest extends TestCase
         Facture::class,
         FactureAchat::class,
         Fournisseur::class,
+        PanierCaisse::class,
         Produit::class,
         Service::class,
     ];

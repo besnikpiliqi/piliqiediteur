@@ -29,10 +29,13 @@ use Filament\Support\Contracts\HasLabel;
  * - L'annulation de ticket suit l'émission d'un avoir sur des tickets de
  *   caisse (voir EmettreAvoirAction).
  * - La vente abandonnée avant validation suit la suppression d'un
- *   brouillon de facture ou de ticket (voir Facture::delete()) et
- *   l'abandon d'une vente à la caisse ; la ligne retirée d'une vente avant
- *   validation, chaque ligne renseignée retirée du panier de la caisse
- *   (voir Caisse).
+ *   brouillon de facture ou de ticket (voir Facture::delete()), l'abandon
+ *   d'une vente à la caisse et chaque vente restée ouverte à la caisse à
+ *   la clôture de sa journée (voir PanierDeCaisse) ; la ligne retirée
+ *   d'une vente avant validation, chaque article qu'une vente perd avant
+ *   son encaissement ou son émission, au panier de la caisse comme dans un
+ *   brouillon de facture ou de ticket : ligne retirée, produit ou service
+ *   remplacé, quantité baissée (voir LignesRetirees).
  * - Chaque vérification de l'intégrité du registre (voir
  *   VerifierIntegriteAction) inscrit ses anomalies, une rupture de
  *   séquence ou de numérotation (95) ou un autre défaut d'intégrité (90),

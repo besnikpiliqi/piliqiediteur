@@ -83,7 +83,7 @@ class EmettreFactureAction
             $typeDocument = $facture->relevantDeLeInvoicing() ? TypeDocument::Facture : TypeDocument::TicketCaisse;
 
             if ($typeDocument === TypeDocument::TicketCaisse) {
-                ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($instant->utc);
+                ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($facture->magasin, $instant);
             }
 
             $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, $instant->enHeureLocale()->format('Y'));

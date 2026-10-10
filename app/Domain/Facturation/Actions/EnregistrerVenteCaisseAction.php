@@ -8,7 +8,9 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -23,7 +25,8 @@ use LogicException;
  *
  * Le registre fiscal du magasin se verrouille avant la création du
  * brouillon (voir RegistreFiscal) : sans clé de signature, rien n'est
- * créé.
+ * créé. Le panier de caisse du vendeur, sa vente étant encaissée, se vide
+ * dans la même transaction (voir PanierDeCaisse).
  */
 class EnregistrerVenteCaisseAction
 {
@@ -31,6 +34,7 @@ class EnregistrerVenteCaisseAction
         private readonly RegistreFiscal $registre,
         private readonly CreerFactureAction $creerFacture,
         private readonly EmettreFactureAction $emettreFacture,
+        private readonly PanierDeCaisse $panierDeCaisse,
     ) {}
 
     /**
@@ -49,6 +53,12 @@ class EnregistrerVenteCaisseAction
                 $this->creerFacture->handle($client, $lignes),
                 new ReglementComptant($modePaiement, $reference),
             );
+
+            $vendeur = auth()->user();
+
+            if ($vendeur instanceof User) {
+                $this->panierDeCaisse->vider($vendeur);
+            }
 
             return $facture->fresh('lignes');
         });

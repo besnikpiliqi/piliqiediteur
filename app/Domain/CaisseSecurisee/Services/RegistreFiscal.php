@@ -52,11 +52,12 @@ use LogicException;
  * tetes_registre_fiscal (voir verrouiller()), qui tient aussi l'état de ses
  * chaînes : la séquence et la signature du dernier enregistrement de
  * chacune, les grands totaux de la chaîne des ventes, la version du module
- * et la clé du dernier enregistrement du magasin. Cet état ne se lit que
- * sur cette ligne, verrouillée, jamais dans
- * enregistrements_fiscaux : sous MySQL et MariaDB (REPEATABLE READ), une
- * lecture sans verrou relit la photo prise à la première lecture de la
- * transaction et ignorerait ce qu'une autre caisse a inscrit depuis, et une
+ * et la clé du dernier enregistrement du magasin, et sa dernière journée de
+ * caisse clôturée (voir derniereJourneeCloturee()). Cet état ne se lit que
+ * sur cette ligne, verrouillée, jamais dans enregistrements_fiscaux ni
+ * clotures_caisse : sous MySQL et MariaDB (REPEATABLE READ), une lecture
+ * sans verrou relit la photo prise à la première lecture de la transaction
+ * et ignorerait ce qu'une autre caisse a inscrit ou clôturé depuis, et une
  * lecture verrouillée du dernier enregistrement d'une chaîne poserait un
  * verrou d'intervalle jusque sur les enregistrements d'un autre magasin.
  *
@@ -149,6 +150,35 @@ class RegistreFiscal
 
             return $operation();
         });
+    }
+
+    /**
+     * La dernière journée de caisse clôturée du magasin actif (AAAA-MM-JJ),
+     * null tant qu'aucune ne l'est, lue sur la ligne de verrou, sous le
+     * verrou de la transaction en cours (voir verrouiller()) : une vente qui
+     * a attendu la fin de la clôture de sa journée la voit, quelle que soit
+     * la photo que ses lectures sans verrou ont prise avant.
+     *
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function derniereJourneeCloturee(Magasin $magasin): ?string
+    {
+        return $this->verrou($magasin)[0]->derniere_journee_cloturee;
+    }
+
+    /**
+     * Note sur la ligne de verrou la journée que la transaction en cours
+     * clôture (voir CloturerCaisseAction), sous le même verrou.
+     *
+     * @param  string  $journee  AAAA-MM-JJ
+     *
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function noterLaJourneeCloturee(Magasin $magasin, string $journee): void
+    {
+        $this->verrou($magasin)[0]->forceFill(['derniere_journee_cloturee' => $journee])->save();
     }
 
     /**

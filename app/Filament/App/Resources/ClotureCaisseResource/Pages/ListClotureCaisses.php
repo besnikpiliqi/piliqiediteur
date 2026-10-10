@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources\ClotureCaisseResource\Pages;
 
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\CaissesPersonnellesOuvertesApercu;
@@ -143,8 +144,9 @@ class ListClotureCaisses extends ListRecords
 
     /**
      * Le magasin voit avant de confirmer exactement ce que chaque journée
-     * regroupera (mêmes critères que CloturerCaisseAction), pas seulement
-     * un avertissement générique.
+     * regroupera (mêmes critères que CloturerCaisseAction) et les ventes
+     * en cours à la caisse qu'elle abandonnera, pas seulement un
+     * avertissement générique.
      *
      * @param  Collection<int, string>  $journees
      */
@@ -165,6 +167,12 @@ class ListClotureCaisses extends ListRecords
                 $enAttente['avoirs'] === 0 => "{$enAttente['ventes']} vente(s) au comptoir pour un total de {$total} €.",
                 default => "{$enAttente['ventes']} vente(s) au comptoir et {$enAttente['avoirs']} avoir(s) déduit(s), pour un total net de {$total} €.",
             };
+        }
+
+        $ventesOuvertes = app(PanierDeCaisse::class)->nombreDeVentesOuvertesLe($this->journee);
+
+        if ($ventesOuvertes > 0) {
+            $paragraphes[] = "{$ventesOuvertes} vente(s) en cours à la caisse, jamais encaissée(s), sera(ont) abandonnée(s) et inscrite(s) au journal des événements.";
         }
 
         $paragraphes[] = 'Après la clôture, vous ne pourrez plus faire de ventes aujourd\'hui.';

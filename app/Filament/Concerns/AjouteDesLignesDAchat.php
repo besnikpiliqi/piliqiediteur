@@ -46,6 +46,8 @@ trait AjouteDesLignesDAchat
 {
     use SaisitLesPrixDeLigne;
 
+    private const AUCUN_MONTANT = ['montant_ht' => 0.0, 'montant_tva' => 0.0, 'montant_ttc' => 0.0];
+
     private const PRODUIT_EXISTANT = 'existant';
 
     private const NOUVEAU_PRODUIT = 'nouveau';

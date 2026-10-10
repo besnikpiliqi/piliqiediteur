@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -10,6 +11,7 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Models\Magasin;
@@ -247,5 +249,27 @@ class EmettreFactureActionTest extends TestCase
         $facture = app(EmettreFactureAction::class)->handle($facture);
 
         $this->assertSame('FAC-LYON1-2026-000001', $facture->numero);
+    }
+
+    /**
+     * Sous MySQL (REPEATABLE READ), un ticket qui attend la fin de la
+     * clôture de sa journée relirait sans verrou la photo prise avant elle,
+     * sans la clôture. Le refus se fonde donc sur la journée que la clôture
+     * note sur la ligne de verrou du registre fiscal, relue sous ce verrou
+     * : ici, la ligne de verrou note la journée alors qu'aucune clôture
+     * n'est visible, comme pour ce ticket.
+     */
+    public function test_le_refus_apres_la_cloture_se_fonde_sur_la_journee_notee_sous_le_verrou_du_registre(): void
+    {
+        $this->travelTo('2026-10-09 19:30:00');
+        (new TeteRegistreFiscal)->forceFill(['derniere_journee_cloturee' => '2026-10-09'])->save();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]);
+
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($brouillon), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
+
+        $this->assertSame([StatutFacture::Brouillon, 0], [$brouillon->fresh()->statut, ClotureCaisse::query()->count()]);
     }
 }

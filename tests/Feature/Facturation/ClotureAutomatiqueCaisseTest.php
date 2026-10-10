@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -344,11 +345,11 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $this->vendreUnTicketDe12Euros($autreMagasin);
         $this->travelTo('2026-10-09 00:00:00');
         Exceptions::fake([RuntimeException::class]);
-        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), $magasinEnPanne->id) extends CloturerCaisseAction
+        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), $magasinEnPanne->id) extends CloturerCaisseAction
         {
-            public function __construct(DocumentNumberingService $numerotation, CalculateurLigne $calculateur, RegistreFiscal $registre, private readonly int $magasinEnPanne)
+            public function __construct(DocumentNumberingService $numerotation, CalculateurLigne $calculateur, RegistreFiscal $registre, PanierDeCaisse $panierDeCaisse, private readonly int $magasinEnPanne)
             {
-                parent::__construct($numerotation, $calculateur, $registre);
+                parent::__construct($numerotation, $calculateur, $registre, $panierDeCaisse);
             }
 
             public function handle(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse

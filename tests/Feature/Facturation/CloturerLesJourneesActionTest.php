@@ -13,6 +13,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
@@ -107,7 +108,7 @@ class CloturerLesJourneesActionTest extends TestCase
         $this->travelTo('2026-10-05 10:00:00');
         $this->vendreUnTicket();
         $this->travelTo('2026-10-08 19:00:00');
-        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class)) extends CloturerCaisseAction
+        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class)) extends CloturerCaisseAction
         {
             public function handle(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
             {

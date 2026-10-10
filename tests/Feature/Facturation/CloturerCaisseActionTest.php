@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -14,8 +16,10 @@ use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use LogicException;
@@ -260,5 +264,35 @@ class CloturerCaisseActionTest extends TestCase
 
         $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-07'), LogicException::class, "La journée du 07/10/2026 précède la dernière journée clôturée, celle du 09/10/2026 : les journées se clôturent dans l'ordre.");
         $this->assertSame(1, ClotureCaisse::query()->count());
+    }
+
+    /**
+     * Une vente restée ouverte à la caisse quand sa journée se clôture est
+     * abandonnée : le journal des événements l'inscrit avec son vendeur, et
+     * son panier s'efface. Une vente commencée après minuit appartient à la
+     * journée suivante.
+     */
+    public function test_la_cloture_abandonne_les_ventes_restees_ouvertes_a_la_caisse_ce_jour_la(): void
+    {
+        $this->travelTo('2026-10-09 18:00:00');
+        $vendeur = User::factory()->create();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 120, 'taux_tva' => 20]);
+        PanierCaisse::factory()->avecLeProduit($ecran, 3)->create(['user_id' => $vendeur->id]);
+        $this->travelTo('2026-10-10 00:00:30');
+        $vendeurDeNuit = User::factory()->create();
+        PanierCaisse::factory()->create(['user_id' => $vendeurDeNuit->id]);
+
+        app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-09');
+
+        $this->assertSame([
+            ['260', []],
+            ['320', ['origine' => 'cloture', 'journee' => '2026-10-09', 'vendeur_id' => $vendeur->id, 'nombre_lignes' => 1, 'total_ttc' => 36000]],
+        ], EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->orderBy('sequence')
+            ->get()
+            ->map(fn (EnregistrementFiscal $evenement): array => [$evenement->type, $evenement->contenuSigne()['donnees']['details']])
+            ->all());
+        $this->assertSame([$vendeurDeNuit->id], PanierCaisse::query()->pluck('user_id')->all());
     }
 }

@@ -2,9 +2,14 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
+use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Services\InstantFiscal;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -19,12 +24,12 @@ use Illuminate\Support\Collection;
 use LogicException;
 
 /**
- * Agrège les ventes à des clients particuliers d'une journée, moins les
- * avoirs qui leur ont été émis ce jour-là, pour l'e-reporting (voir
- * CloturerCaisseAction) -- jamais les ventes à des clients
- * professionnels, qui relèvent de l'e-invoicing individuelle transmise
- * facture par facture (voir Facture::relevantDeLeInvoicing). Une clôture
- * par jour du calendrier à partir de la première vente, dans l'ordre (voir
+ * Agrège les tickets de caisse (ventes à des particuliers) d'une journée,
+ * moins les avoirs sur des tickets émis ce jour-là, pour l'e-reporting
+ * (voir CloturerCaisseAction) -- jamais les factures à des professionnels,
+ * qui relèvent de l'e-invoicing individuelle transmise facture par facture
+ * (voir Facture::relevantDeLeInvoicing), ni leurs avoirs. Une clôture par
+ * jour du calendrier à partir de la première vente, dans l'ordre (voir
  * CloturerLesJourneesAction).
  *
  * PAS de SoftDeletes ici, volontairement : document fiscal au même titre
@@ -71,7 +76,10 @@ class ClotureCaisse extends Model
 
     /**
      * La dernière journée clôturée du magasin actif (AAAA-MM-JJ), null
-     * tant qu'aucune ne l'est.
+     * tant qu'aucune ne l'est, lue sans verrou : pour l'affichage et pour
+     * lister les journées à clôturer. Une émission ou une clôture la relit
+     * sous le verrou du registre fiscal (voir
+     * RegistreFiscal::derniereJourneeCloturee()).
      */
     public static function derniereJourneeCloturee(): ?string
     {
@@ -89,24 +97,34 @@ class ClotureCaisse extends Model
      * ListClotureCaisses). Null tant que la journée est ouverte.
      *
      * @param  CarbonInterface  $instant  l'instant de la vente
+     * @param  string|null  $derniereJourneeCloturee  AAAA-MM-JJ : les journées se clôturent dans l'ordre, celle de la vente l'est donc si elle ne vient pas après
      */
-    public static function refusDUneVente(CarbonInterface $instant): ?string
+    public static function refusDUneVente(CarbonInterface $instant, ?string $derniereJourneeCloturee): ?string
     {
         $journee = CarbonImmutable::instance($instant)->setTimezone(config('app.timezone'));
 
-        return static::query()->duJour($journee->toDateString())->exists()
+        return $derniereJourneeCloturee !== null && $journee->toDateString() <= $derniereJourneeCloturee
             ? "La journée du {$journee->format('d/m/Y')} est clôturée : les ventes reprennent demain."
             : null;
     }
 
     /**
-     * @param  CarbonInterface  $instant  l'instant de l'émission, que donne le registre fiscal
+     * Le refus du domaine, pris sous le verrou du registre fiscal que tient
+     * déjà la transaction de l'émission : il lit la dernière journée
+     * clôturée sur la ligne de verrou (voir
+     * RegistreFiscal::derniereJourneeCloturee()), jamais dans cette table
+     * sans verrou. Un ticket émis pendant la clôture de sa journée attend
+     * qu'elle soit terminée, puis se voit refusé, même sous MySQL.
+     *
+     * @param  InstantFiscal  $instant  l'instant de l'émission, que donne le registre fiscal
      *
      * @throws LogicException la journée est clôturée (voir refusDUneVente())
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
      */
-    public static function refuserUneVenteSiLaJourneeEstCloturee(CarbonInterface $instant): void
+    public static function refuserUneVenteSiLaJourneeEstCloturee(Magasin $magasin, InstantFiscal $instant): void
     {
-        $refus = static::refusDUneVente($instant);
+        $refus = static::refusDUneVente($instant->utc, app(RegistreFiscal::class)->derniereJourneeCloturee($magasin));
 
         if ($refus !== null) {
             throw new LogicException($refus);

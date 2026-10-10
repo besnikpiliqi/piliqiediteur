@@ -4,12 +4,12 @@ namespace App\Domain\Facturation\Models;
 
 use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
-use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\StatutAvoir;
+use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
@@ -88,17 +88,42 @@ class Avoir extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Les avoirs à des particuliers émis tel jour qu'aucune clôture n'a
-     * encore déduits de ses ventes (voir CloturerCaisseAction) : un retour
-     * se compte le jour où il a lieu, pas celui de la vente d'origine.
+     * Les avoirs sur des tickets émis tel jour qu'aucune clôture n'a encore
+     * déduits de ses ventes (voir CloturerCaisseAction) : un retour se
+     * compte le jour où il a lieu, pas celui de la vente d'origine.
      */
     public function scopeEnAttenteDeCloture(Builder $query, CarbonInterface|string $jour): Builder
     {
         return $query
-            ->whereHas('client', fn (Builder $client) => $client->where('type_client', TypeClient::Particulier))
+            ->surDesTickets()
             ->emisLe($jour)
             ->where('statut', StatutAvoir::Emise)
             ->whereNull('cloture_caisse_id');
+    }
+
+    /**
+     * Les avoirs sur des tickets de caisse, en SQL (voir
+     * corrigeDesTickets()).
+     */
+    public function scopeSurDesTickets(Builder $query): Builder
+    {
+        return $query->whereHas('lignes.ligneFacture.facture', fn (Builder $facture) => $facture->tickets());
+    }
+
+    /**
+     * Un avoir sur des tickets de caisse : la clôture du jour de son
+     * émission le déduit (voir scopeEnAttenteDeCloture()), la caisse ne
+     * l'émet plus une fois cette journée clôturée (voir
+     * EmettreAvoirAction), et le registre fiscal l'inscrit en annulation de
+     * ticket. Un avoir ne mélange jamais tickets et factures (voir
+     * CreerAvoirAction) : la série de ses documents corrigés, figée dans
+     * leur numéro, le dit pour toujours, même si le type du client change
+     * depuis. Un avoir sur une facture électronique n'entre donc jamais
+     * dans une clôture de caisse.
+     */
+    public function corrigeDesTickets(): bool
+    {
+        return $this->loadMissing('lignes.ligneFacture.facture')->facturesConcernees()->first()?->serie() === TypeDocument::TicketCaisse;
     }
 
     public function creePar(): BelongsTo

@@ -11,6 +11,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Tenancy\Models\Magasin;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -19,16 +20,18 @@ use Illuminate\Support\Facades\DB;
 use LogicException;
 
 /**
- * Agrège en un seul document fiscal toutes les ventes à des clients
- * PARTICULIERS d'une journée donnée, moins les avoirs qui leur ont été
+ * Agrège en un seul document fiscal tous les tickets de caisse (ventes à
+ * des particuliers) d'une journée donnée, moins les avoirs sur des tickets
  * émis ce jour-là : la TVA d'une vente corrigée se régularise le jour de
  * l'avoir (art. 272 du CGI), et en caisse une correction est toujours une
- * opération en négatif, jamais une modification ni une suppression. Les ventes
- * et avoirs à des professionnels n'y figurent jamais, ils relèvent de
- * l'e-invoicing individuelle (voir Facture::relevantDeLeInvoicing). La
- * correction d'une vente déjà agrégée passe par un avoir, compté dans la
- * clôture du jour où il est émis, jamais par une réouverture de la
- * clôture.
+ * opération en négatif, jamais une modification ni une suppression. Les
+ * factures à des professionnels et leurs avoirs n'y figurent jamais, ils
+ * relèvent de l'e-invoicing individuelle (voir
+ * Facture::relevantDeLeInvoicing). La série d'un document, figée dans son
+ * numéro, le dit pour toujours (voir Facture::scopeTickets() et
+ * Avoir::corrigeDesTickets()). La correction d'une vente déjà agrégée
+ * passe par un avoir, compté dans la clôture du jour où il est émis,
+ * jamais par une réouverture de la clôture.
  *
  * Les journées se clôturent une à une, dans l'ordre du calendrier, et
  * chacune une seule fois (contrainte unique magasin_id/date_cloture) :
@@ -42,10 +45,15 @@ use LogicException;
  * des journées.
  *
  * Le registre fiscal du magasin se verrouille d'abord (voir
- * RegistreFiscal), comme pour toute émission : un ticket émis pendant la
- * clôture de sa journée attend qu'elle soit terminée, puis se voit refusé
- * (voir ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ; aucune
- * vente ne s'ajoute à une journée déjà agrégée.
+ * RegistreFiscal), comme pour toute émission, et la clôture note sa
+ * journée sur la ligne de verrou (voir
+ * RegistreFiscal::noterLaJourneeCloturee()) : un ticket émis pendant la
+ * clôture de sa journée attend qu'elle soit terminée, relit cette journée
+ * sous le verrou, puis se voit refusé (voir
+ * ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ; aucune vente
+ * ne s'ajoute à une journée déjà agrégée. Les ventes restées ouvertes à la
+ * caisse ce jour-là sont abandonnées dans la même transaction (voir
+ * PanierDeCaisse::abandonnerLesVentesOuvertesLe()).
  */
 class CloturerCaisseAction
 {
@@ -53,6 +61,7 @@ class CloturerCaisseAction
         private readonly DocumentNumberingService $numerotation,
         private readonly CalculateurLigne $calculateur,
         private readonly RegistreFiscal $registre,
+        private readonly PanierDeCaisse $panierDeCaisse,
     ) {}
 
     /**
@@ -66,7 +75,8 @@ class CloturerCaisseAction
 
         return DB::transaction(function () use ($magasin, $journee) {
             $instant = $this->registre->verrouiller($magasin);
-            $this->verifierQueLaJourneePeutEtreCloturee($journee, $instant->enHeureLocale()->toDateString());
+            $this->verifierQueLaJourneePeutEtreCloturee($journee, $instant->enHeureLocale()->toDateString(), $this->registre->derniereJourneeCloturee($magasin));
+            $this->panierDeCaisse->abandonnerLesVentesOuvertesLe($journee);
 
             $ventes = Facture::query()->enAttenteDeCloture($journee)->lockForUpdate()->get();
             $avoirs = Avoir::query()->enAttenteDeCloture($journee)->lockForUpdate()->get();
@@ -99,6 +109,8 @@ class CloturerCaisseAction
                     ->update(['cloture_caisse_id' => $cloture->id]);
             }
 
+            $this->registre->noterLaJourneeCloturee($magasin, $journee);
+
             return $cloture;
         });
     }
@@ -106,10 +118,11 @@ class CloturerCaisseAction
     /**
      * @param  string  $journee  la journée à clôturer, AAAA-MM-JJ
      * @param  string  $aujourdhui  la journée en cours à l'heure de Paris, AAAA-MM-JJ
+     * @param  string|null  $derniere  la dernière journée clôturée, lue sous le verrou du registre
      *
      * @throws LogicException
      */
-    private function verifierQueLaJourneePeutEtreCloturee(string $journee, string $aujourdhui): void
+    private function verifierQueLaJourneePeutEtreCloturee(string $journee, string $aujourdhui, ?string $derniere): void
     {
         $enClair = static fn (string $jour): string => CarbonImmutable::parse($jour)->format('d/m/Y');
 
@@ -117,20 +130,16 @@ class CloturerCaisseAction
             throw new LogicException("La journée du {$enClair($journee)} n'est pas encore commencée.");
         }
 
-        if (ClotureCaisse::query()->duJour($journee)->exists()) {
-            throw new LogicException("La journée du {$enClair($journee)} est déjà clôturée.");
-        }
-
-        $derniere = ClotureCaisse::derniereJourneeCloturee();
-
-        if ($derniere !== null && $journee < $derniere) {
-            throw new LogicException("La journée du {$enClair($journee)} précède la dernière journée clôturée, celle du {$enClair($derniere)} : les journées se clôturent dans l'ordre.");
+        if ($derniere !== null && $journee <= $derniere) {
+            throw new LogicException(ClotureCaisse::query()->duJour($journee)->exists()
+                ? "La journée du {$enClair($journee)} est déjà clôturée."
+                : "La journée du {$enClair($journee)} précède la dernière journée clôturée, celle du {$enClair($derniere)} : les journées se clôturent dans l'ordre.");
         }
 
         $veille = CarbonImmutable::parse($journee)->subDay()->toDateString();
         $premiereVente = Facture::jourDeLaPremiereVente();
 
-        if ($premiereVente !== null && $premiereVente <= $veille && ClotureCaisse::query()->duJour($veille)->doesntExist()) {
+        if ($premiereVente !== null && $premiereVente <= $veille && $derniere !== $veille) {
             throw new LogicException("Clôturez d'abord la journée du {$enClair($veille)}.");
         }
     }

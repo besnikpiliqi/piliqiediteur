@@ -4,7 +4,6 @@ namespace App\Domain\CaisseSecurisee\Services;
 
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\CategorieOperation;
-use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
@@ -163,7 +162,7 @@ class ContenuFiscal
             'cree_par' => $this->identifiant($avoir->cree_par),
             'devise' => $avoir->devise,
             'motif' => $avoir->motif,
-            'corrige' => $documentsCorriges->first()?->serie() === TypeDocument::TicketCaisse ? 'ticket' : 'facture',
+            'corrige' => $avoir->corrigeDesTickets() ? 'ticket' : 'facture',
             'documents_corriges' => $documentsCorriges->pluck('numero')->all(),
             ...$this->lignesEtTotaux($avoir->lignes, $avoir, -1),
         ];

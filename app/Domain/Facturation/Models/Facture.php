@@ -9,7 +9,6 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
@@ -204,18 +203,29 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Les ventes à des particuliers émises tel jour qu'aucune clôture n'a
-     * encore comptées (voir CloturerCaisseAction) -- jamais un brouillon,
-     * jamais une vente à un professionnel, qui relève de la facture
-     * électronique (voir relevantDeLeInvoicing()). Une vente corrigée
-     * depuis par un avoir y figure : l'avoir se déduit à part, le jour de
-     * son émission.
+     * Les tickets de caisse : les factures numérotées dans la série des
+     * tickets (voir serie()), émises à un particulier. Le premier segment
+     * de leur numéro le dit pour toujours, même si le type du client change
+     * depuis : un ticket reste dans la clôture de sa journée, et une
+     * facture électronique n'y entre jamais.
+     */
+    public function scopeTickets(Builder $query): Builder
+    {
+        return $query->where('numero', 'like', TypeDocument::TicketCaisse->code().'-%');
+    }
+
+    /**
+     * Les tickets émis tel jour qu'aucune clôture n'a encore comptés (voir
+     * CloturerCaisseAction) -- jamais un brouillon, jamais une facture à un
+     * professionnel, qui relève de la facture électronique (voir
+     * relevantDeLeInvoicing()). Un ticket corrigé depuis par un avoir y
+     * figure : l'avoir se déduit à part, le jour de son émission.
      */
     public function scopeEnAttenteDeCloture(Builder $query, CarbonInterface|string $jour): Builder
     {
         return $query
             ->emises()
-            ->whereHas('client', fn (Builder $client) => $client->where('type_client', TypeClient::Particulier))
+            ->tickets()
             ->emisLe($jour)
             ->whereNull('cloture_caisse_id');
     }

@@ -10,11 +10,15 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\AvoirPdfGenerator;
+use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -185,6 +189,41 @@ class AvoirPdfGeneratorTest extends TestCase
         $avoir = $this->crediter($client, $this->emettreUneFacture($client));
 
         $this->assertStringContainsString('<br>Sur ticket de caisse TK-MABOUT-2026-000001 du 09/10/2026</div>', $this->compacte($this->rendu($avoir)));
+    }
+
+    /**
+     * K6 : l'avoir d'un ticket comptoir de 12,00 € annonce que son numéro
+     * vaut bon d'avoir de 12,00 €, montant signé à son émission : il le
+     * garde une fois le bon utilisé pour une vente de 20,00 €.
+     */
+    public function test_l_avoir_d_un_client_comptoir_vaut_bon_d_avoir_du_montant_de_son_emission(): void
+    {
+        app(TenantContext::class)->set(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create()));
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $avoir = $this->crediter($comptoir, $ticket);
+        app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $avoir->numero);
+
+        $html = $this->rendu($avoir->fresh());
+
+        $this->assertSame(0.0, $avoir->fresh()->montantNonAlloue());
+        $this->assertStringContainsString('<div class="pied">Ce n° vaut bon d&#039;avoir de 12,00 € à présenter lors d&#039;un prochain achat.</div>', $this->compacte($html));
+    }
+
+    /**
+     * Le crédit de l'avoir d'un client nommé lui appartient : son avoir
+     * n'annonce aucun bon d'avoir.
+     */
+    public function test_l_avoir_d_un_client_nomme_n_annonce_aucun_bon_d_avoir(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $client = Client::factory()->create();
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+
+        $avoir = $this->crediter($client, $ticket);
+
+        $this->assertSame(12.0, $avoir->fresh()->montantNonAlloue());
+        $this->assertStringNotContainsString('bon d&#039;avoir', $this->rendu($avoir));
     }
 
     private function emettreUneFacture(Client $client): Facture

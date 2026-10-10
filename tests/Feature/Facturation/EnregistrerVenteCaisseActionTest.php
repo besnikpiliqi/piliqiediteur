@@ -2,18 +2,24 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use LogicException;
@@ -190,5 +196,71 @@ class EnregistrerVenteCaisseActionTest extends TestCase
 
         $this->assertSame(0, Facture::query()->count());
         $this->assertSame(0, Paiement::query()->count());
+    }
+
+    /**
+     * Le client comptoir d'un magasin créé par son propriétaire (voir
+     * CreerMagasinAction), qui devient le magasin actif.
+     */
+    private function clientComptoir(): Client
+    {
+        app(TenantContext::class)->set(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create()));
+
+        return Client::query()->where('est_comptoir', true)->sole();
+    }
+
+    /**
+     * Un ticket comptoir au prix TTC donné, repris en entier par un avoir :
+     * son numéro vaut bon d'avoir de ce montant.
+     */
+    private function bonDAvoir(Client $comptoir, float $prixTtc): Avoir
+    {
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+
+        return app(EnregistrerAvoirAction::class)->handle($comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+    }
+
+    /**
+     * K6 : un bon d'avoir de 30,00 € règle en entier une vente comptoir de
+     * 20,00 €, sans encaissement, et garde 10,00 € pour un prochain achat.
+     */
+    public function test_un_bon_d_avoir_plus_grand_que_la_vente_la_regle_et_garde_son_reste(): void
+    {
+        $comptoir = $this->clientComptoir();
+        $bon = $this->bonDAvoir($comptoir, 30);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: 'AV-MABOUT-2026-000001');
+
+        $this->assertSame([StatutFacture::Payee, 20.0, 0.0, 0.0], [$ticket->fresh()->statut, $ticket->montantCrediteParAvoir(), $ticket->montantPaye(), $ticket->montantRestant()]);
+        $this->assertSame(1, Paiement::query()->count());
+        $this->assertSame(10.0, $bon->fresh()->montantNonAlloue());
+        $contexte = $ticket->enregistrementDeVente()->firstOrFail()->contenuSigne()['donnees']['contexte'];
+        $this->assertSame([[], [['avoir_id' => $bon->id, 'numero' => 'AV-MABOUT-2026-000001', 'montant' => 2000]]], [$contexte['reglements'], $contexte['credits_avoir']]);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
+    }
+
+    /**
+     * Un bon d'avoir épuisé est refusé avant que la vente ne commence :
+     * aucun ticket, aucun numéro consommé, aucun paiement.
+     */
+    public function test_un_bon_d_avoir_epuise_est_refuse_sans_rien_enregistrer(): void
+    {
+        $comptoir = $this->clientComptoir();
+        $bon = $this->bonDAvoir($comptoir, 12);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
+        app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $bon->numero);
+
+        try {
+            app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $bon->numero);
+            $this->fail('Un bon d\'avoir épuisé aurait dû être refusé.');
+        } catch (LogicException $refus) {
+            $this->assertSame('Ce bon d\'avoir est introuvable ou déjà utilisé.', $refus->getMessage());
+        }
+
+        $this->assertSame(['TK-MABOUT-2026-000001', 'TK-MABOUT-2026-000002'], Facture::query()->orderBy('id')->pluck('numero')->all());
+        $this->assertSame(2, Paiement::query()->count());
+        $this->assertSame(['12.00'], AvoirAllocation::query()->where('avoir_id', $bon->id)->pluck('montant_alloue')->all());
+        $this->assertSame('TK-MABOUT-2026-000003', app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes)->numero);
     }
 }

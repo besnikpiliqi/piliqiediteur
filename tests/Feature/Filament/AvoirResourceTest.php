@@ -450,4 +450,28 @@ class AvoirResourceTest extends TestCase
             [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_VIEW],
         );
     }
+
+    /**
+     * B6 et K6 : avant son émission, le magasin lit ce que deviendra le
+     * crédit de l'avoir, selon son client.
+     */
+    public function test_le_formulaire_annonce_ce_que_devient_le_credit_de_l_avoir(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $this->emettreFactureDepuisLePanneau($client);
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $this->emettreFactureDepuisLePanneau($comptoir);
+
+        $formulaire = Livewire::test(CreateAvoir::class);
+
+        $formulaire
+            ->fillForm(['client_id' => $client->id])
+            ->assertSee('L\'avoir réduit d\'abord ce qui reste dû des documents qu\'il corrige. Le crédit restant est imputé sur les factures impayées du client, de la plus ancienne à la plus récente.')
+            ->fillForm(['client_id' => $comptoir->id])
+            ->assertSee('L\'avoir réduit d\'abord ce qui reste dû des tickets qu\'il corrige ; son crédit restant vaut bon d\'avoir : son numéro le fait utiliser lors d\'un prochain achat au comptoir.');
+    }
 }

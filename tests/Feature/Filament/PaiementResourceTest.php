@@ -6,9 +6,11 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -701,8 +703,10 @@ class PaiementResourceTest extends TestCase
 
     /**
      * Un client qui a 36,00 € de crédit d'avoir (un achat de 36,00 €
-     * payé puis rendu) et des factures à régler, émises avant ce retour,
-     * de la plus ancienne à la plus récente.
+     * payé puis rendu) et des factures à régler, de la plus ancienne à la
+     * plus récente : un virement les réglait quand l'avoir a été émis, qui
+     * n'a donc rien eu à y imputer (B6), puis la contre-passation de ce
+     * virement, rejeté, les a rouvertes.
      *
      * @param  list<float>  $prixDesFactures
      * @return array{client: Client, factures: list<Facture>}
@@ -714,7 +718,13 @@ class PaiementResourceTest extends TestCase
         $factures = array_map(fn (float $prix): Facture => app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
             ['produit_id' => Produit::factory()->create(['prix_vente_ttc' => $prix, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1],
         ])), $prixDesFactures);
+        $virementRejete = app(EnregistrerPaiementAction::class)->handle(
+            $client,
+            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => array_sum($prixDesFactures), 'recu_le' => today()->toDateString()],
+            array_map(fn (Facture $facture): array => ['facture_id' => $facture->id, 'montant' => $facture->total_ttc], $factures),
+        );
         app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]]);
+        app(ContrePasserPaiementAction::class)->handle($virementRejete, 'Virement rejeté');
         $this->assertSame(36.0, $client->soldeCrediteur());
 
         return ['client' => $client, 'factures' => $factures];

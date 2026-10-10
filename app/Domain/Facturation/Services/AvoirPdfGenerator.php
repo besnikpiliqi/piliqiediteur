@@ -9,10 +9,11 @@ use Barryvdh\DomPDF\PDF as PdfDocument;
 
 /**
  * Même principe que FacturePdfGenerator : toujours depuis les données
- * déjà figées de l'avoir (client, lignes, totaux) et l'émetteur que son
- * contenu signé a retenu (voir FigeSonEmetteur), jamais depuis l'état
- * courant du catalogue, de la fiche du client, du magasin ou de la
- * facture créditée.
+ * déjà figées de l'avoir (client, lignes, totaux), l'émetteur et la
+ * mention du bon d'avoir que son contenu signé a retenus (voir
+ * FigeSonEmetteur et Avoir::mentionDuBonDAvoir()), jamais depuis l'état
+ * courant du catalogue, de la fiche du client, du magasin, de la facture
+ * créditée ou du crédit qui reste à l'avoir.
  */
 class AvoirPdfGenerator
 {
@@ -33,7 +34,7 @@ class AvoirPdfGenerator
     {
         $avoir->loadMissing(['client', 'lignes.ligneFacture.facture', 'magasin']);
 
-        return view('avoirs.pdf', ['avoir' => $avoir, 'emetteur' => $avoir->emetteur()])->render();
+        return view('avoirs.pdf', ['avoir' => $avoir, 'emetteur' => $avoir->emetteur(), 'bonDAvoir' => $avoir->mentionDuBonDAvoir()])->render();
     }
 
     public function nomFichier(Avoir $avoir): string

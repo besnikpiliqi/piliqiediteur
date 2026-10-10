@@ -550,7 +550,7 @@ class FactureResource extends Resource
                         Textarea::make('motif')->label('Motif de l\'avoir')->required(),
                     ])
                     ->requiresConfirmation()
-                    ->modalDescription('Seules les lignes et quantités conservées ci-dessous seront créditées, et leur stock restauré. Retirez les lignes à ne pas créditer. Cette action est irréversible.')
+                    ->modalDescription(fn (Facture $record): string => 'Seules les lignes et quantités conservées ci-dessous seront créditées, et leur stock restauré. Retirez les lignes à ne pas créditer. Cette action est irréversible. '.AvoirResource::imputationDuCredit($record->client))
                     ->visible(fn (Facture $record) => $record->statut !== StatutFacture::Brouillon
                         && $record->possedeDesLignesCreditables()
                         && auth()->user()->can(PermissionRegistry::AVOIR_CREER))

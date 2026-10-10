@@ -198,19 +198,20 @@ class Client extends Model
     }
 
     /**
-     * Crédit encore disponible pour ce client, tous avoirs confondus
-     * (particulier ou professionnel : aucune intégration bancaire pour
-     * rembourser par virement/espèces, voir AppliquerAvoirsDisponiblesAction
-     * -- ce qu'un avoir n'a pas imputé sur ses propres factures, voir
-     * ImputerAvoirSurSesFacturesAction, reste un crédit à appliquer sur une
-     * prochaine facture jusqu'à épuisement).
+     * Crédit encore disponible pour ce client, tous avoirs confondus,
+     * particulier ou professionnel : un avoir n'est jamais remboursé (B5).
+     * À son émission, il règle d'abord les factures qu'il corrige, puis les
+     * autres factures impayées du client, de la plus ancienne à la plus
+     * récente (voir ImputerAvoirSurSesFacturesAction) ; ce qui reste est ce
+     * crédit, que la prochaine facture du client absorbe (voir
+     * AppliquerAvoirsDisponiblesAction) ou que solde un paiement (voir
+     * EnregistrerPaiementAction).
      *
-     * Exception volontaire : le client comptoir générique (voir
-     * estComptoir()) n'a jamais de solde créditeur. Il est partagé par
-     * toutes les ventes anonymes du magasin -- un avoir émis "pour lui"
-     * n'a aucun client identifiable à qui l'appliquer plus tard, et
-     * l'appliquer au hasard sur la prochaine vente comptoir reviendrait à
-     * donner le remboursement d'une personne à une autre.
+     * Le client comptoir (voir estComptoir()) n'a jamais de solde
+     * créditeur : il est partagé par toutes les ventes anonymes du magasin,
+     * et le crédit d'un avoir fait au comptoir n'appartient qu'à qui en
+     * présente le numéro, son bon d'avoir (voir
+     * EnregistrerVenteCaisseAction), jamais à la vente comptoir suivante.
      */
     public function soldeCrediteur(): float
     {

@@ -13,6 +13,7 @@ use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
@@ -129,7 +130,28 @@ class AvoirResource extends Resource
                 ->columnSpanFull(),
 
             Textarea::make('motif')->label('Motif de l\'avoir')->required()->columnSpanFull(),
+
+            Placeholder::make('imputation_du_credit')
+                ->hiddenLabel()
+                ->content(fn (Get $get): string => self::imputationDuCredit(Client::withTrashed()->find($get('client_id'))))
+                ->visible(fn (Get $get): bool => filled($get('client_id')))
+                ->columnSpanFull(),
         ])->columns(2);
+    }
+
+    /**
+     * Ce que devient le crédit de l'avoir, annoncé avant son émission, ici
+     * comme dans l'action « Avoir » de FactureResource : il réduit d'abord
+     * ce qui reste dû des documents qu'il corrige, puis règle les autres
+     * factures impayées du client (voir ImputerAvoirSurSesFacturesAction),
+     * sauf au client comptoir, dont l'avoir vaut bon d'avoir (voir
+     * EnregistrerVenteCaisseAction).
+     */
+    public static function imputationDuCredit(?Client $client): string
+    {
+        return $client?->estComptoir()
+            ? 'L\'avoir réduit d\'abord ce qui reste dû des tickets qu\'il corrige ; son crédit restant vaut bon d\'avoir : son numéro le fait utiliser lors d\'un prochain achat au comptoir.'
+            : 'L\'avoir réduit d\'abord ce qui reste dû des documents qu\'il corrige. Le crédit restant est imputé sur les factures impayées du client, de la plus ancienne à la plus récente.';
     }
 
     public static function infolist(Infolist $infolist): Infolist
@@ -153,11 +175,11 @@ class AvoirResource extends Resource
                 FactureResource::ventilationTvaEntry(),
                 // Un avoir n'est jamais remboursé par ce logiciel (pas
                 // d'intégration bancaire) : tant qu'il reste du crédit non
-                // appliqué à une facture (voir
-                // AppliquerAvoirsDisponiblesAction), ce doit être visible
-                // ici aussi, pas seulement sur la fiche du client.
+                // imputé (voir Avoir::montantNonAlloue()), ce doit être
+                // visible ici aussi, pas seulement sur la fiche du client ;
+                // celui d'un avoir au client comptoir est son bon d'avoir.
                 TextEntry::make('montant_non_alloue')
-                    ->label('Crédit encore disponible')
+                    ->label(fn (Avoir $record): string => $record->client?->estComptoir() ? 'Bon d\'avoir encore disponible' : 'Crédit encore disponible')
                     ->state(fn (Avoir $record) => $record->montantNonAlloue())
                     ->money('EUR')
                     ->visible(fn (Avoir $record) => $record->montantNonAlloue() > 0),

@@ -30,7 +30,9 @@ use App\Domain\Tenancy\Enums\RegimeTva;
  *   son émission.
  *
  * S'y ajoute, sous les lignes d'un document à un professionnel,
- * l'explication de son calcul (voir calcul()), qui ne se signe pas.
+ * l'explication de son calcul (voir calcul()), qui ne se signe pas, et,
+ * sur l'avoir d'un client comptoir, la mention de son bon d'avoir (voir
+ * bonDAvoir()).
  */
 class MentionsFiscales
 {
@@ -59,6 +61,26 @@ class MentionsFiscales
         }
 
         return $mentions;
+    }
+
+    /**
+     * La mention que l'avoir d'un client comptoir imprime quand il lui
+     * reste du crédit après son émission, une fois imputé sur les tickets
+     * qu'il corrige : son numéro vaut bon d'avoir (voir
+     * EnregistrerVenteCaisseAction). Calculée et signée à l'émission (voir
+     * ContenuFiscal), elle se relit ensuite dans le contenu signé (voir
+     * Avoir::mentionDuBonDAvoir()) : le montant du bon reste celui de son
+     * émission, même une fois utilisé. Null pour tout autre avoir.
+     */
+    public function bonDAvoir(Avoir $avoir): ?string
+    {
+        $credit = $avoir->montantNonAlloue();
+
+        if (! $avoir->client?->estComptoir() || $credit <= 0) {
+            return null;
+        }
+
+        return 'Ce n° vaut bon d\'avoir de '.number_format($credit, 2, ',', ' ').' € à présenter lors d\'un prochain achat.';
     }
 
     /**

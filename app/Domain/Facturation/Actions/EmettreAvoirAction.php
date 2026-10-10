@@ -40,7 +40,9 @@ use LogicException;
  *     Avoir::corrigeDesTickets()), n'est plus émis une fois cette journée
  *     clôturée, jusqu'à minuit (voir
  *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
- *  3. AvoirEmis rend le stock et impute l'avoir sur ses factures ;
+ *  3. AvoirEmis rend le stock et impute l'avoir sur ses factures, puis
+ *     sur les autres factures impayées de son client (voir
+ *     ImputerAvoirSurSesFacturesAction) ;
  *  4. l'avoir est signé en négatif dans la chaîne des ventes (voir
  *     ContenuFiscal), avec les lignes et les numéros des documents qu'il
  *     corrige et ses imputations : il diminue le grand total réel et

@@ -16,11 +16,8 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use Closure;
-use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -56,22 +53,6 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
             ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '60.00', 'recu_le' => today()->toDateString()],
             [['facture_id' => $factureId, 'montant' => '60.00']],
         );
-    }
-
-    /**
-     * Démarre l'opération concurrente dès que l'opération du test tient le
-     * verrou du registre, et attend qu'elle attende ce verrou.
-     *
-     * @param  Closure(): void  $operationConcurrente
-     */
-    private function concurrencerDesQueLeRegistreEstVerrouille(Closure $operationConcurrente, ?InvokedProcess &$concurrente): void
-    {
-        DB::listen(function (QueryExecuted $requete) use (&$concurrente, $operationConcurrente): void {
-            if ($concurrente === null && str_contains($requete->sql, 'from "tetes_registre_fiscal"') && str_contains($requete->sql, 'for update')) {
-                $concurrente = $this->demarrerUnProcessusConcurrent($operationConcurrente);
-                $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
-            }
-        });
     }
 
     public function test_deux_paiements_simultanes_de_60_euros_sur_un_ticket_de_100_euros_n_en_acceptent_qu_un(): void

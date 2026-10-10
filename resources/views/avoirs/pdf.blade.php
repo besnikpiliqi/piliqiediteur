@@ -52,5 +52,11 @@
     @foreach(app(\App\Domain\Facturation\Services\MentionsFiscales::class)->pour($avoir, $emetteur) as $mention)
         <div class="pied">{{ $mention }}</div>
     @endforeach
+
+    {{-- L'avoir d'un client comptoir : son numéro vaut bon d'avoir, du
+         montant signé à son émission (voir Avoir::mentionDuBonDAvoir()). --}}
+    @if($bonDAvoir)
+        <div class="pied">{{ $bonDAvoir }}</div>
+    @endif
 </body>
 </html>

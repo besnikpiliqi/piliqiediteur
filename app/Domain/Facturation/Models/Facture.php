@@ -323,10 +323,12 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Crédit d'avoir imputé sur cette facture : par l'avoir qui la corrige
-     * (voir ImputerAvoirSurSesFacturesAction), à son émission (voir
-     * AppliquerAvoirsDisponiblesAction) ou par un paiement qui la règle
-     * (voir EnregistrerPaiementAction), moins celui que la contre-passation
+     * Crédit d'avoir imputé sur cette facture : par un avoir à son émission,
+     * qu'il la corrige ou non (voir ImputerAvoirSurSesFacturesAction), à
+     * l'émission de la facture, crédit du client ou bon d'avoir présenté au
+     * comptoir (voir AppliquerAvoirsDisponiblesAction et
+     * EmettreFactureAction), ou par un paiement qui la règle (voir
+     * EnregistrerPaiementAction), moins celui que la contre-passation
      * de ce paiement a rendu (voir ContrePasserPaiementAction) -- jamais un
      * paiement réellement encaissé, mais il réduit le solde dû exactement
      * de la même façon.

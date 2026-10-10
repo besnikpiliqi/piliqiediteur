@@ -43,10 +43,13 @@ use Illuminate\Support\Collection;
  *   document imprime ensuite pour toujours (voir FigeSonEmetteur), la
  *   catégorie de l'opération, les mentions fiscales imprimées (voir
  *   MentionsFiscales), et ce qui a réglé le document dans la même
- *   transaction (paiements et crédits d'avoir d'une facture, imputations
- *   d'un avoir sur ses factures) ; le crédit qu'impute un paiement est
- *   signé par ce paiement. Un document qui vient d'être émis n'a pas pu en
- *   recevoir avant : un brouillon n'attend aucun règlement.
+ *   transaction (paiements et crédits d'avoir d'une facture, bon d'avoir
+ *   d'un ticket au comptoir compris, imputations d'un avoir sur les
+ *   factures de son client) ; le crédit qu'impute un paiement est signé
+ *   par ce paiement. Un document qui vient d'être émis n'a pas pu en
+ *   recevoir avant : un brouillon n'attend aucun règlement. L'avoir d'un
+ *   client comptoir y signe aussi la mention de son bon d'avoir, avec le
+ *   crédit qui lui reste (voir MentionsFiscales::bonDAvoir()).
  *
  * Un paiement (encaissement()) signe son mode, son montant, sa référence,
  * sa date de réception, la fiche de son client ce jour-là, ce qu'il règle
@@ -246,6 +249,7 @@ class ContenuFiscal
                 ])
                 ->values()
                 ->all(),
+            'bon_d_avoir' => $this->mentions->bonDAvoir($avoir),
         ];
     }
 

@@ -429,7 +429,10 @@ class FacturePdfGeneratorTest extends TestCase
 
     /**
      * Le crédit qu'une contre-passation a rendu à son avoir ne crédite plus
-     * la facture : seul l'avoir dont le crédit y reste imputé est nommé.
+     * la facture : seul l'avoir dont le crédit y reste imputé est nommé. Le
+     * second avoir est émis quand le ticket est réglé, et n'a donc rien à y
+     * imputer (B6) ; la contre-passation de ce règlement rouvre le ticket,
+     * et c'est le paiement erroné suivant qui y impute son crédit.
      */
     public function test_l_avoir_dont_la_contre_passation_a_rendu_le_credit_n_est_plus_nomme(): void
     {
@@ -440,7 +443,9 @@ class FacturePdfGeneratorTest extends TestCase
         $secondAchat = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $article(30)->id, 'quantite' => 1]], ModePaiement::Especes);
         app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $premierAchat->lignes->sole()->id, 'quantite' => 1]]);
         $ticket = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $article(100)->id, 'quantite' => 1]]));
+        $reglementRejete = $this->payer($client, $ticket, '50.00');
         app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $secondAchat->lignes->sole()->id, 'quantite' => 1]]);
+        app(ContrePasserPaiementAction::class)->handle($reglementRejete, 'Chèque rejeté');
         $errone = $this->payer($client, $ticket, '10.00');
         $this->assertSame([10.0, 80.0], [$ticket->fresh()->montantPaye(), $ticket->fresh()->montantCrediteParAvoir()]);
 

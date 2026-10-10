@@ -9,6 +9,8 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\FactureEmise;
+use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\ContexteDeVente;
@@ -66,15 +68,17 @@ use LogicException;
  *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
  *  3. FactureEmise sort le stock, applique le crédit d'avoir du client et
  *     prépare la transmission PDP ;
- *  4. une facture dont il ne reste rien à payer, parce que ce crédit la
- *     couvre ou qu'elle ne coûte rien (remise de 100 %), passe « payée »
- *     sans encaissement : elle n'attend aucun règlement et ne sera jamais
- *     en retard (G1) ; sinon le règlement comptant d'une vente au
- *     comptoir, s'il y en a un, paie ce qui reste dû (voir
- *     EnregistrerPaiementAction, signé dans la chaîne des encaissements) ;
+ *  4. le règlement comptant d'une vente au comptoir impute d'abord le
+ *     bon d'avoir présenté, s'il y en a un (voir imputerLeBonDAvoir()) ;
+ *     une facture dont il ne reste alors rien à payer, parce que ce crédit
+ *     ou ce bon la couvre ou qu'elle ne coûte rien (remise de 100 %), passe
+ *     « payée » sans encaissement : elle n'attend aucun règlement et ne
+ *     sera jamais en retard (G1) ; sinon ce règlement, s'il y en a un, paie
+ *     ce qui reste dû (voir EnregistrerPaiementAction, signé dans la
+ *     chaîne des encaissements) ;
  *  5. le document, tel qu'il est alors en base, est signé dans la chaîne
- *     des ventes (voir ContenuFiscal) : client figé, règlement et crédit
- *     compris.
+ *     des ventes (voir ContenuFiscal) : client figé, règlement, crédit et
+ *     bon d'avoir compris.
  * Sans clé de signature, ou si l'horloge du serveur a reculé, rien de tout
  * cela n'a lieu : la facture reste un brouillon.
  */
@@ -139,6 +143,10 @@ class EmettreFactureAction
 
             $facture = $facture->fresh();
 
+            if ($reglement?->bonDAvoir !== null && $facture->montantRestant() > 0) {
+                $this->imputerLeBonDAvoir($facture, $reglement->bonDAvoir);
+            }
+
             if ($facture->montantRestant() <= 0) {
                 $facture->constaterUnReglement();
             } elseif ($reglement !== null) {
@@ -176,8 +184,32 @@ class EmettreFactureAction
     }
 
     /**
+     * Le bon d'avoir présenté au comptoir (voir EnregistrerVenteCaisseAction)
+     * impute son crédit restant sur le ticket, au plus ce qui en reste dû :
+     * un avoir du client du ticket, le client comptoir, dont le crédit,
+     * relu sous le verrou du registre, n'est pas épuisé.
+     *
+     * @throws LogicException
+     */
+    private function imputerLeBonDAvoir(Facture $facture, Avoir $bon): void
+    {
+        $montant = min($bon->montantNonAlloue(), $facture->montantRestant());
+
+        if (! $facture->client->estComptoir() || (int) $bon->client_id !== (int) $facture->client_id || $montant <= 0) {
+            throw new LogicException(Avoir::BON_D_AVOIR_INTROUVABLE);
+        }
+
+        AvoirAllocation::create([
+            'avoir_id' => $bon->id,
+            'facture_id' => $facture->id,
+            'montant_alloue' => $montant,
+        ]);
+    }
+
+    /**
      * Une vente au comptoir est soldée dès son émission : ce qui reste dû
-     * après le crédit d'avoir du client est encaissé.
+     * après le crédit d'avoir du client, ou le bon d'avoir présenté, est
+     * encaissé.
      */
     private function encaisserComptant(Facture $facture, ReglementComptant $reglement, string $recuLe): void
     {

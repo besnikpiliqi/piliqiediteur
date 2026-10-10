@@ -21,7 +21,10 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
  * magasin. Le PDF d'un document émis, téléchargé ou joint à un e-mail,
  * l'imprime donc tel qu'il a été signé (voir FacturePdfGenerator et
  * AvoirPdfGenerator), et l'e-mail qui le porte le présente (voir
- * DocumentMail).
+ * DocumentMail). Ce que le document a signé d'autre dans ce contexte se
+ * relit au même endroit (voir contexteSigne()), comme la mention du bon
+ * d'avoir d'un avoir fait au client comptoir (voir
+ * Avoir::mentionDuBonDAvoir()).
  */
 trait FigeSonEmetteur
 {
@@ -54,12 +57,26 @@ trait FigeSonEmetteur
             return Emetteur::duMagasin($this->magasin);
         }
 
+        return Emetteur::duContenuSigne($this->contexteSigne()['emetteur']);
+    }
+
+    /**
+     * Le bloc « contexte » que le document numéroté a signé à son émission
+     * (voir ContenuFiscal) : ce qu'il imprime pour toujours, et non ce que
+     * le magasin ou ses règlements sont devenus depuis.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws DocumentSansEnregistrementSigneException
+     */
+    protected function contexteSigne(): array
+    {
         $enregistrement = $this->enregistrementDeVente()->first();
 
         if ($enregistrement === null) {
             throw DocumentSansEnregistrementSigneException::pour($this);
         }
 
-        return Emetteur::duContenuSigne($enregistrement->contenuSigne()['donnees']['contexte']['emetteur']);
+        return $enregistrement->contenuSigne()['donnees']['contexte'];
     }
 }

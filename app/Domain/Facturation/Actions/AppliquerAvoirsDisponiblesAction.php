@@ -11,17 +11,21 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Applique automatiquement le crédit disponible du client (voir
- * Client::soldeCrediteur()) sur une facture qui vient d'être émise --
- * jamais de remboursement réel (espèces/virement), ce logiciel n'étant pas
- * connecté à une banque. Ce crédit est ce qui reste d'un avoir une fois
- * imputé sur ses propres factures (voir ImputerAvoirSurSesFacturesAction) :
- * il attend qu'une nouvelle facture de ce client vienne l'absorber.
+ * À l'émission d'une facture (voir EmettreFactureAction), le crédit
+ * d'avoir disponible de son client (voir Client::soldeCrediteur()) règle
+ * ce qui en reste dû, dans la transaction qui la signe. Ce crédit est ce
+ * qu'un avoir n'a pu imputer à son émission ni sur les factures qu'il
+ * corrige ni sur les autres factures impayées du client (voir
+ * ImputerAvoirSurSesFacturesAction) : il attendait cette nouvelle facture.
+ * Un avoir n'est jamais remboursé (B5).
  *
- * Les avoirs les plus anciens sont consommés en premier (FIFO), et
- * peuvent se répartir sur plusieurs factures successives comme sur
- * plusieurs avoirs pour une même facture si le crédit d'un seul n'y
- * suffit pas.
+ * Les avoirs les plus anciens sont consommés en premier, et peuvent se
+ * répartir sur plusieurs factures successives comme plusieurs avoirs sur
+ * une même facture si le crédit d'un seul n'y suffit pas.
+ *
+ * Jamais pour le client comptoir : le crédit d'un avoir fait au comptoir
+ * n'appartient qu'à qui en présente le numéro, son bon d'avoir (voir
+ * EnregistrerVenteCaisseAction), jamais à la vente comptoir suivante.
  */
 class AppliquerAvoirsDisponiblesAction
 {
@@ -41,12 +45,6 @@ class AppliquerAvoirsDisponiblesAction
             /** @var Client $client */
             $client = $facture->client;
 
-            // Le client comptoir générique (voir Client::estComptoir()) n'a
-            // jamais de solde créditeur : un avoir émis "pour lui" n'a
-            // aucune personne identifiable à qui l'appliquer plus tard, et
-            // l'appliquer au hasard sur la prochaine vente comptoir
-            // reviendrait à donner le remboursement d'une personne à une
-            // autre.
             if ($client->estComptoir()) {
                 return;
             }

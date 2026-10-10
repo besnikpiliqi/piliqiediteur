@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Models;
 
 use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
@@ -43,6 +44,12 @@ use Illuminate\Support\Collection;
 class Avoir extends Model implements DocumentEnvoyable
 {
     use BelongsToMagasin, EstEnvoyeParEmail, FigeLeClient, FigeSonEmetteur, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
+
+    /**
+     * Le refus d'un numéro saisi à la caisse qui ne désigne aucun bon
+     * d'avoir encore utilisable (voir scopeBonDAvoir()).
+     */
+    public const BON_D_AVOIR_INTROUVABLE = 'Ce bon d\'avoir est introuvable ou déjà utilisé.';
 
     protected $table = 'avoirs';
 
@@ -127,6 +134,35 @@ class Avoir extends Model implements DocumentEnvoyable
     }
 
     /**
+     * L'avoir émis au client comptoir du magasin actif sous ce numéro, tel
+     * que le vendeur le saisit à la caisse pour utiliser son bon d'avoir
+     * (voir EnregistrerVenteCaisseAction), sans tenir compte de la casse
+     * ni des espaces autour. Un avoir d'un client nommé ou d'un autre
+     * magasin (MagasinScope) n'en est jamais un ; son crédit restant (voir
+     * montantNonAlloue()) dit s'il sert encore.
+     */
+    public function scopeBonDAvoir(Builder $query, string $numero): Builder
+    {
+        return $query
+            ->where('statut', StatutAvoir::Emise)
+            ->where('numero', mb_strtoupper(trim($numero)))
+            ->whereIn('client_id', Client::query()->where('est_comptoir', true)->select('id'));
+    }
+
+    /**
+     * La mention du bon d'avoir que l'avoir a signée à son émission (voir
+     * MentionsFiscales::bonDAvoir()) et que son PDF imprime, avec le
+     * montant du bon tel qu'émis, même une fois utilisé ; null s'il n'en a
+     * pas, comme tant qu'il est un brouillon.
+     *
+     * @throws DocumentSansEnregistrementSigneException
+     */
+    public function mentionDuBonDAvoir(): ?string
+    {
+        return $this->numero === null ? null : $this->contexteSigne()['bon_d_avoir'];
+    }
+
+    /**
      * Un avoir sur des tickets de caisse : la clôture du jour de son
      * émission le déduit (voir scopeEnAttenteDeCloture()), la caisse ne
      * l'émet plus une fois cette journée clôturée (voir
@@ -192,12 +228,15 @@ class Avoir extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Solde du crédit encore disponible pour ce client : un avoir émis
-     * n'est jamais remboursé en espèces/virement par ce logiciel (pas
-     * d'intégration bancaire). Il réduit d'abord le reste dû des factures
-     * qu'il corrige (voir ImputerAvoirSurSesFacturesAction) ; l'excédent
-     * s'applique automatiquement aux prochaines factures du même client
-     * (voir AppliquerAvoirsDisponiblesAction), jusqu'à épuisement.
+     * Le crédit de l'avoir qui reste à imputer : un avoir émis n'est jamais
+     * remboursé (B5). À son émission, il règle les factures qu'il corrige,
+     * puis les autres factures impayées de son client (voir
+     * ImputerAvoirSurSesFacturesAction) ; ce qui reste s'applique ensuite
+     * aux prochaines factures du même client (voir
+     * AppliquerAvoirsDisponiblesAction et EnregistrerPaiementAction),
+     * jusqu'à épuisement. Celui d'un avoir fait au client comptoir est son
+     * bon d'avoir, que seule la présentation de son numéro impute sur une
+     * vente comptoir (voir EnregistrerVenteCaisseAction).
      */
     public function montantNonAlloue(): float
     {

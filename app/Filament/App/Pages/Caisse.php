@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PanierCaisse;
@@ -18,9 +19,11 @@ use App\Domain\Tenancy\Services\ReglagesCommunsDeLaSociete;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use Closure;
 use Filament\Actions;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Actions\Action;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
@@ -32,6 +35,7 @@ use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Filament\Support\Enums\MaxWidth;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\Rules\Exists;
@@ -73,6 +77,12 @@ use LogicException;
  * réglage diffère et quelle valeur prendre (voir reglagesNonAlignes()),
  * et le domaine refuse tout ticket et toute facture (voir
  * EmettreFactureAction).
+ *
+ * Pour une vente au client comptoir, « Utiliser un bon d'avoir » demande
+ * le numéro d'un avoir fait au comptoir (K6) : son crédit restant est
+ * déduit du total à payer, puis imputé sur le ticket à l'encaissement,
+ * qui relit le bon sous le verrou du registre (voir
+ * EnregistrerVenteCaisseAction).
  */
 class Caisse extends Page implements HasForms
 {
@@ -146,6 +156,7 @@ class Caisse extends Page implements HasForms
                 'mode_paiement' => $this->data['mode_paiement'] ?? ModePaiement::Especes->value,
                 'montant_recu' => $this->data['montant_recu'] ?? null,
                 'reference' => $this->data['reference'] ?? null,
+                'bon_d_avoir' => $this->data['bon_d_avoir'] ?? null,
             ]);
         }
     }
@@ -176,6 +187,7 @@ class Caisse extends Page implements HasForms
             'mode_paiement' => self::modePrefere($clientId)->value,
             'montant_recu' => null,
             'reference' => null,
+            'bon_d_avoir' => null,
             ...$paiement,
         ]);
     }
@@ -219,7 +231,12 @@ class Caisse extends Page implements HasForms
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE)))
                     ->createOptionUsing(fn (array $data) => Client::create($data)->getKey())
-                    ->afterStateUpdated(fn (mixed $state, Set $set) => $set('mode_paiement', self::modePrefere($state)->value))
+                    // Un bon d'avoir ne règle qu'une vente au client
+                    // comptoir : changer de client le retire.
+                    ->afterStateUpdated(function (mixed $state, Set $set): void {
+                        $set('mode_paiement', self::modePrefere($state)->value);
+                        $set('bon_d_avoir', null);
+                    })
                     ->required(),
             ]),
 
@@ -230,9 +247,16 @@ class Caisse extends Page implements HasForms
 
             Section::make('Paiement')->schema([
                 Placeholder::make('total_a_payer')
+                    // Ses actions exigent une clé : son chemin, comme celle
+                    // d'un champ.
+                    ->key(fn (Placeholder $component): string => $component->getStatePath())
                     ->label('Total à payer')
                     ->content(fn (Get $get) => $this->formaterMontant($this->resteAPayer($get)))
-                    ->helperText(fn (Get $get) => $this->detailCreditApplique($get)),
+                    ->helperText(fn (Get $get) => $this->detailCreditApplique($get))
+                    ->hintActions([self::actionUtiliserUnBonDAvoir(), self::actionRetirerLeBonDAvoir()]),
+                // Posé par « Utiliser un bon d'avoir » : l'encaissement le
+                // revérifie (voir EnregistrerVenteCaisseAction).
+                Hidden::make('bon_d_avoir')->rules(['nullable', 'string', 'max:40']),
                 Select::make('mode_paiement')
                     ->label('Mode de paiement')
                     ->options(ModePaiement::class)
@@ -273,6 +297,59 @@ class Caisse extends Page implements HasForms
                     ->maxLength(100),
             ])->columns(2),
         ])->statePath('data');
+    }
+
+    /**
+     * Au client comptoir, le numéro d'un avoir qui lui a été fait vaut bon
+     * d'avoir (K6) : le numéro saisi doit désigner un avoir du client
+     * comptoir du magasin dont il reste du crédit. L'encaissement le
+     * revérifie sous le verrou du registre (voir
+     * EnregistrerVenteCaisseAction).
+     */
+    private static function actionUtiliserUnBonDAvoir(): Action
+    {
+        return Action::make('utiliserUnBonDAvoir')
+            ->label('Utiliser un bon d\'avoir')
+            ->icon('heroicon-o-ticket')
+            ->modalHeading('Utiliser un bon d\'avoir')
+            ->modalDescription('Saisissez le n° de l\'avoir remis au client : son crédit restant est déduit du total à payer.')
+            ->modalSubmitActionLabel('Utiliser')
+            ->modalWidth(MaxWidth::Medium)
+            ->form([
+                TextInput::make('numero')
+                    ->label('N° de l\'avoir')
+                    ->placeholder('AV-...')
+                    ->required()
+                    ->maxLength(40)
+                    ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                        if (self::bonDAvoirUtilisable($value) === null) {
+                            $fail(Avoir::BON_D_AVOIR_INTROUVABLE);
+                        }
+                    }),
+            ])
+            ->visible(fn (Get $get): bool => blank($get('bon_d_avoir')) && (Client::withTrashed()->find($get('client_id'))?->estComptoir() ?? false))
+            ->action(fn (array $data, Set $set) => $set('bon_d_avoir', mb_strtoupper(trim($data['numero']))));
+    }
+
+    private static function actionRetirerLeBonDAvoir(): Action
+    {
+        return Action::make('retirerLeBonDAvoir')
+            ->label('Retirer le bon d\'avoir')
+            ->icon('heroicon-o-x-mark')
+            ->color('gray')
+            ->visible(fn (Get $get): bool => filled($get('bon_d_avoir')))
+            ->action(fn (Set $set) => $set('bon_d_avoir', null));
+    }
+
+    /**
+     * L'avoir du client comptoir de ce numéro, s'il lui reste du crédit
+     * (voir Avoir::scopeBonDAvoir()) ; null sinon.
+     */
+    private static function bonDAvoirUtilisable(mixed $numero): ?Avoir
+    {
+        $bon = is_string($numero) && filled($numero) ? Avoir::query()->bonDAvoir($numero)->first() : null;
+
+        return $bon !== null && $bon->montantNonAlloue() > 0 ? $bon : null;
     }
 
     protected function getHeaderActions(): array
@@ -402,6 +479,7 @@ class Caisse extends Page implements HasForms
                 $data['lignes'],
                 $modePaiement,
                 $data['reference'] ?? null,
+                $data['bon_d_avoir'] ?? null,
             );
         } catch (LogicException|RefusFiscalException $exception) {
             static::notifierLeRefus($exception);
@@ -420,11 +498,12 @@ class Caisse extends Page implements HasForms
 
     /**
      * Le crédit disponible du client (voir AppliquerAvoirsDisponiblesAction)
-     * peut déjà avoir couvert tout ou partie de la vente au moment de
-     * l'émission, avant même que la caisse n'encaisse quoi que ce soit en
-     * espèces/CB -- le message doit refléter ce qui a RÉELLEMENT été
-     * encaissé, pas le total brut de la facture, sous peine de fausser la
-     * caisse du vendeur en fin de journée.
+     * ou le bon d'avoir présenté au comptoir peut déjà avoir couvert tout
+     * ou partie de la vente au moment de l'émission, avant même que la
+     * caisse n'encaisse quoi que ce soit en espèces/CB -- le message doit
+     * refléter ce qui a RÉELLEMENT été encaissé, pas le total brut de la
+     * facture, sous peine de fausser la caisse du vendeur en fin de
+     * journée.
      */
     private function resumeEncaissement(Facture $facture): string
     {
@@ -434,13 +513,14 @@ class Caisse extends Page implements HasForms
             return $this->formaterMontant((float) $facture->total_ttc).' encaissé.';
         }
 
+        $avoirs = implode(', ', $facture->numerosDesAvoirsImputes());
         $paye = $facture->montantPaye();
 
         if ($paye <= 0) {
-            return 'Réglée intégralement par le crédit disponible du client ('.$this->formaterMontant($credite).').';
+            return "Réglée intégralement par avoir ({$this->formaterMontant($credite)}, {$avoirs}).";
         }
 
-        return $this->formaterMontant($paye).' encaissé ('.$this->formaterMontant($credite).' crédité par avoir).';
+        return "{$this->formaterMontant($paye)} encaissé ({$this->formaterMontant($credite)} crédité par l'avoir {$avoirs}).";
     }
 
     /**
@@ -462,9 +542,10 @@ class Caisse extends Page implements HasForms
 
     /**
      * Ce que la caisse encaisse vraiment : le total moins le crédit d'avoir
-     * du client, que l'émission de la facture déduit automatiquement (voir
-     * AppliquerAvoirsDisponiblesAction) -- sans quoi la monnaie à rendre
-     * serait fausse du montant de ce crédit.
+     * du client ou le bon d'avoir présenté, que l'émission de la facture
+     * déduit automatiquement (voir AppliquerAvoirsDisponiblesAction et
+     * EnregistrerVenteCaisseAction) -- sans quoi la monnaie à rendre serait
+     * fausse du montant de ce crédit.
      */
     private function resteAPayer(Get $get): float
     {
@@ -478,22 +559,35 @@ class Caisse extends Page implements HasForms
     }
 
     /**
-     * Même montant que celui qu'appliquera AppliquerAvoirsDisponiblesAction :
-     * tout le crédit disponible du client, dans la limite du total (jamais
-     * pour le client comptoir, voir Client::soldeCrediteur()). Celui d'un
-     * panier dont le client a été archivé depuis reste affiché, comme son
-     * nom et le texte d'aide du crédit (voir
-     * ClientResource::soldeCrediteurHelperText()).
+     * Même montant que celui qu'imputera l'émission, dans la limite du
+     * total : le crédit restant du bon d'avoir présenté au comptoir, sinon
+     * tout le crédit disponible du client (jamais pour le client comptoir,
+     * voir Client::soldeCrediteur()). Celui d'un panier dont le client a
+     * été archivé depuis reste affiché, comme son nom et le texte d'aide du
+     * crédit (voir ClientResource::soldeCrediteurHelperText()).
      */
     private function creditApplique(Get $get, float $totalTtc): float
     {
-        $soldeCrediteur = Client::withTrashed()->find($get('client_id'))?->soldeCrediteur() ?? 0.0;
+        $credit = self::bonDAvoirUtilisable($get('bon_d_avoir'))?->montantNonAlloue()
+            ?? Client::withTrashed()->find($get('client_id'))?->soldeCrediteur()
+            ?? 0.0;
 
-        return min($soldeCrediteur, $totalTtc);
+        return min($credit, $totalTtc);
     }
 
-    private function detailCreditApplique(Get $get): ?string
+    /**
+     * Le détail du total à payer : ce qu'en déduit le bon d'avoir présenté
+     * ou le crédit du client, ou, en couleur, le refus d'un bon d'avoir
+     * épuisé depuis qu'il a été saisi (par une autre caisse).
+     */
+    private function detailCreditApplique(Get $get): string|Htmlable|null
     {
+        $bonDAvoir = $get('bon_d_avoir');
+
+        if (filled($bonDAvoir) && self::bonDAvoirUtilisable($bonDAvoir) === null) {
+            return ClientResource::enEvidence(Avoir::BON_D_AVOIR_INTROUVABLE);
+        }
+
         $totalTtc = $this->totalTtc($get);
         $credit = $this->creditApplique($get, $totalTtc);
 
@@ -501,7 +595,9 @@ class Caisse extends Page implements HasForms
             return null;
         }
 
-        return 'Total '.$this->formaterMontant($totalTtc).' moins '.$this->formaterMontant($credit).' de crédit d\'avoir du client.';
+        $origine = filled($bonDAvoir) ? "du bon d'avoir {$bonDAvoir}" : 'de crédit d\'avoir du client';
+
+        return 'Total '.$this->formaterMontant($totalTtc).' moins '.$this->formaterMontant($credit).' '.$origine.'.';
     }
 
     private function formaterMontant(float $montant): string

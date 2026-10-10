@@ -1077,7 +1077,7 @@ class VerificateurIntegrite
      * Les imputations que signent les données d'un document : celles d'un
      * paiement sur ses factures et le crédit d'avoir qu'il y impute, les
      * crédits d'avoir qui ont réglé une facture à son émission, les
-     * imputations d'un avoir sur les factures qu'il corrige. Un identifiant
+     * imputations d'un avoir sur les factures de son client. Un identifiant
      * ou un montant illisible vaut null.
      *
      * @param  array<array-key, mixed>  $donnees

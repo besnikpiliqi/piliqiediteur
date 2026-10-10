@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Closure;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Process\InvokedProcess;
@@ -155,6 +156,24 @@ abstract class TestCase extends BaseTestCase
             ->timeout(60)
             ->input(base64_encode($demande))
             ->start([PHP_BINARY, base_path('tests/Fixtures/processus-concurrent.php')]);
+    }
+
+    /**
+     * Démarre l'opération concurrente dès que l'opération du test tient le
+     * verrou du registre fiscal, et attend qu'elle attende ce verrou : deux
+     * caisses qui agissent au même instant, la seconde passant après la
+     * première. $concurrente reçoit le processus démarré.
+     *
+     * @param  Closure(): void  $operationConcurrente
+     */
+    protected function concurrencerDesQueLeRegistreEstVerrouille(Closure $operationConcurrente, ?InvokedProcess &$concurrente): void
+    {
+        DB::listen(function (QueryExecuted $requete) use (&$concurrente, $operationConcurrente): void {
+            if ($concurrente === null && str_contains($requete->sql, 'from "tetes_registre_fiscal"') && str_contains($requete->sql, 'for update')) {
+                $concurrente = $this->demarrerUnProcessusConcurrent($operationConcurrente);
+                $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
+            }
+        });
     }
 
     /**

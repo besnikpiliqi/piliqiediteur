@@ -15,10 +15,12 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
@@ -32,6 +34,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Exceptions;
 use Livewire\Features\SupportTesting\Testable;
@@ -1403,6 +1406,152 @@ class CaisseTest extends TestCase
             ->assertFormSet(['mode_paiement' => ModePaiement::CarteBancaire->value]);
     }
 
+    /**
+     * K6 : le ticket comptoir de 12,00 € repris par l'avoir
+     * AV-MABOUT-2026-000001 ; à la vente comptoir suivante, de 20,00 €, le
+     * n° de cet avoir, saisi tel que le client le présente, règle 12,00 €,
+     * et le reste, 8,00 €, se paie en espèces. Le ticket signe le bon
+     * imputé, et l'avoir est épuisé.
+     */
+    public function test_le_bon_d_avoir_d_un_ticket_comptoir_regle_une_partie_de_la_vente_comptoir_suivante(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $bon = $this->bonDAvoirDeDouzeEuros();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class)
+            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes']);
+
+        $component
+            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => ' av-mabout-2026-000001 '])
+            ->assertHasNoFormComponentActionErrors()
+            ->assertSeeHtml('Total 20,00 € moins 12,00 € du bon d&#039;avoir AV-MABOUT-2026-000001.')
+            ->set('data.montant_recu', '10')
+            ->assertFormFieldExists('montant_recu', fn (TextInput $champ): bool => $champ->getMinValue() === 8.0)
+            ->call('encaisser')
+            ->assertNotified('Vente encaissée : facture TK-MABOUT-2026-000002');
+
+        $ticket = Facture::query()->where('numero', 'TK-MABOUT-2026-000002')->sole();
+        $this->assertSame([StatutFacture::Payee, 12.0, 8.0, 0.0], [$ticket->statut, $ticket->montantCrediteParAvoir(), $ticket->montantPaye(), $ticket->montantRestant()]);
+        $this->assertSame([[ModePaiement::Especes, '8.00']], $ticket->allocationsPaiement->map(fn ($allocation): array => [$allocation->paiement->mode_paiement, $allocation->montant_alloue])->all());
+        $this->assertSame(0.0, $bon->fresh()->montantNonAlloue());
+        $this->assertSame([['avoir_id' => $bon->id, 'numero' => 'AV-MABOUT-2026-000001', 'montant' => 1200]], $ticket->enregistrementDeVente()->firstOrFail()->contenuSigne()['donnees']['contexte']['credits_avoir']);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
+    }
+
+    public function test_un_bon_d_avoir_deja_utilise_est_refuse(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $bon = $this->bonDAvoirDeDouzeEuros();
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $bon->numero);
+
+        Livewire::test(Caisse::class)
+            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001'])
+            ->assertHasFormComponentActionErrors(['numero' => ['Ce bon d\'avoir est introuvable ou déjà utilisé.']])
+            ->assertFormSet(['bon_d_avoir' => null]);
+    }
+
+    /**
+     * Le crédit de l'avoir d'un client nommé lui appartient : son numéro
+     * ne vaut pas bon d'avoir au comptoir.
+     */
+    public function test_l_avoir_d_un_client_nomme_ne_vaut_pas_bon_d_avoir(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $martin = Client::factory()->create(['nom' => 'Mme Martin']);
+        $vente = app(EnregistrerVenteCaisseAction::class)->handle($martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EnregistrerAvoirAction::class)->handle($martin, [['ligne_facture_id' => $vente->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $this->assertSame(12.0, $martin->soldeCrediteur());
+
+        Livewire::test(Caisse::class)
+            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001'])
+            ->assertHasFormComponentActionErrors(['numero' => ['Ce bon d\'avoir est introuvable ou déjà utilisé.']]);
+    }
+
+    public function test_le_bon_d_avoir_d_un_autre_magasin_est_introuvable(): void
+    {
+        $autreMagasin = app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $bonDeLAutreMagasin = app(TenantContext::class)->runAs($autreMagasin, fn (): string => $this->bonDAvoirDeDouzeEuros()->numero);
+        $this->ouvrirLaCaisseDUnMagasin();
+
+        Livewire::test(Caisse::class)
+            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => $bonDeLAutreMagasin])
+            ->assertHasFormComponentActionErrors(['numero' => ['Ce bon d\'avoir est introuvable ou déjà utilisé.']]);
+    }
+
+    public function test_retirer_le_bon_d_avoir_rend_tout_le_total_a_payer(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $this->bonDAvoirDeDouzeEuros();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class)
+            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]]])
+            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001']);
+
+        $component->callFormComponentAction('total_a_payer', 'retirerLeBonDAvoir');
+
+        $component
+            ->assertFormSet(['bon_d_avoir' => null])
+            ->assertDontSeeHtml('du bon d&#039;avoir')
+            ->assertFormFieldExists('montant_recu', fn (TextInput $champ): bool => $champ->getMinValue() === 20.0)
+            ->assertFormComponentActionVisible('total_a_payer', 'utiliserUnBonDAvoir');
+    }
+
+    /**
+     * Un bon saisi puis utilisé par une autre caisse : la caisse le dit
+     * sous le total à payer, et l'encaissement le refuse sans rien
+     * enregistrer.
+     */
+    public function test_un_bon_d_avoir_utilise_entre_temps_par_une_autre_caisse_est_refuse_a_l_encaissement(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $bon = $this->bonDAvoirDeDouzeEuros();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class)
+            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes'])
+            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001']);
+        app(EnregistrerVenteCaisseAction::class)->handle(Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::CarteBancaire, bonDAvoir: $bon->numero);
+
+        $component
+            ->set('data.reference', null)
+            ->assertSee('Ce bon d\'avoir est introuvable ou déjà utilisé.')
+            ->call('encaisser')
+            ->assertNotified('Ce bon d\'avoir est introuvable ou déjà utilisé.');
+
+        $this->assertSame([2, 2], [Facture::query()->count(), Paiement::query()->count()]);
+    }
+
+    /**
+     * Un bon d'avoir ne règle qu'une vente au client comptoir : la caisse
+     * ne le propose pas pour un client nommé, choisir un autre client
+     * retire le bon saisi, et l'encaissement refuse un bon envoyé pour un
+     * client nommé, sans rien enregistrer.
+     */
+    public function test_un_bon_d_avoir_ne_regle_qu_une_vente_au_client_comptoir(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $this->bonDAvoirDeDouzeEuros();
+        $martin = Client::factory()->create(['nom' => 'Mme Martin']);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class)
+            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001'])
+            ->assertFormSet(['bon_d_avoir' => 'AV-MABOUT-2026-000001']);
+
+        $component
+            ->fillForm(['client_id' => $martin->id])
+            ->assertFormSet(['bon_d_avoir' => null])
+            ->assertFormComponentActionHidden('total_a_payer', 'utiliserUnBonDAvoir')
+            ->fillForm([
+                'bon_d_avoir' => 'AV-MABOUT-2026-000001',
+                'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+                'mode_paiement' => 'especes',
+            ])
+            ->call('encaisser')
+            ->assertNotified('Un bon d\'avoir ne règle qu\'une vente au client comptoir.');
+
+        $this->assertSame([1, 1], [Facture::query()->count(), Paiement::query()->count()]);
+    }
+
     private function ouvrirLaCaisseDUnMagasin(): Magasin
     {
         $proprietaire = User::factory()->create();
@@ -1411,6 +1560,18 @@ class CaisseTest extends TestCase
         Filament::setTenant($magasin);
 
         return $magasin;
+    }
+
+    /**
+     * Un ticket comptoir de 12,00 € repris en entier par un avoir dans le
+     * magasin actif : son numéro vaut bon d'avoir de 12,00 €.
+     */
+    private function bonDAvoirDeDouzeEuros(): Avoir
+    {
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+
+        return app(EnregistrerAvoirAction::class)->handle($comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
     }
 
     /**

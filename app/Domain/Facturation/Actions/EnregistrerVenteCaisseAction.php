@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\ReglementComptant;
@@ -24,11 +25,22 @@ use LogicException;
  * EmettreFactureAction) : le ticket signé au registre fiscal porte ce
  * règlement, ou le crédit d'avoir qui l'a couvert.
  *
+ * Au client comptoir, le numéro d'un avoir qui lui a été fait vaut bon
+ * d'avoir (K6) : présenté à la vente, il impute son crédit restant sur le
+ * nouveau ticket, au plus son total, et le reste se paie dans le mode
+ * choisi. Un numéro qui ne désigne aucun avoir du client comptoir du
+ * magasin (celui d'un client nommé, ou d'un autre magasin) ou dont le
+ * crédit est épuisé est refusé, sans rien enregistrer.
+ *
  * Le registre fiscal du magasin actif se verrouille avant toute lecture
  * de la transaction et la création du brouillon (voir RegistreFiscal) :
- * sans clé de signature, rien n'est créé, et le règlement relit sous ce
- * verrou ce qui reste dû (voir EnregistrerPaiementAction). Le panier de caisse du vendeur, sa vente étant encaissée, se vide
- * dans la même transaction (voir PanierDeCaisse).
+ * sans clé de signature, rien n'est créé. Le bon d'avoir et son crédit
+ * restant se relisent sous ce verrou, comme ce que le règlement laisse dû
+ * (voir EnregistrerPaiementAction) : deux caisses qui présentent le même
+ * bon au même instant passent l'une après l'autre, et la seconde ne
+ * trouve plus que ce que la première a laissé. Le panier de caisse du
+ * vendeur, sa vente étant encaissée, se vide dans la même transaction
+ * (voir PanierDeCaisse).
  */
 class EnregistrerVenteCaisseAction
 {
@@ -41,14 +53,15 @@ class EnregistrerVenteCaisseAction
 
     /**
      * @param  list<array<string, mixed>>  $lignes
+     * @param  string|null  $bonDAvoir  le numéro du bon d'avoir présenté (AV-...)
      *
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(Client $client, array $lignes, ModePaiement $modePaiement, ?string $reference = null): Facture
+    public function handle(Client $client, array $lignes, ModePaiement $modePaiement, ?string $reference = null, ?string $bonDAvoir = null): Facture
     {
-        return DB::transaction(function () use ($client, $lignes, $modePaiement, $reference) {
+        return DB::transaction(function () use ($client, $lignes, $modePaiement, $reference, $bonDAvoir) {
             $magasin = app(TenantContext::class)->magasin();
             $this->registre->verrouiller($magasin);
 
@@ -56,9 +69,10 @@ class EnregistrerVenteCaisseAction
                 throw new LogicException('Ce client n\'est pas un client du magasin.');
             }
 
+            $bon = $bonDAvoir === null ? null : $this->bonDAvoirUtilisable($client, $bonDAvoir);
             $facture = $this->emettreFacture->handle(
                 $this->creerFacture->handle($client, $lignes),
-                new ReglementComptant($modePaiement, $reference),
+                new ReglementComptant($modePaiement, $reference, $bon),
             );
 
             $vendeur = auth()->user();
@@ -69,5 +83,27 @@ class EnregistrerVenteCaisseAction
 
             return $facture->fresh('lignes');
         });
+    }
+
+    /**
+     * Le bon d'avoir de ce numéro, relu verrouillé sous le verrou du
+     * registre : un avoir émis au client comptoir du magasin dont il reste
+     * du crédit, présenté pour une vente à ce même client comptoir.
+     *
+     * @throws LogicException
+     */
+    private function bonDAvoirUtilisable(Client $client, string $numero): Avoir
+    {
+        if (! $client->estComptoir()) {
+            throw new LogicException('Un bon d\'avoir ne règle qu\'une vente au client comptoir.');
+        }
+
+        $bon = Avoir::query()->bonDAvoir($numero)->lockForUpdate()->first();
+
+        if ($bon === null || $bon->montantNonAlloue() <= 0) {
+            throw new LogicException(Avoir::BON_D_AVOIR_INTROUVABLE);
+        }
+
+        return $bon;
     }
 }

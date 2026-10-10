@@ -8,15 +8,18 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Ce que chaque avoir crédite de chaque facture : on n'y fait qu'ajouter.
- * Une imputation naît pendant l'émission de l'avoir (voir
+ * Une imputation naît pendant l'émission de l'avoir, sur les factures
+ * qu'il corrige puis sur les autres factures impayées de son client (voir
  * ImputerAvoirSurSesFacturesAction), pendant celle de la facture qui
- * absorbe un crédit (voir AppliquerAvoirsDisponiblesAction), ou pendant
+ * absorbe un crédit (voir AppliquerAvoirsDisponiblesAction) ou du ticket
+ * qu'un bon d'avoir règle au comptoir (voir EmettreFactureAction), ou pendant
  * l'enregistrement d'un paiement, dont le crédit solde ce qui reste dû des
  * factures qu'il règle (voir EnregistrerPaiementAction, paiement_id), ou
  * pendant la contre-passation de ce paiement, qui rend ce crédit par une
  * imputation négative (voir ContrePasserPaiementAction) ; elle figure dans
- * le contenu signé de ce document ou de ce paiement au registre fiscal. La base refuse toute modification, toute suppression et
- * tout vidage (voir DeclencheursDeProtection).
+ * le contenu signé de ce document ou de ce paiement au registre fiscal.
+ * La base refuse toute modification, toute suppression et tout vidage
+ * (voir DeclencheursDeProtection).
  */
 return new class extends Migration
 {

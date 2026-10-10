@@ -306,10 +306,11 @@ class ClientResource extends Resource
                 Tables\Columns\TextColumn::make('telephone'),
                 Tables\Columns\TextColumn::make('ville'),
                 // Un avoir n'est jamais remboursé par ce logiciel (pas
-                // d'intégration bancaire) : ce qu'il n'a pas imputé sur ses
-                // propres factures reste un crédit à appliquer
-                // automatiquement sur la prochaine facture de ce client
-                // (voir AppliquerAvoirsDisponiblesAction) -- affiché ici en
+                // d'intégration bancaire) : ce qu'il n'a pas imputé à son
+                // émission sur les factures impayées de ce client (voir
+                // ImputerAvoirSurSesFacturesAction) reste un crédit à
+                // appliquer automatiquement sur sa prochaine facture (voir
+                // AppliquerAvoirsDisponiblesAction) -- affiché ici en
                 // permanence tant qu'il n'est pas intégralement consommé.
                 Tables\Columns\TextColumn::make('solde_crediteur')
                     ->label('Solde créditeur')

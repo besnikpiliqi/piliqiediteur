@@ -329,8 +329,10 @@ class ContrePasserPaiementActionTest extends TestCase
 
     /**
      * Un client a 100,00 € de crédit et deux factures dues de 100,00 € :
-     * A, la plus ancienne, et R. Le paiement de 10,00 € saisi par erreur
-     * sur R y impute aussi 90,00 € de crédit.
+     * A, la plus ancienne, et R. Elles étaient réglées par un virement
+     * quand l'avoir a été émis, qui n'a donc rien eu à régler (B6), puis la
+     * contre-passation du virement, rejeté, les a rouvertes. Le paiement de
+     * 10,00 € saisi par erreur sur R y impute aussi 90,00 € de crédit.
      *
      * @return array{client: Client, ancienne: Facture, recente: Facture, avoir: Avoir, errone: Paiement}
      */
@@ -344,7 +346,9 @@ class ContrePasserPaiementActionTest extends TestCase
         $ancienne = $this->facture($client);
         $this->travelTo('2026-10-09 10:02:00');
         $recente = $this->facture($client);
+        $virementRejete = $this->payer($client, '200.00', [$ancienne->id => '100.00', $recente->id => '100.00'], ModePaiement::Virement);
         $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $dejaPayee->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
+        $this->contrePasser($virementRejete, 'Virement rejeté');
         $errone = $this->payer($client, '10.00', [$recente->id => '10.00']);
 
         return compact('client', 'ancienne', 'recente', 'avoir', 'errone');

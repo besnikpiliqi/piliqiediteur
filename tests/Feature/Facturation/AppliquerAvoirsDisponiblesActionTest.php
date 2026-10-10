@@ -22,13 +22,13 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Ce logiciel n'étant connecté à aucune banque, un avoir émis n'est jamais
- * remboursé automatiquement : ce qu'il n'a pas pu imputer sur ses propres
- * factures, déjà réglées (voir ImputerAvoirSurSesFacturesAction), reste un
- * crédit disponible pour le client (particulier ou professionnel, sans
- * distinction) jusqu'à ce qu'une prochaine facture vienne l'absorber --
- * automatiquement, à l'émission (voir
- * AppliquerAvoirDisponibleApresEmissionFacture), sans action du vendeur.
+ * Un avoir émis n'est jamais remboursé (B5) : ce qu'il n'a pas pu imputer
+ * à son émission sur les factures impayées du client, déjà réglées (voir
+ * ImputerAvoirSurSesFacturesAction), reste un crédit disponible pour le
+ * client (particulier ou professionnel, sans distinction) jusqu'à ce
+ * qu'une prochaine facture vienne l'absorber -- automatiquement, à
+ * l'émission (voir AppliquerAvoirDisponibleApresEmissionFacture), sans
+ * action du vendeur.
  */
 class AppliquerAvoirsDisponiblesActionTest extends TestCase
 {
@@ -204,11 +204,11 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
 
     /**
      * Le client comptoir (vente anonyme, voir Client::estComptoir()) est
-     * partagé par toutes les ventes au comptoir d'un magasin : un avoir émis
-     * "pour lui" n'a aucune personne identifiable à qui l'appliquer plus
-     * tard, et l'appliquer au hasard sur la prochaine vente comptoir
-     * reviendrait à donner le remboursement d'une personne à une autre. Il
-     * ne doit donc jamais afficher ni accumuler de solde créditeur.
+     * partagé par toutes les ventes au comptoir d'un magasin : le crédit
+     * d'un avoir émis "pour lui" n'appartient qu'à qui en présente le
+     * numéro, son bon d'avoir (voir EnregistrerVenteCaisseAction), et ne
+     * s'applique jamais tout seul à la vente comptoir suivante. Il n'affiche
+     * ni n'accumule donc jamais de solde créditeur.
      */
     public function test_le_client_comptoir_naccumule_et_napplique_jamais_de_credit(): void
     {

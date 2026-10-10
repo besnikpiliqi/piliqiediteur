@@ -53,8 +53,8 @@ use Illuminate\Support\Collection;
  * de chaque facture et le crédit d'avoir qu'il y impute (voir
  * EnregistrerPaiementAction). Une contre-passation (voir
  * ContrePasserPaiementAction) signe en plus le paiement qu'elle annule et
- * la séquence de son enregistrement ; son montant et ses imputations sont
- * négatifs.
+ * la séquence de son enregistrement ; son montant, ses imputations et le
+ * crédit qu'elle rend sont négatifs.
  */
 class ContenuFiscal
 {

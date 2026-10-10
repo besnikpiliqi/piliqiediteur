@@ -64,7 +64,7 @@
                     <td class="libelle">
                         Crédité par avoir
                         @php
-                            $numerosAvoirs = $facture->allocationsAvoir->pluck('avoir.numero')->filter()->implode(', ');
+                            $numerosAvoirs = implode(', ', $facture->numerosDesAvoirsImputes());
                         @endphp
                         @if($numerosAvoirs)
                             ({{ $numerosAvoirs }})

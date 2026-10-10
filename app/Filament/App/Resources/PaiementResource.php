@@ -27,8 +27,10 @@ use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\Rules\Exists;
+use InvalidArgumentException;
 
 /**
  * Pas de page "edit" ni d'action de suppression : un paiement enregistré
@@ -82,11 +84,19 @@ class PaiementResource extends Resource
                     ->rule(fn (): Exists => Client::regleExisteDansLeMagasin(Client::query()->quiPeuventRegler()))
                     ->searchable()
                     ->live()
-                    // Son crédit d'avoir solde ce qui reste dû des factures
-                    // que le paiement règle (voir EnregistrerPaiementAction).
-                    ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id')))
-                    // Son mode de paiement préféré est présélectionné (B8).
-                    ->afterStateUpdated(fn (mixed $state, Set $set) => $set('mode_paiement', Client::withTrashed()->find($state)?->mode_paiement_prefere?->value))
+                    // Son crédit d'avoir solde ce que les montants imputés
+                    // laissent dû des factures que le paiement règle (voir
+                    // EnregistrerPaiementAction).
+                    ->helperText(fn (Get $get): ?Htmlable => self::aideDuCreditDisponible(ClientResource::soldeCrediteurDe($get('client_id'))))
+                    // Son mode de paiement préféré est présélectionné (B8) ;
+                    // sans préférence, le mode déjà choisi reste.
+                    ->afterStateUpdated(function (mixed $state, Set $set): void {
+                        $modePrefere = Client::withTrashed()->find($state)?->mode_paiement_prefere;
+
+                        if ($modePrefere !== null) {
+                            $set('mode_paiement', $modePrefere->value);
+                        }
+                    })
                     ->required(),
                 Select::make('mode_paiement')
                     ->label('Mode de paiement')
@@ -94,7 +104,8 @@ class PaiementResource extends Resource
                     ->required(),
                 // Le montant reçu est exactement le total imputé sur les
                 // factures (B3, voir EnregistrerPaiementAction) ; le reste à
-                // imputer se met à jour pendant la saisie.
+                // imputer se met à jour pendant la saisie. Un montant hors
+                // limites n'est refusé que par maxValue, avec son message.
                 TextInput::make('montant')
                     ->label('Montant reçu')
                     ->numeric()
@@ -102,10 +113,11 @@ class PaiementResource extends Resource
                     ->maxValue(Caisse::MONTANT_MAXIMUM)
                     ->saisieEnDirect()
                     ->rule(fn (Get $get): Closure => function (string $attribute, mixed $valeur, Closure $echec) use ($get): void {
+                        $montant = self::montantSaisi($valeur);
                         $totalImpute = self::totalImpute($get('allocations'));
 
-                        if (is_numeric($valeur) && app(CalculateurLigne::class)->arrondirAuCentime((float) $valeur) !== $totalImpute) {
-                            $echec(sprintf('Le montant reçu (%s) doit être égal au total imputé sur les factures (%s).', self::enEuros((float) $valeur), self::enEuros($totalImpute)));
+                        if ($montant !== null && $totalImpute !== null && $montant !== $totalImpute) {
+                            $echec(sprintf('Le montant reçu (%s) doit être égal au total imputé sur les factures (%s).', self::enEuros($montant), self::enEuros($totalImpute)));
                         }
                     }),
                 TextInput::make('reference')->label('Référence')->maxLength(100),
@@ -148,9 +160,17 @@ class PaiementResource extends Resource
                                 ->searchable()
                                 ->live()
                                 ->required()
-                                ->afterStateUpdated(function (?int $state, Set $set) {
-                                    $facture = $state ? Facture::find($state) : null;
-                                    $set('montant', $facture?->montantRestant());
+                                // Le montant proposé laisse au crédit d'avoir
+                                // du client ce qu'il peut solder (voir
+                                // montantAProposer()), une fois déduit ce
+                                // qu'il soldera des autres factures choisies.
+                                ->afterStateUpdated(function (mixed $state, Set $set, Get $get): void {
+                                    $facture = filled($state) ? Facture::find($state) : null;
+
+                                    $set('montant', $facture === null ? null : self::montantAProposer(
+                                        $facture->montantRestant(),
+                                        self::creditLaissePourLaFacture(ClientResource::soldeCrediteurDe($get('../../client_id')) ?? 0.0, $get('../../allocations'), $facture),
+                                    ));
                                 }),
                             TextInput::make('montant')
                                 ->label('Montant imputé')
@@ -162,7 +182,7 @@ class PaiementResource extends Resource
                                 // ne devient pas un crédit (contrairement à
                                 // un avoir), seule une imputation partielle
                                 // (acompte) reste permise.
-                                ->maxValue(fn (Get $get) => Facture::find($get('facture_id'))?->montantRestant()),
+                                ->maxValue(fn (Get $get): float => Facture::find($get('facture_id'))?->montantRestant() ?? Caisse::MONTANT_MAXIMUM),
                         ])
                         ->columns(2)
                         ->defaultItems(1)
@@ -171,25 +191,116 @@ class PaiementResource extends Resource
                         ->required(),
                     Placeholder::make('reste_a_imputer')
                         ->label('Reste à imputer')
-                        ->content(fn (Get $get): string => is_numeric($get('montant'))
-                            ? self::enEuros(app(CalculateurLigne::class)->soustraire((float) $get('montant'), self::totalImpute($get('allocations'))))
-                            : '—'),
+                        ->content(function (Get $get): string {
+                            $montant = self::montantSaisi($get('montant'));
+                            $totalImpute = self::totalImpute($get('allocations'));
+
+                            return $montant === null || $totalImpute === null ? '—' : self::enEuros(app(CalculateurLigne::class)->soustraire($montant, $totalImpute));
+                        }),
                 ]),
         ]);
     }
 
     /**
+     * Un montant saisi, au centime ; null s'il n'est pas un nombre ou s'il
+     * sort des limites (voir Caisse::MONTANT_MAXIMUM), que sa propre règle
+     * refuse.
+     */
+    private static function montantSaisi(mixed $valeur): ?float
+    {
+        if (! is_numeric($valeur) || abs((float) $valeur) > Caisse::MONTANT_MAXIMUM) {
+            return null;
+        }
+
+        return app(CalculateurLigne::class)->arrondirAuCentime((float) $valeur);
+    }
+
+    /**
      * Le total des montants imputés saisis, au centime ; une saisie qui
-     * n'est pas un nombre n'y compte pas (sa propre règle la refuse).
+     * n'est pas un nombre n'y compte pas (sa propre règle la refuse). Null
+     * quand une saisie sort des limites : aucun total ne s'en déduit.
      *
      * @param  mixed  $allocations  les lignes du répétiteur
      */
-    private static function totalImpute(mixed $allocations): float
+    private static function totalImpute(mixed $allocations): ?float
     {
-        return app(CalculateurLigne::class)->sommer(collect(is_array($allocations) ? $allocations : [])
+        $montantsSaisis = collect(is_array($allocations) ? $allocations : [])
             ->pluck('montant')
             ->filter(fn (mixed $montant): bool => is_numeric($montant))
-            ->map(fn (mixed $montant): float => (float) $montant));
+            ->map(fn (mixed $montant): ?float => self::montantSaisi($montant));
+
+        if ($montantsSaisis->contains(null)) {
+            return null;
+        }
+
+        try {
+            return app(CalculateurLigne::class)->sommer($montantsSaisis);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
+    }
+
+    /**
+     * Le montant à proposer pour régler une facture : ce qui en reste dû,
+     * moins le crédit d'avoir du client, qui soldera ce que le montant
+     * reçu laisse dû (voir EnregistrerPaiementAction) ; rien quand ce
+     * crédit couvre tout.
+     */
+    public static function montantAProposer(float $resteDu, float $creditDisponible): ?float
+    {
+        $montant = app(CalculateurLigne::class)->soustraire($resteDu, max(0.0, $creditDisponible));
+
+        return $montant > 0 ? $montant : null;
+    }
+
+    /**
+     * Le crédit d'avoir du client qui reste pour solder cette facture, une
+     * fois déduit ce qu'il soldera des autres factures du paiement : ce que
+     * leur montant imputé laisse dû.
+     *
+     * @param  mixed  $allocations  les lignes du répétiteur
+     */
+    private static function creditLaissePourLaFacture(float $creditDisponible, mixed $allocations, Facture $facture): float
+    {
+        $calculateur = app(CalculateurLigne::class);
+        $credit = $creditDisponible;
+
+        foreach (is_array($allocations) ? $allocations : [] as $allocation) {
+            $autre = filled($allocation['facture_id'] ?? null) && (int) $allocation['facture_id'] !== $facture->getKey()
+                ? Facture::find($allocation['facture_id'])
+                : null;
+            $montantImpute = self::montantSaisi($allocation['montant'] ?? null);
+
+            if ($autre !== null && $montantImpute !== null) {
+                $credit = $calculateur->soustraire($credit, max(0.0, $calculateur->soustraire($autre->montantRestant(), $montantImpute)));
+            }
+        }
+
+        return max(0.0, $credit);
+    }
+
+    /**
+     * L'aide sous le client ou le montant d'un paiement : le crédit d'avoir
+     * du client ne s'y impute que sur ce que le montant reçu laisse dû
+     * (voir EnregistrerPaiementAction), contrairement aux formulaires de
+     * vente, où il s'impute à l'émission (voir
+     * ClientResource::soldeCrediteurHelperText()). Pour une seule facture,
+     * elle dit quel montant suffit pour la régler.
+     */
+    public static function aideDuCreditDisponible(?float $creditDisponible, ?float $resteDu = null): ?Htmlable
+    {
+        if ($creditDisponible === null) {
+            return null;
+        }
+
+        $credit = 'Crédit disponible pour ce client : '.self::enEuros($creditDisponible).'.';
+        $montantQuiSuffit = $resteDu === null ? null : self::montantAProposer($resteDu, $creditDisponible);
+
+        return ClientResource::enEvidence(match (true) {
+            $resteDu === null => "{$credit} Il soldera ce que les montants imputés laissent dû sur les factures choisies, de la plus ancienne à la plus récente.",
+            $montantQuiSuffit === null => "{$credit} Il soldera ce que le montant reçu laisse dû, et couvre déjà tout ce qui reste dû.",
+            default => "{$credit} Il soldera ce que le montant reçu laisse dû : ".self::enEuros($montantQuiSuffit).' suffisent pour régler la facture.',
+        });
     }
 
     private static function enEuros(float $montant): string
@@ -242,10 +353,11 @@ class PaiementResource extends Resource
                     ])
                     ->requiresConfirmation()
                     ->modalDescription(fn (Paiement $record): string => sprintf(
-                        'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui, et les factures qu\'il réglait redeviendront dues. Saisissez ensuite le bon paiement.',
+                        'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui, et les factures qu\'il réglait redeviendront dues%s. Saisissez ensuite le bon paiement.',
                         self::enEuros((float) $record->montant),
                         $record->mode_paiement->getLabel(),
                         $record->recu_le->format('d/m/Y'),
+                        $record->creditsImputes()->exists() ? ' ; le crédit d\'avoir qu\'il y avait imputé redeviendra disponible' : '',
                     ))
                     ->visible(fn (Paiement $record): bool => auth()->user()->can('contrePasser', $record))
                     ->action(fn (Paiement $record, array $data) => static::executerSansCasser(fn () => app(ContrePasserPaiementAction::class)->handle($record, $data['motif']))),

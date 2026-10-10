@@ -346,12 +346,24 @@ class ClientResource extends Resource
     /**
      * Texte d'aide affiché sous le Select client des pages de création de
      * vente (Devis/Facture/Caisse), pour que le vendeur voie le crédit
-     * disponible avant même de valider -- même s'il sera de toute façon
-     * appliqué automatiquement à l'émission (voir
-     * AppliquerAvoirsDisponiblesAction), y compris pour le client d'un
-     * brouillon archivé depuis.
+     * disponible avant même de valider -- il sera appliqué
+     * automatiquement à l'émission (voir AppliquerAvoirsDisponiblesAction),
+     * y compris pour le client d'un brouillon archivé depuis. Les
+     * formulaires de paiement ont leur propre texte (voir
+     * PaiementResource::aideDuCreditDisponible()).
      */
-    public static function soldeCrediteurHelperText(mixed $clientId): string|Htmlable|null
+    public static function soldeCrediteurHelperText(mixed $clientId): ?Htmlable
+    {
+        $solde = self::soldeCrediteurDe($clientId);
+
+        return $solde === null ? null : self::enEvidence('Crédit disponible pour ce client : '.number_format($solde, 2, ',', ' ').' € (sera appliqué automatiquement).');
+    }
+
+    /**
+     * Le crédit d'avoir disponible du client (voir Client::soldeCrediteur()),
+     * null quand il n'en a pas.
+     */
+    public static function soldeCrediteurDe(mixed $clientId): ?float
     {
         if (blank($clientId)) {
             return null;
@@ -359,16 +371,17 @@ class ClientResource extends Resource
 
         $solde = Client::withTrashed()->find($clientId)?->soldeCrediteur();
 
-        if (blank($solde) || $solde <= 0) {
-            return null;
-        }
+        return $solde !== null && $solde > 0 ? $solde : null;
+    }
 
-        $texte = 'Crédit disponible pour ce client : '.number_format($solde, 2, ',', ' ').' € (sera appliqué automatiquement).';
-
-        // Couleur directement en ligne, pas une classe Tailwind : ce
-        // message doit attirer l'œil du vendeur, pas se fondre dans le
-        // texte d'aide gris habituel -- et ne dépend ainsi jamais de ce
-        // que le build CSS a ou non conservé.
+    /**
+     * Couleur directement en ligne, pas une classe Tailwind : ce message
+     * doit attirer l'œil du vendeur, pas se fondre dans le texte d'aide
+     * gris habituel -- et ne dépend ainsi jamais de ce que le build CSS a
+     * ou non conservé.
+     */
+    public static function enEvidence(string $texte): Htmlable
+    {
         return new HtmlString('<span style="color: #c2410c; font-weight: 600;">'.e($texte).'</span>');
     }
 }

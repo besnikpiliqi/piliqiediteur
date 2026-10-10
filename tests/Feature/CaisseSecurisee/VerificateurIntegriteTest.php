@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\AnomalieFiscale;
+use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
@@ -23,6 +24,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
@@ -816,6 +818,8 @@ class VerificateurIntegriteTest extends TestCase
 
         $this->assertSame([
             [90, 'L\'imputation de l\'avoir AV-LYON1-2026-000001 sur la facture FAC-LYON1-2026-000001 (1,00 €) ne figure dans aucun contenu signé.'],
+            [90, 'La facture FAC-LYON1-2026-000001 : 61,00 € imputés (paiements et crédits d\'avoir) pour un total TTC de 60,00 €, soit 1,00 € de trop.'],
+            [90, 'L\'avoir AV-LYON1-2026-000001 : 13,00 € crédités de factures pour un total TTC de 12,00 €, soit 1,00 € de trop.'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -840,6 +844,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->assertSame([
             [90, "Le paiement (identifiant interne {$documents['virement']->id}) ne correspond plus à ce qui a été signé à son enregistrement (allocations)."],
             [90, "L'imputation du paiement (identifiant interne {$documents['virement']->id}) sur le ticket TK-LYON1-2026-000001 (1,00 €) ne figure dans aucun contenu signé."],
+            [90, 'Le ticket TK-LYON1-2026-000001 : 30,50 € imputés (paiements et crédits d\'avoir) pour un total TTC de 29,50 €, soit 1,00 € de trop.'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -1125,6 +1130,59 @@ class VerificateurIntegriteTest extends TestCase
     }
 
     /**
+     * Constat F2 : sur un ticket de 100,00 € payé au comptoir, un second
+     * paiement de 20,00 € est signé en règle dans la chaîne des
+     * encaissements, comme par un chemin qui n'aurait pas relu sous le
+     * verrou ce qui restait dû. Chaque signature se vérifie, mais le ticket
+     * a reçu plus que son TTC.
+     */
+    public function test_un_paiement_signe_qui_impute_plus_que_le_reste_du_est_detecte(): void
+    {
+        $magasin = $this->magasinActif();
+        $this->travelTo('2026-10-09 10:00:00');
+        $client = Client::factory()->create();
+        $ticket = $this->encaisser($client, [[$this->produit('ART', 100), 1]], ModePaiement::CarteBancaire);
+        $this->assertSame(100.0, $ticket->montantPaye());
+
+        DB::transaction(function () use ($magasin, $client, $ticket): void {
+            app(RegistreFiscal::class)->verrouiller($magasin);
+            $second = Paiement::create(['client_id' => $client->id, 'mode_paiement' => ModePaiement::Especes->value, 'montant' => '20.00', 'recu_le' => '2026-10-09']);
+            PaiementAllocation::create(['paiement_id' => $second->id, 'facture_id' => $ticket->id, 'montant_alloue' => '20.00']);
+            $second = $second->fresh();
+            app(RegistreFiscal::class)->enregistrer(ChaineFiscale::Encaissement, 'paiement', app(ContenuFiscal::class)->encaissement($second), $second);
+        });
+
+        $this->assertSame([
+            [90, 'Le ticket TK-LYON1-2026-000001 : 120,00 € imputés (paiements et crédits d\'avoir) pour un total TTC de 100,00 €, soit 20,00 € de trop.'],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
+     * Une imputation négative ajoutée en base retire d'un ticket plus que
+     * ce qu'il avait reçu : ce qui y est imputé devient négatif.
+     */
+    public function test_un_ticket_dont_les_imputations_deviennent_negatives_est_detecte(): void
+    {
+        $magasin = $this->magasinActif();
+        $documents = $this->activite();
+
+        DB::table('paiement_allocations')->insert([
+            'magasin_id' => $magasin->id,
+            'paiement_id' => $documents['virement']->id,
+            'facture_id' => $documents['ticket']->id,
+            'montant_alloue' => '-30.00',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertSame([
+            [90, "Le paiement (identifiant interne {$documents['virement']->id}) ne correspond plus à ce qui a été signé à son enregistrement (allocations)."],
+            [90, "L'imputation du paiement (identifiant interne {$documents['virement']->id}) sur le ticket TK-LYON1-2026-000001 (-30,00 €) ne figure dans aucun contenu signé."],
+            [90, 'Le ticket TK-LYON1-2026-000001 : -0,50 € imputés (paiements et crédits d\'avoir), un montant négatif : on y a retiré plus qu\'on n\'y avait imputé.'],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
      * Un crédit d'avoir ajouté en base à un paiement change ce qu'il règle :
      * son enregistrement ne le signe pas.
      */
@@ -1146,6 +1204,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->assertSame([
             [90, "Le paiement (identifiant interne {$documents['contrePassation']->id}) ne correspond plus à ce qui a été signé à son enregistrement (credits_imputes)."],
             [90, "Le crédit de l'avoir AV-LYON1-2026-000001 imputé par le paiement (identifiant interne {$documents['contrePassation']->id}) sur la facture FAC-LYON1-2026-000002 (1,00 €) ne figure dans aucun contenu signé."],
+            [90, 'La facture FAC-LYON1-2026-000002 : 61,00 € imputés (paiements et crédits d\'avoir) pour un total TTC de 60,00 €, soit 1,00 € de trop.'],
         ], $this->anomalies($this->verifier()));
     }
 

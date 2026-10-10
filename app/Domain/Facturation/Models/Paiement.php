@@ -81,7 +81,9 @@ class Paiement extends Model
 
     /**
      * Le crédit d'avoir du client que ce paiement a imputé sur ce qui
-     * restait dû des factures qu'il règle (voir EnregistrerPaiementAction).
+     * restait dû des factures qu'il règle (voir EnregistrerPaiementAction) ;
+     * pour une contre-passation, en négatif, celui qu'elle rend aux avoirs
+     * (voir ContrePasserPaiementAction).
      */
     public function creditsImputes(): HasMany
     {

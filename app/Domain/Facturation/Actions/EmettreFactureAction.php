@@ -66,9 +66,12 @@ use LogicException;
  *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
  *  3. FactureEmise sort le stock, applique le crédit d'avoir du client et
  *     prépare la transmission PDP ;
- *  4. le règlement comptant d'une vente au comptoir, s'il y en a un, paie
- *     ce qui reste dû (voir EnregistrerPaiementAction, signé dans la
- *     chaîne des encaissements) ;
+ *  4. une facture dont il ne reste rien à payer, parce que ce crédit la
+ *     couvre ou qu'elle ne coûte rien (remise de 100 %), passe « payée »
+ *     sans encaissement : elle n'attend aucun règlement et ne sera jamais
+ *     en retard (G1) ; sinon le règlement comptant d'une vente au
+ *     comptoir, s'il y en a un, paie ce qui reste dû (voir
+ *     EnregistrerPaiementAction, signé dans la chaîne des encaissements) ;
  *  5. le document, tel qu'il est alors en base, est signé dans la chaîne
  *     des ventes (voir ContenuFiscal) : client figé, règlement et crédit
  *     compris.
@@ -134,8 +137,12 @@ class EmettreFactureAction
             // de FactureEmise sur pourquoi ce event n'est pas différé.
             FactureEmise::dispatch($facture);
 
-            if ($reglement !== null) {
-                $this->reglerComptant($facture->fresh(), $reglement, $instant->enHeureLocale()->toDateString());
+            $facture = $facture->fresh();
+
+            if ($facture->montantRestant() <= 0) {
+                $facture->constaterUnReglement();
+            } elseif ($reglement !== null) {
+                $this->encaisserComptant($facture, $reglement, $instant->enHeureLocale()->toDateString());
             }
 
             $facture = $facture->fresh();
@@ -170,19 +177,11 @@ class EmettreFactureAction
 
     /**
      * Une vente au comptoir est soldée dès son émission : ce qui reste dû
-     * après le crédit d'avoir du client est encaissé, et une vente que ce
-     * crédit couvre, ou qui ne coûte rien (remise de 100 %), est payée
-     * sans encaissement.
+     * après le crédit d'avoir du client est encaissé.
      */
-    private function reglerComptant(Facture $facture, ReglementComptant $reglement, string $recuLe): void
+    private function encaisserComptant(Facture $facture, ReglementComptant $reglement, string $recuLe): void
     {
         $montantRestant = $facture->montantRestant();
-
-        if ($montantRestant <= 0) {
-            $facture->constaterUnReglement();
-
-            return;
-        }
 
         $this->enregistrerPaiement->handle(
             $facture->client,

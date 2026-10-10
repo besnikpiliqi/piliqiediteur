@@ -15,6 +15,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -26,12 +27,13 @@ use LogicException;
  * légale complète du magasin (B11, voir
  * Magasin::verifierSonIdentiteLegale()) ; celui d'un ticket reste
  * possible. Tout se fait dans la même transaction, dans cet ordre :
- *  1. le registre fiscal du magasin est verrouillé, avant l'avoir et la
- *     numérotation (voir RegistreFiscal) ; il donne l'instant de
- *     l'émission ;
- *  2. l'avoir, relu verrouillé, arrête ses montants, prend la copie du
- *     client figée sur le document qu'il corrige, le plus récent s'il en
- *     corrige plusieurs (voir Avoir::clientAFiger()), reçoit son numéro,
+ *  1. le registre fiscal du magasin actif est verrouillé, avant toute
+ *     lecture, l'avoir et la numérotation (voir RegistreFiscal) ; il donne
+ *     l'instant de l'émission ;
+ *  2. l'avoir, relu verrouillé dans le magasin actif, arrête ses
+ *     montants, prend la copie du client figée sur le document qu'il
+ *     corrige, le plus récent s'il en corrige plusieurs (voir
+ *     Avoir::clientAFiger()), reçoit son numéro,
  *     dans l'année de cet instant à l'heure de Paris, et cet instant, en
  *     UTC, pour date d'émission (voir HorodateSonEmission) --
  *     un avoir sur des tickets, que compte la clôture de sa journée (voir
@@ -65,7 +67,7 @@ class EmettreAvoirAction
     public function handle(Avoir $avoir): Avoir
     {
         return DB::transaction(function () use ($avoir) {
-            $instant = $this->registre->verrouiller($avoir->magasin);
+            $instant = $this->registre->verrouiller(app(TenantContext::class)->magasin());
             $avoir = Avoir::query()->whereKey($avoir->getKey())->lockForUpdate()->firstOrFail();
 
             if (! $avoir->statut->peutTransitionnerVers(StatutAvoir::Emise)) {

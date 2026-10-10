@@ -17,10 +17,12 @@ use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -30,6 +32,7 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 use Tests\TestCase;
 
 /**
@@ -699,18 +702,38 @@ class EmissionSigneeTest extends TestCase
         $this->assertLessThan($this->position($requetes, 'insert into "factures"'), $this->position($requetes, 'select * from "tetes_registre_fiscal"'));
     }
 
-    public function test_un_avoir_verrouille_le_registre_avant_les_lignes_qu_il_corrige(): void
+    /**
+     * Un avoir impute son crédit sur ce qui reste dû de ses factures, comme
+     * un paiement simultané : le verrou du registre est la toute première
+     * lecture de sa transaction (ni le magasin du client, ni les lignes
+     * qu'il corrige ne sont lus avant lui).
+     */
+    public function test_un_avoir_verrouille_le_registre_avant_toute_lecture(): void
     {
         $this->magasinActif();
-        $client = Client::factory()->create();
-        $ticket = $this->encaisser($client, [[$this->produit('A-020', 'Article à 20 €', 20), 1]]);
+        $ticket = $this->encaisser(Client::factory()->create(), [[$this->produit('A-020', 'Article à 20 €', 20), 1]]);
         $ligne = $ticket->lignes->sole();
+        $client = Client::query()->findOrFail($ticket->client_id);
 
         $requetes = $this->requetesDe(fn () => app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligne->id, 'quantite' => 1]]));
 
-        $registre = $this->position($requetes, 'select * from "tetes_registre_fiscal"');
-        $this->assertLessThan($this->position($requetes, 'insert into "avoirs"'), $registre);
-        $this->assertLessThan($this->position($requetes, 'select * from "lignes_facture"'), $registre);
+        $this->assertSame(0, $this->position($requetes, 'select * from "tetes_registre_fiscal"'));
+        $this->assertLessThan($this->position($requetes, 'insert into "avoirs"'), $this->position($requetes, 'select * from "lignes_facture"'));
+    }
+
+    /**
+     * Le client d'un autre magasin est refusé sous le verrou du registre
+     * du magasin actif, avant tout avoir.
+     */
+    public function test_un_avoir_pour_le_client_d_un_autre_magasin_est_refuse(): void
+    {
+        $this->magasinActif(['code' => 'LYON2']);
+        $clientDeB = Client::factory()->create();
+        $this->magasinActif();
+
+        $this->assertThrows(fn () => app(EnregistrerAvoirAction::class)->handle($clientDeB, [['ligne_facture_id' => 1, 'quantite' => 1]]), LogicException::class, 'Ce client n\'est pas un client du magasin.');
+
+        $this->assertSame(0, Avoir::query()->withoutGlobalScope(MagasinScope::class)->count());
     }
 
     /**

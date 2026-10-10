@@ -20,6 +20,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class MarquerFacturesEnRetardTest extends TestCase
@@ -120,6 +121,31 @@ class MarquerFacturesEnRetardTest extends TestCase
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
 
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
+    }
+
+    /**
+     * G1 : une facture n'est en retard que tant qu'un montant en reste dû
+     * après l'échéance. Remisée à 100 %, elle ne doit rien : payée dès son
+     * émission, elle ne passe jamais en retard, et personne n'en est
+     * prévenu.
+     */
+    public function test_une_facture_qui_ne_doit_rien_ne_passe_jamais_en_retard(): void
+    {
+        Notification::fake();
+        $this->travelTo('2026-09-01 10:00:00');
+        $magasin = Magasin::factory()->create();
+        app(TenantContext::class)->set($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 100],
+        ]));
+        app(TenantContext::class)->clear();
+        $this->travelTo('2026-10-15 10:00:00');
+
+        $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
+
+        $this->assertSame([StatutFacture::Payee, '0.00'], [$facture->fresh()->statut, $facture->fresh()->total_ttc]);
+        Notification::assertNothingSent();
     }
 
     /**

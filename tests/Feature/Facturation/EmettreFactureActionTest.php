@@ -5,6 +5,7 @@ namespace Tests\Feature\Facturation;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
+use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -18,6 +19,7 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Exceptions\IdentiteDuMagasinIncompleteException;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Exceptions\ReglagesCommunsDifferentsException;
@@ -198,6 +200,27 @@ class EmettreFactureActionTest extends TestCase
 
         $this->assertSame('TK-LYON1-2027-000001', $facture->numero);
         $this->assertSame('2027-01-01 00:30', $facture->fresh()->date_emission->format('Y-m-d H:i'));
+    }
+
+    /**
+     * Une facture remisée à 100 % ne coûte rien : elle n'attend aucun
+     * règlement et passe « payée » dès son émission, sans encaissement,
+     * signée avec ce statut.
+     */
+    public function test_une_facture_qui_ne_coute_rien_est_payee_des_son_emission(): void
+    {
+        $client = Client::factory()->professionnel()->create();
+        $this->completerIdentiteLegale(app(TenantContext::class)->magasin());
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 100],
+        ]);
+
+        $facture = app(EmettreFactureAction::class)->handle($brouillon);
+
+        $this->assertSame([StatutFacture::Payee, '0.00', 0.0, 0.0], [$facture->statut, $facture->total_ttc, $facture->montantPaye(), $facture->montantRestant()]);
+        $this->assertSame(0, Paiement::query()->count());
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
     }
 
     public function test_impossible_demettre_une_facture_sans_lignes(): void

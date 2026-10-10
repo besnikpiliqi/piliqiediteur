@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Filament\App\Resources\AvoirResource\Pages;
 use App\Filament\Concerns\EnvoieLesDocuments;
@@ -169,11 +170,17 @@ class AvoirResource extends Resource
             InfolistSection::make('Crédit appliqué')
                 ->visible(fn (Avoir $record) => $record->allocations()->exists())
                 ->schema([
+                    // Le crédit qu'un paiement saisi par erreur avait
+                    // imputé y figure avec sa contre-passation, en négatif,
+                    // qui le rend à l'avoir (voir ContrePasserPaiementAction).
                     RepeatableEntry::make('allocations')
                         ->label('')
                         ->schema([
                             TextEntry::make('facture.numero')->label('Facture'),
-                            TextEntry::make('montant_alloue')->label('Montant crédité')->money('EUR'),
+                            TextEntry::make('montant_alloue')
+                                ->label('Montant crédité')
+                                ->money('EUR')
+                                ->color(fn (AvoirAllocation $record): ?string => (float) $record->montant_alloue < 0 ? 'danger' : null),
                         ])
                         ->columns(2),
                 ]),

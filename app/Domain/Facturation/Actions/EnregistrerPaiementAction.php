@@ -32,7 +32,8 @@ use LogicException;
  * qui reste dû des factures qu'il règle, de la plus ancienne à la plus
  * récente, les avoirs les plus anciens d'abord (K9) : c'est le cas d'une
  * facture rouverte par la contre-passation d'un paiement saisi par erreur
- * (voir ContrePasserPaiementAction) quand le client a reçu un avoir
+ * (voir ContrePasserPaiementAction), qui a rendu à ses avoirs le crédit
+ * que ce paiement avait imputé, ou quand le client a reçu un avoir
  * entre-temps. Jamais pour le client comptoir, qui n'a pas de crédit (voir
  * Client::soldeCrediteur()).
  *

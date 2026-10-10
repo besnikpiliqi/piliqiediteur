@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
@@ -18,14 +19,15 @@ use LogicException;
 /**
  * Un paiement saisi par erreur ne se modifie ni ne se supprime (voir
  * ProtegeLesDonneesValidees) : il se contre-passe (B4). La contre-passation
- * est un paiement opposé, l'inverse exact de l'original : même client, même
- * mode, même référence, montant et imputations de signe contraire, le
- * motif pour notes. Elle désigne l'original, qui reste tel quel, et les
- * factures qu'il réglait redeviennent dues (voir
+ * est un paiement opposé, l'inverse exact de l'original (K9) : même client,
+ * même mode, même référence, montant et imputations de signe contraire,
+ * le crédit d'avoir que l'original avait imputé compris, le motif pour
+ * notes. Ce crédit revient donc à ses avoirs, disponible de nouveau. Elle
+ * désigne l'original, qui reste tel quel, et les factures qu'il réglait
+ * redeviennent dues de tout ce qu'il y avait réglé (voir
  * Facture::constaterUnReglement()). On saisit ensuite le bon paiement, avec
- * lequel le crédit d'avoir disponible du client s'impute (voir
- * EnregistrerPaiementAction). Le crédit qu'avait imputé le paiement erroné
- * reste imputé : un crédit n'est jamais remboursé.
+ * lequel le crédit disponible du client solde le reste de ses factures
+ * (voir EnregistrerPaiementAction).
  *
  * Elle est datée du jour où elle est faite, à l'heure de Paris, jamais
  * d'une journée déjà clôturée : une fois la journée clôturée, elle attend
@@ -33,10 +35,14 @@ use LogicException;
  * contre-passation ne se contre-passe pas.
  *
  * Le registre fiscal du magasin actif se verrouille avant toute lecture de
- * la transaction ; l'original et chaque facture qu'il réglait sont relus
- * sous ce verrou, et la contre-passation est signée dans la chaîne des
- * encaissements (type « contre_passation », voir ContenuFiscal), dans la
- * même transaction.
+ * la transaction ; l'original, relu sous ce verrou sans verrou de ligne (la
+ * table des paiements est en ajout seul : le compte de l'application n'y a
+ * pas le droit de modifier, qu'exige un SELECT ... FOR UPDATE sous
+ * PostgreSQL), et chaque facture qu'il réglait, relue verrouillée, voient
+ * ce que les transactions précédentes ont validé. La contre-passation est
+ * signée dans la chaîne des encaissements (type « contre_passation », voir
+ * ContenuFiscal), imputations et crédits inversés compris, dans la même
+ * transaction.
  */
 class ContrePasserPaiementAction
 {
@@ -61,7 +67,7 @@ class ContrePasserPaiementAction
         return DB::transaction(function () use ($paiementErrone, $motif) {
             $magasin = app(TenantContext::class)->magasin();
             $journee = $this->registre->verrouiller($magasin)->enHeureLocale();
-            $original = Paiement::query()->whereKey($paiementErrone->getKey())->lockForUpdate()->firstOrFail();
+            $original = Paiement::query()->whereKey($paiementErrone->getKey())->firstOrFail();
 
             if ($original->estUneContrePassation()) {
                 throw new LogicException('Une contre-passation ne se contre-passe pas.');
@@ -82,16 +88,30 @@ class ContrePasserPaiementAction
                 'recu_le' => $journee->toDateString(),
             ]);
             $contrePassation->forceFill(['contre_passe_paiement_id' => $original->getKey()])->save();
+            $factures = [];
 
             foreach ($original->allocations()->orderBy('id')->get() as $allocation) {
-                $facture = Facture::query()->whereKey($allocation->facture_id)->lockForUpdate()->firstOrFail();
+                $factures[$allocation->facture_id] ??= Facture::query()->whereKey($allocation->facture_id)->lockForUpdate()->firstOrFail();
 
                 PaiementAllocation::create([
                     'paiement_id' => $contrePassation->id,
-                    'facture_id' => $facture->id,
+                    'facture_id' => $allocation->facture_id,
                     'montant_alloue' => '-'.$allocation->montant_alloue,
                 ]);
+            }
 
+            foreach ($original->creditsImputes()->orderBy('id')->get() as $credit) {
+                $factures[$credit->facture_id] ??= Facture::query()->whereKey($credit->facture_id)->lockForUpdate()->firstOrFail();
+
+                AvoirAllocation::create([
+                    'avoir_id' => $credit->avoir_id,
+                    'facture_id' => $credit->facture_id,
+                    'paiement_id' => $contrePassation->id,
+                    'montant_alloue' => '-'.$credit->montant_alloue,
+                ]);
+            }
+
+            foreach ($factures as $facture) {
                 $facture->constaterUnReglement();
             }
 

@@ -46,6 +46,7 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -216,6 +217,9 @@ class FactureResource extends Resource
             InfolistSection::make('Crédité par avoir')
                 ->visible(fn (Facture $record) => $record->allocationsAvoir()->exists())
                 ->schema([
+                    // Le crédit qu'avait imputé un paiement saisi par
+                    // erreur y figure avec sa contre-passation, en négatif
+                    // (voir ContrePasserPaiementAction).
                     RepeatableEntry::make('allocationsAvoir')
                         ->label('')
                         ->schema([
@@ -223,7 +227,10 @@ class FactureResource extends Resource
                                 ->label('Avoir')
                                 ->url(fn (AvoirAllocation $record) => AvoirResource::getUrl('view', ['record' => $record->avoir]))
                                 ->color('primary'),
-                            TextEntry::make('montant_alloue')->label('Montant crédité')->money('EUR'),
+                            TextEntry::make('montant_alloue')
+                                ->label('Montant crédité')
+                                ->money('EUR')
+                                ->color(fn (AvoirAllocation $record): ?string => (float) $record->montant_alloue < 0 ? 'danger' : null),
                         ])
                         ->columns(2),
                 ]),
@@ -476,10 +483,12 @@ class FactureResource extends Resource
                             // le vendeur doit saisir au plus le restant dû,
                             // mais peut librement saisir moins (acompte).
                             // Le crédit d'avoir du client solde ensuite ce
-                            // qui reste dû (voir EnregistrerPaiementAction).
+                            // que le montant reçu laisse dû (voir
+                            // EnregistrerPaiementAction) : le montant
+                            // proposé le lui laisse.
                             ->maxValue(fn (Facture $record) => $record->montantRestant())
-                            ->default(fn (Facture $record) => $record->montantRestant())
-                            ->helperText(fn (Facture $record) => ClientResource::soldeCrediteurHelperText($record->client_id)),
+                            ->default(fn (Facture $record): ?float => PaiementResource::montantAProposer($record->montantRestant(), ClientResource::soldeCrediteurDe($record->client_id) ?? 0.0))
+                            ->helperText(fn (Facture $record): ?Htmlable => PaiementResource::aideDuCreditDisponible(ClientResource::soldeCrediteurDe($record->client_id), $record->montantRestant())),
                         TextInput::make('reference')->label('Référence')->maxLength(100),
                         DatePicker::make('recu_le')
                             ->label('Reçu le')

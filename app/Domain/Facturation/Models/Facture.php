@@ -38,6 +38,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use LogicException;
 
 /**
@@ -325,12 +326,36 @@ class Facture extends Model implements DocumentEnvoyable
      * Crédit d'avoir imputé sur cette facture : par l'avoir qui la corrige
      * (voir ImputerAvoirSurSesFacturesAction), à son émission (voir
      * AppliquerAvoirsDisponiblesAction) ou par un paiement qui la règle
-     * (voir EnregistrerPaiementAction) -- jamais un paiement réellement
-     * encaissé, mais il réduit le solde dû exactement de la même façon.
+     * (voir EnregistrerPaiementAction), moins celui que la contre-passation
+     * de ce paiement a rendu (voir ContrePasserPaiementAction) -- jamais un
+     * paiement réellement encaissé, mais il réduit le solde dû exactement
+     * de la même façon.
      */
     public function montantCrediteParAvoir(): float
     {
         return app(CalculateurLigne::class)->sommer($this->allocationsAvoir()->pluck('montant_alloue'));
+    }
+
+    /**
+     * Les numéros des avoirs dont le crédit reste imputé sur cette facture,
+     * chacun une fois, du premier imputé au dernier : un avoir peut s'y
+     * imputer plusieurs fois (à son émission, puis par un paiement), et le
+     * crédit qu'une contre-passation a rendu à son avoir n'y compte plus.
+     *
+     * @return list<string>
+     */
+    public function numerosDesAvoirsImputes(): array
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        return $this->allocationsAvoir
+            ->sortBy('id')
+            ->groupBy('avoir_id')
+            ->filter(fn (Collection $allocations): bool => $calculateur->sommer($allocations->pluck('montant_alloue')) > 0)
+            ->map(fn (Collection $allocations): ?string => $allocations->first()->avoir?->numero)
+            ->filter()
+            ->values()
+            ->all();
     }
 
     public function montantRestant(): float

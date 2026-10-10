@@ -12,9 +12,10 @@ use Illuminate\Support\Facades\Schema;
  * ImputerAvoirSurSesFacturesAction), pendant celle de la facture qui
  * absorbe un crédit (voir AppliquerAvoirsDisponiblesAction), ou pendant
  * l'enregistrement d'un paiement, dont le crédit solde ce qui reste dû des
- * factures qu'il règle (voir EnregistrerPaiementAction, paiement_id) ; elle
- * figure dans le contenu signé de ce document ou de ce paiement au
- * registre fiscal. La base refuse toute modification, toute suppression et
+ * factures qu'il règle (voir EnregistrerPaiementAction, paiement_id), ou
+ * pendant la contre-passation de ce paiement, qui rend ce crédit par une
+ * imputation négative (voir ContrePasserPaiementAction) ; elle figure dans
+ * le contenu signé de ce document ou de ce paiement au registre fiscal. La base refuse toute modification, toute suppression et
  * tout vidage (voir DeclencheursDeProtection).
  */
 return new class extends Migration

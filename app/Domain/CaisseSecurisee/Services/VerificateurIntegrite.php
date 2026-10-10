@@ -55,12 +55,17 @@ use ValueError;
  *    du bon type (une contre-passation sous le type « contre_passation »,
  *    tout autre paiement sous le type « paiement »). Chaque imputation
  *    d'un paiement ou d'un avoir figure dans exactement un contenu signé :
- *    celui de son paiement, du paiement qui a imputé ce crédit d'avoir, de
- *    la facture qu'un crédit d'avoir a réglée à son émission, ou de
- *    l'avoir qui l'a imputée sur ses factures. Le règlement que reprend
- *    aussi le contexte d'un ticket au comptoir n'en est qu'une copie : seul
- *    le paiement, dans la chaîne des encaissements, la signe pour son
- *    compte.
+ *    celui de son paiement, du paiement qui a imputé ce crédit d'avoir ou
+ *    de la contre-passation qui l'a rendu, en négatif, de la facture
+ *    qu'un crédit d'avoir a réglée à son émission, ou de l'avoir qui l'a
+ *    imputée sur ses factures. Le règlement que reprend aussi le contexte
+ *    d'un ticket au comptoir n'en est qu'une copie : seul le paiement,
+ *    dans la chaîne des encaissements, la signe pour son compte. Ce qui
+ *    est imputé sur chaque facture émise (paiements et crédits d'avoir,
+ *    contre-passations déduites) reste entre zéro et son total TTC, et ce
+ *    que chaque avoir émis a crédité, entre zéro et le sien : une
+ *    imputation signée en règle dépasse ce qui restait dû si elle ne l'a
+ *    pas relu sous le verrou du registre.
  * 3. La numérotation des tickets, des factures et des avoirs : continue
  *    dans chaque série et chaque année, de 1 au dernier numéro que la
  *    série a attribué, chaque numéro dans l'année de l'émission de son
@@ -79,7 +84,8 @@ use ValueError;
  * vérifie : un enregistrement dont la signature ne se vérifie pas est relu,
  * et signalé de nouveau, par la reprise suivante, au lieu d'en devenir le
  * point de départ. La ligne de tête, la correspondance entre documents et
- * enregistrements et la numérotation se vérifient toujours entièrement.
+ * enregistrements, les montants imputés et la numérotation se vérifient
+ * toujours entièrement.
  *
  * Tout se lit en flux (par paquets) ou se compte en base : la mémoire
  * d'une vérification, complète ou non, ne grandit pas avec le registre.
@@ -203,6 +209,7 @@ class VerificateurIntegrite
             $this->verifierLaTete();
             $this->verifierLesEnregistrementsDesDocuments();
             $this->verifierLesImputations();
+            $this->verifierLesMontantsImputes();
             $this->verifierLaNumerotation();
         });
 
@@ -1117,6 +1124,73 @@ class VerificateurIntegrite
         };
 
         return $allocations->where('facture_id', $imputation['facture_id']);
+    }
+
+    /**
+     * Ce qui est imputé sur chaque facture émise, paiements et crédits
+     * d'avoir, contre-passations déduites, et ce que chaque avoir émis a
+     * crédité de factures, restent entre zéro et le total TTC du document.
+     * La base fait les sommes en centimes, sur les seules imputations du
+     * magasin, et ne rend que les documents en défaut.
+     */
+    private function verifierLesMontantsImputes(): void
+    {
+        $this->verifierLesMontantsImputesSur('facture', [
+            'paye' => [PaiementAllocation::query(), 'facture_id'],
+            'credite' => [AvoirAllocation::query(), 'facture_id'],
+        ]);
+        $this->verifierLesMontantsImputesSur('avoir', [
+            'impute' => [AvoirAllocation::query(), 'avoir_id'],
+        ]);
+    }
+
+    /**
+     * @param  array<string, array{0: Builder<PaiementAllocation>|Builder<AvoirAllocation>, 1: string}>  $sommes  par alias de jointure, les imputations et la colonne qui désigne le document
+     */
+    private function verifierLesMontantsImputesSur(string $alias, array $sommes): void
+    {
+        $table = (new (self::MODELES[$alias]))->getTable();
+        $documents = self::MODELES[$alias]::query()->whereNotNull("{$table}.numero");
+        $centimesImputes = [];
+
+        foreach ($sommes as $jointure => [$imputations, $colonne]) {
+            $documents->leftJoinSub(
+                $imputations->toBase()->selectRaw("{$colonne} as document_id, round(sum(montant_alloue) * 100) as centimes")->groupBy($colonne),
+                $jointure,
+                "{$jointure}.document_id",
+                '=',
+                "{$table}.id",
+            );
+            $centimesImputes[] = "coalesce({$jointure}.centimes, 0)";
+        }
+
+        $impute = '('.implode(' + ', $centimesImputes).')';
+        $total = "round({$table}.total_ttc * 100)";
+
+        $documents
+            ->whereRaw("({$impute} < 0 or {$impute} > {$total})")
+            ->orderBy("{$table}.id")
+            ->toBase()
+            ->selectRaw("{$table}.id as id, {$table}.numero as numero, {$total} as total, {$impute} as impute")
+            ->get()
+            ->each(function (stdClass $document) use ($alias): void {
+                // Une somme ou un total illisible (« NaN », que garde une
+                // colonne numeric de PostgreSQL) est déjà signalé avec son
+                // imputation (voir verifierLImputation()) ou son document
+                // (voir verifierLeDocument()).
+                if (! is_numeric($document->impute) || ! is_numeric($document->total)) {
+                    return;
+                }
+
+                $libelle = self::libelleDuDocument($alias, (int) $document->id, $document->numero);
+                $impute = (int) $document->impute;
+                $total = (int) $document->total;
+                $nature = $alias === 'avoir' ? 'crédités de factures' : 'imputés (paiements et crédits d\'avoir)';
+
+                $this->rapport->signaler(AnomalieFiscale::defaut('montants_imputes', $impute < 0
+                    ? sprintf('%s : %s %s, un montant négatif : on y a retiré plus qu\'on n\'y avait imputé.', $libelle, self::enEuros($impute), $nature)
+                    : sprintf('%s : %s %s pour un total TTC de %s, soit %s de trop.', $libelle, self::enEuros($impute), $nature, self::enEuros($total), self::enEuros($impute - $total)), ['document' => $alias, 'document_id' => (int) $document->id]));
+            });
     }
 
     // ---------------------------------------------------------------

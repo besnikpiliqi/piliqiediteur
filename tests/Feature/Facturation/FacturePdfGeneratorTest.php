@@ -5,13 +5,17 @@ namespace Tests\Feature\Facturation;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
@@ -384,6 +388,66 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertStringContainsString($avoir->fresh()->numero, $html);
         $this->assertStringContainsString('60,00', $html);
         $this->assertStringNotContainsString('Restant dû', $html);
+    }
+
+    private function payer(Client $client, Facture $facture, string $montant): Paiement
+    {
+        return app(EnregistrerPaiementAction::class)->handle(
+            $client,
+            ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $montant, 'recu_le' => today()->toDateString()],
+            [['facture_id' => $facture->id, 'montant' => $montant]],
+        );
+    }
+
+    private function libelleDuCredit(Facture $facture): string
+    {
+        $html = app(FacturePdfGenerator::class)->html($facture->fresh());
+
+        return trim((string) preg_replace('/\s+/', ' ', Str::betweenFirst($html, 'Crédité par avoir', '</td>')));
+    }
+
+    /**
+     * Un avoir imputé sur sa facture à son émission (20,00 €), puis de
+     * nouveau par le bon paiement qui suit la contre-passation d'un
+     * paiement erroné (30,00 €), n'est nommé qu'une fois.
+     */
+    public function test_un_avoir_impute_deux_fois_sur_la_facture_n_y_est_nomme_qu_une_fois(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'LYON1']));
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ticket = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 2]]));
+        $errone = $this->payer($client, $ticket, '80.00');
+        app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
+        app(ContrePasserPaiementAction::class)->handle($errone, 'Montant erroné');
+
+        $this->payer($client, $ticket, '50.00');
+
+        $this->assertSame('(AV-LYON1-2026-000001)', $this->libelleDuCredit($ticket));
+        $this->assertSame([50.0, 50.0, 0.0], [$ticket->fresh()->montantPaye(), $ticket->fresh()->montantCrediteParAvoir(), $ticket->fresh()->montantRestant()]);
+    }
+
+    /**
+     * Le crédit qu'une contre-passation a rendu à son avoir ne crédite plus
+     * la facture : seul l'avoir dont le crédit y reste imputé est nommé.
+     */
+    public function test_l_avoir_dont_la_contre_passation_a_rendu_le_credit_n_est_plus_nomme(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'LYON1']));
+        $client = Client::factory()->create();
+        $article = fn (float $prixTtc): Produit => Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $premierAchat = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $article(50)->id, 'quantite' => 1]], ModePaiement::Especes);
+        $secondAchat = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $article(30)->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $premierAchat->lignes->sole()->id, 'quantite' => 1]]);
+        $ticket = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $article(100)->id, 'quantite' => 1]]));
+        app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $secondAchat->lignes->sole()->id, 'quantite' => 1]]);
+        $errone = $this->payer($client, $ticket, '10.00');
+        $this->assertSame([10.0, 80.0], [$ticket->fresh()->montantPaye(), $ticket->fresh()->montantCrediteParAvoir()]);
+
+        app(ContrePasserPaiementAction::class)->handle($errone, 'Saisi sur le mauvais ticket');
+
+        $this->assertSame('(AV-LYON1-2026-000001)', $this->libelleDuCredit($ticket));
+        $this->assertSame([0.0, 50.0, 50.0], [$ticket->fresh()->montantPaye(), $ticket->fresh()->montantCrediteParAvoir(), $ticket->fresh()->montantRestant()]);
     }
 
     public function test_aucune_mention_de_reglement_sur_une_facture_non_payee(): void

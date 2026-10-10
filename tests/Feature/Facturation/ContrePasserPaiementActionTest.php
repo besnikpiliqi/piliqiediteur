@@ -17,6 +17,7 @@ use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Models\Magasin;
@@ -24,6 +25,7 @@ use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
@@ -323,6 +325,95 @@ class ContrePasserPaiementActionTest extends TestCase
             'montant' => 9000,
         ]], $this->donneesSignees($bon)['credits_imputes']);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
+    }
+
+    /**
+     * Un client a 100,00 € de crédit et deux factures dues de 100,00 € :
+     * A, la plus ancienne, et R. Le paiement de 10,00 € saisi par erreur
+     * sur R y impute aussi 90,00 € de crédit.
+     *
+     * @return array{client: Client, ancienne: Facture, recente: Facture, avoir: Avoir, errone: Paiement}
+     */
+    private function paiementErroneQuiImputeDuCredit(): array
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $client = Client::factory()->professionnel()->create();
+        $dejaPayee = $this->facture($client);
+        $this->payer($client, '100.00', [$dejaPayee->id => '100.00'], ModePaiement::Virement);
+        $this->travelTo('2026-10-09 10:01:00');
+        $ancienne = $this->facture($client);
+        $this->travelTo('2026-10-09 10:02:00');
+        $recente = $this->facture($client);
+        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $dejaPayee->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
+        $errone = $this->payer($client, '10.00', [$recente->id => '10.00']);
+
+        return compact('client', 'ancienne', 'recente', 'avoir', 'errone');
+    }
+
+    /**
+     * K9 : la contre-passation est l'inverse exact du paiement erroné, le
+     * crédit qu'il avait imputé compris, qui revient à son avoir. Le bon
+     * paiement de 10,00 € sur A y impute ensuite 90,00 € de crédit : A est
+     * payée, R reste due en entier et il reste 10,00 € de crédit, comme
+     * sans l'erreur.
+     */
+    public function test_la_contre_passation_rend_le_credit_que_le_paiement_errone_avait_impute(): void
+    {
+        $this->magasinActif();
+        ['client' => $client, 'ancienne' => $ancienne, 'recente' => $recente, 'avoir' => $avoir, 'errone' => $errone] = $this->paiementErroneQuiImputeDuCredit();
+        $this->assertSame([StatutFacture::Payee, 10.0], [$recente->fresh()->statut, $client->soldeCrediteur()]);
+
+        $contrePassation = $this->contrePasser($errone, 'Saisi sur la mauvaise facture');
+        $this->payer($client, '10.00', [$ancienne->id => '10.00']);
+
+        $this->assertSame([[$avoir->id, $recente->id, '-90.00']], $contrePassation->creditsImputes->map(fn ($credit): array => [$credit->avoir_id, $credit->facture_id, $credit->montant_alloue])->all());
+        $this->assertSame([[
+            'avoir_id' => $avoir->id,
+            'avoir_numero' => 'AV-LYON1-2026-000001',
+            'facture_id' => $recente->id,
+            'facture_numero' => 'FAC-LYON1-2026-000003',
+            'montant' => -9000,
+        ]], $this->donneesSignees($contrePassation)['credits_imputes']);
+        $ancienne->refresh();
+        $this->assertSame([StatutFacture::Payee, 10.0, 90.0, 0.0], [$ancienne->statut, $ancienne->montantPaye(), $ancienne->montantCrediteParAvoir(), $ancienne->montantRestant()]);
+        $recente->refresh();
+        $this->assertSame([StatutFacture::Emise, 0.0, 0.0, 100.0], [$recente->statut, $recente->montantPaye(), $recente->montantCrediteParAvoir(), $recente->montantRestant()]);
+        $this->assertSame(10.0, $client->soldeCrediteur());
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
+    }
+
+    /**
+     * Le compte de l'application n'aura, en production, ni UPDATE ni
+     * DELETE sur les tables en ajout seul (voir CLAUDE.md, étape 15) : or
+     * PostgreSQL exige le droit de modifier pour un SELECT ... FOR UPDATE
+     * ou FOR SHARE. Aucune requête d'un paiement, d'un avoir ou d'une
+     * contre-passation ne verrouille donc une ligne de ces tables, que
+     * PostgreSQL désigne par leurs déclencheurs ; le verrou du registre
+     * suffit à faire passer ces opérations une par une.
+     */
+    public function test_aucune_requete_ne_verrouille_une_ligne_d_une_table_en_ajout_seul(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('SQLite n\'écrit aucun verrou de ligne : ce test ne tourne que sous PostgreSQL.');
+        }
+
+        $this->magasinActif();
+        $tablesEnAjoutSeul = collect(DB::select("select distinct c.relname as nom from pg_trigger t join pg_class c on c.oid = t.tgrelid where t.tgname like '%\\_ajout\\_seul\\_update'"))->pluck('nom')->sort()->values()->all();
+        $this->assertSame(['avoir_allocations', 'enregistrements_fiscaux', 'paiement_allocations', 'paiements'], $tablesEnAjoutSeul);
+        $verrous = [];
+        DB::listen(static function (QueryExecuted $requete) use ($tablesEnAjoutSeul, &$verrous): void {
+            $tables = implode('|', $tablesEnAjoutSeul);
+
+            if (preg_match('/\bfor\s+(no\s+key\s+update|update|key\s+share|share)\b/i', $requete->sql) === 1 && preg_match('/\b(from|join)\s+"('.$tables.')"/i', $requete->sql) === 1) {
+                $verrous[] = $requete->sql;
+            }
+        });
+
+        ['client' => $client, 'ancienne' => $ancienne, 'errone' => $errone] = $this->paiementErroneQuiImputeDuCredit();
+        $this->contrePasser($errone, 'Saisi sur la mauvaise facture');
+        $this->payer($client, '10.00', [$ancienne->id => '10.00']);
+
+        $this->assertSame([], $verrous);
     }
 
     /**

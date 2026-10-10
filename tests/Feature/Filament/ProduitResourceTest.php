@@ -13,6 +13,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ProduitResource\Pages\CreateProduit;
@@ -20,6 +21,7 @@ use App\Filament\App\Resources\ProduitResource\Pages\EditProduit;
 use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
@@ -258,6 +260,25 @@ class ProduitResourceTest extends TestCase
         $this->assertSame(1, Produit::query()->count());
     }
 
+    /**
+     * La référence d'un produit archivé reste prise, comme dans l'index
+     * unique : le message dit où le retrouver. Il contient « : », que
+     * Livewire lirait comme le nom d'une règle : il se compare donc aux
+     * messages eux-mêmes.
+     */
+    public function test_la_reference_d_un_produit_archive_est_refusee_avec_un_message_qui_dit_ou_le_retrouver(): void
+    {
+        $this->connecterProprietaire();
+        Produit::factory()->trashed()->create(['reference' => 'ECR-1']);
+
+        Livewire::test(CreateProduit::class)
+            ->fillForm(['reference' => 'ECR-1', 'nom' => 'Autre écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
+            ->call('create')
+            ->assertHasFormErrors(['reference' => fn (array $reglesEnEchec, array $messages): bool => $messages === ['Cette référence est déjà celle d\'un autre produit, peut-être archivé : affichez les produits archivés pour le restaurer.']]);
+
+        $this->assertSame(1, Produit::withTrashed()->count());
+    }
+
     public function test_le_fournisseur_d_un_autre_magasin_est_refuse_a_la_creation(): void
     {
         app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
@@ -287,24 +308,23 @@ class ProduitResourceTest extends TestCase
         $this->assertNull($produit->fresh()->fournisseur_id);
     }
 
-    public function test_le_proprietaire_supprime_des_produits_en_masse(): void
+    public function test_le_proprietaire_archive_des_produits_en_masse(): void
     {
         $this->connecterProprietaire();
         $produits = Produit::factory()->count(2)->create();
 
         Livewire::test(ListProduits::class)
-            ->callTableBulkAction('delete', $produits)
-            ->assertNotified('Supprimé(e)s');
+            ->callTableBulkAction('archiver', $produits)
+            ->assertNotified('Archivés');
 
         $produits->each(fn (Produit $produit) => $this->assertSoftDeleted($produit));
     }
 
     /**
-     * Sans la permission de supprimer les produits, le vendeur n'a pas le
-     * bouton de suppression en masse, et une requête forgée ne supprime
-     * rien.
+     * Sans la permission d'archiver les produits, le vendeur n'a pas le
+     * bouton d'archivage en masse, et une requête forgée n'archive rien.
      */
-    public function test_un_vendeur_ne_supprime_pas_de_produits_en_masse(): void
+    public function test_un_vendeur_n_archive_pas_de_produits_en_masse(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
@@ -315,8 +335,8 @@ class ProduitResourceTest extends TestCase
         $produits = Produit::factory()->count(2)->create();
 
         Livewire::test(ListProduits::class)
-            ->assertTableBulkActionHidden('delete')
-            ->call('mountTableBulkAction', 'delete', $produits->modelKeys())
+            ->assertTableBulkActionHidden('archiver')
+            ->call('mountTableBulkAction', 'archiver', $produits->modelKeys())
             ->call('callMountedTableBulkAction');
 
         $produits->each(fn (Produit $produit) => $this->assertNotSoftDeleted($produit));
@@ -415,14 +435,29 @@ class ProduitResourceTest extends TestCase
     }
 
     /**
-     * Sa référence reste prise (voir Produit::verifierQueSaReferenceEstLibre()) :
-     * un produit supprimé se retrouve et se restaure depuis la liste.
+     * Archivé depuis sa page de modification, il quitte la liste.
      */
-    public function test_un_produit_supprime_se_retrouve_et_se_restaure_depuis_la_liste(): void
+    public function test_le_proprietaire_archive_un_produit_depuis_sa_fiche(): void
     {
         $this->connecterProprietaire();
         $produit = Produit::factory()->create();
-        $produit->delete();
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->callAction('archiver')
+            ->assertNotified('Produit archivé')
+            ->assertRedirect(ProduitResource::getUrl('index'));
+
+        $this->assertSoftDeleted($produit);
+    }
+
+    /**
+     * Sa référence reste prise (voir Produit::verifierQueSaReferenceEstLibre()) :
+     * un produit archivé se retrouve et se restaure depuis la liste.
+     */
+    public function test_un_produit_archive_se_retrouve_et_se_restaure_depuis_la_liste(): void
+    {
+        $this->connecterProprietaire();
+        $produit = Produit::factory()->trashed()->create();
 
         Livewire::test(ListProduits::class)
             ->assertCanNotSeeTableRecords([$produit])
@@ -435,15 +470,14 @@ class ProduitResourceTest extends TestCase
     }
 
     /**
-     * Sa page de modification ne trouve plus un produit supprimé (voir
+     * Sa page de modification ne trouve plus un produit archivé (voir
      * ProduitPolicy::update()) : sa ligne n'y mène pas.
      */
-    public function test_la_ligne_d_un_produit_supprime_ne_mene_a_aucune_page(): void
+    public function test_la_ligne_d_un_produit_archive_ne_mene_a_aucune_page(): void
     {
         $this->connecterProprietaire();
         $produit = Produit::factory()->create();
-        $supprime = Produit::factory()->create();
-        $supprime->delete();
+        $archive = Produit::factory()->trashed()->create();
 
         $table = Livewire::test(ListProduits::class)
             ->filterTable('trashed', false)
@@ -451,6 +485,68 @@ class ProduitResourceTest extends TestCase
             ->getTable();
 
         $this->assertSame(ProduitResource::getUrl('edit', ['record' => $produit]), $table->getRecordUrl($produit));
-        $this->assertNull($table->getRecordUrl($supprime));
+        $this->assertNull($table->getRecordUrl($archive));
+    }
+
+    /**
+     * La recherche de produit des devis, des factures et de la caisse (voir
+     * DevisResource::ligneSchema()) ne propose plus un produit archivé.
+     */
+    public function test_un_produit_archive_n_est_plus_propose_a_la_vente(): void
+    {
+        $this->connecterProprietaire();
+        Produit::factory()->trashed()->create(['nom' => 'Chargeur ancien modèle']);
+
+        $selectProduit = collect(DevisResource::ligneSchema())
+            ->first(fn ($component): bool => $component instanceof Select && $component->getName() === 'produit_id');
+
+        $this->assertSame([], $selectProduit->getSearchResults('Chargeur'));
+    }
+
+    /**
+     * Une requête forgée qui vend malgré tout un produit archivé reçoit un
+     * message, plutôt qu'une page d'erreur, et aucune facture n'est créée.
+     */
+    public function test_une_ligne_forgee_avec_un_produit_archive_est_refusee_avec_un_message(): void
+    {
+        $this->connecterProprietaire();
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->trashed()->create(['nom' => 'Chargeur ancien modèle', 'prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ttc' => 24, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors()
+            ->assertNotified('Le produit « Chargeur ancien modèle » est archivé : restaurez-le depuis le catalogue, ou retirez-le du document.');
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * Le fournisseur du dernier achat reste celui de la fiche, même archivé
+     * depuis : affiché, gardé à l'enregistrement, sans être proposé aux
+     * autres produits.
+     */
+    public function test_la_fiche_produit_garde_son_fournisseur_archive(): void
+    {
+        $this->connecterProprietaire();
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste fermé']);
+        $produit = Produit::factory()->create(['nom' => 'Écran']);
+        $produit->rattacherAuFournisseur($fournisseur->id);
+        $fournisseur->delete();
+
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->assertFormFieldExists('fournisseur_id', fn (Select $champ): bool => $champ->getOptionLabel() === 'Grossiste fermé')
+            ->fillForm(['nom' => 'Écran OLED'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+        Livewire::test(CreateProduit::class)
+            ->assertFormFieldExists('fournisseur_id', fn (Select $champ): bool => ! array_key_exists($fournisseur->id, $champ->getOptions()));
+
+        $this->assertSame(['Écran OLED', $fournisseur->id], [$produit->fresh()->nom, $produit->fresh()->fournisseur_id]);
+        $this->assertSame('Grossiste fermé', $produit->fresh()->fournisseur->nom);
     }
 }

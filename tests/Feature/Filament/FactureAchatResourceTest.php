@@ -483,34 +483,32 @@ class FactureAchatResourceTest extends TestCase
     }
 
     /**
-     * Un fournisseur désactivé (« Actif » décoché) ou supprimé n'est plus
-     * proposé pour une nouvelle facture d'achat.
+     * Un fournisseur archivé n'est plus proposé pour une nouvelle facture
+     * d'achat.
      */
-    public function test_un_fournisseur_desactive_ou_supprime_n_est_plus_propose(): void
+    public function test_un_fournisseur_archive_n_est_plus_propose(): void
     {
         $this->connecterLeProprietaire();
-        $actif = Fournisseur::factory()->create();
-        $desactive = Fournisseur::factory()->create(['actif' => false]);
-        $supprime = Fournisseur::factory()->create();
-        $supprime->delete();
+        $proposable = Fournisseur::factory()->create();
+        Fournisseur::factory()->trashed()->create();
 
         Livewire::test(CreateFactureAchat::class)
-            ->assertFormFieldExists('fournisseur_id', fn (Select $champ): bool => array_keys($champ->getOptions()) === [$actif->id]);
+            ->assertFormFieldExists('fournisseur_id', fn (Select $champ): bool => array_keys($champ->getOptions()) === [$proposable->id]);
     }
 
     /**
-     * Une requête forgée qui envoie malgré tout un fournisseur désactivé
-     * est refusée, et aucune facture d'achat n'est créée.
+     * Une requête forgée qui envoie malgré tout un fournisseur archivé est
+     * refusée, et aucune facture d'achat n'est créée.
      */
-    public function test_un_fournisseur_desactive_est_refuse_a_la_creation_d_une_facture_dachat(): void
+    public function test_un_fournisseur_archive_est_refuse_a_la_creation_d_une_facture_dachat(): void
     {
         $this->connecterLeProprietaire();
-        $desactive = Fournisseur::factory()->create(['actif' => false]);
+        $archive = Fournisseur::factory()->trashed()->create();
         $produit = Produit::factory()->create(['cmup_ht' => 20, 'taux_tva' => 20]);
 
         Livewire::test(CreateFactureAchat::class)
             ->fillForm([
-                'fournisseur_id' => $desactive->id,
+                'fournisseur_id' => $archive->id,
                 'lignes' => [
                     ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 5, 'prix_unitaire_ht' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
@@ -522,11 +520,11 @@ class FactureAchatResourceTest extends TestCase
     }
 
     /**
-     * Une facture d'achat garde son fournisseur supprimé depuis (voir
+     * Une facture d'achat garde son fournisseur archivé depuis (voir
      * FactureAchat::fournisseur()) : sa fiche l'affiche, et sa
      * modification le garde.
      */
-    public function test_le_fournisseur_supprime_reste_celui_de_sa_facture_dachat(): void
+    public function test_le_fournisseur_archive_reste_celui_de_sa_facture_dachat(): void
     {
         $this->connecterLeProprietaire();
         $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste fermé']);

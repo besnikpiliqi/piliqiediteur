@@ -11,7 +11,9 @@ return new class extends Migration
         Schema::create('mouvements_stock', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            $table->foreignId('produit_id')->constrained('produits')->cascadeOnDelete();
+            // Le grand livre garde ses produits, archivés compris : une fiche
+            // utilisée ne s'efface jamais.
+            $table->foreignId('produit_id')->constrained('produits')->restrictOnDelete();
             // vente, reception_achat, retour_fournisseur, retour_client,
             // ajustement_entree, ajustement_sortie (voir TypeMouvementStock).
             $table->string('type', 30);

@@ -46,9 +46,14 @@ class LigneAchat extends Model
         return $this->belongsTo(FactureAchat::class);
     }
 
+    /**
+     * Une ligne garde son produit, même archivé depuis (voir les
+     * SoftDeletes de Produit) : il se retourne toujours au fournisseur
+     * (voir quantiteRetournableRestante()).
+     */
     public function produit(): BelongsTo
     {
-        return $this->belongsTo(Produit::class);
+        return $this->belongsTo(Produit::class)->withTrashed();
     }
 
     public function lignesAvoirFournisseur(): HasMany

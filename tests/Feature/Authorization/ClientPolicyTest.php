@@ -39,25 +39,55 @@ class ClientPolicyTest extends TestCase
     }
 
     /**
-     * Un par un ou en masse : seulement ceux qui ont la permission de
-     * supprimer les clients -- pas le vendeur, qui en crée et en modifie.
+     * Un par un ou en masse : seulement ceux qui ont la permission
+     * d'archiver les clients -- pas le vendeur, qui en crée et en modifie.
      */
     #[DataProvider('roles')]
-    public function test_supprimer_des_clients_selon_le_role(RoleMagasin $role, bool $peutSupprimer): void
+    public function test_archiver_des_clients_selon_le_role(RoleMagasin $role, bool $peutArchiver): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
         $client = Client::factory()->create();
 
-        $this->assertSame($peutSupprimer, $membre->can('deleteAny', Client::class));
-        $this->assertSame($peutSupprimer, $membre->can('delete', $client));
+        $this->assertSame($peutArchiver, $membre->can('deleteAny', Client::class));
+        $this->assertSame($peutArchiver, $membre->can('delete', $client));
+    }
+
+    /**
+     * Restaurer défait l'archivage : les mêmes rôles que pour archiver.
+     */
+    #[DataProvider('roles')]
+    public function test_restaurer_des_clients_selon_le_role(RoleMagasin $role, bool $peutRestaurer): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $client = Client::factory()->trashed()->create();
+
+        $this->assertSame($peutRestaurer, $membre->can('restore', $client));
+    }
+
+    /**
+     * Sa page de modification ne trouve plus un client archivé : il se
+     * restaure d'abord. Aucune fiche ne s'efface, même pour le
+     * propriétaire.
+     */
+    public function test_un_client_archive_ne_se_modifie_pas_avant_sa_restauration_et_ne_s_efface_jamais(): void
+    {
+        $proprietaire = User::factory()->create();
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $client = Client::factory()->create();
+        $archive = Client::factory()->trashed()->create();
+
+        $this->assertTrue($proprietaire->can('update', $client));
+        $this->assertFalse($proprietaire->can('update', $archive));
+        $this->assertFalse($proprietaire->can('forceDelete', $archive));
     }
 
     /**
      * Toutes les ventes anonymes du magasin le portent : même le
-     * propriétaire ne le supprime pas.
+     * propriétaire ne l'archive pas.
      */
-    public function test_personne_ne_supprime_le_client_comptoir(): void
+    public function test_personne_n_archive_le_client_comptoir(): void
     {
         $proprietaire = User::factory()->create();
         app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);

@@ -180,54 +180,47 @@ class AppServiceProvider extends ServiceProvider
      * requête Livewire forgée y ferait passer le client ou le fournisseur
      * d'un autre magasin. Chaque Select qui pointe vers un modèle de
      * magasin exige donc en plus BelongsToMagasin::regleExisteDansLeMagasin(),
-     * sans qu'aucun formulaire puisse l'oublier.
+     * sans qu'aucun formulaire puisse l'oublier. Cette règle refuse aussi
+     * une fiche archivée.
      *
-     * Le client ou le fournisseur d'un nouveau document se choisit avec
+     * Le client ou le fournisseur d'un document se choisit avec
      * relationProposable() plutôt que relationship() : seules les fiches
-     * actives et non archivées sont proposées, et acceptées côté serveur
-     * (voir ProposableSiActif).
+     * non archivées sont proposées, plus celle déjà rattachée (voir
+     * Proposable).
      *
      * La valeur déjà enregistrée sur la fiche modifiée n'est jamais
      * revérifiée : elle n'a pas été choisie dans ce formulaire, et une
-     * fiche désactivée ou archivée depuis reste rattachée telle quelle.
+     * fiche archivée depuis reste rattachée telle quelle.
      */
     private function limiterLesChoixAuMagasin(): void
     {
-        $choisiDansCeFormulaire = static function (Select $component): bool {
-            $relation = $component->getRelationship();
-            $fiche = $relation->getParent();
-
-            return ! $fiche->exists
-                || (string) $component->getState() !== (string) $fiche->getOriginal($relation->getForeignKeyName());
-        };
-
-        Select::configureUsing(function (Select $select) use ($choisiDansCeFormulaire): void {
+        Select::configureUsing(function (Select $select): void {
             $select->rule(
                 static fn (Select $component): Exists => $component->getRelationship()->getRelated()::regleExisteDansLeMagasin(),
-                static function (Select $component) use ($choisiDansCeFormulaire): bool {
+                static function (Select $component): bool {
                     $relation = $component->getRelationship();
 
-                    return $relation instanceof BelongsTo
-                        && in_array(BelongsToMagasin::class, class_uses_recursive($relation->getRelated()), true)
-                        && $choisiDansCeFormulaire($component);
+                    if (! $relation instanceof BelongsTo || ! in_array(BelongsToMagasin::class, class_uses_recursive($relation->getRelated()), true)) {
+                        return false;
+                    }
+
+                    $fiche = $relation->getParent();
+
+                    return ! $fiche->exists
+                        || (string) $component->getState() !== (string) $fiche->getOriginal($relation->getForeignKeyName());
                 },
             );
         });
 
-        Select::macro('relationProposable', function (string $relation, string $attributAffiche) use ($choisiDansCeFormulaire): Select {
+        Select::macro('relationProposable', function (string $relation, string $attributAffiche): Select {
             /** @var Select $this */
-            return $this
-                ->relationship(
-                    $relation,
-                    $attributAffiche,
-                    static fn (Builder $query, Select $component, ?Model $record): Builder => $query->proposables(
-                        $record?->getOriginal($component->getRelationship()->getForeignKeyName()),
-                    ),
-                )
-                ->rule(
-                    static fn (Select $component): Exists => $component->getRelationship()->getRelated()::regleProposableDansLeMagasin(),
-                    $choisiDansCeFormulaire,
-                );
+            return $this->relationship(
+                $relation,
+                $attributAffiche,
+                static fn (Builder $query, Select $component, ?Model $record): Builder => $query->proposables(
+                    $record?->getOriginal($component->getRelationship()->getForeignKeyName()),
+                ),
+            );
         });
     }
 

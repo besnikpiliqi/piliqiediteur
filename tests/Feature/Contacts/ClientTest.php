@@ -14,7 +14,7 @@ use Tests\TestCase;
 /**
  * Le client comptoir est la fiche des ventes anonymes du magasin (voir
  * CreerMagasinAction) : il se reconnaît à son marqueur, jamais à son nom,
- * et ne se renomme, ne change de type ni ne se supprime.
+ * et ne se renomme, ne change de type ni ne s'archive.
  */
 class ClientTest extends TestCase
 {
@@ -68,12 +68,12 @@ class ClientTest extends TestCase
         $this->assertSame(TypeClient::Particulier, $comptoir->fresh()->type_client);
     }
 
-    public function test_le_client_comptoir_ne_se_supprime_pas(): void
+    public function test_le_client_comptoir_ne_s_archive_jamais(): void
     {
         $this->creerMagasin();
         $comptoir = $this->clientComptoir();
 
-        $this->assertThrows(fn () => $comptoir->delete(), LogicException::class, 'Le client comptoir ne se supprime pas.');
+        $this->assertThrows(fn () => $comptoir->delete(), LogicException::class, 'Le client comptoir ne s\'archive jamais.');
 
         $this->assertNotSoftDeleted($comptoir);
     }

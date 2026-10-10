@@ -7,7 +7,9 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
@@ -61,11 +63,12 @@ class EmettreFactureActionTest extends TestCase
     }
 
     /**
-     * Un produit supprimé après avoir été mis dans un brouillon sort quand
+     * Un produit archivé après avoir été mis dans un brouillon sort quand
      * même du stock à l'émission, avec son mouvement (voir
-     * LigneFacture::produit()).
+     * LigneFacture::produit()), et y revient par l'avoir d'un retour (voir
+     * LigneAvoir::produit()).
      */
-    public function test_emettre_decremente_le_stock_d_un_produit_supprime_depuis_le_brouillon(): void
+    public function test_un_produit_archive_depuis_le_brouillon_sort_du_stock_a_l_emission_et_y_revient_par_l_avoir(): void
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 5, 'suivi_stock' => true]);
@@ -74,10 +77,17 @@ class EmettreFactureActionTest extends TestCase
         ]);
         $produit->delete();
 
-        app(EmettreFactureAction::class)->handle($facture);
+        $facture = app(EmettreFactureAction::class)->handle($facture);
 
         $this->assertSame(3, $produit->fresh()->stock_quantite);
         $this->assertDatabaseHas('mouvements_stock', ['produit_id' => $produit->id, 'type' => 'vente', 'quantite' => 2]);
+
+        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]));
+
+        $this->assertSame(4, $produit->fresh()->stock_quantite);
+        $this->assertDatabaseHas('mouvements_stock', ['produit_id' => $produit->id, 'type' => 'retour_client', 'quantite' => 1]);
     }
 
     public function test_emettre_ne_touche_pas_au_stock_dun_produit_sans_suivi(): void

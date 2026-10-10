@@ -71,10 +71,10 @@ class FournisseurProduitResourceTest extends TestCase
     }
 
     /**
-     * L'observateur, en lecture seule, n'a pas le bouton de suppression en
-     * masse, et une requête forgée ne supprime aucun fournisseur.
+     * L'observateur, en lecture seule, n'a pas le bouton d'archivage en
+     * masse, et une requête forgée n'archive aucun fournisseur.
      */
-    public function test_un_observateur_ne_supprime_pas_de_fournisseurs_en_masse(): void
+    public function test_un_observateur_n_archive_pas_de_fournisseurs_en_masse(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
@@ -85,8 +85,8 @@ class FournisseurProduitResourceTest extends TestCase
         $fournisseurs = Fournisseur::factory()->count(2)->create();
 
         Livewire::test(ListFournisseurs::class)
-            ->assertTableBulkActionHidden('delete')
-            ->call('mountTableBulkAction', 'delete', $fournisseurs->modelKeys())
+            ->assertTableBulkActionHidden('archiver')
+            ->call('mountTableBulkAction', 'archiver', $fournisseurs->modelKeys())
             ->call('callMountedTableBulkAction');
 
         $fournisseurs->each(fn (Fournisseur $fournisseur) => $this->assertNotSoftDeleted($fournisseur));

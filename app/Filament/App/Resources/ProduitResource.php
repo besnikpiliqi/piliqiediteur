@@ -7,6 +7,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ProduitResource\Pages;
+use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
 use Filament\Forms\Components\Field;
@@ -26,7 +27,7 @@ use InvalidArgumentException;
 
 class ProduitResource extends Resource
 {
-    use SupprimeEnMasseLigneParLigne;
+    use ArchiveLaFiche, SupprimeEnMasseLigneParLigne;
 
     protected static ?string $model = Produit::class;
 
@@ -66,7 +67,7 @@ class ProduitResource extends Resource
                     ignorable: $produitModifie,
                     modifyRuleUsing: fn (Unique $rule): Unique => $rule->where('magasin_id', app(TenantContext::class)->id()),
                 )
-                ->validationMessages(['unique' => 'Cette référence est déjà celle d\'un autre produit, peut-être supprimé. Affichez les enregistrements supprimés de la liste des produits pour le restaurer.']),
+                ->validationMessages(['unique' => 'Cette référence est déjà celle d\'un autre produit, peut-être archivé : affichez les produits archivés pour le restaurer.']),
             TextInput::make('code_barres')->label('Code-barres')->maxLength(50),
             TextInput::make('nom')->required()->maxLength(200)->columnSpanFull(),
             TextInput::make('taille')->maxLength(20),
@@ -200,9 +201,11 @@ class ProduitResource extends Resource
                         fn (Field $champ): Field => $champ->disabled($figeParSonFournisseur),
                         self::champsIdentification(fn (?Produit $record): ?Produit => $record),
                     ),
+                    // Archivé, il n'est plus proposé ; celui de la fiche reste
+                    // affiché (voir Produit::fournisseur()).
                     Select::make('fournisseur_id')
                         ->label('Fournisseur')
-                        ->relationship('fournisseur', 'nom')
+                        ->relationProposable('fournisseur', 'nom')
                         ->searchable()
                         ->preload()
                         ->helperText('Celui de la dernière facture d\'achat validée pour ce produit.')
@@ -235,8 +238,6 @@ class ProduitResource extends Resource
                     ->visible(fn (string $operation, Get $get): bool => $operation === 'edit' && $get('suivi_stock'))
                     ->helperText('Tenu à jour par les ventes, les retours clients, les factures d\'achat et les avoirs fournisseur : il ne se saisit pas ici.'),
             ])->columns(3),
-
-            Toggle::make('actif')->default(true),
         ]);
     }
 
@@ -257,10 +258,8 @@ class ProduitResource extends Resource
                     ->color(fn (Produit $record) => ! $record->suivi_stock
                         ? 'gray'
                         : ($record->enAlerteStock() ? 'danger' : 'success')),
-                Tables\Columns\IconColumn::make('actif')->boolean(),
             ])
             ->filters([
-                Tables\Filters\TernaryFilter::make('actif'),
                 Tables\Filters\TernaryFilter::make('suivi_stock'),
                 Tables\Filters\SelectFilter::make('fournisseur_id')
                     ->label('Fournisseur')
@@ -279,15 +278,15 @@ class ProduitResource extends Resource
                         'epuise' => $query->where('suivi_stock', true)->where('stock_quantite', '<=', 0),
                         default => $query,
                     }),
-                Tables\Filters\TrashedFilter::make(),
+                static::filtreDesArchives(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\RestoreAction::make(),
+                static::actionRestaurer(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    static::suppressionEnMasse(),
+                    static::archivageEnMasse(),
                 ]),
             ]);
     }

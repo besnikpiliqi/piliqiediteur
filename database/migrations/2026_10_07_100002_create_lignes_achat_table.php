@@ -12,13 +12,12 @@ return new class extends Migration
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('facture_achat_id')->constrained('factures_achat')->cascadeOnDelete();
-            // Nullable au niveau base (même logique que lignes_facture : un
-            // produit supprimé ne doit jamais effacer l'historique d'achat),
-            // mais chaque ligne reçoit un produit, existant ou créé avec la
-            // facture (voir ConstructeurLigneAchat) : la traçabilité pour
-            // l'avoir fournisseur (voir LigneAchat::quantiteRetournableRestante())
-            // n'a de sens que pour un produit du catalogue.
-            $table->foreignId('produit_id')->nullable()->constrained('produits')->nullOnDelete();
+            // Chaque ligne reçoit un produit, existant ou créé avec la facture
+            // (voir ConstructeurLigneAchat) : la traçabilité pour l'avoir
+            // fournisseur (voir LigneAchat::quantiteRetournableRestante())
+            // n'a de sens que pour un produit du catalogue. Il reste lié,
+            // archivé compris : une fiche utilisée ne s'efface jamais.
+            $table->foreignId('produit_id')->nullable()->constrained('produits')->restrictOnDelete();
             $table->string('description', 255);
             $table->string('reference', 60)->nullable();
             // Nombre entier d'articles (voir QuantiteEntiere).

@@ -66,9 +66,11 @@ class FactureAchatResource extends Resource
             FormSection::make('Facture d\'achat')->schema([
                 // Un fournisseur se crée dans sa propre page (voir
                 // FournisseurResource), jamais depuis une facture d'achat.
-                // Désactivé ou archivé, il n'est plus proposé ; celui de la
-                // facture modifiée reste affiché (voir FactureAchat::fournisseur()
-                // et AppServiceProvider::limiterLesChoixAuMagasin()).
+                // Archivé, il n'est plus proposé ; celui de la facture
+                // modifiée reste affiché (voir FactureAchat::fournisseur() et
+                // AppServiceProvider::limiterLesChoixAuMagasin()), mais elle ne
+                // se valide pas tant qu'il n'est pas restauré (voir
+                // ValiderFactureAchatAction).
                 Select::make('fournisseur_id')
                     ->label('Fournisseur')
                     ->relationProposable('fournisseur', 'nom')

@@ -22,7 +22,6 @@ class ProduitFactory extends Factory
             'taux_tva' => 20.00,
             'suivi_stock' => true,
             'seuil_alerte' => 5,
-            'actif' => true,
         ];
     }
 }

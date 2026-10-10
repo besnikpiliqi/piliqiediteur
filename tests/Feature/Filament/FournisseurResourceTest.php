@@ -11,6 +11,7 @@ use App\Filament\App\Resources\FournisseurResource\Pages\CreateFournisseur;
 use App\Filament\App\Resources\FournisseurResource\Pages\EditFournisseur;
 use App\Filament\App\Resources\FournisseurResource\Pages\ListFournisseurs;
 use App\Models\User;
+use Closure;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -25,7 +26,16 @@ class FournisseurResourceTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const MESSAGE_SIRET_PRIS = 'Ce SIRET est déjà celui d\'un autre fournisseur du magasin, peut-être supprimé. Affichez les enregistrements supprimés de la liste pour le restaurer.';
+    private const MESSAGE_SIRET_PRIS = 'Ce SIRET est déjà celui d\'un autre fournisseur du magasin, peut-être archivé : affichez les fournisseurs archivés pour le restaurer.';
+
+    /**
+     * Le message contient « : », que Livewire lirait comme le nom d'une
+     * règle : il se compare donc aux messages eux-mêmes.
+     */
+    private static function siretPris(): Closure
+    {
+        return fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_SIRET_PRIS];
+    }
 
     private function connecterLeProprietaire(): void
     {
@@ -43,20 +53,20 @@ class FournisseurResourceTest extends TestCase
         Livewire::test(CreateFournisseur::class)
             ->fillForm(['nom' => 'Grossiste B', 'siret' => '12345678900012'])
             ->call('create')
-            ->assertHasFormErrors(['siret' => self::MESSAGE_SIRET_PRIS]);
+            ->assertHasFormErrors(['siret' => self::siretPris()]);
 
         $this->assertSame(1, Fournisseur::query()->count());
     }
 
-    public function test_le_siret_d_un_fournisseur_supprime_est_refuse(): void
+    public function test_le_siret_d_un_fournisseur_archive_est_refuse(): void
     {
         $this->connecterLeProprietaire();
-        Fournisseur::factory()->create(['siret' => '12345678900012'])->delete();
+        Fournisseur::factory()->trashed()->create(['siret' => '12345678900012']);
 
         Livewire::test(CreateFournisseur::class)
             ->fillForm(['nom' => 'Grossiste B', 'siret' => '12345678900012'])
             ->call('create')
-            ->assertHasFormErrors(['siret' => self::MESSAGE_SIRET_PRIS]);
+            ->assertHasFormErrors(['siret' => self::siretPris()]);
 
         $this->assertSame(1, Fournisseur::withTrashed()->count());
     }
@@ -70,7 +80,7 @@ class FournisseurResourceTest extends TestCase
         Livewire::test(EditFournisseur::class, ['record' => $fournisseur->getRouteKey()])
             ->fillForm(['siret' => '12345678900012'])
             ->call('save')
-            ->assertHasFormErrors(['siret' => self::MESSAGE_SIRET_PRIS]);
+            ->assertHasFormErrors(['siret' => self::siretPris()]);
         Livewire::test(EditFournisseur::class, ['record' => $fournisseur->getRouteKey()])
             ->fillForm(['nom' => 'Grossiste renommé'])
             ->call('save')
@@ -109,11 +119,26 @@ class FournisseurResourceTest extends TestCase
         $this->assertSame(0, Fournisseur::query()->count());
     }
 
-    public function test_un_fournisseur_supprime_se_retrouve_et_se_restaure_depuis_la_liste(): void
+    /**
+     * Archivé depuis sa page de modification, il quitte la liste.
+     */
+    public function test_le_proprietaire_archive_un_fournisseur_depuis_sa_fiche(): void
     {
         $this->connecterLeProprietaire();
         $fournisseur = Fournisseur::factory()->create();
-        $fournisseur->delete();
+
+        Livewire::test(EditFournisseur::class, ['record' => $fournisseur->getRouteKey()])
+            ->callAction('archiver')
+            ->assertNotified('Fournisseur archivé')
+            ->assertRedirect(FournisseurResource::getUrl('index'));
+
+        $this->assertSoftDeleted($fournisseur);
+    }
+
+    public function test_un_fournisseur_archive_se_retrouve_et_se_restaure_depuis_la_liste(): void
+    {
+        $this->connecterLeProprietaire();
+        $fournisseur = Fournisseur::factory()->trashed()->create();
 
         Livewire::test(ListFournisseurs::class)
             ->assertCanNotSeeTableRecords([$fournisseur])
@@ -126,15 +151,14 @@ class FournisseurResourceTest extends TestCase
     }
 
     /**
-     * Sa page de modification ne trouve plus un fournisseur supprimé (voir
+     * Sa page de modification ne trouve plus un fournisseur archivé (voir
      * FournisseurPolicy::update()) : sa ligne n'y mène pas.
      */
-    public function test_la_ligne_d_un_fournisseur_supprime_ne_mene_a_aucune_page(): void
+    public function test_la_ligne_d_un_fournisseur_archive_ne_mene_a_aucune_page(): void
     {
         $this->connecterLeProprietaire();
         $fournisseur = Fournisseur::factory()->create();
-        $supprime = Fournisseur::factory()->create();
-        $supprime->delete();
+        $archive = Fournisseur::factory()->trashed()->create();
 
         $table = Livewire::test(ListFournisseurs::class)
             ->filterTable('trashed', false)
@@ -142,14 +166,14 @@ class FournisseurResourceTest extends TestCase
             ->getTable();
 
         $this->assertSame(FournisseurResource::getUrl('edit', ['record' => $fournisseur]), $table->getRecordUrl($fournisseur));
-        $this->assertNull($table->getRecordUrl($supprime));
+        $this->assertNull($table->getRecordUrl($archive));
     }
 
     /**
-     * Sans la permission de supprimer les fournisseurs, pas de
-     * restauration non plus.
+     * Sans la permission d'archiver les fournisseurs, pas de restauration
+     * non plus.
      */
-    public function test_un_observateur_ne_restaure_pas_un_fournisseur_supprime(): void
+    public function test_un_observateur_ne_restaure_pas_un_fournisseur_archive(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
@@ -157,8 +181,7 @@ class FournisseurResourceTest extends TestCase
         ], RoleMagasin::Observateur);
         $this->actingAs($observateur);
         Filament::setTenant($magasin);
-        $fournisseur = Fournisseur::factory()->create();
-        $fournisseur->delete();
+        $fournisseur = Fournisseur::factory()->trashed()->create();
 
         Livewire::test(ListFournisseurs::class)
             ->filterTable('trashed', false)

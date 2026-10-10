@@ -158,39 +158,38 @@ class DevisResourceTest extends TestCase
     }
 
     /**
-     * Un client désactivé (« Actif » décoché) n'est plus proposé pour un
-     * nouveau devis.
+     * Un client archivé n'est plus proposé pour un nouveau devis.
      */
-    public function test_un_client_desactive_n_est_plus_propose_pour_un_nouveau_devis(): void
+    public function test_un_client_archive_n_est_plus_propose_pour_un_nouveau_devis(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $actif = Client::factory()->create(['nom' => 'Client actif']);
-        $desactive = Client::factory()->create(['nom' => 'Client désactivé', 'actif' => false]);
+        $proposable = Client::factory()->create(['nom' => 'Client proposé']);
+        $archive = Client::factory()->trashed()->create(['nom' => 'Client archivé']);
 
         Livewire::test(CreateDevis::class)
-            ->assertFormFieldExists('client_id', fn (Select $champ): bool => array_key_exists($actif->id, $champ->getOptions())
-                && ! array_key_exists($desactive->id, $champ->getOptions()));
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => array_key_exists($proposable->id, $champ->getOptions())
+                && ! array_key_exists($archive->id, $champ->getOptions()));
     }
 
     /**
-     * Une requête forgée qui envoie malgré tout un client désactivé est
+     * Une requête forgée qui envoie malgré tout un client archivé est
      * refusée, et aucun devis n'est créé.
      */
-    public function test_un_client_desactive_est_refuse_a_la_creation_d_un_devis(): void
+    public function test_un_client_archive_est_refuse_a_la_creation_d_un_devis(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $desactive = Client::factory()->create(['actif' => false]);
+        $archive = Client::factory()->trashed()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20]);
 
         Livewire::test(CreateDevis::class)
             ->fillForm([
-                'client_id' => $desactive->id,
+                'client_id' => $archive->id,
                 'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
             ])
             ->call('create')

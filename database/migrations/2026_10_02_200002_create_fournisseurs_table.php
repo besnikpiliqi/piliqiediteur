@@ -23,8 +23,10 @@ return new class extends Migration
             $table->string('pays', 2)->default('FR');
             $table->string('telephone', 30)->nullable();
             $table->string('email', 150)->nullable();
-            $table->boolean('actif')->default(true);
             $table->timestamps();
+            // Un fournisseur ne se supprime pas : il s'archive (voir
+            // FournisseurResource), ses factures et ses produits le gardent,
+            // et il se restaure.
             $table->softDeletes();
 
             $table->unique(['magasin_id', 'siret']);

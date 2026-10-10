@@ -27,7 +27,11 @@ final class PermissionRegistry
 
     public const CLIENT_UPDATE = 'client.update';
 
-    public const CLIENT_DELETE = 'client.delete';
+    /**
+     * Archiver un client, et le restaurer (voir ClientPolicy) : une fiche
+     * ne se supprime jamais.
+     */
+    public const CLIENT_ARCHIVER = 'client.archiver';
 
     // Fournisseurs
     public const FOURNISSEUR_VIEW = 'fournisseur.view';
@@ -36,7 +40,10 @@ final class PermissionRegistry
 
     public const FOURNISSEUR_UPDATE = 'fournisseur.update';
 
-    public const FOURNISSEUR_DELETE = 'fournisseur.delete';
+    /**
+     * Archiver un fournisseur, et le restaurer (voir FournisseurPolicy).
+     */
+    public const FOURNISSEUR_ARCHIVER = 'fournisseur.archiver';
 
     // Produits -- et services (voir ServicePolicy) : tout le catalogue
     public const PRODUIT_VIEW = 'produit.view';
@@ -45,7 +52,11 @@ final class PermissionRegistry
 
     public const PRODUIT_UPDATE = 'produit.update';
 
-    public const PRODUIT_DELETE = 'produit.delete';
+    /**
+     * Archiver un produit, et le restaurer (voir ProduitPolicy). Un service
+     * ne s'archive pas : il se retire de la caisse (voir ServicePolicy).
+     */
+    public const PRODUIT_ARCHIVER = 'produit.archiver';
 
     /**
      * Gérer le stock du magasin : reçoit les alertes de stock bas (voir
@@ -173,9 +184,9 @@ final class PermissionRegistry
     public static function toutes(): array
     {
         return [
-            self::CLIENT_VIEW, self::CLIENT_CREATE, self::CLIENT_UPDATE, self::CLIENT_DELETE,
-            self::FOURNISSEUR_VIEW, self::FOURNISSEUR_CREATE, self::FOURNISSEUR_UPDATE, self::FOURNISSEUR_DELETE,
-            self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_DELETE, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK, self::PRIX_VENTE_REGLER,
+            self::CLIENT_VIEW, self::CLIENT_CREATE, self::CLIENT_UPDATE, self::CLIENT_ARCHIVER,
+            self::FOURNISSEUR_VIEW, self::FOURNISSEUR_CREATE, self::FOURNISSEUR_UPDATE, self::FOURNISSEUR_ARCHIVER,
+            self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_ARCHIVER, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK, self::PRIX_VENTE_REGLER,
             self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ENVOYER, self::RELANCES_REGLER,
             self::PARAMETRES_GERER,
@@ -249,15 +260,15 @@ final class PermissionRegistry
             self::CLIENT_VIEW => 'Clients : voir',
             self::CLIENT_CREATE => 'Clients : créer',
             self::CLIENT_UPDATE => 'Clients : modifier',
-            self::CLIENT_DELETE => 'Clients : supprimer',
+            self::CLIENT_ARCHIVER => 'Clients : archiver et restaurer',
             self::FOURNISSEUR_VIEW => 'Fournisseurs : voir',
             self::FOURNISSEUR_CREATE => 'Fournisseurs : créer',
             self::FOURNISSEUR_UPDATE => 'Fournisseurs : modifier',
-            self::FOURNISSEUR_DELETE => 'Fournisseurs : supprimer',
+            self::FOURNISSEUR_ARCHIVER => 'Fournisseurs : archiver et restaurer',
             self::PRODUIT_VIEW => 'Produits et services : voir',
             self::PRODUIT_CREATE => 'Produits et services : créer',
             self::PRODUIT_UPDATE => 'Produits et services : modifier',
-            self::PRODUIT_DELETE => 'Produits : supprimer',
+            self::PRODUIT_ARCHIVER => 'Produits : archiver et restaurer',
             self::PRODUIT_AJUSTER_STOCK => 'Produits : gérer le stock (alertes de stock bas)',
             self::PRODUIT_VOIR_VALEUR_STOCK => 'Produits : voir la valeur totale du stock',
             self::PRIX_VENTE_REGLER => 'Prix de vente : régler le barème automatique',

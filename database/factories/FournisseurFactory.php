@@ -20,7 +20,6 @@ class FournisseurFactory extends Factory
             'telephone' => fake()->phoneNumber(),
             'email' => fake()->companyEmail(),
             'pays' => 'FR',
-            'actif' => true,
         ];
     }
 }

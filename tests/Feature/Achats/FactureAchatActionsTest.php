@@ -964,6 +964,38 @@ class FactureAchatActionsTest extends TestCase
     }
 
     /**
+     * Un fournisseur archivé depuis la saisie du brouillon ne devient pas
+     * en silence celui de ses produits : la validation est refusée, avec un
+     * message, sans consommer de numéro ; restauré, il se valide avec le
+     * premier numéro.
+     */
+    public function test_valider_une_facture_dachat_dont_le_fournisseur_est_archive_est_refuse(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste fermé']);
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
+        ]);
+        $fournisseur->delete();
+
+        $this->assertThrows(
+            fn () => app(ValiderFactureAchatAction::class)->handle($factureAchat),
+            LogicException::class,
+            'Le fournisseur « Grossiste fermé » a été archivé : restaurez-le depuis la liste des fournisseurs avant de valider cette facture d\'achat.',
+        );
+
+        $this->assertSame([StatutFactureAchat::Brouillon, null], [$factureAchat->fresh()->statut, $factureAchat->fresh()->numero]);
+        $this->assertSame(0, $produit->fresh()->stock_quantite);
+
+        $fournisseur->restore();
+        $validee = app(ValiderFactureAchatAction::class)->handle($factureAchat);
+
+        $this->assertSame('FA-'.app(TenantContext::class)->magasin()->code.'-2026-000001', $validee->numero);
+        $this->assertSame(5, $produit->fresh()->stock_quantite);
+    }
+
+    /**
      * Le produit d'une réception validée archivé depuis : la corriger est
      * refusé avec un message (plus d'erreur de produit introuvable), et la
      * facture reste telle quelle.

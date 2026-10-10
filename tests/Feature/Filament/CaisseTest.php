@@ -35,6 +35,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Exceptions;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
@@ -826,28 +827,28 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * Un client désactivé (« Actif » décoché) n'est plus proposé pour une
-     * vente, ni accepté par une requête forgée.
+     * Un client archivé n'est plus proposé pour une vente, ni accepté par
+     * une requête forgée.
      */
-    public function test_un_client_desactive_n_est_plus_propose_a_la_caisse(): void
+    public function test_un_client_archive_n_est_plus_propose_a_la_caisse(): void
     {
         $this->ouvrirLaCaisseDUnMagasin();
-        $actif = Client::factory()->create(['nom' => 'Martin actif']);
-        Client::factory()->create(['nom' => 'Martin désactivé', 'actif' => false]);
+        $proposable = Client::factory()->create(['nom' => 'Martin proposé']);
+        Client::factory()->trashed()->create(['nom' => 'Martin archivé']);
 
         Livewire::test(Caisse::class)
-            ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('Martin') === [$actif->id => 'Martin actif']);
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('Martin') === [$proposable->id => 'Martin proposé']);
     }
 
-    public function test_un_client_desactive_est_refuse_a_l_encaissement(): void
+    public function test_un_client_archive_est_refuse_a_l_encaissement(): void
     {
         $this->ouvrirLaCaisseDUnMagasin();
-        $desactive = Client::factory()->create(['actif' => false]);
+        $archive = Client::factory()->trashed()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(Caisse::class)
             ->fillForm([
-                'client_id' => $desactive->id,
+                'client_id' => $archive->id,
                 'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
                 'mode_paiement' => ModePaiement::CarteBancaire->value,
             ])
@@ -859,15 +860,19 @@ class CaisseTest extends TestCase
 
     /**
      * Le client comptoir se reconnaît à son marqueur (voir
-     * Client::estComptoir()) : désactivé, il n'est plus proposé par défaut.
+     * Client::estComptoir()) et ne s'archive jamais : il reste proposé par
+     * défaut, même renommé en base et après une tentative d'archivage.
      */
-    public function test_le_client_comptoir_desactive_n_est_plus_propose_par_defaut(): void
+    public function test_le_client_comptoir_reste_propose_par_defaut_car_il_ne_s_archive_jamais(): void
     {
         $this->ouvrirLaCaisseDUnMagasin();
-        Client::query()->where('est_comptoir', true)->sole()->update(['actif' => false]);
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        Client::query()->whereKey($comptoir->id)->update(['nom' => 'Ventes anonymes']);
+
+        $this->assertThrows(fn () => $comptoir->delete(), LogicException::class, 'Le client comptoir ne s\'archive jamais.');
 
         Livewire::test(Caisse::class)
-            ->assertFormSet(['client_id' => null]);
+            ->assertFormSet(['client_id' => $comptoir->id]);
     }
 
     /**

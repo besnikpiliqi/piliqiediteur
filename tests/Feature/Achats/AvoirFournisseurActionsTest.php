@@ -83,6 +83,48 @@ class AvoirFournisseurActionsTest extends TestCase
         $this->assertSame(3, $produit->fresh()->stock_quantite);
     }
 
+    /**
+     * Un produit archivé depuis sa réception se retourne toujours au
+     * fournisseur, et sort du stock (voir LigneAvoirFournisseur::produit()).
+     */
+    public function test_un_avoir_fournisseur_sort_du_stock_un_produit_archive_depuis_sa_reception(): void
+    {
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->receptionnerAchat(Fournisseur::factory()->create(), $produit, 5);
+        $produit->delete();
+
+        $avoir = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+            ['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => 2],
+        ]));
+
+        $this->assertSame(StatutAvoirFournisseur::Emise, $avoir->statut);
+        $this->assertSame(3, $produit->fresh()->stock_quantite);
+        $this->assertDatabaseHas('mouvements_stock', ['produit_id' => $produit->id, 'type' => TypeMouvementStock::RetourFournisseur->value, 'quantite' => 2]);
+    }
+
+    /**
+     * Archivé, un produit garde son stock : le retour reste plafonné à ce
+     * qu'il en reste, même quand la ligne d'achat en permettrait plus.
+     */
+    public function test_le_retour_d_un_produit_archive_reste_plafonne_a_son_stock(): void
+    {
+        $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->receptionnerAchat(Fournisseur::factory()->create(), $produit, 5);
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+        $produit->delete();
+
+        $this->assertThrows(
+            fn () => app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+                ['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => 4],
+            ]),
+            LogicException::class,
+            'La ligne "Câble USB-C" ne peut pas être retournée au-delà de la quantité disponible (3) : elle a déjà été vendue ou déjà retournée.',
+        );
+
+        $this->assertSame(0, AvoirFournisseur::query()->count());
+        $this->assertSame(3, $produit->fresh()->stock_quantite);
+    }
+
     public function test_impossible_de_creer_un_avoir_fournisseur_sur_une_facture_dachat_en_brouillon(): void
     {
         $fournisseur = Fournisseur::factory()->create();

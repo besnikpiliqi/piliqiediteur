@@ -15,8 +15,11 @@ use LogicException;
  * reçoit son numéro interne qu'à la validation, moment où le stock est
  * incrémenté (voir FactureAchatValidee/IncrementerStockApresValidationFactureAchat).
  * Chacun de ses produits doit encore être au catalogue : une réception ne
- * se perd jamais en silence. Un magasin suspendu ou fermé ne valide plus
- * d'achat (voir Magasin::verifierQuIlEstOuvert()).
+ * se perd jamais en silence. Son fournisseur aussi : archivé depuis la
+ * saisie, il ne deviendrait pas le fournisseur de ses produits (voir
+ * Produit::rattacherAuFournisseur()) sans être restauré. Un magasin
+ * suspendu ou fermé ne valide plus d'achat (voir
+ * Magasin::verifierQuIlEstOuvert()).
  */
 class ValiderFactureAchatAction
 {
@@ -33,6 +36,10 @@ class ValiderFactureAchatAction
 
             if (! $factureAchat->statut->peutTransitionnerVers(StatutFactureAchat::Validee)) {
                 throw new LogicException("Impossible de valider une facture d'achat au statut [{$factureAchat->statut->value}].");
+            }
+
+            if ($factureAchat->fournisseur->trashed()) {
+                throw new LogicException("Le fournisseur « {$factureAchat->fournisseur->nom} » a été archivé : restaurez-le depuis la liste des fournisseurs avant de valider cette facture d'achat.");
             }
 
             if (($produitArchive = $factureAchat->produitArchive()) !== null) {

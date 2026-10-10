@@ -78,7 +78,8 @@ class AvoirFournisseur extends Model
      * produit (deux lignes de la facture d'achat) ne peuvent pas non plus
      * en retourner ensemble plus que son stock : des articles déjà vendus
      * seraient retournés. Le stock est lu sous verrou, à la création de
-     * l'avoir comme à son émission, puisqu'il change entre les deux.
+     * l'avoir comme à son émission, puisqu'il change entre les deux ; celui
+     * d'un produit archivé depuis compte aussi, il est toujours là.
      *
      * @throws LogicException
      */
@@ -92,7 +93,7 @@ class AvoirFournisseur extends Model
             ->sortKeys();
 
         foreach ($quantitesParProduit as $produitId => $quantite) {
-            $produit = Produit::query()->whereKey($produitId)->lockForUpdate()->first();
+            $produit = Produit::withTrashed()->whereKey($produitId)->lockForUpdate()->first();
 
             if ($produit !== null && $produit->suivi_stock && $quantite > $produit->stock_quantite) {
                 throw new LogicException(self::messageStockInsuffisant($produit, $quantite));

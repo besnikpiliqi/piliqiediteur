@@ -17,35 +17,58 @@ use LogicException;
  * par delete() ; celles qu'il refuse restent, et l'utilisateur le sait.
  * Une ligne dont le modèle refuse la suppression reste aussi : le journal
  * des événements qui ne s'écrit pas pour un brouillon de facture (voir
- * Facture::delete()), un incident du serveur alors signalé au journal de
+ * Facture::delete()), le client comptoir qui ne s'archive jamais (voir
+ * Client::booted()), un incident du serveur alors signalé au journal de
  * l'application (voir GereLesExceptionsMetier).
+ *
+ * Un brouillon de facture ou de devis se supprime (suppressionEnMasse()) ;
+ * un client, un produit ou un fournisseur s'archive (archivageEnMasse()),
+ * avec le même filtre : delete() d'un modèle SoftDeletes l'archive, et la
+ * fiche se restaure depuis la liste des archivés.
  */
 trait SupprimeEnMasseLigneParLigne
 {
     protected static function suppressionEnMasse(): DeleteBulkAction
     {
         return DeleteBulkAction::make()
-            ->action(function (DeleteBulkAction $action, Collection $records): void {
-                $supprimees = $records->filter(fn (Model $record): bool => auth()->user()->can('delete', $record) && self::supprimerSansCasser($record));
+            ->action(fn (DeleteBulkAction $action, Collection $records) => self::retirerLigneParLigne($action, $records, 'supprimée', 'supprimées', 'Vous ne pouvez pas la supprimer, ou elle ne peut plus l\'être.', 'Vous ne pouvez pas les supprimer, ou elles ne peuvent plus l\'être.'));
+    }
 
-                $conservees = $records->count() - $supprimees->count();
+    protected static function archivageEnMasse(): DeleteBulkAction
+    {
+        return DeleteBulkAction::make('archiver')
+            ->label('Archiver')
+            ->modalHeading(fn (DeleteBulkAction $action): string => "Archiver les {$action->getPluralModelLabel()} sélectionnés")
+            ->modalDescription('Ils ne seront plus proposés pour un nouveau document, restent lisibles sur les anciens, et se restaurent depuis la liste des archivés.')
+            ->modalSubmitActionLabel('Archiver')
+            ->successNotificationTitle('Archivés')
+            ->icon('heroicon-m-archive-box')
+            ->modalIcon('heroicon-o-archive-box')
+            ->action(fn (DeleteBulkAction $action, Collection $records) => self::retirerLigneParLigne($action, $records, 'archivée', 'archivées', 'Vous ne pouvez pas l\'archiver.', 'Vous ne pouvez pas les archiver.'));
+    }
 
-                if ($conservees === 0) {
-                    $action->success();
+    /**
+     * @param  Collection<int, Model>  $records
+     */
+    private static function retirerLigneParLigne(DeleteBulkAction $action, Collection $records, string $participe, string $participePluriel, string $raison, string $raisonPluriel): void
+    {
+        $retirees = $records->filter(fn (Model $record): bool => auth()->user()->can('delete', $record) && self::supprimerSansCasser($record));
 
-                    return;
-                }
+        $conservees = $records->count() - $retirees->count();
 
-                Notification::make()
-                    ->title($conservees === 1
-                        ? '1 ligne cochée n\'a pas été supprimée'
-                        : "{$conservees} lignes cochées n'ont pas été supprimées")
-                    ->body($conservees === 1
-                        ? 'Vous ne pouvez pas la supprimer, ou elle ne peut plus l\'être.'
-                        : 'Vous ne pouvez pas les supprimer, ou elles ne peuvent plus l\'être.')
-                    ->warning()
-                    ->send();
-            });
+        if ($conservees === 0) {
+            $action->success();
+
+            return;
+        }
+
+        Notification::make()
+            ->title($conservees === 1
+                ? "1 ligne cochée n'a pas été {$participe}"
+                : "{$conservees} lignes cochées n'ont pas été {$participePluriel}")
+            ->body($conservees === 1 ? $raison : $raisonPluriel)
+            ->warning()
+            ->send();
     }
 
     private static function supprimerSansCasser(Model $record): bool

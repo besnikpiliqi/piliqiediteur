@@ -58,6 +58,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Finder\SplFileInfo;
@@ -265,6 +266,59 @@ class TenantIsolationTest extends TestCase
         $tous = Client::query()->withoutGlobalScope(MagasinScope::class)->get();
 
         $this->assertCount(2, $tous);
+    }
+
+    /**
+     * Les fiches qui s'archivent (voir Proposable).
+     *
+     * @return array<string, array{0: class-string<Model>}>
+     */
+    public static function fichesArchivables(): array
+    {
+        return [
+            'client' => [Client::class],
+            'fournisseur' => [Fournisseur::class],
+            'produit' => [Produit::class],
+        ];
+    }
+
+    /**
+     * Une fiche archivée reste au magasin qui l'a créée : withTrashed() ne
+     * retire que le filtre des fiches archivées, jamais MagasinScope, et
+     * la règle « exists » d'un formulaire du magasin B ne l'accepte pas.
+     *
+     * @param  class-string<Model>  $modelClass
+     */
+    #[DataProvider('fichesArchivables')]
+    public function test_une_fiche_archivee_d_un_autre_magasin_reste_invisible(string $modelClass): void
+    {
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+        $ficheA = $modelClass::factory()->trashed()->create();
+
+        $contexte->set($this->magasinB);
+
+        $this->assertNull($modelClass::withTrashed()->find($ficheA->id));
+        $this->assertSame([], $modelClass::onlyTrashed()->pluck('id')->all());
+        $this->assertTrue(Validator::make(['fiche' => $ficheA->id], ['fiche' => [$modelClass::regleExisteDansLeMagasin()]])->fails());
+    }
+
+    /**
+     * Le fournisseur d'un produit se lit archivé compris (voir
+     * Produit::fournisseur()), mais jamais celui d'un autre magasin, même
+     * si l'identifiant y pointe.
+     */
+    public function test_le_fournisseur_archive_d_un_autre_magasin_ne_se_lit_pas_par_la_relation(): void
+    {
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+        $fournisseurA = Fournisseur::factory()->trashed()->create();
+
+        $contexte->set($this->magasinB);
+        $produitB = Produit::factory()->create();
+        Produit::query()->whereKey($produitB->id)->update(['fournisseur_id' => $fournisseurA->id]);
+
+        $this->assertNull($produitB->fresh()->fournisseur);
     }
 
     /**

@@ -2,7 +2,7 @@
 
 namespace App\Domain\Contacts\Models;
 
-use App\Domain\Contacts\Concerns\ProposableSiActif;
+use App\Domain\Contacts\Concerns\Proposable;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\FournisseurFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,7 +12,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Fournisseur extends Model
 {
     /** @use HasFactory<FournisseurFactory> */
-    use BelongsToMagasin, HasFactory, ProposableSiActif, SoftDeletes;
+    use BelongsToMagasin, HasFactory, Proposable, SoftDeletes;
 
     protected $fillable = [
         'nom',
@@ -25,10 +25,5 @@ class Fournisseur extends Model
         'pays',
         'telephone',
         'email',
-        'actif',
-    ];
-
-    protected $casts = [
-        'actif' => 'boolean',
     ];
 }

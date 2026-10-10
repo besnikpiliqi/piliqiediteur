@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Filament\App\Resources\ClientResource\Pages;
+use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
 use Filament\Forms\Components\Component;
@@ -12,7 +13,6 @@ use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Resources\Resource;
@@ -23,7 +23,7 @@ use Illuminate\Support\HtmlString;
 
 class ClientResource extends Resource
 {
-    use SupprimeEnMasseLigneParLigne;
+    use ArchiveLaFiche, SupprimeEnMasseLigneParLigne;
 
     protected static ?string $model = Client::class;
 
@@ -142,7 +142,7 @@ class ClientResource extends Resource
                     ->columnSpanFull()
                     ->disabled($estComptoir)
                     ->helperText(fn (?Client $record): ?string => $record?->estComptoir()
-                        ? 'La fiche des ventes anonymes au comptoir : elle ne se renomme pas, reste un particulier et ne se supprime pas.'
+                        ? 'La fiche des ventes anonymes au comptoir : elle ne se renomme pas, reste un particulier et ne s\'archive jamais.'
                         : null),
                 self::champTypeClient()->disabled($estComptoir),
                 self::champSiret(),
@@ -166,7 +166,6 @@ class ClientResource extends Resource
                 TextInput::make('delai_paiement_jours')->label('Délai de paiement (jours)')->integer()->minValue(0)->maxValue(365),
                 TextInput::make('mode_paiement_prefere')->label('Mode de paiement préféré')->maxLength(30),
                 Textarea::make('notes')->columnSpanFull(),
-                Toggle::make('actif')->default(true),
             ])->columns(2),
         ]);
     }
@@ -192,19 +191,19 @@ class ClientResource extends Resource
                     ->money('EUR')
                     ->color(fn (Client $record) => $record->soldeCrediteur() > 0 ? 'warning' : 'gray')
                     ->toggleable(),
-                Tables\Columns\IconColumn::make('actif')->boolean(),
                 Tables\Columns\TextColumn::make('created_at')->label('Créé le')->dateTime('d/m/Y')->sortable()->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('type_client')->label('Type')->options(TypeClient::class),
-                Tables\Filters\TernaryFilter::make('actif'),
+                static::filtreDesArchives(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                static::actionRestaurer(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    static::suppressionEnMasse(),
+                    static::archivageEnMasse(),
                 ]),
             ]);
     }

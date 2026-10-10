@@ -6,6 +6,10 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Models\User;
 
+/**
+ * Un produit ne se supprime pas : il s'archive (delete(), SoftDeletes) et
+ * se restaure (restore()), avec la permission d'archiver les produits.
+ */
 class ProduitPolicy extends MagasinPolicy
 {
     public function viewAny(User $user): bool
@@ -24,10 +28,10 @@ class ProduitPolicy extends MagasinPolicy
     }
 
     /**
-     * Un produit supprimé se restaure avant de se modifier : sa page de
+     * Un produit archivé se restaure avant de se modifier : sa page de
      * modification ne le trouve plus. Ce refus retire aussi, dans la liste
-     * des enregistrements supprimés, le bouton « Modifier » et le lien de
-     * sa ligne (voir ProduitResource::table()).
+     * des produits archivés, le bouton « Modifier » et le lien de sa ligne
+     * (voir ProduitResource::table()).
      */
     public function update(User $user, Produit $produit): bool
     {
@@ -38,24 +42,32 @@ class ProduitPolicy extends MagasinPolicy
 
     public function delete(User $user, Produit $produit): bool
     {
-        return $this->appartientAuMagasinActif($produit) && $user->can(PermissionRegistry::PRODUIT_DELETE);
+        return $this->appartientAuMagasinActif($produit) && $user->can(PermissionRegistry::PRODUIT_ARCHIVER);
     }
 
     /**
-     * Le bouton de suppression en masse ; chaque ligne cochée repasse
-     * ensuite par delete() (voir SupprimeEnMasseLigneParLigne).
+     * Le bouton d'archivage en masse ; chaque ligne cochée repasse ensuite
+     * par delete() (voir SupprimeEnMasseLigneParLigne).
      */
     public function deleteAny(User $user): bool
     {
-        return $user->can(PermissionRegistry::PRODUIT_DELETE);
+        return $user->can(PermissionRegistry::PRODUIT_ARCHIVER);
     }
 
     /**
-     * Restaurer un produit supprimé défait sa suppression : la même
-     * permission que pour le supprimer.
+     * Restaurer défait l'archivage : la même permission que pour archiver.
      */
     public function restore(User $user, Produit $produit): bool
     {
-        return $this->appartientAuMagasinActif($produit) && $user->can(PermissionRegistry::PRODUIT_DELETE);
+        return $this->appartientAuMagasinActif($produit) && $user->can(PermissionRegistry::PRODUIT_ARCHIVER);
+    }
+
+    /**
+     * Jamais : une fiche ne s'efface pas, ses documents et son stock la
+     * gardent.
+     */
+    public function forceDelete(User $user, Produit $produit): bool
+    {
+        return false;
     }
 }

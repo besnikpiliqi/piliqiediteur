@@ -233,7 +233,7 @@ trait AjouteDesLignesDAchat
                     ->helperText('Recherchez par nom, référence, ou scannez le code-barres.')
                     ->searchable()
                     ->getSearchResultsUsing(fn (string $search): array => ProduitResource::rechercher(Produit::query(), $search))
-                    ->getOptionLabelUsing(fn ($value): ?string => Produit::find($value)?->nom)
+                    ->getOptionLabelUsing(fn ($value): ?string => Produit::withTrashed()->find($value)?->nom)
                     ->required()
                     ->visible(fn (Get $get): bool => $get('origine') !== self::NOUVEAU_PRODUIT)
                     ->live()
@@ -446,14 +446,17 @@ trait AjouteDesLignesDAchat
 
     /**
      * Les champs non modifiables de la fiche ne reviennent pas du
-     * formulaire : la ligne reprend alors ceux du produit.
+     * formulaire : la ligne reprend alors ceux du produit. Un produit
+     * archivé depuis reste celui de la ligne, que l'enregistrement refuse
+     * avec un message (voir ConstructeurLigneAchat) : il ne devient jamais
+     * un nouveau produit en silence.
      *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private static function ligneDepuisLeFormulaire(array $data): array
     {
-        $produit = filled($data['produit_id'] ?? null) ? Produit::find($data['produit_id']) : null;
+        $produit = filled($data['produit_id'] ?? null) ? Produit::withTrashed()->find($data['produit_id']) : null;
         $valeursDuProduit = [...($produit === null ? [] : self::valeursDuProduit($produit)), ...array_intersect_key($data, array_flip(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT))];
         $valeursDuProduit['prix_vente_ttc'] = self::prixEnTexte((float) $valeursDuProduit['prix_vente_ttc']);
 

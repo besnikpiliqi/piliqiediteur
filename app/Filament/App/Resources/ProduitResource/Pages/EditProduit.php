@@ -3,22 +3,26 @@
 namespace App\Filament\App\Resources\ProduitResource\Pages;
 
 use App\Filament\App\Resources\ProduitResource;
+use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
-use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
 
 class EditProduit extends EditRecord
 {
-    use GereLesExceptionsMetier, RevientALaListe;
+    use ArchiveLaFiche, GereLesExceptionsMetier, RevientALaListe;
 
     protected static string $resource = ProduitResource::class;
 
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            static::actionArchiver(
+                'Archiver ce produit',
+                'Il ne sera plus proposé à la vente ni à l\'achat. Il reste sur ses documents et compte toujours dans la valeur du stock ; vous pourrez le restaurer depuis les produits archivés.',
+                'Produit archivé',
+            ),
         ];
     }
 

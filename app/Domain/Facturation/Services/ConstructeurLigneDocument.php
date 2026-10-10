@@ -6,6 +6,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Facturation\Enums\NatureLigne;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Construit le tableau d'attributs d'une ligne (devis ou facture) prêt
@@ -34,14 +35,25 @@ class ConstructeurLigneDocument
      * catalogue : son PU TTC est toujours saisi. Un PU TTC n'est jamais
      * négatif : une vente ne rembourse rien, c'est le rôle d'un avoir.
      *
+     * Un produit archivé ne se vend plus (voir ProduitResource) : la ligne
+     * qui le porte est refusée avec un message, plutôt qu'une page
+     * d'erreur. Un brouillon déjà composé avec lui s'émet toujours, sans
+     * repasser par ici, et le sort du stock (voir LigneFacture::produit()).
+     *
      * @param  array{produit_id?: int, service_id?: int, quantite: int|string, prix_unitaire_ttc?: float|string|null, taux_tva?: float|string, remise_pourcentage?: float|string}  $donnees
      * @return array<string, mixed>
+     *
+     * @throws LogicException
      */
     public function construire(array $donnees, int $ordre): array
     {
         $produit = isset($donnees['produit_id'])
-            ? Produit::query()->findOrFail($donnees['produit_id'])
+            ? Produit::withTrashed()->findOrFail($donnees['produit_id'])
             : null;
+
+        if ($produit?->trashed()) {
+            throw new LogicException("Le produit « {$produit->nom} » est archivé : restaurez-le depuis le catalogue, ou retirez-le du document.");
+        }
 
         $service = isset($donnees['service_id'])
             ? Service::query()->findOrFail($donnees['service_id'])

@@ -55,9 +55,13 @@ class LigneDevis extends Model
         return $this->belongsTo(Devis::class);
     }
 
+    /**
+     * Une ligne garde son produit, même archivé depuis (voir les
+     * SoftDeletes de Produit).
+     */
     public function produit(): BelongsTo
     {
-        return $this->belongsTo(Produit::class);
+        return $this->belongsTo(Produit::class)->withTrashed();
     }
 
     /**

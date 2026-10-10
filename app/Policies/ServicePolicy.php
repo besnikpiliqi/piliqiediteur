@@ -34,8 +34,8 @@ class ServicePolicy extends MagasinPolicy
     }
 
     /**
-     * Jamais : des lignes de vente renvoient au service. On l'archive
-     * (actif) pour le retirer de la caisse.
+     * Jamais : des lignes de vente renvoient au service. Il se retire de la
+     * caisse (« Proposé à la caisse » décoché, voir ServiceResource).
      */
     public function delete(User $user, Service $service): bool
     {

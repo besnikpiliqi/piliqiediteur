@@ -10,6 +10,7 @@ use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
 use App\Filament\App\Resources\ProduitResource\Widgets\ValeurStockApercu;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -58,6 +59,31 @@ class ValeurStockWidgetTest extends TestCase
         Livewire::test(ValeurStockApercu::class)
             ->assertSee('48,60 € TTC')
             ->assertSee('900 unités en stock · 40,50 € HT · 8,10 € TVA');
+    }
+
+    /**
+     * Un produit archivé n'est plus proposé, mais ce qu'il en reste en
+     * stock existe toujours : il compte dans la valeur du stock. Épuisé,
+     * il n'est pas une référence à réapprovisionner.
+     */
+    public function test_le_stock_d_un_produit_archive_compte_dans_la_valeur_mais_pas_dans_les_references_epuisees(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        Produit::factory()->create(['nom' => 'A', 'cmup_ht' => 7, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
+        Produit::factory()->trashed()->create(['nom' => 'B', 'cmup_ht' => 4, 'taux_tva' => 20, 'stock_quantite' => 5, 'suivi_stock' => true]);
+        Produit::factory()->trashed()->create(['nom' => 'C', 'cmup_ht' => 9, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
+
+        $widget = Livewire::test(ValeurStockApercu::class)->instance();
+        $tuiles = collect((fn (): array => $this->getStats())->call($widget))
+            ->mapWithKeys(fn (Stat $tuile): array => [$tuile->getLabel() => [$tuile->getValue(), $tuile->getDescription()]]);
+
+        $this->assertSame([
+            'Valeur du stock' => ['24,00 € TTC', '5 unités en stock · 20,00 € HT · 4,00 € TVA'],
+            'Références épuisées' => ['1', 'À réapprovisionner'],
+        ], $tuiles->all());
     }
 
     public function test_un_vendeur_sans_la_permission_ne_voit_pas_le_widget(): void

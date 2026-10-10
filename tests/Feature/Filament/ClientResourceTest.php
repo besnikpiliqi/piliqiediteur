@@ -9,16 +9,21 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\ClientResource\Pages\CreateClient;
 use App\Filament\App\Resources\ClientResource\Pages\EditClient;
 use App\Filament\App\Resources\ClientResource\Pages\ListClients;
+use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
+use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
-use Filament\Actions\DeleteAction;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -173,10 +178,10 @@ class ClientResourceTest extends TestCase
     }
 
     /**
-     * L'observateur, en lecture seule, n'a pas le bouton de suppression en
-     * masse, et une requête forgée ne supprime aucun client.
+     * L'observateur, en lecture seule, n'a pas le bouton d'archivage en
+     * masse, et une requête forgée n'archive aucun client.
      */
-    public function test_un_observateur_ne_supprime_pas_de_clients_en_masse(): void
+    public function test_un_observateur_n_archive_pas_de_clients_en_masse(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
@@ -187,8 +192,8 @@ class ClientResourceTest extends TestCase
         $clients = Client::factory()->count(2)->create();
 
         Livewire::test(ListClients::class)
-            ->assertTableBulkActionHidden('delete')
-            ->call('mountTableBulkAction', 'delete', $clients->modelKeys())
+            ->assertTableBulkActionHidden('archiver')
+            ->call('mountTableBulkAction', 'archiver', $clients->modelKeys())
             ->call('callMountedTableBulkAction');
 
         $clients->each(fn (Client $client) => $this->assertNotSoftDeleted($client));
@@ -205,9 +210,10 @@ class ClientResourceTest extends TestCase
     /**
      * Le client comptoir garde son nom et son type (voir
      * Client::estComptoir()) : ses champs sont désactivés, et une valeur
-     * forcée n'est pas enregistrée. Il ne se supprime pas non plus.
+     * forcée n'est pas enregistrée. Il n'a pas non plus de bouton
+     * « Archiver ».
      */
-    public function test_le_client_comptoir_ne_se_renomme_ni_ne_change_de_type_ni_ne_se_supprime(): void
+    public function test_le_client_comptoir_ne_se_renomme_ni_ne_change_de_type_ni_ne_s_archive(): void
     {
         $this->connecterLeProprietaire();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
@@ -215,7 +221,7 @@ class ClientResourceTest extends TestCase
         Livewire::test(EditClient::class, ['record' => $comptoir->getRouteKey()])
             ->assertFormFieldIsDisabled('nom')
             ->assertFormFieldIsDisabled('type_client')
-            ->assertActionHidden(DeleteAction::class)
+            ->assertActionHidden('archiver')
             ->fillForm(['nom' => 'Vente comptoir', 'type_client' => TypeClient::Professionnel->value, 'notes' => 'Ventes anonymes'])
             ->call('save')
             ->assertHasNoFormErrors();
@@ -224,17 +230,94 @@ class ClientResourceTest extends TestCase
         $this->assertSame(['Client comptoir', TypeClient::Particulier, 'Ventes anonymes'], [$comptoir->nom, $comptoir->type_client, $comptoir->notes]);
     }
 
-    public function test_la_suppression_en_masse_garde_le_client_comptoir(): void
+    public function test_l_archivage_en_masse_garde_le_client_comptoir(): void
     {
         $this->connecterLeProprietaire();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $client = Client::factory()->create();
 
         Livewire::test(ListClients::class)
-            ->callTableBulkAction('delete', [$comptoir, $client])
-            ->assertNotified('1 ligne cochée n\'a pas été supprimée');
+            ->callTableBulkAction('archiver', [$comptoir, $client])
+            ->assertNotified('1 ligne cochée n\'a pas été archivée');
 
         $this->assertNotSoftDeleted($comptoir);
+        $this->assertSoftDeleted($client);
+    }
+
+    /**
+     * Un client ne se supprime pas : il s'archive, et son ticket reste
+     * lisible et téléchargeable, tel qu'il a été émis.
+     */
+    public function test_le_ticket_d_un_client_archive_reste_lisible_et_telechargeable(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create(['nom' => 'Jeanne Martin']);
+        $produit = Produit::factory()->create(['nom' => 'Coque', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+
+        Livewire::test(EditClient::class, ['record' => $client->getRouteKey()])
+            ->callAction('archiver')
+            ->assertNotified('Client archivé');
+
+        $this->assertSoftDeleted($client);
+        $this->assertSame(['TK-MABOUT-2026-000001', '12.00'], [$ticket->numero, $ticket->total_ttc]);
+        Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])
+            ->assertSee('Jeanne Martin')
+            ->assertSee('12,00');
+        Livewire::test(ListFactures::class)
+            ->callTableAction('telecharger_pdf', $ticket)
+            ->assertFileDownloaded('ticket-TK-MABOUT-2026-000001.pdf');
+    }
+
+    /**
+     * Archivé, un client n'est plus proposé pour une vente, ni accepté par
+     * une requête forgée ; restauré, il l'est de nouveau.
+     */
+    public function test_un_client_archive_n_est_plus_propose_puis_le_redevient_une_fois_restaure(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->trashed()->create(['nom' => 'Jeanne Martin']);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(Caisse::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('Jeanne') === []);
+        Livewire::test(CreateFacture::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => ! array_key_exists($client->id, $champ->getOptions()))
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+        $this->assertSame(0, Facture::query()->count());
+
+        Livewire::test(ListClients::class)
+            ->filterTable('trashed', false)
+            ->callTableAction('restore', $client);
+
+        $this->assertNotSoftDeleted($client);
+        Livewire::test(Caisse::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('Jeanne') === [$client->id => 'Jeanne Martin']);
+        Livewire::test(CreateFacture::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => array_key_exists($client->id, $champ->getOptions()));
+    }
+
+    /**
+     * Sans la permission d'archiver les clients, pas de restauration non
+     * plus.
+     */
+    public function test_un_vendeur_ne_restaure_pas_un_client_archive(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur));
+        Filament::setTenant($magasin);
+        $client = Client::factory()->trashed()->create();
+
+        Livewire::test(ListClients::class)
+            ->filterTable('trashed', false)
+            ->assertTableActionHidden('restore', $client);
+
         $this->assertSoftDeleted($client);
     }
 

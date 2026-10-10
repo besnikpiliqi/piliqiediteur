@@ -26,7 +26,6 @@ class ClientFactory extends Factory
             'telephone' => fake()->phoneNumber(),
             'email' => fake()->safeEmail(),
             'pays' => 'FR',
-            'actif' => true,
         ];
     }
 

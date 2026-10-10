@@ -2,9 +2,17 @@
 
 namespace Tests\Feature\Catalogue;
 
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\CreerDevisAction;
+use App\Domain\Stock\Enums\TypeMouvementStock;
+use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use Closure;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -89,7 +97,7 @@ class ProduitTest extends TestCase
         $this->assertSame('PRD-000002', $produit->reference);
     }
 
-    public function test_la_reference_automatique_saute_le_numero_d_un_produit_supprime(): void
+    public function test_la_reference_automatique_saute_le_numero_d_un_produit_archive(): void
     {
         Produit::factory()->create(['reference' => 'PRD-000001'])->delete();
         Produit::factory()->create(['reference' => 'PRD-000002']);
@@ -127,5 +135,52 @@ class ProduitTest extends TestCase
         );
 
         $this->assertSame(0, Produit::withTrashed()->count());
+    }
+
+    /**
+     * Les documents et le grand livre qui gardent un produit, archivé
+     * compris.
+     *
+     * @return array<string, array{0: Closure(Produit): void}>
+     */
+    public static function usagesDUnProduit(): array
+    {
+        return [
+            'grand livre du stock' => [static fn (Produit $produit) => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::AjustementEntree, 3)],
+            'ligne d\'achat' => [static fn (Produit $produit) => app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 2]])],
+            'ligne de devis' => [static fn (Produit $produit) => app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]])],
+        ];
+    }
+
+    /**
+     * Une fiche utilisée ne s'efface jamais : même archivé, un produit
+     * reste dans la base tant qu'un document ou le grand livre le porte.
+     *
+     * @param  Closure(Produit): void  $utiliser
+     */
+    #[DataProvider('usagesDUnProduit')]
+    public function test_un_produit_utilise_ne_s_efface_jamais_de_la_base(Closure $utiliser): void
+    {
+        $produit = Produit::factory()->create(['taux_tva' => 20]);
+        $utiliser($produit);
+        $produit->delete();
+
+        $this->assertThrows(fn () => $produit->forceDelete(), QueryException::class);
+
+        $this->assertSoftDeleted($produit);
+    }
+
+    /**
+     * Le fournisseur d'un produit, archivé compris, reste dans la base.
+     */
+    public function test_le_fournisseur_d_un_produit_ne_s_efface_jamais_de_la_base(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        Produit::factory()->create()->rattacherAuFournisseur($fournisseur->id);
+        $fournisseur->delete();
+
+        $this->assertThrows(fn () => $fournisseur->forceDelete(), QueryException::class);
+
+        $this->assertSoftDeleted($fournisseur);
     }
 }

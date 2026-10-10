@@ -634,50 +634,32 @@ class FactureResourceTest extends TestCase
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $actif = Client::factory()->create(['nom' => 'Client actif']);
+        $proposable = Client::factory()->create(['nom' => 'Client proposé']);
         $archive = Client::factory()->create(['nom' => 'Client archivé']);
         $archive->delete();
 
         Livewire::test(CreateFacture::class)
-            ->assertFormFieldExists('client_id', fn (Select $champ): bool => array_key_exists($actif->id, $champ->getOptions())
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => array_key_exists($proposable->id, $champ->getOptions())
                 && ! array_key_exists($archive->id, $champ->getOptions()));
     }
 
     /**
-     * Un client désactivé (« Actif » décoché) n'est plus proposé pour une
-     * nouvelle facture.
-     */
-    public function test_un_client_desactive_n_est_plus_propose_pour_une_nouvelle_facture(): void
-    {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
-        $actif = Client::factory()->create(['nom' => 'Client actif']);
-        $desactive = Client::factory()->create(['nom' => 'Client désactivé', 'actif' => false]);
-
-        Livewire::test(CreateFacture::class)
-            ->assertFormFieldExists('client_id', fn (Select $champ): bool => array_key_exists($actif->id, $champ->getOptions())
-                && ! array_key_exists($desactive->id, $champ->getOptions()));
-    }
-
-    /**
-     * Le client d'un brouillon désactivé depuis reste affiché sur sa
+     * Le client d'un brouillon archivé depuis reste affiché sur sa
      * modification, sans être proposé aux autres.
      */
-    public function test_le_client_desactive_d_un_brouillon_reste_affiche_a_sa_modification(): void
+    public function test_le_client_archive_d_un_brouillon_reste_affiche_a_sa_modification(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $client = Client::factory()->create(['nom' => 'Client désactivé']);
+        $client = Client::factory()->create(['nom' => 'Client archivé']);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
-        $client->update(['actif' => false]);
+        $client->delete();
 
         Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
-            ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getOptionLabel() === 'Client désactivé');
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getOptionLabel() === 'Client archivé');
     }
 
     public function test_lecheance_est_prereplie_a_aujourdhui_par_defaut(): void
@@ -1312,71 +1294,26 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * Une requête forgée qui envoie malgré tout un client désactivé est
+     * Une requête forgée qui envoie malgré tout un client archivé est
      * refusée, et aucune facture n'est créée.
      */
-    public function test_un_client_desactive_est_refuse_a_la_creation_d_une_facture(): void
+    public function test_un_client_archive_est_refuse_a_la_creation_d_une_facture(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $desactive = Client::factory()->create(['actif' => false]);
+        $archive = Client::factory()->trashed()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)
             ->fillForm([
-                'client_id' => $desactive->id,
+                'client_id' => $archive->id,
                 'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
             ])
             ->call('create')
             ->assertHasFormErrors(['client_id' => 'exists']);
 
         $this->assertSame(0, Facture::query()->count());
-    }
-
-    public function test_un_client_desactive_ne_peut_pas_etre_choisi_pour_un_brouillon(): void
-    {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
-        $client = Client::factory()->create();
-        $desactive = Client::factory()->create(['actif' => false]);
-        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
-
-        Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
-            ->fillForm(['client_id' => $desactive->id])
-            ->call('save')
-            ->assertHasFormErrors(['client_id' => 'exists']);
-
-        $this->assertSame($client->id, $facture->fresh()->client_id);
-    }
-
-    /**
-     * Le client déjà rattaché n'est pas choisi dans le formulaire :
-     * désactivé depuis, il reste celui du brouillon, que l'on peut toujours
-     * corriger.
-     */
-    public function test_le_client_desactive_deja_rattache_reste_celui_du_brouillon_modifie(): void
-    {
-        $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
-        Filament::setTenant($magasin);
-        $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
-        $client->update(['actif' => false]);
-
-        Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
-            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'quantite' => 3, 'taux_tva' => 20, 'remise_pourcentage' => 0]]])
-            ->call('save')
-            ->assertHasNoFormErrors();
-
-        $facture->refresh();
-        $this->assertSame($client->id, $facture->client_id);
-        $this->assertSame('120.00', $facture->total_ttc);
     }
 }

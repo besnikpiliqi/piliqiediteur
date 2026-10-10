@@ -24,6 +24,11 @@ use Illuminate\Support\Number;
  * fausserait la valeur d'un stock d'articles bon marché (2 000 articles à
  * 0,045 € valent 90,00 €, pas 100,00 €).
  *
+ * Un produit archivé (voir les SoftDeletes de Produit) n'est plus proposé,
+ * mais ce qu'il en reste en stock existe toujours : il compte dans la
+ * valeur du stock. Épuisé, il ne compte pas parmi les références à
+ * réapprovisionner, puisqu'il ne se rachète plus.
+ *
  * Information sensible (elle révèle la trésorerie immobilisée en stock) :
  * réservée par défaut au propriétaire/administrateur/comptable via
  * produit.voir_valeur_stock (voir RoleMagasin::permissionsParDefaut()),
@@ -46,9 +51,9 @@ class ValeurStockApercu extends BaseWidget
 
     protected function getStats(): array
     {
-        $produitsSuivis = Produit::query()->where('suivi_stock', true)->get();
-        $produitsEnStock = $produitsSuivis->filter(fn (Produit $produit) => $produit->stock_quantite > 0);
-        $nombreEpuises = $produitsSuivis->count() - $produitsEnStock->count();
+        $produitsSuivis = Produit::withTrashed()->where('suivi_stock', true)->get();
+        $produitsEnStock = $produitsSuivis->filter(fn (Produit $produit): bool => $produit->stock_quantite > 0);
+        $nombreEpuises = $produitsSuivis->filter(fn (Produit $produit): bool => ! $produit->trashed() && $produit->stock_quantite <= 0)->count();
 
         $calculateur = app(CalculateurLigne::class);
         $valeur = $calculateur->totaliser($produitsEnStock->map(

@@ -11,7 +11,9 @@ return new class extends Migration
         Schema::create('produits', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            $table->foreignId('fournisseur_id')->nullable()->constrained('fournisseurs')->nullOnDelete();
+            // Celui de son dernier achat validé (voir Produit::fournisseur()),
+            // même archivé depuis : une fiche utilisée ne s'efface jamais.
+            $table->foreignId('fournisseur_id')->nullable()->constrained('fournisseurs')->restrictOnDelete();
             $table->string('reference', 60);
             $table->string('code_barres', 50)->nullable();
             $table->string('nom', 200);
@@ -35,8 +37,10 @@ return new class extends Migration
             $table->integer('stock_quantite')->default(0);
             $table->boolean('suivi_stock')->default(true);
             $table->unsignedInteger('seuil_alerte')->default(0);
-            $table->boolean('actif')->default(true);
             $table->timestamps();
+            // Un produit ne se supprime pas : il s'archive (voir
+            // ProduitResource), reste sur ses documents et dans la valeur du
+            // stock, et se restaure.
             $table->softDeletes();
 
             $table->unique(['magasin_id', 'reference']);

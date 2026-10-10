@@ -168,10 +168,10 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
-     * Un produit supprimé depuis sa vente rentre quand même en stock à son
+     * Un produit archivé depuis sa vente rentre quand même en stock à son
      * retour, avec son mouvement (voir LigneAvoir::produit()).
      */
-    public function test_emettre_un_avoir_restaure_le_stock_d_un_produit_supprime_depuis_la_vente(): void
+    public function test_emettre_un_avoir_restaure_le_stock_d_un_produit_archive_depuis_la_vente(): void
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);

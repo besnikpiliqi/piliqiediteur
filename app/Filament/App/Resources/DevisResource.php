@@ -60,8 +60,8 @@ class DevisResource extends Resource
             Section::make('Devis')->schema([
                 Select::make('client_id')
                     ->label('Client')
-                    // Un client désactivé ou archivé ne reçoit plus de nouveau
-                    // document, même si ceux qu'il a déjà le gardent (voir
+                    // Un client archivé ne reçoit plus de nouveau document,
+                    // même si ceux qu'il a déjà le gardent (voir
                     // Devis::client() et AppServiceProvider::limiterLesChoixAuMagasin()).
                     ->relationProposable('client', 'nom')
                     ->searchable()
@@ -106,8 +106,12 @@ class DevisResource extends Resource
                 ->label('Produit')
                 ->helperText('Recherchez par nom, référence, ou scannez le code-barres.')
                 ->searchable()
-                ->getSearchResultsUsing(fn (string $search): array => ProduitResource::rechercher(Produit::query()->where('actif', true), $search))
-                ->getOptionLabelUsing(fn ($value) => Produit::find($value)?->nom)
+                // Un produit archivé n'est plus proposé ; celui d'une ligne
+                // déjà composée reste affiché, et le document ne s'enregistre
+                // plus tant qu'il n'est pas restauré ou retiré (voir
+                // ConstructeurLigneDocument).
+                ->getSearchResultsUsing(fn (string $search): array => ProduitResource::rechercher(Produit::query(), $search))
+                ->getOptionLabelUsing(fn ($value) => Produit::withTrashed()->find($value)?->nom)
                 ->required(fn (Get $get): bool => ! self::estUneLigneDeService($get))
                 ->live()
                 ->columnSpan(2)

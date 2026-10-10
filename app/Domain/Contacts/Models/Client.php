@@ -2,7 +2,7 @@
 
 namespace App\Domain\Contacts\Models;
 
-use App\Domain\Contacts\Concerns\ProposableSiActif;
+use App\Domain\Contacts\Concerns\Proposable;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Models\Avoir;
@@ -18,7 +18,7 @@ use LogicException;
 class Client extends Model
 {
     /** @use HasFactory<ClientFactory> */
-    use BelongsToMagasin, HasFactory, ProposableSiActif, SoftDeletes;
+    use BelongsToMagasin, HasFactory, Proposable, SoftDeletes;
 
     /**
      * Nom du client comptoir créé pour chaque magasin (voir
@@ -46,12 +46,10 @@ class Client extends Model
         'delai_paiement_jours',
         'mode_paiement_prefere',
         'notes',
-        'actif',
     ];
 
     protected $casts = [
         'type_client' => TypeClient::class,
-        'actif' => 'boolean',
         'est_comptoir' => 'boolean',
     ];
 
@@ -72,9 +70,11 @@ class Client extends Model
             }
         });
 
+        // Supprimer un client l'archive (SoftDeletes) : jamais le client
+        // comptoir, que portent toutes les ventes anonymes du magasin.
         static::deleting(function (Client $client) {
             if ($client->estComptoir()) {
-                throw new LogicException('Le client comptoir ne se supprime pas.');
+                throw new LogicException('Le client comptoir ne s\'archive jamais.');
             }
         });
     }

@@ -25,13 +25,14 @@ return new class extends Migration
             $table->unsignedSmallInteger('delai_paiement_jours')->nullable();
             $table->string('mode_paiement_prefere', 30)->nullable();
             $table->text('notes')->nullable();
-            $table->boolean('actif')->default(true);
             // Vrai pour la seule fiche du client comptoir du magasin (voir
             // CreerMagasinAction), NULL pour toutes les autres : un index
             // unique ignore les NULL (MySQL, PostgreSQL, SQLite), il
             // n'admet donc qu'un client comptoir par magasin.
             $table->boolean('est_comptoir')->nullable();
             $table->timestamps();
+            // Un client ne se supprime pas : il s'archive (voir
+            // ClientResource), ses documents le gardent, et il se restaure.
             $table->softDeletes();
 
             $table->index(['magasin_id', 'nom']);

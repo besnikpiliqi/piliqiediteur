@@ -5,10 +5,10 @@ namespace App\Filament\App\Resources;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FournisseurResource\Pages;
+use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -17,7 +17,7 @@ use Illuminate\Validation\Rules\Unique;
 
 class FournisseurResource extends Resource
 {
-    use SupprimeEnMasseLigneParLigne;
+    use ArchiveLaFiche, SupprimeEnMasseLigneParLigne;
 
     protected static ?string $model = Fournisseur::class;
 
@@ -48,7 +48,7 @@ class FournisseurResource extends Resource
                     )
                     ->validationMessages([
                         'regex' => 'Le SIRET compte 14 chiffres, sans espace.',
-                        'unique' => 'Ce SIRET est déjà celui d\'un autre fournisseur du magasin, peut-être supprimé. Affichez les enregistrements supprimés de la liste pour le restaurer.',
+                        'unique' => 'Ce SIRET est déjà celui d\'un autre fournisseur du magasin, peut-être archivé : affichez les fournisseurs archivés pour le restaurer.',
                     ]),
                 TextInput::make('numero_tva')->label('N° TVA intracommunautaire')->maxLength(20),
             ])->columns(2),
@@ -62,8 +62,6 @@ class FournisseurResource extends Resource
                 TextInput::make('telephone')->tel()->maxLength(30),
                 TextInput::make('email')->email()->maxLength(150),
             ])->columns(2),
-
-            Toggle::make('actif')->default(true),
         ]);
     }
 
@@ -74,19 +72,17 @@ class FournisseurResource extends Resource
                 Tables\Columns\TextColumn::make('nom')->searchable()->sortable(),
                 Tables\Columns\TextColumn::make('siret')->label('SIRET')->searchable(),
                 Tables\Columns\TextColumn::make('email'),
-                Tables\Columns\IconColumn::make('actif')->boolean(),
             ])
             ->filters([
-                Tables\Filters\TernaryFilter::make('actif'),
-                Tables\Filters\TrashedFilter::make(),
+                static::filtreDesArchives(),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\RestoreAction::make(),
+                static::actionRestaurer(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    static::suppressionEnMasse(),
+                    static::archivageEnMasse(),
                 ]),
             ]);
     }

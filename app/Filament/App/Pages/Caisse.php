@@ -155,7 +155,7 @@ class Caisse extends Page implements HasForms
     private function remplirFormulaire(?PanierCaisse $panier, array $paiement = []): void
     {
         $this->form->fill([
-            'client_id' => $panier?->client_id ?? Client::query()->proposables()->where('est_comptoir', true)->value('id'),
+            'client_id' => $panier?->client_id ?? Client::query()->where('est_comptoir', true)->value('id'),
             'lignes' => array_values($panier->lignes ?? []),
             'mode_paiement' => ModePaiement::Especes->value,
             'montant_recu' => null,
@@ -174,15 +174,15 @@ class Caisse extends Page implements HasForms
                     ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id'))
                         ?? 'Par défaut : le client comptoir générique, pour une vente anonyme.')
                     ->searchable()
-                    // Un client désactivé n'est plus proposé pour une vente
-                    // (voir ProposableSiActif).
+                    // Un client archivé n'est plus proposé pour une vente, ni
+                    // accepté ; celui d'un panier enregistré avant son
+                    // archivage reste affiché, le temps d'en choisir un autre.
                     ->getSearchResultsUsing(fn (string $search) => Client::query()
-                        ->proposables()
                         ->where('nom', 'like', "%{$search}%")
                         ->limit(50)
                         ->pluck('nom', 'id'))
-                    ->getOptionLabelUsing(fn ($value) => Client::find($value)?->nom)
-                    ->rule(fn (): Exists => Client::regleProposableDansLeMagasin())
+                    ->getOptionLabelUsing(fn ($value) => Client::withTrashed()->find($value)?->nom)
+                    ->rule(fn (): Exists => Client::regleExisteDansLeMagasin())
                     // Form explicitement modelé sur Client : ce Select
                     // n'utilise pas relationship(), voir le commentaire
                     // équivalent dans DevisResource::ligneSchema().

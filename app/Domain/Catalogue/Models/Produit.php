@@ -46,7 +46,6 @@ class Produit extends Model
         'taux_tva',
         'suivi_stock',
         'seuil_alerte',
-        'actif',
     ];
 
     // stock_quantite n'est volontairement PAS fillable : seul
@@ -92,12 +91,16 @@ class Produit extends Model
         'stock_quantite' => 'integer',
         'seuil_alerte' => 'integer',
         'suivi_stock' => 'boolean',
-        'actif' => 'boolean',
     ];
 
+    /**
+     * Le fournisseur de son dernier achat validé (voir
+     * rattacherAuFournisseur()), même archivé depuis : la fiche l'affiche
+     * toujours, sans le proposer à nouveau (voir ProduitResource).
+     */
     public function fournisseur(): BelongsTo
     {
-        return $this->belongsTo(Fournisseur::class);
+        return $this->belongsTo(Fournisseur::class)->withTrashed();
     }
 
     public static function parametresDeConformite(): array

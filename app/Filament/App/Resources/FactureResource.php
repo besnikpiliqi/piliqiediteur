@@ -88,8 +88,8 @@ class FactureResource extends Resource
             FormSection::make('Facture')->schema([
                 Select::make('client_id')
                     ->label('Client')
-                    // Un client désactivé ou archivé ne reçoit plus de nouveau
-                    // document, même si ceux qu'il a déjà le gardent (voir
+                    // Un client archivé ne reçoit plus de nouveau document,
+                    // même si ceux qu'il a déjà le gardent (voir
                     // Facture::client() et AppServiceProvider::limiterLesChoixAuMagasin()).
                     ->relationProposable('client', 'nom')
                     ->searchable()

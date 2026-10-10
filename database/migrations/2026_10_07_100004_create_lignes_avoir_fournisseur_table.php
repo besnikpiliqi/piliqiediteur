@@ -17,7 +17,7 @@ return new class extends Migration
             // CreerAvoirFournisseurAction. Comme pour lignes_avoir, tout
             // est un snapshot figé au moment de la création de l'avoir.
             $table->foreignId('ligne_achat_id')->nullable()->constrained('lignes_achat')->nullOnDelete();
-            $table->foreignId('produit_id')->nullable()->constrained('produits')->nullOnDelete();
+            $table->foreignId('produit_id')->nullable()->constrained('produits')->restrictOnDelete();
             $table->string('description', 255);
             $table->string('reference', 60)->nullable();
             // Nombre entier d'articles (voir QuantiteEntiere).

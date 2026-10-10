@@ -36,7 +36,6 @@ class Produit extends Model
     use BelongsToMagasin, HasFactory, JournaliseSesParametresDeConformite, SoftDeletes;
 
     protected $fillable = [
-        'fournisseur_id',
         'reference',
         'code_barres',
         'nom',
@@ -53,6 +52,8 @@ class Produit extends Model
     // stock_quantite n'est volontairement PAS fillable : seul
     // StockLedgerService est autorisé à la modifier, via les mouvements de
     // stock. Toute autre écriture casserait la cohérence du ledger.
+    // fournisseur_id non plus : c'est celui de son dernier achat validé
+    // (voir rattacherAuFournisseur()), jamais un choix de formulaire.
 
     /**
      * Ce que le fournisseur dit du produit : figé dès que le produit est
@@ -65,7 +66,6 @@ class Produit extends Model
         'nom',
         'taille',
         'couleur',
-        'fournisseur_id',
     ];
 
     protected static function booted(): void
@@ -100,7 +100,7 @@ class Produit extends Model
     /**
      * Le fournisseur de son dernier achat validé (voir
      * rattacherAuFournisseur()), même archivé depuis : la fiche l'affiche
-     * toujours, sans le proposer à nouveau (voir ProduitResource).
+     * toujours (voir ProduitResource).
      */
     public function fournisseur(): BelongsTo
     {
@@ -156,8 +156,12 @@ class Produit extends Model
     }
 
     /**
-     * Le fournisseur d'un produit est celui chez qui il vient d'être acheté
-     * (facture d'achat validée).
+     * Le fournisseur d'un produit est celui de son dernier achat validé,
+     * facture saisie à la main ou récupérée automatiquement (voir
+     * IncrementerStockApresValidationFactureAchat et
+     * ModifierFactureAchatAction). Seules cette méthode et la création
+     * d'un nouveau produit à la validation de sa facture d'achat (voir
+     * ConstructeurLigneAchat::creerLesNouveauxProduits()) l'écrivent.
      */
     public function rattacherAuFournisseur(int $fournisseurId): void
     {
@@ -249,9 +253,12 @@ class Produit extends Model
     /**
      * La base refuse deux produits du magasin avec la même référence
      * (archivés compris, sans tenir compte de la casse) : mieux vaut le
-     * dire clairement qu'échouer sur l'index unique.
+     * dire clairement qu'échouer sur l'index unique. Vérifiée aussi, avant
+     * qu'il existe, pour la fiche d'un nouveau produit qu'une facture
+     * d'achat brouillon garde jusqu'à sa validation (voir
+     * ConstructeurLigneAchat).
      */
-    private function verifierQueSaReferenceEstLibre(): void
+    public function verifierQueSaReferenceEstLibre(): void
     {
         if (blank($this->reference) || ! $this->isDirty('reference')) {
             return;

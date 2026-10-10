@@ -23,11 +23,15 @@ use LogicException;
  * Contrairement à la vente, une facture d'achat saisie manuellement reste
  * modifiable même après validation (voir FactureAchat::estModifiable()) :
  * la personne qui l'enregistre peut se tromper, contrairement à une
- * facture récupérée automatiquement par API. Une facture déjà validée a
- * toutefois déjà impacté le stock, le CMUP et le fournisseur du produit
- * (voir IncrementerStockApresValidationFactureAchat) : toute modification
- * de ses lignes corrige donc la réception produit par produit plutôt que
- * de la réappliquer en aveugle (voir corrigerLaReception()).
+ * facture récupérée automatiquement par API ; la corriger demande alors le
+ * droit de valider les factures d'achat (voir FactureAchatPolicy::update()).
+ * Une facture déjà validée a toutefois déjà impacté le stock, le CMUP et
+ * le fournisseur du produit (voir
+ * IncrementerStockApresValidationFactureAchat) : toute modification de ses
+ * lignes corrige donc la réception produit par produit plutôt que de la
+ * réappliquer en aveugle (voir corrigerLaReception()), un nouveau produit
+ * ajouté naissant tout de suite pour y entrer (voir
+ * ConstructeurLigneAchat::enregistrer()).
  *
  * Comme CreerFactureAchatAction, elle reçoit le fournisseur déjà résolu par
  * une requête limitée au magasin, jamais un fournisseur_id brut venu du
@@ -79,7 +83,11 @@ class ModifierFactureAchatAction
                 throw new LogicException("Le fournisseur « {$fournisseur->nom} » a été archivé : restaurez-le depuis la liste des fournisseurs avant de corriger cette facture d'achat.");
             }
 
-            $produitsAvant = $factureAchat->lignes->pluck('produit_id')->map(fn (int|string $produitId): int => (int) $produitId)->unique()->values()->all();
+            // Les produits que la réception a reçus avant sa correction ; un
+            // brouillon n'a rien reçu.
+            $produitsAvant = $estValidee
+                ? $factureAchat->lignes->pluck('produit_id')->map(fn (int|string $produitId): int => (int) $produitId)->unique()->values()->all()
+                : [];
 
             $factureAchat->update([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]);
             $factureAchat->lignes()->delete();

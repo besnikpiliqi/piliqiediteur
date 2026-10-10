@@ -12,12 +12,19 @@ return new class extends Migration
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('facture_achat_id')->constrained('factures_achat')->cascadeOnDelete();
-            // Chaque ligne reçoit un produit, existant ou créé avec la facture
-            // (voir ConstructeurLigneAchat) : la traçabilité pour l'avoir
+            // Le produit du catalogue que la ligne reçoit (voir
+            // ConstructeurLigneAchat) : la traçabilité pour l'avoir
             // fournisseur (voir LigneAchat::quantiteRetournableRestante())
-            // n'a de sens que pour un produit du catalogue. Il reste lié,
-            // archivé compris : une fiche utilisée ne s'efface jamais.
-            $table->foreignId('produit_id')->constrained('produits')->restrictOnDelete();
+            // n'a de sens que pour lui. Il reste lié, archivé compris : une
+            // fiche utilisée ne s'efface jamais. Vide seulement tant que la
+            // ligne d'un brouillon garde la fiche d'un nouveau produit, pas
+            // encore créé (voir nouveau_produit).
+            $table->foreignId('produit_id')->nullable()->constrained('produits')->restrictOnDelete();
+            // Fiche du produit que cette ligne d'un brouillon créera à la
+            // validation (voir ConstructeurLigneAchat::creerLesNouveauxProduits()) ;
+            // une ligne a toujours soit produit_id, soit nouveau_produit
+            // (voir LigneAchat).
+            $table->json('nouveau_produit')->nullable();
             $table->string('description', 255);
             $table->string('reference', 60)->nullable();
             // Nombre entier d'articles (voir QuantiteEntiere).

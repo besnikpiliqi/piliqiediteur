@@ -834,6 +834,55 @@ class CalculateurLigneTest extends TestCase
         );
     }
 
+    /**
+     * Le coût moyen du stock restant après un retour au fournisseur, au
+     * coût de la ligne retournée : (stock x coût moyen - quantité x coût) /
+     * (stock - quantité), au dix-millième, arrondi une seule fois. Sans
+     * stock restant, aucun ; une valeur restante négative vaut 0 €.
+     *
+     * @return array<string, array{int, float, int, float, float|null}>
+     */
+    public static function sortiesAUnAutreCout(): array
+    {
+        return [
+            'les 10 articles à 10 € d\'un stock de 20 à 6 €' => [20, 6.0, 10, 10.0, 2.0],
+            '4 articles à 10 € d\'un stock de 20 à 6 €' => [20, 6.0, 4, 10.0, 5.0],
+            '8,9998 € pour 6 articles' => [7, 1.5714, 1, 2.0, 1.5],
+            'tout le stock' => [5, 3.0, 5, 3.0, null],
+            'plus que le stock' => [5, 3.0, 6, 3.0, null],
+            'une valeur restante de -10 €' => [5, 6.0, 4, 10.0, 0.0],
+        ];
+    }
+
+    #[DataProvider('sortiesAUnAutreCout')]
+    public function test_le_cout_moyen_apres_une_sortie_a_un_autre_cout(int $stock, float $coutMoyen, int $quantite, float $coutUnitaire, ?float $attendu): void
+    {
+        $this->assertSame($attendu, $this->calculateur()->coutMoyenApresUneSortie($stock, $coutMoyen, $quantite, $coutUnitaire));
+    }
+
+    /**
+     * @return array<string, array{int, float, int, float}>
+     */
+    public static function sortiesImpossibles(): array
+    {
+        return [
+            'stock négatif' => [-1, 6.0, 1, 10.0],
+            'quantité négative' => [20, 6.0, -1, 10.0],
+            'coût moyen négatif' => [20, -6.0, 1, 10.0],
+            'coût de sortie négatif' => [20, 6.0, 1, -10.0],
+        ];
+    }
+
+    #[DataProvider('sortiesImpossibles')]
+    public function test_une_sortie_de_quantite_ou_de_cout_negatif_est_refusee(int $stock, float $coutMoyen, int $quantite, float $coutUnitaire): void
+    {
+        $this->assertThrows(
+            fn () => $this->calculateur()->coutMoyenApresUneSortie($stock, $coutMoyen, $quantite, $coutUnitaire),
+            InvalidArgumentException::class,
+            'Un lot de stock ne peut avoir ni quantité ni coût négatif.',
+        );
+    }
+
     public function test_sommer_et_soustraire_comptent_au_centime_exact(): void
     {
         $this->assertSame(0.3, $this->calculateur()->sommer([0.1, 0.2]));

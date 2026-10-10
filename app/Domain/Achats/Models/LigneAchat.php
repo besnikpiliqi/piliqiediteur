@@ -9,7 +9,16 @@ use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use InvalidArgumentException;
 
+/**
+ * Une ligne reçoit toujours un produit du catalogue (produit_id) ; seule
+ * la ligne d'un brouillon peut garder à sa place la fiche d'un nouveau
+ * produit (nouveau_produit), qui ne sera créé qu'à la validation de la
+ * facture d'achat (voir ConstructeurLigneAchat::creerLesNouveauxProduits()) :
+ * un brouillon supprimé ne laisse ainsi aucun produit derrière lui. Jamais
+ * les deux à la fois, jamais aucun des deux.
+ */
 class LigneAchat extends Model
 {
     use BelongsToMagasin;
@@ -19,6 +28,7 @@ class LigneAchat extends Model
     protected $fillable = [
         'facture_achat_id',
         'produit_id',
+        'nouveau_produit',
         'description',
         'reference',
         'quantite',
@@ -32,6 +42,7 @@ class LigneAchat extends Model
     ];
 
     protected $casts = [
+        'nouveau_produit' => 'array',
         'quantite' => 'integer',
         'prix_unitaire_ht' => 'decimal:2',
         'taux_tva' => 'decimal:2',
@@ -41,6 +52,15 @@ class LigneAchat extends Model
         'montant_ttc' => 'decimal:2',
     ];
 
+    protected static function booted(): void
+    {
+        static::saving(function (LigneAchat $ligne) {
+            if (blank($ligne->produit_id) === blank($ligne->nouveau_produit)) {
+                throw new InvalidArgumentException('Une ligne d\'achat reçoit soit un produit du catalogue, soit la fiche d\'un nouveau produit.');
+            }
+        });
+    }
+
     public function factureAchat(): BelongsTo
     {
         return $this->belongsTo(FactureAchat::class);
@@ -49,7 +69,8 @@ class LigneAchat extends Model
     /**
      * Une ligne garde son produit, même archivé depuis (voir les
      * SoftDeletes de Produit) : il se retourne toujours au fournisseur
-     * (voir quantiteRetournableRestante()).
+     * (voir quantiteRetournableRestante()). Aucun tant que la ligne d'un
+     * brouillon garde la fiche d'un nouveau produit.
      */
     public function produit(): BelongsTo
     {

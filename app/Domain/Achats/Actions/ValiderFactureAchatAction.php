@@ -5,6 +5,7 @@ namespace App\Domain\Achats\Actions;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Events\FactureAchatValidee;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use Illuminate\Support\Facades\DB;
@@ -14,16 +15,23 @@ use LogicException;
  * Même logique que EmettreFactureAction côté vente : la facture d'achat ne
  * reçoit son numéro interne qu'à la validation, moment où le stock est
  * incrémenté (voir FactureAchatValidee/IncrementerStockApresValidationFactureAchat).
- * Chacun de ses produits doit encore être au catalogue : une réception ne
- * se perd jamais en silence. Son fournisseur aussi : archivé depuis la
- * saisie, il ne deviendrait pas le fournisseur de ses produits (voir
- * Produit::rattacherAuFournisseur()) sans être restauré. Un magasin
- * suspendu ou fermé ne valide plus d'achat (voir
+ * Chacun de ses produits existants doit encore être au catalogue : une
+ * réception ne se perd jamais en silence. Son fournisseur aussi : archivé
+ * depuis la saisie, il ne deviendrait pas le fournisseur de ses produits
+ * (voir Produit::rattacherAuFournisseur()) sans être restauré. Ses
+ * nouveaux produits naissent alors, avant son numéro (voir
+ * ConstructeurLigneAchat::creerLesNouveauxProduits()) : un refus (prix de
+ * vente manquant, référence prise entre-temps) annule toute la validation,
+ * sans consommer ni numéro de facture d'achat ni référence de produit. Un
+ * magasin suspendu ou fermé ne valide plus d'achat (voir
  * Magasin::verifierQuIlEstOuvert()).
  */
 class ValiderFactureAchatAction
 {
-    public function __construct(private readonly DocumentNumberingService $numerotation) {}
+    public function __construct(
+        private readonly DocumentNumberingService $numerotation,
+        private readonly ConstructeurLigneAchat $constructeurLignes,
+    ) {}
 
     /**
      * @throws LogicException
@@ -46,6 +54,8 @@ class ValiderFactureAchatAction
                 throw new LogicException("Le produit « {$produitArchive->nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture, avant de la valider.");
             }
 
+            $this->constructeurLignes->creerLesNouveauxProduits($factureAchat);
+
             $numero = $this->numerotation->suivant($factureAchat->magasin, TypeDocument::FactureAchat, now()->format('Y'));
 
             $factureAchat->forceFill([
@@ -55,8 +65,9 @@ class ValiderFactureAchatAction
             ])->save();
 
             // Synchrone et dans la même transaction, voir le commentaire de
-            // FactureAchatValidee.
-            FactureAchatValidee::dispatch($factureAchat);
+            // FactureAchatValidee ; chaque ligne y arrive avec son produit,
+            // nouveau compris.
+            FactureAchatValidee::dispatch($factureAchat->load('lignes'));
 
             return $factureAchat;
         });

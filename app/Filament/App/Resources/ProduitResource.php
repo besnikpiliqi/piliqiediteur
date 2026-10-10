@@ -13,8 +13,8 @@ use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
 use Filament\Forms\Components\Field;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
@@ -219,21 +219,19 @@ class ProduitResource extends Resource
 
         return $form->schema([
             Section::make('Identification')
-                ->description($figeParSonFournisseur ? 'Reçu sur une facture d\'achat récupérée automatiquement : sa référence, son nom et son fournisseur sont ceux du fournisseur.' : null)
+                ->description($figeParSonFournisseur ? 'Reçu sur une facture d\'achat récupérée automatiquement : sa référence et son nom sont ceux du fournisseur.' : null)
                 ->schema([
                     ...array_map(
                         fn (Field $champ): Field => $champ->disabled($figeParSonFournisseur),
                         self::champsIdentification(fn (?Produit $record): ?Produit => $record),
                     ),
-                    // Archivé, il n'est plus proposé ; celui de la fiche reste
-                    // affiché (voir Produit::fournisseur()).
-                    Select::make('fournisseur_id')
+                    // Celui de son dernier achat validé, même archivé depuis
+                    // (voir Produit::rattacherAuFournisseur()) : il ne se
+                    // choisit jamais ici.
+                    Placeholder::make('fournisseur')
                         ->label('Fournisseur')
-                        ->relationProposable('fournisseur', 'nom')
-                        ->searchable()
-                        ->preload()
-                        ->helperText('Celui de la dernière facture d\'achat validée pour ce produit.')
-                        ->disabled($figeParSonFournisseur),
+                        ->content(fn (?Produit $record): string => $record?->fournisseur?->nom ?? 'Aucun achat validé')
+                        ->helperText('Celui de sa dernière facture d\'achat validée, saisie à la main ou reçue automatiquement.'),
                 ])->columns(2),
 
             Section::make('Prix et TVA')->schema([

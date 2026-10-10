@@ -22,6 +22,11 @@ return new class extends Migration
             // les erreurs de signe en amont et rend le ledger
             // auto-descriptif.
             $table->unsignedInteger('quantite');
+            // Coût unitaire HT auquel un retour fournisseur sort du stock,
+            // celui de sa ligne d'achat (voir
+            // StockLedgerService::retournerAuFournisseur()) ; null pour les
+            // autres mouvements, au CMUP du moment.
+            $table->decimal('cout_unitaire_ht', 14, 4)->nullable();
             $table->nullableMorphs('source');
             $table->timestamp('survenu_le');
             $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();

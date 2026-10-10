@@ -28,6 +28,7 @@ class MouvementStock extends Model
         'produit_id',
         'type',
         'quantite',
+        'cout_unitaire_ht',
         'source_type',
         'source_id',
         'survenu_le',
@@ -38,6 +39,7 @@ class MouvementStock extends Model
     protected $casts = [
         'type' => TypeMouvementStock::class,
         'quantite' => 'integer',
+        'cout_unitaire_ht' => 'decimal:4',
         'survenu_le' => 'datetime',
     ];
 

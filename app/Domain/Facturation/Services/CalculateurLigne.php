@@ -356,6 +356,45 @@ class CalculateurLigne
     }
 
     /**
+     * Le coût moyen du stock restant quand $quantite articles en sortent à
+     * un autre coût que le sien -- un retour au fournisseur, au coût de la
+     * ligne d'achat retournée (voir StockLedgerService::retournerAuFournisseur()) :
+     * (stock x coût moyen - quantité x coût) / (stock - quantité), au
+     * dix-millième d'euro. 10 articles achetés à 2 €, puis 10 à 10 € (20 à
+     * 6 €) : retourner les 10 à 10 € laisse 10 articles à 2 €. Sans stock
+     * restant, il n'y a plus de coût moyen à recalculer : null, le coût
+     * moyen ne change pas. Un stock ne vaut jamais moins que rien : un
+     * retour qui rendrait négative la valeur du stock restant la ramène à
+     * 0 € -- 5 articles à 6 € dont 4 retournés à 10 € : le dernier vaut 0 €,
+     * pas -10 €. Une quantité ou un coût négatif n'a pas de sens.
+     *
+     * @throws InvalidArgumentException
+     */
+    public function coutMoyenApresUneSortie(int $stock, float $coutMoyen, int $quantite, float $coutUnitaire): ?float
+    {
+        $coutMoyenDixMilliemes = $this->versUnites($coutMoyen, 10000);
+        $coutUnitaireDixMilliemes = $this->versUnites($coutUnitaire, 10000);
+
+        if ($stock < 0 || $quantite < 0 || $coutMoyenDixMilliemes < 0 || $coutUnitaireDixMilliemes < 0) {
+            throw new InvalidArgumentException('Un lot de stock ne peut avoir ni quantité ni coût négatif.');
+        }
+
+        $reste = $stock - $quantite;
+
+        if ($reste <= 0) {
+            return null;
+        }
+
+        $valeurRestanteDixMilliemes = $this->multiplier($coutMoyenDixMilliemes, $stock) - $this->multiplier($coutUnitaireDixMilliemes, $quantite);
+
+        if ($valeurRestanteDixMilliemes < 0) {
+            return 0.0;
+        }
+
+        return $this->diviserArrondi($valeurRestanteDixMilliemes, $reste) / 10000;
+    }
+
+    /**
      * Montants d'un retour : ceux de toute la quantité rendue jusqu'ici
      * (retours déjà émis compris) moins ce que les retours déjà émis ont
      * crédité -- jamais un recalcul du seul retour. Recalculer chaque

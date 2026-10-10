@@ -10,6 +10,7 @@ use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
@@ -17,6 +18,7 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
@@ -128,29 +130,58 @@ class FactureAchatActionsTest extends TestCase
     }
 
     /**
-     * Le produit naît avec la facture, dans la même transaction, rattaché à
-     * son fournisseur : son prix d'achat est celui de la ligne, son prix de
-     * vente celui saisi pour la vente -- jamais l'un tiré de l'autre.
+     * Un brouillon ne crée aucun produit : sa ligne garde seulement la fiche
+     * du nouveau produit, et se calcule comme toute ligne d'achat -- 3 x
+     * 0,47 € HT = 1,41 € HT + 0,28 € de TVA (20 % de 1,41 €) = 1,69 € TTC.
      */
-    public function test_une_ligne_cree_son_nouveau_produit_avec_la_facture(): void
+    public function test_un_brouillon_ne_cree_aucun_produit(): void
+    {
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [$this->ligneDuCableUsbC()]);
+
+        $this->assertSame(0, Produit::withTrashed()->count());
+        $ligne = $factureAchat->lignes->sole();
+        $this->assertNull($ligne->produit_id);
+        $this->assertSame(['Câble USB-C', 'CBL-USBC', '0.47', '1.41', '0.28', '1.69'], [$ligne->description, $ligne->reference, $ligne->prix_unitaire_ht, $ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc]);
+        $this->assertSame(
+            ['reference' => 'CBL-USBC', 'nom' => 'Câble USB-C', 'prix_vente_ttc' => '10.00', 'taux_tva' => '20.00', 'suivi_stock' => true, 'seuil_alerte' => 2],
+            $ligne->nouveau_produit,
+        );
+    }
+
+    /**
+     * Le produit naît à la validation, rattaché au fournisseur de la
+     * facture : son coût est celui de la ligne, son prix de vente celui de
+     * sa fiche -- jamais l'un tiré de l'autre -- et il entre en stock avec
+     * elle. La ligne reçoit alors le produit.
+     */
+    public function test_la_validation_cree_le_nouveau_produit_chez_le_fournisseur_de_la_facture(): void
     {
         $fournisseur = Fournisseur::factory()->create();
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [$this->ligneDuCableUsbC()]);
 
-        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
-            [
-                'produit' => ['nom' => 'Câble USB-C', 'reference' => 'CBL-USBC', 'prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => true, 'seuil_alerte' => 2],
-                'quantite' => 3,
-                'prix_unitaire_ht' => 0.47,
-            ],
-        ]);
+        app(ValiderFactureAchatAction::class)->handle($factureAchat);
 
         $produit = Produit::query()->sole();
-        $this->assertSame(['Câble USB-C', 'CBL-USBC', $fournisseur->id], [$produit->nom, $produit->reference, $produit->fournisseur_id]);
-        $this->assertSame(['0.4700', '10.00', '8.33'], [$produit->cmup_ht, $produit->prix_vente_ttc, $produit->prix_vente_ht]);
-        $this->assertSame(0, $produit->stock_quantite, 'Un brouillon ne doit avoir aucun impact sur le stock.');
+        $this->assertSame(['Câble USB-C', 'CBL-USBC', $fournisseur->id, 2], [$produit->nom, $produit->reference, $produit->fournisseur_id, $produit->seuil_alerte]);
+        $this->assertSame(['0.4700', '10.00', '8.33', 3], [$produit->cmup_ht, $produit->prix_vente_ttc, $produit->prix_vente_ht, $produit->stock_quantite]);
+        $ligne = $factureAchat->lignes()->sole();
+        $this->assertSame([$produit->id, 'CBL-USBC', null], [$ligne->produit_id, $ligne->reference, $ligne->nouveau_produit]);
+    }
 
-        $ligne = $factureAchat->lignes->sole();
-        $this->assertSame([$produit->id, 'Câble USB-C', '0.47', '1.41'], [$ligne->produit_id, $ligne->description, $ligne->prix_unitaire_ht, $ligne->montant_ht]);
+    /**
+     * Un brouillon supprimé ne laisse derrière lui ni produit ni référence
+     * automatique consommée.
+     */
+    public function test_un_brouillon_supprime_ne_laisse_aucun_produit(): void
+    {
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 2, 'prix_unitaire_ht' => 2],
+        ]);
+
+        $factureAchat->delete();
+
+        $this->assertSame([0, 0], [Produit::withTrashed()->count(), LigneAchat::query()->count()]);
+        $this->assertFalse(SequenceDocument::query()->where('magasin_id', app(TenantContext::class)->id())->exists());
     }
 
     /**
@@ -158,14 +189,19 @@ class FactureAchatActionsTest extends TestCase
      * exemple) prend celui du barème du magasin s'il l'a activé, calculé
      * sur le prix d'achat remise déduite : 10 € remisés de 50 % = 5 € HT,
      * + 30 € de bénéfice = 35 € HT, soit 42 € TTC (TVA de 7 € comprise).
+     * Le brouillon le garde dans la fiche du nouveau produit, qui le prend
+     * à sa validation.
      */
     public function test_un_nouveau_produit_sans_prix_de_vente_prend_celui_du_bareme(): void
     {
         app(TenantContext::class)->magasin()->update(['prix_vente_automatique' => true]);
 
-        app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Coque', 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 10, 'remise_pourcentage' => 50],
         ]);
+        $this->assertSame('42.00', $factureAchat->lignes->sole()->nouveau_produit['prix_vente_ttc']);
+
+        app(ValiderFactureAchatAction::class)->handle($factureAchat);
 
         $this->assertSame('42.00', Produit::query()->sole()->prix_vente_ttc);
     }
@@ -180,11 +216,114 @@ class FactureAchatActionsTest extends TestCase
     {
         app(TenantContext::class)->magasin()->update(['prix_vente_automatique' => true]);
 
-        app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
             ['produit' => ['nom' => 'Câble', 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => '2.35', 'remise_pourcentage' => 15],
         ]);
+        $this->assertSame('14.40', $factureAchat->lignes->sole()->nouveau_produit['prix_vente_ttc']);
+
+        app(ValiderFactureAchatAction::class)->handle($factureAchat);
 
         $this->assertSame('14.40', Produit::query()->sole()->prix_vente_ttc);
+    }
+
+    /**
+     * Sans prix de vente ni barème qui en prévoie un, le nouveau produit ne
+     * naît pas : la validation est refusée, avec un message, sans créer de
+     * produit ni consommer de numéro ; la facture reste un brouillon.
+     */
+    public function test_un_nouveau_produit_sans_prix_de_vente_bloque_la_validation(): void
+    {
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Coque', 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 10],
+        ]);
+
+        $this->assertThrows(
+            fn () => app(ValiderFactureAchatAction::class)->handle($factureAchat),
+            LogicException::class,
+            'Indiquez le prix de vente TTC du nouveau produit « Coque » avant de valider la facture d\'achat.',
+        );
+
+        $this->assertSame([StatutFactureAchat::Brouillon, null], [$factureAchat->fresh()->statut, $factureAchat->fresh()->numero]);
+        $this->assertSame(0, Produit::withTrashed()->count());
+        $this->assertFalse(SequenceDocument::query()->where('magasin_id', app(TenantContext::class)->id())->exists());
+    }
+
+    /**
+     * La référence d'un nouveau produit n'est prise qu'à sa validation :
+     * un autre produit qui la prend entre-temps (quelle que soit la casse)
+     * fait refuser la validation, avec un message, et rien n'est créé.
+     */
+    public function test_une_reference_prise_entre_temps_bloque_la_validation(): void
+    {
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Câble', 'reference' => 'CBL-1', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 1],
+        ]);
+        $produitDeLEntreTemps = Produit::factory()->create(['reference' => 'cbl-1']);
+
+        $this->assertThrows(
+            fn () => app(ValiderFactureAchatAction::class)->handle($factureAchat),
+            InvalidArgumentException::class,
+            'La référence « CBL-1 » est déjà celle d\'un autre produit.',
+        );
+
+        $this->assertSame([$produitDeLEntreTemps->id], Produit::withTrashed()->pluck('id')->all());
+        $this->assertSame([StatutFactureAchat::Brouillon, null], [$factureAchat->fresh()->statut, $factureAchat->lignes()->sole()->produit_id]);
+    }
+
+    /**
+     * Une référence déjà prise par un produit du magasin, archivé compris,
+     * est refusée dès l'enregistrement du brouillon.
+     */
+    public function test_un_nouveau_produit_ne_reprend_pas_une_reference_deja_prise(): void
+    {
+        Produit::factory()->trashed()->create(['reference' => 'CBL-1']);
+
+        $this->assertThrows(
+            fn () => app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+                ['produit' => ['nom' => 'Câble', 'reference' => 'cbl-1', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 1],
+            ]),
+            InvalidArgumentException::class,
+            'La référence « cbl-1 » est déjà celle d\'un autre produit.',
+        );
+
+        $this->assertSame(0, FactureAchat::query()->count());
+    }
+
+    public function test_deux_nouveaux_produits_d_une_facture_ne_portent_pas_la_meme_reference(): void
+    {
+        $this->assertThrows(
+            fn () => app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+                ['produit' => ['nom' => 'Câble noir', 'reference' => 'CBL-1', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 1],
+                ['produit' => ['nom' => 'Câble blanc', 'reference' => 'cbl-1', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 1],
+            ]),
+            InvalidArgumentException::class,
+            'Deux nouveaux produits de cette facture d\'achat ont la même référence « cbl-1 ».',
+        );
+
+        $this->assertSame(0, FactureAchat::query()->count());
+    }
+
+    /**
+     * Les références automatiques (PRD-000001...) se prennent dans l'ordre
+     * des validations, pas dans celui des brouillons.
+     */
+    public function test_les_references_automatiques_suivent_l_ordre_des_validations(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $premierBrouillon = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 2],
+        ]);
+        $secondBrouillon = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit' => ['nom' => 'Câble', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 1],
+        ]);
+
+        app(ValiderFactureAchatAction::class)->handle($secondBrouillon);
+        app(ValiderFactureAchatAction::class)->handle($premierBrouillon);
+
+        $this->assertSame(
+            ['PRD-000001', 'PRD-000002'],
+            [Produit::query()->where('nom', 'Câble')->value('reference'), Produit::query()->where('nom', 'Coque')->value('reference')],
+        );
     }
 
     public function test_une_facture_dachat_refusee_ne_laisse_aucun_produit_derriere_elle(): void
@@ -893,6 +1032,74 @@ class FactureAchatActionsTest extends TestCase
     }
 
     /**
+     * La marchandise d'une réception validée est déjà reçue : le nouveau
+     * produit qu'y ajoute une correction naît tout de suite, chez le
+     * fournisseur de la facture, et entre en stock à son coût.
+     */
+    public function test_un_nouveau_produit_ajoute_a_une_reception_validee_nait_et_entre_en_stock(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $recu = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir($fournisseur, [['produit_id' => $recu->id, 'quantite' => 10, 'prix_unitaire_ht' => 2]]);
+
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => $recu->id, 'quantite' => 10, 'prix_unitaire_ht' => 2],
+            ['produit' => ['nom' => 'Coque', 'reference' => 'COQ-1', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 4, 'prix_unitaire_ht' => 3],
+        ]);
+
+        $coque = Produit::query()->where('reference', 'COQ-1')->sole();
+        $this->assertSame([$fournisseur->id, '3.0000', '15.00', 4], [$coque->fournisseur_id, $coque->cmup_ht, $coque->prix_vente_ttc, $coque->stock_quantite]);
+        $this->assertSame([[$recu->id, null], [$coque->id, null]], $factureAchat->lignes()->get()->map(fn (LigneAchat $ligne): array => [$ligne->produit_id, $ligne->nouveau_produit])->all());
+    }
+
+    /**
+     * Le fournisseur d'un produit est celui de son dernier achat validé,
+     * même saisi à la main après une facture récupérée automatiquement chez
+     * un autre ; ce que la facture récupérée dit du produit (son nom) reste
+     * figé.
+     */
+    public function test_un_achat_saisi_a_la_main_donne_son_fournisseur_a_un_produit_recu_par_api(): void
+    {
+        $fournisseurDeLaFactureRecue = Fournisseur::factory()->create();
+        $dernierFournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['nom' => 'Écran (nom du fournisseur)', 'taux_tva' => 20, 'suivi_stock' => true]);
+        app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseurDeLaFactureRecue, [
+            ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 40],
+        ], ['source' => SourceFactureAchat::Api]));
+        $this->assertSame($fournisseurDeLaFactureRecue->id, $produit->fresh()->fournisseur_id);
+        $this->travel(1)->minute();
+
+        $this->recevoir($dernierFournisseur, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 38]]);
+
+        $this->assertSame([$dernierFournisseur->id, 'Écran (nom du fournisseur)'], [$produit->fresh()->fournisseur_id, $produit->fresh()->nom]);
+    }
+
+    /**
+     * Un retour au fournisseur se rejoue avec le grand livre, au coût de sa
+     * ligne d'achat : A, 10 reçus à 2 €, puis B, 10 à 10 € (CMUP 6 €) ; 5
+     * retournés sur B : (20 x 6 - 5 x 10) / 15 = 4,6667 €. A corrigée à
+     * 3 € : (10 x 3 + 10 x 10) / 20 = 6,50 €, puis le même retour,
+     * (20 x 6,50 - 5 x 10) / 15 = 5,3333 €.
+     */
+    public function test_corriger_une_reception_rejoue_les_retours_au_fournisseur_a_leur_cout(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureA = $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 2]]);
+        $factureB = $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 10]]);
+        app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureB, [
+            ['ligne_achat_id' => $factureB->lignes->sole()->id, 'quantite' => 5],
+        ], 'Produit défectueux'));
+        $this->assertSame(['4.6667', 15], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
+
+        app(ModifierFactureAchatAction::class)->handle($factureA, $fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 10, 'prix_unitaire_ht' => 3],
+        ]);
+
+        $this->assertSame(['5.3333', 15], [$produit->fresh()->cmup_ht, $produit->fresh()->stock_quantite]);
+    }
+
+    /**
      * Le fournisseur d'un produit est celui de sa dernière facture d'achat
      * validée : corriger l'ancienne facture chez A ne le ramène pas chez A
      * tant que la facture chez B reste son dernier achat.
@@ -997,12 +1204,14 @@ class FactureAchatActionsTest extends TestCase
     }
 
     /**
-     * Un nouveau produit est rattaché au fournisseur de la facture dès sa
-     * création : archivé depuis la saisie du brouillon, ce fournisseur n'en
-     * reçoit pas (message), et aucun produit n'est créé. Le brouillon reste
-     * modifiable pour ses produits existants.
+     * Un nouveau produit naît rattaché au fournisseur de la facture, à sa
+     * validation : archivé depuis la saisie du brouillon, ce fournisseur
+     * n'en reçoit pas tant qu'il n'est pas restauré. Le brouillon reste
+     * modifiable, nouveau produit compris, sans que rien ne soit créé ; sa
+     * validation est refusée (message), puis, le fournisseur restauré, crée
+     * le produit chez lui.
      */
-    public function test_un_brouillon_dont_le_fournisseur_est_archive_ne_cree_pas_de_nouveau_produit(): void
+    public function test_un_fournisseur_archive_ne_recoit_pas_de_nouveau_produit_avant_sa_restauration(): void
     {
         $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste fermé']);
         $produit = Produit::factory()->create(['taux_tva' => 20]);
@@ -1011,23 +1220,23 @@ class FactureAchatActionsTest extends TestCase
         ]);
         $fournisseur->delete();
 
-        $this->assertThrows(
-            fn () => app(ModifierFactureAchatAction::class)->handle($brouillon, $fournisseur, [
-                ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
-                ['produit' => ['nom' => 'Câble USB-C', 'reference' => 'CAB-1', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 4],
-            ]),
-            LogicException::class,
-            'Le fournisseur « Grossiste fermé » a été archivé : restaurez-le depuis la liste des fournisseurs avant d\'ajouter un nouveau produit à cette facture d\'achat.',
-        );
-
-        $this->assertSame(0, Produit::withTrashed()->where('reference', 'CAB-1')->count());
-        $this->assertSame([$produit->id], $brouillon->fresh()->lignes->pluck('produit_id')->all());
-
         app(ModifierFactureAchatAction::class)->handle($brouillon, $fournisseur, [
-            ['produit_id' => $produit->id, 'quantite' => 6, 'prix_unitaire_ht' => 2],
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
+            ['produit' => ['nom' => 'Câble USB-C', 'reference' => 'CAB-1', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 4],
         ]);
+        $this->assertSame(['22.00', 0], [$brouillon->fresh()->total_ht, Produit::withTrashed()->where('reference', 'CAB-1')->count()]);
 
-        $this->assertSame([6, '12.00'], [$brouillon->fresh()->lignes->sole()->quantite, $brouillon->fresh()->total_ht]);
+        $this->assertThrows(
+            fn () => app(ValiderFactureAchatAction::class)->handle($brouillon),
+            LogicException::class,
+            'Le fournisseur « Grossiste fermé » a été archivé : restaurez-le depuis la liste des fournisseurs avant de valider cette facture d\'achat.',
+        );
+        $this->assertSame(0, Produit::withTrashed()->where('reference', 'CAB-1')->count());
+
+        $fournisseur->restore();
+        app(ValiderFactureAchatAction::class)->handle($brouillon);
+
+        $this->assertSame([$fournisseur->id, 3], [Produit::query()->where('reference', 'CAB-1')->sole()->fournisseur_id, Produit::query()->where('reference', 'CAB-1')->sole()->stock_quantite]);
     }
 
     /**
@@ -1060,19 +1269,22 @@ class FactureAchatActionsTest extends TestCase
     }
 
     /**
-     * Chaque ligne d'achat reçoit un produit (voir ConstructeurLigneAchat),
-     * que sa ligne d'avoir fournisseur reprend : la base refuse l'une comme
-     * l'autre sans produit.
+     * Chaque ligne d'achat reçoit un produit, ou dans un brouillon la fiche
+     * du nouveau produit qu'elle créera (voir LigneAchat) -- jamais aucun des
+     * deux, ni les deux à la fois ; sa ligne d'avoir fournisseur reprend le
+     * produit, et la base la refuse sans lui.
      */
-    public function test_la_base_refuse_une_ligne_d_achat_ou_d_avoir_fournisseur_sans_produit(): void
+    public function test_une_ligne_d_achat_ou_d_avoir_fournisseur_sans_produit_est_refusee(): void
     {
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->recevoir(Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2]]);
         $avoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
             ['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 1],
         ]);
+        $message = 'Une ligne d\'achat reçoit soit un produit du catalogue, soit la fiche d\'un nouveau produit.';
 
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $factureAchat->lignes->sole()->replicate()->forceFill(['produit_id' => null])->save()), QueryException::class);
+        $this->assertThrows(fn () => $factureAchat->lignes->sole()->replicate()->forceFill(['produit_id' => null])->save(), InvalidArgumentException::class, $message);
+        $this->assertThrows(fn () => $factureAchat->lignes->sole()->replicate()->forceFill(['nouveau_produit' => ['nom' => 'Coque']])->save(), InvalidArgumentException::class, $message);
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $avoir->lignes->sole()->replicate()->forceFill(['produit_id' => null])->save()), QueryException::class);
 
         $this->assertSame([1, 1], [$factureAchat->lignes()->count(), $avoir->lignes()->count()]);
@@ -1255,6 +1467,21 @@ class FactureAchatActionsTest extends TestCase
         }
 
         $this->fail("Aucune requête ne contient {$extrait}.");
+    }
+
+    /**
+     * Un câble USB-C acheté 0,47 € HT, à revendre 10,00 € TTC : la ligne
+     * d'achat d'un nouveau produit.
+     *
+     * @return array<string, mixed>
+     */
+    private function ligneDuCableUsbC(): array
+    {
+        return [
+            'produit' => ['nom' => 'Câble USB-C', 'reference' => 'CBL-USBC', 'prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => true, 'seuil_alerte' => 2],
+            'quantite' => 3,
+            'prix_unitaire_ht' => 0.47,
+        ];
     }
 
     /**

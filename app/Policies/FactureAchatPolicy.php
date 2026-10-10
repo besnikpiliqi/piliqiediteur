@@ -32,16 +32,20 @@ class FactureAchatPolicy extends MagasinPolicy
 
     /**
      * Voir FactureAchat::estModifiable() : un brouillon reste toujours
-     * librement modifiable (aucun impact sur le stock, voir
-     * ValiderFactureAchatAction). Une fois validée, seule une facture
-     * saisie manuellement reste modifiable -- une récupérée par API ne
-     * l'est jamais.
+     * librement modifiable par qui saisit les factures d'achat (aucun
+     * impact sur le stock, voir ValiderFactureAchatAction). Une fois
+     * validée, seule une facture saisie manuellement reste modifiable --
+     * une récupérée par API ne l'est jamais -- et la corriger, c'est
+     * corriger une réception déjà entrée en stock (voir
+     * ModifierFactureAchatAction) : il faut en plus le droit de valider les
+     * factures d'achat.
      */
     public function update(User $user, FactureAchat $factureAchat): bool
     {
         return $this->view($user, $factureAchat)
             && $factureAchat->estModifiable()
-            && $user->can(PermissionRegistry::FACTURE_ACHAT_CREER);
+            && $user->can(PermissionRegistry::FACTURE_ACHAT_CREER)
+            && ($factureAchat->statut !== StatutFactureAchat::Validee || $user->can(PermissionRegistry::FACTURE_ACHAT_VALIDER));
     }
 
     public function valider(User $user, FactureAchat $factureAchat): bool

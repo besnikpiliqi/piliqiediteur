@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
@@ -316,7 +317,9 @@ class FactureResource extends Resource
      * qui explique alors que PU x quantité diffère du total. Sur un
      * document de vente à un professionnel, calculé depuis le HT de chaque
      * ligne, la note de calcul de ses PDF l'explique aussi (voir
-     * MentionsFiscales::calcul()).
+     * MentionsFiscales::calcul()). La ligne d'une facture d'achat brouillon
+     * qui garde la fiche d'un nouveau produit dit qu'il ne naîtra qu'à sa
+     * validation (voir LigneAchat).
      */
     public static function lignesEntry(?Model $document): RepeatableEntry
     {
@@ -327,7 +330,8 @@ class FactureResource extends Resource
             ->label('')
             ->helperText($document instanceof Facture || $document instanceof Avoir || $document instanceof Devis ? app(MentionsFiscales::class)->calcul($document) : null)
             ->schema([
-                TextEntry::make('description'),
+                TextEntry::make('description')
+                    ->helperText(fn (?Model $record): ?string => $record instanceof LigneAchat && $record->nouveau_produit !== null ? 'Nouveau produit, créé à la validation' : null),
                 TextEntry::make('quantite')->label('Quantité')->numeric(),
                 TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
                 TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR')->hidden($estUnAchat),

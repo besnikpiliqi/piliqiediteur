@@ -38,9 +38,10 @@ use InvalidArgumentException;
  * Prix d'achat HT et prix de vente TTC sont deux champs distincts : le
  * prix de vente ne change jamais le prix d'achat, et seul le barème du
  * magasin, s'il l'a activé, propose un prix de vente d'après le prix
- * d'achat (voir appliquerLeBareme()). Le produit n'est créé ou corrigé qu'à
- * l'enregistrement de la facture, avec elle (voir ConstructeurLigneAchat) :
- * l'état d'une ligne porte donc le produit sous sa clé "produit".
+ * d'achat (voir appliquerLeBareme()). Un produit existant n'est corrigé
+ * qu'à l'enregistrement de la facture, avec elle, et un nouveau produit ne
+ * naît qu'à sa validation (voir ConstructeurLigneAchat) : l'état d'une
+ * ligne porte donc le produit sous sa clé "produit".
  */
 trait AjouteDesLignesDAchat
 {
@@ -451,7 +452,7 @@ trait AjouteDesLignesDAchat
             'nom' => $produit?->nom,
             'taille' => $produit?->taille,
             'couleur' => $produit?->couleur,
-            'prix_vente_ttc' => $produit === null ? null : self::prixEnTexte((float) $produit->prix_vente_ttc),
+            'prix_vente_ttc' => blank($produit?->prix_vente_ttc) ? null : self::prixEnTexte((float) $produit->prix_vente_ttc),
             'taux_tva' => self::pourcentageEnTexte($produit->taux_tva ?? app(TenantContext::class)->magasin()->tauxTvaParDefaut()),
             'suivi_stock' => $produit->suivi_stock ?? true,
             'seuil_alerte' => $produit->seuil_alerte ?? 0,
@@ -506,8 +507,9 @@ trait AjouteDesLignesDAchat
 
     /**
      * Une ligne déjà enregistrée, telle que la facture l'affiche à sa
-     * modification : le produit tel qu'il est aujourd'hui, la ligne telle
-     * qu'elle a été achetée.
+     * modification : le produit tel qu'il est aujourd'hui, ou la fiche du
+     * nouveau produit que le brouillon garde jusqu'à sa validation ; la
+     * ligne telle qu'elle a été achetée.
      *
      * @return array<string, mixed>
      */
@@ -515,7 +517,7 @@ trait AjouteDesLignesDAchat
     {
         return [
             'produit_id' => $ligne->produit_id,
-            'produit' => self::valeursDuProduit($ligne->produit),
+            'produit' => self::valeursDuProduit($ligne->produit ?? new Produit($ligne->nouveau_produit)),
             'quantite' => $ligne->quantite,
             'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
             'remise_pourcentage' => self::pourcentageEnTexte($ligne->remise_pourcentage),

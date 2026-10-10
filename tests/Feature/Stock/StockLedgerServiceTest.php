@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Stock;
 
+use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Stock\Enums\TypeMouvementStock;
@@ -17,6 +19,7 @@ use App\Filament\App\Resources\ProduitResource;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -51,11 +54,99 @@ class StockLedgerServiceTest extends TestCase
 
     public function test_un_retour_fournisseur_diminue_le_stock(): void
     {
-        $produit = Produit::factory()->create(['stock_quantite' => 10]);
+        $produit = Produit::factory()->create(['stock_quantite' => 10, 'cmup_ht' => 5]);
 
-        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::RetourFournisseur, 4);
+        app(StockLedgerService::class)->retournerAuFournisseur($produit, 4, 5.0, AvoirFournisseur::factory()->create(), 'Retour');
 
         $this->assertSame(6, $produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * Un retour au fournisseur sort au coût de sa ligne d'achat, gardé dans
+     * son mouvement, et recalcule le CMUP du stock restant : 10 reçus à
+     * 2 €, puis 10 à 10 € (CMUP 6 €) ; les 10 à 10 € retournés laissent
+     * 10 articles à 2 €, 4 seulement en laissent 16 à (120 - 40) / 16 =
+     * 5 €.
+     */
+    public function test_un_retour_fournisseur_sort_au_cout_de_sa_ligne_d_achat(): void
+    {
+        $tousRetournes = $this->produitRecuDeuxFois();
+        $quatreRetournes = $this->produitRecuDeuxFois();
+        $stock = app(StockLedgerService::class);
+
+        $mouvement = $stock->retournerAuFournisseur($tousRetournes, 10, 10.0, AvoirFournisseur::factory()->create(), 'Retour');
+        $stock->retournerAuFournisseur($quatreRetournes, 4, 10.0, AvoirFournisseur::factory()->create(), 'Retour');
+
+        $this->assertSame([10, '2.0000'], [$tousRetournes->fresh()->stock_quantite, $tousRetournes->fresh()->cmup_ht]);
+        $this->assertSame([TypeMouvementStock::RetourFournisseur, 10, '10.0000'], [$mouvement->type, $mouvement->quantite, $mouvement->fresh()->cout_unitaire_ht]);
+        $this->assertSame([16, '5.0000'], [$quatreRetournes->fresh()->stock_quantite, $quatreRetournes->fresh()->cmup_ht]);
+    }
+
+    /**
+     * Le CMUP du stock restant s'arrondit une seule fois au dix-millième :
+     * 3 reçus à 1 €, puis 3 à 2 € et 1 à 2 € (CMUP 1,5714 €) ; un article
+     * retourné à 2 € laisse 6 articles valant 7 x 1,5714 - 2 = 8,9998 €,
+     * soit 1,5000 € chacun.
+     */
+    public function test_le_cmup_apres_un_retour_s_arrondit_une_seule_fois(): void
+    {
+        $produit = Produit::factory()->create(['stock_quantite' => 0, 'cmup_ht' => 1]);
+        $stock = app(StockLedgerService::class);
+        $stock->receptionner($produit, 3, 1.0, FactureAchat::factory()->create(), 'Réception');
+        $reception = FactureAchat::factory()->create();
+        $stock->receptionner($produit, 3, 2.0, $reception, 'Réception');
+        $stock->receptionner($produit, 1, 2.0, $reception, 'Réception');
+        $this->assertSame('1.5714', $produit->fresh()->cmup_ht);
+
+        $stock->retournerAuFournisseur($produit, 1, 2.0, AvoirFournisseur::factory()->create(), 'Retour');
+
+        $this->assertSame([6, '1.5000'], [$produit->fresh()->stock_quantite, $produit->fresh()->cmup_ht]);
+    }
+
+    /**
+     * Sans stock restant, il n'y a plus de coût moyen à recalculer : 5
+     * reçus à 3 €, tous retournés, et le CMUP reste 3 €.
+     */
+    public function test_un_retour_de_tout_le_stock_garde_le_cmup(): void
+    {
+        $produit = Produit::factory()->create(['stock_quantite' => 0, 'cmup_ht' => 3]);
+        app(StockLedgerService::class)->receptionner($produit, 5, 3.0, FactureAchat::factory()->create(), 'Réception');
+
+        app(StockLedgerService::class)->retournerAuFournisseur($produit, 5, 3.0, AvoirFournisseur::factory()->create(), 'Retour');
+
+        $this->assertSame([0, '3.0000'], [$produit->fresh()->stock_quantite, $produit->fresh()->cmup_ht]);
+    }
+
+    /**
+     * Un stock ne vaut jamais moins que rien : 10 reçus à 2 €, 10 à 10 €
+     * (CMUP 6 €), 15 vendus ; les 5 restants valent 30 €. En retourner 4 à
+     * 10 € (40 €) laisserait le dernier article à -10 € : il vaut 0 €.
+     */
+    public function test_un_retour_qui_rendrait_la_valeur_du_stock_negative_la_ramene_a_zero(): void
+    {
+        $produit = $this->produitRecuDeuxFois();
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 15);
+
+        app(StockLedgerService::class)->retournerAuFournisseur($produit, 4, 10.0, AvoirFournisseur::factory()->create(), 'Retour');
+
+        $this->assertSame([1, '0.0000'], [$produit->fresh()->stock_quantite, $produit->fresh()->cmup_ht]);
+    }
+
+    /**
+     * Un retour fournisseur sort à son propre coût : il ne s'enregistre pas
+     * comme un mouvement ordinaire, au CMUP du moment.
+     */
+    public function test_un_retour_fournisseur_ne_s_enregistre_pas_comme_un_mouvement_ordinaire(): void
+    {
+        $produit = Produit::factory()->create(['stock_quantite' => 10]);
+
+        $this->assertThrows(
+            fn () => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::RetourFournisseur, 4),
+            InvalidArgumentException::class,
+            'Un retour fournisseur passe par retournerAuFournisseur(), avec le coût de sa ligne d\'achat.',
+        );
+
+        $this->assertSame([10, 0], [$produit->fresh()->stock_quantite, $produit->mouvementsStock()->count()]);
     }
 
     public function test_un_retour_client_augmente_le_stock(): void
@@ -109,7 +200,7 @@ class StockLedgerServiceTest extends TestCase
     {
         $produit = Produit::factory()->create();
 
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(InvalidArgumentException::class);
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 0);
     }
 
@@ -243,5 +334,17 @@ class StockLedgerServiceTest extends TestCase
 
         $this->expectException(\LogicException::class);
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 1);
+    }
+
+    /**
+     * 10 articles reçus à 2 €, puis 10 à 10 € : 20 en stock à 6 €.
+     */
+    private function produitRecuDeuxFois(): Produit
+    {
+        $produit = Produit::factory()->create(['stock_quantite' => 0, 'cmup_ht' => 2]);
+        app(StockLedgerService::class)->receptionner($produit, 10, 2.0, FactureAchat::factory()->create(), 'Réception');
+        app(StockLedgerService::class)->receptionner($produit, 10, 10.0, FactureAchat::factory()->create(), 'Réception');
+
+        return $produit;
     }
 }

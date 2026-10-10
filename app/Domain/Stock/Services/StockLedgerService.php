@@ -24,10 +24,12 @@ use LogicException;
  *
  * Le stock est valorisé au coût moyen unitaire pondéré (CMUP, voir
  * Produit::$cmup_ht), recalculé après chaque entrée achetée (voir
- * receptionner()) : toute sortie (vente, retour fournisseur) et toute
- * autre entrée (retour client, ajustement) se fait au CMUP du moment, qui
- * ne change donc pas. Une réception corrigée après coup rejoue tout le
- * grand livre du produit (voir corrigerUneReception()).
+ * receptionner()) et après chaque retour au fournisseur, qui sort au coût
+ * de sa ligne d'achat (voir retournerAuFournisseur()) : toute autre sortie
+ * (vente, ajustement) et toute autre entrée (retour client, ajustement) se
+ * fait au CMUP du moment, qui ne change donc pas. Une réception corrigée
+ * après coup rejoue tout le grand livre du produit (voir
+ * corrigerUneReception()).
  *
  * Seul à voir chaque mouvement, il signale aussi le passage d'un produit
  * à son seuil d'alerte (voir StockPasseSousLeSeuilDAlerte).
@@ -85,7 +87,8 @@ class StockLedgerService
      *
      * Le coût : pour un produit qui suit son stock, le CMUP se recalcule en
      * rejouant tout son grand livre (voir cmupRejoue()), chaque réception
-     * entrant au coût actuel de ses lignes. Les articles déjà vendus sont
+     * entrant au coût actuel de ses lignes et chaque retour au fournisseur
+     * sortant au coût de sa ligne d'achat. Les articles déjà vendus sont
      * sortis à leur CMUP du moment et ne reviennent pas : 10 reçus à 2 €,
      * 10 à 10 € (CMUP 6), 10 vendus, puis la seconde réception corrigée à
      * 5 € -- le stock restant vaut 3,50 € l'article. Un produit qui ne suit
@@ -128,6 +131,38 @@ class StockLedgerService
     }
 
     /**
+     * Retour au fournisseur d'articles d'une ligne d'achat, par un avoir
+     * fournisseur ($source) : ils sortent du stock au coût de cette ligne
+     * ($coutUnitaireHt, voir LigneAchat::coutUnitaireHt()), et le CMUP du
+     * stock restant se recalcule (voir
+     * CalculateurLigne::coutMoyenApresUneSortie()) -- 10 reçus à 2 €, 10 à
+     * 10 € (CMUP 6 €), les 10 à 10 € retournés : il en reste 10 à 2 €. Sans
+     * stock restant, le CMUP ne change pas ; un stock ne vaut jamais moins
+     * que rien. Le mouvement garde ce coût de sortie, pour qu'une réception
+     * corrigée après coup rejoue le retour tel quel (voir cmupRejoue()).
+     */
+    public function retournerAuFournisseur(Produit $produit, int $quantite, float $coutUnitaireHt, Model $source, string $note): MouvementStock
+    {
+        $this->verifierLeMouvement($produit, $quantite);
+
+        return DB::transaction(function () use ($produit, $quantite, $coutUnitaireHt, $source, $note) {
+            $produitVerrouille = $this->verrouiller($produit);
+            $cmup = $this->calculateur->coutMoyenApresUneSortie(
+                max($produitVerrouille->stock_quantite, 0),
+                (float) $produitVerrouille->cmup_ht,
+                $quantite,
+                $coutUnitaireHt,
+            );
+
+            if ($cmup !== null) {
+                $this->changerLeCmup($produit, $produitVerrouille, $cmup);
+            }
+
+            return $this->appliquer($produit, TypeMouvementStock::RetourFournisseur, $quantite, $source, $note, null, $coutUnitaireHt);
+        });
+    }
+
+    /**
      * Retour client d'articles vendus, par un avoir : n'entre en
      * stock que ce que la vente en a fait sortir et qui n'y est pas encore
      * revenu ($quantiteEncoreSortie, lue sous le verrou du produit pour que
@@ -150,8 +185,10 @@ class StockLedgerService
     }
 
     /**
-     * Enregistre un mouvement typé (vente, réception, retour...) et met à
-     * jour le cache produits.stock_quantite de façon atomique.
+     * Enregistre un mouvement typé (vente, réception, retour client...) et
+     * met à jour le cache produits.stock_quantite de façon atomique. Un
+     * retour fournisseur, qui sort à son propre coût, passe par
+     * retournerAuFournisseur().
      */
     public function enregistrer(
         Produit $produit,
@@ -161,6 +198,21 @@ class StockLedgerService
         ?string $note = null,
         ?int $creeParUserId = null,
     ): MouvementStock {
+        if ($type === TypeMouvementStock::RetourFournisseur) {
+            throw new InvalidArgumentException('Un retour fournisseur passe par retournerAuFournisseur(), avec le coût de sa ligne d\'achat.');
+        }
+
+        $this->verifierLeMouvement($produit, $quantite);
+
+        return $this->appliquer($produit, $type, $quantite, $source, $note, $creeParUserId);
+    }
+
+    /**
+     * @throws InvalidArgumentException
+     * @throws LogicException
+     */
+    private function verifierLeMouvement(Produit $produit, int $quantite): void
+    {
         if ($quantite <= 0) {
             throw new InvalidArgumentException("La quantité d'un mouvement de stock doit être strictement positive.");
         }
@@ -168,8 +220,6 @@ class StockLedgerService
         if (! $produit->suivi_stock) {
             throw new LogicException("Le produit [{$produit->id}] ne suit pas son stock (suivi_stock = false).");
         }
-
-        return $this->appliquer($produit, $type, $quantite, $source, $note, $creeParUserId);
     }
 
     /**
@@ -192,6 +242,9 @@ class StockLedgerService
         return $this->appliquer($produit, $type, abs($delta), $source, $note, $creeParUserId);
     }
 
+    /**
+     * @param  float|null  $coutUnitaireHt  le coût de sortie d'un retour fournisseur (voir retournerAuFournisseur())
+     */
     private function appliquer(
         Produit $produit,
         TypeMouvementStock $type,
@@ -199,8 +252,9 @@ class StockLedgerService
         ?Model $source,
         ?string $note,
         ?int $creeParUserId,
+        ?float $coutUnitaireHt = null,
     ): MouvementStock {
-        return DB::transaction(function () use ($produit, $type, $quantite, $source, $note, $creeParUserId) {
+        return DB::transaction(function () use ($produit, $type, $quantite, $source, $note, $creeParUserId, $coutUnitaireHt) {
             $produitVerrouille = $this->verrouiller($produit);
 
             $nouvelleQuantite = $produitVerrouille->stock_quantite + $type->variation($quantite);
@@ -209,6 +263,7 @@ class StockLedgerService
                 'produit_id' => $produitVerrouille->id,
                 'type' => $type,
                 'quantite' => $quantite,
+                'cout_unitaire_ht' => $coutUnitaireHt,
                 'source_type' => $source?->getMorphClass(),
                 'source_id' => $source?->getKey(),
                 'survenu_le' => now(),
@@ -238,9 +293,11 @@ class StockLedgerService
      * mouvements (ajustements de correction compris) disent toujours la
      * quantité de ses lignes, puisque chaque correction les y ramène (voir
      * corrigerUneReception()) ; une réception qui n'est jamais entrée en
-     * stock, ou dont le produit a été retiré, n'en a fait entrer aucun. Les
-     * sorties et les autres entrées ne changent pas le CMUP, et un stock
-     * vide ou négatif ne pèse rien.
+     * stock, ou dont le produit a été retiré, n'en a fait entrer aucun.
+     * Chaque retour au fournisseur sort au coût de sa ligne d'achat, gardé
+     * dans son mouvement, et recalcule le CMUP comme à son émission (voir
+     * retournerAuFournisseur()) ; les autres sorties et entrées ne changent
+     * pas le CMUP, et un stock vide ou négatif ne pèse rien.
      *
      * Le stock que le grand livre n'explique pas (aucun en pratique : seul
      * ce service fait varier le stock, toujours par un mouvement) est
@@ -262,6 +319,10 @@ class StockLedgerService
             $receptionId = $mouvement->source_type === $typeDeReception ? $mouvement->source_id : null;
 
             if ($receptionId === null) {
+                if ($mouvement->type === TypeMouvementStock::RetourFournisseur) {
+                    $cmup = $this->calculateur->coutMoyenApresUneSortie(max($stock, 0), $cmup, $mouvement->quantite, (float) $mouvement->cout_unitaire_ht) ?? $cmup;
+                }
+
                 $stock += $mouvement->type->variation($mouvement->quantite);
 
                 continue;

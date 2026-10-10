@@ -196,25 +196,29 @@ class ProduitResourceTest extends TestCase
 
     /**
      * Un produit reçu sur une facture d'achat affiche le fournisseur chez
-     * qui il vient d'être acheté.
+     * qui il vient d'être acheté ; un produit jamais acheté n'en a pas.
      */
     public function test_la_fiche_produit_affiche_le_fournisseur_de_sa_facture_dachat(): void
     {
         $this->connecterProprietaire();
-        $fournisseur = Fournisseur::factory()->create();
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste du Sud']);
         $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
             ['produit' => ['nom' => 'Câble USB-C', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 0.47],
         ]);
         app(ValiderFactureAchatAction::class)->handle($factureAchat);
 
         Livewire::test(EditProduit::class, ['record' => Produit::query()->sole()->getRouteKey()])
-            ->assertFormSet(['fournisseur_id' => $fournisseur->id, 'cmup_ht' => '0.47']);
+            ->assertFormSet(['cmup_ht' => '0.47'])
+            ->assertSee('Grossiste du Sud')
+            ->assertSee('Celui de sa dernière facture d\'achat validée, saisie à la main ou reçue automatiquement.');
+        Livewire::test(CreateProduit::class)
+            ->assertSee('Aucun achat validé');
     }
 
     /**
      * Ce que le fournisseur dit d'un produit reçu par API (référence, nom,
-     * fournisseur, prix d'achat) reste affiché mais figé ; le magasin garde
-     * la main sur son prix de vente.
+     * prix d'achat) reste affiché mais figé ; le magasin garde la main sur
+     * son prix de vente.
      */
     public function test_un_produit_recu_par_api_garde_ce_que_son_fournisseur_en_dit(): void
     {
@@ -224,7 +228,7 @@ class ProduitResourceTest extends TestCase
 
         $component = Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()]);
 
-        foreach (['reference', 'nom', 'code_barres', 'fournisseur_id', 'cmup_ht'] as $champ) {
+        foreach (['reference', 'nom', 'code_barres', 'cmup_ht'] as $champ) {
             $component->assertFormFieldIsDisabled($champ);
         }
 
@@ -348,32 +352,30 @@ class ProduitResourceTest extends TestCase
         $this->assertSame(1, Produit::withTrashed()->count());
     }
 
-    public function test_le_fournisseur_d_un_autre_magasin_est_refuse_a_la_creation(): void
-    {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
-        $fournisseurDUnAutreMagasin = Fournisseur::factory()->create();
-        $this->connecterProprietaire();
-
-        Livewire::test(CreateProduit::class)
-            ->fillForm(['nom' => 'Écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20, 'fournisseur_id' => $fournisseurDUnAutreMagasin->id])
-            ->call('create')
-            ->assertHasFormErrors(['fournisseur_id' => 'exists']);
-
-        $this->assertSame(0, Produit::query()->count());
-    }
-
-    public function test_le_fournisseur_d_un_autre_magasin_est_refuse_a_la_modification(): void
+    /**
+     * Le fournisseur d'un produit est celui de son dernier achat validé :
+     * il ne se choisit pas sur la fiche, et un fournisseur glissé dans une
+     * requête forgée -- ici celui d'un autre magasin -- est ignoré, à la
+     * création comme à la modification.
+     */
+    public function test_un_fournisseur_force_sur_la_fiche_est_ignore(): void
     {
         app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
         $fournisseurDUnAutreMagasin = Fournisseur::factory()->create();
         $this->connecterProprietaire();
         $produit = Produit::factory()->create();
 
+        Livewire::test(CreateProduit::class)
+            ->fillForm(['nom' => 'Écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
+            ->set('data.fournisseur_id', $fournisseurDUnAutreMagasin->id)
+            ->call('create')
+            ->assertHasNoFormErrors();
         Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
-            ->fillForm(['fournisseur_id' => $fournisseurDUnAutreMagasin->id])
+            ->set('data.fournisseur_id', $fournisseurDUnAutreMagasin->id)
             ->call('save')
-            ->assertHasFormErrors(['fournisseur_id' => 'exists']);
+            ->assertHasNoFormErrors();
 
+        $this->assertNull(Produit::query()->where('nom', 'Écran')->sole()->fournisseur_id);
         $this->assertNull($produit->fresh()->fournisseur_id);
     }
 
@@ -669,8 +671,7 @@ class ProduitResourceTest extends TestCase
 
     /**
      * Le fournisseur du dernier achat reste celui de la fiche, même archivé
-     * depuis : affiché, gardé à l'enregistrement, sans être proposé aux
-     * autres produits.
+     * depuis : affiché, et gardé à l'enregistrement.
      */
     public function test_la_fiche_produit_garde_son_fournisseur_archive(): void
     {
@@ -681,12 +682,10 @@ class ProduitResourceTest extends TestCase
         $fournisseur->delete();
 
         Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
-            ->assertFormFieldExists('fournisseur_id', fn (Select $champ): bool => $champ->getOptionLabel() === 'Grossiste fermé')
+            ->assertSee('Grossiste fermé')
             ->fillForm(['nom' => 'Écran OLED'])
             ->call('save')
             ->assertHasNoFormErrors();
-        Livewire::test(CreateProduit::class)
-            ->assertFormFieldExists('fournisseur_id', fn (Select $champ): bool => ! array_key_exists($fournisseur->id, $champ->getOptions()));
 
         $this->assertSame(['Écran OLED', $fournisseur->id], [$produit->fresh()->nom, $produit->fresh()->fournisseur_id]);
         $this->assertSame('Grossiste fermé', $produit->fresh()->fournisseur->nom);

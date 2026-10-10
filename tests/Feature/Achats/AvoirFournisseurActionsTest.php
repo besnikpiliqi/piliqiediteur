@@ -84,6 +84,38 @@ class AvoirFournisseurActionsTest extends TestCase
     }
 
     /**
+     * Le retour sort du stock au coût réellement payé sur sa ligne, remise
+     * et escompte déduits, et recalcule le CMUP du stock restant ; l'avoir,
+     * lui, crédite les montants de la ligne achetée. Facture 1 : 8 à
+     * 9,00 € HT (CMUP 9 €). Facture 2, escompte 2 % : 12 à 12,50 € HT
+     * remisés de 10 %, soit 11,025 € l'article ; CMUP (72 + 132,30) / 20 =
+     * 10,215 €. 5 retournés sur la facture 2 : l'avoir crédite 56,25 € HT +
+     * 11,25 € de TVA = 67,50 €, et les 15 articles restants valent
+     * 204,30 - 55,125 = 149,175 €, soit 9,9450 € chacun.
+     */
+    public function test_un_retour_sort_du_stock_au_cout_de_sa_ligne_et_recalcule_le_cmup(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 8, 'prix_unitaire_ht' => 9],
+        ]));
+        $this->assertSame('9.0000', $produit->fresh()->cmup_ht);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 12, 'prix_unitaire_ht' => '12.50', 'remise_pourcentage' => 10],
+        ], ['escompte_pourcentage' => 2]));
+        $this->assertSame('10.2150', $produit->fresh()->cmup_ht);
+
+        $avoir = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+            ['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 5],
+        ], 'Produit défectueux'))->fresh();
+
+        $this->assertSame(['56.25', '11.25', '67.50'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
+        $this->assertSame([15, '9.9450'], [$produit->fresh()->stock_quantite, $produit->fresh()->cmup_ht]);
+        $this->assertSame('11.0250', $produit->mouvementsStock()->where('type', TypeMouvementStock::RetourFournisseur)->sole()->cout_unitaire_ht);
+    }
+
+    /**
      * Un produit archivé depuis sa réception se retourne toujours au
      * fournisseur, et sort du stock (voir LigneAvoirFournisseur::produit()).
      */

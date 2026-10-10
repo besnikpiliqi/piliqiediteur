@@ -14,9 +14,11 @@ use App\Domain\Stock\Services\StockLedgerService;
  * Chaque ligne entre en stock à son coût réellement payé, remise et
  * escompte déduits (voir LigneAchat::coutUnitaireHt()), ce qui recalcule
  * le CMUP du produit (voir StockLedgerService::receptionner()) ; le
- * produit est rattaché au fournisseur de la facture. Chaque ligne a un
- * produit au catalogue : la validation refuse un produit archivé (voir
- * ValiderFactureAchatAction).
+ * produit est rattaché au fournisseur de la facture : le dernier achat
+ * validé donne son fournisseur, que la facture ait été saisie à la main ou
+ * récupérée automatiquement. Chaque ligne a alors un produit au catalogue :
+ * la validation refuse un produit archivé et crée d'abord les nouveaux
+ * produits (voir ValiderFactureAchatAction).
  */
 class IncrementerStockApresValidationFactureAchat
 {

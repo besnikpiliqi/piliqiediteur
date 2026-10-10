@@ -10,8 +10,9 @@ use Illuminate\Support\Facades\DB;
 /**
  * Enregistre une facture d'achat en brouillon, sans aucun impact sur le
  * stock (voir ValiderFactureAchatAction). Ses lignes, et les produits
- * qu'elles créent ou corrigent, sont enregistrés par
- * ConstructeurLigneAchat. Quand une ligne change le taux de TVA d'un
+ * existants qu'elles corrigent, sont enregistrés par
+ * ConstructeurLigneAchat ; ses nouveaux produits ne naissent qu'à sa
+ * validation. Quand une ligne change le taux de TVA d'un
  * produit, le registre fiscal du magasin est le premier verrou de la
  * transaction (voir ConstructeurLigneAchat::verrouillerLeRegistreSiUnTauxChange()).
  */

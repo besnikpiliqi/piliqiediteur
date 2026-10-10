@@ -112,7 +112,8 @@ class FactureAchatResourceTest extends TestCase
      * de prix de vente, et la ligne passait à 8,33 € HT -- le prix de vente
      * était pris pour le TTC de l'achat. Les deux prix se saisissent dans le
      * formulaire de ligne, chacun dans son champ, et aucun ne recalcule
-     * l'autre.
+     * l'autre : le brouillon les garde tels quels, et le produit les prend à
+     * la validation.
      */
     public function test_le_prix_de_vente_saisi_ne_change_jamais_le_prix_dachat(): void
     {
@@ -135,9 +136,13 @@ class FactureAchatResourceTest extends TestCase
         $ligne = collect($component->get('data.lignes'))->sole();
         $this->assertSame('0.47', $ligne['prix_unitaire_ht']);
         $this->assertSame('10.00', $ligne['produit']['prix_vente_ttc']);
-        $this->assertSame(0, Produit::query()->count(), 'Le produit naît avec la facture, pas avant.');
-
         $component->call('create')->assertHasNoFormErrors();
+
+        $this->assertSame(0, Produit::query()->count(), 'Le produit naît à la validation de la facture, pas avant.');
+        $factureAchat = FactureAchat::query()->sole();
+        $this->assertSame(['0.47', '1.41', '10.00'], [$factureAchat->lignes->sole()->prix_unitaire_ht, $factureAchat->lignes->sole()->montant_ht, $factureAchat->lignes->sole()->nouveau_produit['prix_vente_ttc']]);
+
+        Livewire::test(ListFacturesAchat::class)->callTableAction('valider', $factureAchat);
 
         $produit = Produit::query()->sole();
         $this->assertSame('Câble USB-C', $produit->nom);
@@ -272,7 +277,7 @@ class FactureAchatResourceTest extends TestCase
 
         $component->call('create')->assertHasNoFormErrors();
 
-        $this->assertSame('15.00', Produit::query()->where('nom', 'Câble USB-C')->sole()->prix_vente_ttc);
+        $this->assertSame('15.00', FactureAchat::query()->sole()->lignes->sole()->nouveau_produit['prix_vente_ttc']);
     }
 
     /**
@@ -782,7 +787,8 @@ class FactureAchatResourceTest extends TestCase
     /**
      * La fiche d'un nouveau produit se remplit dans le formulaire de ligne
      * avec les mêmes informations que la page Produits (prix, TVA, stock),
-     * et le produit est rattaché au fournisseur de la facture.
+     * et le produit naît à la validation, rattaché au fournisseur de la
+     * facture.
      */
     public function test_un_nouveau_produit_recu_a_la_meme_fiche_que_dans_la_page_produits(): void
     {
@@ -809,6 +815,7 @@ class FactureAchatResourceTest extends TestCase
             ->assertHasNoFormComponentActionErrors()
             ->call('create')
             ->assertHasNoFormErrors();
+        Livewire::test(ListFacturesAchat::class)->callTableAction('valider', FactureAchat::query()->sole());
 
         $this->assertDatabaseHas('produits', [
             'reference' => 'ECR-IP17-PRO',
@@ -819,6 +826,56 @@ class FactureAchatResourceTest extends TestCase
             'prix_vente_ht' => 150,
             'seuil_alerte' => 1,
         ]);
+    }
+
+    /**
+     * Rouvert, un brouillon garde la fiche de son nouveau produit, pas
+     * encore créé : sa fiche le dit, et le formulaire de sa ligne la
+     * retrouve telle que saisie.
+     */
+    public function test_rouvrir_un_brouillon_affiche_son_nouveau_produit(): void
+    {
+        $this->connecterLeProprietaire();
+        $brouillon = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Câble USB-C', 'reference' => 'CBL-USBC', 'prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => true, 'seuil_alerte' => 2], 'quantite' => 3, 'prix_unitaire_ht' => '0.47'],
+        ]);
+
+        Livewire::test(ViewFactureAchat::class, ['record' => $brouillon->getRouteKey()])
+            ->assertSee('Câble USB-C')
+            ->assertSee('Nouveau produit, créé à la validation');
+        $component = Livewire::test(EditFactureAchat::class, ['record' => $brouillon->getRouteKey()]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->mountFormComponentAction('lignes', 'modifierLaLigne', arguments: ['item' => $cle])
+            ->assertFormComponentActionDataSet(['origine' => 'nouveau', 'produit_id' => null, 'reference' => 'CBL-USBC', 'nom' => 'Câble USB-C', 'prix_vente_ttc' => '10.00', 'taux_tva' => '20', 'seuil_alerte' => 2, 'quantite' => 3, 'prix_unitaire_ht' => '0.47'])
+            ->callMountedFormComponentAction()
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(0, Produit::query()->count());
+        $this->assertSame(['Câble USB-C', '1.41'], [$brouillon->lignes()->sole()->nouveau_produit['nom'], $brouillon->fresh()->total_ht]);
+    }
+
+    /**
+     * Corriger une facture d'achat validée, c'est corriger une réception
+     * déjà entrée en stock : sans le droit de valider les factures d'achat,
+     * sa page de modification est refusée et le stock ne bouge pas.
+     */
+    public function test_sans_droit_de_valider_une_facture_dachat_validee_ne_se_corrige_pas(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 5],
+        ]));
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER]));
+        Filament::setTenant($magasin);
+
+        Livewire::test(ListFacturesAchat::class)->assertTableActionHidden('edit', $factureAchat);
+        Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])->assertForbidden();
+
+        $this->assertSame(2, $produit->fresh()->stock_quantite);
     }
 
     /**

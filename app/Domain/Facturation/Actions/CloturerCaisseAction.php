@@ -25,13 +25,12 @@ use LogicException;
  * émis ce jour-là : la TVA d'une vente corrigée se régularise le jour de
  * l'avoir (art. 272 du CGI), et en caisse une correction est toujours une
  * opération en négatif, jamais une modification ni une suppression. Les
- * factures à des professionnels et leurs avoirs n'y figurent jamais, ils
- * relèvent de l'e-invoicing individuelle (voir
- * Facture::relevantDeLeInvoicing). La série d'un document, figée dans son
- * numéro, le dit pour toujours (voir Facture::scopeTickets() et
- * Avoir::corrigeDesTickets()). La correction d'une vente déjà agrégée
- * passe par un avoir, compté dans la clôture du jour où il est émis,
- * jamais par une réouverture de la clôture.
+ * factures à des professionnels et leurs avoirs n'y figurent pas. Le type
+ * du client, figé sur chaque document à son émission, le dit pour
+ * toujours, même si la fiche du client change depuis (voir
+ * Facture::scopeTickets() et Avoir::corrigeDesTickets()). La correction
+ * d'une vente déjà agrégée passe par un avoir, compté dans la clôture du
+ * jour où il est émis, jamais par une réouverture de la clôture.
  *
  * Les journées se clôturent une à une, dans l'ordre du calendrier, et
  * chacune une seule fois (contrainte unique magasin_id/date_cloture) :

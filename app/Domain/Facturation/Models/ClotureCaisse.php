@@ -26,9 +26,8 @@ use LogicException;
 /**
  * Agrège les tickets de caisse (ventes à des particuliers) d'une journée,
  * moins les avoirs sur des tickets émis ce jour-là, pour l'e-reporting
- * (voir CloturerCaisseAction) -- jamais les factures à des professionnels,
- * qui relèvent de l'e-invoicing individuelle transmise facture par facture
- * (voir Facture::relevantDeLeInvoicing), ni leurs avoirs. Une clôture par
+ * (voir CloturerCaisseAction) -- pas les factures à des professionnels, ni
+ * leurs avoirs (voir Facture::scopeTickets()). Une clôture par
  * jour du calendrier à partir de la première vente, dans l'ordre (voir
  * CloturerLesJourneesAction).
  *

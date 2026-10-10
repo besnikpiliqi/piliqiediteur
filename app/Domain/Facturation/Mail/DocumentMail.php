@@ -85,7 +85,7 @@ class DocumentMail extends Mailable
         $montant = number_format((float) $document->total_ttc, 2, ',', ' ').' € TTC';
 
         return match (true) {
-            $document instanceof Facture && ! $document->client->estProfessionnel() => "Veuillez trouver ci-joint votre ticket de caisse {$document->numero} d'un montant de {$montant}.",
+            $document instanceof Facture && ! $document->estPourUnProfessionnel() => "Veuillez trouver ci-joint votre ticket de caisse {$document->numero} d'un montant de {$montant}.",
             $document instanceof Facture => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de {$montant}"
                 .($document->date_echeance ? ", à régler au plus tard le {$document->date_echeance->format('d/m/Y')}." : '.'),
             $document instanceof Devis => "Veuillez trouver ci-joint notre devis {$document->numero} d'un montant de {$montant}"

@@ -8,6 +8,12 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Crée un devis brouillon pour un client déjà résolu par une requête
+ * limitée au magasin, jamais un client_id brut venu du formulaire, et note
+ * le type de ce client, que reprend la facture qui en est tirée (voir
+ * CreerFactureDepuisDevisAction).
+ */
 class CreerDevisAction
 {
     public function __construct(
@@ -22,7 +28,8 @@ class CreerDevisAction
     public function handle(Client $client, array $lignes, array $attributs = []): Devis
     {
         return DB::transaction(function () use ($client, $lignes, $attributs) {
-            $devis = Devis::create([...$attributs, 'client_id' => $client->getKey()]);
+            $devis = new Devis($attributs);
+            $devis->forceFill(['client_id' => $client->getKey(), 'type_client' => $client->type_client])->save();
 
             $lignesConstruites = $this->constructeurLigne->construireToutes($lignes);
 

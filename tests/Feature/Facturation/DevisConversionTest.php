@@ -4,11 +4,13 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -71,6 +73,27 @@ class DevisConversionTest extends TestCase
 
         $this->expectException(LogicException::class);
         app(AccepterDevisAction::class)->handle($devis);
+    }
+
+    /**
+     * La facture tirée du devis prend le type de client du devis, d'après
+     * lequel il a été établi : si le client est devenu professionnel
+     * depuis, l'émission demande de la réenregistrer.
+     */
+    public function test_la_facture_tiree_du_devis_prend_son_type_de_client_et_son_emission_signale_le_changement(): void
+    {
+        $client = Client::factory()->create();
+        $devis = app(AccepterDevisAction::class)->handle($this->envoyerDevis($client, Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20])));
+        $client->update(['type_client' => TypeClient::Professionnel, 'siren' => '111222333']);
+
+        $facture = app(CreerFactureDepuisDevisAction::class)->handle($devis);
+
+        $this->assertSame([TypeClient::Particulier, TypeClient::Particulier], [$devis->type_client, $facture->type_client]);
+        $this->assertThrows(
+            fn () => app(EmettreFactureAction::class)->handle($facture),
+            LogicException::class,
+            "Ce client est devenu professionnel depuis l'enregistrement du brouillon : ouvrez-le et enregistrez-le de nouveau.",
+        );
     }
 
     public function test_convertir_un_devis_accepte_copie_ses_lignes_dans_une_facture_brouillon(): void

@@ -17,12 +17,32 @@ return new class extends Migration
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
             $table->foreignId('devis_id')->nullable()->constrained('devis')->restrictOnDelete();
-            // Clôture de caisse qui a agrégé cette vente à un particulier
-            // pour l'e-reporting (voir CloturerCaisseAction) -- jamais
-            // renseignée pour un client professionnel, qui relève de la
-            // facture électronique (voir Facture::relevantDeLeInvoicing).
-            // Seule colonne, avec le statut, encore écrite sur une facture
-            // émise : l'étape des clôtures la supprimera.
+            // Le type du client (TypeClient), écrit à chaque enregistrement
+            // du brouillon et contrôlé à l'émission (voir
+            // EmettreFactureAction) : il choisit la série, ticket de caisse
+            // ou facture, puis ne change plus.
+            $table->string('type_client', 20);
+            // La copie du client prise à l'émission (voir FigeLeClient) :
+            // nom, adresse et identifiants tels qu'ils s'impriment et se
+            // signent au registre fiscal, que la fiche du client change ou
+            // non ensuite. Vides sur un brouillon, qui lit la fiche.
+            $table->string('client_nom', 150)->nullable();
+            $table->string('client_adresse')->nullable();
+            $table->string('client_complement_adresse')->nullable();
+            $table->string('client_code_postal', 10)->nullable();
+            $table->string('client_ville', 100)->nullable();
+            $table->string('client_pays', 2)->nullable();
+            $table->string('client_siren', 9)->nullable();
+            $table->string('client_siret', 14)->nullable();
+            $table->string('client_numero_tva', 20)->nullable();
+            $table->string('client_identifiant_etranger', 50)->nullable();
+            $table->boolean('client_etabli_en_france')->nullable();
+            // Clôture de caisse qui a agrégé ce ticket de caisse pour
+            // l'e-reporting (voir CloturerCaisseAction) -- jamais renseignée
+            // pour une facture à un professionnel (voir
+            // Facture::scopeTickets()). Seule colonne, avec le statut, encore
+            // écrite sur une facture émise : l'étape des clôtures la
+            // supprimera.
             $table->foreignId('cloture_caisse_id')->nullable()->constrained('clotures_caisse')->nullOnDelete();
             // Qui a créé la facture : nécessaire pour restreindre la
             // visibilité d'un vendeur à ses propres ventes par défaut
@@ -58,6 +78,7 @@ return new class extends Migration
             $table->index(['magasin_id', 'statut']);
             $table->index(['magasin_id', 'client_id']);
             $table->index(['magasin_id', 'cloture_caisse_id']);
+            $table->index(['magasin_id', 'type_client', 'date_emission']);
         });
     }
 

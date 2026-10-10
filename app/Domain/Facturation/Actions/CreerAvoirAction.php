@@ -30,7 +30,9 @@ use LogicException;
  * Jamais de tickets de caisse et de factures dans un même avoir : leurs
  * circuits fiscaux diffèrent (clôture de caisse et e-reporting, ou
  * facture électronique), et un avoir n'en suit qu'un (voir
- * Facture::serie()).
+ * Facture::serie()). Il prend donc le type de client, figé à leur
+ * émission, des documents qu'il corrige : particulier pour des tickets,
+ * professionnel pour des factures (voir FigeLeClient).
  *
  * L'avoir créé ici reste un brouillon jusqu'à son émission : l'interface
  * passe toujours par EnregistrerAvoirAction, qui fait les deux d'un seul
@@ -59,13 +61,8 @@ class CreerAvoirAction
         }
 
         return DB::transaction(function () use ($client, $lignesSelectionnees, $motif) {
-            $avoir = Avoir::create([
-                'client_id' => $client->getKey(),
-                'motif' => $motif,
-            ]);
-
-            $lignesConstruites = [];
-            $serie = null;
+            $lignesDeLAvoir = [];
+            $typeClient = null;
 
             foreach (array_values($lignesSelectionnees) as $index => $selection) {
                 $ligneFacture = LigneFacture::query()
@@ -88,9 +85,9 @@ class CreerAvoirAction
                     throw new LogicException("Impossible de créditer une ligne d'une facture au statut [{$facture->statut->value}].");
                 }
 
-                $serie ??= $facture->serie();
+                $typeClient ??= $facture->type_client;
 
-                if ($facture->serie() !== $serie) {
+                if ($facture->type_client !== $typeClient) {
                     throw new InvalidArgumentException('Un avoir ne mélange jamais des tickets de caisse et des factures : faites un avoir pour les tickets, et un autre pour les factures.');
                 }
 
@@ -101,9 +98,7 @@ class CreerAvoirAction
                     throw new LogicException("La ligne \"{$ligneFacture->description}\" ne peut pas être créditée au-delà de la quantité restante ({$restante}).");
                 }
 
-                $montants = $ligneFacture->montantsDuRetour($quantite);
-
-                $avoir->lignes()->create([
+                $lignesDeLAvoir[] = [
                     'ligne_facture_id' => $ligneFacture->id,
                     'produit_id' => $ligneFacture->produit_id,
                     'nature' => $ligneFacture->nature,
@@ -115,13 +110,20 @@ class CreerAvoirAction
                     'taux_tva' => $ligneFacture->taux_tva,
                     'remise_pourcentage' => $ligneFacture->remise_pourcentage,
                     'ordre' => $index,
-                    ...$montants,
-                ]);
-
-                $lignesConstruites[] = $montants;
+                    ...$ligneFacture->montantsDuRetour($quantite),
+                ];
             }
 
-            $avoir->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
+            $avoir = new Avoir(['motif' => $motif]);
+            $avoir->forceFill([
+                'client_id' => $client->getKey(),
+                'type_client' => $typeClient,
+                ...$this->calculateurLigne->totaliser($lignesDeLAvoir),
+            ])->save();
+
+            foreach ($lignesDeLAvoir as $ligne) {
+                $avoir->lignes()->create($ligne);
+            }
 
             return $avoir->fresh('lignes');
         });

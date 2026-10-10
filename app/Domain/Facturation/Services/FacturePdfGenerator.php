@@ -8,9 +8,10 @@ use Barryvdh\DomPDF\PDF as PdfDocument;
 
 /**
  * Génère toujours depuis les données déjà figées de la facture (numéro,
- * lignes snapshot, totaux) -- jamais depuis l'état courant du catalogue.
- * Une facture émise aujourd'hui doit produire EXACTEMENT le même PDF dans
- * un an, même si les produits référencés ont changé entre-temps.
+ * client, lignes, totaux) -- jamais depuis l'état courant du catalogue ou
+ * de la fiche du client. Une facture émise aujourd'hui doit produire le
+ * même document dans un an, même si les produits référencés ou son client
+ * ont changé entre-temps.
  */
 class FacturePdfGenerator
 {
@@ -24,7 +25,7 @@ class FacturePdfGenerator
     public function nomFichier(Facture $facture): string
     {
         $identifiant = $facture->numero ?? "brouillon-{$facture->id}";
-        $prefixe = $facture->client->estProfessionnel() ? 'facture' : 'ticket';
+        $prefixe = $facture->estPourUnProfessionnel() ? 'facture' : 'ticket';
 
         return "{$prefixe}-{$identifiant}.pdf";
     }

@@ -21,7 +21,11 @@
         ]),
     ])
 
-    @include('documents.pdf.client', ['client' => $avoir->client, 'titre' => 'Émis à'])
+    @include('documents.pdf.client', [
+        'client' => $avoir->copieClient(),
+        'professionnel' => $avoir->estPourUnProfessionnel(),
+        'titre' => 'Émis à',
+    ])
 
     @include('documents.pdf.lignes', ['lignes' => $avoir->lignes, 'avecFactureDOrigine' => true])
 

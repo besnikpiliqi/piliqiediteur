@@ -136,7 +136,7 @@ class AvoirResource extends Resource
         return $infolist->schema([
             InfolistSection::make('Avoir')->schema([
                 TextEntry::make('numero')->label('Numéro'),
-                TextEntry::make('client.nom')->label('Client'),
+                FactureResource::clientEntry(),
                 TextEntry::make('factures_concernees')
                     ->label('Factures créditées')
                     ->state(fn (Avoir $record) => $record->facturesConcernees()->pluck('numero')->implode(', ')),
@@ -190,7 +190,7 @@ class AvoirResource extends Resource
      */
     private static function seriesCreditablesPourClient(int $clientId): array
     {
-        $seriesPresentes = self::lignesCreditables($clientId)->map(fn (LigneFacture $ligne): ?TypeDocument => $ligne->facture->serie());
+        $seriesPresentes = self::lignesCreditables($clientId)->map(fn (LigneFacture $ligne): TypeDocument => $ligne->facture->serie());
 
         return collect([TypeDocument::TicketCaisse->value => 'Tickets de caisse', TypeDocument::Facture->value => 'Factures'])
             ->filter(fn (string $libelle, string $serie): bool => $seriesPresentes->contains(TypeDocument::from($serie)))
@@ -234,7 +234,7 @@ class AvoirResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->searchable(),
-                Tables\Columns\TextColumn::make('client.nom')->label('Client')->searchable(),
+                FactureResource::clientColumn(),
                 Tables\Columns\TextColumn::make('factures_concernees')
                     ->label('Factures créditées')
                     ->state(fn (Avoir $record) => $record->facturesConcernees()->pluck('numero')->implode(', ')),

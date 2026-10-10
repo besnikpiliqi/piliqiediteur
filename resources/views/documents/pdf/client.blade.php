@@ -1,17 +1,20 @@
 {{--
-    @param \App\Domain\Contacts\Models\Client $client
+    Le client tel que le document l'imprime : nom, adresse, pays hors de
+    France et, pour un professionnel, ses identifiants (voir CopieClient).
+
+    @param \App\Domain\Facturation\Services\CopieClient $client
+    @param bool $professionnel
     @param string $titre
 --}}
 <div class="bloc-client">
     <div class="titre">{{ $titre }}</div>
     <strong>{{ $client->nom }}</strong><br>
-    @if($client->adresse)
-        {{ $client->adresse }}<br>
-    @endif
-    @if($client->code_postal || $client->ville)
-        {{ $client->code_postal }} {{ $client->ville }}<br>
-    @endif
-    @if($client->estProfessionnel() && $client->siret)
-        SIRET : {{ $client->siret }}
+    @foreach($client->lignesAdresse() as $ligne)
+        {{ $ligne }}<br>
+    @endforeach
+    @if($professionnel)
+        @foreach($client->identifiants() as $identifiant)
+            {{ $identifiant }}<br>
+        @endforeach
     @endif
 </div>

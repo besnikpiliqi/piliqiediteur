@@ -132,7 +132,7 @@ class ClotureCaisseResource extends Resource
                     ->label('')
                     ->schema([
                         TextEntry::make('numero')->label('Numéro'),
-                        TextEntry::make('client.nom')->label('Client'),
+                        TextEntry::make('client_nom')->label('Client'),
                         TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
                         TextEntry::make('total_tva')->label('TVA')->money('EUR'),
                         TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
@@ -147,7 +147,7 @@ class ClotureCaisseResource extends Resource
                         ->label('')
                         ->schema([
                             TextEntry::make('numero')->label('Numéro'),
-                            TextEntry::make('client.nom')->label('Client'),
+                            TextEntry::make('client_nom')->label('Client'),
                             TextEntry::make('total_ht')->label('Total HT')->state(fn (Avoir $record) => -(float) $record->total_ht)->money('EUR'),
                             TextEntry::make('total_tva')->label('TVA')->state(fn (Avoir $record) => -(float) $record->total_tva)->money('EUR'),
                             TextEntry::make('total_ttc')->label('Total TTC')->state(fn (Avoir $record) => -(float) $record->total_ttc)->money('EUR'),

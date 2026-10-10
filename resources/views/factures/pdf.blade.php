@@ -2,9 +2,9 @@
 <html lang="fr">
 <head>
     {{--
-        Un particulier relève de l'e-reporting agrégé (clôture de caisse) :
-        son document porte le libellé usuel "Ticket de caisse" plutôt que
-        "Facture" (voir Facture::libelleDocument()).
+        Une vente à un particulier porte le libellé usuel "Ticket de caisse"
+        plutôt que "Facture" (voir Facture::libelleDocument()), d'après le
+        type du client figé sur le document.
     --}}
     @php
         $libelleDocument = $facture->libelleDocument();
@@ -25,8 +25,9 @@
     ])
 
     @include('documents.pdf.client', [
-        'client' => $facture->client,
-        'titre' => $facture->client->estProfessionnel() ? 'Facturé à' : 'Client',
+        'client' => $facture->copieClient(),
+        'professionnel' => $facture->estPourUnProfessionnel(),
+        'titre' => $facture->estPourUnProfessionnel() ? 'Facturé à' : 'Client',
     ])
 
     @include('documents.pdf.lignes', ['lignes' => $facture->lignes])

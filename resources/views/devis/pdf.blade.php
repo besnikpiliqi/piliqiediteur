@@ -16,7 +16,11 @@
         ]),
     ])
 
-    @include('documents.pdf.client', ['client' => $devis->client, 'titre' => 'Établi pour'])
+    @include('documents.pdf.client', [
+        'client' => \App\Domain\Facturation\Services\CopieClient::depuisClient($devis->client),
+        'professionnel' => $devis->estPourUnProfessionnel(),
+        'titre' => 'Établi pour',
+    ])
 
     @include('documents.pdf.lignes', ['lignes' => $devis->lignes])
 

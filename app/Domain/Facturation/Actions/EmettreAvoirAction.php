@@ -26,10 +26,11 @@ use LogicException;
  *  1. le registre fiscal du magasin est verrouillé, avant l'avoir et la
  *     numérotation (voir RegistreFiscal) ; il donne l'instant de
  *     l'émission ;
- *  2. l'avoir, relu verrouillé, arrête ses montants, reçoit son numéro,
- *     dans l'année de cet instant à l'heure de Paris, et cet instant, en
- *     UTC, pour date d'émission (voir HorodateSonEmission) -- un avoir sur
- *     des tickets, que compte la clôture de sa journée (voir
+ *  2. l'avoir, relu verrouillé, arrête ses montants, prend la copie de
+ *     son client tel qu'il est ce jour-là (voir FigeLeClient), reçoit son
+ *     numéro, dans l'année de cet instant à l'heure de Paris, et cet
+ *     instant, en UTC, pour date d'émission (voir HorodateSonEmission) --
+ *     un avoir sur des tickets, que compte la clôture de sa journée (voir
  *     Avoir::corrigeDesTickets()), n'est plus émis une fois cette journée
  *     clôturée, jusqu'à minuit (voir
  *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
@@ -75,6 +76,7 @@ class EmettreAvoirAction
 
             $numero = $this->numerotation->suivant($avoir->magasin, TypeDocument::Avoir, $instant->enHeureLocale()->format('Y'));
 
+            $avoir->figerLeClient($avoir->client);
             $avoir->forceFill([
                 'numero' => $numero,
                 'statut' => StatutAvoir::Emise,

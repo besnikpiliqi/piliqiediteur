@@ -44,9 +44,9 @@ use ValueError;
  *    montant de chaque vente. Puis la ligne de tête du registre, qui doit
  *    noter le dernier enregistrement de chaque chaîne.
  * 2. Les documents : le bloc « document » d'un ticket, d'une facture ou
- *    d'un avoir, et le paiement et les imputations d'un encaissement,
- *    recalculés depuis la base (voir ContenuFiscal), doivent être ceux qui
- *    ont été signés, et la date d'émission l'instant de la signature :
+ *    d'un avoir, client figé compris, et le paiement et les imputations
+ *    d'un encaissement, recalculés depuis la base (voir ContenuFiscal),
+ *    doivent être ceux qui ont été signés, et la date d'émission l'instant de la signature :
  *    une modification directe en base se voit ici. Chaque document
  *    numéroté, et chaque paiement, a exactement un enregistrement, et
  *    chaque enregistrement désigne un document numéroté du bon type.

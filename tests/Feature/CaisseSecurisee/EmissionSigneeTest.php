@@ -6,7 +6,9 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
+use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
@@ -190,7 +192,7 @@ class EmissionSigneeTest extends TestCase
         $vente = $this->enregistrementDe($ticket, ChaineFiscale::Vente);
         $paiement = Paiement::query()->sole();
         $encaissement = $this->enregistrementDe($paiement, ChaineFiscale::Encaissement);
-        $copieDuClient = [
+        $ficheDuClient = [
             'id' => $client->id,
             'nom' => 'Alice Martin',
             'type_client' => 'particulier',
@@ -210,7 +212,22 @@ class EmissionSigneeTest extends TestCase
             'document' => [
                 'numero' => 'TK-LYON1-2026-000001',
                 'date_emission' => '2026-10-09T10:15:30+02:00',
-                'client_id' => $client->id,
+                'client' => [
+                    'id' => $client->id,
+                    'comptoir' => false,
+                    'type_client' => 'particulier',
+                    'nom' => 'Alice Martin',
+                    'adresse' => '3 place du Marché',
+                    'complement_adresse' => null,
+                    'code_postal' => '75011',
+                    'ville' => 'Paris',
+                    'pays' => 'FR',
+                    'siren' => null,
+                    'siret' => null,
+                    'numero_tva' => null,
+                    'identifiant_etranger' => null,
+                    'etabli_en_france' => true,
+                ],
                 'cree_par' => $vendeuse->id,
                 'devis_id' => null,
                 'devise' => 'EUR',
@@ -245,7 +262,6 @@ class EmissionSigneeTest extends TestCase
                     'regime_tva' => 'reel_normal_mensuel',
                     'option_debits_tva' => false,
                 ],
-                'client' => $copieDuClient,
                 'categorie_operation' => 'livraison_de_biens',
                 'reglements' => [['paiement_id' => $paiement->id, 'mode' => 'carte_bancaire', 'reference' => 'TRX-42', 'montant' => 2950]],
                 'credits_avoir' => [],
@@ -254,7 +270,7 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame(['montant' => 2950, 'perpetuel_reel' => 2950, 'perpetuel_absolu' => 2950], $this->contenu($vente)['gt']);
         $this->assertSame([
             'paiement' => ['client_id' => $client->id, 'mode' => 'carte_bancaire', 'montant' => 2950, 'reference' => 'TRX-42', 'notes' => null, 'recu_le' => '2026-10-09', 'cree_par' => $vendeuse->id],
-            'client' => $copieDuClient,
+            'client' => $ficheDuClient,
             'allocations' => [['facture_id' => $ticket->id, 'numero' => 'TK-LYON1-2026-000001', 'montant' => 2950]],
         ], $this->contenu($encaissement)['donnees']);
         $this->assertSignatureValide($vente);
@@ -316,7 +332,7 @@ class EmissionSigneeTest extends TestCase
     {
         $this->travelTo('2026-10-09 10:15:30');
         $this->magasinActif();
-        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320']);
+        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320']);
         $produit = $this->produit('CAF-250', 'Café moulu 250 g', 12);
 
         $facture = $this->emettre($client, [[$produit, 10]], ['date_echeance' => '2026-11-08', 'conditions_paiement' => 'Paiement à 30 jours', 'notes' => 'Livraison au dépôt']);
@@ -326,10 +342,35 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame('FAC-LYON1-2026-000001', $donnees['document']['numero']);
         $this->assertSame(['2026-11-08', 'Paiement à 30 jours', 'Livraison au dépôt'], [$donnees['document']['date_echeance'], $donnees['document']['conditions_paiement'], $donnees['document']['notes']]);
         $this->assertSame(['ht' => 10000, 'tva' => 2000, 'ttc' => 12000], $donnees['document']['totaux']);
-        $this->assertSame(['professionnel', '73282932000074', 'FR44732829320'], [$donnees['contexte']['client']['type_client'], $donnees['contexte']['client']['siret'], $donnees['contexte']['client']['numero_tva']]);
+        $this->assertSame(
+            ['type_client' => 'professionnel', 'nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320', 'etabli_en_france' => true],
+            Arr::only($donnees['document']['client'], ['type_client', 'nom', 'siren', 'siret', 'numero_tva', 'etabli_en_france']),
+        );
         $this->assertSame([], $donnees['contexte']['reglements']);
         $this->assertSame([], $donnees['contexte']['credits_avoir']);
         $this->assertSame(StatutFacture::Emise, $facture->statut);
+    }
+
+    /**
+     * Le client signé est la copie figée à l'émission : la fiche qui change
+     * ensuite (nom, type, identifiants) ne change ni le document ni ce
+     * qu'en recalcule la vérification de l'intégrité.
+     */
+    public function test_le_client_signe_est_la_copie_figee_que_la_fiche_modifiee_ne_change_pas(): void
+    {
+        $this->freezeTime();
+        $this->magasinActif();
+        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320']);
+        $facture = $this->emettre($client, [[$this->produit('A-020', 'Article à 20 €', 20), 1]]);
+        $signe = $this->contenu($this->enregistrementDe($facture, ChaineFiscale::Vente))['donnees']['document'];
+
+        $client->update(['nom' => 'Jean Durand', 'type_client' => TypeClient::Particulier]);
+
+        $this->assertSame($signe, app(ContenuFiscal::class)->blocDocument($facture->fresh()));
+        $this->assertSame(
+            ['type_client' => 'professionnel', 'nom' => 'Atelier Durand', 'siren' => '732829320', 'etabli_en_france' => true],
+            Arr::only($signe['client'], ['type_client', 'nom', 'siren', 'etabli_en_france']),
+        );
     }
 
     /**
@@ -366,7 +407,7 @@ class EmissionSigneeTest extends TestCase
         $this->magasinActif();
         $vendeuse = User::factory()->create(['name' => 'Zoé Lefèvre']);
         $this->actingAs($vendeuse);
-        $client = Client::factory()->create();
+        $client = Client::factory()->create(['nom' => 'Claire Petit']);
         $produit = $this->produit('A-020', 'Article à 20 €', 20);
         $ticket = $this->encaisser($client, [[$produit, 2]]);
         $ligne = $ticket->lignes->sole();
@@ -380,7 +421,22 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame([
             'numero' => 'AV-LYON1-2026-000001',
             'date_emission' => '2026-10-09T10:15:30+02:00',
-            'client_id' => $client->id,
+            'client' => [
+                'id' => $client->id,
+                'comptoir' => false,
+                'type_client' => 'particulier',
+                'nom' => 'Claire Petit',
+                'adresse' => null,
+                'complement_adresse' => null,
+                'code_postal' => null,
+                'ville' => null,
+                'pays' => 'FR',
+                'siren' => null,
+                'siret' => null,
+                'numero_tva' => null,
+                'identifiant_etranger' => null,
+                'etabli_en_france' => true,
+            ],
             'cree_par' => $vendeuse->id,
             'devise' => 'EUR',
             'motif' => 'Article abîmé',

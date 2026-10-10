@@ -24,20 +24,22 @@ use Illuminate\Support\Collection;
  * Un ticket, une facture ou un avoir (document()) signe deux blocs :
  *
  * - « document », qui se recalcule depuis ses seules colonnes figées et
- *   celles de ses lignes : numéro, date d'émission, client, auteur,
+ *   celles de ses lignes : numéro, date d'émission, client (son type et la
+ *   copie de sa fiche prise à l'émission, voir FigeLeClient), auteur,
  *   devise, échéance, conditions, notes ou motif, lignes, ventilation par
  *   taux et totaux. Un avoir s'y écrit en négatif (quantités et montants)
  *   et chacune de ses lignes y référence la ligne et le numéro du ticket
  *   ou de la facture qu'elle corrige ;
  * - « contexte », figé à l'émission parce qu'il change ensuite ailleurs :
- *   l'identité du magasin émetteur et la copie du client, la catégorie de
- *   l'opération, et ce qui a réglé le document dans la même transaction
+ *   l'identité du magasin émetteur, la catégorie de l'opération, et ce
+ *   qui a réglé le document dans la même transaction
  *   (paiements et crédits d'avoir d'une facture, imputations d'un avoir
  *   sur ses factures). Un document qui vient d'être émis n'a pas pu en
  *   recevoir avant : un brouillon n'attend aucun règlement.
  *
  * Un paiement (encaissement()) signe son mode, son montant, sa référence,
- * sa date de réception, son client et ce qu'il règle de chaque facture.
+ * sa date de réception, la fiche de son client ce jour-là et ce qu'il
+ * règle de chaque facture.
  */
 class ContenuFiscal
 {
@@ -100,12 +102,12 @@ class ContenuFiscal
      */
     private function blocDeLaFacture(Facture $facture): array
     {
-        $facture->load('lignes');
+        $facture->load(['lignes', 'client']);
 
         return [
             'numero' => $facture->numero,
             'date_emission' => $facture->date_emission->toIso8601String(),
-            'client_id' => (int) $facture->client_id,
+            'client' => $this->clientFige($facture),
             'cree_par' => $this->identifiant($facture->cree_par),
             'devis_id' => $this->identifiant($facture->devis_id),
             'devise' => $facture->devise,
@@ -121,11 +123,10 @@ class ContenuFiscal
      */
     private function contexteDeLaFacture(Facture $facture): array
     {
-        $facture->load(['lignes', 'client', 'magasin', 'allocationsPaiement.paiement', 'allocationsAvoir.avoir']);
+        $facture->load(['lignes', 'magasin', 'allocationsPaiement.paiement', 'allocationsAvoir.avoir']);
 
         return [
             'emetteur' => $this->emetteur($facture->magasin),
-            'client' => $this->client($facture->client),
             'categorie_operation' => CategorieOperation::depuisNatures($facture->lignes->pluck('nature'))->value,
             'reglements' => $facture->allocationsPaiement->sortBy('id')
                 ->map(fn (PaiementAllocation $allocation): array => [
@@ -152,13 +153,13 @@ class ContenuFiscal
      */
     private function blocDeLAvoir(Avoir $avoir): array
     {
-        $avoir->load('lignes.ligneFacture.facture');
+        $avoir->load(['lignes.ligneFacture.facture', 'client']);
         $documentsCorriges = $avoir->facturesConcernees();
 
         return [
             'numero' => $avoir->numero,
             'date_emission' => $avoir->date_emission->toIso8601String(),
-            'client_id' => (int) $avoir->client_id,
+            'client' => $this->clientFige($avoir),
             'cree_par' => $this->identifiant($avoir->cree_par),
             'devise' => $avoir->devise,
             'motif' => $avoir->motif,
@@ -173,11 +174,10 @@ class ContenuFiscal
      */
     private function contexteDeLAvoir(Avoir $avoir): array
     {
-        $avoir->load(['lignes', 'client', 'magasin', 'allocations.facture']);
+        $avoir->load(['lignes', 'magasin', 'allocations.facture']);
 
         return [
             'emetteur' => $this->emetteur($avoir->magasin),
-            'client' => $this->client($avoir->client),
             'categorie_operation' => CategorieOperation::depuisNatures($avoir->lignes->pluck('nature'))->value,
             'imputations' => $avoir->allocations->sortBy('id')
                 ->map(fn (AvoirAllocation $allocation): array => [
@@ -273,8 +273,26 @@ class ContenuFiscal
     }
 
     /**
-     * La fiche du client le jour de l'émission, qu'il peut changer
-     * ensuite : une donnée fiscale du document.
+     * Le client du ticket, de la facture ou de l'avoir, lu sur ses colonnes
+     * figées à l'émission (voir FigeLeClient) : son identifiant, le client
+     * comptoir ou non, le type écrit sur le document et la copie de sa
+     * fiche.
+     *
+     * @return array<string, int|string|bool|null>
+     */
+    private function clientFige(Facture|Avoir $document): array
+    {
+        return [
+            'id' => (int) $document->client_id,
+            'comptoir' => $document->client->estComptoir(),
+            'type_client' => $document->type_client->value,
+            ...$document->copieClient()->enTableau(),
+        ];
+    }
+
+    /**
+     * La fiche du client d'un paiement le jour de son enregistrement,
+     * qu'il peut changer ensuite.
      *
      * @return array<string, int|string|bool|null>
      */

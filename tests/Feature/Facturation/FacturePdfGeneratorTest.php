@@ -16,6 +16,7 @@ use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -66,25 +67,55 @@ class FacturePdfGeneratorTest extends TestCase
 
     /**
      * Une mise à jour groupée ne passe pas par le modèle, qui retire le
-     * SIRET d'un particulier : le document ne l'imprime de toute façon que
-     * pour un professionnel.
+     * SIRET d'un particulier : la copie de son client que prend le ticket
+     * le garde, mais seul un document à un professionnel imprime les
+     * identifiants de son client.
      */
     public function test_le_siret_du_client_ne_s_imprime_que_pour_un_professionnel(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
-        $client = Client::factory()->professionnel()->create(['siret' => '12345678900012']);
+        $professionnel = Client::factory()->professionnel()->create(['siret' => '12345678900012']);
+        $particulier = Client::factory()->create(['nom' => 'Jean Dupont', 'adresse' => '3 place du Marché', 'code_postal' => '75011', 'ville' => 'Paris']);
+        Client::query()->whereKey($particulier->id)->update(['siret' => '98765432100013']);
         $produit = Produit::factory()->create(['suivi_stock' => false]);
+        $emettre = fn (Client $client): Facture => app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client->fresh(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]));
+
+        [$facture, $ticket] = [$emettre($professionnel), $emettre($particulier)];
+
+        $this->assertStringContainsString('SIRET : 12345678900012<br>', $this->rendu($facture));
+        $this->assertSame('98765432100013', $ticket->client_siret);
+        $this->assertStringContainsString(
+            '<div class="bloc-client"><div class="titre">Client</div><strong>Jean Dupont</strong><br>3 place du Marché<br>75011 Paris<br></div>',
+            $this->compacte($this->rendu($ticket)),
+        );
+    }
+
+    /**
+     * Le client d'une facture à un professionnel établi hors de France
+     * s'imprime avec son adresse complète, son pays et son n° de TVA.
+     */
+    public function test_la_facture_imprime_l_adresse_le_pays_et_le_numero_de_tva_d_un_client_etranger(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $client = Client::factory()->etranger('BE', 'BE0123456789')->create([
+            'nom' => 'Brasserie de Namur',
+            'adresse' => 'Rue de Fer 12',
+            'complement_adresse' => 'Boîte 3',
+            'code_postal' => '5000',
+            'ville' => 'Namur',
+        ]);
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
+
         $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
-        $rendu = fn (): string => view('factures.pdf', [
-            'facture' => $facture->fresh()->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
-        ])->render();
-        $this->assertStringContainsString('SIRET : 12345678900012', $rendu());
 
-        Client::query()->whereKey($client->id)->update(['type_client' => 'particulier']);
-
-        $this->assertStringNotContainsString('12345678900012', $rendu());
+        $this->assertStringContainsString(
+            '<div class="bloc-client"><div class="titre">Facturé à</div><strong>Brasserie de Namur</strong><br>Rue de Fer 12<br>Boîte 3<br>5000 Namur<br>BE<br>N° TVA : BE0123456789<br></div>',
+            $this->compacte($this->rendu($facture)),
+        );
     }
 
     /**
@@ -216,10 +247,11 @@ class FacturePdfGeneratorTest extends TestCase
             'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
         ])->render();
 
-        $this->assertStringContainsString('<div class="magasin-nom">Boutique du Port</div></td>', preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], $html));
-        $this->assertStringNotContainsString('SIREN', $html);
-        $this->assertStringNotContainsString('TVA intracommunautaire', $html);
-        $this->assertStringNotContainsString('Tél.', $html);
+        $enTete = Str::betweenFirst($html, '<table class="en-tete">', '</table>');
+        $this->assertStringContainsString('<div class="magasin-nom">Boutique du Port</div></td>', $this->compacte($enTete));
+        $this->assertStringNotContainsString('SIREN', $enTete);
+        $this->assertStringNotContainsString('TVA intracommunautaire', $enTete);
+        $this->assertStringNotContainsString('Tél.', $enTete);
     }
 
     public function test_le_nom_de_fichier_utilise_le_numero_ou_brouillon(): void
@@ -321,6 +353,21 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertStringNotContainsString('Payé', $html);
         $this->assertStringNotContainsString('Crédité par avoir', $html);
         $this->assertStringNotContainsString('Restant dû', $html);
+    }
+
+    private function rendu(Facture $facture): string
+    {
+        return view('factures.pdf', [
+            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
+        ])->render();
+    }
+
+    /**
+     * Le HTML sans les blancs qui entourent ses balises.
+     */
+    private function compacte(string $html): string
+    {
+        return preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], $html);
     }
 
     private function factureEmise(): Facture

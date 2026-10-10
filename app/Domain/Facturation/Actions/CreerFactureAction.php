@@ -8,6 +8,12 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Crée une facture brouillon pour un client déjà résolu par une requête
+ * limitée au magasin, jamais un client_id brut venu du formulaire. Le
+ * brouillon note le type de ce client, contrôlé à l'émission, qui choisit
+ * sa série (voir EmettreFactureAction).
+ */
 class CreerFactureAction
 {
     public function __construct(
@@ -22,7 +28,8 @@ class CreerFactureAction
     public function handle(Client $client, array $lignes, array $attributs = []): Facture
     {
         return DB::transaction(function () use ($client, $lignes, $attributs) {
-            $facture = Facture::create([...$attributs, 'client_id' => $client->getKey()]);
+            $facture = new Facture($attributs);
+            $facture->forceFill(['client_id' => $client->getKey(), 'type_client' => $client->type_client])->save();
 
             $lignesConstruites = $this->constructeurLigne->construireToutes($lignes);
 

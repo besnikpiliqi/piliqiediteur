@@ -72,6 +72,7 @@ class FactureResource extends Resource
         // withSum évite un N+1 sur montantPaye()/montantCrediteParAvoir()
         // pour chaque ligne du tableau.
         $query = parent::getEloquentQuery()
+            ->with('client')
             ->withSum('allocationsPaiement as montant_paye_somme', 'montant_alloue')
             ->withSum('allocationsAvoir as montant_credite_somme', 'montant_alloue');
 
@@ -129,7 +130,7 @@ class FactureResource extends Resource
             InfolistSection::make('Facture')->schema([
                 TextEntry::make('numero')->label('Numéro')->placeholder('Brouillon (pas encore émise)'),
                 TextEntry::make('statut')->badge(),
-                TextEntry::make('client.nom')->label('Client'),
+                self::clientEntry(),
                 TextEntry::make('date_emission')->label('Émise le')->dateTime('d/m/Y')->placeholder('—'),
                 TextEntry::make('date_echeance')->label('Échéance')->date('d/m/Y')->placeholder('—'),
                 TextEntry::make('creePar.name')->label('Créée par'),
@@ -303,6 +304,33 @@ class FactureResource extends Resource
     }
 
     /**
+     * Le client tel que le document l'imprime (voir FigeLeClient) : sa copie
+     * prise à l'émission, la fiche du client tant qu'il est un brouillon.
+     * Partagé par les fiches des factures et des avoirs.
+     */
+    public static function clientEntry(): TextEntry
+    {
+        return TextEntry::make('client_nom')
+            ->label('Client')
+            ->state(fn (Facture|Avoir $record): string => $record->copieClient()->nom);
+    }
+
+    /**
+     * La même colonne dans les listes des factures et des avoirs ; la
+     * recherche trouve le nom imprimé sur le document comme celui de la
+     * fiche du client aujourd'hui.
+     */
+    public static function clientColumn(): Tables\Columns\TextColumn
+    {
+        return Tables\Columns\TextColumn::make('client_nom')
+            ->label('Client')
+            ->state(fn (Facture|Avoir $record): string => $record->copieClient()->nom)
+            ->searchable(query: fn (Builder $query, string $search): Builder => $query->where(fn (Builder $documents): Builder => $documents
+                ->where('client_nom', 'like', "%{$search}%")
+                ->orWhereHas('client', fn (Builder $client): Builder => $client->where('nom', 'like', "%{$search}%"))));
+    }
+
+    /**
      * Récapitulatif par taux (voir VentileLaTvaParTaux), partagé par les
      * fiches de tous les documents à lignes.
      */
@@ -345,7 +373,7 @@ class FactureResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->searchable(),
-                Tables\Columns\TextColumn::make('client.nom')->label('Client')->searchable(),
+                self::clientColumn(),
                 Tables\Columns\TextColumn::make('statut')->badge(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 // Un avoir n'est jamais remboursé par ce logiciel : son

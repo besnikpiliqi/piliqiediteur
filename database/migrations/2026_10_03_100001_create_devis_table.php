@@ -12,6 +12,11 @@ return new class extends Migration
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
+            // Le type du client (TypeClient), écrit à chaque enregistrement
+            // du devis et repris par la facture qui en est tirée. Un devis
+            // ne fige pas son client : il imprime sa fiche telle qu'elle
+            // est.
+            $table->string('type_client', 20);
             // nullable tant que le devis est en brouillon : la numérotation
             // n'intervient qu'à l'envoi (voir DocumentNumberingService).
             $table->string('numero', 40)->nullable();

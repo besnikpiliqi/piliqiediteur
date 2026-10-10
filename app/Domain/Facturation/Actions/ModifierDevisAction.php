@@ -18,7 +18,8 @@ use LogicException;
  * il devient définitivement figé : voir Devis::estModifiable().
  *
  * Comme CreerDevisAction, elle reçoit le client déjà résolu par une
- * requête limitée au magasin, jamais un client_id brut venu du formulaire.
+ * requête limitée au magasin, jamais un client_id brut venu du formulaire,
+ * et note de nouveau son type.
  */
 class ModifierDevisAction
 {
@@ -38,7 +39,7 @@ class ModifierDevisAction
         }
 
         return DB::transaction(function () use ($devis, $client, $lignes, $attributs) {
-            $devis->update([...$attributs, 'client_id' => $client->getKey()]);
+            $devis->fill($attributs)->forceFill(['client_id' => $client->getKey(), 'type_client' => $client->type_client])->save();
             $devis->lignes()->delete();
 
             $lignesConstruites = $this->constructeurLigne->construireToutes($lignes);

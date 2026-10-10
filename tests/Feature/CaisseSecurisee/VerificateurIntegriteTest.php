@@ -11,6 +11,7 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
@@ -196,6 +197,33 @@ class VerificateurIntegriteTest extends TestCase
 
         $this->assertSame([
             [90, 'Le ticket TK-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (lignes, ventilation).'],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
+     * La fiche du client change après l'émission : ses documents gardent la
+     * copie signée, et la vérification ne voit rien à redire.
+     */
+    public function test_une_fiche_client_modifiee_apres_l_emission_ne_presente_aucune_anomalie(): void
+    {
+        $this->magasinActif();
+        $documents = $this->activite();
+
+        $documents['facture']->client->update(['nom' => 'Nouveau nom', 'type_client' => TypeClient::Particulier]);
+        $documents['ticket']->client->update(['nom' => 'Autre nom', 'type_client' => TypeClient::Professionnel, 'siren' => '111222333']);
+
+        $this->assertSame([], $this->anomalies($this->verifier()));
+    }
+
+    public function test_un_client_fige_modifie_en_base_est_detecte(): void
+    {
+        $magasin = $this->magasinActif();
+        $documents = $this->activite();
+
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['client_nom' => 'Nom réécrit']);
+
+        $this->assertSame([
+            [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (client).'],
         ], $this->anomalies($this->verifier()));
     }
 

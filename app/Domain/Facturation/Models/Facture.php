@@ -9,8 +9,10 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
+use App\Domain\Facturation\Concerns\FigeLeClient;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
@@ -47,17 +49,18 @@ use LogicException;
  *
  * Une fois numérotée, elle ne se modifie plus que dans son statut de
  * règlement (voir ProtegeLesDonneesValidees) : elle est signée telle
- * qu'émise au registre fiscal (voir EmettreFactureAction).
+ * qu'émise au registre fiscal (voir EmettreFactureAction), avec la copie de
+ * son client et le type de ce client (voir FigeLeClient).
  */
 class Facture extends Model implements DocumentEnvoyable
 {
     /** @use HasFactory<FactureFactory> */
-    use BelongsToMagasin, EstEnvoyeParEmail, HasFactory, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, FigeLeClient, HasFactory, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
 
     protected $table = 'factures';
 
-    // numero, statut, date_emission, totaux : jamais en mass assignment,
-    // uniquement via les Actions dédiées (voir
+    // numero, statut, date_emission, totaux, type et copie du client :
+    // jamais en mass assignment, uniquement via les Actions dédiées (voir
     // app/Domain/Facturation/Actions).
     protected $fillable = [
         'client_id',
@@ -143,8 +146,9 @@ class Facture extends Model implements DocumentEnvoyable
 
     /**
      * Un document légal garde son client, même archivé depuis (voir les
-     * SoftDeletes de Client) : la facture reste due, se réimprime et se
-     * relance, et la clôture du jour la compte.
+     * SoftDeletes de Client) : la facture reste due, se règle et se relance.
+     * Elle imprime la copie de ce client prise à son émission (voir
+     * copieClient()).
      */
     public function client(): BelongsTo
     {
@@ -203,28 +207,26 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Les tickets de caisse : les factures numérotées dans la série des
-     * tickets (voir serie()), émises à un particulier. Le premier segment
-     * de leur numéro le dit pour toujours, même si le type du client change
+     * Les tickets de caisse : les ventes émises à un particulier, numérotées
+     * dans la série des tickets (voir serie()). Le type du client figé à
+     * l'émission le dit pour toujours, même si la fiche du client change
      * depuis : un ticket reste dans la clôture de sa journée, et une
-     * facture électronique n'y entre jamais.
+     * facture à un professionnel n'y entre pas.
      */
     public function scopeTickets(Builder $query): Builder
     {
-        return $query->where('numero', 'like', TypeDocument::TicketCaisse->code().'-%');
+        return $query->emises()->where('type_client', TypeClient::Particulier);
     }
 
     /**
      * Les tickets émis tel jour qu'aucune clôture n'a encore comptés (voir
      * CloturerCaisseAction) -- jamais un brouillon, jamais une facture à un
-     * professionnel, qui relève de la facture électronique (voir
-     * relevantDeLeInvoicing()). Un ticket corrigé depuis par un avoir y
-     * figure : l'avoir se déduit à part, le jour de son émission.
+     * professionnel. Un ticket corrigé depuis par un avoir y figure :
+     * l'avoir se déduit à part, le jour de son émission.
      */
     public function scopeEnAttenteDeCloture(Builder $query, CarbonInterface|string $jour): Builder
     {
         return $query
-            ->emises()
             ->tickets()
             ->emisLe($jour)
             ->whereNull('cloture_caisse_id');
@@ -403,7 +405,7 @@ class Facture extends Model implements DocumentEnvoyable
     public function messageDeRelance(): string
     {
         $euros = fn (float $montant): string => number_format($montant, 2, ',', ' ').' €';
-        [$document, $accord] = $this->client->estProfessionnel() ? ['la facture', 'e'] : ['le ticket de caisse', ''];
+        [$document, $accord] = $this->estPourUnProfessionnel() ? ['la facture', 'e'] : ['le ticket de caisse', ''];
 
         return "Sauf erreur de notre part, {$document} {$this->numero} d'un montant de {$euros((float) $this->total_ttc)} TTC, "
             ."arrivé{$accord} à échéance le {$this->date_echeance->format('d/m/Y')}, n'est pas entièrement réglé{$accord} : "
@@ -413,14 +415,13 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Un particulier relève de l'e-reporting agrégé (clôture de caisse),
-     * pas d'une facture transmise individuellement (voir
-     * relevantDeLeInvoicing()) : son document porte le libellé usuel
-     * « Ticket de caisse », même s'il s'agit du même enregistrement.
+     * Une vente à un particulier porte le libellé usuel « Ticket de
+     * caisse », une vente à un professionnel celui de « Facture », d'après
+     * le type du client écrit sur le document (voir serie()).
      */
     public function libelleDocument(): string
     {
-        return $this->client->estProfessionnel() ? 'Facture' : 'Ticket de caisse';
+        return $this->estPourUnProfessionnel() ? 'Facture' : 'Ticket de caisse';
     }
 
     /**
@@ -434,30 +435,32 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * La série dans laquelle la facture a été numérotée à son émission :
-     * tickets de caisse ou factures (voir EmettreFactureAction), chacune
-     * avec son propre circuit fiscal (clôture de caisse et e-reporting,
-     * ou facture électronique). Le premier segment de son numéro la porte
-     * pour toujours (TK-LYON1-2026-000001 est un ticket), même si le type
-     * du client change depuis. Un brouillon n'a encore aucune série.
+     * La série où la vente est numérotée à son émission (voir
+     * EmettreFactureAction) : les tickets de caisse pour un particulier, les
+     * factures pour un professionnel, chacune avec son circuit fiscal
+     * (clôture de caisse et e-reporting, ou facture électronique) et jamais
+     * mélangées dans un même avoir (voir CreerAvoirAction). Elle suit le
+     * type du client écrit sur le document, figé à l'émission : le premier
+     * segment du numéro la porte aussi (TK-LYON1-2026-000001 est un ticket).
      */
-    public function serie(): ?TypeDocument
+    public function serie(): TypeDocument
     {
-        return match (true) {
-            $this->numero === null => null,
-            strstr($this->numero, '-', true) === TypeDocument::TicketCaisse->code() => TypeDocument::TicketCaisse,
-            default => TypeDocument::Facture,
-        };
+        return $this->estPourUnProfessionnel() ? TypeDocument::Facture : TypeDocument::TicketCaisse;
     }
 
     /**
-     * Détermine le circuit réglementaire applicable : une facture à un
-     * client professionnel relève de l'e-invoicing (transmission PDP
-     * individuelle) ; un particulier relève de l'e-reporting agrégé via
-     * la clôture de caisse journalière (non transmise facture par facture).
+     * Le circuit de la vente, d'après le type du client figé sur le
+     * document : une facture à un professionnel se transmet une à une à la
+     * plateforme agréée (facture électronique), un ticket à un particulier
+     * entre dans la clôture de sa journée et dans l'e-reporting agrégé.
+     * Simplification provisoire : l'intégration de SUPER PDP décidera du
+     * circuit depuis le client figé (type, établissement en France, pays)
+     * et la nature de l'opération, puisqu'un professionnel établi hors de
+     * France relève de l'e-reporting des opérations internationales et
+     * qu'un client public ou non assujetti reste hors plateforme.
      */
     public function relevantDeLeInvoicing(): bool
     {
-        return $this->client->estProfessionnel();
+        return $this->estPourUnProfessionnel();
     }
 }

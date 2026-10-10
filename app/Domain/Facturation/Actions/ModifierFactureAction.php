@@ -35,7 +35,10 @@ use LogicException;
  * jamais en la réécrivant.
  *
  * Comme CreerFactureAction, elle reçoit le client déjà résolu par une
- * requête limitée au magasin, jamais un client_id brut venu du formulaire.
+ * requête limitée au magasin, jamais un client_id brut venu du formulaire,
+ * et note de nouveau son type : un brouillon réenregistré après que son
+ * client a changé de type s'émet dans l'autre série (voir
+ * EmettreFactureAction).
  */
 class ModifierFactureAction
 {
@@ -67,7 +70,7 @@ class ModifierFactureAction
                 ->map(fn (LigneFacture $ligne): array => $this->lignesRetirees->comparable($ligne->produit_id, $ligne->service_id, $ligne->description, $ligne->quantite, $ligne->prix_unitaire_ttc))
                 ->all();
 
-            $facture->update([...$attributs, 'client_id' => $client->getKey()]);
+            $facture->fill($attributs)->forceFill(['client_id' => $client->getKey(), 'type_client' => $client->type_client])->save();
 
             $facture->lignes()->delete();
 

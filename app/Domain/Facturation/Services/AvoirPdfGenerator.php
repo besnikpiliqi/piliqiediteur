@@ -8,8 +8,8 @@ use Barryvdh\DomPDF\PDF as PdfDocument;
 
 /**
  * Même principe que FacturePdfGenerator : toujours depuis les données
- * déjà figées de l'avoir (snapshot de ses lignes, totaux), jamais depuis
- * l'état courant du catalogue ou de la facture créditée.
+ * déjà figées de l'avoir (client, lignes, totaux), jamais depuis l'état
+ * courant du catalogue, de la fiche du client ou de la facture créditée.
  */
 class AvoirPdfGenerator
 {

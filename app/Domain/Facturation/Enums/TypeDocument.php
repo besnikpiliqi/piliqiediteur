@@ -16,11 +16,10 @@ enum TypeDocument: string
 {
     case Devis = 'devis';
     case Facture = 'facture';
-    // Vente comptoir à un client particulier (voir
-    // Facture::relevantDeLeInvoicing()) : même table `factures`, mais une
-    // série de numérotation distincte de celle des vraies factures --
-    // deux séries séparées, chacune continue, sont légalement admises
-    // (contrairement à un mélange des deux dans une même série).
+    // Vente à un particulier (voir Facture::serie()) : même table
+    // `factures`, mais une série de numérotation distincte de celle des
+    // factures -- deux séries séparées, chacune continue, sont légalement
+    // admises (contrairement à un mélange des deux dans une même série).
     case TicketCaisse = 'ticket_caisse';
     case Avoir = 'avoir';
     case FactureAchat = 'facture_achat';
@@ -33,7 +32,8 @@ enum TypeDocument: string
      * Le premier segment de chaque numéro de la série, avant le code du
      * magasin et l'année (TK dans TK-LYON1-2026-000001, voir
      * DocumentNumberingService) : il dit pour toujours dans quelle série
-     * un document a été numéroté (voir Facture::serie()).
+     * un document a été numéroté, ce que confronte la vérification de
+     * l'intégrité à ce qui a été signé (voir VerificateurIntegrite).
      */
     public function code(): string
     {

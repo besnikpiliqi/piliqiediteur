@@ -17,28 +17,30 @@ use Illuminate\Support\Facades\DB;
 use LogicException;
 
 /**
- * L'émission est le SEUL moment où une facture reçoit son numéro (voir
- * ta propre règle métier : on ne numérote jamais un brouillon). Elle est
- * donc aussi le seul moment où le stock est impacté et où la transmission
- * PDP peut se déclencher -- avant l'émission, une facture brouillon n'a
- * aucune existence légale ni commerciale.
+ * L'émission est le SEUL moment où une facture reçoit son numéro : un
+ * brouillon n'est jamais numéroté. Elle est donc aussi le seul moment où le
+ * stock est impacté et où la transmission PDP peut se déclencher -- avant
+ * l'émission, une facture brouillon n'a aucune existence légale ni
+ * commerciale.
  *
- * Une vente à un particulier pioche dans la série TicketCaisse plutôt que
- * Facture (même critère que Facture::relevantDeLeInvoicing(), qui décide
- * aussi du circuit PDP applicable) : un ticket de caisse et une vraie
- * facture professionnelle ne doivent jamais se mélanger dans une même
- * suite numérique, même s'ils restent le même enregistrement en base
- * (voir FacturePdfGenerator pour le libellé affiché).
+ * Le type du client écrit sur le brouillon (voir FigeLeClient) choisit la
+ * série : les tickets de caisse pour un particulier, les factures pour un
+ * professionnel (voir Facture::serie()), deux suites numériques qui ne se
+ * mélangent jamais, même si elles restent dans la même table (voir
+ * FacturePdfGenerator pour le libellé affiché). Si la fiche du client a
+ * changé de type depuis l'enregistrement du brouillon, l'émission est
+ * refusée : le brouillon doit être réenregistré pour son nouveau type.
  *
  * Tout se fait dans une seule transaction, dans cet ordre (art. 286 I-3°
  * bis du CGI) :
  *  1. le registre fiscal du magasin est verrouillé, avant la facture et la
  *     numérotation (voir RegistreFiscal) ; il donne l'instant de
  *     l'émission ;
- *  2. la facture, relue verrouillée, reçoit son numéro, dans la série et
- *     l'année de cet instant à l'heure de Paris, et cet instant, en UTC,
- *     pour date d'émission (voir HorodateSonEmission) -- un ticket n'est
- *     plus émis une fois sa journée clôturée, jusqu'à minuit (voir
+ *  2. la facture, relue verrouillée, prend la copie de son client (nom,
+ *     adresse, identifiants), son numéro, dans la série et l'année de cet
+ *     instant à l'heure de Paris, et cet instant, en UTC, pour date
+ *     d'émission (voir HorodateSonEmission) -- un ticket n'est plus émis
+ *     une fois sa journée clôturée, jusqu'à minuit (voir
  *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
  *  3. FactureEmise sort le stock, applique le crédit d'avoir du client et
  *     prépare la transmission PDP ;
@@ -46,7 +48,8 @@ use LogicException;
  *     ce qui reste dû (voir EnregistrerPaiementAction, signé dans la
  *     chaîne des encaissements) ;
  *  5. le document, tel qu'il est alors en base, est signé dans la chaîne
- *     des ventes (voir ContenuFiscal) : règlement et crédit compris.
+ *     des ventes (voir ContenuFiscal) : client figé, règlement et crédit
+ *     compris.
  * Sans clé de signature, ou si l'horloge du serveur a reculé, rien de tout
  * cela n'a lieu : la facture reste un brouillon.
  */
@@ -80,7 +83,15 @@ class EmettreFactureAction
                 throw new LogicException('Impossible d\'émettre une facture sans lignes.');
             }
 
-            $typeDocument = $facture->relevantDeLeInvoicing() ? TypeDocument::Facture : TypeDocument::TicketCaisse;
+            $client = $facture->client;
+
+            if ($client->type_client !== $facture->type_client) {
+                $nouveauType = $client->estProfessionnel() ? 'professionnel' : 'particulier';
+
+                throw new LogicException("Ce client est devenu {$nouveauType} depuis l'enregistrement du brouillon : ouvrez-le et enregistrez-le de nouveau.");
+            }
+
+            $typeDocument = $facture->serie();
 
             if ($typeDocument === TypeDocument::TicketCaisse) {
                 ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($facture->magasin, $instant);
@@ -88,6 +99,7 @@ class EmettreFactureAction
 
             $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, $instant->enHeureLocale()->format('Y'));
 
+            $facture->figerLeClient($client);
             $facture->forceFill([
                 'numero' => $numero,
                 'statut' => StatutFacture::Emise,

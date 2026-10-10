@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
@@ -22,8 +23,9 @@ class Devis extends Model implements DocumentEnvoyable
 
     protected $table = 'devis';
 
-    // numero, statut, date_emission et les totaux sont volontairement
-    // absents : ils ne sont écrits que par CreerDevisAction/EmettreDevisAction,
+    // numero, statut, date_emission, les totaux et le type du client sont
+    // volontairement absents : ils ne sont écrits que par les actions des
+    // devis (CreerDevisAction, ModifierDevisAction, EmettreDevisAction...),
     // jamais par mass assignment depuis une requête utilisateur.
     protected $fillable = [
         'client_id',
@@ -35,6 +37,7 @@ class Devis extends Model implements DocumentEnvoyable
 
     protected $casts = [
         'statut' => StatutDevis::class,
+        'type_client' => TypeClient::class,
         'date_emission' => 'datetime',
         'date_validite' => 'date',
         'total_ht' => 'decimal:2',
@@ -52,11 +55,21 @@ class Devis extends Model implements DocumentEnvoyable
 
     /**
      * Un document légal garde son client, même archivé depuis (voir les
-     * SoftDeletes de Client) : il se réimprime et se renvoie.
+     * SoftDeletes de Client) : il se réimprime et se renvoie. Un devis ne
+     * fige pas son client : il imprime sa fiche telle qu'elle est.
      */
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class)->withTrashed();
+    }
+
+    /**
+     * Le type du client écrit au dernier enregistrement du devis : les
+     * identifiants du client ne s'impriment que pour un professionnel.
+     */
+    public function estPourUnProfessionnel(): bool
+    {
+        return $this->type_client === TypeClient::Professionnel;
     }
 
     public function lignes(): HasMany

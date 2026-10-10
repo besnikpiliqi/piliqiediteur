@@ -11,6 +11,7 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -401,7 +402,7 @@ class TenantIsolationTest extends TestCase
     private static function creerEnregistrement(string $modele, array $attributs = []): Model
     {
         $exiges = match ($modele) {
-            Avoir::class => ['client_id' => Client::factory()->create()->getKey()],
+            Avoir::class => ['client_id' => Client::factory()->create()->getKey(), 'type_client' => TypeClient::Particulier],
             AvoirAllocation::class => [
                 'avoir_id' => self::creerEnregistrement(Avoir::class)->getKey(),
                 'facture_id' => Facture::factory()->create()->getKey(),

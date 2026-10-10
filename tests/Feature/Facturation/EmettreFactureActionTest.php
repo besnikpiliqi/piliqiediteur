@@ -195,8 +195,7 @@ class EmettreFactureActionTest extends TestCase
 
     public function test_impossible_demettre_une_facture_sans_lignes(): void
     {
-        $client = Client::factory()->create();
-        $facture = Facture::create(['client_id' => $client->id]);
+        $facture = Facture::factory()->for(Client::factory()->create())->create();
 
         $this->expectException(LogicException::class);
         app(EmettreFactureAction::class)->handle($facture);

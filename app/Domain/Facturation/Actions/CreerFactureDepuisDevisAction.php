@@ -14,8 +14,10 @@ use LogicException;
  * émise automatiquement : l'émission reste une étape manuelle distincte,
  * voir EmettreFactureAction) -- aucun recalcul de prix, comme
  * CreerAvoirAction reprend les lignes de la facture plutôt que de les
- * reconstruire via ConstructeurLigneDocument. Converti, le devis n'est
- * plus modifiable (voir Devis::estModifiable()).
+ * reconstruire via ConstructeurLigneDocument. La facture prend aussi le
+ * type de client du devis : si le client a changé de type depuis,
+ * l'émission le signale (voir EmettreFactureAction). Converti, le devis
+ * n'est plus modifiable (voir Devis::estModifiable()).
  */
 class CreerFactureDepuisDevisAction
 {
@@ -32,12 +34,15 @@ class CreerFactureDepuisDevisAction
                 throw new LogicException('Ce devis a déjà été converti en facture.');
             }
 
-            $facture = Facture::create([
-                'client_id' => $devis->client_id,
-                'devis_id' => $devis->id,
+            $facture = new Facture([
                 'devise' => $devis->devise,
                 'conditions_paiement' => $devis->conditions_paiement,
             ]);
+            $facture->forceFill([
+                'client_id' => $devis->client_id,
+                'devis_id' => $devis->id,
+                'type_client' => $devis->type_client,
+            ])->save();
 
             foreach ($devis->lignes as $ligne) {
                 $facture->lignes()->create([

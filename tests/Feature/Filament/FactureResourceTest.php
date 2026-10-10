@@ -1113,6 +1113,36 @@ class FactureResourceTest extends TestCase
         return $facture->fresh();
     }
 
+    /**
+     * La liste montre le client tel que le document l'imprime : le nom figé
+     * à l'émission, la fiche pour un brouillon ; la recherche trouve aussi
+     * bien le nom imprimé que celui de la fiche aujourd'hui.
+     */
+    public function test_la_liste_montre_le_client_fige_et_la_recherche_trouve_aussi_la_fiche_actuelle(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create(['nom' => 'Jean Ancien']);
+        $emise = $this->emettreFactureDepuisLePanneau($client);
+        $client->update(['nom' => 'Marc Nouveau']);
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle($client->fresh(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $autre = app(CreerFactureAction::class)->handle(Client::factory()->create(['nom' => 'Paul Tiers']), [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        $liste = Livewire::test(ListFactures::class);
+
+        $liste->assertTableColumnStateSet('client_nom', 'Jean Ancien', $emise)
+            ->assertTableColumnStateSet('client_nom', 'Marc Nouveau', $brouillon);
+        $liste->searchTable('Jean Ancien')
+            ->assertCanSeeTableRecords([$emise])
+            ->assertCanNotSeeTableRecords([$brouillon, $autre]);
+        $liste->searchTable('Marc Nouveau')
+            ->assertCanSeeTableRecords([$emise, $brouillon])
+            ->assertCanNotSeeTableRecords([$autre]);
+    }
+
     public function test_la_liste_ne_montre_que_les_factures_du_vendeur_sans_vue_totale(): void
     {
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());

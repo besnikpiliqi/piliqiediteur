@@ -19,9 +19,28 @@ return new class extends Migration
             // (voir CreerAvoirAction). La facture d'origine de chaque ligne
             // est connue par lignes_avoir.ligne_facture_id.
             $table->foreignId('client_id')->constrained('clients')->restrictOnDelete();
-            // Clôture de caisse qui a déduit cet avoir à un particulier des
+            // Le type du client des tickets ou des factures que l'avoir
+            // corrige (voir CreerAvoirAction), qui ne se mélangent jamais :
+            // particulier pour des tickets de caisse, professionnel pour
+            // des factures.
+            $table->string('type_client', 20);
+            // La copie du client prise à l'émission de l'avoir, son
+            // identité de ce jour-là (voir FigeLeClient), comme pour une
+            // facture (voir factures.client_nom). Vides sur un brouillon.
+            $table->string('client_nom', 150)->nullable();
+            $table->string('client_adresse')->nullable();
+            $table->string('client_complement_adresse')->nullable();
+            $table->string('client_code_postal', 10)->nullable();
+            $table->string('client_ville', 100)->nullable();
+            $table->string('client_pays', 2)->nullable();
+            $table->string('client_siren', 9)->nullable();
+            $table->string('client_siret', 14)->nullable();
+            $table->string('client_numero_tva', 20)->nullable();
+            $table->string('client_identifiant_etranger', 50)->nullable();
+            $table->boolean('client_etabli_en_france')->nullable();
+            // Clôture de caisse qui a déduit cet avoir sur des tickets des
             // ventes de sa journée (voir CloturerCaisseAction) -- jamais
-            // renseignée pour un client professionnel, comme pour une
+            // renseignée pour un avoir sur des factures, comme pour une
             // facture (voir factures.cloture_caisse_id). Seule colonne
             // encore écrite sur un avoir émis : l'étape des clôtures la
             // supprimera.
@@ -47,6 +66,7 @@ return new class extends Migration
             $table->unique(['magasin_id', 'numero']);
             $table->index(['magasin_id', 'client_id']);
             $table->index(['magasin_id', 'cloture_caisse_id']);
+            $table->index(['magasin_id', 'type_client', 'date_emission']);
         });
     }
 

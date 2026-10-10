@@ -4,12 +4,13 @@ namespace App\Domain\Facturation\Models;
 
 use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
+use App\Domain\Facturation\Concerns\FigeLeClient;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\StatutAvoir;
-use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
@@ -32,17 +33,18 @@ use Illuminate\Support\Collection;
  * (voir AvoirPolicy et la migration create_avoirs_table). Une fois
  * numéroté, il ne se modifie plus du tout (voir
  * ProtegeLesDonneesValidees) : il est signé tel qu'émis au registre fiscal
- * (voir EmettreAvoirAction).
+ * (voir EmettreAvoirAction), avec la copie de son client prise ce jour-là
+ * et le type de client des documents qu'il corrige (voir FigeLeClient).
  */
 class Avoir extends Model implements DocumentEnvoyable
 {
-    use BelongsToMagasin, EstEnvoyeParEmail, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, FigeLeClient, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
 
     protected $table = 'avoirs';
 
-    // numero, statut, date_emission, totaux : jamais en mass assignment,
-    // uniquement via EnregistrerAvoirAction (CreerAvoirAction puis
-    // EmettreAvoirAction).
+    // numero, statut, date_emission, totaux, type et copie du client :
+    // jamais en mass assignment, uniquement via EnregistrerAvoirAction
+    // (CreerAvoirAction puis EmettreAvoirAction).
     protected $fillable = [
         'client_id',
         'motif',
@@ -80,7 +82,8 @@ class Avoir extends Model implements DocumentEnvoyable
 
     /**
      * Un document légal garde son client, même archivé depuis (voir les
-     * SoftDeletes de Client) : il se réimprime et se renvoie.
+     * SoftDeletes de Client) : il se renvoie, et il imprime la copie de ce
+     * client prise à son émission (voir copieClient()).
      */
     public function client(): BelongsTo
     {
@@ -88,26 +91,18 @@ class Avoir extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Les avoirs sur des tickets émis tel jour qu'aucune clôture n'a encore
-     * déduits de ses ventes (voir CloturerCaisseAction) : un retour se
-     * compte le jour où il a lieu, pas celui de la vente d'origine.
+     * Les avoirs sur des tickets de caisse (voir corrigeDesTickets()), émis
+     * tel jour, qu'aucune clôture n'a encore déduits de ses ventes (voir
+     * CloturerCaisseAction) : un retour se compte le jour où il a lieu, pas
+     * celui de la vente d'origine.
      */
     public function scopeEnAttenteDeCloture(Builder $query, CarbonInterface|string $jour): Builder
     {
         return $query
-            ->surDesTickets()
+            ->where('type_client', TypeClient::Particulier)
             ->emisLe($jour)
             ->where('statut', StatutAvoir::Emise)
             ->whereNull('cloture_caisse_id');
-    }
-
-    /**
-     * Les avoirs sur des tickets de caisse, en SQL (voir
-     * corrigeDesTickets()).
-     */
-    public function scopeSurDesTickets(Builder $query): Builder
-    {
-        return $query->whereHas('lignes.ligneFacture.facture', fn (Builder $facture) => $facture->tickets());
     }
 
     /**
@@ -116,14 +111,14 @@ class Avoir extends Model implements DocumentEnvoyable
      * l'émet plus une fois cette journée clôturée (voir
      * EmettreAvoirAction), et le registre fiscal l'inscrit en annulation de
      * ticket. Un avoir ne mélange jamais tickets et factures (voir
-     * CreerAvoirAction) : la série de ses documents corrigés, figée dans
-     * leur numéro, le dit pour toujours, même si le type du client change
-     * depuis. Un avoir sur une facture électronique n'entre donc jamais
-     * dans une clôture de caisse.
+     * CreerAvoirAction) : il prend le type de client des documents qu'il
+     * corrige, figé à leur émission, particulier pour des tickets, même si
+     * la fiche du client change depuis. Un avoir sur une facture à un
+     * professionnel n'entre donc jamais dans une clôture de caisse.
      */
     public function corrigeDesTickets(): bool
     {
-        return $this->loadMissing('lignes.ligneFacture.facture')->facturesConcernees()->first()?->serie() === TypeDocument::TicketCaisse;
+        return ! $this->estPourUnProfessionnel();
     }
 
     public function creePar(): BelongsTo

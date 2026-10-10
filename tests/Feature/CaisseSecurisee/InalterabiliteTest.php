@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\Exceptions\DonneeFiscaleInalterableException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
@@ -83,6 +84,8 @@ class InalterabiliteTest extends TestCase
         return [
             'total' => [static fn (): array => ['total_ttc' => '1.00'], 'total_ttc'],
             'client' => [static fn (): array => ['client_id' => Client::factory()->create()->id], 'client_id'],
+            'nom du client figé' => [static fn (): array => ['client_nom' => 'Autre nom'], 'client_nom'],
+            'type du client' => [static fn (): array => ['type_client' => TypeClient::Professionnel], 'type_client'],
             'numéro' => [static fn (): array => ['numero' => 'TK-LYON1-2026-999999'], 'numero'],
             'date d\'émission' => [static fn (): array => ['date_emission' => CarbonImmutable::parse('2020-01-01 00:00:00', 'UTC')], 'date_emission'],
             'notes' => [static fn (): array => ['notes' => 'Réécrite après coup'], 'notes'],

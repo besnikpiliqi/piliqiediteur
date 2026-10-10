@@ -14,17 +14,24 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Exceptions\IdentiteDuMagasinIncompleteException;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\SequenceDocument;
+use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Exceptions\ReglagesCommunsDifferentsException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -221,6 +228,59 @@ class EmettreFactureActionTest extends TestCase
         $this->assertSame([StatutFacture::Payee, '0.00', 0.0, 0.0], [$facture->statut, $facture->total_ttc, $facture->montantPaye(), $facture->montantRestant()]);
         $this->assertSame(0, Paiement::query()->count());
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
+    }
+
+    /**
+     * Seul l'avoir d'un client comptoir du magasin vaut bon d'avoir (K6) :
+     * l'avoir d'un client nommé, même passé tel quel au règlement
+     * comptant, ne règle pas la vente d'un autre client. Le brouillon
+     * reste un brouillon, et le crédit de l'avoir reste à son client.
+     */
+    public function test_l_avoir_d_un_client_nomme_ne_regle_jamais_une_vente_comme_bon_d_avoir(): void
+    {
+        $martin = Client::factory()->create();
+        $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle($martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $avoirDeMartin = app(EnregistrerAvoirAction::class)->handle($martin, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
+
+        try {
+            app(EmettreFactureAction::class)->handle($brouillon, new ReglementComptant(ModePaiement::Especes, bonDAvoir: $avoirDeMartin));
+            $this->fail('L\'avoir d\'un client nommé aurait dû être refusé comme bon d\'avoir.');
+        } catch (LogicException $refus) {
+            $this->assertSame('Ce bon d\'avoir est introuvable ou déjà utilisé.', $refus->getMessage());
+        }
+
+        $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
+        $this->assertSame([12.0, 12.0], [$avoirDeMartin->fresh()->montantNonAlloue(), $martin->soldeCrediteur()]);
+    }
+
+    /**
+     * Le bon d'avoir d'un autre magasin, même passé tel quel au règlement
+     * comptant, ne règle jamais une vente de ce magasin : rien n'est émis.
+     */
+    public function test_le_bon_d_avoir_d_un_autre_magasin_ne_regle_jamais_une_vente(): void
+    {
+        $magasin = app(TenantContext::class)->magasin();
+        $autreMagasin = app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $bonDeLAutreMagasin = app(TenantContext::class)->runAs($autreMagasin, function (): Avoir {
+            $comptoir = Client::query()->where('est_comptoir', true)->sole();
+            $ticket = app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+
+            return app(EnregistrerAvoirAction::class)->handle($comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        });
+        // CreerMagasinAction a rendu actif le magasin qu'elle a créé.
+        app(TenantContext::class)->set($magasin);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
+
+        try {
+            app(EmettreFactureAction::class)->handle($brouillon, new ReglementComptant(ModePaiement::Especes, bonDAvoir: $bonDeLAutreMagasin));
+            $this->fail('Le bon d\'avoir d\'un autre magasin aurait dû être refusé.');
+        } catch (LogicException $refus) {
+            $this->assertSame('Ce bon d\'avoir est introuvable ou déjà utilisé.', $refus->getMessage());
+        }
+
+        $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
+        $this->assertSame(12.0, app(TenantContext::class)->runAs($autreMagasin, fn (): float => $bonDeLAutreMagasin->fresh()->montantNonAlloue()));
     }
 
     public function test_impossible_demettre_une_facture_sans_lignes(): void

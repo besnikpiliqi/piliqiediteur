@@ -14,10 +14,15 @@ use Illuminate\Support\Facades\DB;
  * À l'émission d'une facture (voir EmettreFactureAction), le crédit
  * d'avoir disponible de son client (voir Client::soldeCrediteur()) règle
  * ce qui en reste dû, dans la transaction qui la signe. Ce crédit est ce
- * qu'un avoir n'a pu imputer à son émission ni sur les factures qu'il
- * corrige ni sur les autres factures impayées du client (voir
- * ImputerAvoirSurSesFacturesAction) : il attendait cette nouvelle facture.
- * Un avoir n'est jamais remboursé (B5).
+ * qu'un avoir n'a pu imputer à son émission, le client n'ayant plus
+ * aucune facture due (voir ImputerAvoirSurSesFacturesAction), ou ce que
+ * la contre-passation d'un paiement a rendu à ses avoirs (voir
+ * ContrePasserPaiementAction). Un avoir n'est jamais remboursé (B5).
+ *
+ * Une contre-passation rouvre aussi les factures que réglait le paiement
+ * erroné, sans y imputer ce crédit, qui attend le bon paiement (K9, voir
+ * EnregistrerPaiementAction) : une facture émise entre-temps le prend,
+ * même si une facture plus ancienne ainsi rouverte reste due.
  *
  * Les avoirs les plus anciens sont consommés en premier, et peuvent se
  * répartir sur plusieurs factures successives comme plusieurs avoirs sur

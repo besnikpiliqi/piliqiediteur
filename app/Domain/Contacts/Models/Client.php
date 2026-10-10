@@ -203,9 +203,13 @@ class Client extends Model
      * À son émission, il règle d'abord les factures qu'il corrige, puis les
      * autres factures impayées du client, de la plus ancienne à la plus
      * récente (voir ImputerAvoirSurSesFacturesAction) ; ce qui reste est ce
-     * crédit, que la prochaine facture du client absorbe (voir
-     * AppliquerAvoirsDisponiblesAction) ou que solde un paiement (voir
-     * EnregistrerPaiementAction).
+     * crédit, comme celui que la contre-passation d'un paiement rend à ses
+     * avoirs (voir ContrePasserPaiementAction). La prochaine facture du
+     * client l'absorbe (voir AppliquerAvoirsDisponiblesAction), ou un
+     * paiement le solde sur les factures qu'il règle (voir
+     * EnregistrerPaiementAction). Il peut donc coexister avec des factures
+     * dues : celles qu'une contre-passation a rouvertes sans y imputer ce
+     * crédit, qui attend le bon paiement (K9).
      *
      * Le client comptoir (voir estComptoir()) n'a jamais de solde
      * créditeur : il est partagé par toutes les ventes anonymes du magasin,

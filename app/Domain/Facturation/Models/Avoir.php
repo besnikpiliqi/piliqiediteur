@@ -236,7 +236,8 @@ class Avoir extends Model implements DocumentEnvoyable
      * AppliquerAvoirsDisponiblesAction et EnregistrerPaiementAction),
      * jusqu'à épuisement. Celui d'un avoir fait au client comptoir est son
      * bon d'avoir, que seule la présentation de son numéro impute sur une
-     * vente comptoir (voir EnregistrerVenteCaisseAction).
+     * vente à la caisse, quel qu'en soit le client (voir
+     * EnregistrerVenteCaisseAction).
      */
     public function montantNonAlloue(): float
     {

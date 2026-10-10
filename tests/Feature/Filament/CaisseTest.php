@@ -35,6 +35,7 @@ use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Exceptions;
 use Livewire\Features\SupportTesting\Testable;
@@ -1522,34 +1523,59 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * Un bon d'avoir ne règle qu'une vente au client comptoir : la caisse
-     * ne le propose pas pour un client nommé, choisir un autre client
-     * retire le bon saisi, et l'encaissement refuse un bon envoyé pour un
-     * client nommé, sans rien enregistrer.
+     * K6 : le bon d'avoir règle aussi la vente d'un client nommé. Mme
+     * Martin a 10,00 € de crédit d'avoir à elle et présente le bon de
+     * 12,00 € pour un achat de 15,00 € : son crédit s'impute d'abord,
+     * 10,00 €, puis le bon sur les 5,00 € qui restent ; le ticket, à son
+     * nom, est réglé sans encaissement, et le bon garde 7,00 €.
      */
-    public function test_un_bon_d_avoir_ne_regle_qu_une_vente_au_client_comptoir(): void
+    public function test_le_bon_d_avoir_regle_la_vente_d_un_client_nomme_apres_son_propre_credit(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $bon = $this->bonDAvoirDeDouzeEuros();
+        $martin = Client::factory()->create(['nom' => 'Mme Martin']);
+        $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle($martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $avoirDeMartin = app(EnregistrerAvoirAction::class)->handle($martin, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 15, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class)
+            ->fillForm(['client_id' => $martin->id, 'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes'])
+            ->assertFormComponentActionVisible('total_a_payer', 'utiliserUnBonDAvoir')
+            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001'])
+            ->assertHasNoFormComponentActionErrors()
+            ->assertSeeHtml('Total 15,00 € moins 10,00 € de crédit d&#039;avoir du client et 5,00 € du bon d&#039;avoir AV-MABOUT-2026-000001.')
+            ->assertFormFieldExists('montant_recu', fn (TextInput $champ): bool => $champ->getMinValue() === 0.0);
+
+        $component
+            ->call('encaisser')
+            ->assertNotified(Notification::make()->title('Vente encaissée : facture TK-MABOUT-2026-000003')->body('Réglée intégralement par avoir (15,00 €, AV-MABOUT-2026-000002, AV-MABOUT-2026-000001).')->success());
+
+        $ticket = Facture::query()->where('numero', 'TK-MABOUT-2026-000003')->sole();
+        $this->assertSame([$martin->id, 'Mme Martin'], [(int) $ticket->client_id, $ticket->client_nom]);
+        $this->assertSame([StatutFacture::Payee, 15.0, 0.0, 0.0], [$ticket->statut, $ticket->montantCrediteParAvoir(), $ticket->montantPaye(), $ticket->montantRestant()]);
+        $this->assertSame([7.0, 0.0], [$bon->fresh()->montantNonAlloue(), $martin->soldeCrediteur()]);
+        $this->assertSame(2, Paiement::query()->count());
+        $this->assertSame(
+            [['avoir_id' => $avoirDeMartin->id, 'numero' => 'AV-MABOUT-2026-000002', 'montant' => 1000], ['avoir_id' => $bon->id, 'numero' => 'AV-MABOUT-2026-000001', 'montant' => 500]],
+            $ticket->enregistrementDeVente()->firstOrFail()->contenuSigne()['donnees']['contexte']['credits_avoir'],
+        );
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
+    }
+
+    /**
+     * Le bon d'avoir saisi règle la vente de tout client : choisir un
+     * autre client le garde.
+     */
+    public function test_changer_de_client_garde_le_bon_d_avoir_saisi(): void
     {
         $this->ouvrirLaCaisseDUnMagasin();
         $this->bonDAvoirDeDouzeEuros();
         $martin = Client::factory()->create(['nom' => 'Mme Martin']);
-        $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
         $component = Livewire::test(Caisse::class)
-            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001'])
-            ->assertFormSet(['bon_d_avoir' => 'AV-MABOUT-2026-000001']);
+            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001']);
 
-        $component
-            ->fillForm(['client_id' => $martin->id])
-            ->assertFormSet(['bon_d_avoir' => null])
-            ->assertFormComponentActionHidden('total_a_payer', 'utiliserUnBonDAvoir')
-            ->fillForm([
-                'bon_d_avoir' => 'AV-MABOUT-2026-000001',
-                'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
-                'mode_paiement' => 'especes',
-            ])
-            ->call('encaisser')
-            ->assertNotified('Un bon d\'avoir ne règle qu\'une vente au client comptoir.');
+        $component->fillForm(['client_id' => $martin->id]);
 
-        $this->assertSame([1, 1], [Facture::query()->count(), Paiement::query()->count()]);
+        $component->assertFormSet(['bon_d_avoir' => 'AV-MABOUT-2026-000001']);
     }
 
     private function ouvrirLaCaisseDUnMagasin(): Magasin

@@ -23,12 +23,13 @@ use Tests\TestCase;
 
 /**
  * Un avoir émis n'est jamais remboursé (B5) : ce qu'il n'a pas pu imputer
- * à son émission sur les factures impayées du client, déjà réglées (voir
- * ImputerAvoirSurSesFacturesAction), reste un crédit disponible pour le
- * client (particulier ou professionnel, sans distinction) jusqu'à ce
- * qu'une prochaine facture vienne l'absorber -- automatiquement, à
- * l'émission (voir AppliquerAvoirDisponibleApresEmissionFacture), sans
- * action du vendeur.
+ * à son émission, le client n'ayant plus aucune facture due (voir
+ * ImputerAvoirSurSesFacturesAction), comme ce que la contre-passation
+ * d'un paiement a rendu à ses avoirs (voir ContrePasserPaiementAction),
+ * reste un crédit disponible pour le client (particulier ou
+ * professionnel, sans distinction) jusqu'à ce qu'une prochaine facture
+ * vienne l'absorber -- automatiquement, à l'émission (voir
+ * AppliquerAvoirDisponibleApresEmissionFacture), sans action du vendeur.
  */
 class AppliquerAvoirsDisponiblesActionTest extends TestCase
 {

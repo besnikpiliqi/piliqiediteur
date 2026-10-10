@@ -25,9 +25,10 @@ use LogicException;
  * EmettreFactureAction) : le ticket signé au registre fiscal porte ce
  * règlement, ou le crédit d'avoir qui l'a couvert.
  *
- * Au client comptoir, le numéro d'un avoir qui lui a été fait vaut bon
- * d'avoir (K6) : présenté à la vente, il impute son crédit restant sur le
- * nouveau ticket, au plus son total, et le reste se paie dans le mode
+ * Le numéro d'un avoir fait au client comptoir vaut bon d'avoir (K6) :
+ * présenté à une vente, quel qu'en soit le client, il impute son crédit
+ * restant sur ce que le crédit d'avoir du client laisse dû de la nouvelle
+ * facture (voir EmettreFactureAction), et le reste se paie dans le mode
  * choisi. Un numéro qui ne désigne aucun avoir du client comptoir du
  * magasin (celui d'un client nommé, ou d'un autre magasin) ou dont le
  * crédit est épuisé est refusé, sans rien enregistrer.
@@ -69,7 +70,7 @@ class EnregistrerVenteCaisseAction
                 throw new LogicException('Ce client n\'est pas un client du magasin.');
             }
 
-            $bon = $bonDAvoir === null ? null : $this->bonDAvoirUtilisable($client, $bonDAvoir);
+            $bon = $bonDAvoir === null ? null : $this->bonDAvoirUtilisable($bonDAvoir);
             $facture = $this->emettreFacture->handle(
                 $this->creerFacture->handle($client, $lignes),
                 new ReglementComptant($modePaiement, $reference, $bon),
@@ -88,16 +89,12 @@ class EnregistrerVenteCaisseAction
     /**
      * Le bon d'avoir de ce numéro, relu verrouillé sous le verrou du
      * registre : un avoir émis au client comptoir du magasin dont il reste
-     * du crédit, présenté pour une vente à ce même client comptoir.
+     * du crédit.
      *
      * @throws LogicException
      */
-    private function bonDAvoirUtilisable(Client $client, string $numero): Avoir
+    private function bonDAvoirUtilisable(string $numero): Avoir
     {
-        if (! $client->estComptoir()) {
-            throw new LogicException('Un bon d\'avoir ne règle qu\'une vente au client comptoir.');
-        }
-
         $bon = Avoir::query()->bonDAvoir($numero)->lockForUpdate()->first();
 
         if ($bon === null || $bon->montantNonAlloue() <= 0) {

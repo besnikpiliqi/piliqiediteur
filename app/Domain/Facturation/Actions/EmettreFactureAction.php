@@ -69,7 +69,8 @@ use LogicException;
  *  3. FactureEmise sort le stock, applique le crédit d'avoir du client et
  *     prépare la transmission PDP ;
  *  4. le règlement comptant d'une vente au comptoir impute d'abord le
- *     bon d'avoir présenté, s'il y en a un (voir imputerLeBonDAvoir()) ;
+ *     bon d'avoir présenté, s'il y en a un, sur ce que le crédit du client
+ *     laisse dû (voir imputerLeBonDAvoir()) ;
  *     une facture dont il ne reste alors rien à payer, parce que ce crédit
  *     ou ce bon la couvre ou qu'elle ne coûte rien (remise de 100 %), passe
  *     « payée » sans encaissement : elle n'attend aucun règlement et ne
@@ -185,9 +186,11 @@ class EmettreFactureAction
 
     /**
      * Le bon d'avoir présenté au comptoir (voir EnregistrerVenteCaisseAction)
-     * impute son crédit restant sur le ticket, au plus ce qui en reste dû :
-     * un avoir du client du ticket, le client comptoir, dont le crédit,
-     * relu sous le verrou du registre, n'est pas épuisé.
+     * impute son crédit restant sur la facture, quel qu'en soit le client,
+     * au plus ce qu'en laisse dû le crédit du client, déjà imputé (voir
+     * AppliquerAvoirsDisponiblesAction) : un avoir du client comptoir du
+     * magasin de la facture, dont le crédit, relu sous le verrou du
+     * registre, n'est pas épuisé.
      *
      * @throws LogicException
      */
@@ -195,7 +198,7 @@ class EmettreFactureAction
     {
         $montant = min($bon->montantNonAlloue(), $facture->montantRestant());
 
-        if (! $facture->client->estComptoir() || (int) $bon->client_id !== (int) $facture->client_id || $montant <= 0) {
+        if ((int) $bon->magasin_id !== (int) $facture->magasin_id || ! ($bon->client?->estComptoir() ?? false) || $montant <= 0) {
             throw new LogicException(Avoir::BON_D_AVOIR_INTROUVABLE);
         }
 
@@ -208,7 +211,7 @@ class EmettreFactureAction
 
     /**
      * Une vente au comptoir est soldée dès son émission : ce qui reste dû
-     * après le crédit d'avoir du client, ou le bon d'avoir présenté, est
+     * après le crédit d'avoir du client et le bon d'avoir présenté est
      * encaissé.
      */
     private function encaisserComptant(Facture $facture, ReglementComptant $reglement, string $recuLe): void

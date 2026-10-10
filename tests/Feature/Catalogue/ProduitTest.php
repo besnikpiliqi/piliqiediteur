@@ -12,6 +12,7 @@ use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -67,7 +68,7 @@ class ProduitTest extends TestCase
 
     /**
      * « ABC » et « abc » sont la même référence : le modèle le dit avant
-     * que l'index unique (magasin_id, lower(reference)) ne refuse.
+     * que l'index unique (magasin_id, reference_normalisee) ne refuse.
      */
     public function test_une_reference_deja_prise_sous_une_autre_casse_est_refusee(): void
     {
@@ -79,9 +80,39 @@ class ProduitTest extends TestCase
     }
 
     /**
-     * La base elle-même refuse une référence déjà prise sous une autre
-     * casse, même par une requête qui ne passe pas par le modèle ; la
-     * référence reste enregistrée telle que saisie.
+     * La casse d'une lettre accentuée compte comme celle d'une autre
+     * lettre, sur les deux moteurs : la clé de la référence se calcule en
+     * PHP, pas par le lower() de la base, qui sous SQLite ne met en
+     * minuscules que les lettres ASCII.
+     */
+    public function test_une_reference_accentuee_deja_prise_sous_une_autre_casse_est_refusee(): void
+    {
+        Produit::factory()->create(['reference' => 'ÉCRAN-1']);
+
+        $this->assertTrue(Produit::referenceDejaPrise('écran-1'));
+        $this->assertThrows(
+            $this->dansUnPointDeSauvegarde(fn () => Produit::factory()->create(['reference' => 'écran-1'])),
+            InvalidArgumentException::class,
+            'La référence « écran-1 » est déjà celle d\'un autre produit.',
+        );
+        $this->assertSame(['ÉCRAN-1'], Produit::query()->pluck('reference')->all());
+    }
+
+    public function test_une_reference_accentuee_prise_dans_un_autre_magasin_reste_libre(): void
+    {
+        Produit::factory()->create(['reference' => 'ÉCRAN-1']);
+        $autreMagasin = Magasin::factory()->create();
+        app(TenantContext::class)->set($autreMagasin);
+
+        $produit = Produit::factory()->create(['reference' => 'écran-1']);
+
+        $this->assertSame(['écran-1', $autreMagasin->id], [$produit->reference, $produit->magasin_id]);
+    }
+
+    /**
+     * La base elle-même refuse une seconde référence de même clé, même par
+     * une requête qui ne passe pas par le modèle ; la référence reste
+     * enregistrée telle que saisie.
      */
     public function test_la_base_refuse_une_reference_deja_prise_sous_une_autre_casse(): void
     {
@@ -90,10 +121,38 @@ class ProduitTest extends TestCase
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('produits')->insert([
             'magasin_id' => $produit->magasin_id,
             'reference' => 'abc',
+            'reference_normalisee' => Produit::normaliserReference('abc'),
             'nom' => 'Doublon',
             'taux_tva' => 20,
         ])), UniqueConstraintViolationException::class);
 
+        $this->assertSame(['ABC'], Produit::query()->pluck('reference')->all());
+    }
+
+    /**
+     * Un autre membre du magasin enregistre « ABC » juste après la
+     * vérification de la référence « abc », avant son écriture (simulé par
+     * un enregistrement direct en base, dès la fin de la requête de
+     * vérification) : la référence est refusée comme si elle avait été
+     * prise avant, au lieu d'une erreur de l'index unique, et la
+     * transaction en cours reste utilisable (point de sauvegarde).
+     */
+    public function test_une_reference_prise_entre_temps_par_un_autre_membre_est_refusee_sans_erreur_de_la_base(): void
+    {
+        $magasinId = app(TenantContext::class)->id();
+        $autreMembreAEnregistre = false;
+        DB::listen(static function (QueryExecuted $requete) use (&$autreMembreAEnregistre, $magasinId): void {
+            if (! $autreMembreAEnregistre && str_starts_with($requete->sql, 'select') && str_contains($requete->sql, 'reference_normalisee')) {
+                $autreMembreAEnregistre = true;
+                DB::table('produits')->insert(['magasin_id' => $magasinId, 'reference' => 'ABC', 'reference_normalisee' => 'abc', 'nom' => 'Écran', 'taux_tva' => 20]);
+            }
+        });
+
+        $this->assertThrows(
+            fn () => Produit::factory()->create(['reference' => 'abc']),
+            InvalidArgumentException::class,
+            'La référence « abc » est déjà celle d\'un autre produit.',
+        );
         $this->assertSame(['ABC'], Produit::query()->pluck('reference')->all());
     }
 

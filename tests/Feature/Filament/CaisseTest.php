@@ -792,6 +792,57 @@ class CaisseTest extends TestCase
     }
 
     /**
+     * La recherche des services passe par le serveur, sans casse ni
+     * accents : « ECRAN » propose « Remplacement écran », jamais le
+     * service d'un autre magasin, même quand il correspond.
+     */
+    public function test_la_recherche_d_un_service_ignore_la_casse_et_les_accents(): void
+    {
+        $autreProprietaire = User::factory()->create();
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre Boutique'], $autreProprietaire);
+        Service::factory()->create(['nom' => 'Écran de la concurrence']);
+        $this->ouvrirLaCaisseDUnMagasin();
+        Service::factory()->create(['nom' => 'Remplacement écran']);
+        Service::factory()->create(['nom' => 'Diagnostic']);
+
+        Livewire::test(Caisse::class)
+            ->mountFormComponentAction('ajouterUnServiceAction', 'ajouterUnService')
+            ->setFormComponentActionData(['recherche' => 'ECRAN'])
+            ->assertSee('Remplacement écran')
+            ->assertDontSee('Diagnostic')
+            ->assertDontSee('Écran de la concurrence')
+            ->assertDontSee('Aucun service ne correspond.');
+    }
+
+    /**
+     * Un service déjà coché reste proposé, et ajouté, quand la recherche
+     * ne le trouve plus ; une recherche sans résultat le dit.
+     */
+    public function test_un_service_coche_reste_propose_quand_la_recherche_ne_le_trouve_plus(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $diagnostic = Service::factory()->create(['nom' => 'Diagnostic']);
+        Service::factory()->create(['nom' => 'Nettoyage']);
+
+        Livewire::test(Caisse::class)
+            ->mountFormComponentAction('ajouterUnServiceAction', 'ajouterUnService')
+            ->setFormComponentActionData(['recherche' => 'batterie'])
+            ->assertSee('Aucun service ne correspond.')
+            ->assertDontSee('Diagnostic')
+            ->assertDontSee('Nettoyage');
+
+        $component = Livewire::test(Caisse::class)
+            ->mountFormComponentAction('ajouterUnServiceAction', 'ajouterUnService')
+            ->setFormComponentActionData(['services' => [$diagnostic->id], 'recherche' => 'nettoy'])
+            ->assertSee('Diagnostic')
+            ->assertSee('Nettoyage')
+            ->callMountedFormComponentAction()
+            ->assertHasNoFormComponentActionErrors();
+
+        $this->assertSame($diagnostic->id, $this->seuleLigne($component)['service_id']);
+    }
+
+    /**
      * Le vendeur au comptoir doit pouvoir facturer une réparation qui n'est
      * pas encore dans la liste, sans permission de catalogue.
      */

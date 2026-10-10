@@ -27,10 +27,11 @@ return [
     | rapides ; la suite complète passe sur les deux (voir CLAUDE.md). La
     | base PostgreSQL est créée avec la collation déterministe C.UTF-8 :
     | l'ordre binaire, celui de SQLite, ne change jamais l'ordre d'un
-    | contenu signé. Les recherches ignorent la casse et les accents par la
-    | fonction sans_casse_ni_accents(), créée par une migration sous
-    | PostgreSQL et enregistrée sur chaque connexion SQLite (voir
-    | RechercheSansAccents).
+    | contenu signé, et lower() met en minuscules toutes les lettres, pas
+    | seulement celles de l'ASCII. Les recherches ignorent la casse et les
+    | accents par la fonction sans_casse_ni_accents(), le même pliage
+    | créé par une migration sous PostgreSQL et enregistré sur chaque
+    | connexion SQLite (voir RechercheSansAccents).
     |
     */
 

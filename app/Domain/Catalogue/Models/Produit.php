@@ -14,6 +14,7 @@ use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use Closure;
 use Database\Factories\ProduitFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -21,6 +22,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\UniqueConstraintViolationException;
 use InvalidArgumentException;
 
 /**
@@ -80,6 +82,8 @@ class Produit extends Model
             if (blank($produit->reference)) {
                 $produit->reference = $produit->referenceAutomatiqueLibre();
             }
+
+            $produit->reference_normalisee = self::normaliserReference($produit->reference);
         });
     }
 
@@ -201,17 +205,45 @@ class Produit extends Model
     }
 
     /**
+     * Clé de doublon d'une référence, que compare l'index unique
+     * (magasin_id, reference_normalisee) : la référence sans tenir compte
+     * de la casse (« ABC », « abc » ; « ÉCRAN-1 », « écran-1 »), par le
+     * repliement de casse d'Unicode, calculé en PHP pour que SQLite et
+     * PostgreSQL décident pareil. Les accents restent : « ECRAN-1 » et
+     * « ÉCRAN-1 » sont deux références.
+     */
+    public static function normaliserReference(string $reference): string
+    {
+        return mb_convert_case($reference, MB_CASE_FOLD_SIMPLE, 'UTF-8');
+    }
+
+    /**
      * Vrai quand un autre produit du magasin, archivés compris, porte déjà
-     * cette référence, quelle que soit la casse (« ABC » et « abc » sont
-     * la même référence) : l'index unique (magasin_id, lower(reference))
-     * la refuserait. La comparaison passe par le même lower() que l'index.
+     * cette référence, quelle que soit la casse : l'index unique la
+     * refuserait.
      */
     public static function referenceDejaPrise(string $reference, ?self $sauf = null): bool
     {
         return static::withTrashed()
-            ->whereRaw('lower(reference) = lower(?)', [$reference])
+            ->where('reference_normalisee', self::normaliserReference($reference))
             ->when($sauf?->exists, fn (Builder $produits) => $produits->whereKeyNot($sauf->getKey()))
             ->exists();
+    }
+
+    /**
+     * @param  Builder<Produit>  $query
+     */
+    protected function performInsert(Builder $query): bool
+    {
+        return $this->refuserUneReferencePriseEntreTemps($query, fn (): bool => parent::performInsert($query));
+    }
+
+    /**
+     * @param  Builder<Produit>  $query
+     */
+    protected function performUpdate(Builder $query): bool
+    {
+        return $this->refuserUneReferencePriseEntreTemps($query, fn (): bool => parent::performUpdate($query));
     }
 
     /**
@@ -226,8 +258,41 @@ class Produit extends Model
         }
 
         if (self::referenceDejaPrise($this->reference, $this)) {
-            throw new InvalidArgumentException("La référence « {$this->reference} » est déjà celle d'un autre produit.");
+            throw $this->referenceRefusee();
         }
+    }
+
+    /**
+     * Deux membres du magasin qui enregistrent la même référence au même
+     * instant (« ABC » et « abc ») passent tous deux
+     * verifierQueSaReferenceEstLibre() : l'index unique retient le
+     * premier, et le second reçoit le même refus que si la référence
+     * avait été prise avant lui, jamais une erreur de la base. L'écriture
+     * se tente dans un point de sauvegarde quand une transaction est
+     * ouverte (validation d'une facture d'achat) : sous PostgreSQL, le
+     * refus de l'index annulerait sinon toute la transaction, et la
+     * référence ne pourrait plus être relue. Tout autre refus de la base
+     * remonte tel quel.
+     *
+     * @param  Builder<Produit>  $query
+     * @param  Closure(): bool  $ecriture
+     */
+    private function refuserUneReferencePriseEntreTemps(Builder $query, Closure $ecriture): bool
+    {
+        try {
+            return $query->withSavepointIfNeeded($ecriture);
+        } catch (UniqueConstraintViolationException $doublon) {
+            if (! self::referenceDejaPrise($this->reference, $this)) {
+                throw $doublon;
+            }
+
+            throw $this->referenceRefusee($doublon);
+        }
+    }
+
+    private function referenceRefusee(?UniqueConstraintViolationException $doublon = null): InvalidArgumentException
+    {
+        return new InvalidArgumentException("La référence « {$this->reference} » est déjà celle d'un autre produit.", previous: $doublon);
     }
 
     /**

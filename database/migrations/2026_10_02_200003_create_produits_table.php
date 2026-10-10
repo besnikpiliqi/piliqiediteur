@@ -2,7 +2,6 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -16,6 +15,11 @@ return new class extends Migration
             // même archivé depuis : une fiche utilisée ne s'efface jamais.
             $table->foreignId('fournisseur_id')->nullable()->constrained('fournisseurs')->restrictOnDelete();
             $table->string('reference', 60);
+            // Clé de doublon de la référence, calculée en PHP (voir
+            // Produit::normaliserReference()) : « ABC » et « abc » sont la
+            // même référence, sur les deux moteurs. La référence reste
+            // enregistrée telle que saisie.
+            $table->string('reference_normalisee', 60);
             $table->string('code_barres', 50)->nullable();
             $table->string('nom', 200);
             $table->string('taille', 20)->nullable();
@@ -46,15 +50,11 @@ return new class extends Migration
             // stock, et se restaure.
             $table->softDeletes();
 
+            // Une référence est unique dans le magasin, archivés compris,
+            // sans tenir compte de la casse.
+            $table->unique(['magasin_id', 'reference_normalisee']);
             $table->index(['magasin_id', 'code_barres']);
         });
-
-        // Une référence est unique dans le magasin sans tenir compte de la
-        // casse (« ABC » et « abc » sont la même référence), archivés
-        // compris, et s'enregistre telle que saisie : index unique sur
-        // l'expression lower(reference), que Produit::referenceDejaPrise()
-        // reprend pour la validation.
-        DB::statement('CREATE UNIQUE INDEX produits_magasin_reference_unique ON produits (magasin_id, lower(reference))');
     }
 
     public function down(): void

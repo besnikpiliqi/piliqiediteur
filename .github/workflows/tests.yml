@@ -75,8 +75,9 @@ jobs:
   # La suite complète sur PostgreSQL, le moteur de production : base en
   # UTF8 et collation déterministe C.UTF-8 (POSTGRES_INITDB_ARGS), comme en
   # production. Le compte des tests n'est pas superutilisateur : il crée
-  # les bases des processus parallèles (CREATEDB) et l'extension unaccent,
-  # de confiance, comme le propriétaire de la base de production.
+  # seulement les bases des processus parallèles (CREATEDB), puis leurs
+  # tables et leurs fonctions, comme le propriétaire de la base de
+  # production.
   postgresql:
     runs-on: ubuntu-latest
 

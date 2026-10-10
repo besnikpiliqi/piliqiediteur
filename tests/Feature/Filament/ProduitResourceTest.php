@@ -24,6 +24,7 @@ use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
@@ -265,9 +266,9 @@ class ProduitResourceTest extends TestCase
     }
 
     /**
-     * « ABC » et « abc » sont la même référence (index unique sur
-     * lower(reference)) : la saisie est refusée comme un doublon, au lieu
-     * d'échouer sur l'index.
+     * « ABC » et « abc » sont la même référence (voir
+     * Produit::normaliserReference()) : la saisie est refusée comme un
+     * doublon, au lieu d'échouer sur l'index.
      */
     public function test_une_reference_deja_prise_sous_une_autre_casse_est_refusee(): void
     {
@@ -278,6 +279,34 @@ class ProduitResourceTest extends TestCase
             ->fillForm(['reference' => 'abc', 'nom' => 'Autre écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
             ->call('create')
             ->assertHasFormErrors(['reference' => fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_REFERENCE_PRISE]]);
+
+        $this->assertSame(['ABC'], Produit::query()->pluck('reference')->all());
+    }
+
+    /**
+     * Un autre membre du magasin enregistre « ABC » juste après la
+     * validation du formulaire (simulé par un enregistrement direct en
+     * base, dès la fin de la requête de validation) : le refus du modèle
+     * s'affiche et la saisie reste à l'écran, jamais une page d'erreur.
+     */
+    public function test_une_reference_prise_juste_apres_la_validation_du_formulaire_est_refusee_par_une_notification(): void
+    {
+        $this->connecterProprietaire();
+        $magasinId = app(TenantContext::class)->id();
+        $autreMembreAEnregistre = false;
+        DB::listen(static function (QueryExecuted $requete) use (&$autreMembreAEnregistre, $magasinId): void {
+            if (! $autreMembreAEnregistre && str_starts_with($requete->sql, 'select') && str_contains($requete->sql, 'reference_normalisee')) {
+                $autreMembreAEnregistre = true;
+                DB::table('produits')->insert(['magasin_id' => $magasinId, 'reference' => 'ABC', 'reference_normalisee' => 'abc', 'nom' => 'Écran', 'taux_tva' => 20]);
+            }
+        });
+
+        Livewire::test(CreateProduit::class)
+            ->fillForm(['reference' => 'abc', 'nom' => 'Autre écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
+            ->call('create')
+            ->assertHasNoFormErrors()
+            ->assertNotified('La référence « abc » est déjà celle d\'un autre produit.')
+            ->assertFormSet(['reference' => 'abc', 'nom' => 'Autre écran']);
 
         $this->assertSame(['ABC'], Produit::query()->pluck('reference')->all());
     }

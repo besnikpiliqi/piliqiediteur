@@ -13,7 +13,7 @@ use Tests\TestCase;
  * supprimée qu'après celles qui la référencent). Sous PostgreSQL, rien
  * ne survit non plus dans le schéma : ni les fonctions de refus des
  * tables protégées (voir DeclencheursDeProtection::retirer()), ni la
- * fonction des recherches et l'extension unaccent.
+ * fonction des recherches.
  *
  * DatabaseMigrations, pas RefreshDatabase : comme un vrai déploiement,
  * hors de toute transaction englobante.

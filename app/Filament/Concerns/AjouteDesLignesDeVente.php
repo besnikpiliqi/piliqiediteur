@@ -13,6 +13,7 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ProduitResource;
@@ -33,6 +34,7 @@ use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Support\Enums\ActionSize;
 use Filament\Support\Enums\MaxWidth;
+use Illuminate\Database\Eloquent\Builder;
 use InvalidArgumentException;
 use Livewire\Component as LivewireComponent;
 use Livewire\Livewire;
@@ -411,7 +413,10 @@ trait AjouteDesLignesDeVente
      * Cases à cocher des services que le magasin a déjà créés ; un service
      * qui n'y est pas encore se crée ici et y sera proposé la prochaine
      * fois (voir TrouverOuCreerServiceAction). Chaque service coché devient
-     * une ligne dont le vendeur saisit le prix TTC.
+     * une ligne dont le vendeur saisit le prix TTC. La recherche passe par
+     * le serveur, sans casse ni accents (voir servicesProposes()) : celle
+     * d'une liste de cases à cocher de Filament, faite dans le navigateur,
+     * tiendrait compte des accents.
      *
      * Ouvert à quiconque peut vendre, création comprise : un service n'est
      * qu'un nom, sans prix ni stock, et le vendeur doit pouvoir facturer une
@@ -428,17 +433,25 @@ trait AjouteDesLignesDeVente
             ->modalSubmitActionLabel('Ajouter')
             ->modalWidth(MaxWidth::Large)
             ->form([
+                TextInput::make('recherche')
+                    ->label('Rechercher un service')
+                    ->placeholder('Ex. : ecran')
+                    ->live(debounce: 300)
+                    ->dehydrated(false)
+                    ->visible(fn (): bool => Service::query()->actifs()->exists()),
                 CheckboxList::make('services')
                     ->label('Services du magasin')
-                    ->options(fn (): array => Service::query()->actifs()->orderBy('nom')->pluck('nom', 'id')->all())
-                    ->searchable()
-                    ->noSearchResultsMessage('Aucun service ne correspond.')
+                    ->options(fn (Get $get): array => self::servicesProposes($get('recherche'), $get('services')))
                     ->visible(fn (): bool => Service::query()->actifs()->exists())
                     ->required(fn (Get $get): bool => blank($get('nouveau_service')))
                     // Pas d'astérisque : un nouveau service tapé plus bas
                     // dispense de cocher.
                     ->markAsRequired(false)
                     ->validationMessages(['required' => 'Cochez au moins un service, ou écrivez le nom d\'un nouveau service.']),
+                Placeholder::make('aucun_service_ne_correspond')
+                    ->hiddenLabel()
+                    ->content('Aucun service ne correspond.')
+                    ->visible(fn (Get $get): bool => filled($get('recherche')) && self::servicesProposes($get('recherche'), $get('services')) === []),
                 TextInput::make('nouveau_service')
                     ->label(fn (): string => Service::query()->actifs()->exists() ? 'Le service n\'est pas dans la liste ?' : 'Nom du service')
                     ->placeholder('Ex. : Remplacement écran')
@@ -448,6 +461,31 @@ trait AjouteDesLignesDeVente
                     ->required(fn (): bool => ! Service::query()->actifs()->exists()),
             ])
             ->action(fn (array $data, HasForms $livewire) => self::ajouterLesServices($livewire, $data));
+    }
+
+    /**
+     * Les services actifs du magasin (MagasinScope) dont le nom contient
+     * le terme cherché, sans casse ni accents (« ecran » trouve
+     * « Remplacement écran ») ; ceux déjà cochés restent proposés même
+     * s'ils ne correspondent plus au terme, pour rester visibles et
+     * décochables.
+     *
+     * @return array<int, string>
+     */
+    private static function servicesProposes(mixed $recherche, mixed $coches): array
+    {
+        $recherche = is_string($recherche) ? trim($recherche) : '';
+        $coches = array_map('intval', is_array($coches) ? $coches : []);
+
+        return Service::query()
+            ->actifs()
+            ->when($recherche !== '', fn (Builder $services): Builder => $services->where(
+                fn (Builder $services): Builder => RechercheSansAccents::appliquer($services, $recherche, ['nom'])->orWhereKey($coches),
+            ))
+            ->orderBy('nom')
+            ->orderBy('id')
+            ->pluck('nom', 'id')
+            ->all();
     }
 
     /**

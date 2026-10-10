@@ -41,9 +41,13 @@ use LogicException;
  * nouveau produit reçu sans prix (voir BaremePrixDeVente).
  *
  * Créer ou corriger un produit depuis une ligne suit les droits de la page
- * Produits (voir ProduitPolicy), vérifiés ici, à l'enregistrement de la
- * ligne, et non seulement dans le formulaire, dont l'état se forge. Sans
- * utilisateur connecté (facture récupérée automatiquement chez le
+ * Produits (voir ProduitPolicy), vérifiés ici, à l'enregistrement des
+ * lignes, et non seulement dans le formulaire, dont l'état se forge : la
+ * fiche d'un produit existant se corrige avec le droit de la modifier, et
+ * celle d'un nouveau produit se saisit ou se change avec le droit d'en
+ * créer. La validation crée ensuite le produit que cette saisie a
+ * autorisé, sans redemander ce droit (voir verifierLesNouveauxProduits()).
+ * Sans utilisateur connecté (facture récupérée automatiquement chez le
  * fournisseur), il n'y a aucun droit à vérifier.
  *
  * Corriger le taux de TVA d'un produit existant s'inscrit au journal des
@@ -109,12 +113,11 @@ class ConstructeurLigneAchat
     }
 
     /**
-     * Enregistre les lignes de la facture d'achat, puis ses totaux. Deux
-     * nouveaux produits de la même facture ne portent jamais la même
-     * référence, sans tenir compte de la casse, comme deux produits du
-     * catalogue (voir Produit::normaliserReference()). Une facture déjà
-     * validée crée tout de suite ses nouveaux produits (voir
-     * creerLesNouveauxProduits()).
+     * Enregistre les lignes de la facture d'achat, à la place de celles
+     * qu'elle avait, puis ses totaux. La fiche de chaque nouveau produit
+     * est vérifiée une fois toutes les lignes enregistrées (voir
+     * verifierLesNouveauxProduits()). Une facture déjà validée crée tout
+     * de suite ses nouveaux produits (voir creerLesNouveauxProduits()).
      *
      * @param  list<array{produit_id?: int|string|null, produit?: array<string, mixed>, quantite: int|string, prix_unitaire_ht?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}>  $lignes
      */
@@ -124,27 +127,25 @@ class ConstructeurLigneAchat
             throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
         }
 
-        $lignesCreees = [];
-        $referencesDesNouveauxProduits = [];
+        $fichesDejaSaisies = $factureAchat->lignes()
+            ->whereNull('produit_id')
+            ->get()
+            ->map(fn (LigneAchat $ligne): array => self::ficheComparable($ligne->nouveau_produit))
+            ->all();
+        $factureAchat->lignes()->delete();
+
+        $lignesEnregistrees = [];
 
         foreach (array_values($lignes) as $ordre => $donnees) {
-            $ligne = $this->enregistrerUneLigne($factureAchat, $donnees, $ordre);
-            $reference = $ligne->nouveau_produit['reference'] ?? null;
-
-            if ($reference !== null) {
-                $cle = Produit::normaliserReference($reference);
-
-                if (in_array($cle, $referencesDesNouveauxProduits, true)) {
-                    throw new InvalidArgumentException("Deux nouveaux produits de cette facture d'achat ont la même référence « {$reference} ».");
-                }
-
-                $referencesDesNouveauxProduits[] = $cle;
-            }
-
-            $lignesCreees[] = $ligne->only(['montant_ht', 'montant_tva', 'montant_ttc']);
+            $lignesEnregistrees[] = $this->enregistrerUneLigne($factureAchat, $donnees, $ordre);
         }
 
-        $factureAchat->forceFill($this->calculateur->totaliser($lignesCreees))->save();
+        $this->verifierLesNouveauxProduits($lignesEnregistrees, $fichesDejaSaisies);
+
+        $factureAchat->forceFill($this->calculateur->totaliser(array_map(
+            fn (LigneAchat $ligne): array => $ligne->only(['montant_ht', 'montant_tva', 'montant_ttc']),
+            $lignesEnregistrees,
+        )))->save();
 
         // Sa marchandise est déjà reçue : le nouveau produit d'une
         // correction naît tout de suite, pour entrer en stock avec elle
@@ -188,6 +189,75 @@ class ConstructeurLigneAchat
     }
 
     /**
+     * Vérifie la fiche de chaque nouveau produit une fois toutes les lignes
+     * enregistrées, et les fiches des produits existants corrigées : quel
+     * que soit l'ordre des lignes, sa référence n'est ni celle d'un produit
+     * du catalogue, archivé ou corrigé par une autre ligne compris (voir
+     * Produit::verifierQueSaReferenceEstLibre()), ni celle d'un autre
+     * nouveau produit de la facture, sans tenir compte de la casse (voir
+     * Produit::normaliserReference()).
+     *
+     * Le droit de créer des produits se demande à qui saisit une fiche
+     * nouvelle ou changée (voir verifierLeDroitDEnregistrer()). Reprendre
+     * telle quelle une fiche que le brouillon gardait déjà ($fichesDejaSaisies)
+     * ne crée rien de plus que ce que sa saisie a autorisé : un membre qui
+     * ne peut pas créer de produits corrige les autres lignes d'un
+     * brouillon, ou le valide, sans toucher au nouveau produit qu'un
+     * collègue y a saisi ; il ne change pas cette fiche et ne la recopie
+     * pas sur une seconde ligne, chaque fiche gardée ne servant qu'une fois.
+     *
+     * @param  list<LigneAchat>  $lignes
+     * @param  list<array<string, mixed>>  $fichesDejaSaisies  voir ficheComparable()
+     */
+    private function verifierLesNouveauxProduits(array $lignes, array $fichesDejaSaisies): void
+    {
+        $referencesDesNouveauxProduits = [];
+
+        foreach ($lignes as $ligne) {
+            if ($ligne->nouveau_produit === null) {
+                continue;
+            }
+
+            $produit = new Produit($ligne->nouveau_produit);
+            $ficheDejaSaisie = array_search(self::ficheComparable($ligne->nouveau_produit), $fichesDejaSaisies, true);
+
+            if ($ficheDejaSaisie === false) {
+                $this->verifierLeDroitDEnregistrer($produit);
+            } else {
+                unset($fichesDejaSaisies[$ficheDejaSaisie]);
+            }
+
+            if (blank($produit->reference)) {
+                continue;
+            }
+
+            $produit->verifierQueSaReferenceEstLibre();
+            $cle = Produit::normaliserReference($produit->reference);
+
+            if (in_array($cle, $referencesDesNouveauxProduits, true)) {
+                throw new InvalidArgumentException("Deux nouveaux produits de cette facture d'achat ont la même référence « {$produit->reference} ».");
+            }
+
+            $referencesDesNouveauxProduits[] = $cle;
+        }
+    }
+
+    /**
+     * La fiche d'un nouveau produit (voir ficheDuNouveauProduit()), ses
+     * attributs dans un ordre fixe, pour la comparer strictement à une
+     * autre.
+     *
+     * @param  array<string, mixed>  $fiche
+     * @return array<string, mixed>
+     */
+    private static function ficheComparable(array $fiche): array
+    {
+        ksort($fiche);
+
+        return $fiche;
+    }
+
+    /**
      * @param  array<string, mixed>  $donnees
      */
     private function enregistrerUneLigne(FactureAchat $factureAchat, array $donnees, int $ordre): LigneAchat
@@ -203,12 +273,11 @@ class ConstructeurLigneAchat
             ? $donnees['prix_unitaire_ht']
             : (($produit->exists ? $produit->dernierPrixDAchatHt() : null) ?? throw new InvalidArgumentException('Une ligne d\'achat doit fournir prix_unitaire_ht.'))));
 
+        // Sans prix de vente donné, un nouveau produit prend celui du barème
+        // du magasin (voir BaremePrixDeVente), s'il en prévoit un à ce prix
+        // d'achat ; sa fiche est vérifiée avec celles des autres lignes
+        // (voir verifierLesNouveauxProduits()).
         if (! $produit->exists) {
-            $this->verifierLeDroitDEnregistrer($produit);
-            $produit->verifierQueSaReferenceEstLibre();
-
-            // Sans prix de vente donné, celui du barème du magasin (voir
-            // BaremePrixDeVente), s'il en prévoit un à ce prix d'achat.
             if (blank($produit->prix_vente_ttc)) {
                 $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, $prixUnitaireHt, $remise, (float) $produit->taux_tva);
             }
@@ -245,7 +314,10 @@ class ConstructeurLigneAchat
      * La fiche qu'un brouillon garde pour le nouveau produit, telle que le
      * produit la lira (ses casts : prix et taux au centième, suivi du
      * stock en booléen), sans les attributs laissés vides, qui prendront
-     * leur valeur par défaut.
+     * leur valeur par défaut. Le suivi du stock et le seuil d'alerte y
+     * figurent toujours, à leur valeur par défaut quand la ligne ne les
+     * donne pas (voir Produit::$attributes) : deux saisies du même produit
+     * donnent la même fiche (voir verifierLesNouveauxProduits()).
      *
      * @return array<string, mixed>
      */

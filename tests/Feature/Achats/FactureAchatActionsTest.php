@@ -35,6 +35,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class FactureAchatActionsTest extends TestCase
@@ -304,6 +305,43 @@ class FactureAchatActionsTest extends TestCase
     }
 
     /**
+     * Un nouveau produit ne prend pas la référence qu'une autre ligne de la
+     * facture donne à un produit existant, quel que soit l'ordre des
+     * lignes : le brouillon est refusé tout entier et la fiche du produit
+     * existant reste intacte -- sinon il serait accepté pour être refusé à
+     * la validation.
+     */
+    #[DataProvider('ordresDesLignes')]
+    public function test_un_nouveau_produit_ne_prend_pas_la_reference_donnee_a_un_produit_existant_de_la_facture(bool $nouveauProduitDAbord): void
+    {
+        $existant = Produit::factory()->create(['reference' => 'OLD-1', 'taux_tva' => 20]);
+        $lignes = [
+            ['produit' => ['nom' => 'Coque', 'reference' => 'X-1', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 4, 'prix_unitaire_ht' => 3],
+            ['produit_id' => $existant->id, 'produit' => ['reference' => 'x-1'], 'quantite' => 1, 'prix_unitaire_ht' => 2],
+        ];
+
+        $this->assertThrows(
+            fn () => app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), $nouveauProduitDAbord ? $lignes : array_reverse($lignes)),
+            InvalidArgumentException::class,
+            'La référence « X-1 » est déjà celle d\'un autre produit.',
+        );
+
+        $this->assertSame('OLD-1', $existant->fresh()->reference);
+        $this->assertSame(0, FactureAchat::query()->count());
+    }
+
+    /**
+     * @return array<string, array{bool}>
+     */
+    public static function ordresDesLignes(): array
+    {
+        return [
+            'nouveau produit d\'abord' => [true],
+            'produit existant d\'abord' => [false],
+        ];
+    }
+
+    /**
      * Les références automatiques (PRD-000001...) se prennent dans l'ordre
      * des validations, pas dans celui des brouillons.
      */
@@ -430,6 +468,64 @@ class FactureAchatActionsTest extends TestCase
 
         $this->assertSame(0, Produit::query()->count());
         $this->assertSame(0, FactureAchat::query()->count());
+    }
+
+    /**
+     * Un membre qui ne peut pas créer de produits corrige la quantité d'une
+     * autre ligne du brouillon où le propriétaire a saisi un nouveau
+     * produit, puis valide ce brouillon : la fiche gardée telle quelle ne
+     * redemande pas le droit de créer, et la Coque naît à la validation.
+     * 2 x 2,00 € + 4 x 3,00 € = 16,00 € HT + 3,20 € de TVA = 19,20 € TTC.
+     */
+    public function test_sans_droit_de_creer_des_produits_un_membre_corrige_et_valide_le_brouillon_qui_garde_le_nouveau_produit_d_un_collegue(): void
+    {
+        [$fournisseur, $brouillon, $lignes, $existant] = $this->brouillonDuProprietaireAvecUnNouveauProduitPuisUnMembreSansDroitDeCreer();
+        $lignes[0]['quantite'] = 2;
+
+        app(ModifierFactureAchatAction::class)->handle($brouillon, $fournisseur, $lignes);
+        app(ValiderFactureAchatAction::class)->handle($brouillon);
+
+        $coque = Produit::query()->where('nom', 'Coque')->sole();
+        $this->assertSame([$fournisseur->id, '3.0000', '15.00', 4], [$coque->fournisseur_id, $coque->cmup_ht, $coque->prix_vente_ttc, $coque->stock_quantite]);
+        $this->assertSame(2, $existant->fresh()->stock_quantite);
+        $brouillon->refresh();
+        $this->assertSame(['16.00', '3.20', '19.20'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
+    }
+
+    /**
+     * Sans le droit de créer des produits, changer la fiche du nouveau
+     * produit qu'un collègue a saisi, ou la recopier sur une seconde ligne,
+     * est refusé : le brouillon reste tel quel.
+     *
+     * @param  Closure(list<array<string, mixed>>): list<array<string, mixed>>  $modification
+     */
+    #[DataProvider('fichesNouvellesOuChangees')]
+    public function test_sans_droit_de_creer_des_produits_une_fiche_nouvelle_ou_changee_est_refusee(Closure $modification): void
+    {
+        [$fournisseur, $brouillon, $lignes] = $this->brouillonDuProprietaireAvecUnNouveauProduitPuisUnMembreSansDroitDeCreer();
+
+        $this->assertThrows(
+            fn () => app(ModifierFactureAchatAction::class)->handle($brouillon, $fournisseur, $modification($lignes)),
+            LogicException::class,
+            'Vous ne pouvez pas créer de produit : « Coque » doit d\'abord être ajouté au catalogue.',
+        );
+
+        $this->assertSame(
+            [[1, null], [4, '15.00']],
+            $brouillon->lignes()->orderBy('ordre')->get()->map(fn (LigneAchat $ligne): array => [$ligne->quantite, $ligne->nouveau_produit['prix_vente_ttc'] ?? null])->all(),
+        );
+        $this->assertSame(1, Produit::query()->count());
+    }
+
+    /**
+     * @return array<string, array{Closure(list<array<string, mixed>>): list<array<string, mixed>>}>
+     */
+    public static function fichesNouvellesOuChangees(): array
+    {
+        return [
+            'prix de vente changé' => [fn (array $lignes): array => [$lignes[0], array_replace_recursive($lignes[1], ['produit' => ['prix_vente_ttc' => 12]])]],
+            'fiche recopiée sur une seconde ligne' => [fn (array $lignes): array => [...$lignes, $lignes[1]]],
+        ];
     }
 
     public function test_une_quantite_achetee_non_entiere_est_refusee(): void
@@ -1122,10 +1218,10 @@ class FactureAchatActionsTest extends TestCase
 
     /**
      * Retiré de sa dernière facture d'achat, le produit revient au
-     * fournisseur de l'achat validé d'avant ; retiré de son seul achat, il
-     * garde son fournisseur.
+     * fournisseur de l'achat validé d'avant ; retiré de son seul achat
+     * validé, il n'a plus de fournisseur, puisqu'il n'a plus d'achat validé.
      */
-    public function test_un_produit_retire_de_sa_derniere_facture_reprend_le_fournisseur_de_l_achat_d_avant(): void
+    public function test_un_produit_retire_de_sa_derniere_facture_reprend_le_fournisseur_de_l_achat_d_avant_ou_aucun(): void
     {
         $ancien = Fournisseur::factory()->create();
         $dernier = Fournisseur::factory()->create();
@@ -1144,7 +1240,30 @@ class FactureAchatActionsTest extends TestCase
         ]);
 
         $this->assertSame($ancien->id, $produit->fresh()->fournisseur_id);
-        $this->assertSame($dernier->id, $seulAchat->fresh()->fournisseur_id);
+        $this->assertNull($seulAchat->fresh()->fournisseur_id);
+    }
+
+    /**
+     * Le nouveau produit né à la validation d'une facture d'achat, puis
+     * retiré de cette seule facture par sa correction, sort du stock et n'a
+     * plus de fournisseur.
+     */
+    public function test_un_nouveau_produit_retire_de_sa_seule_facture_validee_n_a_plus_de_fournisseur(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $autre = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir($fournisseur, [
+            ['produit' => ['nom' => 'Coque', 'reference' => 'COQ-1', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 4, 'prix_unitaire_ht' => 3],
+        ]);
+        $coque = Produit::query()->where('reference', 'COQ-1')->sole();
+        $this->assertSame([$fournisseur->id, 4], [$coque->fournisseur_id, $coque->stock_quantite]);
+
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => $autre->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
+        ]);
+
+        $coque->refresh();
+        $this->assertSame([null, 0, 0], [$coque->fournisseur_id, $coque->stock_quantite, $coque->achatsValides()->count()]);
     }
 
     /**
@@ -1490,6 +1609,35 @@ class FactureAchatActionsTest extends TestCase
     private function recevoir(Fournisseur $fournisseur, array $lignes): FactureAchat
     {
         return app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, $lignes));
+    }
+
+    /**
+     * Le propriétaire enregistre un brouillon qui reçoit 1 produit existant
+     * à 2,00 € HT et 4 nouvelles Coques à 3,00 € HT, à revendre 15,00 €
+     * TTC ; puis un membre qui saisit et valide les achats, mais ne peut pas
+     * créer de produits, se connecte.
+     *
+     * @return array{Fournisseur, FactureAchat, list<array<string, mixed>>, Produit}
+     */
+    private function brouillonDuProprietaireAvecUnNouveauProduitPuisUnMembreSansDroitDeCreer(): array
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $this->actingAs($this->proprietaireDe($magasin));
+        $fournisseur = Fournisseur::factory()->create();
+        $existant = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $lignes = [
+            ['produit_id' => $existant->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
+            ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 4, 'prix_unitaire_ht' => 3],
+        ];
+        $brouillon = app(CreerFactureAchatAction::class)->handle($fournisseur, $lignes);
+        $this->actingAs($this->membre($magasin, RoleMagasin::Observateur, [
+            PermissionRegistry::FACTURE_ACHAT_VIEW,
+            PermissionRegistry::FACTURE_ACHAT_CREER,
+            PermissionRegistry::FACTURE_ACHAT_VALIDER,
+            PermissionRegistry::PRODUIT_VIEW,
+        ]));
+
+        return [$fournisseur, $brouillon, $lignes, $existant];
     }
 
     /**

@@ -41,9 +41,10 @@ class ProduitResource extends Resource
     protected static ?string $pluralModelLabel = 'produits';
 
     /**
-     * Voir StockLedgerService::receptionner().
+     * Voir StockLedgerService::receptionner() et
+     * StockLedgerService::retournerAuFournisseur().
      */
-    private const AIDE_CMUP = 'Le coût moyen du stock, recalculé à chaque facture d\'achat validée avec le prix réellement payé, remise et escompte déduits.';
+    private const AIDE_CMUP = 'Le coût moyen du stock, recalculé à chaque facture d\'achat validée, au prix réellement payé, remise et escompte déduits, et à chaque retour au fournisseur, au coût de la ligne d\'achat retournée.';
 
     /**
      * Référence, code-barres, nom, taille et couleur : la fiche produit et
@@ -235,9 +236,10 @@ class ProduitResource extends Resource
                 ])->columns(2),
 
             Section::make('Prix et TVA')->schema([
-                // Saisi une fois, à la création ; ensuite seules les
-                // factures d'achat validées le font évoluer (voir
-                // StockLedgerService::receptionner()).
+                // Saisi une fois, à la création ; ensuite seuls les achats
+                // le font évoluer : chaque facture d'achat validée ou
+                // corrigée, et chaque retour au fournisseur (voir
+                // StockLedgerService).
                 TextInput::make('cmup_ht')
                     ->label(fn (string $operation): string => $operation === 'create' ? 'Prix d\'achat HT' : 'Coût moyen pondéré (CMUP) HT')
                     ->numeric()

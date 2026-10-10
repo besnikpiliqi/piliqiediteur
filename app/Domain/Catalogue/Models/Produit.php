@@ -56,6 +56,18 @@ class Produit extends Model
     // (voir rattacherAuFournisseur()), jamais un choix de formulaire.
 
     /**
+     * Les valeurs par défaut de la base, dès la création du modèle : la
+     * fiche d'un nouveau produit qu'une facture d'achat brouillon garde les
+     * porte déjà (voir ConstructeurLigneAchat::ficheDuNouveauProduit()).
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'suivi_stock' => true,
+        'seuil_alerte' => 0,
+    ];
+
+    /**
      * Ce que le fournisseur dit du produit : figé dès que le produit est
      * reçu sur une facture d'achat récupérée automatiquement (voir
      * vientDUneFactureAchatApi()).
@@ -159,11 +171,13 @@ class Produit extends Model
      * Le fournisseur d'un produit est celui de son dernier achat validé,
      * facture saisie à la main ou récupérée automatiquement (voir
      * IncrementerStockApresValidationFactureAchat et
-     * ModifierFactureAchatAction). Seules cette méthode et la création
-     * d'un nouveau produit à la validation de sa facture d'achat (voir
-     * ConstructeurLigneAchat::creerLesNouveauxProduits()) l'écrivent.
+     * ModifierFactureAchatAction) ; aucun quand la correction d'une facture
+     * d'achat le retire de son seul achat validé. Seules cette méthode et la
+     * création d'un nouveau produit, à la validation de sa facture d'achat
+     * ou à la correction d'une facture déjà validée (voir
+     * ConstructeurLigneAchat::creerLesNouveauxProduits()), l'écrivent.
      */
-    public function rattacherAuFournisseur(int $fournisseurId): void
+    public function rattacherAuFournisseur(?int $fournisseurId): void
     {
         $this->forceFill(['fournisseur_id' => $fournisseurId])->save();
     }

@@ -858,6 +858,49 @@ class FactureAchatResourceTest extends TestCase
     }
 
     /**
+     * Un membre qui ne peut pas créer de produits rouvre le brouillon où le
+     * propriétaire a saisi un nouveau produit, corrige la quantité de
+     * l'autre ligne, puis le valide : la fiche gardée, relue et renvoyée par
+     * le formulaire, n'a pas changé (le suivi du stock et le seuil d'alerte
+     * que le propriétaire n'avait pas donnés prennent leur valeur par
+     * défaut), et la Coque naît à la validation.
+     */
+    public function test_sans_droit_de_creer_des_produits_un_brouillon_qui_garde_le_nouveau_produit_d_un_collegue_se_corrige_et_se_valide(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $existant = Produit::factory()->create(['nom' => 'Écran iPhone 13', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $brouillon = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit_id' => $existant->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
+            ['produit' => ['nom' => 'Coque', 'prix_vente_ttc' => 15, 'taux_tva' => 20], 'quantite' => 4, 'prix_unitaire_ht' => 3],
+        ]);
+        $this->actingAs($this->membre($magasin, RoleMagasin::Observateur, [
+            PermissionRegistry::FACTURE_ACHAT_VIEW,
+            PermissionRegistry::FACTURE_ACHAT_CREER,
+            PermissionRegistry::FACTURE_ACHAT_VALIDER,
+            PermissionRegistry::PRODUIT_VIEW,
+        ]));
+        Filament::setTenant($magasin);
+        $component = Livewire::test(EditFactureAchat::class, ['record' => $brouillon->getRouteKey()]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->mountFormComponentAction('lignes', 'modifierLaLigne', arguments: ['item' => $cle])
+            ->setFormComponentActionData(['quantite' => 2])
+            ->callMountedFormComponentAction()
+            ->assertHasNoFormComponentActionErrors()
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertNotNotified('Vous ne pouvez pas créer de produit : « Coque » doit d\'abord être ajouté au catalogue.');
+        $this->assertSame([2, 4], $brouillon->lignes()->orderBy('ordre')->pluck('quantite')->all());
+        Livewire::test(ListFacturesAchat::class)->callTableAction('valider', $brouillon);
+
+        $coque = Produit::query()->where('nom', 'Coque')->sole();
+        $this->assertSame(['15.00', true, 0, 4], [$coque->prix_vente_ttc, $coque->suivi_stock, $coque->seuil_alerte, $coque->stock_quantite]);
+        $this->assertSame(2, $existant->fresh()->stock_quantite);
+        $this->assertSame(['16.00', '19.20'], [$brouillon->fresh()->total_ht, $brouillon->fresh()->total_ttc]);
+    }
+
+    /**
      * Corriger une facture d'achat validée, c'est corriger une réception
      * déjà entrée en stock : sans le droit de valider les factures d'achat,
      * sa page de modification est refusée et le stock ne bouge pas.

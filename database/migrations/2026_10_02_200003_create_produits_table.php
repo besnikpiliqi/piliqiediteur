@@ -25,9 +25,11 @@ return new class extends Migration
             $table->string('taille', 20)->nullable();
             $table->string('couleur', 30)->nullable();
             // Coût moyen unitaire pondéré HT du stock (voir
-            // StockLedgerService::receptionner()), au dix-millième d'euro :
-            // recalculé à chaque réception, un arrondi au centime à chaque
-            // fois finirait par dériver.
+            // StockLedgerService::receptionner() et
+            // StockLedgerService::retournerAuFournisseur()), au dix-millième
+            // d'euro : recalculé à chaque réception et à chaque retour au
+            // fournisseur, un arrondi au centime à chaque fois finirait par
+            // dériver.
             $table->decimal('cmup_ht', 14, 4)->default(0);
             // Le prix de vente est saisi et enregistré en TTC, tel que
             // l'affiche le magasin ; le HT n'en est que la conversion au

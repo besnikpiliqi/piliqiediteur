@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
@@ -196,7 +197,9 @@ class ProduitResourceTest extends TestCase
 
     /**
      * Un produit reçu sur une facture d'achat affiche le fournisseur chez
-     * qui il vient d'être acheté ; un produit jamais acheté n'en a pas.
+     * qui il vient d'être acheté ; un produit jamais acheté n'en a pas, ni
+     * un produit que la correction de sa seule facture d'achat validée a
+     * retiré.
      */
     public function test_la_fiche_produit_affiche_le_fournisseur_de_sa_facture_dachat(): void
     {
@@ -206,13 +209,22 @@ class ProduitResourceTest extends TestCase
             ['produit' => ['nom' => 'Câble USB-C', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 0.47],
         ]);
         app(ValiderFactureAchatAction::class)->handle($factureAchat);
+        $cable = Produit::query()->sole();
 
-        Livewire::test(EditProduit::class, ['record' => Produit::query()->sole()->getRouteKey()])
+        Livewire::test(EditProduit::class, ['record' => $cable->getRouteKey()])
             ->assertFormSet(['cmup_ht' => '0.47'])
             ->assertSee('Grossiste du Sud')
             ->assertSee('Celui de sa dernière facture d\'achat validée, saisie à la main ou reçue automatiquement.');
         Livewire::test(CreateProduit::class)
             ->assertSee('Aucun achat validé');
+
+        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+            ['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
+        ]);
+
+        Livewire::test(EditProduit::class, ['record' => $cable->getRouteKey()])
+            ->assertSee('Aucun achat validé')
+            ->assertDontSee('Grossiste du Sud');
     }
 
     /**

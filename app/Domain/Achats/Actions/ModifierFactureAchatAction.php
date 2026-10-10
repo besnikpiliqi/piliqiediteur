@@ -90,7 +90,6 @@ class ModifierFactureAchatAction
                 : [];
 
             $factureAchat->update([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]);
-            $factureAchat->lignes()->delete();
 
             $this->constructeurLignes->enregistrer($factureAchat, $lignes);
 
@@ -111,7 +110,8 @@ class ModifierFactureAchatAction
      * réellement fait entrer en stock, et non le suivi du stock coché ou
      * décoché sur sa fiche ou sa ligne, qui dit ce qui se corrige. Chacun
      * reprend aussi le fournisseur de son dernier achat validé -- pas
-     * forcément celui de cette facture, si elle n'est pas la plus récente.
+     * forcément celui de cette facture, si elle n'est pas la plus récente --
+     * et n'en a plus aucun quand il n'en reste aucun.
      *
      * @param  list<int>  $produitsAvant
      */
@@ -133,9 +133,7 @@ class ModifierFactureAchatAction
                 "Correction de la facture d'achat {$factureAchat->numero}",
             );
 
-            if (($dernierAchat = $produit->dernierAchatValide()) !== null) {
-                $produit->rattacherAuFournisseur($dernierAchat->factureAchat->fournisseur_id);
-            }
+            $produit->rattacherAuFournisseur($produit->dernierAchatValide()?->factureAchat->fournisseur_id);
         }
     }
 

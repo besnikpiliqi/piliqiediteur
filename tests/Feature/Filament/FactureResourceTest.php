@@ -19,6 +19,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -644,7 +645,7 @@ class FactureResourceTest extends TestCase
             ->assertSee('74,99')
             ->assertDontSee('85,00');
 
-        $pdf = view('factures.pdf', ['facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir')])->render();
+        $pdf = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
         $this->assertStringContainsString('66,66', $pdf);
         $this->assertStringContainsString('74,99', $pdf);
         $this->assertStringContainsString('84,99', $pdf);
@@ -715,7 +716,7 @@ class FactureResourceTest extends TestCase
             ->assertDontSee('20.00 %')
             ->assertDontSee('0.00 %');
 
-        $pdf = view('factures.pdf', ['facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir')])->render();
+        $pdf = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
         $this->assertStringContainsString('<td class="montant">2</td>', $pdf);
         $this->assertStringContainsString('<td class="montant">20 %</td>', $pdf);
         $this->assertStringContainsString('<td class="montant">0 %</td>', $pdf);
@@ -1520,7 +1521,7 @@ class FactureResourceTest extends TestCase
         $avecRemise = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 2, 'remise_pourcentage' => 12.5]]);
         $sansRemise = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 2]]);
 
-        $rendre = fn (Facture $facture): string => view('factures.pdf', ['facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir')])->render();
+        $rendre = fn (Facture $facture): string => app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $pdf = $rendre($avecRemise);
         $this->assertStringContainsString('<th class="montant">Remise</th>', $pdf);

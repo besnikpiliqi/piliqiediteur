@@ -8,6 +8,7 @@ use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
 use App\Domain\Facturation\Concerns\FigeLeClient;
+use App\Domain\Facturation\Concerns\FigeSonEmetteur;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\StatutAvoir;
@@ -36,11 +37,12 @@ use Illuminate\Support\Collection;
  * ProtegeLesDonneesValidees) : il est signé tel qu'émis au registre fiscal
  * (voir EmettreAvoirAction), avec le client des documents qu'il corrige,
  * son type, son nom, son adresse et ses identifiants, tels que ces
- * documents les ont figés (voir FigeLeClient).
+ * documents les ont figés (voir FigeLeClient), et l'émetteur qu'il
+ * imprime pour toujours (voir FigeSonEmetteur).
  */
 class Avoir extends Model implements DocumentEnvoyable
 {
-    use BelongsToMagasin, EstEnvoyeParEmail, FigeLeClient, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, FigeLeClient, FigeSonEmetteur, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
 
     protected $table = 'avoirs';
 

@@ -15,6 +15,7 @@ use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -61,7 +62,7 @@ class TypeClientFigeTest extends TestCase
 
     private function rendu(Facture $facture): string
     {
-        return view('factures.pdf', ['facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir')])->render();
+        return app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
     }
 
     /**
@@ -208,7 +209,7 @@ class TypeClientFigeTest extends TestCase
             ['type_client' => 'professionnel', 'nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320'],
             Arr::only($this->clientSigne($avoir), ['type_client', 'nom', 'siren', 'siret', 'numero_tva']),
         );
-        $pdf = view('avoirs.pdf', ['avoir' => $avoir->load('client', 'lignes.ligneFacture.facture', 'magasin')])->render();
+        $pdf = app(AvoirPdfGenerator::class)->html($avoir->load('client', 'lignes.ligneFacture.facture', 'magasin'));
         $this->assertStringContainsString('SIREN : 732829320', $pdf);
         $this->assertStringContainsString('SIRET : 73282932000074', $pdf);
         $this->assertStringContainsString('N° TVA : FR44732829320', $pdf);

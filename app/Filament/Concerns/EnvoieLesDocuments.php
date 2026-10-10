@@ -2,6 +2,7 @@
 
 namespace App\Filament\Concerns;
 
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Models\Avoir;
@@ -37,7 +38,10 @@ trait EnvoieLesDocuments
 {
     /**
      * Dès que le document a son numéro : un brouillon n'a encore aucune
-     * existence pour le client.
+     * existence pour le client. Le PDF se produit avant le téléchargement :
+     * un ticket, une facture ou un avoir qui ne peut pas être reproduit tel
+     * qu'il a été émis (voir DocumentSansEnregistrementSigneException) ne
+     * se télécharge pas, et l'écran dit pourquoi.
      *
      * @template TAction of MountableAction
      *
@@ -50,17 +54,22 @@ trait EnvoieLesDocuments
             ->label('PDF')
             ->icon('heroicon-o-arrow-down-tray')
             ->visible(fn (Model&DocumentEnvoyable $record): bool => filled($record->numero))
-            ->action(function (Facture|Devis|Avoir $record): StreamedResponse {
+            ->action(function (Facture|Devis|Avoir $record): ?StreamedResponse {
                 $generateur = match (true) {
                     $record instanceof Facture => app(FacturePdfGenerator::class),
                     $record instanceof Devis => app(DevisPdfGenerator::class),
                     $record instanceof Avoir => app(AvoirPdfGenerator::class),
                 };
 
-                return response()->streamDownload(
-                    fn () => print ($generateur->generer($record)->output()),
-                    $generateur->nomFichier($record),
-                );
+                try {
+                    $pdf = $generateur->generer($record)->output();
+                } catch (DocumentSansEnregistrementSigneException $refus) {
+                    static::notifierLeRefus($refus);
+
+                    return null;
+                }
+
+                return response()->streamDownload(fn () => print ($pdf), $generateur->nomFichier($record));
             });
     }
 

@@ -63,9 +63,7 @@ class FacturePdfGeneratorTest extends TestCase
 
         $this->assertStringStartsWith('%PDF', $generateur->generer($facture)->output());
         $this->assertSame("ticket-{$facture->numero}.pdf", $generateur->nomFichier($facture));
-        $this->assertStringContainsString('Jeanne Archivée', view('factures.pdf', [
-            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
-        ])->render());
+        $this->assertStringContainsString('Jeanne Archivée', app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir')));
     }
 
     /**
@@ -142,9 +140,7 @@ class FacturePdfGeneratorTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
 
-        $html = view('factures.pdf', [
-            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
-        ])->render();
+        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $this->assertSame($optionDebits, str_contains($html, e("Option pour le paiement de la taxe d'après les débits")));
     }
@@ -179,9 +175,7 @@ class FacturePdfGeneratorTest extends TestCase
             $natures,
         )));
 
-        $html = view('factures.pdf', [
-            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
-        ])->render();
+        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $this->assertStringContainsString(e("Catégorie de l'opération : {$categorie}").'</div>', $html);
     }
@@ -212,9 +206,7 @@ class FacturePdfGeneratorTest extends TestCase
         ]));
         $facture = $this->factureEmise();
 
-        $html = view('factures.pdf', [
-            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
-        ])->render();
+        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $this->assertStringContainsString(
             '<div class="magasin-nom">Boutique du Port</div>'
@@ -250,9 +242,7 @@ class FacturePdfGeneratorTest extends TestCase
         ]));
         $facture = $this->ticketEmis();
 
-        $html = view('factures.pdf', [
-            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
-        ])->render();
+        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $enTete = Str::betweenFirst($html, '<table class="en-tete">', '</table>');
         $this->assertStringContainsString('<div class="magasin-nom">Boutique du Port</div></td>', $this->compacte($enTete));
@@ -270,9 +260,7 @@ class FacturePdfGeneratorTest extends TestCase
         app(TenantContext::class)->set(Magasin::factory()->create(['raison_sociale' => 'Martin et Fils', 'forme_juridique' => 'SARL', 'capital_social' => null]));
         $facture = $this->factureEmise();
 
-        $html = view('factures.pdf', [
-            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
-        ])->render();
+        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $this->assertStringContainsString('</div>Martin et Fils SARL<br>', $this->compacte($html));
         $this->assertStringNotContainsString('au capital', $html);
@@ -291,9 +279,7 @@ class FacturePdfGeneratorTest extends TestCase
             'Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.',
             'Pas d\'escompte pour paiement anticipé.',
         ];
-        $rendu = fn (Facture $facture): string => view('factures.pdf', [
-            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
-        ])->render();
+        $rendu = fn (Facture $facture): string => app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $facture = $rendu($this->factureEmise());
         $ticket = $rendu($this->ticketEmis());
@@ -313,9 +299,7 @@ class FacturePdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->create(['mention_escompte' => 'Escompte de 1 % pour paiement sous 8 jours.']));
 
-        $html = view('factures.pdf', [
-            'facture' => $this->factureEmise()->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
-        ])->render();
+        $html = app(FacturePdfGenerator::class)->html($this->factureEmise()->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $this->assertStringContainsString('<div class="pied">Escompte de 1 % pour paiement sous 8 jours.</div>', $html);
         $this->assertStringNotContainsString(e('Pas d\'escompte pour paiement anticipé.'), $html);
@@ -358,9 +342,10 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertSame("ticket-{$facture->numero}.pdf", $generateur->nomFichier($facture));
 
         // Le binaire PDF compilé n'est pas cherchable en texte brut
-        // (flux compressés) : on vérifie le libellé sur le gabarit Blade
-        // lui-même plutôt que sur la sortie de dompdf.
-        $html = view('factures.pdf', ['facture' => $facture->load('client', 'lignes', 'magasin')])->render();
+        // (flux compressés) : on vérifie le libellé sur la page HTML que
+        // reçoit dompdf (voir FacturePdfGenerator::html()) plutôt que sur
+        // sa sortie.
+        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin'));
         $this->assertStringContainsString('Ticket de caisse', $html);
         $this->assertStringNotContainsString('>Facturé à<', $html);
     }
@@ -393,9 +378,7 @@ class FacturePdfGeneratorTest extends TestCase
         ]);
         $nouvelleFacture = app(EmettreFactureAction::class)->handle($nouvelleFacture)->fresh();
 
-        $html = view('factures.pdf', [
-            'facture' => $nouvelleFacture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
-        ])->render();
+        $html = app(FacturePdfGenerator::class)->html($nouvelleFacture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $this->assertStringContainsString('Crédité par avoir', $html);
         $this->assertStringContainsString($avoir->fresh()->numero, $html);
@@ -413,9 +396,7 @@ class FacturePdfGeneratorTest extends TestCase
         ]);
         $facture = app(EmettreFactureAction::class)->handle($facture);
 
-        $html = view('factures.pdf', [
-            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
-        ])->render();
+        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $this->assertStringNotContainsString('Payé', $html);
         $this->assertStringNotContainsString('Crédité par avoir', $html);
@@ -470,9 +451,7 @@ class FacturePdfGeneratorTest extends TestCase
 
     private function rendu(Facture $facture): string
     {
-        return view('factures.pdf', [
-            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
-        ])->render();
+        return app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
     }
 
     /**

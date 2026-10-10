@@ -13,6 +13,7 @@ use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
 use App\Domain\Facturation\Concerns\FigeLeClient;
+use App\Domain\Facturation\Concerns\FigeSonEmetteur;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
@@ -51,12 +52,13 @@ use LogicException;
  * Une fois numérotée, elle ne se modifie plus que dans son statut de
  * règlement (voir ProtegeLesDonneesValidees) : elle est signée telle
  * qu'émise au registre fiscal (voir EmettreFactureAction), avec la copie de
- * son client et le type de ce client (voir FigeLeClient).
+ * son client et le type de ce client (voir FigeLeClient), et l'émetteur
+ * qu'elle imprime pour toujours (voir FigeSonEmetteur).
  */
 class Facture extends Model implements DocumentEnvoyable
 {
     /** @use HasFactory<FactureFactory> */
-    use BelongsToMagasin, EstEnvoyeParEmail, FigeLeClient, HasFactory, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, FigeLeClient, FigeSonEmetteur, HasFactory, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
 
     protected $table = 'factures';
 

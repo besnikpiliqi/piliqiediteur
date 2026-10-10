@@ -38,7 +38,7 @@ class DevisPdfGeneratorTest extends TestCase
     {
         $devis = $this->devisEnvoye();
 
-        $html = view('devis.pdf', ['devis' => $devis->load('client', 'lignes', 'magasin')])->render();
+        $html = app(DevisPdfGenerator::class)->html($devis->load('client', 'lignes', 'magasin'));
 
         foreach ([
             'Boutique du Port', 'Martin et Fils SARL', '12 quai des Pêcheurs', '13002 Marseille', 'SIREN : 123456789', 'SIRET : 12345678900011', 'TVA intracommunautaire : FR12123456789',
@@ -72,7 +72,7 @@ class DevisPdfGeneratorTest extends TestCase
 
         $this->assertStringContainsString(
             '<div class="bloc-client"><div class="titre">Établi pour</div><strong>Marc Nouveau</strong><br>SIREN : 111222333<br></div>',
-            $this->compacte(view('devis.pdf', ['devis' => $devis->load('client', 'lignes', 'magasin')])->render()),
+            $this->compacte(app(DevisPdfGenerator::class)->html($devis->load('client', 'lignes', 'magasin'))),
         );
     }
 
@@ -91,9 +91,9 @@ class DevisPdfGeneratorTest extends TestCase
         $devisParticulier = app(EmettreDevisAction::class)->handle(app(CreerDevisAction::class)->handle($client, [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]));
         $client->update(['type_client' => TypeClient::Professionnel, 'siren' => '111222333']);
 
-        $renduParticulier = $this->compacte(view('devis.pdf', ['devis' => $devisParticulier->fresh()->load('client', 'lignes', 'magasin')])->render());
+        $renduParticulier = $this->compacte(app(DevisPdfGenerator::class)->html($devisParticulier->fresh()->load('client', 'lignes', 'magasin')));
 
-        $this->assertStringContainsString($note, view('devis.pdf', ['devis' => $devisProfessionnel->load('client', 'lignes', 'magasin')])->render());
+        $this->assertStringContainsString($note, app(DevisPdfGenerator::class)->html($devisProfessionnel->load('client', 'lignes', 'magasin')));
         $this->assertStringNotContainsString($note, $renduParticulier);
         $this->assertStringContainsString('<div class="bloc-client"><div class="titre">Établi pour</div><strong>Jean Ancien</strong><br></div>', $renduParticulier);
     }
@@ -110,7 +110,7 @@ class DevisPdfGeneratorTest extends TestCase
         $lignes = $devis->lignes->map(fn (LigneDevis $ligne): array => ['produit_id' => $ligne->produit_id, 'quantite' => $ligne->quantite])->all();
         $modifie = app(ModifierDevisAction::class)->handle($devis, $client, $lignes, ['date_validite' => '2026-12-31']);
 
-        $html = view('devis.pdf', ['devis' => $modifie->load('client', 'lignes', 'magasin')])->render();
+        $html = app(DevisPdfGenerator::class)->html($modifie->load('client', 'lignes', 'magasin'));
 
         $this->assertStringContainsString("{$devis->numero} (brouillon, modifié depuis son envoi)", $html);
         $this->assertStringNotContainsString('Émis le', $html);

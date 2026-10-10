@@ -4,7 +4,9 @@
     {{--
         Une vente à un particulier porte le libellé usuel "Ticket de caisse"
         plutôt que "Facture" (voir Facture::libelleDocument()), d'après le
-        type du client figé sur le document.
+        type du client figé sur le document. $emetteur : celui que la
+        facture a signé une fois émise, le magasin d'aujourd'hui pour un
+        brouillon (voir FacturePdfGenerator et FigeSonEmetteur).
     --}}
     @php
         $libelleDocument = $facture->libelleDocument();
@@ -15,7 +17,7 @@
 </head>
 <body>
     @include('documents.pdf.en-tete', [
-        'magasin' => $facture->magasin,
+        'emetteur' => $emetteur,
         'titre' => $libelleDocument,
         'details' => array_filter([
             $facture->numero ?? 'Brouillon (non émise)',
@@ -86,17 +88,17 @@
 
     {{-- Entre professionnels : pénalités de retard, indemnité forfaitaire
          pour frais de recouvrement et escompte, réglés par le magasin (art.
-         L441-9 du Code de commerce, voir Magasin::mentionsEntreProfessionnels()) ;
-         rien sur un ticket de caisse. --}}
+         L441-9 du Code de commerce, voir Magasin::mentionsEntreProfessionnels())
+         et figés avec l'émetteur ; rien sur un ticket de caisse. --}}
     @if($facture->estPourUnProfessionnel())
-        @foreach($facture->magasin->mentionsEntreProfessionnels() as $mention)
+        @foreach($emetteur->mentionsEntreProfessionnels as $mention)
             <div class="pied">{{ $mention }}</div>
         @endforeach
     @endif
 
     {{-- Catégorie de l'opération, franchise de TVA, option pour les débits :
          voir MentionsFiscales. --}}
-    @foreach(app(\App\Domain\Facturation\Services\MentionsFiscales::class)->pour($facture) as $mention)
+    @foreach(app(\App\Domain\Facturation\Services\MentionsFiscales::class)->pour($facture, $emetteur) as $mention)
         <div class="pied">{{ $mention }}</div>
     @endforeach
 </body>

@@ -22,6 +22,9 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\AvoirPdfGenerator;
+use App\Domain\Facturation\Services\DevisPdfGenerator;
+use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -322,16 +325,16 @@ class FranchiseEnBaseTest extends TestCase
 
     private function pdfDeLaFacture(Facture $facture): string
     {
-        return view('factures.pdf', ['facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir')])->render();
+        return app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
     }
 
     private function pdfDeLAvoir(Avoir $avoir): string
     {
-        return view('avoirs.pdf', ['avoir' => $avoir->load('client', 'lignes.ligneFacture.facture', 'magasin')])->render();
+        return app(AvoirPdfGenerator::class)->html($avoir->load('client', 'lignes.ligneFacture.facture', 'magasin'));
     }
 
     private function pdfDuDevis(Devis $devis): string
     {
-        return view('devis.pdf', ['devis' => $devis->load('client', 'lignes', 'magasin')])->render();
+        return app(DevisPdfGenerator::class)->html($devis->load('client', 'lignes', 'magasin'));
     }
 }

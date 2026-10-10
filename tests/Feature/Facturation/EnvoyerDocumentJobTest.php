@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
@@ -33,6 +34,8 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Mailables\Attachment;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use LogicException;
@@ -320,6 +323,32 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
         $this->assertSame('Une adresse e-mail n\'est pas valide (celle du destinataire, ou celle du magasin, à laquelle le client répond) : corrigez-la, puis renvoyez-le.', $envoi->erreur);
         $this->assertSame(1, $magasin->proprietaires()->sole()->notifications()->count());
+    }
+
+    /**
+     * Un ticket numéroté directement en base n'a aucun enregistrement
+     * signé : il ne part pas avec un PDF reconstitué depuis le magasin
+     * d'aujourd'hui. L'envoi échoue sans nouvelle tentative, le magasin
+     * sait pourquoi, et l'incident est signalé au journal de
+     * l'application.
+     */
+    public function test_un_document_numerote_sans_enregistrement_signe_ne_part_pas(): void
+    {
+        Mail::fake();
+        Exceptions::fake([DocumentSansEnregistrementSigneException::class]);
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
+        $envoi = EnvoiDocument::factory()->for($brouillon->fresh(), 'document')->create(['destinataire' => 'client@exemple.fr']);
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
+        $this->assertSame('Le ticket TK-MABOUT-2026-000009 n\'a aucun enregistrement signé au registre fiscal : son PDF n\'est pas produit. Lancez la vérification de l\'intégrité (Ventes > Caisse sécurisée) et contactez le support. L\'e-mail n\'est pas parti.', $envoi->erreur);
+        $this->assertSame(1, $magasin->proprietaires()->sole()->notifications()->count());
+        Exceptions::assertReported(DocumentSansEnregistrementSigneException::class);
     }
 
     /**

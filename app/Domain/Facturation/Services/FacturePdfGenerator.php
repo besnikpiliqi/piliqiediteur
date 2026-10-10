@@ -2,24 +2,42 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Models\Facture;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Barryvdh\DomPDF\PDF as PdfDocument;
 
 /**
  * Génère toujours depuis les données déjà figées de la facture (numéro,
- * client, lignes, totaux) -- jamais depuis l'état courant du catalogue ou
- * de la fiche du client. Une facture émise aujourd'hui doit produire le
- * même document dans un an, même si les produits référencés ou son client
- * ont changé entre-temps.
+ * client, lignes, totaux) et depuis l'émetteur que son contenu signé a
+ * retenu (voir FigeSonEmetteur) -- jamais depuis l'état courant du
+ * catalogue, de la fiche du client ou du magasin. Une facture émise
+ * aujourd'hui doit produire le même document dans un an, même si les
+ * produits référencés, son client ou l'identité du magasin ont changé
+ * entre-temps. Un brouillon imprime le magasin tel qu'il est.
  */
 class FacturePdfGenerator
 {
+    /**
+     * @throws DocumentSansEnregistrementSigneException
+     */
     public function generer(Facture $facture): PdfDocument
+    {
+        return Pdf::loadHTML($this->html($facture));
+    }
+
+    /**
+     * La page que le PDF imprime : l'émetteur est lu avant elle, pour qu'un
+     * document émis sans enregistrement signé soit refusé avant toute
+     * impression.
+     *
+     * @throws DocumentSansEnregistrementSigneException
+     */
+    public function html(Facture $facture): string
     {
         $facture->loadMissing(['client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir']);
 
-        return Pdf::loadView('factures.pdf', ['facture' => $facture]);
+        return view('factures.pdf', ['facture' => $facture, 'emetteur' => $facture->emetteur()])->render();
     }
 
     public function nomFichier(Facture $facture): string

@@ -9,10 +9,11 @@
     {{-- Un devis modifié depuis son envoi est un brouillon qui garde son
          numéro et la date de son dernier envoi (voir ModifierDevisAction) :
          cette version n'a pas encore été émise, elle ne porte aucune date
-         d'émission. --}}
+         d'émission. $emetteur : le magasin d'aujourd'hui, un devis n'étant
+         pas signé au registre fiscal (voir DevisPdfGenerator). --}}
     @php($brouillon = $devis->statut === \App\Domain\Facturation\Enums\StatutDevis::Brouillon)
     @include('documents.pdf.en-tete', [
-        'magasin' => $devis->magasin,
+        'emetteur' => $emetteur,
         'titre' => 'Devis',
         'details' => array_filter([
             match (true) {
@@ -50,7 +51,7 @@
     @endif
 
     {{-- La franchise de TVA, s'il y a lieu : voir MentionsFiscales. --}}
-    @foreach(app(\App\Domain\Facturation\Services\MentionsFiscales::class)->pour($devis) as $mention)
+    @foreach(app(\App\Domain\Facturation\Services\MentionsFiscales::class)->pour($devis, $emetteur) as $mention)
         <div class="pied">{{ $mention }}</div>
     @endforeach
 

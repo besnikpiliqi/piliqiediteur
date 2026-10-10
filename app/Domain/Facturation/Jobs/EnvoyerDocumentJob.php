@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Jobs;
 
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutEnvoi;
@@ -54,9 +55,13 @@ use Throwable;
  * Idempotent : un envoi déjà envoyé ne repart jamais, même si le job est
  * rejoué. ShouldBeUnique : jamais deux exécutions du même envoi en
  * parallèle. Le PDF est généré à chaque tentative depuis le document tel
- * qu'il est enregistré : une facture ou un avoir figés à leur émission
- * (voir FacturePdfGenerator), un devis dans la version émise que cet
- * e-mail annonce.
+ * qu'il est enregistré : une facture ou un avoir figés à leur émission,
+ * avec l'émetteur qu'ils ont signé, quoi que soit devenu le magasin (voir
+ * FacturePdfGenerator et FigeSonEmetteur), un devis dans la version émise
+ * que cet e-mail annonce. Une facture ou un avoir numéroté sans
+ * enregistrement signé ne part pas : l'envoi échoue aussitôt, sans
+ * nouvelle tentative, et l'incident est signalé au journal de
+ * l'application.
  */
 class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 {
@@ -123,11 +128,18 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
         };
 
         try {
-            Mail::to($envoi->destinataire)->send(new DocumentMail(
-                $envoi,
-                $generateur->generer($document)->output(),
-                $generateur->nomFichier($document),
-            ));
+            $pdf = $generateur->generer($document)->output();
+        } catch (DocumentSansEnregistrementSigneException $exception) {
+            // Le document ne se reproduit pas tel qu'il a été émis : aucune
+            // nouvelle tentative n'y changera rien.
+            report($exception);
+            $this->echouer($envoi, "{$exception->getMessage()} L'e-mail n'est pas parti.");
+
+            return;
+        }
+
+        try {
+            Mail::to($envoi->destinataire)->send(new DocumentMail($envoi, $pdf, $generateur->nomFichier($document)));
         } catch (RfcComplianceException) {
             // Une adresse que le composant d'envoi refuse : aucune nouvelle
             // tentative n'y changera rien.

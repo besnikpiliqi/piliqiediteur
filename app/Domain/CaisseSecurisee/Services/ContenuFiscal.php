@@ -12,8 +12,8 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Facturation\Services\MentionsFiscales;
-use App\Domain\Tenancy\Models\Magasin;
 use Illuminate\Support\Collection;
 
 /**
@@ -37,13 +37,13 @@ use Illuminate\Support\Collection;
  *   introuvable dans le magasin s'y recalcule vide, pour que la
  *   vérification de l'intégrité le signale au lieu de s'interrompre ;
  * - « contexte », figé à l'émission parce qu'il change ensuite ailleurs :
- *   l'identité du magasin émetteur (capital social et mentions entre
- *   professionnels compris), la catégorie de l'opération, les
- *   mentions fiscales imprimées (voir MentionsFiscales), et ce qui a
- *   réglé le document dans la même transaction (paiements et crédits
- *   d'avoir d'une facture, imputations d'un avoir sur ses factures). Un
- *   document qui vient d'être émis n'a pas pu en recevoir avant : un
- *   brouillon n'attend aucun règlement.
+ *   l'émetteur, tel que le magasin est ce jour-là (voir Emetteur), que le
+ *   document imprime ensuite pour toujours (voir FigeSonEmetteur), la
+ *   catégorie de l'opération, les mentions fiscales imprimées (voir
+ *   MentionsFiscales), et ce qui a réglé le document dans la même
+ *   transaction (paiements et crédits d'avoir d'une facture, imputations
+ *   d'un avoir sur ses factures). Un document qui vient d'être émis n'a
+ *   pas pu en recevoir avant : un brouillon n'attend aucun règlement.
  *
  * Un paiement (encaissement()) signe son mode, son montant, sa référence,
  * sa date de réception, la fiche de son client ce jour-là et ce qu'il
@@ -136,11 +136,12 @@ class ContenuFiscal
     private function contexteDeLaFacture(Facture $facture): array
     {
         $facture->load(['lignes', 'magasin', 'allocationsPaiement.paiement', 'allocationsAvoir.avoir']);
+        $emetteur = Emetteur::duMagasin($facture->magasin);
 
         return [
-            'emetteur' => $this->emetteur($facture->magasin),
+            'emetteur' => $emetteur->enTableau(),
             'categorie_operation' => CategorieOperation::depuisNatures($facture->lignes->pluck('nature'))->value,
-            'mentions' => $this->mentions->pour($facture),
+            'mentions' => $this->mentions->pour($facture, $emetteur),
             'reglements' => $facture->allocationsPaiement->sortBy('id')
                 ->map(fn (PaiementAllocation $allocation): array => [
                     'paiement_id' => (int) $allocation->paiement_id,
@@ -194,11 +195,12 @@ class ContenuFiscal
     private function contexteDeLAvoir(Avoir $avoir): array
     {
         $avoir->load(['lignes', 'magasin', 'allocations.facture']);
+        $emetteur = Emetteur::duMagasin($avoir->magasin);
 
         return [
-            'emetteur' => $this->emetteur($avoir->magasin),
+            'emetteur' => $emetteur->enTableau(),
             'categorie_operation' => CategorieOperation::depuisNatures($avoir->lignes->pluck('nature'))->value,
-            'mentions' => $this->mentions->pour($avoir),
+            'mentions' => $this->mentions->pour($avoir, $emetteur),
             'imputations' => $avoir->allocations->sortBy('id')
                 ->map(fn (AvoirAllocation $allocation): array => [
                     'facture_id' => (int) $allocation->facture_id,
@@ -262,39 +264,6 @@ class ContenuFiscal
                 'tva' => $sens * $this->calculateur->enCentiemes($document->total_tva),
                 'ttc' => $sens * $this->calculateur->enCentiemes($document->total_ttc),
             ],
-        ];
-    }
-
-    /**
-     * L'identité du magasin le jour de l'émission (voir IdentiteMagasin,
-     * ParametresFiscaux et ParametresFactures), qu'il peut changer
-     * ensuite : le capital social en centimes (vide s'il n'est pas
-     * renseigné) et les mentions qu'imprime une facture à un professionnel
-     * (voir Magasin::mentionsEntreProfessionnels()).
-     *
-     * @return array<string, mixed>
-     */
-    private function emetteur(Magasin $magasin): array
-    {
-        return [
-            'nom' => $magasin->nom,
-            'raison_sociale' => $magasin->raison_sociale,
-            'forme_juridique' => $magasin->forme_juridique,
-            'capital_social' => $magasin->capital_social === null ? null : $this->calculateur->enCentiemes($magasin->capital_social),
-            'siren' => $magasin->siren,
-            'siret' => $magasin->siret,
-            'immatriculation' => $magasin->immatriculation,
-            'numero_tva' => $magasin->numero_tva,
-            'adresse' => $magasin->adresse,
-            'complement_adresse' => $magasin->complement_adresse,
-            'code_postal' => $magasin->code_postal,
-            'ville' => $magasin->ville,
-            'pays' => $magasin->pays,
-            'email' => $magasin->email,
-            'telephone' => $magasin->telephone,
-            'regime_tva' => $magasin->regime_tva?->value,
-            'option_debits_tva' => (bool) $magasin->option_debits_tva,
-            'mentions' => $magasin->mentionsEntreProfessionnels(),
         ];
     }
 

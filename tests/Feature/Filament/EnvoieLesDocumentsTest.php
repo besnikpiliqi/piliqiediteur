@@ -3,6 +3,7 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
@@ -31,6 +32,8 @@ use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -254,6 +257,26 @@ class EnvoieLesDocumentsTest extends TestCase
         Mail::assertSent(DocumentMail::class, 2);
         Livewire::test(ViewAvoir::class, ['record' => $avoir->getRouteKey()])
             ->assertSee('autre@exemple.fr');
+    }
+
+    /**
+     * Un ticket numéroté directement en base n'a aucun enregistrement
+     * signé : son PDF ne se télécharge pas, et l'écran dit pourquoi au lieu
+     * d'une erreur.
+     */
+    public function test_le_pdf_d_un_document_numerote_sans_enregistrement_signe_ne_se_telecharge_pas(): void
+    {
+        Exceptions::fake([DocumentSansEnregistrementSigneException::class]);
+        $magasin = $this->connecterLeProprietaire();
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
+
+        Livewire::test(ListFactures::class)
+            ->callTableAction('telecharger_pdf', $brouillon->fresh())
+            ->assertNotified('Le ticket TK-MABOUT-2026-000009 n\'a aucun enregistrement signé au registre fiscal : son PDF n\'est pas produit. Lancez la vérification de l\'intégrité (Ventes > Caisse sécurisée) et contactez le support.')
+            ->assertNoFileDownloaded();
+
+        Exceptions::assertReported(DocumentSansEnregistrementSigneException::class);
     }
 
     /**

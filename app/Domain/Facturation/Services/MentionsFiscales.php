@@ -21,10 +21,13 @@ use App\Domain\Tenancy\Enums\RegimeTva;
  *   jamais sur le régime actuel du magasin, pour qu'un document réimprimé
  *   après la sortie de la franchise la porte toujours ; un devis la porte
  *   aussi, ses prix s'entendant sans TVA ;
- * - hors franchise, sur un ticket, une facture ou un avoir, l'option du
- *   magasin pour le paiement de la taxe d'après les débits (voir
+ * - hors franchise, sur un ticket, une facture ou un avoir, l'option de
+ *   son émetteur pour le paiement de la taxe d'après les débits (voir
  *   ParametresFiscaux) : sans TVA due, elle n'a pas d'objet. Un avoir
- *   rectifie une facture : il en reprend les mentions.
+ *   rectifie une facture : il en reprend les mentions. L'émetteur d'un
+ *   document émis est celui qu'il a signé (voir FigeSonEmetteur) :
+ *   réimprimé après un changement de l'option, il garde la mention de
+ *   son émission.
  *
  * S'y ajoute, sous les lignes d'un document à un professionnel,
  * l'explication de son calcul (voir calcul()), qui ne se signe pas.
@@ -38,9 +41,10 @@ class MentionsFiscales
     private const CALCUL_RETOUR_PROFESSIONNEL = 'Client professionnel : chaque retour se calcule comme sa facture, pour tous les articles rendus jusqu\'ici (HT = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA sur ce HT, dans la limite de celle de la ligne), déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.';
 
     /**
+     * @param  Emetteur  $emetteur  celui qu'imprime le document : signé une fois émis (voir FigeSonEmetteur::emetteur()), le magasin d'aujourd'hui pour un brouillon ou un devis, et pour le document qu'on émet (voir ContenuFiscal)
      * @return list<string>
      */
-    public function pour(Facture|Avoir|Devis $document): array
+    public function pour(Facture|Avoir|Devis $document, Emetteur $emetteur): array
     {
         $mentions = [];
 
@@ -50,7 +54,7 @@ class MentionsFiscales
 
         if ($document->franchise_en_base) {
             $mentions[] = RegimeTva::MENTION_FRANCHISE;
-        } elseif (! $document instanceof Devis && $document->magasin->option_debits_tva) {
+        } elseif (! $document instanceof Devis && $emetteur->optionDebitsTva) {
             $mentions[] = self::OPTION_DEBITS;
         }
 

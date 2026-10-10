@@ -12,6 +12,7 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,9 +38,7 @@ class AvoirPdfGeneratorTest extends TestCase
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
 
-        $html = view('avoirs.pdf', [
-            'avoir' => $avoir->load('client', 'lignes.ligneFacture.facture', 'magasin'),
-        ])->render();
+        $html = app(AvoirPdfGenerator::class)->html($avoir->load('client', 'lignes.ligneFacture.facture', 'magasin'));
 
         $this->assertStringContainsString(e("Option pour le paiement de la taxe d'après les débits"), $html);
     }
@@ -67,9 +66,7 @@ class AvoirPdfGeneratorTest extends TestCase
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
 
-        $html = view('avoirs.pdf', [
-            'avoir' => $avoir->load('client', 'lignes.ligneFacture.facture', 'magasin'),
-        ])->render();
+        $html = app(AvoirPdfGenerator::class)->html($avoir->load('client', 'lignes.ligneFacture.facture', 'magasin'));
 
         foreach (['Martin et Fils SARL', '12 quai des Pêcheurs', '13002 Marseille', 'SIREN : 123456789', 'TVA intracommunautaire : FR32123456789'] as $mention) {
             $this->assertStringContainsString($mention, $html);
@@ -208,7 +205,7 @@ class AvoirPdfGeneratorTest extends TestCase
 
     private function rendu(Avoir $avoir): string
     {
-        return view('avoirs.pdf', ['avoir' => $avoir->load('client', 'lignes.ligneFacture.facture', 'magasin')])->render();
+        return app(AvoirPdfGenerator::class)->html($avoir->load('client', 'lignes.ligneFacture.facture', 'magasin'));
     }
 
     /**

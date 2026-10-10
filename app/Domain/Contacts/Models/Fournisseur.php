@@ -3,6 +3,7 @@
 namespace App\Domain\Contacts\Models;
 
 use App\Domain\Contacts\Concerns\Proposable;
+use App\Domain\Facturation\Casts\NumeroTvaNormalise;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\FournisseurFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -25,5 +26,9 @@ class Fournisseur extends Model
         'pays',
         'telephone',
         'email',
+    ];
+
+    protected $casts = [
+        'numero_tva' => NumeroTvaNormalise::class,
     ];
 }

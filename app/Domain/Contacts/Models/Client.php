@@ -4,13 +4,14 @@ namespace App\Domain\Contacts\Models;
 
 use App\Domain\Contacts\Concerns\Proposable;
 use App\Domain\Contacts\Enums\TypeClient;
+use App\Domain\Facturation\Casts\NumeroTvaNormalise;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
-use App\Domain\Facturation\Services\NumeroTva;
+use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\ClientFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -66,6 +67,7 @@ class Client extends Model
 
     protected $casts = [
         'type_client' => TypeClient::class,
+        'numero_tva' => NumeroTvaNormalise::class,
         'etabli_en_france' => 'boolean',
         'mode_paiement_prefere' => ModePaiement::class,
         'est_comptoir' => 'boolean',
@@ -97,9 +99,11 @@ class Client extends Model
 
     /**
      * Établi en France, un professionnel a un SIREN ; établi ailleurs, un
-     * n° de TVA ou un autre identifiant (voir ClientResource). Une donnée
-     * de la fiche, que le pays de son adresse propose sans l'imposer : une
-     * entreprise étrangère peut avoir un établissement en France.
+     * n° de TVA ou un autre identifiant (voir ClientResource). Une
+     * entreprise dont l'adresse est en France y est établie (voir
+     * normaliserSesIdentifiants()) ; à l'étranger, c'est la fiche qui le
+     * dit, puisqu'une entreprise étrangère peut avoir un établissement en
+     * France.
      */
     public function estEtabliEnFrance(): bool
     {
@@ -108,11 +112,12 @@ class Client extends Model
 
     /**
      * Les identifiants tels qu'ils s'enregistrent : le pays en majuscules,
-     * le n° de TVA sans séparateurs (voir NumeroTva::normaliser()), le
-     * SIREN tiré au besoin du SIRET, dont il forme les 9 premiers
-     * chiffres. Les champs que le formulaire cache ne restent pas en base
-     * pour s'imprimer encore sur ses documents : un particulier n'a ni
-     * SIREN, ni SIRET, ni n° de TVA et compte comme établi en France ;
+     * le SIREN tiré au besoin du SIRET, dont il forme les 9 premiers
+     * chiffres (le n° de TVA, lui, perd ses séparateurs dès qu'il est
+     * écrit, voir NumeroTvaNormalise). Les champs que le formulaire cache
+     * ne restent pas en base pour s'imprimer encore sur ses documents : un
+     * particulier n'a ni SIREN, ni SIRET, ni n° de TVA et compte comme
+     * établi en France, comme une entreprise dont l'adresse est en France ;
      * établi en France, un client n'a pas d'identifiant étranger.
      */
     private function normaliserSesIdentifiants(): void
@@ -120,8 +125,6 @@ class Client extends Model
         if (filled($this->pays)) {
             $this->pays = Str::upper(trim($this->pays));
         }
-
-        $this->numero_tva = filled($this->numero_tva) ? NumeroTva::normaliser($this->numero_tva) : null;
 
         if (blank($this->siren) && filled($this->siret)) {
             $this->siren = substr($this->siret, 0, 9);
@@ -131,6 +134,9 @@ class Client extends Model
             $this->siren = null;
             $this->siret = null;
             $this->numero_tva = null;
+        }
+
+        if (! $this->estProfessionnel() || TerritoireFiscal::estEnFrance($this->pays)) {
             $this->etabli_en_france = true;
         }
 

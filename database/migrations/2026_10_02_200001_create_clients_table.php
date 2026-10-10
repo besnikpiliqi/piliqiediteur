@@ -47,7 +47,6 @@ return new class extends Migration
 
             $table->index(['magasin_id', 'nom']);
             $table->index(['magasin_id', 'type_client']);
-            $table->index(['magasin_id', 'siren']);
             $table->unique(['magasin_id', 'est_comptoir']);
         });
     }

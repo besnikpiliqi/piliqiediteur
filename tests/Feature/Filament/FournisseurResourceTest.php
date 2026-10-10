@@ -121,14 +121,49 @@ class FournisseurResourceTest extends TestCase
         $this->assertSame(0, Fournisseur::query()->count());
     }
 
-    public function test_un_numero_de_tva_avec_des_espaces_est_refuse(): void
+    public function test_un_numero_de_tva_sans_le_code_du_pays_est_refuse(): void
     {
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateFournisseur::class)
-            ->fillForm(['nom' => 'Grossiste A', 'numero_tva' => 'FR 32 123'])
+            ->fillForm(['nom' => 'Grossiste A', 'numero_tva' => '32 123 456 789'])
             ->call('create')
-            ->assertHasFormErrors(['numero_tva' => 'Le n° de TVA commence par les deux lettres du pays (FR...), suivies de chiffres ou de lettres, sans espace.']);
+            ->assertHasFormErrors(['numero_tva' => 'Le n° de TVA commence par les deux lettres du pays (FR...), suivies de 2 à 13 chiffres ou lettres ; les espaces, points et tirets ne comptent pas.']);
+
+        $this->assertSame(0, Fournisseur::query()->count());
+    }
+
+    /**
+     * Même règle que pour un client : saisi avec ses séparateurs, le n° de
+     * TVA s'enregistre sans eux, en majuscules.
+     */
+    public function test_le_numero_de_tva_s_enregistre_sans_separateurs(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateFournisseur::class)
+            ->fillForm(['nom' => 'Brasserie de Namur', 'numero_tva' => 'be 0123.456.789'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('fournisseurs', ['nom' => 'Brasserie de Namur', 'numero_tva' => 'BE0123456789']);
+    }
+
+    /**
+     * Le SIRET est facultatif : le n° de TVA de l'entreprise du magasin,
+     * saisi seul, est refusé aussi.
+     */
+    public function test_le_numero_de_tva_de_l_entreprise_du_magasin_est_refuse(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'siren' => '732829320', 'numero_tva' => 'FR44732829320'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateFournisseur::class)
+            ->fillForm(['nom' => 'Ma Boutique Lyon', 'numero_tva' => 'FR44732829320'])
+            ->call('create')
+            ->assertHasFormErrors(['numero_tva' => fn (array $reglesEnEchec, array $messages): bool => $messages === ['Ce n° de TVA est celui de votre propre entreprise : un achat entre magasins d\'une même société n\'est pas un achat.']]);
 
         $this->assertSame(0, Fournisseur::query()->count());
     }

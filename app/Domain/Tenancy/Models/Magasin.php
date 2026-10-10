@@ -8,6 +8,7 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Casts\NumeroTvaNormalise;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Enums\RegimeTva;
@@ -84,6 +85,7 @@ class Magasin extends Model implements HasName
 
     protected $casts = [
         'statut' => StatutMagasin::class,
+        'numero_tva' => NumeroTvaNormalise::class,
         'regime_tva' => RegimeTva::class,
         'option_debits_tva' => 'boolean',
         'prix_vente_automatique' => 'boolean',

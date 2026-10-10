@@ -3,7 +3,7 @@
 namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Facturation\Services\NumeroTva;
+use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Rules\CodeMagasinLibre;
 use App\Domain\Tenancy\Services\CodeMagasin;
@@ -140,11 +140,13 @@ class IdentiteMagasin extends Page implements HasForms
                             'regex' => 'Le SIRET compte 14 chiffres, sans espace.',
                             'unique' => self::MESSAGE_SIRET_DEJA_UTILISE,
                         ]),
+                    // Saisi avec ses séparateurs s'il le faut : il s'enregistre
+                    // sans eux (voir NumeroTvaNormalise), comme celui d'un
+                    // client ou d'un fournisseur.
                     TextInput::make('numero_tva')
                         ->label('N° TVA intracommunautaire')
                         ->maxLength(20)
-                        ->regex(NumeroTva::FORMAT)
-                        ->validationMessages(['regex' => NumeroTva::MESSAGE_FORMAT]),
+                        ->rule(new NumeroTvaAuFormat),
                 ])
                 ->columns(2),
             Section::make('Adresse')

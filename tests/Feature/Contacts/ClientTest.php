@@ -136,6 +136,21 @@ class ClientTest extends TestCase
         $this->assertSame([true, '123456789', null], [$client->etabli_en_france, $client->siren, $client->identifiant_etranger]);
     }
 
+    /**
+     * Une entreprise dont l'adresse est en France, outre-mer compris, y
+     * est établie : elle s'identifie par son SIREN, jamais par un
+     * identifiant étranger.
+     */
+    public function test_une_entreprise_dont_l_adresse_est_en_france_y_est_etablie(): void
+    {
+        $this->creerMagasin();
+
+        $client = Client::factory()->professionnel()->create(['pays' => 'GP', 'etabli_en_france' => false, 'identifiant_etranger' => 'X']);
+
+        $client->refresh();
+        $this->assertSame([true, null], [$client->etabli_en_france, $client->identifiant_etranger]);
+    }
+
     public function test_un_client_professionnel_garde_ses_identifiants(): void
     {
         $this->creerMagasin();

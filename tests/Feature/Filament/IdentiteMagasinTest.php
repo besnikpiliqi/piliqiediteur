@@ -103,7 +103,7 @@ class IdentiteMagasinTest extends TestCase
             'SIRET de 13 chiffres' => [['siren' => '123456789', 'siret' => '1234567890001'], 'siret', 'Le SIRET compte 14 chiffres, sans espace.'],
             'SIRET d\'un autre SIREN' => [['siren' => '123456789', 'siret' => '98765432100012'], 'siret', 'Le SIRET commence par les 9 chiffres du SIREN.'],
             'SIRET sans SIREN' => [['siren' => '', 'siret' => '12345678900012'], 'siren', 'Indiquez le SIREN, par lequel commence le SIRET.'],
-            'n° de TVA avec espaces' => [['numero_tva' => 'FR 12 123456789'], 'numero_tva', 'Le n° de TVA commence par les deux lettres du pays (FR...), suivies de chiffres ou de lettres, sans espace.'],
+            'n° de TVA sans code pays' => [['numero_tva' => '12 123456789'], 'numero_tva', 'Le n° de TVA commence par les deux lettres du pays (FR...), suivies de 2 à 13 chiffres ou lettres ; les espaces, points et tirets ne comptent pas.'],
             'pays en minuscules' => [['pays' => 'fr'], 'pays', 'Le code du pays compte deux lettres majuscules : FR, BE, CH...'],
             'e-mail sans domaine' => [['email' => 'contact@'], 'email', 'Cette adresse e-mail n\'est pas valide.'],
             'e-mail de 151 caractères' => [['email' => 'contact@'.str_repeat('a', 63).'.'.str_repeat('b', 63).'.'.str_repeat('c', 12).'.fr'], 'email', 'Le champ e-mail ne doit pas dépasser 150 caractères.'],
@@ -197,6 +197,24 @@ class IdentiteMagasinTest extends TestCase
             ->assertFormSet(['code' => 'LYON1']);
 
         $this->assertSame('LYON1', $magasin->fresh()->code);
+    }
+
+    /**
+     * Même règle que pour un client ou un fournisseur : saisi avec ses
+     * séparateurs, le n° de TVA s'enregistre sans eux, en majuscules, et
+     * le formulaire montre ensuite le n° enregistré.
+     */
+    public function test_le_numero_de_tva_s_enregistre_sans_separateurs(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+
+        Livewire::test(IdentiteMagasin::class)
+            ->fillForm(['numero_tva' => 'fr 32 123.456.789'])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertFormSet(['numero_tva' => 'FR32123456789']);
+
+        $this->assertSame('FR32123456789', $magasin->fresh()->numero_tva);
     }
 
     /**

@@ -46,6 +46,8 @@ class ClientResourceTest extends TestCase
      */
     private const MESSAGE_PROPRE_ENTREPRISE = 'Ce SIREN est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
 
+    private const MESSAGE_PROPRE_NUMERO_TVA = 'Ce n° de TVA est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
+
     public function test_un_proprietaire_peut_afficher_la_liste_des_clients_de_son_magasin(): void
     {
         $proprietaire = User::factory()->create();
@@ -483,7 +485,7 @@ class ClientResourceTest extends TestCase
         Livewire::test(CreateClient::class)
             ->fillForm(['nom' => 'Brasserie de Namur', 'type_client' => TypeClient::Professionnel->value, 'pays' => 'BE', 'numero_tva' => '0123456789'])
             ->call('create')
-            ->assertHasFormErrors(['numero_tva' => 'Le n° de TVA commence par les deux lettres du pays (FR...), suivies de chiffres ou de lettres, sans espace.']);
+            ->assertHasFormErrors(['numero_tva' => 'Le n° de TVA commence par les deux lettres du pays (FR...), suivies de 2 à 13 chiffres ou lettres ; les espaces, points et tirets ne comptent pas.']);
 
         $this->assertDatabaseMissing('clients', ['nom' => 'Brasserie de Namur']);
     }
@@ -519,6 +521,94 @@ class ClientResourceTest extends TestCase
             ->assertHasFormErrors(['siren' => self::MESSAGE_SIREN_OBLIGATOIRE]);
 
         $this->assertDatabaseMissing('clients', ['nom' => 'Distillerie de Basse-Terre']);
+    }
+
+    /**
+     * Une entreprise dont l'adresse est en France y est établie : « Établi
+     * en France » ne se décoche pas, même forcé, et son SIREN reste
+     * obligatoire.
+     */
+    public function test_une_entreprise_dont_l_adresse_est_en_france_y_est_etablie_et_doit_avoir_un_siren(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Garage Martin', 'type_client' => TypeClient::Professionnel->value, 'pays' => 'FR'])
+            ->assertFormFieldIsDisabled('etabli_en_france')
+            ->set('data.etabli_en_france', false)
+            ->set('data.identifiant_etranger', 'x')
+            ->call('create')
+            ->assertHasFormErrors(['siren' => self::MESSAGE_SIREN_OBLIGATOIRE]);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Garage Martin']);
+    }
+
+    /**
+     * Une entreprise étrangère qui a un établissement en France se coche
+     * « Établi en France » : son SIREN l'identifie.
+     */
+    public function test_une_entreprise_etrangere_qui_a_un_etablissement_en_france_s_enregistre_avec_son_siren(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Brasserie de Namur', 'type_client' => TypeClient::Professionnel->value, 'pays' => 'BE'])
+            ->assertFormFieldIsEnabled('etabli_en_france')
+            ->fillForm(['etabli_en_france' => true, 'siren' => '123456789'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('clients', ['nom' => 'Brasserie de Namur', 'pays' => 'BE', 'etabli_en_france' => true, 'siren' => '123456789']);
+    }
+
+    /**
+     * Passer en professionnel propose « Établi en France » depuis le pays
+     * de la fiche : une adresse en Belgique le décoche, et le n° de TVA
+     * suffit.
+     */
+    public function test_un_particulier_a_l_etranger_qui_passe_en_professionnel_s_enregistre_avec_son_seul_numero_de_tva(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create(['nom' => 'Brasserie de Namur', 'pays' => 'BE', 'telephone' => '0102030405']);
+
+        Livewire::test(EditClient::class, ['record' => $client->getRouteKey()])
+            ->fillForm(['type_client' => TypeClient::Professionnel->value])
+            ->assertFormSet(['etabli_en_france' => false])
+            ->fillForm(['numero_tva' => 'BE0123456789'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $client->refresh();
+        $this->assertSame([TypeClient::Professionnel, false, 'BE0123456789', null], [$client->type_client, $client->etabli_en_france, $client->numero_tva, $client->siren]);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function paysDesAdresses(): array
+    {
+        return [
+            'adresse en France' => ['FR'],
+            'adresse à l\'étranger' => ['BE'],
+        ];
+    }
+
+    /**
+     * « Établi en France » vaut oui ou non : vide, forcé par une requête,
+     * il est refusé par le formulaire au lieu de casser l'enregistrement.
+     */
+    #[DataProvider('paysDesAdresses')]
+    public function test_un_etablissement_en_france_force_a_vide_est_refuse_par_le_formulaire(string $pays): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Garage Martin', 'type_client' => TypeClient::Professionnel->value, 'pays' => $pays, 'identifiant_etranger' => 'X'])
+            ->set('data.etabli_en_france', null)
+            ->call('create')
+            ->assertHasFormErrors(['etabli_en_france' => 'required']);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Garage Martin']);
     }
 
     public function test_le_code_du_pays_s_enregistre_en_majuscules(): void
@@ -575,6 +665,38 @@ class ClientResourceTest extends TestCase
             ->assertHasFormErrors([$champ => fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_PROPRE_ENTREPRISE]]);
 
         $this->assertDatabaseMissing('clients', ['nom' => 'Ma Boutique Lyon']);
+    }
+
+    /**
+     * @return array<string, array{string|null, string}>
+     */
+    public static function numerosDeTvaDeLEntrepriseDuMagasin(): array
+    {
+        return [
+            'son n° de TVA, saisi avec des espaces' => ['FR44732829320', 'fr 44 732 829 320'],
+            'le n° de TVA français que forme son SIREN' => [null, 'FR44732829320'],
+        ];
+    }
+
+    /**
+     * Le n° de TVA identifie aussi l'entreprise du magasin : le sien, ou
+     * le n° français formé de son SIREN (FR, clé, SIREN), est refusé, même
+     * pour une adresse à l'étranger, où le SIREN n'est pas demandé.
+     */
+    #[DataProvider('numerosDeTvaDeLEntrepriseDuMagasin')]
+    public function test_un_client_qui_porte_le_numero_de_tva_de_l_entreprise_du_magasin_est_refuse(?string $numeroTvaDuMagasin, string $numeroTva): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'siren' => '732829320', 'numero_tva' => $numeroTvaDuMagasin], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Ma Boutique Bruxelles', 'type_client' => TypeClient::Professionnel->value, 'pays' => 'BE', 'numero_tva' => $numeroTva])
+            ->call('create')
+            ->assertHasFormErrors(['numero_tva' => fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_PROPRE_NUMERO_TVA]]);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Ma Boutique Bruxelles']);
     }
 
     /**

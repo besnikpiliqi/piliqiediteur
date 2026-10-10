@@ -4,7 +4,7 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Contacts\Rules\HorsDeLEntrepriseDuMagasin;
-use App\Domain\Facturation\Services\NumeroTva;
+use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FournisseurResource\Pages;
 use App\Filament\Concerns\ArchiveLaFiche;
@@ -55,11 +55,15 @@ class FournisseurResource extends Resource
                         'regex' => 'Le SIRET compte 14 chiffres, sans espace.',
                         'unique' => 'Ce SIRET est déjà celui d\'un autre fournisseur du magasin, peut-être archivé : affichez les fournisseurs archivés pour le restaurer.',
                     ]),
+                // Saisi avec ses séparateurs s'il le faut : il s'enregistre
+                // sans eux (voir NumeroTvaNormalise). Le SIRET étant
+                // facultatif, le n° de TVA écarte lui aussi l'entreprise du
+                // magasin.
                 TextInput::make('numero_tva')
                     ->label('N° TVA intracommunautaire')
                     ->maxLength(20)
-                    ->regex(NumeroTva::FORMAT)
-                    ->validationMessages(['regex' => NumeroTva::MESSAGE_FORMAT]),
+                    ->rule(new NumeroTvaAuFormat)
+                    ->rule(new HorsDeLEntrepriseDuMagasin('Ce n° de TVA est celui de votre propre entreprise : un achat entre magasins d\'une même société n\'est pas un achat.')),
             ])->columns(2),
 
             Section::make('Coordonnées')->schema([

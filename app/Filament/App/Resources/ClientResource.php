@@ -6,7 +6,7 @@ use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Rules\HorsDeLEntrepriseDuMagasin;
 use App\Domain\Facturation\Enums\ModePaiement;
-use App\Domain\Facturation\Services\NumeroTva;
+use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Filament\App\Resources\ClientResource\Pages;
 use App\Filament\Concerns\ArchiveLaFiche;
@@ -37,6 +37,8 @@ class ClientResource extends Resource
      * (voir HorsDeLEntrepriseDuMagasin).
      */
     private const MESSAGE_PROPRE_ENTREPRISE = 'Ce SIREN est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
+
+    private const MESSAGE_PROPRE_NUMERO_TVA = 'Ce n° de TVA est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
 
     protected static ?string $model = Client::class;
 
@@ -77,8 +79,24 @@ class ClientResource extends Resource
     }
 
     /**
+     * Une entreprise dont l'adresse est en France y est établie ; à
+     * l'étranger, elle l'est si le magasin coche « Établi en France », pour
+     * un établissement qu'elle a en France. Même règle que le modèle (voir
+     * Client::normaliserSesIdentifiants()), lue ici sur la saisie : une
+     * case forcée par une requête ne retire pas le SIREN à une adresse en
+     * France.
+     */
+    private static function estEtabliEnFrance(Get $get): bool
+    {
+        return TerritoireFiscal::estEnFrance($get('pays')) || (bool) $get('etabli_en_france');
+    }
+
+    /**
      * Deux boutons côte à côte plutôt qu'un menu déroulant : un clic au
-     * lieu de deux pendant une vente.
+     * lieu de deux pendant une vente. Changer de type propose, comme le
+     * pays, « Établi en France » depuis le pays de la fiche : un
+     * particulier compte comme établi en France, ce qu'une entreprise
+     * dont l'adresse est à l'étranger n'est pas d'office.
      */
     private static function champTypeClient(): Radio
     {
@@ -89,14 +107,16 @@ class ClientResource extends Resource
             ->inlineLabel(false)
             ->default(TypeClient::Particulier)
             ->required()
-            ->live();
+            ->live()
+            ->afterStateUpdated(fn (Get $get, Set $set) => $set('etabli_en_france', TerritoireFiscal::estEnFrance($get('pays'))));
     }
 
     /**
      * Le pays de l'adresse du client, enregistré en majuscules (voir
-     * Client::booted()). Il propose, à chaque changement, si le client est
-     * établi en France, ce que le magasin peut ensuite corriger (voir
-     * champsProfessionnel()).
+     * Client::booted()). Une adresse en France y établit le client ; à
+     * chaque changement vers l'étranger, « Établi en France » se décoche,
+     * et le magasin le coche pour une entreprise qui a un établissement en
+     * France (voir champsProfessionnel()).
      */
     private static function champPays(): TextInput
     {
@@ -116,11 +136,17 @@ class ClientResource extends Resource
     /**
      * Les identifiants d'un client professionnel, mêmes règles dans la
      * fiche et dans la création rapide des devis, des factures et de la
-     * Caisse : établi en France, il a un SIREN, ou un SIRET, qui commence
-     * par lui ; établi ailleurs, un n° de TVA ou un autre identifiant. Ni
-     * son SIREN ni son SIRET ne sont ceux de l'entreprise du magasin. Le
-     * format seul est contrôlé : aucune clé de contrôle, que les n° du bac
-     * à sable SUPER PDP (000000001, 000000002) ne respectent pas.
+     * Caisse : établi en France (toujours, pour une adresse en France), il
+     * a un SIREN, ou un SIRET, qui commence par lui ; établi ailleurs, un
+     * n° de TVA ou un autre identifiant. Ni son SIREN, ni son SIRET, ni son
+     * n° de TVA ne sont ceux de l'entreprise du magasin. Le format seul est
+     * contrôlé : aucune clé de contrôle, que les n° du bac à sable
+     * SUPER PDP (000000001, 000000002) ne respectent pas.
+     *
+     * « Établi en France » vaut oui ou non : obligatoire, il refuse une
+     * valeur vide forcée par une requête, sans astérisque pour un
+     * interrupteur qui a toujours une valeur à l'écran. Désactivé pour une
+     * adresse en France, il n'est pas enregistré, et le modèle le coche.
      *
      * @return array<Component>
      */
@@ -131,15 +157,20 @@ class ClientResource extends Resource
         return [
             Toggle::make('etabli_en_france')
                 ->label('Établi en France')
-                ->helperText('Décochez pour une entreprise sans établissement en France : son n° de TVA ou un autre identifiant remplace alors le SIREN.')
+                ->helperText(fn (Get $get): string => TerritoireFiscal::estEnFrance($get('pays'))
+                    ? 'Son adresse est en France : il y est établi, et son SIREN l\'identifie.'
+                    : 'Cochez pour une entreprise étrangère qui a un établissement en France : son SIREN remplace alors son n° de TVA ou un autre identifiant.')
                 ->default(true)
+                ->disabled(fn (Get $get): bool => TerritoireFiscal::estEnFrance($get('pays')))
+                ->required()
+                ->markAsRequired(false)
                 ->live()
                 ->visible($visibleSiProfessionnel),
             TextInput::make('siren')
                 ->label('SIREN')
                 ->maxLength(9)
                 ->regex('/^\d{9}$/')
-                ->required(fn (Get $get): bool => $get('etabli_en_france') && blank($get('siret')))
+                ->required(fn (Get $get): bool => static::estEtabliEnFrance($get) && blank($get('siret')))
                 ->rule(new HorsDeLEntrepriseDuMagasin(self::MESSAGE_PROPRE_ENTREPRISE))
                 ->validationMessages([
                     'regex' => 'Le SIREN compte 9 chiffres, sans espace.',
@@ -159,22 +190,19 @@ class ClientResource extends Resource
                 ->validationMessages(['regex' => 'Le SIRET compte 14 chiffres, sans espace.'])
                 ->visible($visibleSiProfessionnel),
             // Saisi avec ses séparateurs s'il le faut : il s'enregistre sans
-            // eux (voir Client::booted()).
+            // eux (voir NumeroTvaNormalise).
             TextInput::make('numero_tva')
                 ->label('N° TVA intracommunautaire')
                 ->maxLength(20)
-                ->rule(fn (): Closure => function (string $attribute, mixed $numero, Closure $fail): void {
-                    if (! NumeroTva::estAuFormat($numero)) {
-                        $fail(NumeroTva::MESSAGE_FORMAT);
-                    }
-                })
+                ->rule(new NumeroTvaAuFormat)
+                ->rule(new HorsDeLEntrepriseDuMagasin(self::MESSAGE_PROPRE_NUMERO_TVA))
                 ->visible($visibleSiProfessionnel),
             TextInput::make('identifiant_etranger')
                 ->label('Autre identifiant (entreprise étrangère)')
                 ->maxLength(50)
                 ->required(fn (Get $get): bool => blank($get('numero_tva')))
                 ->validationMessages(['required' => 'Indiquez le n° de TVA ou un autre identifiant de ce client établi hors de France.'])
-                ->visible(fn (Get $get, ?Client $record): bool => static::estProfessionnel($get, $record) && ! $get('etabli_en_france')),
+                ->visible(fn (Get $get, ?Client $record): bool => static::estProfessionnel($get, $record) && ! static::estEtabliEnFrance($get)),
         ];
     }
 

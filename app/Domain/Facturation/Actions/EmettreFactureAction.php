@@ -11,6 +11,7 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\FactureEmise;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\ReglementComptant;
 use Illuminate\Support\Facades\DB;
@@ -94,9 +95,7 @@ class EmettreFactureAction
                 throw new LogicException("Ce client est devenu {$nouveauType} depuis l'enregistrement du brouillon : ouvrez-le et enregistrez-le de nouveau.");
             }
 
-            if ($facture->franchise_en_base !== $facture->magasin->estEnFranchiseDeTva()) {
-                throw new LogicException('Le régime de TVA du magasin a changé depuis l\'enregistrement de ce brouillon : ouvrez-le et enregistrez-le de nouveau pour recalculer ses lignes.');
-            }
+            ContexteDeVente::refuserSiLeRegimeAChange($facture);
 
             $typeDocument = $facture->serie();
 

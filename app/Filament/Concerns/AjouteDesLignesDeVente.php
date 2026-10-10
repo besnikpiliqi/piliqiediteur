@@ -6,6 +6,10 @@ use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneDevis;
+use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
@@ -30,6 +34,9 @@ use Filament\Notifications\Notification;
 use Filament\Support\Enums\ActionSize;
 use Filament\Support\Enums\MaxWidth;
 use InvalidArgumentException;
+use Livewire\Component as LivewireComponent;
+use Livewire\Livewire;
+use WeakMap;
 
 /**
  * Les lignes d'une vente (caisse, facture, devis) : chacune vend un produit
@@ -44,6 +51,15 @@ use InvalidArgumentException;
 trait AjouteDesLignesDeVente
 {
     use SaisitLesPrixDeLigne;
+
+    /**
+     * Les aperçus déjà calculés pendant la requête en cours, par page
+     * Livewire (une nouvelle instance à chaque requête) puis par lignes et
+     * client (voir apercuDesLignes()).
+     *
+     * @var WeakMap<LivewireComponent, array<string, array<array-key, array<string, mixed>>>>|null
+     */
+    private static ?WeakMap $apercusDeLaRequete = null;
 
     /**
      * @return array<Component>
@@ -72,12 +88,64 @@ trait AjouteDesLignesDeVente
      * client (voir ConstructeurLigneDocument::apercu()), par clé de ligne ;
      * une ligne pas encore complète n'y est pas.
      *
+     * Le total de chaque ligne, celui du document et ceux de la Caisse
+     * (reste à payer, monnaie à rendre) lisent tous ce même aperçu : il ne
+     * se calcule, client et catalogue lus, qu'une fois par requête de la
+     * page pour les mêmes lignes et le même client, quel que soit le
+     * nombre de lignes.
+     *
      * @param  array<array-key, mixed>  $lignes
      * @return array<array-key, array<string, mixed>>
      */
     public static function apercuDesLignes(array $lignes, mixed $clientId): array
     {
-        return app(ConstructeurLigneDocument::class)->apercu($lignes, self::contexteDeVente($clientId));
+        $calculer = fn (): array => app(ConstructeurLigneDocument::class)->apercu($lignes, self::contexteDeVente($clientId));
+        $page = Livewire::current();
+
+        if (! $page instanceof LivewireComponent) {
+            return $calculer();
+        }
+
+        self::$apercusDeLaRequete ??= new WeakMap;
+        $apercus = self::$apercusDeLaRequete[$page] ?? [];
+        $cle = hash('xxh128', serialize([$lignes, $clientId]));
+
+        if (! array_key_exists($cle, $apercus)) {
+            $apercus[$cle] = $calculer();
+            self::$apercusDeLaRequete[$page] = $apercus;
+        }
+
+        return $apercus[$cle];
+    }
+
+    /**
+     * Les lignes d'un brouillon de facture ou d'un devis, telles que son
+     * formulaire les rouvre. Le taux d'une ligne de produit se reprend de
+     * sa fiche (voir champsPrixDeLigne()) ; celui d'une ligne de service,
+     * tel qu'il a été saisi -- sauf sur un document enregistré en
+     * franchise en base, où son 0 % n'a pas été saisi mais imposé (voir
+     * ConstructeurLigneDocument) : la ligne propose alors le taux du
+     * territoire du magasin, celui qu'elle prend s'il est sorti de la
+     * franchise depuis. Toujours en franchise, le champ reste caché et la
+     * ligne à 0 %.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function lignesARouvrir(Facture|Devis $document): array
+    {
+        return $document->lignes->map(fn (LigneFacture|LigneDevis $ligne): array => [
+            'produit_id' => $ligne->produit_id,
+            'service_id' => $ligne->service_id,
+            'description' => $ligne->description,
+            'reference' => $ligne->reference,
+            'quantite' => $ligne->quantite,
+            'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
+            'prix_unitaire_ttc' => $ligne->prix_unitaire_ttc,
+            'taux_tva' => self::pourcentageEnTexte($document->franchise_en_base && $ligne->service_id !== null
+                ? self::magasin()->tauxTvaParDefaut()
+                : $ligne->taux_tva),
+            'remise_pourcentage' => self::pourcentageEnTexte($ligne->remise_pourcentage),
+        ])->all();
     }
 
     /**
@@ -195,10 +263,11 @@ trait AjouteDesLignesDeVente
                 ->hidden(fn (Get $get): bool => self::estUneLigneDeService($get) && self::magasin()->estEnFranchiseDeTva())
                 ->helperText(fn (Get $get): ?string => self::magasin()->estEnFranchiseDeTva() ? 'TVA non applicable' : null)
                 ->saisieEnDirect()
-                // Une ligne rouverte (brouillon, devis, panier de la caisse)
-                // reprend le taux de la fiche du produit et le régime du
+                // Une ligne de produit rouverte (brouillon, devis, panier de
+                // la caisse) reprend le taux de sa fiche et le régime du
                 // magasin d'aujourd'hui, ceux avec lesquels elle sera
-                // enregistrée.
+                // enregistrée ; une ligne de service garde le taux saisi
+                // (voir lignesARouvrir()).
                 ->afterStateHydrated(function (Get $get, Set $set): void {
                     $produit = self::estUneLigneDeService($get) || blank($get('produit_id'))
                         ? null
@@ -242,9 +311,9 @@ trait AjouteDesLignesDeVente
         return Placeholder::make('total_ligne')
             ->label('Total TTC')
             ->columnSpanFull()
-            ->content(fn (Get $get): string => self::montantEnTexte((float) (self::montantsDeLaLigne($get)['montant_ttc'] ?? 0)))
-            ->helperText(function (Get $get): string {
-                $montants = self::montantsDeLaLigne($get);
+            ->content(fn (Get $get, Placeholder $component): string => self::montantEnTexte((float) (self::montantsDeLaLigne($get, $component)['montant_ttc'] ?? 0)))
+            ->helperText(function (Get $get, Placeholder $component): string {
+                $montants = self::montantsDeLaLigne($get, $component);
                 $detail = self::montantEnTexte((float) ($montants['montant_ht'] ?? 0)).' HT + '.self::montantEnTexte((float) ($montants['montant_tva'] ?? 0)).' de TVA';
                 $aide = self::estUneLigneDeService($get) && ! self::magasin()->estEnFranchiseDeTva()
                     ? self::magasin()->territoireTva()?->aideSiTauxInhabituel($get('taux_tva'))
@@ -263,14 +332,15 @@ trait AjouteDesLignesDeVente
     }
 
     /**
-     * La ligne lue depuis l'un de ses champs, calculée comme à son
-     * enregistrement ; vide tant qu'elle n'est pas complète.
+     * La ligne du champ, lue par sa clé dans le répéteur dans l'aperçu de
+     * toutes les lignes du document (voir apercuDesLignes()) ; vide tant
+     * qu'elle n'est pas complète.
      *
      * @return array<string, mixed>
      */
-    private static function montantsDeLaLigne(Get $get): array
+    private static function montantsDeLaLigne(Get $get, Placeholder $champ): array
     {
-        return self::apercuDesLignes([self::ligneSaisie($get)], $get('../../client_id'))[0] ?? [];
+        return self::apercuDesLignes($get('../../lignes') ?? [], $get('../../client_id'))[$champ->getContainer()->getStatePath(isAbsolute: false)] ?? [];
     }
 
     /**

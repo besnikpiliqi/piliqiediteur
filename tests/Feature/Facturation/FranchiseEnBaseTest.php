@@ -17,6 +17,7 @@ use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
@@ -27,6 +28,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -167,6 +169,44 @@ class FranchiseEnBaseTest extends TestCase
         $this->assertSame('0.00', $devis->lignes->sole()->taux_tva);
         $this->assertSame(['36.00', '0.00', '36.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
         $this->assertStringContainsString(self::MENTION, $this->pdfDuDevis($devis));
+    }
+
+    /**
+     * @return array<string, array{RegimeTva, RegimeTva, list<string>}>
+     */
+    public static function changementsDeRegimeAvantLEnvoi(): array
+    {
+        return [
+            'enregistré au réel, envoyé en franchise' => [RegimeTva::ReelNormalMensuel, RegimeTva::FranchiseEnBase, ['30.00', '6.00', '36.00']],
+            'enregistré en franchise, envoyé au réel' => [RegimeTva::FranchiseEnBase, RegimeTva::ReelNormalMensuel, ['36.00', '0.00', '36.00']],
+        ];
+    }
+
+    /**
+     * Comme une facture : un devis enregistré avant que le magasin entre en
+     * franchise, ou en sorte, ne part pas avec de la TVA et sans la mention,
+     * ni à 0 % avec la mention ; il garde son statut, n'est pas numéroté et
+     * ses montants restent ceux de son enregistrement.
+     *
+     * @param  list<string>  $totauxEnregistres
+     */
+    #[DataProvider('changementsDeRegimeAvantLEnvoi')]
+    public function test_un_devis_ne_s_envoie_plus_une_fois_le_regime_du_magasin_change(RegimeTva $regimeALEnregistrement, RegimeTva $regimeALEnvoi, array $totauxEnregistres): void
+    {
+        $magasin = $this->magasin($regimeALEnregistrement);
+        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
+        $magasin->update(['regime_tva' => $regimeALEnvoi]);
+
+        try {
+            app(EmettreDevisAction::class)->handle($devis);
+            $this->fail('L\'envoi aurait dû être refusé.');
+        } catch (LogicException $refus) {
+            $this->assertSame(self::REFUS_REGIME_CHANGE, $refus->getMessage());
+        }
+
+        $devis->refresh();
+        $this->assertSame([StatutDevis::Brouillon, null, null], [$devis->statut, $devis->numero, $devis->date_emission]);
+        $this->assertSame($totauxEnregistres, [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
     }
 
     public function test_un_devis_au_reel_ne_porte_aucune_mention_de_franchise(): void

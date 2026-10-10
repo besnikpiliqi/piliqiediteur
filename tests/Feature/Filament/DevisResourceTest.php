@@ -17,6 +17,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -350,6 +351,36 @@ class DevisResourceTest extends TestCase
         $ligne = $devis->fresh()->lignes->sole();
         $this->assertSame($service->id, $ligne->service_id);
         $this->assertSame('15.00', $ligne->montant_ttc);
+    }
+
+    /**
+     * Enregistré en franchise en base, un service est à 0 % sans que ce
+     * taux ait été saisi : le devis rouvert après la sortie de la
+     * franchise propose le taux du territoire du magasin, et réenregistré,
+     * il se recalcule avec sa TVA au même prix TTC.
+     */
+    public function test_un_service_enregistre_en_franchise_reprend_le_taux_du_territoire_apres_la_sortie_de_la_franchise(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [
+            ['service_id' => Service::factory()->create(['nom' => 'Pose écran'])->id, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'quantite' => 1],
+        ]);
+        $magasin->update(['regime_tva' => RegimeTva::ReelNormalMensuel]);
+
+        $component = Livewire::test(EditDevis::class, ['record' => $devis->getRouteKey()]);
+        $component
+            ->assertSet('data.lignes.'.array_key_first($component->get('data.lignes')).'.taux_tva', '20')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $devis->refresh();
+        $this->assertFalse($devis->franchise_en_base);
+        $this->assertSame('20.00', $devis->lignes->sole()->taux_tva);
+        $this->assertSame(['100.00', '20.00', '120.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
     }
 
     public function test_laction_modifier_disparait_des_quun_devis_est_converti_en_facture(): void

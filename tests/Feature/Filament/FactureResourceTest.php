@@ -483,6 +483,84 @@ class FactureResourceTest extends TestCase
     }
 
     /**
+     * Dans l'autre sens : enregistré en franchise, un service est à 0 %
+     * sans que ce taux ait été saisi. Rouvert après la sortie de la
+     * franchise, il propose le taux du territoire du magasin, et
+     * réenregistré, il s'émet avec sa TVA au même prix TTC.
+     */
+    public function test_un_service_enregistre_en_franchise_reprend_le_taux_du_territoire_apres_la_sortie_de_la_franchise(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+            ['service_id' => Service::factory()->create(['nom' => 'Pose écran'])->id, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'quantite' => 1],
+        ]);
+        $magasin->update(['regime_tva' => RegimeTva::ReelNormalMensuel]);
+
+        $component = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()]);
+        $component
+            ->assertSet('data.lignes.'.array_key_first($component->get('data.lignes')).'.taux_tva', '20')
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $facture = app(EmettreFactureAction::class)->handle($brouillon->fresh());
+
+        $this->assertFalse($facture->franchise_en_base);
+        $this->assertSame('20.00', $facture->lignes->sole()->taux_tva);
+        $this->assertSame(['100.00', '20.00', '120.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+    }
+
+    /**
+     * Une frappe dans une ligne calcule l'aperçu de toutes les lignes une
+     * seule fois : le client et le catalogue ne se relisent ni pour chaque
+     * ligne, ni pour chaque montant affiché.
+     */
+    public function test_une_frappe_lit_le_client_et_le_catalogue_autant_de_fois_pour_vingt_lignes_que_pour_une(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        $lecturesPourUneLigne = $this->lecturesDUneFrappeDansUnBrouillonDe(1, 'Total HT 20,00 € · TVA 4,00 € · Total TTC 24,00 €');
+        $lecturesPourVingtLignes = $this->lecturesDUneFrappeDansUnBrouillonDe(20, 'Total HT 210,00 € · TVA 42,00 € · Total TTC 252,00 €');
+
+        $this->assertSame($lecturesPourUneLigne, $lecturesPourVingtLignes);
+    }
+
+    /**
+     * Les lectures des clients et des produits que fait une frappe dans la
+     * quantité de la première ligne (de 1 à 2) d'un brouillon de produits à
+     * 12,00 € TTC, qui affiche ensuite ses nouveaux totaux.
+     *
+     * @return array{clients: int, produits: int}
+     */
+    private function lecturesDUneFrappeDansUnBrouillonDe(int $nombreDeLignes, string $totauxAttendus): array
+    {
+        $produits = Produit::factory()->count($nombreDeLignes)->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), $produits
+            ->map(fn (Produit $produit): array => ['produit_id' => $produit->id, 'quantite' => 1])
+            ->all());
+        $component = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()]);
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $component
+            ->set('data.lignes.'.array_key_first($component->get('data.lignes')).'.quantite', '2')
+            ->assertSee($totauxAttendus);
+
+        $requetes = collect(DB::getQueryLog())->pluck('query');
+        DB::disableQueryLog();
+
+        return [
+            'clients' => $requetes->filter(fn (string $requete): bool => preg_match('/from [`"]clients[`"]/', $requete) === 1)->count(),
+            'produits' => $requetes->filter(fn (string $requete): bool => preg_match('/from [`"]produits[`"]/', $requete) === 1)->count(),
+        ];
+    }
+
+    /**
      * Le taux d'un service se saisit librement (B2) : un taux qui n'est
      * pas en vigueur en métropole est signalé sous la ligne, sans empêcher
      * d'enregistrer (X8).

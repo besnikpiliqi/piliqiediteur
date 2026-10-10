@@ -225,6 +225,24 @@ class IdentiteMagasinTest extends TestCase
     }
 
     /**
+     * Un magasin français qui tape « fr » n'est pas refusé comme s'il était
+     * établi ailleurs : le pays s'enregistre en majuscules, et le
+     * formulaire montre ensuite le pays enregistré.
+     */
+    public function test_le_pays_saisi_en_minuscules_s_enregistre_en_majuscules(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+
+        Livewire::test(IdentiteMagasin::class)
+            ->fillForm(['pays' => 'fr', 'code_postal' => '13002'])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertFormSet(['pays' => 'FR']);
+
+        $this->assertSame(['FR', '13002'], [$magasin->fresh()->pays, $magasin->fresh()->code_postal]);
+    }
+
+    /**
      * Même règle que pour un client ou un fournisseur : saisi avec ses
      * séparateurs, le n° de TVA s'enregistre sans eux, en majuscules, et
      * le formulaire montre ensuite le n° enregistré.

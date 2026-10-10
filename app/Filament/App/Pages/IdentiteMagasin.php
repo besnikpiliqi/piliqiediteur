@@ -21,6 +21,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -53,6 +54,8 @@ class IdentiteMagasin extends Page implements HasForms
     ];
 
     private const MESSAGE_SIRET_DEJA_UTILISE = 'Ce SIRET est déjà celui d\'un autre magasin.';
+
+    private const MESSAGE_PAYS_NON_GERE = 'Le logiciel ne gère pour l\'instant que les magasins établis en France.';
 
     private const MESSAGE_TERRITOIRE_NON_GERE = 'Le logiciel ne gère pas encore les magasins situés en Guyane, à Mayotte ou dans une collectivité d\'outre-mer.';
 
@@ -174,12 +177,18 @@ class IdentiteMagasin extends Page implements HasForms
                             }
                         }),
                     TextInput::make('ville')->maxLength(100),
+                    // Saisi en minuscules comme en majuscules, il s'enregistre
+                    // en majuscules (voir Magasin::pays()).
                     TextInput::make('pays')
                         ->label('Pays')
                         ->helperText('Code du pays à deux lettres : FR.')
                         ->required()
-                        ->in(['FR'])
-                        ->validationMessages(['in' => 'Le logiciel ne gère pour l\'instant que les magasins établis en France.']),
+                        ->extraInputAttributes(['style' => 'text-transform: uppercase'])
+                        ->rule(fn (): Closure => function (string $attribute, mixed $pays, Closure $fail): void {
+                            if (Str::upper(trim((string) $pays)) !== 'FR') {
+                                $fail(self::MESSAGE_PAYS_NON_GERE);
+                            }
+                        }),
                 ])
                 ->columns(2),
             Section::make('Coordonnées')

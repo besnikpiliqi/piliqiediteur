@@ -29,6 +29,11 @@ class ConstructeurLigneDocument
     /**
      * Les lignes d'un document, dans leur ordre.
      *
+     * Un produit archivé ne se vend plus (voir ProduitResource) : la ligne
+     * qui le porte est refusée avec un message, plutôt qu'une page
+     * d'erreur. Un brouillon déjà composé avec lui s'émet toujours, sans
+     * repasser par ici, et le sort du stock (voir LigneFacture::produit()).
+     *
      * @param  list<array<string, mixed>>  $lignesDonnees
      * @return list<array<string, mixed>>
      *
@@ -46,6 +51,12 @@ class ConstructeurLigneDocument
         $lignes = [];
 
         foreach (array_values($lignesDonnees) as $index => $donnees) {
+            $produit = filled($donnees['produit_id'] ?? null) ? $produits->get((int) $donnees['produit_id']) : null;
+
+            if ($produit?->trashed()) {
+                throw new LogicException("Le produit « {$produit->nom} » est archivé : restaurez-le depuis le catalogue, ou retirez-le du document.");
+            }
+
             $lignes[] = $this->construire($donnees, $index, $contexte, $produits, $services);
         }
 
@@ -53,10 +64,14 @@ class ConstructeurLigneDocument
     }
 
     /**
-     * Les lignes telles qu'elles sont saisies à l'écran, calculées comme à
-     * l'enregistrement, par clé de ligne : une ligne pas encore complète
-     * (aucun produit ni service choisi, prix ou quantité à saisir, valeur
-     * hors limites) est ignorée, plutôt que comptée pour un montant faux.
+     * Les lignes telles qu'elles sont saisies à l'écran, ou gardées dans un
+     * panier de la caisse, calculées comme à l'enregistrement, par clé de
+     * ligne : une ligne pas encore complète (aucun produit ni service
+     * choisi, prix ou quantité à saisir, valeur hors limites) est ignorée,
+     * plutôt que comptée pour un montant faux. Une ligne dont le produit a
+     * été archivé depuis compte pour son montant : seul son enregistrement
+     * la refuse (voir construireToutes()), et le total d'une vente
+     * abandonnée la compte (voir PanierDeCaisse).
      *
      * @param  array<array-key, mixed>  $lignesSaisies
      * @return array<array-key, array<string, mixed>>
@@ -71,7 +86,7 @@ class ConstructeurLigneDocument
         foreach ($lignesSaisies as $cle => $donnees) {
             try {
                 $lignes[$cle] = $this->construire($donnees, $ordre++, $contexte, $produits, $services);
-            } catch (InvalidArgumentException|LogicException|ModelNotFoundException) {
+            } catch (InvalidArgumentException|ModelNotFoundException) {
                 continue;
             }
         }
@@ -98,18 +113,12 @@ class ConstructeurLigneDocument
      * en base, toute ligne est à 0 % : son PU HT est son PU TTC, et le
      * client paie le même prix TTC sans TVA (B10).
      *
-     * Un produit archivé ne se vend plus (voir ProduitResource) : la ligne
-     * qui le porte est refusée avec un message, plutôt qu'une page
-     * d'erreur. Un brouillon déjà composé avec lui s'émet toujours, sans
-     * repasser par ici, et le sort du stock (voir LigneFacture::produit()).
-     *
      * @param  array{produit_id?: int|string|null, service_id?: int|string|null, quantite: int|string, prix_unitaire_ttc?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}  $donnees
      * @param  Collection<int, Produit>  $produits  les produits des lignes, archivés compris (voir catalogue())
      * @param  Collection<int, Service>  $services  les services des lignes
      * @return array<string, mixed>
      *
      * @throws InvalidArgumentException
-     * @throws LogicException
      * @throws ModelNotFoundException un produit ou un service qui n'est pas du magasin actif
      */
     private function construire(array $donnees, int $ordre, ContexteDeVente $contexte, Collection $produits, Collection $services): array
@@ -117,10 +126,6 @@ class ConstructeurLigneDocument
         $produit = filled($donnees['produit_id'] ?? null)
             ? ($produits->get((int) $donnees['produit_id']) ?? throw (new ModelNotFoundException)->setModel(Produit::class, [$donnees['produit_id']]))
             : null;
-
-        if ($produit?->trashed()) {
-            throw new LogicException("Le produit « {$produit->nom} » est archivé : restaurez-le depuis le catalogue, ou retirez-le du document.");
-        }
 
         $service = filled($donnees['service_id'] ?? null)
             ? ($services->get((int) $donnees['service_id']) ?? throw (new ModelNotFoundException)->setModel(Service::class, [$donnees['service_id']]))
@@ -170,8 +175,9 @@ class ConstructeurLigneDocument
     }
 
     /**
-     * Les produits (archivés compris, pour les refuser avec un message) et
-     * les services des lignes, lus en une requête chacun, limitée au
+     * Les produits (archivés compris : l'aperçu les compte, l'enregistrement
+     * les refuse avec un message) et les services des lignes, archivés
+     * compris eux aussi, lus en une requête chacun, limitée au
      * magasin actif par MagasinScope : un identifiant d'un autre magasin
      * n'y est pas, et sa ligne est introuvable.
      *

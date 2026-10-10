@@ -4,7 +4,10 @@ namespace App\Domain\Facturation\Services;
 
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
+use LogicException;
 
 /**
  * Ce qui, hors des lignes elles-mêmes, décide du calcul d'une vente (voir
@@ -14,9 +17,11 @@ use App\Domain\Tenancy\Models\Magasin;
  * celui du territoire du magasin (B2).
  *
  * Un brouillon de facture ou un devis note le type du client et la
- * franchise à chaque enregistrement (colonnes()) : l'émission refuse un
- * brouillon dont le type de client ou le régime du magasin a changé depuis
- * (voir EmettreFactureAction).
+ * franchise à chaque enregistrement (colonnes()) : l'émission d'une
+ * facture refuse un brouillon dont le type de client a changé depuis (voir
+ * EmettreFactureAction), et celle d'une facture comme l'envoi d'un devis,
+ * un document dont le régime du magasin a changé depuis (voir
+ * refuserSiLeRegimeAChange()).
  */
 final readonly class ContexteDeVente
 {
@@ -38,6 +43,23 @@ final readonly class ContexteDeVente
             franchiseEnBase: $magasin->estEnFranchiseDeTva(),
             tauxTvaParDefaut: $magasin->tauxTvaParDefaut(),
         );
+    }
+
+    /**
+     * Un brouillon de facture ou un devis part avec la franchise notée à
+     * son enregistrement : si le magasin est entré en franchise en base, ou
+     * en est sorti, depuis, ses lignes sont à recalculer, à 0 % ou à leurs
+     * taux, en l'enregistrant de nouveau. Sinon, un magasin en franchise
+     * enverrait un document avec de la TVA et sans la mention, ou un
+     * magasin redevable un document à 0 % avec la mention (B10).
+     *
+     * @throws LogicException
+     */
+    public static function refuserSiLeRegimeAChange(Facture|Devis $document): void
+    {
+        if ($document->franchise_en_base !== $document->magasin->estEnFranchiseDeTva()) {
+            throw new LogicException('Le régime de TVA du magasin a changé depuis l\'enregistrement de ce brouillon : ouvrez-le et enregistrez-le de nouveau pour recalculer ses lignes.');
+        }
     }
 
     /**

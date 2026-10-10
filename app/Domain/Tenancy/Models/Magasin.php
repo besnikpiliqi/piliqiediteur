@@ -245,6 +245,19 @@ class Magasin extends Model implements HasName
     }
 
     /**
+     * Le pays s'enregistre en majuscules, sans espace autour, comme celui
+     * d'un client (voir Client::booted()) : « fr » saisi devient « FR ».
+     *
+     * @return Attribute<string, string|null>
+     */
+    protected function pays(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $pays): ?string => $pays === null ? null : Str::upper(trim($pays)),
+        );
+    }
+
+    /**
      * Les délais de relance, en jours après l'échéance d'une facture :
      * toujours enregistrés dans l'ordre, sans doublon, la relance n°1 étant
      * celle du plus court (voir relanceDue()).

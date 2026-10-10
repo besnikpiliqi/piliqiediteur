@@ -39,19 +39,13 @@ class EditFacture extends EditRecord
         ];
     }
 
+    /**
+     * Les lignes du document, telles que son formulaire les rouvre (voir
+     * AjouteDesLignesDeVente::lignesARouvrir()).
+     */
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        $data['lignes'] = $this->record->lignes->map(fn ($ligne) => [
-            'produit_id' => $ligne->produit_id,
-            'service_id' => $ligne->service_id,
-            'description' => $ligne->description,
-            'reference' => $ligne->reference,
-            'quantite' => $ligne->quantite,
-            'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
-            'prix_unitaire_ttc' => $ligne->prix_unitaire_ttc,
-            'taux_tva' => DevisResource::pourcentageEnTexte($ligne->taux_tva),
-            'remise_pourcentage' => DevisResource::pourcentageEnTexte($ligne->remise_pourcentage),
-        ])->all();
+        $data['lignes'] = DevisResource::lignesARouvrir($this->record);
 
         return $data;
     }

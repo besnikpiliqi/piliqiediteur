@@ -1012,6 +1012,31 @@ class CaisseTest extends TestCase
         $this->assertTrue(app(VerificateurIntegrite::class)->verifier($magasin)->estConforme());
     }
 
+    /**
+     * Un produit archivé pendant la vente ne s'encaisse plus, mais l'abandon
+     * le compte : le journal inscrit le total des deux lignes, pas celui de
+     * la seule qui reste vendable.
+     */
+    public function test_l_abandon_compte_une_ligne_dont_le_produit_a_ete_archive_depuis(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+            ['produit_id' => $cable->id, 'description' => $cable->nom, 'quantite' => 2, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+        $cable->delete();
+
+        $caisse->callAction('abandonnerLaVente');
+
+        $this->assertSame([
+            ['260', []],
+            ['320', ['origine' => 'caisse', 'nombre_lignes' => 2, 'total_ttc' => 7200]],
+        ], $this->journalDesEvenements($magasin));
+        $this->assertTrue(app(VerificateurIntegrite::class)->verifier($magasin)->estConforme());
+    }
+
     public function test_retirer_une_ligne_renseignee_du_panier_l_inscrit_au_journal(): void
     {
         $magasin = $this->ouvrirLaCaisseDUnMagasin();

@@ -16,9 +16,12 @@
         ]),
     ])
 
+    {{-- La fiche du client d'aujourd'hui, présentée selon le type avec
+         lequel le devis a été calculé, comme ses lignes (voir
+         Devis::client()). --}}
     @include('documents.pdf.client', [
         'client' => \App\Domain\Facturation\Services\CopieClient::depuisClient($devis->client),
-        'professionnel' => $devis->client->estProfessionnel(),
+        'professionnel' => $devis->estPourUnProfessionnel(),
         'titre' => 'Établi pour',
     ])
 

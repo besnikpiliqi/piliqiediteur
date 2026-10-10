@@ -30,10 +30,12 @@ use LogicException;
  * mélangent jamais, même si elles restent dans la même table (voir
  * FacturePdfGenerator pour le libellé affiché). Si la fiche du client a
  * changé de type depuis l'enregistrement du brouillon, l'émission est
- * refusée : le brouillon doit être réenregistré pour son nouveau type. De
- * même si le magasin est entré en franchise en base de TVA, ou en est
- * sorti, depuis : ses lignes doivent être recalculées, à 0 % ou à leurs
- * taux (voir ContexteDeVente).
+ * refusée : le brouillon doit être réenregistré pour son nouveau type, qui
+ * décide aussi de son calcul (voir
+ * ContexteDeVente::refuserSiLeTypeDeClientAChange()). De même si le
+ * magasin est entré en franchise en base de TVA, ou en est sorti, depuis :
+ * ses lignes doivent être recalculées, à 0 % ou à leurs taux (voir
+ * ContexteDeVente::refuserSiLeRegimeAChange()).
  *
  * Tout se fait dans une seule transaction, dans cet ordre (art. 286 I-3°
  * bis du CGI) :
@@ -87,14 +89,7 @@ class EmettreFactureAction
                 throw new LogicException('Impossible d\'émettre une facture sans lignes.');
             }
 
-            $client = $facture->client;
-
-            if ($client->type_client !== $facture->type_client) {
-                $nouveauType = $client->estProfessionnel() ? 'professionnel' : 'particulier';
-
-                throw new LogicException("Ce client est devenu {$nouveauType} depuis l'enregistrement du brouillon : ouvrez-le et enregistrez-le de nouveau.");
-            }
-
+            ContexteDeVente::refuserSiLeTypeDeClientAChange($facture);
             ContexteDeVente::refuserSiLeRegimeAChange($facture);
 
             $typeDocument = $facture->serie();

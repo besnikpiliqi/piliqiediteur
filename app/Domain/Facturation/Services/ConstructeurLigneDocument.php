@@ -26,7 +26,9 @@ use LogicException;
  * article ; une vente à un professionnel, depuis le HT de chaque ligne,
  * puis la TVA de chaque taux sur le total HT de ses lignes, répartie entre
  * elles (E1, voir repartirLaTvaParTaux()) : ses lignes ne se calculent
- * qu'ensemble.
+ * qu'ensemble. En franchise en base, toute vente se calcule article par
+ * article, quel que soit le client (voir
+ * ContexteDeVente::calculeDepuisLeHtDeLigne()).
  */
 class ConstructeurLigneDocument
 {
@@ -124,18 +126,19 @@ class ConstructeurLigneDocument
      * catalogue : son PU TTC est toujours saisi. Un PU TTC n'est jamais
      * négatif : une vente ne rembourse rien, c'est le rôle d'un avoir.
      *
-     * Vendue à un particulier, la ligne a ici tous ses montants, article
-     * par article ; vendue à un professionnel, seulement son HT, quantité x
-     * PU TTC ÷ (1 + taux) arrondi une fois -- sa TVA et son TTC attendent
-     * les autres lignes de son taux (voir repartirLaTvaParTaux()). Son PU
-     * HT n'est alors qu'un affichage : 1 000 x 0,83 € ne font pas les
-     * 833,33 € HT de la ligne.
+     * Vendue à un particulier, ou en franchise en base, la ligne a ici
+     * tous ses montants, article par article ; vendue à un professionnel
+     * hors franchise, seulement son HT, quantité x PU TTC ÷ (1 + taux)
+     * arrondi une fois -- sa TVA et son TTC attendent les autres lignes de
+     * son taux (voir repartirLaTvaParTaux()). Son PU HT n'est alors qu'un
+     * affichage : 1 000 x 0,83 € ne font pas les 833,33 € HT de la ligne.
      *
      * Le taux d'une ligne de produit est celui de sa fiche, quel que soit
      * celui envoyé (C15, C40) ; celui d'une ligne de service se saisit
      * librement, sinon le taux du territoire du magasin (B2). En franchise
      * en base, toute ligne est à 0 % : son PU HT est son PU TTC, et le
-     * client paie le même prix TTC sans TVA (B10).
+     * client, particulier ou professionnel, paie le même prix TTC sans TVA
+     * (B10).
      *
      * @param  array{produit_id?: int|string|null, service_id?: int|string|null, quantite: int|string, prix_unitaire_ttc?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}  $donnees
      * @param  Collection<int, Produit>  $produits  les produits des lignes, archivés compris (voir catalogue())

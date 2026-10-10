@@ -53,42 +53,47 @@ class DevisPdfGeneratorTest extends TestCase
 
     /**
      * Un devis ne fige pas son client : envoyé après que la fiche de
-     * « Jean Ancien », particulier, est devenue « Marc Nouveau »,
-     * professionnel, il imprime la fiche du jour, nom et SIREN compris.
+     * « Jean Ancien » est devenue « Marc Nouveau », avec un autre SIREN,
+     * il imprime la fiche du jour, nom et SIREN compris. Un changement de
+     * type, lui, empêche l'envoi tant que le devis n'est pas recalculé
+     * (E1, voir DevisConversionTest).
      */
     public function test_le_pdf_imprime_le_nom_et_les_identifiants_de_la_fiche_du_jour(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
-        $client = Client::factory()->create(['nom' => 'Jean Ancien']);
+        $client = Client::factory()->professionnel()->create(['nom' => 'Jean Ancien', 'siren' => '999888777', 'siret' => null, 'numero_tva' => null]);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20]);
         $devis = app(CreerDevisAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
-        $client->update(['nom' => 'Marc Nouveau', 'type_client' => TypeClient::Professionnel, 'siren' => '111222333']);
+        $client->update(['nom' => 'Marc Nouveau', 'siren' => '111222333']);
 
         $devis = app(EmettreDevisAction::class)->handle($devis);
 
         $this->assertStringContainsString(
             '<div class="bloc-client"><div class="titre">Établi pour</div><strong>Marc Nouveau</strong><br>SIREN : 111222333<br></div>',
-            preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], view('devis.pdf', ['devis' => $devis->load('client', 'lignes', 'magasin')])->render()),
+            $this->compacte(view('devis.pdf', ['devis' => $devis->load('client', 'lignes', 'magasin')])->render()),
         );
     }
 
     /**
      * Le devis d'un professionnel se calcule comme sa facture (E1) et
      * porte la même note sous ses lignes ; celui établi pour un
-     * particulier, article par article, n'en porte pas, même si la fiche
-     * du client est devenue professionnelle avant son envoi.
+     * particulier, article par article, n'en porte pas. Si la fiche du
+     * client devient professionnelle après son envoi, il se réimprime
+     * comme il a été calculé : client sans identifiant et sans note.
      */
     public function test_le_devis_d_un_professionnel_explique_le_calcul_de_ses_lignes(): void
     {
         $note = 'Client professionnel : HT de chaque ligne = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA calculée sur le total HT de chaque taux.';
         $devisProfessionnel = $this->devisEnvoye();
-        $client = Client::factory()->create();
-        $devisParticulier = app(CreerDevisAction::class)->handle($client, [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
+        $client = Client::factory()->create(['nom' => 'Jean Ancien']);
+        $devisParticulier = app(EmettreDevisAction::class)->handle(app(CreerDevisAction::class)->handle($client, [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]));
         $client->update(['type_client' => TypeClient::Professionnel, 'siren' => '111222333']);
-        $devisParticulier = app(EmettreDevisAction::class)->handle($devisParticulier);
+
+        $renduParticulier = $this->compacte(view('devis.pdf', ['devis' => $devisParticulier->fresh()->load('client', 'lignes', 'magasin')])->render());
 
         $this->assertStringContainsString($note, view('devis.pdf', ['devis' => $devisProfessionnel->load('client', 'lignes', 'magasin')])->render());
-        $this->assertStringNotContainsString($note, view('devis.pdf', ['devis' => $devisParticulier->load('client', 'lignes', 'magasin')])->render());
+        $this->assertStringNotContainsString($note, $renduParticulier);
+        $this->assertStringContainsString('<div class="bloc-client"><div class="titre">Établi pour</div><strong>Jean Ancien</strong><br></div>', $renduParticulier);
     }
 
     private function devisEnvoye(): Devis
@@ -112,5 +117,13 @@ class DevisPdfGeneratorTest extends TestCase
         ], ['date_validite' => '2026-12-31']);
 
         return app(EmettreDevisAction::class)->handle($devis);
+    }
+
+    /**
+     * Le HTML sans les blancs qui entourent ses balises.
+     */
+    private function compacte(string $html): string
+    {
+        return preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], $html);
     }
 }

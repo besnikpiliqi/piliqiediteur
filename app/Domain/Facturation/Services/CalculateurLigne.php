@@ -15,18 +15,23 @@ use InvalidArgumentException;
  *    PU HT + TVA = PU TTC ; la ligne multiplie séparément le HT et le TTC
  *    par la quantité, sa TVA étant leur différence (montantsDeVente()) :
  *    2 x 40,00 € TTC = 66,66 € HT + 13,34 € de TVA = 80,00 € TTC.
- * 2. Une vente à un professionnel part aussi du prix TTC, mais pour toute
- *    la ligne : son HT est quantité x PU TTC ÷ (1 + taux), remise déduite,
- *    arrondi une seule fois (montantHtDeLigneProfessionnelle()) ; la TVA
- *    de chaque taux se calcule une seule fois sur le total HT de ses
- *    lignes, puis se répartit entre elles (repartirLaTva()) : 1 000 x
- *    1,00 € TTC à 20 % = 833,33 € HT + 166,67 € de TVA = 1 000,00 € TTC,
- *    là où un particulier paie 830,00 € HT + 170,00 € de TVA. Chacun de
- *    ses retours se recalcule de même, par différence de cumul, le dernier
- *    soldant la ligne au centime (retourDeLigneProfessionnelle()).
+ * 2. Une vente à un professionnel, hors franchise en base, part aussi du
+ *    prix TTC, mais pour toute la ligne : son HT est quantité x PU TTC ÷
+ *    (1 + taux), remise déduite, arrondi une seule fois
+ *    (montantHtDeLigneProfessionnelle()) ; la TVA de chaque taux se
+ *    calcule une seule fois sur le total HT de ses lignes, puis se
+ *    répartit entre elles (repartirLaTva()) : 1 000 x 1,00 € TTC à 20 % =
+ *    833,33 € HT + 166,67 € de TVA = 1 000,00 € TTC, là où un particulier
+ *    paie 830,00 € HT + 170,00 € de TVA. Chacun de ses retours se
+ *    recalcule de même, par différence de cumul, le dernier soldant la
+ *    ligne au centime (retourDeLigneProfessionnelle()).
  * 3. Un magasin en franchise en base vend à 0 % (voir
- *    ConstructeurLigneDocument), au particulier comme au professionnel :
- *    le HT est le TTC, sans TVA, et 2 x 40,00 € font 80,00 € HT.
+ *    ConstructeurLigneDocument), article par article comme au point 1,
+ *    au particulier comme au professionnel (voir
+ *    ContexteDeVente::calculeDepuisLeHtDeLigne()) : le HT est le TTC,
+ *    sans TVA, 2 x 40,00 € font 80,00 € HT, et 9,99 € remisés de 50 %
+ *    coûtent 4,99 € à l'un comme à l'autre -- c'est la remise qui
+ *    s'arrondit, jamais le montant net.
  * 4. Un achat part du PU HT du fournisseur, multiplié par la quantité,
  *    puis la TVA se calcule une seule fois sur le HT de la ligne
  *    (montantsDAchat()) : 10 x 1,18 € HT = 11,80 € HT + 2,36 € de TVA
@@ -93,11 +98,12 @@ class CalculateurLigne
     }
 
     /**
-     * Le HT d'une ligne vendue à un professionnel (voir le point 2 du
-     * commentaire de classe) : quantité x PU TTC, remise déduite, ÷ (1 +
-     * taux), arrondi une seule fois au centime -- 1 000 x 1,00 € TTC à
-     * 20 % font 833,33 € HT, jamais 1 000 x 0,83 €. Sa TVA est sa part de
-     * celle de son taux (voir repartirLaTva()).
+     * Le HT d'une ligne vendue à un professionnel, hors franchise en base
+     * (voir les points 2 et 3 du commentaire de classe) : quantité x PU
+     * TTC, remise déduite, ÷ (1 + taux), arrondi une seule fois au centime
+     * -- 1 000 x 1,00 € TTC à 20 % font 833,33 € HT, jamais 1 000 x
+     * 0,83 €. Sa TVA est sa part de celle de son taux (voir
+     * repartirLaTva()).
      *
      * @param  int  $quantite  nombre entier d'articles (voir QuantiteEntiere)
      *
@@ -359,9 +365,10 @@ class CalculateurLigne
      * TVA créditée suit 0,03, 0,05, 0,08... jusqu'aux 0,26 € de la ligne,
      * jamais négative, et le dernier retour retombe exactement sur la
      * ligne. Le cumul se calcule comme la ligne elle-même : article par
-     * article pour un particulier (montantsDeVente()), depuis le HT de la
-     * ligne pour un professionnel (retourDeLigneProfessionnelle()), depuis
-     * le PU HT pour un achat (montantsDAchat()).
+     * article pour un particulier ou en franchise en base
+     * (montantsDeVente()), depuis le HT de la ligne pour un professionnel
+     * (retourDeLigneProfessionnelle()), depuis le PU HT pour un achat
+     * (montantsDAchat()).
      *
      * @param  array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}  $montantsDuCumul  la ligne calculée pour toute la quantité rendue jusqu'ici
      * @param  iterable<array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}>  $montantsDejaCredites

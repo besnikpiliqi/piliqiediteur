@@ -47,8 +47,8 @@ use WeakMap;
  * constructeur que l'enregistrement réel, avec le client choisi et le
  * régime de TVA du magasin (voir apercuDesLignes()) : l'écran ne peut
  * jamais afficher un centime différent de ce qui sera enregistré. Pour un
- * client professionnel, chaque ligne affiche son HT, la TVA se calculant
- * sur le total de son taux (voir totalDeLigne()).
+ * client professionnel, hors franchise en base, chaque ligne affiche son
+ * HT, la TVA se calculant sur le total de son taux (voir totalDeLigne()).
  */
 trait AjouteDesLignesDeVente
 {
@@ -322,9 +322,10 @@ trait AjouteDesLignesDeVente
 
     /**
      * Le HT et la TVA de la ligne à côté de son TTC, comme le ticket. Pour
-     * un client professionnel, la ligne affiche son HT, quantité x PU TTC
-     * ÷ (1 + taux) arrondi une fois : sa TVA se calcule sur le total HT de
-     * son taux (E1, voir ConstructeurLigneDocument), dans les totaux du
+     * un client professionnel, hors franchise en base (voir
+     * calculeDepuisLeHtDeLigne()), la ligne affiche son HT, quantité x PU
+     * TTC ÷ (1 + taux) arrondi une fois : sa TVA se calcule sur le total HT
+     * de son taux (E1, voir ConstructeurLigneDocument), dans les totaux du
      * document. Un taux de service qui n'est pas en vigueur sur le
      * territoire du magasin est signalé, sans être refusé (X8).
      */
@@ -349,12 +350,12 @@ trait AjouteDesLignesDeVente
 
     /**
      * La ligne du champ est vendue à un professionnel, hors franchise en
-     * base : sans TVA, son HT est son TTC, et elle s'affiche comme celle
-     * d'un particulier.
+     * base (voir ContexteDeVente::calculeDepuisLeHtDeLigne()) : en
+     * franchise, elle se calcule et s'affiche comme celle d'un particulier.
      */
     private static function calculeDepuisLeHtDeLigne(Get $get): bool
     {
-        return self::contexteDeVente($get('../../client_id'))->calculeDepuisLeHtDeLigne() && ! self::magasin()->estEnFranchiseDeTva();
+        return self::contexteDeVente($get('../../client_id'))->calculeDepuisLeHtDeLigne();
     }
 
     /**

@@ -35,7 +35,7 @@ class MentionsFiscales
 
     private const CALCUL_VENTE_PROFESSIONNELLE = 'Client professionnel : HT de chaque ligne = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA calculée sur le total HT de chaque taux.';
 
-    private const CALCUL_RETOUR_PROFESSIONNEL = 'Client professionnel : chaque ligne se calcule comme sur sa facture, HT = quantité × PU TTC ÷ (1 + taux) arrondi une fois et TVA sur ce HT, déduction faite des avoirs déjà émis sur la même ligne.';
+    private const CALCUL_RETOUR_PROFESSIONNEL = 'Client professionnel : chaque retour se calcule comme sa facture, pour tous les articles rendus jusqu\'ici (HT = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA sur ce HT, dans la limite de celle de la ligne), déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.';
 
     /**
      * @return list<string>
@@ -63,13 +63,19 @@ class MentionsFiscales
      * de chaque ligne, PU HT x quantité peut différer du HT de la ligne
      * (1 000 x 0,83 € pour 833,33 €, voir CalculateurLigne). Un avoir
      * reprend le calcul de sa facture, par différence avec les avoirs déjà
-     * émis sur la même ligne. Rien pour un particulier, ni en franchise en
-     * base, où le HT est le TTC. Une explication, pas une mention : elle ne
-     * se signe pas avec le document (voir ContenuFiscal).
+     * émis sur la même ligne (K2, voir
+     * CalculateurLigne::retourDeLigneProfessionnelle()) : sa TVA ne dépasse
+     * jamais celle de la ligne facturée, sa part de la TVA de son taux,
+     * qui peut différer d'un centime de la TVA de son propre HT, et le
+     * dernier retour reprend ce qui reste de la ligne. Rien pour un
+     * particulier, ni en franchise en base, où la vente se calcule article
+     * par article (voir ContexteDeVente::documentCalculeDepuisLeHtDeLigne()).
+     * Une explication, pas une mention : elle ne se signe pas avec le
+     * document (voir ContenuFiscal).
      */
     public function calcul(Facture|Avoir|Devis $document): ?string
     {
-        if (! $document->estPourUnProfessionnel() || $document->franchise_en_base) {
+        if (! ContexteDeVente::documentCalculeDepuisLeHtDeLigne($document)) {
             return null;
         }
 

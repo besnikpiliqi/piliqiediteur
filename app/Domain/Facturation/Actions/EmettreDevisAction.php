@@ -13,9 +13,13 @@ use LogicException;
 /**
  * Le devis reçoit son numéro quand il part (voir EnvoyerDocumentAction).
  * Un magasin suspendu ou fermé n'en envoie plus (voir
- * Magasin::verifierQuIlEstOuvert()), et un devis enregistré avant que le
- * magasin entre en franchise en base, ou en sorte, ne part pas tant qu'il
- * n'est pas recalculé (voir ContexteDeVente::refuserSiLeRegimeAChange()).
+ * Magasin::verifierQuIlEstOuvert()). Comme une facture à son émission (voir
+ * EmettreFactureAction), un devis enregistré avant que son client change
+ * de type, ou que le magasin entre en franchise en base ou en sorte, ne
+ * part pas tant qu'il n'est pas recalculé : le client accepterait un prix
+ * que la facture tirée du devis ne reprendrait pas (voir
+ * ContexteDeVente::refuserSiLeTypeDeClientAChange() et
+ * ContexteDeVente::refuserSiLeRegimeAChange()).
  */
 class EmettreDevisAction
 {
@@ -38,6 +42,7 @@ class EmettreDevisAction
                 throw new LogicException('Impossible d\'envoyer un devis sans lignes.');
             }
 
+            ContexteDeVente::refuserSiLeTypeDeClientAChange($devis);
             ContexteDeVente::refuserSiLeRegimeAChange($devis);
 
             $numero = $this->numerotation->suivant($devis->magasin, TypeDocument::Devis, now()->format('Y'));

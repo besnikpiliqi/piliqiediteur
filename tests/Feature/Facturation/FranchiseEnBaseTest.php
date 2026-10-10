@@ -75,6 +75,40 @@ class FranchiseEnBaseTest extends TestCase
         $this->assertStringNotContainsString(self::MENTION, $this->pdfDeLaFacture($ticket));
     }
 
+    /**
+     * @return array<string, array{bool}>
+     */
+    public static function typesDeClient(): array
+    {
+        return [
+            'professionnel' => [true],
+            'particulier' => [false],
+        ];
+    }
+
+    /**
+     * En franchise, le client paie le même prix TTC quel que soit son type
+     * (B10) : 3 x 9,99 € remisés de 50 % font 14,98 € (29,97 € moins une
+     * remise de 14,985 € arrondie à 14,99 €), pour un professionnel comme
+     * pour un particulier, et le retour d'un article crédite 4,99 € (9,99 €
+     * moins 5,00 € de remise) dans les deux cas.
+     */
+    #[DataProvider('typesDeClient')]
+    public function test_en_franchise_une_ligne_remisee_et_son_retour_coutent_le_meme_prix_a_tout_client(bool $professionnel): void
+    {
+        $this->magasin(RegimeTva::FranchiseEnBase);
+        $client = $professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '9.99', 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 3, 'remise_pourcentage' => 50],
+        ]));
+        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
+
+        $this->assertSame(['14.98', '0.00', '14.98'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(['4.99', '0.00', '4.99'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
+    }
+
     public function test_une_ligne_de_service_saisie_a_10_pour_cent_est_enregistree_a_zero_en_franchise(): void
     {
         $this->magasin(RegimeTva::FranchiseEnBase);

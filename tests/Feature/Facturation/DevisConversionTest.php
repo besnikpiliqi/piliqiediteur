@@ -11,6 +11,7 @@ use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -74,6 +75,40 @@ class DevisConversionTest extends TestCase
 
         $this->expectException(LogicException::class);
         app(AccepterDevisAction::class)->handle($devis);
+    }
+
+    /**
+     * Le type du client décide du calcul d'un devis (E1) : enregistré pour
+     * un particulier, 1 000 x 1,00 € à 20 % font 830,00 € HT + 170,00 € de
+     * TVA, quand la facture d'un professionnel ferait 833,33 € + 166,67 €.
+     * Si la fiche du client devient professionnelle avant l'envoi, le devis
+     * ne part pas, n'est pas numéroté et garde ses montants ; réenregistré,
+     * il se recalcule pour un professionnel et part avec le premier numéro
+     * de la série, qu'aucun envoi refusé n'a consommé.
+     */
+    public function test_un_devis_dont_le_client_a_change_de_type_ne_part_qu_une_fois_reenregistre(): void
+    {
+        $client = Client::factory()->create();
+        $lignes = [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 1, 'taux_tva' => 20])->id, 'quantite' => 1000]];
+        $devis = app(CreerDevisAction::class)->handle($client, $lignes);
+        $client->update(['type_client' => TypeClient::Professionnel, 'siren' => '111222333']);
+
+        $this->assertThrows(
+            fn () => app(EmettreDevisAction::class)->handle($devis),
+            LogicException::class,
+            "Ce client est devenu professionnel depuis l'enregistrement du brouillon : ouvrez-le et enregistrez-le de nouveau.",
+        );
+
+        $devis->refresh();
+        $this->assertSame([StatutDevis::Brouillon, null, null, TypeClient::Particulier], [$devis->statut, $devis->numero, $devis->date_emission, $devis->type_client]);
+        $this->assertSame(['830.00', '170.00', '1000.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
+        $this->assertDatabaseCount('sequences_documents', 0);
+
+        $envoye = app(EmettreDevisAction::class)->handle(app(ModifierDevisAction::class)->handle($devis, $client->fresh(), $lignes));
+
+        $this->assertSame([StatutDevis::Envoye, TypeClient::Professionnel], [$envoye->statut, $envoye->type_client]);
+        $this->assertStringEndsWith('-000001', $envoye->numero);
+        $this->assertSame(['833.33', '166.67', '1000.00'], [$envoye->total_ht, $envoye->total_tva, $envoye->total_ttc]);
     }
 
     /**

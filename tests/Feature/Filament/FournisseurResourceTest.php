@@ -28,6 +28,8 @@ class FournisseurResourceTest extends TestCase
 
     private const MESSAGE_SIRET_PRIS = 'Ce SIRET est déjà celui d\'un autre fournisseur du magasin, peut-être archivé : affichez les fournisseurs archivés pour le restaurer.';
 
+    private const MESSAGE_PROPRE_ENTREPRISE = 'Ce SIRET est celui de votre propre entreprise : un achat entre magasins d\'une même société n\'est pas un achat.';
+
     /**
      * Le message contient « : », que Livewire lirait comme le nom d'une
      * règle : il se compare donc aux messages eux-mêmes.
@@ -115,6 +117,48 @@ class FournisseurResourceTest extends TestCase
             ->fillForm(['nom' => 'Grossiste A', 'siret' => '1234567890001'])
             ->call('create')
             ->assertHasFormErrors(['siret' => 'Le SIRET compte 14 chiffres, sans espace.']);
+
+        $this->assertSame(0, Fournisseur::query()->count());
+    }
+
+    public function test_un_numero_de_tva_avec_des_espaces_est_refuse(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateFournisseur::class)
+            ->fillForm(['nom' => 'Grossiste A', 'numero_tva' => 'FR 32 123'])
+            ->call('create')
+            ->assertHasFormErrors(['numero_tva' => 'Le n° de TVA commence par les deux lettres du pays (FR...), suivies de chiffres ou de lettres, sans espace.']);
+
+        $this->assertSame(0, Fournisseur::query()->count());
+    }
+
+    public function test_un_numero_de_tva_au_format_est_accepte(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateFournisseur::class)
+            ->fillForm(['nom' => 'Grossiste A', 'numero_tva' => 'FR32123456789'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('fournisseurs', ['nom' => 'Grossiste A', 'numero_tva' => 'FR32123456789']);
+    }
+
+    /**
+     * Acheter à un autre magasin de la même société n'est pas un achat.
+     */
+    public function test_le_siret_d_un_etablissement_de_l_entreprise_du_magasin_est_refuse(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'siren' => '732829320'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateFournisseur::class)
+            ->fillForm(['nom' => 'Ma Boutique Lyon', 'siret' => '73282932000082'])
+            ->call('create')
+            ->assertHasFormErrors(['siret' => fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_PROPRE_ENTREPRISE]]);
 
         $this->assertSame(0, Fournisseur::query()->count());
     }

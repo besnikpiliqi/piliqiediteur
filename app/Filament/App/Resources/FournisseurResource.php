@@ -3,6 +3,8 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Contacts\Rules\HorsDeLEntrepriseDuMagasin;
+use App\Domain\Facturation\Services\NumeroTva;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FournisseurResource\Pages;
 use App\Filament\Concerns\ArchiveLaFiche;
@@ -46,11 +48,18 @@ class FournisseurResource extends Resource
                         ignoreRecord: true,
                         modifyRuleUsing: fn (Unique $rule): Unique => $rule->where('magasin_id', app(TenantContext::class)->id()),
                     )
+                    // Acheter à un autre magasin de la même société n'est
+                    // pas un achat (voir HorsDeLEntrepriseDuMagasin).
+                    ->rule(new HorsDeLEntrepriseDuMagasin('Ce SIRET est celui de votre propre entreprise : un achat entre magasins d\'une même société n\'est pas un achat.'))
                     ->validationMessages([
                         'regex' => 'Le SIRET compte 14 chiffres, sans espace.',
                         'unique' => 'Ce SIRET est déjà celui d\'un autre fournisseur du magasin, peut-être archivé : affichez les fournisseurs archivés pour le restaurer.',
                     ]),
-                TextInput::make('numero_tva')->label('N° TVA intracommunautaire')->maxLength(20),
+                TextInput::make('numero_tva')
+                    ->label('N° TVA intracommunautaire')
+                    ->maxLength(20)
+                    ->regex(NumeroTva::FORMAT)
+                    ->validationMessages(['regex' => NumeroTva::MESSAGE_FORMAT]),
             ])->columns(2),
 
             Section::make('Coordonnées')->schema([

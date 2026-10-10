@@ -14,7 +14,8 @@ use Tests\TestCase;
 /**
  * Le client comptoir est la fiche des ventes anonymes du magasin (voir
  * CreerMagasinAction) : il se reconnaît à son marqueur, jamais à son nom,
- * et ne se renomme, ne change de type ni ne s'archive.
+ * et ne se renomme, ne change de type ni ne s'archive. Une fiche ne garde
+ * que les identifiants d'entreprise qui correspondent à son type.
  */
 class ClientTest extends TestCase
 {
@@ -101,27 +102,47 @@ class ClientTest extends TestCase
     }
 
     /**
-     * Un particulier n'a ni SIRET ni numéro de TVA : ses factures ne les
-     * impriment plus.
+     * Un particulier n'a aucun identifiant d'entreprise et compte comme
+     * établi en France : ses factures n'impriment plus ceux qu'il avait.
      */
-    public function test_un_client_repasse_en_particulier_perd_son_siret_et_son_numero_de_tva(): void
+    public function test_un_client_repasse_en_particulier_perd_ses_identifiants_d_entreprise(): void
     {
         $this->creerMagasin();
-        $client = Client::factory()->professionnel()->create();
+        $client = Client::factory()->etranger('BE', 'BE0123456789')->create([
+            'siren' => '123456789',
+            'siret' => '12345678900011',
+            'identifiant_etranger' => 'BCE 0123.456.789',
+        ]);
 
         $client->update(['type_client' => TypeClient::Particulier]);
 
-        $this->assertNull($client->fresh()->siret);
-        $this->assertNull($client->fresh()->numero_tva);
+        $client->refresh();
+        $this->assertSame([null, null, null, null, true], [$client->siren, $client->siret, $client->numero_tva, $client->identifiant_etranger, $client->etabli_en_france]);
     }
 
-    public function test_un_client_professionnel_garde_son_siret_et_son_numero_de_tva(): void
+    /**
+     * Établi en France, un professionnel est identifié par son SIREN :
+     * l'identifiant étranger que le formulaire ne montre plus ne reste pas
+     * en base.
+     */
+    public function test_un_professionnel_repasse_etabli_en_france_perd_son_identifiant_etranger(): void
+    {
+        $this->creerMagasin();
+        $client = Client::factory()->etranger('CH', 'CHE123456789')->create(['identifiant_etranger' => 'CHE-123.456.789']);
+
+        $client->update(['etabli_en_france' => true, 'siren' => '123456789']);
+
+        $client->refresh();
+        $this->assertSame([true, '123456789', null], [$client->etabli_en_france, $client->siren, $client->identifiant_etranger]);
+    }
+
+    public function test_un_client_professionnel_garde_ses_identifiants(): void
     {
         $this->creerMagasin();
 
-        $client = Client::factory()->professionnel()->create(['siret' => '12345678900012', 'numero_tva' => 'FR12123456789']);
+        $client = Client::factory()->professionnel()->create(['siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320']);
 
-        $this->assertSame('12345678900012', $client->fresh()->siret);
-        $this->assertSame('FR12123456789', $client->fresh()->numero_tva);
+        $client->refresh();
+        $this->assertSame(['732829320', '73282932000074', 'FR44732829320', true], [$client->siren, $client->siret, $client->numero_tva, $client->etabli_en_france]);
     }
 }

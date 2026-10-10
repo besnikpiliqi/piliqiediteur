@@ -428,6 +428,27 @@ class CaisseTest extends TestCase
     }
 
     /**
+     * La fenêtre « Nouveau client » de la Caisse applique les règles de la
+     * fiche : un professionnel établi en France a un SIREN.
+     */
+    public function test_la_caisse_refuse_de_creer_un_professionnel_etabli_en_france_sans_siren(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(Caisse::class)
+            ->callFormComponentAction('client_id', 'createOption', data: [
+                'nom' => 'Garage Martin',
+                'type_client' => 'professionnel',
+            ])
+            ->assertHasFormComponentActionErrors(['siren' => 'Le SIREN (ou le SIRET) est obligatoire pour un client professionnel établi en France.']);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Garage Martin']);
+    }
+
+    /**
      * En espèces, un montant reçu saisi qui ne couvre pas ce qui reste à
      * payer est refusé : sinon la vente serait enregistrée payée avec un
      * tiroir-caisse en manque.

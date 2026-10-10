@@ -29,13 +29,32 @@ class ClientFactory extends Factory
         ];
     }
 
+    /**
+     * Une entreprise établie en France, identifiée par son SIREN.
+     */
     public function professionnel(): static
     {
         return $this->state(fn () => [
             'nom' => fake()->company(),
             'type_client' => TypeClient::Professionnel,
-            'siret' => fake()->numerify('##############'),
-            'numero_tva' => 'FR'.fake()->numerify('##').fake()->numerify('#########'),
+            'siren' => '123456789',
+            'siret' => '12345678900011',
+            'numero_tva' => 'FR32123456789',
+        ]);
+    }
+
+    /**
+     * Une entreprise sans établissement en France, identifiée par son n°
+     * de TVA, sans SIREN.
+     */
+    public function etranger(string $pays, string $numeroTva): static
+    {
+        return $this->state(fn () => [
+            'nom' => fake()->company(),
+            'type_client' => TypeClient::Professionnel,
+            'pays' => $pays,
+            'etabli_en_france' => false,
+            'numero_tva' => $numeroTva,
         ]);
     }
 }

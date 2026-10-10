@@ -38,6 +38,14 @@ class ClientResourceTest extends TestCase
 {
     use RefreshDatabase;
 
+    private const MESSAGE_SIREN_OBLIGATOIRE = 'Le SIREN (ou le SIRET) est obligatoire pour un client professionnel établi en France.';
+
+    /**
+     * Le message contient « : », que Livewire lirait comme le nom d'une
+     * règle : il se compare donc aux messages eux-mêmes.
+     */
+    private const MESSAGE_PROPRE_ENTREPRISE = 'Ce SIREN est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
+
     public function test_un_proprietaire_peut_afficher_la_liste_des_clients_de_son_magasin(): void
     {
         $proprietaire = User::factory()->create();
@@ -354,23 +362,243 @@ class ClientResourceTest extends TestCase
         $this->assertDatabaseMissing('clients', ['nom' => 'Acme Corp']);
     }
 
-    public function test_un_client_professionnel_s_enregistre_sans_siret(): void
+    /**
+     * Le SIREN, ou le SIRET qui le contient, est obligatoire pour un
+     * professionnel établi en France.
+     */
+    public function test_un_professionnel_etabli_en_france_sans_siren_ni_siret_est_refuse(): void
     {
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateClient::class)
             ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value])
             ->call('create')
+            ->assertHasFormErrors(['siren' => self::MESSAGE_SIREN_OBLIGATOIRE]);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Acme Corp']);
+    }
+
+    public function test_un_siren_qui_ne_compte_pas_9_chiffres_est_refuse(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value, 'siren' => '12345678'])
+            ->call('create')
+            ->assertHasFormErrors(['siren' => 'Le SIREN compte 9 chiffres, sans espace.']);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Acme Corp']);
+    }
+
+    public function test_un_siret_qui_ne_commence_pas_par_le_siren_est_refuse(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value, 'siren' => '123456789', 'siret' => '98765432100011'])
+            ->call('create')
+            ->assertHasFormErrors(['siret' => 'Le SIRET commence par les 9 chiffres du SIREN.']);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Acme Corp']);
+    }
+
+    public function test_un_siret_qui_commence_par_le_siren_est_accepte(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value, 'siren' => '123456789', 'siret' => '12345678900011'])
+            ->call('create')
             ->assertHasNoFormErrors();
 
-        $this->assertDatabaseHas('clients', ['nom' => 'Acme Corp', 'siret' => null]);
+        $this->assertDatabaseHas('clients', ['nom' => 'Acme Corp', 'siren' => '123456789', 'siret' => '12345678900011']);
+    }
+
+    /**
+     * Les 9 premiers chiffres du SIRET sont le SIREN : il s'enregistre
+     * aussi.
+     */
+    public function test_un_siret_seul_enregistre_le_siren_qu_il_contient(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value, 'siret' => '12345678900011'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('clients', ['nom' => 'Acme Corp', 'siren' => '123456789', 'siret' => '12345678900011']);
+    }
+
+    /**
+     * Seul le format est contrôlé : les SIREN fictifs du bac à sable
+     * SUPER PDP, qui ne respectent pas la clé de contrôle, sont acceptés.
+     */
+    public function test_le_siren_d_une_entreprise_du_bac_a_sable_super_pdp_est_accepte(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Burger Queen', 'type_client' => TypeClient::Professionnel->value, 'siren' => '000000002'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('clients', ['nom' => 'Burger Queen', 'siren' => '000000002']);
+    }
+
+    /**
+     * Le pays propose « Établi en France » : une adresse en Belgique le
+     * décoche, et le n° de TVA ou un autre identifiant remplace le SIREN.
+     */
+    public function test_un_professionnel_etabli_hors_de_france_sans_tva_ni_autre_identifiant_est_refuse(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Brasserie de Namur', 'type_client' => TypeClient::Professionnel->value, 'pays' => 'BE'])
+            ->assertFormSet(['etabli_en_france' => false])
+            ->call('create')
+            ->assertHasFormErrors(['identifiant_etranger' => 'Indiquez le n° de TVA ou un autre identifiant de ce client établi hors de France.']);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Brasserie de Namur']);
+    }
+
+    public function test_le_numero_de_tva_d_un_professionnel_etranger_s_enregistre_sans_separateurs(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Brasserie de Namur', 'type_client' => TypeClient::Professionnel->value, 'pays' => 'BE', 'numero_tva' => 'be 0123.456.789'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $client = Client::query()->where('nom', 'Brasserie de Namur')->sole();
+        $this->assertSame(['BE', false, 'BE0123456789', null], [$client->pays, $client->etabli_en_france, $client->numero_tva, $client->siren]);
+    }
+
+    public function test_un_numero_de_tva_qui_ne_commence_pas_par_le_code_du_pays_est_refuse(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Brasserie de Namur', 'type_client' => TypeClient::Professionnel->value, 'pays' => 'BE', 'numero_tva' => '0123456789'])
+            ->call('create')
+            ->assertHasFormErrors(['numero_tva' => 'Le n° de TVA commence par les deux lettres du pays (FR...), suivies de chiffres ou de lettres, sans espace.']);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Brasserie de Namur']);
+    }
+
+    /**
+     * Une entreprise hors de l'Union européenne n'a pas de n° de TVA
+     * intracommunautaire : un autre identifiant suffit.
+     */
+    public function test_un_professionnel_suisse_s_enregistre_avec_un_autre_identifiant(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Horlogerie de Genève', 'type_client' => TypeClient::Professionnel->value, 'pays' => 'CH', 'identifiant_etranger' => 'CHE-123.456.789'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('clients', ['nom' => 'Horlogerie de Genève', 'pays' => 'CH', 'etabli_en_france' => false, 'identifiant_etranger' => 'CHE-123.456.789', 'numero_tva' => null]);
+    }
+
+    /**
+     * La Guadeloupe est en France : ses entreprises ont un SIREN.
+     */
+    public function test_un_professionnel_de_guadeloupe_est_propose_comme_etabli_en_france_et_doit_avoir_un_siren(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Distillerie de Basse-Terre', 'type_client' => TypeClient::Professionnel->value, 'pays' => 'BE'])
+            ->fillForm(['pays' => 'GP'])
+            ->assertFormSet(['etabli_en_france' => true])
+            ->call('create')
+            ->assertHasFormErrors(['siren' => self::MESSAGE_SIREN_OBLIGATOIRE]);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Distillerie de Basse-Terre']);
+    }
+
+    public function test_le_code_du_pays_s_enregistre_en_majuscules(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Jean Dupont', 'type_client' => TypeClient::Particulier->value, 'pays' => 'fr'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('clients', ['nom' => 'Jean Dupont', 'pays' => 'FR']);
+    }
+
+    public function test_un_code_de_pays_qui_ne_compte_pas_deux_lettres_est_refuse(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Jean Dupont', 'type_client' => TypeClient::Particulier->value, 'pays' => 'F1'])
+            ->call('create')
+            ->assertHasFormErrors(['pays' => fn (array $reglesEnEchec, array $messages): bool => $messages === ['Le code du pays compte deux lettres : FR, BE, CH...']]);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Jean Dupont']);
+    }
+
+    /**
+     * @return array<string, array{array<string, string>, string}>
+     */
+    public static function identifiantsDeLEntrepriseDuMagasin(): array
+    {
+        return [
+            'son SIREN' => [['siren' => '732829320'], 'siren'],
+            'le SIRET d\'un de ses établissements' => [['siret' => '73282932000082'], 'siret'],
+        ];
+    }
+
+    /**
+     * Vendre à un autre magasin de la même société n'est pas une vente.
+     *
+     * @param  array<string, string>  $identifiant
+     */
+    #[DataProvider('identifiantsDeLEntrepriseDuMagasin')]
+    public function test_un_client_de_l_entreprise_du_magasin_est_refuse(array $identifiant, string $champ): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'siren' => '732829320'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Ma Boutique Lyon', 'type_client' => TypeClient::Professionnel->value, ...$identifiant])
+            ->call('create')
+            ->assertHasFormErrors([$champ => fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_PROPRE_ENTREPRISE]]);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Ma Boutique Lyon']);
+    }
+
+    /**
+     * Seul le SIREN du magasin actif est comparé : l'entreprise d'un autre
+     * magasin du logiciel peut être cliente.
+     */
+    public function test_l_entreprise_d_un_autre_magasin_du_logiciel_peut_etre_cliente(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique', 'siren' => '732829320'], User::factory()->create());
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Autre boutique SAS', 'type_client' => TypeClient::Professionnel->value, 'siren' => '732829320'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('clients', ['nom' => 'Autre boutique SAS', 'siren' => '732829320']);
     }
 
     /**
      * Ses champs disparaissent du formulaire : ils ne restent pas en base
      * pour s'imprimer encore sur ses factures.
      */
-    public function test_un_client_repasse_en_particulier_perd_son_siret_et_son_numero_de_tva(): void
+    public function test_un_client_repasse_en_particulier_perd_ses_identifiants_d_entreprise(): void
     {
         $this->connecterLeProprietaire();
         $client = Client::factory()->professionnel()->create(['telephone' => '0102030405']);
@@ -381,7 +609,47 @@ class ClientResourceTest extends TestCase
             ->assertHasNoFormErrors();
 
         $client->refresh();
-        $this->assertSame([TypeClient::Particulier, null, null], [$client->type_client, $client->siret, $client->numero_tva]);
+        $this->assertSame([TypeClient::Particulier, null, null, null], [$client->type_client, $client->siren, $client->siret, $client->numero_tva]);
+    }
+
+    /**
+     * Un particulier n'a pas d'identifiant d'entreprise, même forcé dans
+     * un champ caché.
+     */
+    public function test_un_particulier_s_enregistre_sans_siren(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Jean Dupont', 'type_client' => TypeClient::Particulier->value, 'siren' => '123456789'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('clients', ['nom' => 'Jean Dupont', 'siren' => null]);
+    }
+
+    public function test_le_mode_de_paiement_prefere_se_choisit_parmi_les_modes_de_paiement(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Jean Dupont', 'type_client' => TypeClient::Particulier->value, 'mode_paiement_prefere' => 'carte_bancaire'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(ModePaiement::CarteBancaire, Client::query()->where('nom', 'Jean Dupont')->sole()->mode_paiement_prefere);
+    }
+
+    public function test_un_mode_de_paiement_prefere_inconnu_est_refuse(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(CreateClient::class)
+            ->fillForm(['nom' => 'Jean Dupont', 'type_client' => TypeClient::Particulier->value, 'mode_paiement_prefere' => 'bitcoin'])
+            ->call('create')
+            ->assertHasFormErrors(['mode_paiement_prefere' => 'La valeur choisie pour mode de paiement préféré n\'est pas valide.']);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Jean Dupont']);
     }
 
     /**

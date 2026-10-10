@@ -3,6 +3,7 @@
 namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Facturation\Services\NumeroTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Rules\CodeMagasinLibre;
 use App\Domain\Tenancy\Services\CodeMagasin;
@@ -142,8 +143,8 @@ class IdentiteMagasin extends Page implements HasForms
                     TextInput::make('numero_tva')
                         ->label('N° TVA intracommunautaire')
                         ->maxLength(20)
-                        ->regex('/^[A-Z]{2}[0-9A-Z]{2,13}$/')
-                        ->validationMessages(['regex' => 'Le n° de TVA commence par les deux lettres du pays (FR...), suivies de chiffres ou de lettres, sans espace.']),
+                        ->regex(NumeroTva::FORMAT)
+                        ->validationMessages(['regex' => NumeroTva::MESSAGE_FORMAT]),
                 ])
                 ->columns(2),
             Section::make('Adresse')

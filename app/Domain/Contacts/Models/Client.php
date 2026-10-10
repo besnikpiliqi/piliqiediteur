@@ -4,11 +4,13 @@ namespace App\Domain\Contacts\Models;
 
 use App\Domain\Contacts\Concerns\Proposable;
 use App\Domain\Contacts\Enums\TypeClient;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\NumeroTva;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\ClientFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -16,6 +18,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 use LogicException;
 
 class Client extends Model
@@ -37,8 +40,11 @@ class Client extends Model
     protected $fillable = [
         'nom',
         'type_client',
+        'siren',
         'siret',
         'numero_tva',
+        'etabli_en_france',
+        'identifiant_etranger',
         'adresse',
         'complement_adresse',
         'code_postal',
@@ -51,21 +57,23 @@ class Client extends Model
         'notes',
     ];
 
+    /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'etabli_en_france' => true,
+    ];
+
     protected $casts = [
         'type_client' => TypeClient::class,
+        'etabli_en_france' => 'boolean',
+        'mode_paiement_prefere' => ModePaiement::class,
         'est_comptoir' => 'boolean',
     ];
 
     protected static function booted(): void
     {
-        // Un particulier n'a ni SIRET ni numéro de TVA : repassé de
-        // professionnel à particulier, il ne garde pas ceux qu'il avait.
-        static::saving(function (Client $client) {
-            if (! $client->estProfessionnel()) {
-                $client->siret = null;
-                $client->numero_tva = null;
-            }
-        });
+        static::saving(fn (Client $client) => $client->normaliserSesIdentifiants());
 
         static::updating(function (Client $client) {
             if ($client->estComptoir() && $client->isDirty(['nom', 'type_client'])) {
@@ -85,6 +93,50 @@ class Client extends Model
     public function estProfessionnel(): bool
     {
         return $this->type_client === TypeClient::Professionnel;
+    }
+
+    /**
+     * Établi en France, un professionnel a un SIREN ; établi ailleurs, un
+     * n° de TVA ou un autre identifiant (voir ClientResource). Une donnée
+     * de la fiche, que le pays de son adresse propose sans l'imposer : une
+     * entreprise étrangère peut avoir un établissement en France.
+     */
+    public function estEtabliEnFrance(): bool
+    {
+        return $this->etabli_en_france;
+    }
+
+    /**
+     * Les identifiants tels qu'ils s'enregistrent : le pays en majuscules,
+     * le n° de TVA sans séparateurs (voir NumeroTva::normaliser()), le
+     * SIREN tiré au besoin du SIRET, dont il forme les 9 premiers
+     * chiffres. Les champs que le formulaire cache ne restent pas en base
+     * pour s'imprimer encore sur ses documents : un particulier n'a ni
+     * SIREN, ni SIRET, ni n° de TVA et compte comme établi en France ;
+     * établi en France, un client n'a pas d'identifiant étranger.
+     */
+    private function normaliserSesIdentifiants(): void
+    {
+        if (filled($this->pays)) {
+            $this->pays = Str::upper(trim($this->pays));
+        }
+
+        $this->numero_tva = filled($this->numero_tva) ? NumeroTva::normaliser($this->numero_tva) : null;
+
+        if (blank($this->siren) && filled($this->siret)) {
+            $this->siren = substr($this->siret, 0, 9);
+        }
+
+        if (! $this->estProfessionnel()) {
+            $this->siren = null;
+            $this->siret = null;
+            $this->numero_tva = null;
+            $this->etabli_en_france = true;
+        }
+
+        if ($this->estEtabliEnFrance()) {
+            $this->identifiant_etranger = null;
+        }
     }
 
     /**

@@ -1152,10 +1152,32 @@ class FactureResourceTest extends TestCase
             ->callFormComponentAction('client_id', 'createOption', data: [
                 'nom' => 'Client Créé En Direct',
                 'type_client' => 'professionnel',
+                'siren' => '123456789',
             ])
             ->assertHasNoFormComponentActionErrors();
 
-        $this->assertDatabaseHas('clients', ['nom' => 'Client Créé En Direct', 'type_client' => 'professionnel']);
+        $this->assertDatabaseHas('clients', ['nom' => 'Client Créé En Direct', 'type_client' => 'professionnel', 'siren' => '123456789']);
+    }
+
+    /**
+     * La fenêtre « Nouveau client » applique les règles de la fiche : un
+     * professionnel établi en France a un SIREN.
+     */
+    public function test_la_creation_rapide_refuse_un_professionnel_etabli_en_france_sans_siren(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        Livewire::test(CreateFacture::class)
+            ->callFormComponentAction('client_id', 'createOption', data: [
+                'nom' => 'Client Créé En Direct',
+                'type_client' => 'professionnel',
+            ])
+            ->assertHasFormComponentActionErrors(['siren' => 'Le SIREN (ou le SIRET) est obligatoire pour un client professionnel établi en France.']);
+
+        $this->assertDatabaseMissing('clients', ['nom' => 'Client Créé En Direct']);
     }
 
     /**

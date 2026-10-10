@@ -4,6 +4,10 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Rules\HorsDeLEntrepriseDuMagasin;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Services\NumeroTva;
+use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Filament\App\Resources\ClientResource\Pages;
 use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
@@ -11,10 +15,13 @@ use Closure;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Section;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -24,6 +31,12 @@ use Illuminate\Support\HtmlString;
 class ClientResource extends Resource
 {
     use ArchiveLaFiche, SupprimeEnMasseLigneParLigne;
+
+    /**
+     * Vendre à un autre magasin de la même société n'est pas une vente
+     * (voir HorsDeLEntrepriseDuMagasin).
+     */
+    private const MESSAGE_PROPRE_ENTREPRISE = 'Ce SIREN est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
 
     protected static ?string $model = Client::class;
 
@@ -43,15 +56,24 @@ class ClientResource extends Resource
      * "live" oblige -- d'où la normalisation ici : une comparaison directe
      * à TypeClient::Professionnel->value resterait silencieusement
      * toujours fausse dès qu'un utilisateur change réellement la valeur.
+     * Le client comptoir reste un particulier, quelle que soit la valeur
+     * forcée dans son type désactivé, qui n'est jamais enregistré. La
+     * création rapide n'a pas de fiche : $record y est vide.
      */
+    private static function estProfessionnel(Get $get, ?Client $record): bool
+    {
+        if ($record?->estComptoir()) {
+            return false;
+        }
+
+        $type = $get('type_client');
+
+        return ($type instanceof TypeClient ? $type : TypeClient::tryFrom((string) $type)) === TypeClient::Professionnel;
+    }
+
     private static function visibleSiProfessionnel(): Closure
     {
-        return function (Get $get): bool {
-            $type = $get('type_client');
-            $type = $type instanceof TypeClient ? $type->value : $type;
-
-            return $type === TypeClient::Professionnel->value;
-        };
+        return fn (Get $get, ?Client $record): bool => static::estProfessionnel($get, $record);
     }
 
     /**
@@ -71,16 +93,89 @@ class ClientResource extends Resource
     }
 
     /**
-     * Facultatif, mais un SIRET saisi compte toujours 14 chiffres.
+     * Le pays de l'adresse du client, enregistré en majuscules (voir
+     * Client::booted()). Il propose, à chaque changement, si le client est
+     * établi en France, ce que le magasin peut ensuite corriger (voir
+     * champsProfessionnel()).
      */
-    private static function champSiret(): TextInput
+    private static function champPays(): TextInput
     {
-        return TextInput::make('siret')
-            ->label('SIRET')
-            ->maxLength(14)
-            ->regex('/^\d{14}$/')
-            ->validationMessages(['regex' => 'Le SIRET compte 14 chiffres, sans espace.'])
-            ->visible(static::visibleSiProfessionnel());
+        return TextInput::make('pays')
+            ->label('Pays')
+            ->helperText('Code du pays à deux lettres : FR, BE, CH...')
+            ->required()
+            ->default('FR')
+            ->maxLength(2)
+            ->regex('/^[A-Za-z]{2}$/')
+            ->validationMessages(['regex' => 'Le code du pays compte deux lettres : FR, BE, CH...'])
+            ->extraInputAttributes(['style' => 'text-transform: uppercase'])
+            ->live(onBlur: true)
+            ->afterStateUpdated(fn (Set $set, ?string $state) => $set('etabli_en_france', TerritoireFiscal::estEnFrance($state)));
+    }
+
+    /**
+     * Les identifiants d'un client professionnel, mêmes règles dans la
+     * fiche et dans la création rapide des devis, des factures et de la
+     * Caisse : établi en France, il a un SIREN, ou un SIRET, qui commence
+     * par lui ; établi ailleurs, un n° de TVA ou un autre identifiant. Ni
+     * son SIREN ni son SIRET ne sont ceux de l'entreprise du magasin. Le
+     * format seul est contrôlé : aucune clé de contrôle, que les n° du bac
+     * à sable SUPER PDP (000000001, 000000002) ne respectent pas.
+     *
+     * @return array<Component>
+     */
+    private static function champsProfessionnel(): array
+    {
+        $visibleSiProfessionnel = static::visibleSiProfessionnel();
+
+        return [
+            Toggle::make('etabli_en_france')
+                ->label('Établi en France')
+                ->helperText('Décochez pour une entreprise sans établissement en France : son n° de TVA ou un autre identifiant remplace alors le SIREN.')
+                ->default(true)
+                ->live()
+                ->visible($visibleSiProfessionnel),
+            TextInput::make('siren')
+                ->label('SIREN')
+                ->maxLength(9)
+                ->regex('/^\d{9}$/')
+                ->required(fn (Get $get): bool => $get('etabli_en_france') && blank($get('siret')))
+                ->rule(new HorsDeLEntrepriseDuMagasin(self::MESSAGE_PROPRE_ENTREPRISE))
+                ->validationMessages([
+                    'regex' => 'Le SIREN compte 9 chiffres, sans espace.',
+                    'required' => 'Le SIREN (ou le SIRET) est obligatoire pour un client professionnel établi en France.',
+                ])
+                ->visible($visibleSiProfessionnel),
+            TextInput::make('siret')
+                ->label('SIRET')
+                ->maxLength(14)
+                ->regex('/^\d{14}$/')
+                ->rule(fn (Get $get): Closure => function (string $attribute, mixed $siret, Closure $fail) use ($get): void {
+                    if (filled($get('siren')) && ! str_starts_with((string) $siret, (string) $get('siren'))) {
+                        $fail('Le SIRET commence par les 9 chiffres du SIREN.');
+                    }
+                })
+                ->rule(new HorsDeLEntrepriseDuMagasin(self::MESSAGE_PROPRE_ENTREPRISE))
+                ->validationMessages(['regex' => 'Le SIRET compte 14 chiffres, sans espace.'])
+                ->visible($visibleSiProfessionnel),
+            // Saisi avec ses séparateurs s'il le faut : il s'enregistre sans
+            // eux (voir Client::booted()).
+            TextInput::make('numero_tva')
+                ->label('N° TVA intracommunautaire')
+                ->maxLength(20)
+                ->rule(fn (): Closure => function (string $attribute, mixed $numero, Closure $fail): void {
+                    if (! NumeroTva::estAuFormat($numero)) {
+                        $fail(NumeroTva::MESSAGE_FORMAT);
+                    }
+                })
+                ->visible($visibleSiProfessionnel),
+            TextInput::make('identifiant_etranger')
+                ->label('Autre identifiant (entreprise étrangère)')
+                ->maxLength(50)
+                ->required(fn (Get $get): bool => blank($get('numero_tva')))
+                ->validationMessages(['required' => 'Indiquez le n° de TVA ou un autre identifiant de ce client établi hors de France.'])
+                ->visible(fn (Get $get, ?Client $record): bool => static::estProfessionnel($get, $record) && ! $get('etabli_en_france')),
+        ];
     }
 
     /**
@@ -99,11 +194,11 @@ class ClientResource extends Resource
 
     /**
      * Formulaire allégé utilisé dans la modale "+" du Select client_id de
-     * DevisResource/FactureResource (createOptionForm) : un vendeur en
-     * train de facturer n'a besoin que de l'essentiel pour créer un
-     * nouveau client à la volée, pas de toute la fiche complète -- sauf
-     * pour un professionnel, qui a besoin de ses informations
-     * légales/postales (SIRET, TVA, adresse) dès la création.
+     * DevisResource/FactureResource et de la Caisse (createOptionForm) :
+     * un vendeur en train de facturer n'a besoin que de l'essentiel pour
+     * créer un nouveau client à la volée, pas de toute la fiche complète --
+     * sauf pour un professionnel, qui a besoin de ses identifiants et de
+     * son adresse dès la création.
      *
      * @return array<Component>
      */
@@ -114,13 +209,12 @@ class ClientResource extends Resource
         return [
             TextInput::make('nom')->required()->maxLength(150)->columnSpanFull(),
             self::champTypeClient(),
-            self::champSiret(),
-            TextInput::make('numero_tva')->label('N° TVA intracommunautaire')->maxLength(20)->visible($visibleSiProfessionnel),
+            self::champPays()->visible($visibleSiProfessionnel),
+            ...self::champsProfessionnel(),
             TextInput::make('adresse')->maxLength(255)->columnSpanFull()->visible($visibleSiProfessionnel),
             TextInput::make('complement_adresse')->label('Complément d\'adresse')->maxLength(255)->columnSpanFull()->visible($visibleSiProfessionnel),
             TextInput::make('code_postal')->label('Code postal')->maxLength(10)->visible($visibleSiProfessionnel),
             TextInput::make('ville')->maxLength(100)->visible($visibleSiProfessionnel),
-            TextInput::make('pays')->label('Pays')->maxLength(2)->default('FR')->visible($visibleSiProfessionnel),
             TextInput::make('telephone')->tel()->maxLength(30),
             self::champEmail(),
         ];
@@ -145,11 +239,8 @@ class ClientResource extends Resource
                         ? 'La fiche des ventes anonymes au comptoir : elle ne se renomme pas, reste un particulier et ne s\'archive jamais.'
                         : null),
                 self::champTypeClient()->disabled($estComptoir),
-                self::champSiret(),
-                TextInput::make('numero_tva')
-                    ->label('N° TVA intracommunautaire')
-                    ->maxLength(20)
-                    ->visible(static::visibleSiProfessionnel()),
+                self::champPays(),
+                ...self::champsProfessionnel(),
             ])->columns(2),
 
             Section::make('Coordonnées')->schema([
@@ -157,14 +248,21 @@ class ClientResource extends Resource
                 TextInput::make('complement_adresse')->label('Complément d\'adresse')->maxLength(255)->columnSpanFull(),
                 TextInput::make('code_postal')->label('Code postal')->maxLength(10),
                 TextInput::make('ville')->maxLength(100),
-                TextInput::make('pays')->label('Pays')->maxLength(2)->default('FR'),
                 TextInput::make('telephone')->tel()->maxLength(30),
                 self::champEmail(),
             ])->columns(2),
 
             Section::make('Paiement et notes')->schema([
-                TextInput::make('delai_paiement_jours')->label('Délai de paiement (jours)')->integer()->minValue(0)->maxValue(365),
-                TextInput::make('mode_paiement_prefere')->label('Mode de paiement préféré')->maxLength(30),
+                TextInput::make('delai_paiement_jours')
+                    ->label('Délai de paiement (jours)')
+                    ->helperText('Vide : délai par défaut du magasin (Paramètres > Factures).')
+                    ->integer()
+                    ->minValue(0)
+                    ->maxValue(365),
+                Select::make('mode_paiement_prefere')
+                    ->label('Mode de paiement préféré')
+                    ->options(ModePaiement::class)
+                    ->enum(ModePaiement::class),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
         ]);

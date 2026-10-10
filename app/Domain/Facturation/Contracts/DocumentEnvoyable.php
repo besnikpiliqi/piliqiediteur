@@ -2,6 +2,8 @@
 
 namespace App\Domain\Facturation\Contracts;
 
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
+use App\Domain\Facturation\Services\Emetteur;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 /**
@@ -27,4 +29,14 @@ interface DocumentEnvoyable
      * exemple.
      */
     public function peutEtreEnvoye(): bool;
+
+    /**
+     * Le vendeur que le document imprime, et que présente l'e-mail qui le
+     * porte (voir DocumentMail) : celui qu'une facture ou un avoir
+     * numéroté a signé à son émission (voir FigeSonEmetteur), le magasin
+     * tel qu'il est aujourd'hui pour un devis, jamais signé.
+     *
+     * @throws DocumentSansEnregistrementSigneException
+     */
+    public function emetteur(): Emetteur;
 }

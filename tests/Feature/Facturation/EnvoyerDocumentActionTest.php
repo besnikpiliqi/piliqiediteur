@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
@@ -153,6 +154,31 @@ class EnvoyerDocumentActionTest extends TestCase
         );
 
         $this->assertSame(0, EnvoiDocument::query()->count());
+    }
+
+    /**
+     * Un ticket numéroté directement en base, hors de son émission, n'a
+     * aucun enregistrement signé, donc aucun émetteur à nommer dans l'objet
+     * de l'e-mail ni à imprimer sur son PDF : l'envoi est refusé dès la
+     * demande, rien n'est noté ni programmé, et le ticket garde son
+     * statut.
+     */
+    public function test_un_document_numerote_sans_enregistrement_signe_ne_part_pas(): void
+    {
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $magasin = $this->magasin();
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-ENVOI-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
+
+        $this->assertThrows(
+            fn () => app(EnvoyerDocumentAction::class)->handle($brouillon->fresh(), 'client@exemple.fr', null, null),
+            DocumentSansEnregistrementSigneException::class,
+            'Le ticket TK-ENVOI-2026-000009 n\'a aucun enregistrement signé au registre fiscal : son PDF n\'est pas produit.',
+        );
+
+        $this->assertSame(0, EnvoiDocument::query()->count());
+        $this->assertSame(StatutFacture::Emise, $brouillon->fresh()->statut);
+        Queue::assertNotPushed(EnvoyerDocumentJob::class);
     }
 
     public function test_un_devis_brouillon_recoit_son_numero_en_partant(): void

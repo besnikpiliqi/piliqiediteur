@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -22,6 +23,8 @@ use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
@@ -171,6 +174,37 @@ class RelancerFacturesImpayeesTest extends TestCase
         foreach ([$payee, $corrigeeParAvoir, $sansAdresse, $brouillon] as $facture) {
             $this->assertSame([], $this->niveauxRelances($facture));
         }
+    }
+
+    /**
+     * Un ticket numéroté directement en base, hors de son émission, n'a
+     * aucun enregistrement signé : il n'est pas relancé, l'incident est
+     * signalé au journal de l'application, et la facture qui le suit part
+     * quand même.
+     */
+    public function test_un_ticket_sans_enregistrement_signe_ne_bloque_pas_les_autres_relances(): void
+    {
+        Mail::fake();
+        Exceptions::fake([DocumentSansEnregistrementSigneException::class]);
+        $this->travelTo('2026-10-01 09:00:00');
+        $magasin = $this->magasinQuiRelance();
+        app(TenantContext::class)->set($magasin);
+        $sansEnregistrement = app(CreerFactureAction::class)->handle(Client::factory()->create(['email' => 'anomalie@exemple.fr', 'delai_paiement_jours' => 0]), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $sansEnregistrement->id)
+            ->update(['numero' => 'TK-RELANCE-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-01 09:00:00', 'date_echeance' => '2026-10-01']);
+        $facture = $this->factureImpayee($magasin, 'client@exemple.fr');
+        $this->travelTo('2026-10-08 09:00:00');
+        app(TenantContext::class)->clear();
+
+        $this->artisan('app:relancer-factures-impayees')
+            ->expectsOutputToContain('Facture TK-RELANCE-2026-000009 non relancée : Le ticket TK-RELANCE-2026-000009 n\'a aucun enregistrement signé au registre fiscal')
+            ->assertSuccessful();
+
+        $this->assertSame([], $this->niveauxRelances($sansEnregistrement));
+        $this->assertSame([1], $this->niveauxRelances($facture));
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('client@exemple.fr'));
+        Mail::assertNotSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('anomalie@exemple.fr'));
+        Exceptions::assertReported(DocumentSansEnregistrementSigneException::class);
     }
 
     public function test_un_magasin_aux_relances_desactivees_ne_relance_rien(): void

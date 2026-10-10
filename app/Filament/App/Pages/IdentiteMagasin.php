@@ -27,12 +27,15 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * L'identité légale du magasin, imprimée en tête de ses devis, factures et
- * avoirs (voir documents/pdf/en-tete.blade.php), et ses coordonnées, qui
- * signent les e-mails de ses documents (voir DocumentMail). Elle se règle
- * avec « Paramètres du magasin » (PermissionRegistry::PARAMETRES_GERER),
- * comme les paramètres fiscaux : même responsabilité de configuration
- * légale du magasin, que le propriétaire détient et délègue à qui il veut.
+ * L'identité légale du magasin, imprimée telle quelle en tête de ses
+ * devis et de ses brouillons, et signée par chaque ticket, facture ou
+ * avoir à son émission, qui l'imprime ensuite pour toujours (voir Emetteur
+ * et documents/pdf/en-tete.blade.php), et ses coordonnées, par lesquelles
+ * ses clients le joignent depuis les e-mails de ses documents (voir
+ * DocumentMail). Elle se règle avec « Paramètres du magasin »
+ * (PermissionRegistry::PARAMETRES_GERER), comme les paramètres fiscaux :
+ * même responsabilité de configuration légale du magasin, que le
+ * propriétaire détient et délègue à qui il veut.
  *
  * Le code du magasin, qui figure dans les numéros de tous ses documents, se
  * modifie ici jusqu'au premier document ; le champ se désactive ensuite

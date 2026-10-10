@@ -2,13 +2,14 @@
 
 namespace App\Domain\Facturation\Mail;
 
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Facturation\Services\Emetteur;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Attachment;
@@ -20,24 +21,46 @@ use Illuminate\Mail\Mailables\Envelope;
  * en pièce jointe (voir EnvoyerDocumentJob). Il part de l'adresse du
  * logiciel, au nom du magasin, et les réponses vont au magasin.
  *
+ * Il présente le vendeur que son PDF imprime (voir
+ * DocumentEnvoyable::emetteur()) : celui qu'une facture ou un avoir a
+ * signé à son émission, le magasin d'aujourd'hui pour un devis. Son nom
+ * est celui de l'expéditeur, de l'objet (voir EnvoiDocument::objetPour()),
+ * de l'en-tête et de la signature ; sa raison sociale, son adresse et son
+ * SIRET sont ceux du pied. Seuls les moyens de joindre le magasin restent
+ * ceux d'aujourd'hui, pour que le client joigne le magasin tel qu'il est
+ * quand il lit l'e-mail : l'adresse à laquelle il répond, le téléphone et
+ * l'adresse e-mail du pied.
+ *
  * Jamais mis en file lui-même : c'est EnvoyerDocumentJob qui l'est, et qui
  * constate son envoi.
  */
 class DocumentMail extends Mailable
 {
+    private readonly Emetteur $emetteur;
+
+    /**
+     * L'émetteur se lit ici, au départ de l'e-mail (voir
+     * EnvoyerDocumentJob), dans le magasin de l'envoi : pour une facture
+     * ou un avoir, dans son enregistrement signé au registre fiscal.
+     *
+     * @throws DocumentSansEnregistrementSigneException
+     */
     public function __construct(
         public readonly EnvoiDocument $envoi,
         private readonly string $pdf,
         private readonly string $nomFichier,
-    ) {}
+    ) {
+        $this->emetteur = $envoi->document->emetteur();
+    }
 
     public function envelope(): Envelope
     {
-        $magasin = $this->magasin();
+        $nom = $this->emetteur->nom;
+        $emailDuMagasin = $this->envoi->magasin->email;
 
         return new Envelope(
-            from: new Address(config('mail.from.address'), $magasin->nom),
-            replyTo: $magasin->email ? [new Address($magasin->email, $magasin->nom)] : [],
+            from: new Address(config('mail.from.address'), $nom),
+            replyTo: $emailDuMagasin ? [new Address($emailDuMagasin, $nom)] : [],
             subject: $this->envoi->objet,
         );
     }
@@ -47,10 +70,10 @@ class DocumentMail extends Mailable
         return new Content(
             markdown: 'mail.document',
             with: [
-                'magasin' => $this->magasin(),
+                'nom' => $this->emetteur->nom,
                 'introduction' => $this->introduction(),
                 'paragraphes' => $this->paragraphesDuMessage(),
-                'coordonnees' => $this->coordonneesDuMagasin(),
+                'coordonnees' => $this->coordonnees(),
             ],
         );
     }
@@ -65,20 +88,17 @@ class DocumentMail extends Mailable
         ];
     }
 
-    private function magasin(): Magasin
-    {
-        return $this->envoi->magasin;
-    }
-
     /**
      * Ce que contient la pièce jointe. Une relance n'en a pas : son message
      * dit déjà tout de la facture (voir EnvoyerDocumentAction::relancer()).
      * Une facture ne demande d'être réglée avant son échéance que s'il en
      * reste quelque chose à payer quand l'e-mail part : une vente au
      * comptoir, soldée dès son émission, ou une facture réglée depuis, se
-     * dit déjà réglée. Seul un document numéroté directement en base, que
-     * signale la vérification de l'intégrité, peut n'avoir aucune échéance
-     * (voir Facture::estEchueEtImpayee()).
+     * dit déjà réglée. Seule une facture modifiée directement en base après
+     * son émission, que signale la vérification de l'intégrité, peut
+     * n'avoir aucune échéance (voir Facture::estEchueEtImpayee()) : une
+     * facture numérotée hors de son émission, sans enregistrement signé,
+     * ne part pas (voir le constructeur).
      */
     private function introduction(): ?string
     {
@@ -102,20 +122,23 @@ class DocumentMail extends Mailable
     }
 
     /**
-     * Les coordonnées du magasin en pied d'e-mail, une ligne par sujet, sans
-     * celles qu'il n'a pas renseignées.
+     * Le pied de l'e-mail, une ligne par sujet, sans ce qui n'est pas
+     * renseigné : le vendeur que le PDF imprime (raison sociale, adresse),
+     * le moyen de joindre le magasin aujourd'hui (téléphone, adresse
+     * e-mail), puis le SIRET du vendeur.
      *
      * @return list<string>
      */
-    private function coordonneesDuMagasin(): array
+    private function coordonnees(): array
     {
-        $magasin = $this->magasin();
+        $emetteur = $this->emetteur;
+        $magasin = $this->envoi->magasin;
         $joindre = fn (array $morceaux): string => implode(' · ', array_filter($morceaux, fn (?string $morceau): bool => filled($morceau)));
 
         return array_values(array_filter([
-            $joindre([$magasin->raison_sociale ?: $magasin->nom, $magasin->adresse, trim("{$magasin->code_postal} {$magasin->ville}")]),
+            $joindre([$emetteur->raisonSociale ?: $emetteur->nom, $emetteur->adresse, trim("{$emetteur->codePostal} {$emetteur->ville}")]),
             $joindre([$magasin->telephone ? "Tél. {$magasin->telephone}" : null, $magasin->email]),
-            $magasin->siret ? "SIRET {$magasin->siret}" : '',
+            $emetteur->siret ? "SIRET {$emetteur->siret}" : '',
         ], fn (string $ligne): bool => $ligne !== ''));
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
@@ -72,11 +73,17 @@ class RelancerFacturesImpayees extends Command
                 try {
                     $envoyer->relancer($facture, $facture->client->email, null);
                     $relancees++;
-                } catch (LogicException $exception) {
+                } catch (LogicException|RefusFiscalException $exception) {
                     // Réglée ou relancée par quelqu'un d'autre entre la
                     // lecture et la relance, adresse du client invalide
-                    // (InvalidArgumentException est une LogicException) :
+                    // (InvalidArgumentException est une LogicException),
+                    // facture numérotée sans enregistrement signé, refus
+                    // fiscal signalé en plus au journal de l'application :
                     // les autres factures partent quand même.
+                    if ($exception instanceof RefusFiscalException) {
+                        report($exception);
+                    }
+
                     $this->warn("Facture {$facture->numero} non relancée : {$exception->getMessage()}");
                 }
             });

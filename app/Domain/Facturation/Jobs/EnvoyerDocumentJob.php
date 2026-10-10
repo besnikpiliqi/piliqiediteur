@@ -39,10 +39,12 @@ use Throwable;
  *
  * Le document est relu au moment de partir : une relance ne part que si
  * la facture est toujours échue et impayée, et son rappel dit ce qu'il
- * reste à payer à cet instant. Il existe toujours : une facture ou un
- * avoir émis le reste pour toujours (une correction est un avoir à part),
- * et un devis, numéroté dès son premier envoi, ne se supprime plus (voir
- * Devis::estSupprimable()).
+ * reste à payer à cet instant ; l'objet de l'e-mail se relit aussi, sur
+ * l'émetteur que l'e-mail présente et que son PDF imprime (voir
+ * DocumentMail), quoi qu'ait changé le magasin depuis la demande. Il
+ * existe toujours : une facture ou un avoir émis le reste pour toujours
+ * (une correction est un avoir à part), et un devis, numéroté dès son
+ * premier envoi, ne se supprime plus (voir Devis::estSupprimable()).
  *
  * Un devis, lui, se modifie après son envoi (voir ModifierDevisAction) :
  * modifié depuis la demande d'envoi, qu'il soit encore en brouillon ou
@@ -59,9 +61,10 @@ use Throwable;
  * avec l'émetteur qu'ils ont signé, quoi que soit devenu le magasin (voir
  * FacturePdfGenerator et FigeSonEmetteur), un devis dans la version émise
  * que cet e-mail annonce. Une facture ou un avoir numéroté sans
- * enregistrement signé ne part pas : l'envoi échoue aussitôt, sans
- * nouvelle tentative, et l'incident est signalé au journal de
- * l'application.
+ * enregistrement signé, déjà refusé à la demande (voir
+ * EnvoyerDocumentAction), ne part pas davantage ici : l'envoi échoue
+ * aussitôt, sans nouvelle tentative, et l'incident est signalé au journal
+ * de l'application.
  */
 class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 {
@@ -137,6 +140,8 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 
             return;
         }
+
+        $envoi->forceFill(['objet' => EnvoiDocument::objetPour($document, $envoi->niveau_relance)])->save();
 
         try {
             Mail::to($envoi->destinataire)->send(new DocumentMail($envoi, $pdf, $generateur->nomFichier($document)));

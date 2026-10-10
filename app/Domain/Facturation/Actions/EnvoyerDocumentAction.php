@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\StatutDevis;
@@ -36,6 +37,11 @@ use LogicException;
  *
  * Un magasin suspendu ou fermé n'écrit plus à ses clients (voir
  * Magasin::verifierQuIlEstOuvert()) : ni envoi ni relance.
+ *
+ * L'objet de l'e-mail nomme l'émetteur du document (voir
+ * EnvoiDocument::objetPour()) : un ticket, une facture ou un avoir
+ * numéroté sans enregistrement signé n'en a aucun, et ne part pas (voir
+ * DocumentSansEnregistrementSigneException).
  */
 class EnvoyerDocumentAction
 {
@@ -54,6 +60,7 @@ class EnvoyerDocumentAction
      * @param  Facture|Devis|Avoir  $document
      *
      * @throws LogicException
+     * @throws DocumentSansEnregistrementSigneException
      */
     public function handle(DocumentEnvoyable $document, string $destinataire, ?string $message, ?User $expediteur): EnvoiDocument
     {
@@ -78,7 +85,7 @@ class EnvoyerDocumentAction
 
             $envoi = $document->envois()->create([
                 'destinataire' => $destinataire,
-                'objet' => "{$document->libelleDocument()} {$document->numero} — {$document->magasin->nom}",
+                'objet' => EnvoiDocument::objetPour($document),
                 'message' => filled($message) ? trim($message) : null,
                 'nature' => NatureEnvoi::Envoi,
                 'envoye_par' => $expediteur?->getKey(),
@@ -99,6 +106,7 @@ class EnvoyerDocumentAction
      * l'historique, vers l'adresse donnée cette fois.
      *
      * @throws LogicException
+     * @throws DocumentSansEnregistrementSigneException
      */
     public function relancer(Facture $facture, string $destinataire, ?User $expediteur): EnvoiDocument
     {
@@ -120,7 +128,7 @@ class EnvoyerDocumentAction
             $niveau = $facture->niveauDeRelanceAtteint() + 1;
             $attributs = [
                 'destinataire' => $destinataire,
-                'objet' => "Relance n°{$niveau} : {$facture->libelleDocument()} {$facture->numero} — {$facture->magasin->nom}",
+                'objet' => EnvoiDocument::objetPour($facture, $niveau),
                 'message' => $facture->messageDeRelance(),
                 'envoye_par' => $expediteur?->getKey(),
             ];

@@ -10,7 +10,7 @@ use Barryvdh\DomPDF\PDF as PdfDocument;
  * Même présentation que la facture (voir FacturePdfGenerator), depuis les
  * lignes et les totaux enregistrés du devis, jamais depuis l'état courant
  * du catalogue. Un devis n'est pas signé au registre fiscal : il imprime
- * le magasin tel qu'il est aujourd'hui (voir Emetteur::duMagasin()).
+ * le magasin tel qu'il est aujourd'hui (voir Devis::emetteur()).
  */
 class DevisPdfGenerator
 {
@@ -26,7 +26,7 @@ class DevisPdfGenerator
     {
         $devis->loadMissing(['client', 'lignes', 'magasin']);
 
-        return view('devis.pdf', ['devis' => $devis, 'emetteur' => Emetteur::duMagasin($devis->magasin)])->render();
+        return view('devis.pdf', ['devis' => $devis, 'emetteur' => $devis->emetteur()])->render();
     }
 
     public function nomFichier(Devis $devis): string

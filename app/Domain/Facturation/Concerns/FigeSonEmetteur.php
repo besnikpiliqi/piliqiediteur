@@ -20,7 +20,8 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
  * enregistrement de la chaîne des ventes, et se relit là, jamais sur le
  * magasin. Le PDF d'un document émis, téléchargé ou joint à un e-mail,
  * l'imprime donc tel qu'il a été signé (voir FacturePdfGenerator et
- * AvoirPdfGenerator).
+ * AvoirPdfGenerator), et l'e-mail qui le porte le présente (voir
+ * DocumentMail).
  */
 trait FigeSonEmetteur
 {

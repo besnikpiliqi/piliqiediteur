@@ -1,7 +1,8 @@
 {{--
-    Voir DocumentMail. Le magasin, pas le logiciel, signe l'e-mail : son
-    nom en en-tête, ses coordonnées en pied. Aucune indentation : le
-    Markdown en ferait du code.
+    Voir DocumentMail. Le magasin, pas le logiciel, signe l'e-mail : $nom,
+    celui du vendeur que le PDF imprime, en en-tête et en signature, les
+    coordonnées en pied. Aucune indentation : le Markdown en ferait du
+    code.
 
     Chaque texte venu du magasin ou de son message est un bloc <p> sur sa
     propre ligne, suivi d'une ligne vide : un bloc HTML que le Markdown
@@ -14,7 +15,7 @@
 <x-slot:header>
 <tr>
 <td class="header">
-{{ $magasin->nom }}
+{{ $nom }}
 </td>
 </tr>
 </x-slot:header>
@@ -30,7 +31,7 @@
 
 @endforeach
 <p>Cordialement,<br>
-{{ $magasin->nom }}</p>
+{{ $nom }}</p>
 
 <x-slot:footer>
 <x-mail::footer>

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\StatutEnvoi;
@@ -19,6 +20,10 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * EnvoyerDocumentJob, qui en constate le résultat. Seule une relance en
  * échec en change ensuite : EnvoyerDocumentAction::relancer() la
  * reprogramme.
+ *
+ * Son objet est noté à la demande, puis relu au départ de l'e-mail (voir
+ * objetPour()), comme le rappel d'une relance : il est celui que le
+ * client a reçu.
  *
  * @property-read DocumentEnvoyable&Model $document
  */
@@ -53,6 +58,23 @@ class EnvoiDocument extends Model
         static::creating(function (EnvoiDocument $envoi) {
             $envoi->statut ??= StatutEnvoi::EnAttente;
         });
+    }
+
+    /**
+     * L'objet de l'e-mail : le document, son numéro et le nom de son
+     * émetteur, celui que l'e-mail présente et que son PDF imprime (voir
+     * DocumentEnvoyable::emetteur() et DocumentMail), précédés du niveau
+     * pour une relance.
+     *
+     * @param  Model&DocumentEnvoyable  $document
+     *
+     * @throws DocumentSansEnregistrementSigneException
+     */
+    public static function objetPour(DocumentEnvoyable $document, ?int $niveauRelance = null): string
+    {
+        $objet = "{$document->libelleDocument()} {$document->numero} — {$document->emetteur()->nom}";
+
+        return $niveauRelance === null ? $objet : "Relance n°{$niveauRelance} : {$objet}";
     }
 
     public function document(): MorphTo

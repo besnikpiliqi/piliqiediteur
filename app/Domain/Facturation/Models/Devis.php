@@ -8,6 +8,7 @@ use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\StatutDevis;
+use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\DevisFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -134,6 +135,16 @@ class Devis extends Model implements DocumentEnvoyable
     public function peutEtreEnvoye(): bool
     {
         return true;
+    }
+
+    /**
+     * Un devis n'est pas signé au registre fiscal, même numéroté : il
+     * imprime le magasin tel qu'il est aujourd'hui, sur son PDF comme dans
+     * l'e-mail qui le porte.
+     */
+    public function emetteur(): Emetteur
+    {
+        return Emetteur::duMagasin($this->magasin);
     }
 
     /**

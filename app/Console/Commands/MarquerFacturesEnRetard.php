@@ -44,7 +44,6 @@ class MarquerFacturesEnRetard extends Command
     {
         $echues = fn (): Builder => Facture::query()
             ->whereIn('statut', [StatutFacture::Emise, StatutFacture::Envoyee, StatutFacture::PartiellementPayee])
-            ->whereNotNull('date_echeance')
             ->whereDate('date_echeance', '<', now());
 
         $numeros = $echues()->orderBy('date_echeance')->orderBy('id')->pluck('numero', 'id');

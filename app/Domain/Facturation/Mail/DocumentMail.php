@@ -73,6 +73,12 @@ class DocumentMail extends Mailable
     /**
      * Ce que contient la pièce jointe. Une relance n'en a pas : son message
      * dit déjà tout de la facture (voir EnvoyerDocumentAction::relancer()).
+     * Une facture ne demande d'être réglée avant son échéance que s'il en
+     * reste quelque chose à payer quand l'e-mail part : une vente au
+     * comptoir, soldée dès son émission, ou une facture réglée depuis, se
+     * dit déjà réglée. Seul un document numéroté directement en base, que
+     * signale la vérification de l'intégrité, peut n'avoir aucune échéance
+     * (voir Facture::estEchueEtImpayee()).
      */
     private function introduction(): ?string
     {
@@ -86,6 +92,7 @@ class DocumentMail extends Mailable
 
         return match (true) {
             $document instanceof Facture && ! $document->estPourUnProfessionnel() => "Veuillez trouver ci-joint votre ticket de caisse {$document->numero} d'un montant de {$montant}.",
+            $document instanceof Facture && $document->montantRestant() <= 0 => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de {$montant}, déjà réglée.",
             $document instanceof Facture => "Veuillez trouver ci-joint notre facture {$document->numero} d'un montant de {$montant}"
                 .($document->date_echeance ? ", à régler au plus tard le {$document->date_echeance->format('d/m/Y')}." : '.'),
             $document instanceof Devis => "Veuillez trouver ci-joint notre devis {$document->numero} d'un montant de {$montant}"

@@ -174,7 +174,7 @@ class MembreEquipeResourceTest extends TestCase
                 sort($proposees);
 
                 return $proposees === $toutes
-                    && $autorisations->getOptions()[PermissionRegistry::PARAMETRES_GERER] === 'Paramètres du magasin : identité et TVA'
+                    && $autorisations->getOptions()[PermissionRegistry::PARAMETRES_GERER] === 'Paramètres du magasin : identité, TVA, échéance et mentions des factures'
                     && $autorisations->getOptions()[PermissionRegistry::FACTURE_ENVOYER] === 'Factures : envoyer par e-mail et relancer';
             })
             ->assertFormFieldIsEnabled('permissions');

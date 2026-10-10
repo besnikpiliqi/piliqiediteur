@@ -51,7 +51,7 @@ enum RoleMagasin: string implements HasLabel
     /**
      * Les autorisations cochées d'office pour ce rôle. Le propriétaire les
      * a toutes ; l'administrateur aussi, sauf les paramètres du magasin
-     * (identité et TVA).
+     * (identité, TVA, échéance et mentions des factures).
      *
      * @return list<string>
      */

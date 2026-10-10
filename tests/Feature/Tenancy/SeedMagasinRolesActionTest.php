@@ -140,7 +140,8 @@ class SeedMagasinRolesActionTest extends TestCase
 
     /**
      * L'administrateur reçoit d'office toutes les autorisations, sauf les
-     * paramètres du magasin (identité et TVA).
+     * paramètres du magasin (identité, TVA, échéance et mentions des
+     * factures).
      */
     public function test_l_administrateur_recoit_d_office_tout_sauf_les_parametres_du_magasin(): void
     {

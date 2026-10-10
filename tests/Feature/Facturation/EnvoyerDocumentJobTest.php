@@ -20,6 +20,7 @@ use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
+use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -85,6 +86,27 @@ class EnvoyerDocumentJobTest extends TestCase
             'Cordialement,',
             'Tél. 01 23 45 67 89',
         ], escape: false);
+    }
+
+    /**
+     * Vendue au comptoir et payée par carte à son émission, la facture a
+     * bien une échéance (B7), mais son e-mail ne demande plus de la régler.
+     */
+    public function test_l_e_mail_d_une_facture_reglee_a_son_emission_ne_demande_pas_de_la_regler(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $this->magasin();
+        $facture = app(EmettreFactureAction::class)->handle(
+            app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]),
+            new ReglementComptant(ModePaiement::CarteBancaire),
+        );
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['message' => 'Merci de votre visite.']);
+
+        $mail = new DocumentMail($envoi, '%PDF', 'facture.pdf');
+
+        $mail->assertSeeInHtml("Veuillez trouver ci-joint notre facture {$facture->numero} d'un montant de 120,00 € TTC, déjà réglée.", escape: false);
+        $mail->assertDontSeeInHtml('à régler');
+        $this->assertSame(['2026-11-08', 0.0], [$facture->date_echeance->toDateString(), $facture->montantRestant()]);
     }
 
     /**

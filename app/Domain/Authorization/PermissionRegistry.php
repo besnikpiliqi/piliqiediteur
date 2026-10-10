@@ -113,9 +113,10 @@ final class PermissionRegistry
 
     /**
      * Régler les paramètres du magasin : son identité légale
-     * (IdentiteMagasin) et sa TVA (ParametresFiscaux). Aucun modèle de
-     * rôle ne la coche d'office : le propriétaire la détient, et la coche
-     * pour le membre de son choix.
+     * (IdentiteMagasin), sa TVA (ParametresFiscaux), et le délai de
+     * paiement et les mentions entre professionnels de ses factures
+     * (ParametresFactures). Aucun modèle de rôle ne la coche d'office : le
+     * propriétaire la détient, et la coche pour le membre de son choix.
      */
     public const PARAMETRES_GERER = 'parametres.gerer';
 
@@ -282,7 +283,7 @@ final class PermissionRegistry
             self::FACTURE_EMETTRE => 'Factures : émettre',
             self::FACTURE_ENVOYER => 'Factures : envoyer par e-mail et relancer',
             self::RELANCES_REGLER => 'Relances : régler les relances automatiques',
-            self::PARAMETRES_GERER => 'Paramètres du magasin : identité et TVA',
+            self::PARAMETRES_GERER => 'Paramètres du magasin : identité, TVA, échéance et mentions des factures',
             self::EQUIPE_VIEW => 'Équipe : voir',
             self::EQUIPE_CREER => 'Équipe : créer des comptes',
             self::EQUIPE_MODIFIER => 'Équipe : modifier',

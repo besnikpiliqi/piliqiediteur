@@ -365,7 +365,11 @@ class Facture extends Model implements DocumentEnvoyable
     /**
      * Une facture se relance (voir EnvoyerDocumentAction::relancer()) une
      * fois son échéance passée, tant qu'il reste quelque chose à régler --
-     * jamais une facture payée ou soldée par un avoir.
+     * jamais une facture payée ou soldée par un avoir. Une facture émise a
+     * toujours son échéance (voir EmettreFactureAction) : seul un document
+     * numéroté directement en base, que signale la vérification de
+     * l'intégrité, peut ne pas en avoir ; il ne se relance pas, et la liste
+     * des factures comme sa fiche s'affichent quand même.
      */
     public function estEchueEtImpayee(): bool
     {

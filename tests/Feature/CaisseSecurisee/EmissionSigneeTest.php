@@ -400,8 +400,8 @@ class EmissionSigneeTest extends TestCase
     /**
      * Le capital social, l'immatriculation et les mentions entre
      * professionnels réglés par le magasin le jour de l'émission (H2, B9,
-     * K7) se signent avec l'émetteur : la facture se reproduit telle
-     * qu'émise même s'il les change ensuite.
+     * K7) se signent avec l'émetteur : le contenu signé garde ces valeurs
+     * même si le magasin les change ensuite.
      */
     public function test_l_emetteur_signe_son_capital_son_immatriculation_et_ses_mentions_entre_professionnels(): void
     {

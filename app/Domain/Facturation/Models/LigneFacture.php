@@ -142,7 +142,10 @@ class LigneFacture extends Model
      * Montants d'un retour de $quantite articles de cette ligne : la ligne
      * calculée pour tout ce qui en a été rendu jusqu'ici, moins ce que les
      * avoirs déjà émis ont crédité (voir CalculateurLigne::retourCumule()).
-     * Le dernier retour retombe ainsi exactement sur la ligne vendue.
+     * Le cumul se calcule comme la facture : article par article sur un
+     * ticket, depuis le HT de la ligne sur une facture à un professionnel
+     * (E1, K2, voir CalculateurLigne::retourDeLigneProfessionnelle()). Le
+     * dernier retour retombe ainsi exactement sur la ligne vendue.
      *
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
      */
@@ -152,14 +155,12 @@ class LigneFacture extends Model
         $avoirsEmis = $this->lignesAvoir()
             ->whereHas('avoir', fn ($query) => $query->where('statut', StatutAvoir::Emise))
             ->get(['quantite', 'montant_ht', 'montant_tva', 'montant_ttc']);
+        $quantiteRendue = (int) $avoirsEmis->sum('quantite') + $quantite;
 
         return $calculateur->retourCumule(
-            $calculateur->montantsDeVente(
-                (float) $this->prix_unitaire_ht,
-                (float) $this->prix_unitaire_ttc,
-                (int) $avoirsEmis->sum('quantite') + $quantite,
-                (float) $this->remise_pourcentage,
-            ),
+            $this->facture->estPourUnProfessionnel()
+                ? $calculateur->retourDeLigneProfessionnelle($this->only(['prix_unitaire_ttc', 'taux_tva', 'quantite', 'remise_pourcentage', 'montant_ht', 'montant_tva']), $quantiteRendue)
+                : $calculateur->montantsDeVente((float) $this->prix_unitaire_ht, (float) $this->prix_unitaire_ttc, $quantiteRendue, (float) $this->remise_pourcentage),
             $avoirsEmis->toArray(),
         );
     }

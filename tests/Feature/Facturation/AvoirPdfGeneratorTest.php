@@ -121,6 +121,27 @@ class AvoirPdfGeneratorTest extends TestCase
         );
     }
 
+    /**
+     * Un avoir sur une facture à un professionnel reprend son calcul, par
+     * différence avec les avoirs déjà émis sur la même ligne (K2) : une
+     * note sous les lignes l'explique ; un avoir sur un ticket n'en a pas.
+     */
+    public function test_lavoir_sur_une_facture_professionnelle_explique_le_calcul_de_ses_lignes(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $professionnel = Client::factory()->professionnel()->create();
+        $particulier = Client::factory()->create();
+
+        $avoirProfessionnel = $this->crediter($professionnel, $this->emettreUneFacture($professionnel));
+        $avoirSurTicket = $this->crediter($particulier, $this->emettreUneFacture($particulier));
+
+        $this->assertStringContainsString(
+            'Client professionnel : chaque ligne se calcule comme sur sa facture, HT = quantité × PU TTC ÷ (1 + taux) arrondi une fois et TVA sur ce HT, déduction faite des avoirs déjà émis sur la même ligne.',
+            $this->rendu($avoirProfessionnel),
+        );
+        $this->assertStringNotContainsString('Client professionnel :', $this->rendu($avoirSurTicket));
+    }
+
     private function emettreUneFacture(Client $client): Facture
     {
         $produit = Produit::factory()->create(['suivi_stock' => false]);

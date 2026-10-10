@@ -46,20 +46,23 @@ use WeakMap;
  * Les montants affichés pendant la saisie passent par le même
  * constructeur que l'enregistrement réel, avec le client choisi et le
  * régime de TVA du magasin (voir apercuDesLignes()) : l'écran ne peut
- * jamais afficher un centime différent de ce qui sera enregistré.
+ * jamais afficher un centime différent de ce qui sera enregistré. Pour un
+ * client professionnel, chaque ligne affiche son HT, la TVA se calculant
+ * sur le total de son taux (voir totalDeLigne()).
  */
 trait AjouteDesLignesDeVente
 {
     use SaisitLesPrixDeLigne;
 
     /**
-     * Les aperçus déjà calculés pendant la requête en cours, par page
-     * Livewire (une nouvelle instance à chaque requête) puis par lignes et
-     * client (voir apercuDesLignes()).
+     * Les calculs déjà faits pendant la requête en cours, par page Livewire
+     * (une nouvelle instance à chaque requête) puis par calcul : le
+     * contexte de vente de chaque client choisi, l'aperçu de chaque jeu de
+     * lignes pour un client (voir calculUneFoisParRequete()).
      *
-     * @var WeakMap<LivewireComponent, array<string, array<array-key, array<string, mixed>>>>|null
+     * @var WeakMap<LivewireComponent, array<string, mixed>>|null
      */
-    private static ?WeakMap $apercusDeLaRequete = null;
+    private static ?WeakMap $calculsDeLaRequete = null;
 
     /**
      * @return array<Component>
@@ -99,23 +102,39 @@ trait AjouteDesLignesDeVente
      */
     public static function apercuDesLignes(array $lignes, mixed $clientId): array
     {
-        $calculer = fn (): array => app(ConstructeurLigneDocument::class)->apercu($lignes, self::contexteDeVente($clientId));
+        return self::calculUneFoisParRequete(
+            'apercu:'.hash('xxh128', serialize([$lignes, $clientId])),
+            fn (): array => app(ConstructeurLigneDocument::class)->apercu($lignes, self::contexteDeVente($clientId)),
+        );
+    }
+
+    /**
+     * Le résultat d'un calcul de la page, fait une seule fois par requête
+     * pour la même clé ; hors d'une page Livewire, refait à chaque appel.
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $calculer
+     * @return T
+     */
+    private static function calculUneFoisParRequete(string $cle, Closure $calculer): mixed
+    {
         $page = Livewire::current();
 
         if (! $page instanceof LivewireComponent) {
             return $calculer();
         }
 
-        self::$apercusDeLaRequete ??= new WeakMap;
-        $apercus = self::$apercusDeLaRequete[$page] ?? [];
-        $cle = hash('xxh128', serialize([$lignes, $clientId]));
+        self::$calculsDeLaRequete ??= new WeakMap;
 
-        if (! array_key_exists($cle, $apercus)) {
-            $apercus[$cle] = $calculer();
-            self::$apercusDeLaRequete[$page] = $apercus;
+        if (! array_key_exists($cle, self::$calculsDeLaRequete[$page] ?? [])) {
+            $resultat = $calculer();
+            // Relu après le calcul, qui a pu en mémoriser un autre (le
+            // contexte de vente d'un aperçu).
+            self::$calculsDeLaRequete[$page] = [...(self::$calculsDeLaRequete[$page] ?? []), $cle => $resultat];
         }
 
-        return $apercus[$cle];
+        return self::$calculsDeLaRequete[$page][$cle];
     }
 
     /**
@@ -302,25 +321,40 @@ trait AjouteDesLignesDeVente
     }
 
     /**
-     * Le HT et la TVA de la ligne à côté de son TTC, comme la facture. Un
-     * taux de service qui n'est pas en vigueur sur le territoire du
-     * magasin est signalé, sans être refusé (X8).
+     * Le HT et la TVA de la ligne à côté de son TTC, comme le ticket. Pour
+     * un client professionnel, la ligne affiche son HT, quantité x PU TTC
+     * ÷ (1 + taux) arrondi une fois : sa TVA se calcule sur le total HT de
+     * son taux (E1, voir ConstructeurLigneDocument), dans les totaux du
+     * document. Un taux de service qui n'est pas en vigueur sur le
+     * territoire du magasin est signalé, sans être refusé (X8).
      */
     private static function totalDeLigne(): Placeholder
     {
         return Placeholder::make('total_ligne')
-            ->label('Total TTC')
+            ->label(fn (Get $get): string => self::calculeDepuisLeHtDeLigne($get) ? 'Total HT' : 'Total TTC')
             ->columnSpanFull()
-            ->content(fn (Get $get, Placeholder $component): string => self::montantEnTexte((float) (self::montantsDeLaLigne($get, $component)['montant_ttc'] ?? 0)))
+            ->content(fn (Get $get, Placeholder $component): string => self::montantEnTexte((float) (self::montantsDeLaLigne($get, $component)[self::calculeDepuisLeHtDeLigne($get) ? 'montant_ht' : 'montant_ttc'] ?? 0)))
             ->helperText(function (Get $get, Placeholder $component): string {
                 $montants = self::montantsDeLaLigne($get, $component);
-                $detail = self::montantEnTexte((float) ($montants['montant_ht'] ?? 0)).' HT + '.self::montantEnTexte((float) ($montants['montant_tva'] ?? 0)).' de TVA';
+                $detail = self::calculeDepuisLeHtDeLigne($get)
+                    ? 'TVA calculée sur le total'
+                    : self::montantEnTexte((float) ($montants['montant_ht'] ?? 0)).' HT + '.self::montantEnTexte((float) ($montants['montant_tva'] ?? 0)).' de TVA';
                 $aide = self::estUneLigneDeService($get) && ! self::magasin()->estEnFranchiseDeTva()
                     ? self::magasin()->territoireTva()?->aideSiTauxInhabituel($get('taux_tva'))
                     : null;
 
                 return $aide === null ? $detail : "{$detail} · {$aide}";
             });
+    }
+
+    /**
+     * La ligne du champ est vendue à un professionnel, hors franchise en
+     * base : sans TVA, son HT est son TTC, et elle s'affiche comme celle
+     * d'un particulier.
+     */
+    private static function calculeDepuisLeHtDeLigne(Get $get): bool
+    {
+        return self::contexteDeVente($get('../../client_id'))->calculeDepuisLeHtDeLigne() && ! self::magasin()->estEnFranchiseDeTva();
     }
 
     /**
@@ -346,13 +380,16 @@ trait AjouteDesLignesDeVente
     /**
      * Le client choisi s'il est du magasin actif (MagasinScope), archivé
      * compris, et le magasin actif, dont le régime de TVA et le territoire
-     * décident du calcul.
+     * décident du calcul ; lus une seule fois par requête de la page pour
+     * le même client.
      */
     private static function contexteDeVente(mixed $clientId): ContexteDeVente
     {
-        $identifiant = is_bool($clientId) ? false : filter_var($clientId, FILTER_VALIDATE_INT);
+        return self::calculUneFoisParRequete('contexte:'.hash('xxh128', serialize($clientId)), function () use ($clientId): ContexteDeVente {
+            $identifiant = is_bool($clientId) ? false : filter_var($clientId, FILTER_VALIDATE_INT);
 
-        return ContexteDeVente::pour($identifiant === false ? null : Client::withTrashed()->find($identifiant), self::magasin());
+            return ContexteDeVente::pour($identifiant === false ? null : Client::withTrashed()->find($identifiant), self::magasin());
+        });
     }
 
     private static function magasin(): Magasin

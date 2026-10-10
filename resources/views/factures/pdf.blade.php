@@ -30,7 +30,10 @@
         'titre' => $facture->estPourUnProfessionnel() ? 'Facturé à' : 'Client',
     ])
 
-    @include('documents.pdf.lignes', ['lignes' => $facture->lignes])
+    @include('documents.pdf.lignes', [
+        'lignes' => $facture->lignes,
+        'noteDeCalcul' => app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($facture),
+    ])
 
     @include('documents.pdf.totaux', ['document' => $facture])
 

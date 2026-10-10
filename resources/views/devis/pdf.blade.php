@@ -22,7 +22,10 @@
         'titre' => 'Établi pour',
     ])
 
-    @include('documents.pdf.lignes', ['lignes' => $devis->lignes])
+    @include('documents.pdf.lignes', [
+        'lignes' => $devis->lignes,
+        'noteDeCalcul' => app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($devis),
+    ])
 
     @include('documents.pdf.totaux', ['document' => $devis])
 

@@ -626,6 +626,67 @@ class AvoirActionsTest extends TestCase
         $this->assertSame(['29.99', '6.01', '36.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
     }
 
+    /**
+     * K2 : une facture à un professionnel de 1 000 x 1,00 € à 20 % (833,33 €
+     * HT + 166,67 €). Le premier retour de 500 articles se calcule comme la
+     * facture -- 416,666... -> 416,67 € HT et 20 % de ce HT, 83,33 € ; le
+     * second solde la ligne : 416,66 € + 83,34 €. 500,00 € chacun, toute la
+     * facture créditée.
+     */
+    public function test_deux_retours_de_la_moitie_d_une_facture_professionnelle_creditent_chacun_la_moitie(): void
+    {
+        $client = Client::factory()->professionnel()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 1, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = $this->emettreFacture($client, $produit, 1000);
+        $ligneFacture = $facture->lignes->sole();
+
+        $premier = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 500]]);
+        $second = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 500]]);
+
+        $this->assertSame(['833.33', '166.67', '1000.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(['416.67', '83.33', '500.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
+        $this->assertSame(['416.66', '83.34', '500.00'], [$second->total_ht, $second->total_tva, $second->total_ttc]);
+        $this->assertSame(0.0, $facture->fresh()->montantRestant());
+    }
+
+    /**
+     * K2 : 2 x 40,00 € TTC à 20 % vendus à un professionnel (66,67 € HT +
+     * 13,33 €) ; chaque article rendu crédite 40,00 € -- 33,33 € HT +
+     * 6,67 €, puis 33,34 € + 6,66 € --, jamais 40,01 €.
+     */
+    public function test_chaque_article_a_40_euros_rendu_par_un_professionnel_credite_40_euros(): void
+    {
+        $client = Client::factory()->professionnel()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ligneFacture = $this->emettreFacture($client, $produit, 2)->lignes->sole();
+
+        $premier = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]]);
+        $second = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]]);
+
+        $this->assertSame(['66.67', '13.33', '80.00'], [$ligneFacture->montant_ht, $ligneFacture->montant_tva, $ligneFacture->montant_ttc]);
+        $this->assertSame(['33.33', '6.67', '40.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
+        $this->assertSame(['33.34', '6.66', '40.00'], [$second->total_ht, $second->total_tva, $second->total_ttc]);
+    }
+
+    /**
+     * Trois lignes de 0,10 € à 20 % vendues à un professionnel : la
+     * deuxième n'a pris que 0,01 € de la TVA du taux (0,08 € HT). Son
+     * retour crédite exactement cette ligne, 0,09 €.
+     */
+    public function test_le_retour_d_une_ligne_professionnelle_credite_sa_part_de_la_tva_de_son_taux(): void
+    {
+        $client = Client::factory()->professionnel()->create();
+        $produits = Produit::factory()->count(3)->create(['prix_vente_ttc' => '0.10', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, $produits
+            ->map(fn (Produit $produit): array => ['produit_id' => $produit->id, 'quantite' => 1])
+            ->all()));
+
+        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes[1]->id, 'quantite' => 1]]);
+
+        $this->assertSame(['0.08', '0.01', '0.09'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
+        $this->assertSame(['0.08', '0.01', '0.09'], [$avoir->lignes->sole()->montant_ht, $avoir->lignes->sole()->montant_tva, $avoir->lignes->sole()->montant_ttc]);
+    }
+
     public function test_une_quantite_a_crediter_non_entiere_est_refusee(): void
     {
         $client = Client::factory()->create();

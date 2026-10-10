@@ -12,10 +12,12 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
+use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\MentionsFiscales;
 use App\Filament\App\Resources\FactureResource\Pages;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -280,7 +282,10 @@ class FactureResource extends Resource
      * puis le HT, la TVA et le TTC de la ligne (voir CalculateurLigne). Un
      * achat n'a pas de PU TTC : sa TVA se calcule sur le HT de la ligne. La
      * remise n'apparaît que si une ligne du document en a une : c'est elle
-     * qui explique alors que PU x quantité diffère du total.
+     * qui explique alors que PU x quantité diffère du total. Sur un
+     * document de vente à un professionnel, calculé depuis le HT de chaque
+     * ligne, la note de calcul de ses PDF l'explique aussi (voir
+     * MentionsFiscales::calcul()).
      */
     public static function lignesEntry(?Model $document): RepeatableEntry
     {
@@ -289,6 +294,7 @@ class FactureResource extends Resource
 
         return RepeatableEntry::make('lignes')
             ->label('')
+            ->helperText($document instanceof Facture || $document instanceof Avoir || $document instanceof Devis ? app(MentionsFiscales::class)->calcul($document) : null)
             ->schema([
                 TextEntry::make('description'),
                 TextEntry::make('quantite')->label('Quantité')->numeric(),

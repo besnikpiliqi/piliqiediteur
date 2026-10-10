@@ -18,6 +18,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -35,6 +36,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class FactureResourceTest extends TestCase
@@ -513,19 +515,32 @@ class FactureResourceTest extends TestCase
     }
 
     /**
+     * @return array<string, array{bool}>
+     */
+    public static function typesDeClient(): array
+    {
+        return [
+            'particulier' => [false],
+            'professionnel' => [true],
+        ];
+    }
+
+    /**
      * Une frappe dans une ligne calcule l'aperçu de toutes les lignes une
      * seule fois : le client et le catalogue ne se relisent ni pour chaque
-     * ligne, ni pour chaque montant affiché.
+     * ligne, ni pour chaque montant affiché -- ni, pour un professionnel,
+     * pour savoir si chaque ligne affiche son HT.
      */
-    public function test_une_frappe_lit_le_client_et_le_catalogue_autant_de_fois_pour_vingt_lignes_que_pour_une(): void
+    #[DataProvider('typesDeClient')]
+    public function test_une_frappe_lit_le_client_et_le_catalogue_autant_de_fois_pour_vingt_lignes_que_pour_une(bool $professionnel): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
-        $lecturesPourUneLigne = $this->lecturesDUneFrappeDansUnBrouillonDe(1, 'Total HT 20,00 € · TVA 4,00 € · Total TTC 24,00 €');
-        $lecturesPourVingtLignes = $this->lecturesDUneFrappeDansUnBrouillonDe(20, 'Total HT 210,00 € · TVA 42,00 € · Total TTC 252,00 €');
+        $lecturesPourUneLigne = $this->lecturesDUneFrappeDansUnBrouillonDe(1, 'Total HT 20,00 € · TVA 4,00 € · Total TTC 24,00 €', $professionnel);
+        $lecturesPourVingtLignes = $this->lecturesDUneFrappeDansUnBrouillonDe(20, 'Total HT 210,00 € · TVA 42,00 € · Total TTC 252,00 €', $professionnel);
 
         $this->assertSame($lecturesPourUneLigne, $lecturesPourVingtLignes);
     }
@@ -537,10 +552,10 @@ class FactureResourceTest extends TestCase
      *
      * @return array{clients: int, produits: int}
      */
-    private function lecturesDUneFrappeDansUnBrouillonDe(int $nombreDeLignes, string $totauxAttendus): array
+    private function lecturesDUneFrappeDansUnBrouillonDe(int $nombreDeLignes, string $totauxAttendus, bool $professionnel): array
     {
         $produits = Produit::factory()->count($nombreDeLignes)->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), $produits
+        $brouillon = app(CreerFactureAction::class)->handle($professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create(), $produits
             ->map(fn (Produit $produit): array => ['produit_id' => $produit->id, 'quantite' => 1])
             ->all());
         $component = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()]);
@@ -634,6 +649,38 @@ class FactureResourceTest extends TestCase
         $this->assertStringContainsString('74,99', $pdf);
         $this->assertStringContainsString('84,99', $pdf);
         $this->assertStringNotContainsString('85,00', $pdf);
+    }
+
+    /**
+     * Le même panier vendu à un professionnel se calcule depuis le HT de
+     * chaque ligne (E1) : 80,00 / 1,2 = 66,67 € HT, 10,00 / 1,2 = 8,33 €,
+     * et 20 % des 75,00 € HT du taux, 15,00 €, répartis en 13,33 € et
+     * 1,67 €. Il totalise 85,00 € HT + 15,00 € = 100,00 €, et sa fiche
+     * explique le calcul sous les lignes.
+     */
+    public function test_la_meme_facture_a_un_professionnel_totalise_85_ht_et_explique_son_calcul(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 0, 'suivi_stock' => false]);
+        $coque = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $facture = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [
+            ['produit_id' => $ecran->id, 'quantite' => 2],
+            ['produit_id' => $cable->id, 'quantite' => 1],
+            ['produit_id' => $coque->id, 'quantite' => 1],
+        ]);
+
+        $this->assertSame([['66.67', '13.33', '80.00'], ['10.00', '0.00', '10.00'], ['8.33', '1.67', '10.00']], $facture->lignes->map(fn (LigneFacture $ligne): array => [$ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc])->all());
+        $this->assertSame(['85.00', '15.00', '100.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSee('66,67')
+            ->assertSee('13,33')
+            ->assertSee('85,00')
+            ->assertSee('Client professionnel : HT de chaque ligne = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA calculée sur le total HT de chaque taux.');
     }
 
     /**

@@ -14,11 +14,13 @@ use Tests\TestCase;
 
 /**
  * Calcul d'une ligne (voir le commentaire de classe de CalculateurLigne) :
- * une vente part de son prix TTC, décomposé article par article (PU HT et
- * PU TTC au centime, multipliés séparément par la quantité) ; un achat part
- * du PU HT du fournisseur, multiplié par la quantité, puis la TVA se
- * calcule une seule fois sur le HT de la ligne. Tout se fait en centimes
- * entiers, jamais en flottant.
+ * une vente à un particulier part de son prix TTC, décomposé article par
+ * article (PU HT et PU TTC au centime, multipliés séparément par la
+ * quantité) ; une vente à un professionnel, du HT de la ligne, quantité x
+ * PU TTC ÷ (1 + taux) arrondi une fois, la TVA de chaque taux se calculant
+ * sur le total HT de ses lignes ; un achat part du PU HT du fournisseur,
+ * multiplié par la quantité, puis la TVA se calcule une seule fois sur le
+ * HT de la ligne. Tout se fait en centimes entiers, jamais en flottant.
  *
  * Au-delà des exemples nommés (cas réels signalés par un magasin), les tests
  * "sur_tous_les" et "aleatoires" comparent le calculateur, sur des dizaines
@@ -142,6 +144,100 @@ class CalculateurLigneTest extends TestCase
 
         $this->assertSame([0.03, 0.02, 0.03, 0.02, 0.03, 0.03, 0.02, 0.03, 0.02, 0.03], array_column($retours, 'montant_tva'));
         $this->assertSame(['total_ht' => 1.3, 'total_tva' => 0.26, 'total_ttc' => 1.56], $calculateur->totaliser($retours));
+    }
+
+    /**
+     * Vente à un professionnel (E1) : HT de la ligne = quantité x PU TTC x
+     * (1 - remise) ÷ (1 + taux), arrondi une seule fois -- 1 000 x 1,00 €
+     * à 20 % = 833,333... -> 833,33 € ; 49,90 € x 2 / 1,2 = 83,166... ;
+     * 4,20 € x 3 / 1,055 = 11,943... ; 3,99 € x 7 x 0,9 / 1,055 =
+     * 23,826... ; 12,00 € x 10 x 0,85 / 1,2 = 85,00 €.
+     *
+     * @return array<string, array{float, float, int, float, float}>
+     */
+    public static function lignesProfessionnelles(): array
+    {
+        return [
+            '1 000 x 1,00 € à 20 %' => [1.00, 20, 1000, 0, 833.33],
+            '2 x 49,90 € à 20 %' => [49.90, 20, 2, 0, 83.17],
+            '3 x 4,20 € à 5,5 %' => [4.20, 5.5, 3, 0, 11.94],
+            '7 x 3,99 € à 5,5 % remisés de 10 %' => [3.99, 5.5, 7, 10, 23.83],
+            '10 x 12,00 € à 20 % remisés de 15 %' => [12.00, 20, 10, 15, 85.00],
+        ];
+    }
+
+    #[DataProvider('lignesProfessionnelles')]
+    public function test_le_ht_d_une_ligne_professionnelle_s_arrondit_une_seule_fois(float $prixUnitaireTtc, float $tauxTva, int $quantite, float $remise, float $htAttendu): void
+    {
+        $this->assertSame($htAttendu, $this->calculateur()->montantHtDeLigneProfessionnelle($prixUnitaireTtc, $tauxTva, $quantite, $remise));
+    }
+
+    /**
+     * Trois lignes de 0,08 € HT à 20 % : 20 % du cumul vaut 0,016 -> 0,02,
+     * puis 0,032 -> 0,03, puis 0,048 -> 0,05 ; chaque ligne prend la
+     * différence, et les 0,05 € de 20 % du total de 0,24 €. Une ligne
+     * seule prend la TVA de son HT.
+     */
+    public function test_la_tva_d_un_taux_se_calcule_sur_son_total_ht_et_se_repartit_entre_ses_lignes(): void
+    {
+        $this->assertSame([0.02, 0.01, 0.02], $this->calculateur()->repartirLaTva([0.08, 0.08, 0.08], 20));
+        $this->assertSame([166.67], $this->calculateur()->repartirLaTva([833.33], 20));
+    }
+
+    /**
+     * Une ligne de 1 000 x 1,00 € à 20 % vendue à un professionnel (833,33
+     * € HT + 166,67 €) : le HT de ce qui est rendu se calcule comme la
+     * facture -- 500 articles font 416,666... -> 416,67 € HT et 20 % de ce
+     * HT, 83,334 -> 83,33 € ; un article 0,83 € + 0,17 € ; deux 1,67 € +
+     * 0,33 € -- et toute la ligne rendue fait exactement la ligne.
+     */
+    public function test_les_retours_d_une_ligne_professionnelle_se_calculent_comme_la_facture(): void
+    {
+        $ligne = ['prix_unitaire_ttc' => '1.00', 'taux_tva' => '20.00', 'quantite' => 1000, 'remise_pourcentage' => '0.00', 'montant_ht' => '833.33', 'montant_tva' => '166.67'];
+
+        $this->assertSame(['montant_ht' => 416.67, 'montant_tva' => 83.33, 'montant_ttc' => 500.0], $this->calculateur()->retourDeLigneProfessionnelle($ligne, 500));
+        $this->assertSame(['montant_ht' => 833.33, 'montant_tva' => 166.67, 'montant_ttc' => 1000.0], $this->calculateur()->retourDeLigneProfessionnelle($ligne, 1000));
+        $this->assertSame(['montant_ht' => 0.83, 'montant_tva' => 0.17, 'montant_ttc' => 1.0], $this->calculateur()->retourDeLigneProfessionnelle($ligne, 1));
+        $this->assertSame(['montant_ht' => 1.67, 'montant_tva' => 0.33, 'montant_ttc' => 2.0], $this->calculateur()->retourDeLigneProfessionnelle($ligne, 2));
+    }
+
+    /**
+     * K2 : 2 x 40,00 € TTC à 20 % vendus à un professionnel (66,67 € HT +
+     * 13,33 €). Le premier article rendu vaut 33,33 € HT + 6,67 €, le
+     * second solde la ligne : 33,34 € + 6,66 €, 40,00 € chacun.
+     */
+    public function test_deux_retours_d_un_article_a_40_euros_vendu_a_un_professionnel_creditent_40_euros_chacun(): void
+    {
+        $calculateur = $this->calculateur();
+        $ligne = ['prix_unitaire_ttc' => '40.00', 'taux_tva' => '20.00', 'quantite' => 2, 'remise_pourcentage' => '0.00', 'montant_ht' => '66.67', 'montant_tva' => '13.33'];
+
+        $premierRetour = $calculateur->retourCumule($calculateur->retourDeLigneProfessionnelle($ligne, 1), []);
+        $secondRetour = $calculateur->retourCumule($calculateur->retourDeLigneProfessionnelle($ligne, 2), [$premierRetour]);
+
+        $this->assertSame(['montant_ht' => 33.33, 'montant_tva' => 6.67, 'montant_ttc' => 40.0], $premierRetour);
+        $this->assertSame(['montant_ht' => 33.34, 'montant_tva' => 6.66, 'montant_ttc' => 40.0], $secondRetour);
+    }
+
+    /**
+     * 10 x 0,01 € à 20 % font 0,08 € HT (0,0833... arrondi) ; deuxième de
+     * deux lignes de 0,08 € HT, la ligne n'a pris que 0,01 € de la TVA de
+     * son taux. Neuf articles rendus font déjà 0,08 € HT (0,075 arrondi),
+     * dont 20 % vaut 0,02 € : le retour ne crédite que les 0,01 € de la
+     * ligne, jamais plus qu'elle.
+     */
+    public function test_un_retour_professionnel_ne_credite_jamais_plus_que_la_tva_de_la_ligne(): void
+    {
+        $ligne = ['prix_unitaire_ttc' => '0.01', 'taux_tva' => '20.00', 'quantite' => 10, 'remise_pourcentage' => '0.00', 'montant_ht' => '0.08', 'montant_tva' => '0.01'];
+
+        $this->assertSame(['montant_ht' => 0.08, 'montant_tva' => 0.01, 'montant_ttc' => 0.09], $this->calculateur()->retourDeLigneProfessionnelle($ligne, 9));
+    }
+
+    public function test_un_retour_professionnel_hors_de_la_quantite_de_la_ligne_est_refuse(): void
+    {
+        $ligne = ['prix_unitaire_ttc' => '40.00', 'taux_tva' => '20.00', 'quantite' => 2, 'remise_pourcentage' => '0.00', 'montant_ht' => '66.67', 'montant_tva' => '13.33'];
+
+        $this->assertThrows(fn () => $this->calculateur()->retourDeLigneProfessionnelle($ligne, 0), InvalidArgumentException::class, 'Un retour rend entre 1 article et la quantité de la ligne.');
+        $this->assertThrows(fn () => $this->calculateur()->retourDeLigneProfessionnelle($ligne, 3), InvalidArgumentException::class, 'Un retour rend entre 1 article et la quantité de la ligne.');
     }
 
     public function test_une_remise_sur_plusieurs_articles_reste_exacte_au_centime(): void
@@ -351,6 +447,174 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
+     * 10 000 lignes vendues à un professionnel, tirées au hasard (PU TTC de
+     * 0,01 € à 9 999,99 €, de 1 à 999 articles, avec ou sans remise, tous
+     * les taux) : le HT est exactement quantité x PU TTC x (1 - remise) ÷
+     * (1 + taux), arrondi une fois au centime.
+     */
+    public function test_10000_lignes_professionnelles_aleatoires_egalent_le_calcul_exact(): void
+    {
+        $hasard = new Randomizer(new Mt19937(self::GRAINE + 3));
+
+        for ($i = 0; $i < 10000; $i++) {
+            $ligne = $this->ligneProfessionnelleAleatoire($hasard, self::TAUX[$hasard->getInt(0, count(self::TAUX) - 1)]);
+
+            $this->assertSame(
+                $this->htProfessionnelAttendu($ligne, $ligne['quantite']),
+                $this->enCentimes($this->calculateur()->montantHtDeLigneProfessionnelle($ligne['ttc'] / 100, (float) $ligne['taux'], $ligne['quantite'], $ligne['remise'] / 100)),
+                $this->decrireProfessionnelle($ligne),
+            );
+        }
+    }
+
+    /**
+     * 2 000 factures à un professionnel de 1 à 20 lignes tirées au hasard,
+     * de taux mélangés : pour chaque taux, la somme des parts de TVA des
+     * lignes vaut exactement la TVA du total HT du taux, arrondie une
+     * fois ; aucune part n'est négative, et chacune s'écarte d'au plus un
+     * centime de la TVA du HT de sa ligne.
+     */
+    public function test_2000_factures_professionnelles_aleatoires_ont_la_tva_du_total_ht_de_chaque_taux(): void
+    {
+        $hasard = new Randomizer(new Mt19937(self::GRAINE + 4));
+
+        for ($i = 0; $i < 2000; $i++) {
+            $htParTaux = [];
+
+            for ($n = $hasard->getInt(1, 20); $n > 0; $n--) {
+                $ligne = $this->ligneProfessionnelleAleatoire($hasard, self::TAUX[$hasard->getInt(0, count(self::TAUX) - 1)]);
+                $htParTaux[$ligne['taux']][] = $this->htProfessionnelAttendu($ligne, $ligne['quantite']);
+            }
+
+            foreach ($htParTaux as $taux => $hts) {
+                $parts = array_map($this->enCentimes(...), $this->calculateur()->repartirLaTva(array_map(fn (int $ht): float => $ht / 100, $hts), (float) $taux));
+
+                $this->assertSame($this->tvaAttendue(array_sum($hts), (string) $taux), array_sum($parts), "facture n° {$i}, taux {$taux} %");
+
+                foreach ($parts as $index => $part) {
+                    $this->assertGreaterThanOrEqual(0, $part, "facture n° {$i}, taux {$taux} %, ligne {$index}");
+                    $this->assertLessThanOrEqual(1, abs($part - $this->tvaAttendue($hts[$index], (string) $taux)), "facture n° {$i}, taux {$taux} %, ligne {$index}");
+                }
+            }
+        }
+    }
+
+    /**
+     * 2 000 lignes de factures à un professionnel (de 1 à 5 lignes du même
+     * taux, dont la TVA se répartit), rendues en retours successifs de
+     * quantités tirées au hasard : tant que la ligne n'est pas toute
+     * rendue, le HT cumulé est celui de la facture pour ces articles et sa
+     * TVA celle de ce HT, plafonnée à la ligne ; aucun retour ne crédite de
+     * montant négatif, et la somme des retours retombe exactement sur la
+     * ligne.
+     */
+    public function test_2000_series_de_retours_professionnels_creditent_exactement_la_ligne(): void
+    {
+        $hasard = new Randomizer(new Mt19937(self::GRAINE + 5));
+
+        for ($i = 0; $i < 2000; $i++) {
+            $taux = self::TAUX[$hasard->getInt(0, count(self::TAUX) - 1)];
+            $lignes = [];
+
+            for ($n = $hasard->getInt(1, 5); $n > 0; $n--) {
+                $lignes[] = [...$this->ligneProfessionnelleAleatoire($hasard, $taux), 'quantite' => $hasard->getInt(2, 999)];
+            }
+
+            $hts = array_map(fn (array $ligne): int => $this->htProfessionnelAttendu($ligne, $ligne['quantite']), $lignes);
+            $parts = array_map($this->enCentimes(...), $this->calculateur()->repartirLaTva(array_map(fn (int $ht): float => $ht / 100, $hts), (float) $taux));
+            $choisie = $hasard->getInt(0, count($lignes) - 1);
+            $ligne = $lignes[$choisie];
+            $vendue = [
+                'prix_unitaire_ttc' => $ligne['ttc'] / 100,
+                'taux_tva' => (float) $taux,
+                'quantite' => $ligne['quantite'],
+                'remise_pourcentage' => $ligne['remise'] / 100,
+                'montant_ht' => $hts[$choisie] / 100,
+                'montant_tva' => $parts[$choisie] / 100,
+            ];
+            $cas = $this->decrireProfessionnelle($ligne)." (TVA de la ligne {$this->texte($parts[$choisie])})";
+
+            $retours = [];
+            $rendus = 0;
+
+            while ($rendus < $ligne['quantite']) {
+                $rendus = $hasard->getInt(0, 3) === 0 ? $ligne['quantite'] : $hasard->getInt($rendus + 1, $ligne['quantite']);
+                $cumul = $this->calculateur()->retourDeLigneProfessionnelle($vendue, $rendus);
+
+                if ($rendus < $ligne['quantite']) {
+                    $htCumule = $this->htProfessionnelAttendu($ligne, $rendus);
+
+                    $this->assertSame($htCumule, $this->enCentimes($cumul['montant_ht']), "HT cumulé de {$rendus} : {$cas}");
+                    $this->assertSame(min($parts[$choisie], $this->tvaAttendue($htCumule, $taux)), $this->enCentimes($cumul['montant_tva']), "TVA cumulée de {$rendus} : {$cas}");
+                }
+
+                $retour = $this->calculateur()->retourCumule($cumul, $retours);
+
+                foreach ($retour as $montant => $valeur) {
+                    $this->assertGreaterThanOrEqual(0, $this->enCentimes($valeur), "{$montant} négatif : {$cas}");
+                }
+
+                $retours[] = $retour;
+            }
+
+            $credite = $this->calculateur()->totaliser($retours);
+
+            $this->assertSame([$hts[$choisie], $parts[$choisie], $hts[$choisie] + $parts[$choisie]], [
+                $this->enCentimes($credite['total_ht']),
+                $this->enCentimes($credite['total_tva']),
+                $this->enCentimes($credite['total_ttc']),
+            ], "total : {$cas}");
+        }
+    }
+
+    /**
+     * Ligne vendue à un professionnel tirée au hasard, en unités entières :
+     * PU TTC en centimes, de 1 à 999 articles, remise en centièmes de point
+     * (nulle sept fois sur dix).
+     *
+     * @return array{ttc: int, quantite: int, remise: int, taux: string}
+     */
+    private function ligneProfessionnelleAleatoire(Randomizer $hasard, string $taux): array
+    {
+        return [
+            'ttc' => $hasard->getInt(1, 999999),
+            'quantite' => $hasard->getInt(1, 999),
+            'remise' => $hasard->getInt(1, 10) <= 7 ? 0 : $hasard->getInt(0, 10000),
+            'taux' => $taux,
+        ];
+    }
+
+    /**
+     * Référence exacte du HT de $quantite articles d'une ligne vendue à un
+     * professionnel : quantité x PU TTC x (1 - remise) ÷ (1 + taux),
+     * arrondi une fois au centime, au demi supérieur.
+     *
+     * @param  array{ttc: int, quantite: int, remise: int, taux: string}  $ligne
+     */
+    private function htProfessionnelAttendu(array $ligne, int $quantite): int
+    {
+        return BigDecimal::ofUnscaledValue($ligne['ttc'] * $quantite, 2)
+            ->multipliedBy(BigDecimal::one()->minus(BigDecimal::ofUnscaledValue($ligne['remise'], 4)))
+            ->dividedBy(BigDecimal::one()->plus(BigDecimal::of($ligne['taux'])->dividedBy(100, 4)), 2, RoundingMode::HalfUp)
+            ->getUnscaledValue()
+            ->toInt();
+    }
+
+    /**
+     * @param  array{ttc: int, quantite: int, remise: int, taux: string}  $ligne
+     */
+    private function decrireProfessionnelle(array $ligne): string
+    {
+        return sprintf(
+            'vente professionnelle : PU TTC %s (TVA %s %%), quantité %d, remise %s %%',
+            $this->texte($ligne['ttc']),
+            $ligne['taux'],
+            $ligne['quantite'],
+            $this->texte($ligne['remise']),
+        );
+    }
+
+    /**
      * Ligne tirée au hasard, en unités entières : une vente (PU TTC en
      * centimes et son PU HT de référence) ou un achat (PU HT seul, ttc
      * null), quantité de 1 à 999 articles, remise en centièmes de point
@@ -477,6 +741,10 @@ class CalculateurLigneTest extends TestCase
             'montant reçu absurde' => [fn (CalculateurLigne $c) => $c->soustraire('100000000000000000', 40), 'Montant hors limites.'],
             'paiement absurde' => [fn (CalculateurLigne $c) => $c->arrondirAuCentime(1e17), 'Montant hors limites.'],
             'prix x quantité qui déborde' => [fn (CalculateurLigne $c) => $c->montantsDAchat(9999999999.99, 20, 999999), 'Montant hors limites.'],
+            'taux au-delà de 100 % (ligne professionnelle)' => [fn (CalculateurLigne $c) => $c->montantHtDeLigneProfessionnelle(10, 150, 1), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
+            'remise au-delà de 100 % (ligne professionnelle)' => [fn (CalculateurLigne $c) => $c->montantHtDeLigneProfessionnelle(10, 20, 1, 150), 'La remise doit être comprise entre 0 et 100 %.'],
+            'prix x quantité qui déborde (ligne professionnelle)' => [fn (CalculateurLigne $c) => $c->montantHtDeLigneProfessionnelle(9999999999.99, 20, 999999), 'Montant hors limites.'],
+            'taux négatif (répartition de la TVA)' => [fn (CalculateurLigne $c) => $c->repartirLaTva([10], -5), 'Le taux de TVA doit être compris entre 0 et 100 %.'],
         ];
     }
 

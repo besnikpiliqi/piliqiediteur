@@ -4,12 +4,18 @@
     n'apparaît que si une ligne en a une : elle explique alors pourquoi
     PU x quantité diffère du total de la ligne.
 
+    Sur un document à un professionnel, PU HT x quantité peut différer du
+    HT de la ligne (1 000 x 0,83 € pour 833,33 €) : la note de calcul sous
+    les lignes l'explique (voir MentionsFiscales::calcul()).
+
     @param \Illuminate\Support\Collection $lignes
     @param bool $avecFactureDOrigine un avoir indique la facture de chaque ligne
+    @param string|null $noteDeCalcul
 --}}
 @php
     $avecRemise = $lignes->contains(fn ($ligne) => (float) $ligne->remise_pourcentage != 0);
     $avecFactureDOrigine ??= false;
+    $noteDeCalcul ??= null;
 @endphp
 
 <table class="lignes">
@@ -52,3 +58,7 @@
         @endforeach
     </tbody>
 </table>
+
+@if($noteDeCalcul)
+    <div class="note-calcul">{{ $noteDeCalcul }}</div>
+@endif

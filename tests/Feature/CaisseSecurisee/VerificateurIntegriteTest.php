@@ -187,6 +187,27 @@ class VerificateurIntegriteTest extends TestCase
         ], $rapport->pointsDeReprise());
     }
 
+    /**
+     * Une facture à un professionnel calculée depuis le HT de sa ligne
+     * (833,33 € HT + 166,67 €) et ses deux retours partiels, recalculés
+     * comme elle (416,67 € + 83,33 €, puis 416,66 € + 83,34 €), se
+     * vérifient sans anomalie (E1, K2).
+     */
+    public function test_une_facture_professionnelle_et_ses_retours_partiels_ne_presentent_aucune_anomalie(): void
+    {
+        $this->magasinActif();
+        $professionnel = Client::factory()->professionnel()->create();
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($professionnel, [['produit_id' => $this->produit('VIS', 1)->id, 'quantite' => 1000]]));
+        $ligne = $facture->lignes->sole();
+        app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]]);
+        app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]]);
+
+        $rapport = $this->verifier();
+
+        $this->assertSame([], $this->anomalies($rapport));
+        $this->assertSame(['vente' => 3, 'encaissement' => 0, 'evenement' => 1], $rapport->enregistrementsVerifies());
+    }
+
     public function test_une_ligne_de_ticket_modifiee_en_base_est_detectee(): void
     {
         $magasin = $this->magasinActif();

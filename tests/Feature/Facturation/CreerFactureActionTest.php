@@ -9,11 +9,14 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class CreerFactureActionTest extends TestCase
@@ -240,6 +243,89 @@ class CreerFactureActionTest extends TestCase
         $this->assertSame(['96.69', '19.34', '116.03'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 
+    /**
+     * Un même panier vendu à un professionnel se calcule depuis le HT de
+     * chaque ligne, quantité x PU TTC ÷ (1 + taux) arrondi une fois, et la
+     * TVA de chaque taux sur le total HT de ses lignes (E1) ; vendu à un
+     * particulier, article par article. Articles : [PU TTC, taux, quantité,
+     * remise] ; montants : [HT, TVA, TTC] de chaque ligne puis du document.
+     *
+     * - 1 000 x 1,00 € : 1 000 / 1,2 = 833,33 € HT et 20 % de ce HT,
+     *   166,67 € ; article par article, 1 000 x 0,83 € = 830,00 € HT.
+     * - Trois lignes de 0,10 € : 0,08 € HT chacune, 20 % du cumul (0,016,
+     *   0,032, 0,048) répartis en 0,02, 0,01 et 0,02 € -- 0,29 € au lieu
+     *   des 0,30 € affichés, à quelques centimes près sur des lignes
+     *   nombreuses ; article par article, 3 x 0,02 €.
+     * - 2 x 49,90 € à 20 % et 3 x 4,20 € à 5,5 % : 83,17 € HT (99,80 / 1,2
+     *   = 83,166...) et 11,94 € HT (12,60 / 1,055 = 11,943...) ;
+     *   article par article, 2 x 41,58 € = 83,16 €.
+     * - 7 x 3,99 € à 5,5 % remisés de 10 % : 25,137 / 1,055 = 23,826... ->
+     *   23,83 € HT ; article par article, 26,46 € - 2,65 € de remise =
+     *   23,81 € HT.
+     *
+     * @return array<string, array{bool, list<array{string, int|float, int, int}>, list<list<string>>, list<string>}>
+     */
+    public static function paniersVendusAUnProfessionnelOuAUnParticulier(): array
+    {
+        return [
+            'professionnel, 1 000 x 1,00 € à 20 %' => [true, [['1.00', 20, 1000, 0]], [['833.33', '166.67', '1000.00']], ['833.33', '166.67', '1000.00']],
+            'particulier, 1 000 x 1,00 € à 20 %' => [false, [['1.00', 20, 1000, 0]], [['830.00', '170.00', '1000.00']], ['830.00', '170.00', '1000.00']],
+            'professionnel, trois lignes de 0,10 € à 20 %' => [true, [['0.10', 20, 1, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0]], [['0.08', '0.02', '0.10'], ['0.08', '0.01', '0.09'], ['0.08', '0.02', '0.10']], ['0.24', '0.05', '0.29']],
+            'particulier, trois lignes de 0,10 € à 20 %' => [false, [['0.10', 20, 1, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0]], [['0.08', '0.02', '0.10'], ['0.08', '0.02', '0.10'], ['0.08', '0.02', '0.10']], ['0.24', '0.06', '0.30']],
+            'professionnel, 2 x 49,90 € à 20 % et 3 x 4,20 € à 5,5 %' => [true, [['49.90', 20, 2, 0], ['4.20', 5.5, 3, 0]], [['83.17', '16.63', '99.80'], ['11.94', '0.66', '12.60']], ['95.11', '17.29', '112.40']],
+            'particulier, 2 x 49,90 € à 20 % et 3 x 4,20 € à 5,5 %' => [false, [['49.90', 20, 2, 0], ['4.20', 5.5, 3, 0]], [['83.16', '16.64', '99.80'], ['11.94', '0.66', '12.60']], ['95.10', '17.30', '112.40']],
+            'professionnel, 7 x 3,99 € à 5,5 % remisés de 10 %' => [true, [['3.99', 5.5, 7, 10]], [['23.83', '1.31', '25.14']], ['23.83', '1.31', '25.14']],
+            'particulier, 7 x 3,99 € à 5,5 % remisés de 10 %' => [false, [['3.99', 5.5, 7, 10]], [['23.81', '1.33', '25.14']], ['23.81', '1.33', '25.14']],
+        ];
+    }
+
+    /**
+     * @param  list<array{string, int|float, int, int}>  $articles
+     * @param  list<list<string>>  $lignesAttendues
+     * @param  list<string>  $totauxAttendus
+     */
+    #[DataProvider('paniersVendusAUnProfessionnelOuAUnParticulier')]
+    public function test_une_vente_a_un_professionnel_se_calcule_depuis_le_ht_de_chaque_ligne(bool $professionnel, array $articles, array $lignesAttendues, array $totauxAttendus): void
+    {
+        $client = $professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create();
+
+        $facture = app(CreerFactureAction::class)->handle($client, $this->lignesDesArticles($articles));
+
+        $this->assertSame($lignesAttendues, $facture->lignes->map(fn (LigneFacture $ligne): array => [$ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc])->all());
+        $this->assertSame($totauxAttendus, [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+    }
+
+    /**
+     * Le récapitulatif par taux d'une facture à un professionnel donne,
+     * pour chaque taux, la TVA de son total HT : 20 % de 0,24 € = 0,05 €,
+     * 5,5 % de 11,94 € = 0,66 €.
+     */
+    public function test_la_tva_de_chaque_taux_d_une_facture_professionnelle_est_celle_de_son_total_ht(): void
+    {
+        $facture = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->lignesDesArticles([
+            ['0.10', 20, 1, 0], ['4.20', 5.5, 3, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0],
+        ]));
+
+        $this->assertSame([
+            ['taux_tva' => '20.00', 'montant_ht' => 0.24, 'montant_tva' => 0.05, 'montant_ttc' => 0.29],
+            ['taux_tva' => '5.50', 'montant_ht' => 11.94, 'montant_tva' => 0.66, 'montant_ttc' => 12.6],
+        ], $facture->ventilation_tva);
+        $this->assertSame(['12.18', '0.71', '12.89'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+    }
+
+    /**
+     * En franchise en base, un professionnel paie le même prix TTC, sans
+     * TVA : 1 000 x 1,00 € font 1 000,00 € HT (B10).
+     */
+    public function test_une_vente_a_un_professionnel_en_franchise_est_sans_tva_au_meme_prix(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['regime_tva' => RegimeTva::FranchiseEnBase]));
+
+        $facture = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->lignesDesArticles([['1.00', 20, 1000, 0]]));
+
+        $this->assertSame(['1000.00', '0.00', '1000.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+    }
+
     public function test_une_ligne_de_service_reprend_le_nom_du_service_et_se_calcule_depuis_le_ttc_saisi(): void
     {
         $client = Client::factory()->create();
@@ -312,5 +398,21 @@ class CreerFactureActionTest extends TestCase
         app(CreerFactureAction::class)->handle($client, [
             ['service_id' => $serviceAutreMagasin->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
         ]);
+    }
+
+    /**
+     * Une ligne par article, chacun un produit du magasin à ce prix et à ce
+     * taux, sans suivi du stock.
+     *
+     * @param  list<array{string, int|float, int, int}>  $articles  [PU TTC, taux, quantité, remise]
+     * @return list<array{produit_id: int, quantite: int, remise_pourcentage: int}>
+     */
+    private function lignesDesArticles(array $articles): array
+    {
+        return array_map(fn (array $article): array => [
+            'produit_id' => Produit::factory()->create(['prix_vente_ttc' => $article[0], 'taux_tva' => $article[1], 'suivi_stock' => false])->id,
+            'quantite' => $article[2],
+            'remise_pourcentage' => $article[3],
+        ], $articles);
     }
 }

@@ -21,6 +21,12 @@ use LogicException;
  * les écrans qui en montrent les montants pendant la saisie (voir
  * apercu()) : l'écran ne peut jamais afficher un centime différent de ce
  * qui sera enregistré.
+ *
+ * Une vente à un particulier se calcule ligne par ligne, article par
+ * article ; une vente à un professionnel, depuis le HT de chaque ligne,
+ * puis la TVA de chaque taux sur le total HT de ses lignes, répartie entre
+ * elles (E1, voir repartirLaTvaParTaux()) : ses lignes ne se calculent
+ * qu'ensemble.
  */
 class ConstructeurLigneDocument
 {
@@ -60,7 +66,7 @@ class ConstructeurLigneDocument
             $lignes[] = $this->construire($donnees, $index, $contexte, $produits, $services);
         }
 
-        return $lignes;
+        return $contexte->calculeDepuisLeHtDeLigne() ? $this->repartirLaTvaParTaux($lignes) : $lignes;
     }
 
     /**
@@ -71,7 +77,10 @@ class ConstructeurLigneDocument
      * plutôt que comptée pour un montant faux. Une ligne dont le produit a
      * été archivé depuis compte pour son montant : seul son enregistrement
      * la refuse (voir construireToutes()), et le total d'une vente
-     * abandonnée la compte (voir PanierDeCaisse).
+     * abandonnée la compte (voir PanierDeCaisse). La TVA d'une vente à un
+     * professionnel se répartit entre les seules lignes complètes ; des
+     * montants si absurdes que la TVA de leur total ne se calcule plus ne
+     * donnent aucun aperçu.
      *
      * @param  array<array-key, mixed>  $lignesSaisies
      * @return array<array-key, array<string, mixed>>
@@ -91,7 +100,15 @@ class ConstructeurLigneDocument
             }
         }
 
-        return $lignes;
+        if (! $contexte->calculeDepuisLeHtDeLigne()) {
+            return $lignes;
+        }
+
+        try {
+            return $this->repartirLaTvaParTaux($lignes);
+        } catch (InvalidArgumentException) {
+            return [];
+        }
     }
 
     /**
@@ -106,6 +123,13 @@ class ConstructeurLigneDocument
      * la fiche. Une ligne de service (voir Service) n'a pas de prix
      * catalogue : son PU TTC est toujours saisi. Un PU TTC n'est jamais
      * négatif : une vente ne rembourse rien, c'est le rôle d'un avoir.
+     *
+     * Vendue à un particulier, la ligne a ici tous ses montants, article
+     * par article ; vendue à un professionnel, seulement son HT, quantité x
+     * PU TTC ÷ (1 + taux) arrondi une fois -- sa TVA et son TTC attendent
+     * les autres lignes de son taux (voir repartirLaTvaParTaux()). Son PU
+     * HT n'est alors qu'un affichage : 1 000 x 0,83 € ne font pas les
+     * 833,33 € HT de la ligne.
      *
      * Le taux d'une ligne de produit est celui de sa fiche, quel que soit
      * celui envoyé (C15, C40) ; celui d'une ligne de service se saisit
@@ -170,8 +194,42 @@ class ConstructeurLigneDocument
             'taux_tva' => $tauxTva,
             'remise_pourcentage' => $remise,
             'ordre' => $ordre,
-            ...$this->calculateur->montantsDeVente($prixUnitaireHt, $prixUnitaireTtc, $quantite, $remise),
+            ...($contexte->calculeDepuisLeHtDeLigne()
+                ? ['montant_ht' => $this->calculateur->montantHtDeLigneProfessionnelle($prixUnitaireTtc, $tauxTva, $quantite, $remise)]
+                : $this->calculateur->montantsDeVente($prixUnitaireHt, $prixUnitaireTtc, $quantite, $remise)),
         ];
+    }
+
+    /**
+     * Vente à un professionnel (E1) : la TVA de chaque taux se calcule une
+     * seule fois sur le total HT de ses lignes, puis se répartit entre
+     * elles, dans leur ordre (voir CalculateurLigne::repartirLaTva()) ; le
+     * TTC de chaque ligne est son HT plus sa part de TVA. Le total TVA du
+     * document est donc, taux par taux, la TVA de son total HT.
+     *
+     * @param  array<array-key, array<string, mixed>>  $lignes  les lignes construites, avec leur seul HT, dans leur ordre
+     * @return array<array-key, array<string, mixed>>
+     *
+     * @throws InvalidArgumentException
+     */
+    private function repartirLaTvaParTaux(array $lignes): array
+    {
+        $clesParTaux = [];
+
+        foreach ($lignes as $cle => $ligne) {
+            $clesParTaux[number_format($ligne['taux_tva'], 2, '.', '')][] = $cle;
+        }
+
+        foreach ($clesParTaux as $tauxTva => $cles) {
+            $parts = $this->calculateur->repartirLaTva(array_map(fn (int|string $cle): float => $lignes[$cle]['montant_ht'], $cles), (float) $tauxTva);
+
+            foreach ($cles as $index => $cle) {
+                $lignes[$cle]['montant_tva'] = $parts[$index];
+                $lignes[$cle]['montant_ttc'] = $this->calculateur->sommer([$lignes[$cle]['montant_ht'], $parts[$index]]);
+            }
+        }
+
+        return $lignes;
     }
 
     /**

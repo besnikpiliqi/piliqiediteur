@@ -85,6 +85,16 @@ class Devis extends Model implements DocumentEnvoyable
     }
 
     /**
+     * Le type du client écrit au dernier enregistrement du devis, avec
+     * lequel ses lignes ont été calculées (voir ContexteDeVente) : depuis
+     * le HT de chaque ligne pour un professionnel.
+     */
+    public function estPourUnProfessionnel(): bool
+    {
+        return $this->type_client === TypeClient::Professionnel;
+    }
+
+    /**
      * Quel que soit son statut : un brouillon reçoit son numéro au moment
      * de partir (voir EnvoyerDocumentAction), un devis déjà envoyé, accepté
      * ou refusé peut toujours être renvoyé à son client.

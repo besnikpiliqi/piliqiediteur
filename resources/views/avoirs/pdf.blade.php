@@ -27,7 +27,11 @@
         'titre' => 'Émis à',
     ])
 
-    @include('documents.pdf.lignes', ['lignes' => $avoir->lignes, 'avecFactureDOrigine' => true])
+    @include('documents.pdf.lignes', [
+        'lignes' => $avoir->lignes,
+        'avecFactureDOrigine' => true,
+        'noteDeCalcul' => app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($avoir),
+    ])
 
     @include('documents.pdf.totaux', ['document' => $avoir, 'signe' => '-'])
 

@@ -11,10 +11,12 @@ use LogicException;
 
 /**
  * Ce qui, hors des lignes elles-mêmes, décide du calcul d'une vente (voir
- * ConstructeurLigneDocument) : le type du client, le régime de TVA du
- * magasin -- en franchise en base, tout se vend à 0 % au même prix TTC
- * (B10) -- et le taux proposé pour une ligne de service sans taux saisi,
- * celui du territoire du magasin (B2).
+ * ConstructeurLigneDocument) : le type du client -- article par article
+ * pour un particulier, depuis le HT de chaque ligne pour un professionnel
+ * (E1, voir calculeDepuisLeHtDeLigne()) --, le régime de TVA du magasin --
+ * en franchise en base, tout se vend à 0 % au même prix TTC (B10) -- et le
+ * taux proposé pour une ligne de service sans taux saisi, celui du
+ * territoire du magasin (B2).
  *
  * Un brouillon de facture ou un devis note le type du client et la
  * franchise à chaque enregistrement (colonnes()) : l'émission d'une
@@ -60,6 +62,19 @@ final readonly class ContexteDeVente
         if ($document->franchise_en_base !== $document->magasin->estEnFranchiseDeTva()) {
             throw new LogicException('Le régime de TVA du magasin a changé depuis l\'enregistrement de ce brouillon : ouvrez-le et enregistrez-le de nouveau pour recalculer ses lignes.');
         }
+    }
+
+    /**
+     * Une vente à un professionnel se calcule depuis le HT de chaque ligne,
+     * quantité x PU TTC ÷ (1 + taux) arrondi une fois, et la TVA de chaque
+     * taux sur le total HT de ses lignes (voir CalculateurLigne) ; une vente
+     * à un particulier, article par article. En franchise en base, toutes
+     * les lignes sont à 0 % : le HT d'une ligne professionnelle est alors
+     * son TTC, sans TVA, comme pour un particulier.
+     */
+    public function calculeDepuisLeHtDeLigne(): bool
+    {
+        return $this->typeClient === TypeClient::Professionnel;
     }
 
     /**

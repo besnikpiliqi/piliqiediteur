@@ -72,6 +72,25 @@ class DevisPdfGeneratorTest extends TestCase
         );
     }
 
+    /**
+     * Le devis d'un professionnel se calcule comme sa facture (E1) et
+     * porte la même note sous ses lignes ; celui établi pour un
+     * particulier, article par article, n'en porte pas, même si la fiche
+     * du client est devenue professionnelle avant son envoi.
+     */
+    public function test_le_devis_d_un_professionnel_explique_le_calcul_de_ses_lignes(): void
+    {
+        $note = 'Client professionnel : HT de chaque ligne = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA calculée sur le total HT de chaque taux.';
+        $devisProfessionnel = $this->devisEnvoye();
+        $client = Client::factory()->create();
+        $devisParticulier = app(CreerDevisAction::class)->handle($client, [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
+        $client->update(['type_client' => TypeClient::Professionnel, 'siren' => '111222333']);
+        $devisParticulier = app(EmettreDevisAction::class)->handle($devisParticulier);
+
+        $this->assertStringContainsString($note, view('devis.pdf', ['devis' => $devisProfessionnel->load('client', 'lignes', 'magasin')])->render());
+        $this->assertStringNotContainsString($note, view('devis.pdf', ['devis' => $devisParticulier->load('client', 'lignes', 'magasin')])->render());
+    }
+
     private function devisEnvoye(): Devis
     {
         app(TenantContext::class)->set(Magasin::factory()->create([

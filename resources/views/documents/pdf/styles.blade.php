@@ -13,6 +13,7 @@
     table.lignes th { background: #f5f7fa; text-align: left; padding: 6px 8px; font-size: 9px; text-transform: uppercase; color: #52606d; border-bottom: 1px solid #d9e2ec; }
     table.lignes td { padding: 6px 8px; border-bottom: 1px solid #e4e7eb; }
     table.lignes .montant { text-align: right; }
+    .note-calcul { margin-top: -16px; margin-bottom: 24px; font-size: 9px; color: #52606d; }
     table.totaux { width: 260px; margin-left: auto; border-collapse: collapse; }
     table.totaux td { padding: 4px 8px; }
     table.totaux .libelle { color: #52606d; }

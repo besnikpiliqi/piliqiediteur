@@ -13,6 +13,7 @@ use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -23,6 +24,8 @@ use Tests\TestCase;
 class FacturePdfGeneratorTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const NOTE_VENTE_PROFESSIONNELLE = 'Client professionnel : HT de chaque ligne = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA calculée sur le total HT de chaque taux.';
 
     public function test_genere_un_pdf_non_vide_pour_une_facture_emise(): void
     {
@@ -353,6 +356,52 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertStringNotContainsString('Payé', $html);
         $this->assertStringNotContainsString('Crédité par avoir', $html);
         $this->assertStringNotContainsString('Restant dû', $html);
+    }
+
+    /**
+     * Sur une facture à un professionnel, PU HT x quantité diffère du HT
+     * de la ligne (1 000 x 0,83 € pour 833,33 €) : une note sous les
+     * lignes explique le calcul (E1).
+     */
+    public function test_une_facture_a_un_professionnel_explique_le_calcul_de_ses_lignes(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 1, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1000],
+        ]));
+
+        $html = $this->rendu($facture);
+
+        $this->assertStringContainsString('<td class="montant">0,83 €</td>', $html);
+        $this->assertStringContainsString('<td class="montant">833,33 €</td>', $html);
+        $this->assertStringContainsString(self::NOTE_VENTE_PROFESSIONNELLE, $html);
+    }
+
+    /**
+     * Un ticket se calcule article par article, et en franchise en base le
+     * HT est le TTC, même pour un professionnel : aucune note de calcul.
+     *
+     * @return array<string, array{RegimeTva, bool}>
+     */
+    public static function ventesSansNoteDeCalcul(): array
+    {
+        return [
+            'ticket à un particulier' => [RegimeTva::ReelNormalMensuel, false],
+            'facture à un professionnel en franchise' => [RegimeTva::FranchiseEnBase, true],
+        ];
+    }
+
+    #[DataProvider('ventesSansNoteDeCalcul')]
+    public function test_une_vente_calculee_sans_tva_sur_le_total_n_a_pas_de_note_de_calcul(RegimeTva $regime, bool $professionnel): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['regime_tva' => $regime]));
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 1, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1000],
+        ]));
+
+        $this->assertStringNotContainsString('Client professionnel :', $this->rendu($facture));
     }
 
     private function rendu(Facture $facture): string

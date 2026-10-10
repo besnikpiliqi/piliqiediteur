@@ -15,6 +15,7 @@ use App\Domain\Facturation\Actions\RefuserDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -118,6 +119,32 @@ class DevisConversionTest extends TestCase
         $this->assertSame($ligneDevis->montant_ttc, $ligneFacture->montant_ttc);
         $this->assertSame($ligneDevis->prix_unitaire_ttc, $ligneFacture->prix_unitaire_ttc);
         $this->assertSame('60.00', $ligneFacture->prix_unitaire_ttc);
+    }
+
+    /**
+     * Un devis à un professionnel se calcule comme sa facture, depuis le HT
+     * de chaque ligne (E1) : 2 x 49,90 € à 20 % font 83,17 € HT + 16,63 €,
+     * 3 x 4,20 € à 5,5 % 11,94 € + 0,66 €. La facture qui en est tirée
+     * reprend ces montants et son type de client, et s'émet telle quelle.
+     */
+    public function test_un_devis_professionnel_converti_garde_ses_montants_et_s_emet(): void
+    {
+        $client = Client::factory()->professionnel()->create();
+        $sacoche = Produit::factory()->create(['prix_vente_ttc' => '49.90', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $livre = Produit::factory()->create(['prix_vente_ttc' => '4.20', 'taux_tva' => 5.5, 'suivi_stock' => false]);
+        $devis = app(CreerDevisAction::class)->handle($client, [
+            ['produit_id' => $sacoche->id, 'quantite' => 2],
+            ['produit_id' => $livre->id, 'quantite' => 3],
+        ]);
+        $devis = app(AccepterDevisAction::class)->handle(app(EmettreDevisAction::class)->handle($devis));
+
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureDepuisDevisAction::class)->handle($devis));
+
+        $this->assertSame(['95.11', '17.29', '112.40'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
+        $this->assertSame(TypeClient::Professionnel, $facture->type_client);
+        $this->assertStringStartsWith('FAC-', $facture->numero);
+        $this->assertSame([['83.17', '16.63', '99.80'], ['11.94', '0.66', '12.60']], $facture->lignes->map(fn (LigneFacture $ligne): array => [$ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc])->all());
+        $this->assertSame(['95.11', '17.29', '112.40'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 
     public function test_convertir_un_devis_garde_le_service_de_chaque_ligne_de_service(): void

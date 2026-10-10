@@ -499,6 +499,43 @@ class CaisseTest extends TestCase
     }
 
     /**
+     * Pour un client professionnel, chaque ligne affiche son HT, quantité x
+     * PU TTC ÷ (1 + taux) arrondi une fois, et la TVA se calcule sur le
+     * total de chaque taux (E1) : 2 x 49,90 € à 20 % font 83,17 € HT, 3 x
+     * 4,20 € à 5,5 % 11,94 € HT. La caisse affiche et encaisse le total
+     * qu'enregistre la facture, 112,40 €, et rend 7,60 € sur 120,00 €.
+     */
+    public function test_une_vente_a_un_professionnel_affiche_et_encaisse_le_total_calcule_depuis_le_ht_des_lignes(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $professionnel = Client::factory()->professionnel()->create();
+        $sacoche = Produit::factory()->create(['prix_vente_ttc' => '49.90', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $livre = Produit::factory()->create(['prix_vente_ttc' => '4.20', 'taux_tva' => 5.5, 'suivi_stock' => false]);
+
+        Livewire::test(Caisse::class)
+            ->fillForm([
+                'client_id' => $professionnel->id,
+                'lignes' => [
+                    ['produit_id' => $sacoche->id, 'description' => $sacoche->nom, 'quantite' => 2, 'prix_unitaire_ttc' => '49.90', 'remise_pourcentage' => 0],
+                    ['produit_id' => $livre->id, 'description' => $livre->nom, 'quantite' => 3, 'prix_unitaire_ttc' => '4.20', 'remise_pourcentage' => 0],
+                ],
+                'mode_paiement' => 'especes',
+                'montant_recu' => 120,
+            ])
+            ->assertSee('83,17 €')
+            ->assertSee('11,94 €')
+            ->assertSee('TVA calculée sur le total')
+            ->assertSee('Total HT 95,11 € · TVA 17,29 € · Total TTC 112,40 €')
+            ->assertSee('7,60 €')
+            ->call('encaisser')
+            ->assertHasNoFormErrors();
+
+        $facture = Facture::query()->where('client_id', $professionnel->id)->sole();
+        $this->assertSame(['95.11', '17.29', '112.40'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(112.4, $facture->montantPaye());
+    }
+
+    /**
      * Un montant reçu absurde (des milliards de milliards) ne fait jamais
      * planter la caisse pendant la frappe, et il est refusé à l'encaissement.
      */

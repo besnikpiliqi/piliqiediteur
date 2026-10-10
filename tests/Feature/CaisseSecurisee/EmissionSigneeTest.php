@@ -300,6 +300,25 @@ class EmissionSigneeTest extends TestCase
     }
 
     /**
+     * Une facture à un professionnel signe les montants calculés depuis le
+     * HT de la ligne (E1) : 1 000 x 1,00 € à 20 % font 833,33 € HT et
+     * 166,67 € de TVA, sur la ligne comme dans la ventilation.
+     */
+    public function test_une_facture_professionnelle_signe_la_tva_calculee_sur_son_total_ht(): void
+    {
+        $this->magasinActif();
+        $facture = $this->emettre(Client::factory()->professionnel()->create(), [[$this->produit('VIS-001', 'Vis à bois', 1), 1000]]);
+
+        $vente = $this->enregistrementDe($facture, ChaineFiscale::Vente);
+        $document = $this->contenu($vente)['donnees']['document'];
+
+        $this->assertSignatureValide($vente);
+        $this->assertSame(['prix_unitaire_ht' => 83, 'prix_unitaire_ttc' => 100, 'ht' => 83333, 'tva' => 16667, 'ttc' => 100000], Arr::only($document['lignes'][0], ['prix_unitaire_ht', 'prix_unitaire_ttc', 'ht', 'tva', 'ttc']));
+        $this->assertSame([['taux' => 2000, 'ht' => 83333, 'tva' => 16667, 'ttc' => 100000]], $document['ventilation']);
+        $this->assertSame(['ht' => 83333, 'tva' => 16667, 'ttc' => 100000], $document['totaux']);
+    }
+
+    /**
      * La date d'émission est l'instant du verrou du registre, celui que
      * signe l'enregistrement, à la seconde ; l'année de numérotation est
      * celle de cet instant à Paris.

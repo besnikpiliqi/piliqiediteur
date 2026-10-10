@@ -12,6 +12,11 @@ use Illuminate\Support\Facades\Schema;
  * toute modification, toute suppression et tout vidage (voir
  * DeclencheursDeProtection), et les clés étrangères toute suppression
  * d'une fiche qu'il référence.
+ *
+ * Un paiement saisi par erreur se corrige par sa contre-passation (voir
+ * ContrePasserPaiementAction) : un paiement opposé, de montant négatif,
+ * qui désigne l'original par contre_passe_paiement_id. Un paiement n'a
+ * qu'une contre-passation au plus.
  */
 return new class extends Migration
 {
@@ -27,6 +32,7 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->date('recu_le');
             $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
+            $table->foreignId('contre_passe_paiement_id')->nullable()->unique()->constrained('paiements')->restrictOnDelete();
             $table->timestamps();
 
             $table->index(['magasin_id', 'client_id']);

@@ -2,18 +2,22 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use LogicException;
 use Tests\TestCase;
@@ -112,6 +116,124 @@ class EnregistrerPaiementActionTest extends TestCase
 
         $this->assertSame(StatutFacture::Payee, $factureA->fresh()->statut);
         $this->assertSame(StatutFacture::Payee, $factureB->fresh()->statut);
+    }
+
+    /**
+     * B3 : un trop-perçu ne devient jamais un crédit, le montant reçu est
+     * exactement le total imputé sur les factures.
+     */
+    public function test_un_montant_recu_superieur_au_total_impute_est_refuse(): void
+    {
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+        $registreAvant = EnregistrementFiscal::query()->count();
+
+        $this->assertThrows(
+            fn () => app(EnregistrerPaiementAction::class)->handle($client, [
+                'mode_paiement' => ModePaiement::Virement->value,
+                'montant' => '200.00',
+                'recu_le' => now()->toDateString(),
+            ], [['facture_id' => $facture->id, 'montant' => '120.00']]),
+            LogicException::class,
+            'Le montant reçu (200,00 €) doit être égal au total imputé sur les factures (120,00 €).',
+        );
+
+        $this->assertSame([0, 0, $registreAvant], [Paiement::query()->count(), PaiementAllocation::query()->count(), EnregistrementFiscal::query()->count()]);
+        $this->assertSame([StatutFacture::Emise, 120.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant()]);
+    }
+
+    public function test_un_montant_recu_egal_au_total_impute_sur_deux_factures_les_regle_toutes_les_deux(): void
+    {
+        $client = Client::factory()->create();
+        $premiere = $this->emettreFactureDe($client, 100); // total TTC 120
+        $seconde = $this->emettreFactureDe($client, 50 / 1.2); // total TTC 50
+
+        $paiement = app(EnregistrerPaiementAction::class)->handle($client, [
+            'mode_paiement' => ModePaiement::Virement->value,
+            'montant' => '170.00',
+            'recu_le' => now()->toDateString(),
+        ], [
+            ['facture_id' => $premiere->id, 'montant' => '120.00'],
+            ['facture_id' => $seconde->id, 'montant' => '50.00'],
+        ]);
+
+        $this->assertSame('170.00', $paiement->montant);
+        $this->assertSame([StatutFacture::Payee, 0.0], [$premiere->fresh()->statut, $premiere->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 0.0], [$seconde->fresh()->statut, $seconde->fresh()->montantRestant()]);
+    }
+
+    public function test_un_paiement_sans_aucune_facture_est_refuse(): void
+    {
+        $client = Client::factory()->create();
+
+        $this->assertThrows(
+            fn () => app(EnregistrerPaiementAction::class)->handle($client, [
+                'mode_paiement' => ModePaiement::Especes->value,
+                'montant' => '50.00',
+                'recu_le' => now()->toDateString(),
+            ], []),
+            LogicException::class,
+            'Un paiement règle au moins une facture.',
+        );
+
+        $this->assertSame(0, Paiement::query()->count());
+    }
+
+    public function test_un_montant_recu_negatif_est_refuse(): void
+    {
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+
+        $this->assertThrows(
+            fn () => app(EnregistrerPaiementAction::class)->handle($client, [
+                'mode_paiement' => ModePaiement::Especes->value,
+                'montant' => '-20.00',
+                'recu_le' => now()->toDateString(),
+            ], [['facture_id' => $facture->id, 'montant' => '20.00']]),
+            LogicException::class,
+            'Le montant reçu doit être strictement positif.',
+        );
+
+        $this->assertSame([0, StatutFacture::Emise], [Paiement::query()->count(), $facture->fresh()->statut]);
+    }
+
+    public function test_une_facture_imputee_deux_fois_dans_le_meme_paiement_est_refusee(): void
+    {
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+
+        $this->assertThrows(
+            fn () => app(EnregistrerPaiementAction::class)->handle($client, [
+                'mode_paiement' => ModePaiement::Especes->value,
+                'montant' => '100.00',
+                'recu_le' => now()->toDateString(),
+            ], [['facture_id' => $facture->id, 'montant' => '60.00'], ['facture_id' => $facture->id, 'montant' => '40.00']]),
+            LogicException::class,
+            'Une facture ne s\'impute qu\'une fois par paiement.',
+        );
+
+        $this->assertSame([0, StatutFacture::Emise], [Paiement::query()->count(), $facture->fresh()->statut]);
+    }
+
+    /**
+     * Le client comptoir n'a jamais de crédit (voir Client::soldeCrediteur()) :
+     * l'avoir d'un ticket anonyme ne s'impute pas sur le paiement d'un autre
+     * ticket anonyme.
+     */
+    public function test_le_paiement_d_un_ticket_du_client_comptoir_n_impute_aucun_credit(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $ticketRetourne = $this->emettreFactureDe($comptoir, 100); // total TTC 120
+        app(EnregistrerPaiementAction::class)->handle($comptoir, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '120.00', 'recu_le' => now()->toDateString()], [['facture_id' => $ticketRetourne->id, 'montant' => '120.00']]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle($comptoir, [['ligne_facture_id' => $ticketRetourne->lignes()->sole()->id, 'quantite' => 1]]);
+        $ticket = $this->emettreFactureDe($comptoir, 100); // total TTC 120
+
+        $paiement = app(EnregistrerPaiementAction::class)->handle($comptoir, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '10.00', 'recu_le' => now()->toDateString()], [['facture_id' => $ticket->id, 'montant' => '10.00']]);
+
+        $this->assertSame(0, $paiement->creditsImputes()->count());
+        $this->assertSame([StatutFacture::PartiellementPayee, 110.0], [$ticket->fresh()->statut, $ticket->fresh()->montantRestant()]);
+        $this->assertSame(120.0, $avoir->fresh()->montantNonAlloue());
     }
 
     public function test_impossible_dallouer_plus_que_le_solde_restant_dune_facture(): void

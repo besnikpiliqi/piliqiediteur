@@ -29,6 +29,7 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
@@ -160,20 +161,32 @@ class Caisse extends Page implements HasForms
 
     /**
      * Le formulaire avec le client et les lignes du panier, ou vide (le
-     * client comptoir, aucune ligne) sans panier.
+     * client comptoir, aucune ligne) sans panier, et le mode de paiement
+     * préféré de ce client (B8).
      *
      * @param  array<string, mixed>  $paiement
      */
     private function remplirFormulaire(?PanierCaisse $panier, array $paiement = []): void
     {
+        $clientId = $panier?->client_id ?? Client::query()->where('est_comptoir', true)->value('id');
+
         $this->form->fill([
-            'client_id' => $panier?->client_id ?? Client::query()->where('est_comptoir', true)->value('id'),
+            'client_id' => $clientId,
             'lignes' => array_values($panier->lignes ?? []),
-            'mode_paiement' => ModePaiement::Especes->value,
+            'mode_paiement' => self::modePrefere($clientId)->value,
             'montant_recu' => null,
             'reference' => null,
             ...$paiement,
         ]);
+    }
+
+    /**
+     * Le mode de paiement préféré du client, présélectionné à
+     * l'encaissement (B8), sinon les espèces.
+     */
+    private static function modePrefere(mixed $clientId): ModePaiement
+    {
+        return (blank($clientId) ? null : Client::withTrashed()->find($clientId)?->mode_paiement_prefere) ?? ModePaiement::Especes;
     }
 
     public function form(Form $form): Form
@@ -206,6 +219,7 @@ class Caisse extends Page implements HasForms
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE)))
                     ->createOptionUsing(fn (array $data) => Client::create($data)->getKey())
+                    ->afterStateUpdated(fn (mixed $state, Set $set) => $set('mode_paiement', self::modePrefere($state)->value))
                     ->required(),
             ]),
 

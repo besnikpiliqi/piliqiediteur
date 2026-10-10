@@ -152,7 +152,7 @@ class MembreEquipeResourceTest extends TestCase
             'devis.view',
             'facture.envoyer', 'facture.view', 'facture.view_toutes', 'facture_achat.view',
             'fournisseur.view',
-            'paiement.creer', 'paiement.view',
+            'paiement.contre_passer', 'paiement.creer', 'paiement.view',
             'produit.view', 'produit.voir_valeur_stock',
         ], $autorisations);
     }

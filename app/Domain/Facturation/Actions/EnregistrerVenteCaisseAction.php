@@ -10,6 +10,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -23,9 +24,10 @@ use LogicException;
  * EmettreFactureAction) : le ticket signé au registre fiscal porte ce
  * règlement, ou le crédit d'avoir qui l'a couvert.
  *
- * Le registre fiscal du magasin se verrouille avant la création du
- * brouillon (voir RegistreFiscal) : sans clé de signature, rien n'est
- * créé. Le panier de caisse du vendeur, sa vente étant encaissée, se vide
+ * Le registre fiscal du magasin actif se verrouille avant toute lecture
+ * de la transaction et la création du brouillon (voir RegistreFiscal) :
+ * sans clé de signature, rien n'est créé, et le règlement relit sous ce
+ * verrou ce qui reste dû (voir EnregistrerPaiementAction). Le panier de caisse du vendeur, sa vente étant encaissée, se vide
  * dans la même transaction (voir PanierDeCaisse).
  */
 class EnregistrerVenteCaisseAction
@@ -47,7 +49,12 @@ class EnregistrerVenteCaisseAction
     public function handle(Client $client, array $lignes, ModePaiement $modePaiement, ?string $reference = null): Facture
     {
         return DB::transaction(function () use ($client, $lignes, $modePaiement, $reference) {
-            $this->registre->verrouiller($client->magasin);
+            $magasin = app(TenantContext::class)->magasin();
+            $this->registre->verrouiller($magasin);
+
+            if ((int) $client->magasin_id !== $magasin->getKey()) {
+                throw new LogicException('Ce client n\'est pas un client du magasin.');
+            }
 
             $facture = $this->emettreFacture->handle(
                 $this->creerFacture->handle($client, $lignes),

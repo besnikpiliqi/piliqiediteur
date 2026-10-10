@@ -79,6 +79,7 @@ class ControleDesDroitsTest extends TestCase
             PermissionRegistry::RELANCES_REGLER,
             PermissionRegistry::PARAMETRES_GERER,
             PermissionRegistry::PAIEMENT_CREER,
+            PermissionRegistry::PAIEMENT_CONTRE_PASSER,
             PermissionRegistry::AVOIR_CREER,
             PermissionRegistry::AVOIR_ENVOYER,
             PermissionRegistry::FACTURE_ACHAT_CREER,

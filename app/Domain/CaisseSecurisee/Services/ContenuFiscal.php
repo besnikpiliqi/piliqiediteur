@@ -2,6 +2,8 @@
 
 namespace App\Domain\CaisseSecurisee\Services;
 
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\CategorieOperation;
 use App\Domain\Facturation\Models\Avoir;
@@ -42,12 +44,17 @@ use Illuminate\Support\Collection;
  *   catégorie de l'opération, les mentions fiscales imprimées (voir
  *   MentionsFiscales), et ce qui a réglé le document dans la même
  *   transaction (paiements et crédits d'avoir d'une facture, imputations
- *   d'un avoir sur ses factures). Un document qui vient d'être émis n'a
- *   pas pu en recevoir avant : un brouillon n'attend aucun règlement.
+ *   d'un avoir sur ses factures) ; le crédit qu'impute un paiement est
+ *   signé par ce paiement. Un document qui vient d'être émis n'a pas pu en
+ *   recevoir avant : un brouillon n'attend aucun règlement.
  *
  * Un paiement (encaissement()) signe son mode, son montant, sa référence,
- * sa date de réception, la fiche de son client ce jour-là et ce qu'il
- * règle de chaque facture.
+ * sa date de réception, la fiche de son client ce jour-là, ce qu'il règle
+ * de chaque facture et le crédit d'avoir qu'il y impute (voir
+ * EnregistrerPaiementAction). Une contre-passation (voir
+ * ContrePasserPaiementAction) signe en plus le paiement qu'elle annule et
+ * la séquence de son enregistrement ; son montant et ses imputations sont
+ * négatifs.
  */
 class ContenuFiscal
 {
@@ -80,11 +87,11 @@ class ContenuFiscal
     }
 
     /**
-     * @return array{paiement: array<string, mixed>, client: array<string, mixed>, allocations: list<array{facture_id: int, numero: string|null, montant: int}>}
+     * @return array{paiement: array<string, mixed>, contre_passe: array{paiement_id: int, sequence: int|null}|null, client: array<string, mixed>, allocations: list<array{facture_id: int, numero: string|null, montant: int}>, credits_imputes: list<array{avoir_id: int, avoir_numero: string|null, facture_id: int, facture_numero: string|null, montant: int}>}
      */
     public function encaissement(Paiement $paiement): array
     {
-        $paiement->load(['client', 'allocations.facture']);
+        $paiement->load(['client', 'allocations.facture', 'creditsImputes.avoir', 'creditsImputes.facture']);
 
         return [
             'paiement' => [
@@ -96,6 +103,10 @@ class ContenuFiscal
                 'recu_le' => $paiement->recu_le->toDateString(),
                 'cree_par' => $this->identifiant($paiement->cree_par),
             ],
+            'contre_passe' => $paiement->estUneContrePassation() ? [
+                'paiement_id' => (int) $paiement->contre_passe_paiement_id,
+                'sequence' => $this->sequenceDeLEncaissement((int) $paiement->contre_passe_paiement_id),
+            ] : null,
             'client' => $this->client($paiement->client),
             'allocations' => $paiement->allocations->sortBy('id')
                 ->map(fn (PaiementAllocation $allocation): array => [
@@ -105,7 +116,33 @@ class ContenuFiscal
                 ])
                 ->values()
                 ->all(),
+            'credits_imputes' => $paiement->creditsImputes->sortBy('id')
+                ->map(fn (AvoirAllocation $allocation): array => [
+                    'avoir_id' => (int) $allocation->avoir_id,
+                    'avoir_numero' => $allocation->avoir->numero,
+                    'facture_id' => (int) $allocation->facture_id,
+                    'facture_numero' => $allocation->facture->numero,
+                    'montant' => $this->calculateur->enCentiemes($allocation->montant_alloue),
+                ])
+                ->values()
+                ->all(),
         ];
+    }
+
+    /**
+     * La séquence, dans la chaîne des encaissements, de l'enregistrement
+     * d'un paiement du magasin actif ; null s'il n'en a pas, ce que
+     * signale la vérification de l'intégrité.
+     */
+    private function sequenceDeLEncaissement(int $paiementId): ?int
+    {
+        $sequence = EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Encaissement->value)
+            ->where('document_type', (new Paiement)->getMorphClass())
+            ->where('document_id', $paiementId)
+            ->min('sequence');
+
+        return $sequence === null ? null : (int) $sequence;
     }
 
     /**
@@ -151,7 +188,7 @@ class ContenuFiscal
                 ])
                 ->values()
                 ->all(),
-            'credits_avoir' => $facture->allocationsAvoir->sortBy('id')
+            'credits_avoir' => $facture->allocationsAvoir->whereNull('paiement_id')->sortBy('id')
                 ->map(fn (AvoirAllocation $allocation): array => [
                     'avoir_id' => (int) $allocation->avoir_id,
                     'numero' => $allocation->avoir->numero,

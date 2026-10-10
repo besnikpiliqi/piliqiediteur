@@ -120,11 +120,11 @@ class EnregistrementFiscal extends Model
     /**
      * Ce qu'enregistre la ligne : le code et le libellé d'un événement
      * technique, sinon la nature du document (Ticket, Facture, Avoir,
-     * Paiement).
+     * Paiement, Contre-passation).
      */
     public function libelleDuType(): string
     {
-        return $this->codeEvenement()?->libelleAvecCode() ?? Str::ucfirst($this->type);
+        return $this->codeEvenement()?->libelleAvecCode() ?? Str::ucfirst(str_replace('_', '-', $this->type));
     }
 
     /**

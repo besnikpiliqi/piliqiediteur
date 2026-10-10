@@ -81,13 +81,15 @@ enum RoleMagasin: string implements HasLabel
             // (indispensable pour son travail), pas seulement les siennes.
             // Il suit aussi les impayés : il envoie et relance factures et
             // avoirs, sans régler les relances automatiques, qui écrivent
-            // aux clients au nom du magasin.
+            // aux clients au nom du magasin, et contre-passe un paiement
+            // saisi par erreur.
             self::Comptable => [
                 ...$lecture,
                 PermissionRegistry::FACTURE_VIEW_TOUTES,
                 PermissionRegistry::FACTURE_ENVOYER,
                 PermissionRegistry::PAIEMENT_VIEW,
                 PermissionRegistry::PAIEMENT_CREER,
+                PermissionRegistry::PAIEMENT_CONTRE_PASSER,
                 PermissionRegistry::AVOIR_VIEW,
                 PermissionRegistry::AVOIR_ENVOYER,
                 PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK,

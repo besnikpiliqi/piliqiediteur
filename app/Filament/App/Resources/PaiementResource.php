@@ -4,13 +4,18 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\PaiementResource\Pages;
+use App\Filament\Concerns\GereLesExceptionsMetier;
+use Closure;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
@@ -28,11 +33,14 @@ use Illuminate\Validation\Rules\Exists;
 /**
  * Pas de page "edit" ni d'action de suppression : un paiement enregistré
  * ne se modifie ni ne se supprime jamais (voir PaiementPolicy et
- * ProtegeLesDonneesValidees). Une erreur se corrige en enregistrant un
- * nouveau paiement.
+ * ProtegeLesDonneesValidees). Un paiement saisi par erreur se contre-passe
+ * (action « Contre-passer », voir ContrePasserPaiementAction), puis on
+ * saisit le bon paiement.
  */
 class PaiementResource extends Resource
 {
+    use GereLesExceptionsMetier;
+
     protected static ?string $model = Paiement::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
@@ -52,7 +60,7 @@ class PaiementResource extends Resource
      */
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->with('allocations.facture');
+        $query = parent::getEloquentQuery()->with(['allocations.facture', 'contrePassation']);
 
         if (! auth()->user()->can(PermissionRegistry::FACTURE_VIEW_TOUTES)) {
             $query->where('cree_par', auth()->id());
@@ -74,14 +82,32 @@ class PaiementResource extends Resource
                     ->rule(fn (): Exists => Client::regleExisteDansLeMagasin(Client::query()->quiPeuventRegler()))
                     ->searchable()
                     ->live()
+                    // Son crédit d'avoir solde ce qui reste dû des factures
+                    // que le paiement règle (voir EnregistrerPaiementAction).
+                    ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id')))
+                    // Son mode de paiement préféré est présélectionné (B8).
+                    ->afterStateUpdated(fn (mixed $state, Set $set) => $set('mode_paiement', Client::withTrashed()->find($state)?->mode_paiement_prefere?->value))
                     ->required(),
                 Select::make('mode_paiement')
                     ->label('Mode de paiement')
                     ->options(ModePaiement::class)
                     ->required(),
-                // live() et non live(onBlur: true) : le reste à allouer se
-                // met à jour pendant la saisie.
-                TextInput::make('montant')->label('Montant reçu')->numeric()->required()->maxValue(Caisse::MONTANT_MAXIMUM)->saisieEnDirect(),
+                // Le montant reçu est exactement le total imputé sur les
+                // factures (B3, voir EnregistrerPaiementAction) ; le reste à
+                // imputer se met à jour pendant la saisie.
+                TextInput::make('montant')
+                    ->label('Montant reçu')
+                    ->numeric()
+                    ->required()
+                    ->maxValue(Caisse::MONTANT_MAXIMUM)
+                    ->saisieEnDirect()
+                    ->rule(fn (Get $get): Closure => function (string $attribute, mixed $valeur, Closure $echec) use ($get): void {
+                        $totalImpute = self::totalImpute($get('allocations'));
+
+                        if (is_numeric($valeur) && app(CalculateurLigne::class)->arrondirAuCentime((float) $valeur) !== $totalImpute) {
+                            $echec(sprintf('Le montant reçu (%s) doit être égal au total imputé sur les factures (%s).', self::enEuros((float) $valeur), self::enEuros($totalImpute)));
+                        }
+                    }),
                 TextInput::make('reference')->label('Référence')->maxLength(100),
                 // Un paiement vu hier sur le relevé s'enregistre aujourd'hui ;
                 // aucun ne se reçoit dans le futur (voir
@@ -95,8 +121,8 @@ class PaiementResource extends Resource
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
 
-            Section::make('Allocation aux factures')
-                ->description('Répartissez ce paiement sur une ou plusieurs factures du client.')
+            Section::make('Imputation sur les factures')
+                ->description('Répartissez ce paiement sur une ou plusieurs factures du client : le montant reçu est égal au total imputé.')
                 ->schema([
                     Repeater::make('allocations')
                         ->label('')
@@ -116,7 +142,7 @@ class PaiementResource extends Resource
                                         ->get()
                                         ->filter(fn (Facture $facture) => $facture->montantRestant() > 0)
                                         ->mapWithKeys(fn (Facture $facture) => [
-                                            $facture->id => "{$facture->numero} — restant : ".number_format($facture->montantRestant(), 2, ',', ' ').' €',
+                                            $facture->id => "{$facture->numero} — restant : ".self::enEuros($facture->montantRestant()),
                                         ]);
                                 })
                                 ->searchable()
@@ -127,23 +153,48 @@ class PaiementResource extends Resource
                                     $set('montant', $facture?->montantRestant());
                                 }),
                             TextInput::make('montant')
-                                ->label('Montant alloué')
+                                ->label('Montant imputé')
                                 ->numeric()
                                 ->required()
-                                // Une allocation ne doit jamais dépasser le
-                                // restant dû de la facture choisie : un
-                                // trop-perçu ne devient pas un crédit
-                                // (contrairement à un avoir), seule une
-                                // allocation partielle (acompte) reste
-                                // permise.
+                                ->saisieEnDirect()
+                                // Une imputation ne dépasse jamais le reste
+                                // dû de la facture choisie : un trop-perçu
+                                // ne devient pas un crédit (contrairement à
+                                // un avoir), seule une imputation partielle
+                                // (acompte) reste permise.
                                 ->maxValue(fn (Get $get) => Facture::find($get('facture_id'))?->montantRestant()),
                         ])
                         ->columns(2)
                         ->defaultItems(1)
                         ->addActionLabel('Ajouter une facture')
+                        ->live()
                         ->required(),
+                    Placeholder::make('reste_a_imputer')
+                        ->label('Reste à imputer')
+                        ->content(fn (Get $get): string => is_numeric($get('montant'))
+                            ? self::enEuros(app(CalculateurLigne::class)->soustraire((float) $get('montant'), self::totalImpute($get('allocations'))))
+                            : '—'),
                 ]),
         ]);
+    }
+
+    /**
+     * Le total des montants imputés saisis, au centime ; une saisie qui
+     * n'est pas un nombre n'y compte pas (sa propre règle la refuse).
+     *
+     * @param  mixed  $allocations  les lignes du répétiteur
+     */
+    private static function totalImpute(mixed $allocations): float
+    {
+        return app(CalculateurLigne::class)->sommer(collect(is_array($allocations) ? $allocations : [])
+            ->pluck('montant')
+            ->filter(fn (mixed $montant): bool => is_numeric($montant))
+            ->map(fn (mixed $montant): float => (float) $montant));
+    }
+
+    private static function enEuros(float $montant): string
+    {
+        return number_format($montant, 2, ',', ' ').' €';
     }
 
     public static function table(Table $table): Table
@@ -153,7 +204,20 @@ class PaiementResource extends Resource
                 Tables\Columns\TextColumn::make('recu_le')->label('Reçu le')->date('d/m/Y')->sortable(),
                 Tables\Columns\TextColumn::make('client.nom')->label('Client')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('mode_paiement')->label('Mode')->badge(),
-                Tables\Columns\TextColumn::make('montant')->money('EUR')->sortable(),
+                Tables\Columns\TextColumn::make('montant')
+                    ->money('EUR')
+                    ->color(fn (Paiement $record): ?string => (float) $record->montant < 0 ? 'danger' : null)
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('correction')
+                    ->label('Correction')
+                    ->state(fn (Paiement $record): ?string => match (true) {
+                        $record->estUneContrePassation() => 'Contre-passation',
+                        $record->contrePassation !== null => 'Contre-passé',
+                        default => null,
+                    })
+                    ->badge()
+                    ->color(fn (?string $state): string => $state === 'Contre-passation' ? 'danger' : 'gray')
+                    ->placeholder('—'),
                 Tables\Columns\TextColumn::make('allocations')
                     ->label('Factures réglées')
                     ->state(fn (Paiement $record) => $record->allocations
@@ -166,9 +230,26 @@ class PaiementResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('mode_paiement')->options(ModePaiement::class),
             ])
-            // Aucune action d'édition ni de suppression : voir le
-            // commentaire de classe.
-            ->actions([])
+            // Ni modification ni suppression (voir le commentaire de
+            // classe) : un paiement saisi par erreur se contre-passe.
+            ->actions([
+                Tables\Actions\Action::make('contre_passer')
+                    ->label('Contre-passer')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('danger')
+                    ->form([
+                        Textarea::make('motif')->label('Motif')->required()->maxLength(1000),
+                    ])
+                    ->requiresConfirmation()
+                    ->modalDescription(fn (Paiement $record): string => sprintf(
+                        'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui, et les factures qu\'il réglait redeviendront dues. Saisissez ensuite le bon paiement.',
+                        self::enEuros((float) $record->montant),
+                        $record->mode_paiement->getLabel(),
+                        $record->recu_le->format('d/m/Y'),
+                    ))
+                    ->visible(fn (Paiement $record): bool => auth()->user()->can('contrePasser', $record))
+                    ->action(fn (Paiement $record, array $data) => static::executerSansCasser(fn () => app(ContrePasserPaiementAction::class)->handle($record, $data['motif']))),
+            ])
             ->bulkActions([]);
     }
 

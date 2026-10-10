@@ -45,18 +45,22 @@ use ValueError;
  *    montant de chaque vente. Puis la ligne de tête du registre, qui doit
  *    noter le dernier enregistrement de chaque chaîne.
  * 2. Les documents : le bloc « document » d'un ticket, d'une facture ou
- *    d'un avoir, client figé compris, et le paiement et les imputations
- *    d'un encaissement, recalculés depuis la base (voir ContenuFiscal),
- *    doivent être ceux qui ont été signés, et la date d'émission l'instant de la signature :
- *    une modification directe en base se voit ici. Chaque document
- *    numéroté, et chaque paiement, a exactement un enregistrement, et
- *    chaque enregistrement désigne un document numéroté du bon type.
- *    Chaque imputation d'un paiement ou d'un avoir figure dans exactement
- *    un contenu signé : celui de son paiement, de la facture qu'un crédit
- *    d'avoir a réglée à son émission, ou de l'avoir qui l'a imputée sur
- *    ses factures. Le règlement que reprend aussi le contexte d'un ticket
- *    au comptoir n'en est qu'une copie : seul le paiement, dans la chaîne
- *    des encaissements, la signe pour son compte.
+ *    d'un avoir, client figé compris, et pour un encaissement le paiement,
+ *    celui qu'il contre-passe, ses imputations et le crédit d'avoir qu'il
+ *    impute, recalculés depuis la base (voir ContenuFiscal), doivent être
+ *    ceux qui ont été signés, et la date d'émission l'instant de la
+ *    signature : une modification directe en base se voit ici. Chaque
+ *    document numéroté, et chaque paiement, a exactement un
+ *    enregistrement, et chaque enregistrement désigne un document numéroté
+ *    du bon type (une contre-passation sous le type « contre_passation »,
+ *    tout autre paiement sous le type « paiement »). Chaque imputation
+ *    d'un paiement ou d'un avoir figure dans exactement un contenu signé :
+ *    celui de son paiement, du paiement qui a imputé ce crédit d'avoir, de
+ *    la facture qu'un crédit d'avoir a réglée à son émission, ou de
+ *    l'avoir qui l'a imputée sur ses factures. Le règlement que reprend
+ *    aussi le contexte d'un ticket au comptoir n'en est qu'une copie : seul
+ *    le paiement, dans la chaîne des encaissements, la signe pour son
+ *    compte.
  * 3. La numérotation des tickets, des factures et des avoirs : continue
  *    dans chaque série et chaque année, de 1 au dernier numéro que la
  *    série a attribué, chaque numéro dans l'année de l'émission de son
@@ -105,7 +109,7 @@ class VerificateurIntegrite
      */
     private const DOCUMENTS_PAR_TYPE = [
         'vente' => ['ticket' => 'facture', 'facture' => 'facture', 'avoir' => 'avoir'],
-        'encaissement' => ['paiement' => 'paiement'],
+        'encaissement' => ['paiement' => 'paiement', 'contre_passation' => 'paiement'],
     ];
 
     /**
@@ -140,7 +144,7 @@ class VerificateurIntegrite
      * Les imputations signées par un enregistrement vérifié et introuvables
      * en base, par clé (voir cleDImputation()).
      *
-     * @var array<string, array{origine: string, origine_id: int|null, facture_id: int|null, montant: int|null}>
+     * @var array<string, array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null, montant: int|null}>
      */
     private array $imputationsIntrouvables = [];
 
@@ -149,7 +153,7 @@ class VerificateurIntegrite
      * alias : les imputations d'un même paiement, d'une même facture ou
      * d'un même avoir se suivent en base.
      *
-     * @var array<string, array{document_id: int, imputations: list<array{origine: string, origine_id: int|null, facture_id: int|null, montant: int|null}>}>
+     * @var array<string, array{document_id: int, imputations: list<array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null, montant: int|null}>}>
      */
     private array $dernieresImputationsLues = [];
 
@@ -705,7 +709,7 @@ class VerificateurIntegrite
 
         $ecarts = [];
 
-        foreach ($document instanceof Paiement ? ['paiement', 'allocations'] : ['document'] as $bloc) {
+        foreach ($document instanceof Paiement ? ['paiement', 'contre_passe', 'allocations', 'credits_imputes'] : ['document'] as $bloc) {
             $ecarts = [...$ecarts, ...self::ecarts($bloc, $recalcule[$bloc], $donnees[$bloc] ?? null)];
         }
 
@@ -735,14 +739,16 @@ class VerificateurIntegrite
      * Note les imputations signées qui n'existent pas en base, signalées
      * par verifierLesImputations().
      *
-     * @param  list<array{origine: string, origine_id: int|null, facture_id: int|null, montant: int|null}>  $imputations
+     * @param  list<array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null, montant: int|null}>  $imputations
      */
     private function noterLesImputationsIntrouvables(array $imputations): void
     {
         foreach ($imputations as $imputation) {
             $cle = self::cleDImputation($imputation);
 
-            if (isset($this->imputationsIntrouvables[$cle]) || ($imputation['origine_id'] !== null && $imputation['facture_id'] !== null && self::allocationsDeLImputation($imputation)->exists())) {
+            $lisible = $imputation['origine_id'] !== null && $imputation['facture_id'] !== null && ($imputation['origine'] !== 'credit' || $imputation['avoir_id'] !== null);
+
+            if (isset($this->imputationsIntrouvables[$cle]) || ($lisible && self::allocationsDeLImputation($imputation)->exists())) {
                 continue;
             }
 
@@ -825,17 +831,19 @@ class VerificateurIntegrite
 
     /**
      * Chaque document numéroté (chaque paiement) a exactement un
-     * enregistrement, et un ticket ou une facture est enregistré sous le
-     * type de sa série : la base compte les enregistrements de chaque
+     * enregistrement, un ticket ou une facture sous le type de sa série, un
+     * paiement sous « contre_passation » s'il en contre-passe un autre,
+     * « paiement » sinon : la base compte les enregistrements de chaque
      * document et ne rend que ceux qui sont en défaut. Un document rendu
-     * avec un seul enregistrement est donc un ticket ou une facture
-     * enregistré sous le type de l'autre série.
+     * avec un seul enregistrement est donc enregistré sous un autre type
+     * que le sien.
      */
     private function verifierLEnregistrementUniqueDesDocuments(string $alias): void
     {
         [$chaine, $types] = self::enregistrementsDuDocument($alias);
         $table = (new (self::MODELES[$alias]))->getTable();
         $numero = $alias === 'paiement' ? 'null' : "{$table}.numero";
+        $contrePasse = $alias === 'paiement' ? "{$table}.contre_passe_paiement_id" : 'null';
 
         self::MODELES[$alias]::query()
             ->when($alias !== 'paiement', static fn (Builder $documents): Builder => $documents->whereNotNull("{$table}.numero"))
@@ -845,18 +853,21 @@ class VerificateurIntegrite
                 ->where('enregistrements_fiscaux.chaine', $chaine)
                 ->whereIn('enregistrements_fiscaux.type', $types)
                 ->where('enregistrements_fiscaux.document_type', $alias))
-            ->groupBy("{$table}.id", ...($alias === 'paiement' ? [] : ["{$table}.numero"]))
-            ->when(
-                $alias === 'facture',
-                static fn (Builder $documents): Builder => $documents->havingRaw(
+            ->groupBy("{$table}.id", ...($alias === 'paiement' ? ["{$table}.contre_passe_paiement_id"] : ["{$table}.numero"]))
+            ->havingRaw(...match ($alias) {
+                'facture' => [
                     "count(enregistrements_fiscaux.id) <> 1 or min(enregistrements_fiscaux.type) <> case when {$table}.numero like ? then ? else ? end",
                     [TypeDocument::TicketCaisse->code().'-%', 'ticket', 'facture'],
-                ),
-                static fn (Builder $documents): Builder => $documents->havingRaw('count(enregistrements_fiscaux.id) <> 1'),
-            )
+                ],
+                'paiement' => [
+                    "count(enregistrements_fiscaux.id) <> 1 or min(enregistrements_fiscaux.type) <> case when {$table}.contre_passe_paiement_id is null then ? else ? end",
+                    ['paiement', 'contre_passation'],
+                ],
+                default => ['count(enregistrements_fiscaux.id) <> 1', []],
+            })
             ->orderBy("{$table}.id")
             ->toBase()
-            ->selectRaw("{$table}.id as id, {$numero} as numero, count(enregistrements_fiscaux.id) as nombre, min(enregistrements_fiscaux.type) as type_enregistre, min(enregistrements_fiscaux.sequence) as sequence_enregistree")
+            ->selectRaw("{$table}.id as id, {$numero} as numero, {$contrePasse} as contre_passe_paiement_id, count(enregistrements_fiscaux.id) as nombre, min(enregistrements_fiscaux.type) as type_enregistre, min(enregistrements_fiscaux.sequence) as sequence_enregistree")
             ->get()
             ->each(function (stdClass $document) use ($alias, $chaine, $types): void {
                 $documentId = (int) $document->id;
@@ -883,16 +894,17 @@ class VerificateurIntegrite
                     return;
                 }
 
-                $typeAttendu = str_starts_with($document->numero, TypeDocument::TicketCaisse->code().'-') ? 'ticket' : 'facture';
-
-                if ($document->type_enregistre !== $typeAttendu) {
-                    $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', sprintf(
+                $this->rapport->signaler(AnomalieFiscale::defaut('enregistrement_du_document', match ($alias) {
+                    'paiement' => $document->contre_passe_paiement_id === null
+                        ? sprintf('%s est enregistré comme « %s » alors qu\'il ne contre-passe aucun paiement.', $libelle, $document->type_enregistre)
+                        : sprintf('%s est enregistré comme « %s » alors qu\'il contre-passe le paiement (identifiant interne %d).', $libelle, $document->type_enregistre, $document->contre_passe_paiement_id),
+                    default => sprintf(
                         '%s est enregistré comme « %s » alors que son numéro le place dans la série des %ss.',
                         $libelle,
                         $document->type_enregistre,
-                        $typeAttendu,
-                    ), [...$reference, 'chaine' => $chaine, 'sequence' => (int) $document->sequence_enregistree]));
-                }
+                        str_starts_with($document->numero, TypeDocument::TicketCaisse->code().'-') ? 'ticket' : 'facture',
+                    ),
+                }, [...$reference, 'chaine' => $chaine, 'sequence' => (int) $document->sequence_enregistree]));
             });
     }
 
@@ -960,12 +972,19 @@ class VerificateurIntegrite
         AvoirAllocation::query()
             ->when(! $complet, fn (Builder $allocations): Builder => $allocations->where(fn (Builder $documents): Builder => $documents
                 ->whereIntegerInRaw('facture_id', $this->documentsVerifies['facture'])
-                ->orWhereIntegerInRaw('avoir_id', $this->documentsVerifies['avoir'])))
-            ->select(['id', 'avoir_id', 'facture_id', 'montant_alloue'])
+                ->orWhereIntegerInRaw('avoir_id', $this->documentsVerifies['avoir'])
+                ->orWhereIntegerInRaw('paiement_id', $this->documentsVerifies['paiement'])))
+            ->select(['id', 'avoir_id', 'facture_id', 'paiement_id', 'montant_alloue'])
             ->lazyById(500)
-            ->each(fn (AvoirAllocation $allocation) => $this->verifierLImputation([
+            ->each(fn (AvoirAllocation $allocation) => $this->verifierLImputation($allocation->paiement_id === null ? [
                 'origine' => 'avoir',
                 'origine_id' => (int) $allocation->avoir_id,
+                'facture_id' => (int) $allocation->facture_id,
+                'montant' => $this->centimes($allocation),
+            ] : [
+                'origine' => 'credit',
+                'origine_id' => (int) $allocation->paiement_id,
+                'avoir_id' => (int) $allocation->avoir_id,
                 'facture_id' => (int) $allocation->facture_id,
                 'montant' => $this->centimes($allocation),
             ]));
@@ -977,18 +996,19 @@ class VerificateurIntegrite
 
     /**
      * Une imputation en base figure dans exactement un des contenus qui
-     * peuvent la signer, pour son montant : celui de son paiement, ou pour
-     * un avoir, celui de la facture qu'il a réglée à son émission ou le
-     * sien.
+     * peuvent la signer, pour son montant : celui de son paiement, celui du
+     * paiement qui a imputé ce crédit d'avoir, ou pour un avoir imputé à
+     * une émission, celui de la facture qu'il a réglée à son émission ou
+     * le sien.
      *
-     * @param  array{origine: string, origine_id: int, facture_id: int, montant: int|null}  $imputation
+     * @param  array{origine: string, origine_id: int, avoir_id?: int, facture_id: int, montant: int|null}  $imputation
      */
     private function verifierLImputation(array $imputation): void
     {
         $cle = self::cleDImputation($imputation);
-        $signataires = $imputation['origine'] === 'paiement'
-            ? [['paiement', $imputation['origine_id']]]
-            : [['facture', $imputation['facture_id']], ['avoir', $imputation['origine_id']]];
+        $signataires = $imputation['origine'] === 'avoir'
+            ? [['facture', $imputation['facture_id']], ['avoir', $imputation['origine_id']]]
+            : [['paiement', $imputation['origine_id']]];
         $signees = [];
 
         foreach ($signataires as [$alias, $documentId]) {
@@ -1018,7 +1038,7 @@ class VerificateurIntegrite
      * Les imputations que signent les enregistrements du document, relues
      * une seule fois pour les imputations du même document qui se suivent.
      *
-     * @return list<array{origine: string, origine_id: int|null, facture_id: int|null, montant: int|null}>
+     * @return list<array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null, montant: int|null}>
      */
     private function imputationsSigneesDuDocument(string $alias, int $documentId): array
     {
@@ -1048,26 +1068,32 @@ class VerificateurIntegrite
 
     /**
      * Les imputations que signent les données d'un document : celles d'un
-     * paiement sur ses factures, les crédits d'avoir qui ont réglé une
-     * facture à son émission, les imputations d'un avoir sur les factures
-     * qu'il corrige. Un identifiant ou un montant illisible vaut null.
+     * paiement sur ses factures et le crédit d'avoir qu'il y impute, les
+     * crédits d'avoir qui ont réglé une facture à son émission, les
+     * imputations d'un avoir sur les factures qu'il corrige. Un identifiant
+     * ou un montant illisible vaut null.
      *
      * @param  array<array-key, mixed>  $donnees
-     * @return list<array{origine: string, origine_id: int|null, facture_id: int|null, montant: int|null}>
+     * @return list<array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null, montant: int|null}>
      */
     private static function imputationsSignees(string $alias, int $documentId, array $donnees): array
     {
         $entier = static fn (mixed $valeur): ?int => is_int($valeur) ? $valeur : null;
-        [$imputations, $imputation] = match ($alias) {
-            'paiement' => [$donnees['allocations'] ?? [], static fn (array $signee): array => ['origine' => 'paiement', 'origine_id' => $documentId, 'facture_id' => $entier($signee['facture_id'] ?? null)]],
-            'facture' => [$donnees['contexte']['credits_avoir'] ?? [], static fn (array $signee): array => ['origine' => 'avoir', 'origine_id' => $entier($signee['avoir_id'] ?? null), 'facture_id' => $documentId]],
-            'avoir' => [$donnees['contexte']['imputations'] ?? [], static fn (array $signee): array => ['origine' => 'avoir', 'origine_id' => $documentId, 'facture_id' => $entier($signee['facture_id'] ?? null)]],
+        $listes = match ($alias) {
+            'paiement' => [
+                [$donnees['allocations'] ?? [], static fn (array $signee): array => ['origine' => 'paiement', 'origine_id' => $documentId, 'facture_id' => $entier($signee['facture_id'] ?? null)]],
+                [$donnees['credits_imputes'] ?? [], static fn (array $signee): array => ['origine' => 'credit', 'origine_id' => $documentId, 'avoir_id' => $entier($signee['avoir_id'] ?? null), 'facture_id' => $entier($signee['facture_id'] ?? null)]],
+            ],
+            'facture' => [[$donnees['contexte']['credits_avoir'] ?? [], static fn (array $signee): array => ['origine' => 'avoir', 'origine_id' => $entier($signee['avoir_id'] ?? null), 'facture_id' => $documentId]]],
+            'avoir' => [[$donnees['contexte']['imputations'] ?? [], static fn (array $signee): array => ['origine' => 'avoir', 'origine_id' => $documentId, 'facture_id' => $entier($signee['facture_id'] ?? null)]]],
         };
         $signees = [];
 
-        foreach (is_array($imputations) ? $imputations : [] as $signee) {
-            if (is_array($signee)) {
-                $signees[] = [...$imputation($signee), 'montant' => $entier($signee['montant'] ?? null)];
+        foreach ($listes as [$imputations, $imputation]) {
+            foreach (is_array($imputations) ? $imputations : [] as $signee) {
+                if (is_array($signee)) {
+                    $signees[] = [...$imputation($signee), 'montant' => $entier($signee['montant'] ?? null)];
+                }
             }
         }
 
@@ -1075,15 +1101,22 @@ class VerificateurIntegrite
     }
 
     /**
-     * @param  array{origine: string, origine_id: int, facture_id: int}  $imputation
+     * Les allocations en base d'une imputation : un crédit d'avoir imputé
+     * par un paiement désigne ce paiement, un crédit imputé à une émission
+     * n'en désigne aucun.
+     *
+     * @param  array{origine: string, origine_id: int, avoir_id?: int, facture_id: int}  $imputation
      * @return Builder<PaiementAllocation>|Builder<AvoirAllocation>
      */
     private static function allocationsDeLImputation(array $imputation): Builder
     {
-        return ($imputation['origine'] === 'paiement'
-            ? PaiementAllocation::query()->where('paiement_id', $imputation['origine_id'])
-            : AvoirAllocation::query()->where('avoir_id', $imputation['origine_id']))
-            ->where('facture_id', $imputation['facture_id']);
+        $allocations = match ($imputation['origine']) {
+            'paiement' => PaiementAllocation::query()->where('paiement_id', $imputation['origine_id']),
+            'credit' => AvoirAllocation::query()->where('paiement_id', $imputation['origine_id'])->where('avoir_id', $imputation['avoir_id']),
+            default => AvoirAllocation::query()->where('avoir_id', $imputation['origine_id'])->whereNull('paiement_id'),
+        };
+
+        return $allocations->where('facture_id', $imputation['facture_id']);
     }
 
     // ---------------------------------------------------------------
@@ -1320,23 +1353,28 @@ class VerificateurIntegrite
     }
 
     /**
-     * @param  array{origine: string, origine_id: int|null, facture_id: int|null}  $imputation
+     * @param  array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null}  $imputation
      */
     private function libelleDeLImputation(array $imputation): string
     {
         $facture = lcfirst(self::libelleDuDocument('facture', $imputation['facture_id'], self::numeroDuDocument('facture', $imputation['facture_id'])));
+        $avoir = static fn (?int $avoirId): string => lcfirst(self::libelleDuDocument('avoir', $avoirId, self::numeroDuDocument('avoir', $avoirId)));
 
-        return $imputation['origine'] === 'paiement'
-            ? "L'imputation du paiement (identifiant interne ".($imputation['origine_id'] ?? '?').") sur {$facture}"
-            : 'L\'imputation de '.lcfirst(self::libelleDuDocument('avoir', $imputation['origine_id'], self::numeroDuDocument('avoir', $imputation['origine_id'])))." sur {$facture}";
+        return match ($imputation['origine']) {
+            'paiement' => "L'imputation du paiement (identifiant interne ".($imputation['origine_id'] ?? '?').") sur {$facture}",
+            'credit' => 'Le crédit de '.$avoir($imputation['avoir_id'] ?? null).' imputé par le paiement (identifiant interne '.($imputation['origine_id'] ?? '?').") sur {$facture}",
+            default => 'L\'imputation de '.$avoir($imputation['origine_id'])." sur {$facture}",
+        };
     }
 
     /**
-     * @param  array{origine: string, origine_id: int|null, facture_id: int|null}  $imputation
+     * @param  array{origine: string, origine_id: int|null, avoir_id?: int|null, facture_id: int|null}  $imputation
      */
     private static function cleDImputation(array $imputation): string
     {
-        return sprintf('%s:%s:%s', $imputation['origine'], $imputation['origine_id'] ?? '?', $imputation['facture_id'] ?? '?');
+        $cle = sprintf('%s:%s:%s', $imputation['origine'], $imputation['origine_id'] ?? '?', $imputation['facture_id'] ?? '?');
+
+        return $imputation['origine'] === 'credit' ? $cle.':'.($imputation['avoir_id'] ?? '?') : $cle;
     }
 
     /**

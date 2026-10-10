@@ -1299,6 +1299,23 @@ class FactureResourceTest extends TestCase
         $this->assertSame('15.00', $ligne->montant_ttc);
     }
 
+    /**
+     * B8 : l'action « Encaisser » présélectionne le mode de paiement
+     * préféré du client de la facture.
+     */
+    public function test_encaisser_preselectionne_le_mode_de_paiement_prefere_du_client(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $facture = $this->emettreFactureDepuisLePanneau(Client::factory()->create(['mode_paiement_prefere' => ModePaiement::CarteBancaire]));
+
+        Livewire::test(ListFactures::class)
+            ->mountTableAction('encaisser', $facture)
+            ->assertTableActionDataSet(['mode_paiement' => ModePaiement::CarteBancaire->value, 'montant' => 60.0]);
+    }
+
     private function emettreFactureDepuisLePanneau(Client $client)
     {
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);

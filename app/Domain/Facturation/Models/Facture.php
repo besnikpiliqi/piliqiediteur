@@ -322,10 +322,11 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Crédit appliqué sur cette facture par un ou plusieurs avoirs
-     * disponibles du client (voir AppliquerAvoirsDisponiblesAction) --
-     * jamais un paiement réellement encaissé, mais vient réduire le solde
-     * dû exactement de la même façon.
+     * Crédit d'avoir imputé sur cette facture : par l'avoir qui la corrige
+     * (voir ImputerAvoirSurSesFacturesAction), à son émission (voir
+     * AppliquerAvoirsDisponiblesAction) ou par un paiement qui la règle
+     * (voir EnregistrerPaiementAction) -- jamais un paiement réellement
+     * encaissé, mais il réduit le solde dû exactement de la même façon.
      */
     public function montantCrediteParAvoir(): float
     {
@@ -338,19 +339,25 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Après un paiement ou l'imputation d'un avoir : « payée » quand plus
-     * rien n'est dû, « partiellement payée » sinon -- sauf pour une facture
-     * en retard, qui le reste tant qu'elle n'est pas soldée : son échéance
-     * est toujours dépassée (voir MarquerFacturesEnRetard).
+     * Après un paiement, sa contre-passation ou l'imputation d'un avoir, le
+     * statut suit ce qui reste dû : « payée » quand plus rien ne l'est ;
+     * sinon « en retard » une fois l'échéance dépassée, tant qu'il reste un
+     * montant dû (G1) ; sinon « partiellement payée » si elle a déjà reçu
+     * un paiement ou un crédit ; sinon, rouverte par une contre-passation,
+     * elle redevient « envoyée » si elle est partie au client, « émise »
+     * sinon.
      *
      * @throws LogicException
      */
     public function constaterUnReglement(): void
     {
+        $calculateur = app(CalculateurLigne::class);
         $nouveauStatut = match (true) {
             $this->montantRestant() <= 0.0 => StatutFacture::Payee,
-            $this->statut === StatutFacture::EnRetard => StatutFacture::EnRetard,
-            default => StatutFacture::PartiellementPayee,
+            $this->estEchue() => StatutFacture::EnRetard,
+            $calculateur->sommer([$this->montantPaye(), $this->montantCrediteParAvoir()]) > 0.0 => StatutFacture::PartiellementPayee,
+            $this->envois()->where('statut', '!=', StatutEnvoi::Echec)->exists() => StatutFacture::Envoyee,
+            default => StatutFacture::Emise,
         };
 
         if ($this->statut === $nouveauStatut) {
@@ -365,19 +372,27 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
+     * Son échéance est dépassée : elle tombait avant aujourd'hui. Une
+     * facture émise a toujours son échéance (voir EmettreFactureAction) :
+     * seul un document numéroté directement en base, que signale la
+     * vérification de l'intégrité, peut ne pas en avoir.
+     */
+    public function estEchue(): bool
+    {
+        return $this->date_echeance !== null && $this->date_echeance->lt(today());
+    }
+
+    /**
      * Une facture se relance (voir EnvoyerDocumentAction::relancer()) une
      * fois son échéance passée, tant qu'il reste quelque chose à régler --
-     * jamais une facture payée ou soldée par un avoir. Une facture émise a
-     * toujours son échéance (voir EmettreFactureAction) : seul un document
-     * numéroté directement en base, que signale la vérification de
-     * l'intégrité, peut ne pas en avoir ; il ne se relance pas, et la liste
-     * des factures comme sa fiche s'affichent quand même.
+     * jamais une facture payée ou soldée par un avoir. Une facture sans
+     * échéance (voir estEchue()) ne se relance pas, et la liste des
+     * factures comme sa fiche s'affichent quand même.
      */
     public function estEchueEtImpayee(): bool
     {
         return $this->statut->attendUnReglement()
-            && $this->date_echeance !== null
-            && $this->date_echeance->lt(today())
+            && $this->estEchue()
             && $this->montantRestant() > 0;
     }
 

@@ -280,8 +280,10 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame(['montant' => 2950, 'perpetuel_reel' => 2950, 'perpetuel_absolu' => 2950], $this->contenu($vente)['gt']);
         $this->assertSame([
             'paiement' => ['client_id' => $client->id, 'mode' => 'carte_bancaire', 'montant' => 2950, 'reference' => 'TRX-42', 'notes' => null, 'recu_le' => '2026-10-09', 'cree_par' => $vendeuse->id],
+            'contre_passe' => null,
             'client' => $ficheDuClient,
             'allocations' => [['facture_id' => $ticket->id, 'numero' => 'TK-LYON1-2026-000001', 'montant' => 2950]],
+            'credits_imputes' => [],
         ], $this->contenu($encaissement)['donnees']);
         $this->assertSignatureValide($vente);
         $this->assertSignatureValide($encaissement);
@@ -681,14 +683,19 @@ class EmissionSigneeTest extends TestCase
         $this->assertLessThan($numerotation, $facture);
     }
 
-    public function test_la_caisse_verrouille_le_registre_avant_de_creer_la_vente(): void
+    /**
+     * La caisse verrouille le registre avant toute lecture, puis crée la
+     * vente et encaisse son règlement sous ce verrou.
+     */
+    public function test_la_caisse_verrouille_le_registre_avant_toute_lecture(): void
     {
         $this->magasinActif();
         $produit = $this->produit('A-020', 'Article à 20 €', 20);
-        $client = Client::factory()->create();
+        $client = Client::query()->findOrFail(Client::factory()->create()->id);
 
         $requetes = $this->requetesDe(fn () => $this->encaisser($client, [[$produit, 1]]));
 
+        $this->assertSame(0, $this->position($requetes, 'select * from "tetes_registre_fiscal"'));
         $this->assertLessThan($this->position($requetes, 'insert into "factures"'), $this->position($requetes, 'select * from "tetes_registre_fiscal"'));
     }
 
@@ -706,11 +713,17 @@ class EmissionSigneeTest extends TestCase
         $this->assertLessThan($this->position($requetes, 'select * from "lignes_facture"'), $registre);
     }
 
-    public function test_un_paiement_verrouille_le_registre_avant_de_s_enregistrer(): void
+    /**
+     * Le verrou du registre est la toute première lecture du paiement :
+     * rien n'est lu avant lui (ni le magasin du client, ni la facture, ni
+     * ce qui en reste dû), qu'un paiement simultané pourrait avoir changé
+     * pendant l'attente du verrou.
+     */
+    public function test_un_paiement_verrouille_le_registre_avant_toute_lecture(): void
     {
         $this->magasinActif();
-        $client = Client::factory()->professionnel()->create();
-        $facture = $this->emettre($client, [[$this->produit('A-020', 'Article à 20 €', 20), 1]]);
+        $facture = $this->emettre(Client::factory()->professionnel()->create(), [[$this->produit('A-020', 'Article à 20 €', 20), 1]]);
+        $client = Client::query()->findOrFail($facture->client_id);
 
         $requetes = $this->requetesDe(fn () => app(EnregistrerPaiementAction::class)->handle(
             $client,
@@ -718,8 +731,7 @@ class EmissionSigneeTest extends TestCase
             [['facture_id' => $facture->id, 'montant' => '20.00']],
         ));
 
-        $registre = $this->position($requetes, 'select * from "tetes_registre_fiscal"');
-        $this->assertLessThan($this->position($requetes, 'insert into "paiements"'), $registre);
-        $this->assertLessThan($this->position($requetes, 'select * from "factures"'), $registre);
+        $this->assertSame(0, $this->position($requetes, 'select * from "tetes_registre_fiscal"'));
+        $this->assertLessThan($this->position($requetes, 'select * from "factures"'), $this->position($requetes, 'insert into "paiements"'));
     }
 }

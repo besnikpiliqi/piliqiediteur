@@ -281,7 +281,7 @@ class EnvoyerDocumentActionTest extends TestCase
         );
         $this->assertStringContainsString("la facture {$facture->numero} d'un montant de 120,00 € TTC, arrivée à échéance le 30/09/2026, n'est pas entièrement réglée : il reste 70,00 € à payer.", $relance->message);
         $this->assertStringContainsString("Si vous l'avez réglée entre-temps", $relance->message);
-        $this->assertSame(StatutFacture::PartiellementPayee, $facture->fresh()->statut);
+        $this->assertSame(StatutFacture::EnRetard, $facture->fresh()->statut);
     }
 
     /**

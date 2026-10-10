@@ -78,13 +78,15 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
 
     /**
      * Comme un acompte (voir MarquerFacturesEnRetardTest), un avoir partiel
-     * laisse en retard la facture échue qui n'est pas soldée.
+     * laisse en retard la facture échue qui n'est pas soldée (G1).
      */
     public function test_un_avoir_partiel_laisse_en_retard_sa_facture_echue(): void
     {
+        $this->travelTo('2026-09-01 10:00:00');
         $client = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit, 3);
+        $this->travelTo('2026-10-15 10:00:00');
         $facture->forceFill(['statut' => StatutFacture::EnRetard])->save();
 
         $this->emettreAvoir($client, [[$facture, 1]]);

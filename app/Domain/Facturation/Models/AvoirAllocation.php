@@ -9,8 +9,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Ce qu'un avoir crédite d'une facture : né pendant l'émission de l'un ou
- * de l'autre et signé avec lui, jamais modifié ni supprimé (voir
- * ProtegeLesDonneesValidees et les déclencheurs de la table).
+ * de l'autre et signé avec lui, ou pendant l'enregistrement d'un paiement
+ * (paiement_id) et signé avec ce paiement ; jamais modifié ni supprimé
+ * (voir ProtegeLesDonneesValidees et les déclencheurs de la table).
  */
 class AvoirAllocation extends Model
 {
@@ -21,6 +22,7 @@ class AvoirAllocation extends Model
     protected $fillable = [
         'avoir_id',
         'facture_id',
+        'paiement_id',
         'montant_alloue',
     ];
 
@@ -46,5 +48,14 @@ class AvoirAllocation extends Model
     public function facture(): BelongsTo
     {
         return $this->belongsTo(Facture::class);
+    }
+
+    /**
+     * Le paiement qui a imputé ce crédit, null pour un crédit imputé à
+     * l'émission d'un avoir ou d'une facture.
+     */
+    public function paiement(): BelongsTo
+    {
+        return $this->belongsTo(Paiement::class);
     }
 }

@@ -1372,6 +1372,37 @@ class CaisseTest extends TestCase
         $this->assertSame([0, 0], [Facture::query()->count(), Paiement::query()->count()]);
     }
 
+    /**
+     * B8 : choisir un client présélectionne son mode de paiement préféré,
+     * et les espèces pour un client qui n'en a pas.
+     */
+    public function test_choisir_un_client_preselectionne_son_mode_de_paiement_prefere(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $carte = Client::factory()->create(['mode_paiement_prefere' => ModePaiement::CarteBancaire]);
+        $sansPreference = Client::factory()->create(['mode_paiement_prefere' => null]);
+
+        Livewire::test(Caisse::class)
+            ->assertFormSet(['mode_paiement' => ModePaiement::Especes->value])
+            ->fillForm(['client_id' => $carte->id])
+            ->assertFormSet(['mode_paiement' => ModePaiement::CarteBancaire->value])
+            ->fillForm(['client_id' => $sansPreference->id])
+            ->assertFormSet(['mode_paiement' => ModePaiement::Especes->value]);
+    }
+
+    /**
+     * Le formulaire vide de la caisse part du mode de paiement préféré du
+     * client comptoir.
+     */
+    public function test_la_caisse_s_ouvre_sur_le_mode_de_paiement_prefere_du_client_comptoir(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        Client::query()->where('est_comptoir', true)->sole()->update(['mode_paiement_prefere' => ModePaiement::CarteBancaire]);
+
+        Livewire::test(Caisse::class)
+            ->assertFormSet(['mode_paiement' => ModePaiement::CarteBancaire->value]);
+    }
+
     private function ouvrirLaCaisseDUnMagasin(): Magasin
     {
         $proprietaire = User::factory()->create();

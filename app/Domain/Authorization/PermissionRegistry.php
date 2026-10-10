@@ -134,11 +134,19 @@ final class PermissionRegistry
 
     // Paiements -- ni modification ni suppression après coup (voir
     // ProtegeLesDonneesValidees et PaiementPolicy) : une erreur de saisie se
-    // corrige par un nouveau paiement, jamais en réécrivant l'historique
-    // d'encaissement.
+    // corrige par une contre-passation, puis par le bon paiement, jamais en
+    // réécrivant l'historique d'encaissement.
     public const PAIEMENT_VIEW = 'paiement.view';
 
     public const PAIEMENT_CREER = 'paiement.creer';
+
+    /**
+     * Contre-passer un paiement saisi par erreur (voir
+     * ContrePasserPaiementAction et PaiementPolicy::contrePasser()) :
+     * cochée d'office pour l'administrateur et le comptable, cochable pour
+     * un vendeur, sur les paiements qu'il voit.
+     */
+    public const PAIEMENT_CONTRE_PASSER = 'paiement.contre_passer';
 
     // Avoirs
     public const AVOIR_VIEW = 'avoir.view';
@@ -192,7 +200,7 @@ final class PermissionRegistry
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ENVOYER, self::RELANCES_REGLER,
             self::PARAMETRES_GERER,
             self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
-            self::PAIEMENT_VIEW, self::PAIEMENT_CREER,
+            self::PAIEMENT_VIEW, self::PAIEMENT_CREER, self::PAIEMENT_CONTRE_PASSER,
             self::AVOIR_VIEW, self::AVOIR_CREER, self::AVOIR_ENVOYER,
             self::CLOTURE_CAISSE_VIEW, self::CLOTURE_CAISSE_VIEW_TOUTES, self::CLOTURE_CAISSE_GERER,
             self::FACTURE_ACHAT_VIEW, self::FACTURE_ACHAT_CREER, self::FACTURE_ACHAT_VALIDER,
@@ -289,6 +297,7 @@ final class PermissionRegistry
             self::EQUIPE_MODIFIER => 'Équipe : modifier',
             self::PAIEMENT_VIEW => 'Paiements : voir',
             self::PAIEMENT_CREER => 'Paiements : enregistrer',
+            self::PAIEMENT_CONTRE_PASSER => 'Paiements : contre-passer une saisie erronée',
             self::AVOIR_VIEW => 'Avoirs : voir',
             self::AVOIR_CREER => 'Avoirs : créer',
             self::AVOIR_ENVOYER => 'Avoirs : envoyer par e-mail',

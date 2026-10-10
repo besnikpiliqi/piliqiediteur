@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Filament\App\Resources\PaiementResource\Pages\CreatePaiement;
 use App\Filament\App\Resources\PaiementResource\Pages\ListPaiements;
 use App\Models\User;
@@ -573,6 +574,110 @@ class PaiementResourceTest extends TestCase
             ->assertHasFormErrors(['client_id' => 'exists']);
 
         $this->assertSame(['120.00'], Paiement::query()->pluck('montant')->all());
+    }
+
+    /**
+     * B3 : le formulaire refuse un montant reçu différent du total imputé
+     * sur les factures, avec le message du domaine.
+     */
+    public function test_le_formulaire_refuse_un_montant_recu_different_du_total_impute(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
+
+        Livewire::test(CreatePaiement::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'mode_paiement' => ModePaiement::Virement->value,
+                'montant' => 200,
+                'recu_le' => now()->toDateString(),
+                'allocations' => [
+                    ['facture_id' => $facture->id, 'montant' => 120],
+                ],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['montant'])
+            ->assertSee('Le montant reçu (200,00 €) doit être égal au total imputé sur les factures (120,00 €).');
+
+        $this->assertSame([0, StatutFacture::Emise], [Paiement::query()->count(), $facture->fresh()->statut]);
+    }
+
+    public function test_le_reste_a_imputer_suit_la_saisie(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
+
+        Livewire::test(CreatePaiement::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'montant' => 150,
+                'allocations' => [
+                    ['facture_id' => $facture->id, 'montant' => 120],
+                ],
+            ])
+            ->assertSee('30,00 €');
+    }
+
+    /**
+     * B8 : le mode de paiement préféré du client choisi est présélectionné.
+     */
+    public function test_le_mode_de_paiement_prefere_du_client_est_preselectionne(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create(['mode_paiement_prefere' => ModePaiement::Cheque]);
+
+        Livewire::test(CreatePaiement::class)
+            ->fillForm(['client_id' => $client->id])
+            ->assertFormSet(['mode_paiement' => ModePaiement::Cheque->value]);
+    }
+
+    public function test_contre_passer_un_paiement_depuis_la_liste_rouvre_sa_facture(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
+        Livewire::test(ListFactures::class)->callTableAction('encaisser', $facture, data: [
+            'mode_paiement' => ModePaiement::Especes->value,
+            'montant' => 120,
+            'recu_le' => now()->toDateString(),
+        ]);
+        $errone = Paiement::query()->sole();
+
+        Livewire::test(ListPaiements::class)
+            ->callTableAction('contre_passer', $errone, data: ['motif' => 'Saisi sur le mauvais client'])
+            ->assertHasNoTableActionErrors();
+
+        $contrePassation = Paiement::query()->whereKeyNot($errone->id)->sole();
+        $this->assertSame([$errone->id, '-120.00', 'Saisi sur le mauvais client'], [$contrePassation->contre_passe_paiement_id, $contrePassation->montant, $contrePassation->notes]);
+        $this->assertSame([StatutFacture::Emise, 120.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant()]);
+        Livewire::test(ListPaiements::class)
+            ->assertTableColumnStateSet('correction', 'Contre-passé', $errone->getKey())
+            ->assertTableColumnStateSet('correction', 'Contre-passation', $contrePassation->getKey())
+            ->assertTableActionHidden('contre_passer', $errone->getKey())
+            ->assertTableActionHidden('contre_passer', $contrePassation->getKey());
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSee('Contre-passation')
+            ->assertSee("-120,00\u{00A0}€");
+    }
+
+    public function test_contre_passer_sans_motif_est_refuse(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
+        Livewire::test(ListFactures::class)->callTableAction('encaisser', $facture, data: [
+            'mode_paiement' => ModePaiement::Especes->value,
+            'montant' => 120,
+            'recu_le' => now()->toDateString(),
+        ]);
+
+        Livewire::test(ListPaiements::class)
+            ->callTableAction('contre_passer', Paiement::query()->sole(), data: ['motif' => ''])
+            ->assertHasTableActionErrors(['motif' => 'required']);
+
+        $this->assertSame([1, StatutFacture::Payee], [Paiement::query()->count(), $facture->fresh()->statut]);
     }
 
     private function connecterLeProprietaire(): Magasin

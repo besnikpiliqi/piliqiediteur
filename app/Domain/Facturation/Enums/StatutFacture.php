@@ -11,9 +11,9 @@ use Filament\Support\Contracts\HasLabel;
  * qui évolue indépendamment (une facture peut être "payee" ici tout en
  * ayant une transmission PDP encore "en_attente").
  *
- * Une facture émise ne revient jamais en arrière et ne disparaît jamais
- * (art. 286 du CGI) : elle se corrige par un avoir, total ou partiel, qui
- * est un document à part (voir EnregistrerAvoirAction).
+ * Une facture émise ne redevient jamais un brouillon et ne disparaît
+ * jamais (art. 286 du CGI) : elle se corrige par un avoir, total ou
+ * partiel, qui est un document à part (voir EnregistrerAvoirAction).
  * Seul un brouillon, qui n'a pas encore de numéro, se supprime (voir
  * FacturePolicy::delete()).
  */
@@ -27,6 +27,12 @@ enum StatutFacture: string implements HasColor, HasLabel
     case EnRetard = 'en_retard';
 
     /**
+     * Le statut d'une facture émise suit ses règlements (voir
+     * Facture::constaterUnReglement()) : la contre-passation d'un paiement
+     * saisi par erreur (voir ContrePasserPaiementAction) rouvre une facture
+     * payée ou partiellement payée, qui redevient partiellement payée, en
+     * retard, envoyée ou émise.
+     *
      * @return list<self>
      */
     public function transitionsAutorisees(): array
@@ -38,12 +44,12 @@ enum StatutFacture: string implements HasColor, HasLabel
             // Une facture partiellement payée devient "payee" une fois le
             // solde réglé (un deuxième paiement par exemple), et reste
             // détectable comme en retard si l'échéance passe entre-temps.
-            self::PartiellementPayee => [self::Payee, self::EnRetard],
-            // Une facture en retard le reste après un paiement partiel :
-            // son échéance est toujours dépassée (voir
-            // Facture::constaterUnReglement()).
+            self::PartiellementPayee => [self::Payee, self::EnRetard, self::Emise, self::Envoyee],
+            // Une facture en retard le reste tant qu'un montant reste dû
+            // après l'échéance (G1), même après un paiement partiel ou la
+            // contre-passation d'un paiement.
             self::EnRetard => [self::Payee],
-            self::Payee => [],
+            self::Payee => [self::PartiellementPayee, self::EnRetard, self::Emise, self::Envoyee],
         };
     }
 

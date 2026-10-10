@@ -17,6 +17,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\MentionsFiscales;
 use App\Domain\Recherche\RechercheSansAccents;
@@ -190,15 +191,26 @@ class FactureResource extends Resource
             InfolistSection::make('Paiements reçus')
                 ->visible(fn (Facture $record) => $record->allocationsPaiement()->exists())
                 ->schema([
+                    // Un paiement saisi par erreur y figure avec sa
+                    // contre-passation, en négatif (voir
+                    // ContrePasserPaiementAction).
                     RepeatableEntry::make('allocationsPaiement')
                         ->label('')
                         ->schema([
+                            TextEntry::make('nature')
+                                ->label('Nature')
+                                ->state(fn (PaiementAllocation $record): string => (float) $record->montant_alloue < 0 ? 'Contre-passation' : 'Paiement')
+                                ->badge()
+                                ->color(fn (string $state): string => $state === 'Contre-passation' ? 'danger' : 'gray'),
                             TextEntry::make('paiement.recu_le')->label('Reçu le')->date('d/m/Y'),
                             TextEntry::make('paiement.mode_paiement')->label('Mode')->badge(),
-                            TextEntry::make('montant_alloue')->label('Montant alloué')->money('EUR'),
+                            TextEntry::make('montant_alloue')
+                                ->label('Montant imputé')
+                                ->money('EUR')
+                                ->color(fn (PaiementAllocation $record): ?string => (float) $record->montant_alloue < 0 ? 'danger' : null),
                             TextEntry::make('paiement.reference')->label('Référence')->placeholder('—'),
                         ])
-                        ->columns(4),
+                        ->columns(5),
                 ]),
 
             InfolistSection::make('Crédité par avoir')
@@ -447,9 +459,12 @@ class FactureResource extends Resource
                     ->icon('heroicon-o-banknotes')
                     ->color('success')
                     ->form([
+                        // Le mode de paiement préféré du client est
+                        // présélectionné (B8).
                         Select::make('mode_paiement')
                             ->label('Mode de paiement')
                             ->options(ModePaiement::class)
+                            ->default(fn (Facture $record): ?string => $record->client?->mode_paiement_prefere?->value)
                             ->required(),
                         TextInput::make('montant')
                             ->label('Montant reçu')
@@ -460,8 +475,11 @@ class FactureResource extends Resource
                             // pas un crédit (contrairement à un avoir) --
                             // le vendeur doit saisir au plus le restant dû,
                             // mais peut librement saisir moins (acompte).
+                            // Le crédit d'avoir du client solde ensuite ce
+                            // qui reste dû (voir EnregistrerPaiementAction).
                             ->maxValue(fn (Facture $record) => $record->montantRestant())
-                            ->default(fn (Facture $record) => $record->montantRestant()),
+                            ->default(fn (Facture $record) => $record->montantRestant())
+                            ->helperText(fn (Facture $record) => ClientResource::soldeCrediteurHelperText($record->client_id)),
                         TextInput::make('reference')->label('Référence')->maxLength(100),
                         DatePicker::make('recu_le')
                             ->label('Reçu le')

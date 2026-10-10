@@ -13,6 +13,7 @@ use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
@@ -90,6 +91,37 @@ class VerificateurIntegriteTest extends TestCase
         );
 
         return compact('ticket', 'avoir', 'ticketAvecCredit', 'facture', 'avoirSurFacture', 'virement');
+    }
+
+    /**
+     * Un virement de 60,00 € saisi par erreur sur FAC-LYON1-2026-000002,
+     * contre-passé (paiement n° 3), après qu'un avoir sur
+     * FAC-LYON1-2026-000001, déjà payée, a donné au client 60,00 € de
+     * crédit ; le bon paiement, 10,00 € (paiement n° 4), impute 50,00 € de
+     * ce crédit sur le reste de la facture (K9).
+     *
+     * @return array{avoir: Avoir, facture: Facture, errone: Paiement, contrePassation: Paiement, bon: Paiement}
+     */
+    private function contrePassationPuisBonPaiement(): array
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $professionnel = Client::factory()->professionnel()->create();
+        $article = $this->produit('ART', 60);
+        $emettre = fn (): Facture => app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($professionnel, [['produit_id' => $article->id, 'quantite' => 1]]));
+        $payer = fn (Facture $facture, string $montant): Paiement => app(EnregistrerPaiementAction::class)->handle(
+            $professionnel,
+            ['mode_paiement' => ModePaiement::Virement->value, 'montant' => $montant, 'recu_le' => '2026-10-09'],
+            [['facture_id' => $facture->id, 'montant' => $montant]],
+        );
+        $payee = $emettre();
+        $payer($payee, '60.00');
+        $facture = $emettre();
+        $errone = $payer($facture, '60.00');
+        $avoir = app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $payee->lignes->sole()->id, 'quantite' => 1]]);
+        $contrePassation = app(ContrePasserPaiementAction::class)->handle($errone, 'Virement d\'un autre client');
+        $bon = $payer($facture, '10.00');
+
+        return compact('avoir', 'facture', 'errone', 'contrePassation', 'bon');
     }
 
     /**
@@ -1057,6 +1089,77 @@ class VerificateurIntegriteTest extends TestCase
             [90, 'Enregistrement n° 1 de la chaîne des ventes : l\'en-tête signé diffère de ses colonnes (document).'],
             [90, 'Le ticket TK-LYON1-2026-000001 n\'a aucun enregistrement de la chaîne des ventes.'],
             [90, "Enregistrement n° 1 de la chaîne des ventes : il désigne une facture introuvable ou jamais numérotée (identifiant interne {$ticketDeB->id})."],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    public function test_une_contre_passation_et_le_credit_impute_par_le_bon_paiement_ne_presentent_aucune_anomalie(): void
+    {
+        $this->magasinActif();
+        $this->contrePassationPuisBonPaiement();
+
+        $rapport = $this->verifier();
+
+        $this->assertSame([], $this->anomalies($rapport));
+        $this->assertSame(['vente' => 3, 'encaissement' => 4, 'evenement' => 1], $rapport->enregistrementsVerifies());
+    }
+
+    /**
+     * Même signée de la clé de l'éditeur, une contre-passation enregistrée
+     * comme un paiement ordinaire ne correspond pas à son type.
+     */
+    public function test_une_contre_passation_enregistree_comme_un_paiement_est_detectee(): void
+    {
+        $this->magasinActif();
+        $documents = $this->contrePassationPuisBonPaiement();
+
+        $this->reecrireEtResigner(
+            $this->enregistrementDe($documents['contrePassation'], ChaineFiscale::Encaissement),
+            static fn (string $contenu): string => str_replace('"type":"contre_passation"', '"type":"paiement"', $contenu),
+            ['type' => 'paiement'],
+        );
+
+        $this->assertSame([
+            [90, 'Enregistrement n° 4 de la chaîne des encaissements : sa signature précédente n\'est pas la signature de l\'enregistrement n° 3.'],
+            [90, "Le paiement (identifiant interne {$documents['contrePassation']->id}) est enregistré comme « paiement » alors qu'il contre-passe le paiement (identifiant interne {$documents['errone']->id})."],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
+     * Un crédit d'avoir ajouté en base à un paiement change ce qu'il règle :
+     * son enregistrement ne le signe pas.
+     */
+    public function test_un_credit_ajoute_a_un_paiement_est_detecte(): void
+    {
+        $magasin = $this->magasinActif();
+        $documents = $this->contrePassationPuisBonPaiement();
+
+        DB::table('avoir_allocations')->insert([
+            'magasin_id' => $magasin->id,
+            'avoir_id' => $documents['avoir']->id,
+            'facture_id' => $documents['facture']->id,
+            'paiement_id' => $documents['contrePassation']->id,
+            'montant_alloue' => '1.00',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertSame([
+            [90, "Le paiement (identifiant interne {$documents['contrePassation']->id}) ne correspond plus à ce qui a été signé à son enregistrement (credits_imputes)."],
+            [90, "Le crédit de l'avoir AV-LYON1-2026-000001 imputé par le paiement (identifiant interne {$documents['contrePassation']->id}) sur la facture FAC-LYON1-2026-000002 (1,00 €) ne figure dans aucun contenu signé."],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    public function test_un_credit_signe_par_un_paiement_disparu_de_la_base_est_detecte(): void
+    {
+        $magasin = $this->magasinActif();
+        $documents = $this->contrePassationPuisBonPaiement();
+        $this->retirerLeDeclencheur('avoir_allocations', 'avoir_allocations_ajout_seul_delete');
+
+        DB::table('avoir_allocations')->where('magasin_id', $magasin->id)->where('paiement_id', $documents['bon']->id)->delete();
+
+        $this->assertSame([
+            [90, "Le paiement (identifiant interne {$documents['bon']->id}) ne correspond plus à ce qui a été signé à son enregistrement (credits_imputes)."],
+            [90, "Le crédit de l'avoir AV-LYON1-2026-000001 imputé par le paiement (identifiant interne {$documents['bon']->id}) sur la facture FAC-LYON1-2026-000002, signée, est introuvable en base."],
         ], $this->anomalies($this->verifier()));
     }
 

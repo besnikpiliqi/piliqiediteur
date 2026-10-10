@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Authorization;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
@@ -13,12 +15,14 @@ use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
  * Un paiement révèle le chiffre d'affaires encaissé : sans
  * facture.view_toutes, on ne voit que les paiements que l'on a soi-même
- * enregistrés (voir PaiementPolicy::view()).
+ * enregistrés (voir PaiementPolicy::view()). Le contre-passer exige en plus
+ * l'autorisation dédiée (voir PaiementPolicy::contrePasser()).
  */
 class PaiementPolicyTest extends TestCase
 {
@@ -44,6 +48,72 @@ class PaiementPolicyTest extends TestCase
         $paiementDuVendeur = $this->encaisserUnPaiementEnTantQue($vendeur);
 
         $this->assertTrue($comptable->can('view', $paiementDuVendeur));
+    }
+
+    /**
+     * @return array<string, array{0: RoleMagasin}>
+     */
+    public static function rolesQuiContrePassentDOffice(): array
+    {
+        return [
+            'administrateur' => [RoleMagasin::Administrateur],
+            'comptable' => [RoleMagasin::Comptable],
+        ];
+    }
+
+    public function test_le_proprietaire_contre_passe_un_paiement(): void
+    {
+        $proprietaire = User::factory()->create();
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+
+        $this->assertTrue($proprietaire->can('contrePasser', $this->encaisserUnPaiementEnTantQue($proprietaire)));
+    }
+
+    #[DataProvider('rolesQuiContrePassentDOffice')]
+    public function test_l_administrateur_et_le_comptable_contre_passent_un_paiement_d_office(RoleMagasin $role): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $membre = $this->membre($magasin, $role);
+        $paiement = $this->encaisserUnPaiementEnTantQue($vendeur);
+
+        $this->assertTrue($membre->can('contrePasser', $paiement));
+    }
+
+    public function test_un_vendeur_ne_contre_passe_pas_par_defaut(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+
+        $this->assertFalse($vendeur->can('contrePasser', $this->encaisserUnPaiementEnTantQue($vendeur)));
+    }
+
+    /**
+     * Cochée pour un vendeur, l'autorisation vaut pour les paiements qu'il
+     * voit : les siens, sans facture.view_toutes.
+     */
+    public function test_un_vendeur_autorise_ne_contre_passe_que_les_paiements_qu_il_voit(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $autorise = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PAIEMENT_CONTRE_PASSER]);
+        $autreVendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $sonPaiement = $this->encaisserUnPaiementEnTantQue($autorise);
+        $paiementDUnAutre = $this->encaisserUnPaiementEnTantQue($autreVendeur);
+
+        $this->assertTrue($autorise->can('contrePasser', $sonPaiement));
+        $this->assertFalse($autorise->can('contrePasser', $paiementDUnAutre));
+    }
+
+    public function test_ni_une_contre_passation_ni_un_paiement_deja_contre_passe_ne_se_contre_passent(): void
+    {
+        $proprietaire = User::factory()->create();
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $paiement = $this->encaisserUnPaiementEnTantQue($proprietaire);
+
+        $contrePassation = app(ContrePasserPaiementAction::class)->handle($paiement, 'Saisi deux fois');
+
+        $this->assertFalse($proprietaire->can('contrePasser', $contrePassation));
+        $this->assertFalse($proprietaire->can('contrePasser', $paiement->fresh()));
     }
 
     private function encaisserUnPaiementEnTantQue(User $auteur): Paiement

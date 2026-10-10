@@ -8,9 +8,10 @@ use App\Models\User;
 
 /**
  * Un paiement enregistré ne se modifie ni ne se supprime jamais (voir
- * ProtegeLesDonneesValidees) : une erreur de saisie se corrige par un nouveau
- * paiement, jamais en réécrivant l'historique d'encaissement -- même
- * logique que l'interdiction de suppression des factures.
+ * ProtegeLesDonneesValidees) : une erreur de saisie se corrige par une
+ * contre-passation (voir contrePasser()), puis par le bon paiement, jamais
+ * en réécrivant l'historique d'encaissement -- même logique que
+ * l'interdiction de suppression des factures.
  *
  * Confidentialité par vendeur, même règle que FacturePolicy : un paiement
  * révèle le chiffre d'affaires encaissé, donc sans FACTURE_VIEW_TOUTES un
@@ -39,6 +40,19 @@ class PaiementPolicy extends MagasinPolicy
     public function create(User $user): bool
     {
         return $user->can(PermissionRegistry::PAIEMENT_CREER);
+    }
+
+    /**
+     * Contre-passer un paiement que l'on voit, avec l'autorisation dédiée :
+     * jamais une contre-passation, ni un paiement déjà contre-passé (voir
+     * ContrePasserPaiementAction, qui le revérifie sous verrou).
+     */
+    public function contrePasser(User $user, Paiement $paiement): bool
+    {
+        return $this->view($user, $paiement)
+            && $user->can(PermissionRegistry::PAIEMENT_CONTRE_PASSER)
+            && ! $paiement->estUneContrePassation()
+            && $paiement->contrePassation === null;
     }
 
     public function update(User $user, Paiement $paiement): bool

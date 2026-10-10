@@ -161,12 +161,14 @@ abstract class TestCase extends BaseTestCase
      * Attend que l'autre processus attende un verrou que tient le test, ou
      * qu'il ait fini, dix secondes au plus. L'attente se lit dans
      * pg_stat_activity par une connexion à part, hors de la transaction du
-     * test, fermée ensuite.
+     * test, fermée ensuite. Elle porte son propre nom : fermée sous celui
+     * de la connexion du test, elle effacerait du gestionnaire de
+     * transactions celles que l'opération du test a ouvertes.
      */
     protected function attendreQueLeProcessusAttendeUnVerrou(InvokedProcess $processus): void
     {
         $observateur = DB::getDefaultConnection().'_observateur';
-        config(["database.connections.{$observateur}" => DB::connection()->getConfig()]);
+        config(["database.connections.{$observateur}" => [...DB::connection()->getConfig(), 'name' => $observateur]]);
         $limite = microtime(true) + 10;
 
         try {

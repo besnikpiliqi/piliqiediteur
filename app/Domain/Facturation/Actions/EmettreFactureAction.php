@@ -15,6 +15,7 @@ use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Services\ReglagesCommunsDeLaSociete;
+use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -51,9 +52,9 @@ use LogicException;
  *
  * Tout se fait dans une seule transaction, dans cet ordre (art. 286 I-3°
  * bis du CGI) :
- *  1. le registre fiscal du magasin est verrouillé, avant la facture et la
- *     numérotation (voir RegistreFiscal) ; il donne l'instant de
- *     l'émission ;
+ *  1. le registre fiscal du magasin actif est verrouillé, avant toute
+ *     lecture, la facture et la numérotation (voir RegistreFiscal) ; il
+ *     donne l'instant de l'émission ;
  *  2. la facture, relue verrouillée, prend la copie de son client (nom,
  *     adresse, identifiants), son numéro, dans la série et l'année de cet
  *     instant à l'heure de Paris, cet instant, en UTC, pour date
@@ -94,7 +95,7 @@ class EmettreFactureAction
     public function handle(Facture $facture, ?ReglementComptant $reglement = null): Facture
     {
         return DB::transaction(function () use ($facture, $reglement) {
-            $instant = $this->registre->verrouiller($facture->magasin);
+            $instant = $this->registre->verrouiller(app(TenantContext::class)->magasin());
             $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
 
             if (! $facture->statut->peutTransitionnerVers(StatutFacture::Emise)) {

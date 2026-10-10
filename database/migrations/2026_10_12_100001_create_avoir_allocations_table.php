@@ -3,16 +3,19 @@
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
  * Ce que chaque avoir crédite de chaque facture : on n'y fait qu'ajouter.
- * Une imputation naît toujours pendant une émission, celle de l'avoir
- * (voir ImputerAvoirSurSesFacturesAction) ou celle de la facture qui
- * absorbe un crédit (voir AppliquerAvoirsDisponiblesAction), et figure
- * dans le contenu signé de ce document au registre fiscal ; la base refuse
- * toute modification, toute suppression et tout vidage (voir
- * DeclencheursDeProtection).
+ * Une imputation naît pendant l'émission de l'avoir (voir
+ * ImputerAvoirSurSesFacturesAction), pendant celle de la facture qui
+ * absorbe un crédit (voir AppliquerAvoirsDisponiblesAction), ou pendant
+ * l'enregistrement d'un paiement, dont le crédit solde ce qui reste dû des
+ * factures qu'il règle (voir EnregistrerPaiementAction, paiement_id) ; elle
+ * figure dans le contenu signé de ce document ou de ce paiement au
+ * registre fiscal. La base refuse toute modification, toute suppression et
+ * tout vidage (voir DeclencheursDeProtection).
  */
 return new class extends Migration
 {
@@ -23,17 +26,21 @@ return new class extends Migration
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             $table->foreignId('avoir_id')->constrained('avoirs')->restrictOnDelete();
             $table->foreignId('facture_id')->constrained('factures')->restrictOnDelete();
+            $table->foreignId('paiement_id')->nullable()->constrained('paiements')->restrictOnDelete();
             $table->decimal('montant_alloue', 12, 2);
             $table->timestamps();
 
-            // Un avoir ne s'alloue qu'une fois par facture : pour
-            // compléter, on applique le reliquat d'un autre avoir, pas une
-            // deuxième ligne d'allocation sur le même couple (même
-            // contrainte que paiement_allocations).
-            $table->unique(['avoir_id', 'facture_id']);
+            // Un paiement n'impute un avoir qu'une fois sur une facture.
+            $table->unique(['avoir_id', 'facture_id', 'paiement_id']);
             $table->index(['magasin_id', 'facture_id']);
         });
 
+        // Une émission n'impute un avoir qu'une fois sur une facture (deux
+        // valeurs nulles ne se heurtent pas dans l'index unique ci-dessus).
+        // Un paiement peut l'y imputer de nouveau, quand une
+        // contre-passation a rouvert la facture (voir
+        // ContrePasserPaiementAction).
+        DB::statement('create unique index avoir_allocations_emission_unique on avoir_allocations (avoir_id, facture_id) where paiement_id is null');
         DeclencheursDeProtection::ajoutSeul('avoir_allocations');
     }
 

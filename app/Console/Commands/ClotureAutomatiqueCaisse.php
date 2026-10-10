@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Console\Attributes\Description;
@@ -20,6 +21,11 @@ use LogicException;
  * jour même, qui n'est pas encore terminé au moment où elle tourne. Un
  * magasin suspendu ou fermé est clôturé comme les autres : ses clôtures
  * continuent jusqu'au bout. Seul un magasin supprimé n'est plus traité.
+ *
+ * Un ticket Z se produit chaque jour à partir de la première vente du
+ * magasin, jamais avant : un magasin qui n'a encore rien vendu n'a aucune
+ * journée à clôturer, ne numérote rien, et son code reste modifiable (voir
+ * Magasin::codeEstDefinitif()).
  */
 #[Signature('app:cloturer-caisses-automatiquement')]
 #[Description("Clôture automatiquement la caisse de la veille pour les magasins qui ne l'ont pas fait eux-mêmes")]
@@ -33,6 +39,10 @@ class ClotureAutomatiqueCaisse extends Command
         Magasin::query()
             ->each(function (Magasin $magasin) use ($tenantContext, $cloturerCaisse, $hier, &$totalClotures) {
                 $tenantContext->runAs($magasin, function () use ($cloturerCaisse, $magasin, $hier, &$totalClotures) {
+                    if (! $this->aVenduAuPlusTardLe($hier)) {
+                        return;
+                    }
+
                     try {
                         // CloturerCaisseAction rejette déjà une journée
                         // déjà clôturée (voir son propre
@@ -50,5 +60,16 @@ class ClotureAutomatiqueCaisse extends Command
         $this->info("{$totalClotures} clôture(s) automatique(s) effectuée(s) pour le {$hier}.");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Le magasin du contexte avait-il émis sa première vente (ticket ou
+     * facture) au plus tard ce jour-là, à l'heure de Paris ?
+     */
+    private function aVenduAuPlusTardLe(string $jour): bool
+    {
+        $premiereVente = Facture::query()->emises()->oldest('date_emission')->first();
+
+        return $premiereVente !== null && $premiereVente->date_emission->toDateString() <= $jour;
     }
 }

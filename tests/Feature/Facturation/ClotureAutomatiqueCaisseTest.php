@@ -7,8 +7,10 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -23,6 +25,19 @@ use Tests\TestCase;
 class ClotureAutomatiqueCaisseTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * Une vente à un client particulier, émise maintenant.
+     */
+    private function emettreUneVente(Magasin $magasin): Facture
+    {
+        app(TenantContext::class)->set($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]));
+    }
 
     private function emettreFactureHier(Magasin $magasin): Facture
     {
@@ -110,20 +125,41 @@ class ClotureAutomatiqueCaisseTest extends TestCase
 
     public function test_ne_cloture_jamais_le_jour_meme(): void
     {
+        $this->travelTo('2026-10-08 15:00:00');
         $magasin = Magasin::factory()->create();
-        app(TenantContext::class)->set($magasin);
-        $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
-            ['produit_id' => $produit->id, 'quantite' => 1],
-        ]);
-        app(EmettreFactureAction::class)->handle($facture); // vente d'aujourd'hui
+        $venteDHier = $this->emettreUneVente($magasin);
+        $this->travelTo('2026-10-09 15:00:00');
+        $venteDuJour = $this->emettreUneVente($magasin);
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
         app(TenantContext::class)->set($magasin);
-        $cloture = ClotureCaisse::query()->first();
-        $this->assertSame(0, $cloture->nombre_ventes, 'La vente du jour même ne doit pas être incluse dans la clôture de la veille.');
+        $cloture = ClotureCaisse::query()->sole();
+        $this->assertSame(['2026-10-08', 1], [$cloture->date_cloture->toDateString(), $cloture->nombre_ventes]);
+        $this->assertSame($cloture->id, $venteDHier->fresh()->cloture_caisse_id);
+        $this->assertNull($venteDuJour->fresh()->cloture_caisse_id, 'La vente du jour même ne doit pas être incluse dans la clôture de la veille.');
+    }
+
+    /**
+     * Un ticket Z se produit chaque jour à partir de la première vente,
+     * jamais avant : ni un magasin qui n'a jamais vendu, ni un magasin dont
+     * la première vente est d'aujourd'hui n'a de journée à clôturer, et
+     * aucun numéro n'est consommé.
+     */
+    public function test_aucune_journee_n_est_cloturee_avant_la_premiere_vente(): void
+    {
+        $this->travelTo('2026-10-09 15:00:00');
+        $magasinSansVente = Magasin::factory()->create();
+        $magasinVendantAujourdHui = Magasin::factory()->create();
+        $this->emettreUneVente($magasinVendantAujourdHui);
+
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+
+        foreach ([$magasinSansVente, $magasinVendantAujourdHui] as $magasin) {
+            app(TenantContext::class)->set($magasin);
+            $this->assertSame(0, ClotureCaisse::query()->count());
+            $this->assertFalse(SequenceDocument::query()->where('magasin_id', $magasin->id)->where('type_document', TypeDocument::ClotureCaisse->value)->exists());
+        }
     }
 
     /**

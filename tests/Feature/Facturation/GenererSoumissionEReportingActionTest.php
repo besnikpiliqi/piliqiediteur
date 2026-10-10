@@ -10,9 +10,11 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\GenererSoumissionEReportingAction;
+use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\SoumissionEReportingGeneree;
 use App\Domain\Facturation\Jobs\SubmitSoumissionEReportingToPdpJob;
 use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
@@ -102,9 +104,13 @@ class GenererSoumissionEReportingActionTest extends TestCase
         ], $soumission->ventilation_tva);
     }
 
-    public function test_exclut_les_clotures_hors_de_la_periode(): void
+    /**
+     * Rien n'est déclaré pour une période sans opération : la clôture d'une
+     * autre période n'y compte pas, et aucun numéro n'est consommé.
+     */
+    public function test_une_periode_sans_cloture_n_est_ni_declaree_ni_numerotee(): void
     {
-        $this->cloturerJournee('2026-10-15', 100); // hors période
+        $clotureHorsPeriode = $this->cloturerJournee('2026-10-15', 100);
 
         $periode = new PeriodeEReporting(
             CarbonImmutable::parse('2026-10-01'),
@@ -114,8 +120,56 @@ class GenererSoumissionEReportingActionTest extends TestCase
 
         $soumission = app(GenererSoumissionEReportingAction::class)->handle($this->magasin, $periode);
 
-        $this->assertSame(0, $soumission->nombre_clotures);
-        $this->assertSame('0.00', $soumission->total_ttc);
+        $this->assertNull($soumission);
+        $this->assertSame(0, SoumissionEReporting::count());
+        $this->assertFalse(SequenceDocument::query()->where('magasin_id', $this->magasin->id)->where('type_document', TypeDocument::SoumissionEReporting->value)->exists());
+        $this->assertNull($clotureHorsPeriode->fresh()->soumission_ereporting_id);
+    }
+
+    /**
+     * Une journée clôturée à zéro n'est pas déclarée : seules les clôtures
+     * qui comptent une vente ou un avoir le sont.
+     */
+    public function test_seules_les_clotures_ayant_des_operations_sont_declarees(): void
+    {
+        $clotureDesVentes = $this->cloturerJournee('2026-10-03', 100); // 120 TTC
+        $this->travelTo('2026-10-05 00:00:00');
+        $clotureAZero = app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-04');
+
+        $periode = new PeriodeEReporting(
+            CarbonImmutable::parse('2026-10-01'),
+            CarbonImmutable::parse('2026-10-10'),
+            CarbonImmutable::parse('2026-10-20'),
+        );
+
+        $soumission = app(GenererSoumissionEReportingAction::class)->handle($this->magasin, $periode);
+
+        $this->assertSame([1, '120.00'], [$soumission->nombre_clotures, $soumission->total_ttc]);
+        $this->assertSame($soumission->id, $clotureDesVentes->fresh()->soumission_ereporting_id);
+        $this->assertNull($clotureAZero->fresh()->soumission_ereporting_id);
+    }
+
+    /**
+     * Une période dont toutes les journées sont clôturées à zéro n'est pas
+     * déclarée davantage.
+     */
+    public function test_une_periode_cloturee_a_zero_n_est_ni_declaree_ni_numerotee(): void
+    {
+        $this->travelTo('2026-10-05 00:00:00');
+        $clotureAZero = app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-04');
+
+        $periode = new PeriodeEReporting(
+            CarbonImmutable::parse('2026-10-01'),
+            CarbonImmutable::parse('2026-10-10'),
+            CarbonImmutable::parse('2026-10-20'),
+        );
+
+        $soumission = app(GenererSoumissionEReportingAction::class)->handle($this->magasin, $periode);
+
+        $this->assertNull($soumission);
+        $this->assertSame(0, SoumissionEReporting::count());
+        $this->assertFalse(SequenceDocument::query()->where('magasin_id', $this->magasin->id)->where('type_document', TypeDocument::SoumissionEReporting->value)->exists());
+        $this->assertNull($clotureAZero->fresh()->soumission_ereporting_id);
     }
 
     public function test_generer_deux_fois_la_meme_periode_est_un_no_op(): void
@@ -145,10 +199,11 @@ class GenererSoumissionEReportingActionTest extends TestCase
             CarbonImmutable::parse('2026-10-10'),
             CarbonImmutable::parse('2026-10-20'),
         );
-        app(GenererSoumissionEReportingAction::class)->handle($this->magasin, $premierePeriode);
+        $premiereSoumission = app(GenererSoumissionEReportingAction::class)->handle($this->magasin, $premierePeriode);
 
         // Une période plus large qui engloberait aussi le 3 octobre ne doit
-        // pas la re-agréger : elle est déjà marquée.
+        // pas la re-agréger : elle est déjà marquée, et il ne reste rien à
+        // déclarer.
         $periodeElargie = new PeriodeEReporting(
             CarbonImmutable::parse('2026-09-01'),
             CarbonImmutable::parse('2026-10-31'),
@@ -156,8 +211,9 @@ class GenererSoumissionEReportingActionTest extends TestCase
         );
         $soumission = app(GenererSoumissionEReportingAction::class)->handle($this->magasin, $periodeElargie);
 
-        $this->assertSame(0, $soumission->nombre_clotures);
-        $this->assertNotSame($cloture->fresh()->soumission_ereporting_id, $soumission->id);
+        $this->assertNull($soumission);
+        $this->assertSame([$premiereSoumission->id], SoumissionEReporting::query()->pluck('id')->all());
+        $this->assertSame($premiereSoumission->id, $cloture->fresh()->soumission_ereporting_id);
     }
 
     public function test_generer_une_soumission_avec_mandat_pdp_actif_declenche_la_transmission(): void

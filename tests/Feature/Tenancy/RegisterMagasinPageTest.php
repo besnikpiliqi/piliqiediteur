@@ -61,6 +61,22 @@ class RegisterMagasinPageTest extends TestCase
     }
 
     /**
+     * La page est ouverte à tous : ni le code proposé ni la validation du
+     * champ seul, que Livewire laisse demander sans limite, ne disent
+     * qu'un autre magasin porte déjà ce code.
+     */
+    public function test_ni_la_proposition_ni_la_validation_du_champ_ne_revelent_les_codes_des_autres_magasins(): void
+    {
+        Magasin::factory()->create(['code' => 'MABOUT']);
+
+        Livewire::test(RegisterMagasin::class)
+            ->fillForm(['nom_magasin' => 'Ma Boutique'])
+            ->assertFormSet(['code' => 'MABOUT'])
+            ->call('validateOnly', 'data.code')
+            ->assertHasNoErrors(['data.code']);
+    }
+
+    /**
      * @return array<string, array{string, string}>
      */
     public static function codesRefuses(): array
@@ -72,8 +88,9 @@ class RegisterMagasinPageTest extends TestCase
     }
 
     /**
-     * Le code se valide comme dans l'identité du magasin ; refusé, il
-     * n'ouvre ni compte ni magasin.
+     * Un code mal formé, ou déjà pris, même par un magasin supprimé, est
+     * refusé à la soumission, avec le message de l'identité du magasin ;
+     * refusé, il n'ouvre ni compte ni magasin.
      */
     #[DataProvider('codesRefuses')]
     public function test_un_code_refuse_n_ouvre_ni_compte_ni_magasin(string $code, string $message): void
@@ -91,8 +108,8 @@ class RegisterMagasinPageTest extends TestCase
     }
 
     /**
-     * Un code pris par une inscription simultanée entre la validation et
-     * l'enregistrement est refusé comme par la validation, et l'inscription
+     * Un code pris par une inscription simultanée juste avant
+     * l'enregistrement est refusé comme un code déjà pris, et l'inscription
      * s'annule entière : l'adresse e-mail reste libre pour recommencer.
      */
     public function test_un_code_pris_par_une_inscription_simultanee_est_refuse_sans_laisser_de_compte(): void

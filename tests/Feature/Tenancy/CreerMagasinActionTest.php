@@ -85,40 +85,10 @@ class CreerMagasinActionTest extends TestCase
     }
 
     /**
-     * Une création simultanée sous le même nom prend le code proposé avant
-     * l'enregistrement : la création recommence avec le code suivant.
-     */
-    public function test_un_code_propose_pris_par_une_creation_simultanee_passe_au_code_suivant(): void
-    {
-        $this->creationSimultaneeAvecLeMemeCode(fois: 1);
-        $proprietaire = User::factory()->create();
-
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Piliqi Store'], $proprietaire);
-
-        $this->assertSame('PILIQI2', $magasin->fresh()->code);
-        $this->assertSame([$proprietaire->id], $magasin->proprietaires()->get()->modelKeys());
-    }
-
-    /**
-     * Trois essais au plus : au troisième code pris, la création est
-     * refusée, sans rien laisser en base.
-     */
-    public function test_la_creation_est_refusee_quand_trois_codes_proposes_sont_pris_de_suite(): void
-    {
-        $this->creationSimultaneeAvecLeMemeCode(fois: 3);
-        $proprietaire = User::factory()->create();
-
-        $this->assertThrows(fn () => app(CreerMagasinAction::class)->handle(['nom' => 'Piliqi Store'], $proprietaire), UniqueConstraintViolationException::class);
-
-        $this->assertSame(0, Magasin::withTrashed()->count());
-        $this->assertFalse($proprietaire->magasins()->exists());
-    }
-
-    /**
      * Un code choisi ne se remplace jamais en silence : déjà pris, la
      * création est refusée.
      */
-    public function test_un_code_choisi_deja_pris_est_refuse_sans_autre_essai(): void
+    public function test_un_code_choisi_deja_pris_est_refuse(): void
     {
         $autreMagasin = Magasin::factory()->create(['code' => 'LYON1']);
 
@@ -227,26 +197,5 @@ class CreerMagasinActionTest extends TestCase
         $this->actingAs($proprietaireA);
         app(TenantContext::class)->set($magasinB);
         $this->assertFalse($proprietaireA->can(PermissionRegistry::CLIENT_VIEW), 'Le propriétaire de A ne doit rien pouvoir faire dans B.');
-    }
-
-    /**
-     * Les $fois prochaines créations de magasin voient un autre magasin
-     * prendre leur code juste avant leur enregistrement, comme une
-     * création simultanée.
-     */
-    private function creationSimultaneeAvecLeMemeCode(int $fois): void
-    {
-        $concurrentEnCours = false;
-
-        Magasin::creating(function (Magasin $magasin) use (&$fois, &$concurrentEnCours): void {
-            if ($concurrentEnCours || $fois === 0) {
-                return;
-            }
-
-            $fois--;
-            $concurrentEnCours = true;
-            Magasin::factory()->create(['code' => $magasin->code]);
-            $concurrentEnCours = false;
-        });
     }
 }

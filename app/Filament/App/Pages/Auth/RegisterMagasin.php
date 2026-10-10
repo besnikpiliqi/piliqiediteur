@@ -3,6 +3,7 @@
 namespace App\Filament\App\Pages\Auth;
 
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Rules\CodeMagasinAuFormat;
 use App\Domain\Tenancy\Rules\CodeMagasinLibre;
 use App\Domain\Tenancy\Services\CodeMagasin;
 use Filament\Forms\Components\Component;
@@ -23,9 +24,13 @@ use Illuminate\Validation\ValidationException;
  * propre magasin.
  *
  * Le code du magasin, qui figurera dans les numéros de tous ses documents,
- * se choisit dès l'inscription : proposé depuis le nom du magasin tant que
- * la personne ne l'a pas changé, modifiable, et validé comme dans
- * l'identité du magasin (voir CodeMagasinLibre).
+ * se choisit dès l'inscription : tiré du nom du magasin tant que la
+ * personne ne l'a pas changé, et modifiable. La page est ouverte à tous :
+ * ni la proposition (voir CodeMagasin::depuisLeNom()) ni la validation du
+ * champ (voir CodeMagasinAuFormat) ne lisent les codes des autres magasins.
+ * Un code déjà pris n'est refusé qu'à l'enregistrement, par l'index unique
+ * de magasins.code (voir handleRegistration()), dans register(), dont
+ * Register limite les essais (rateLimit()) avant toute autre chose.
  *
  * L'inscription s'enregistre dans une seule transaction : un magasin
  * refusé n'y laisse jamais un compte sans magasin, dont l'adresse e-mail
@@ -55,8 +60,8 @@ class RegisterMagasin extends Register
 
     /**
      * Quand le nom change, le code proposé suit, sauf si la personne a
-     * saisi le sien : le code n'est remplacé que vide ou encore égal à la
-     * proposition faite pour l'ancien nom.
+     * saisi le sien : le code n'est remplacé que vide ou encore égal à
+     * celui que tirait l'ancien nom.
      */
     protected function getNomMagasinFormComponent(): Component
     {
@@ -69,8 +74,8 @@ class RegisterMagasin extends Register
             ->afterStateUpdated(function (Get $get, Set $set, ?string $old, ?string $state): void {
                 $code = (string) $get('code');
 
-                if ($code === '' || ($old !== null && $code === CodeMagasin::proposer($old))) {
-                    $set('code', CodeMagasin::proposer((string) $state));
+                if ($code === '' || ($old !== null && $code === CodeMagasin::depuisLeNom($old))) {
+                    $set('code', CodeMagasin::depuisLeNom((string) $state));
                 }
             });
     }
@@ -83,15 +88,14 @@ class RegisterMagasin extends Register
             ->required()
             ->maxLength(CodeMagasin::LONGUEUR_MAXIMALE)
             ->extraInputAttributes(['style' => 'text-transform: uppercase'])
-            ->rule(new CodeMagasinLibre)
+            ->rule(new CodeMagasinAuFormat)
             ->dehydrateStateUsing(fn (string $state): string => CodeMagasin::normaliser($state));
     }
 
     /**
-     * Le code, libre à la validation, peut être pris par une inscription
-     * simultanée avant l'enregistrement : l'index unique de magasins.code
-     * refuse alors le magasin, et la personne choisit un autre code, comme
-     * si la validation l'avait refusé, et l'inscription entière s'annule,
+     * Un code déjà pris, par un magasin existant ou par une inscription
+     * simultanée, est refusé par l'index unique de magasins.code : la
+     * personne choisit un autre code, et l'inscription entière s'annule,
      * compte compris.
      *
      * @throws ValidationException

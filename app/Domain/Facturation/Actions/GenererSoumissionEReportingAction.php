@@ -10,6 +10,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Integrations\Pdp\Contracts\PeriodeEReporting;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -17,6 +18,13 @@ use Illuminate\Support\Facades\DB;
  * d'e-reporting (voir CalculateurPeriodeEReporting), au lieu de transmettre
  * chaque clôture quotidienne isolément au PDP -- l'e-reporting n'est pas
  * une obligation journalière (voir le docblock de SoumissionEReporting).
+ *
+ * Rien n'est déclaré à l'administration pour un jour sans opération :
+ * seules les clôtures qui comptent une vente ou un avoir sont agrégées, et
+ * une période qui n'en a aucune ne produit ni soumission ni numéro. Un
+ * magasin qui n'a encore rien vendu ne numérote donc aucun document
+ * d'e-reporting, et son code reste modifiable (voir
+ * Magasin::codeEstDefinitif()).
  *
  * Idempotent par construction : une contrainte unique (magasin_id,
  * periode_debut, periode_fin) empêche de régénérer deux fois la même
@@ -47,8 +55,13 @@ class GenererSoumissionEReportingAction
                 ->whereDate('date_cloture', '>=', $periode->debut->toDateString())
                 ->whereDate('date_cloture', '<=', $periode->fin->toDateString())
                 ->whereNull('soumission_ereporting_id')
+                ->where(fn (Builder $cloture): Builder => $cloture->where('nombre_ventes', '>', 0)->orWhere('nombre_avoirs', '>', 0))
                 ->lockForUpdate()
                 ->get();
+
+            if ($clotures->isEmpty()) {
+                return null;
+            }
 
             $numero = $this->numerotation->suivant($magasin, TypeDocument::SoumissionEReporting, $periode->debut->format('Y'));
 
@@ -65,9 +78,7 @@ class GenererSoumissionEReportingAction
                 'generee_le' => now(),
             ])->save();
 
-            if ($clotures->isNotEmpty()) {
-                ClotureCaisse::query()->whereIn('id', $clotures->pluck('id'))->update(['soumission_ereporting_id' => $soumission->id]);
-            }
+            ClotureCaisse::query()->whereIn('id', $clotures->pluck('id'))->update(['soumission_ereporting_id' => $soumission->id]);
 
             SoumissionEReportingGeneree::dispatch($soumission);
 

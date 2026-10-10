@@ -21,23 +21,8 @@ class SoumettreEReportingPeriodiqueTest extends TestCase
 
     public function test_genere_une_soumission_pour_un_magasin_avec_un_regime_configure(): void
     {
-        $magasin = Magasin::factory()->create([
-            'regime_tva' => RegimeTva::ReelNormalMensuel,
-        ]);
-
-        app(TenantContext::class)->runAs($magasin, function () use ($magasin) {
-            $client = Client::factory()->create();
-            $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
-            $facture = app(CreerFactureAction::class)->handle($client, [
-                ['produit_id' => $produit->id, 'quantite' => 1],
-            ]);
-            // Une vente d'il y a vingt jours s'émet il y a vingt jours (voir
-            // EmettreFactureAction).
-            $this->travel(-20)->days();
-            app(EmettreFactureAction::class)->handle($facture);
-            $this->travelBack();
-            app(CloturerCaisseAction::class)->handle($magasin, now()->subDays(20));
-        });
+        $magasin = $this->magasinAyantVenduLe5Octobre(RegimeTva::ReelNormalMensuel);
+        $this->travelTo('2026-10-11 01:00:00');
 
         $this->artisan('app:soumettre-ereporting-periodique')->assertSuccessful();
 
@@ -46,9 +31,8 @@ class SoumettreEReportingPeriodiqueTest extends TestCase
 
     public function test_ignore_un_magasin_sans_regime_de_tva_configure(): void
     {
-        $magasin = Magasin::factory()->create([
-            'regime_tva' => null,
-        ]);
+        $magasin = $this->magasinAyantVenduLe5Octobre(null);
+        $this->travelTo('2026-10-11 01:00:00');
 
         $this->artisan('app:soumettre-ereporting-periodique')->assertSuccessful();
 
@@ -61,15 +45,7 @@ class SoumettreEReportingPeriodiqueTest extends TestCase
      */
     public function test_un_magasin_suspendu_est_declare(): void
     {
-        $this->travelTo('2026-10-05 10:00:00');
-        $magasin = Magasin::factory()->create(['regime_tva' => RegimeTva::ReelNormalMensuel]);
-        app(TenantContext::class)->runAs($magasin, function () {
-            $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-            $ticket = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
-            app(EmettreFactureAction::class)->handle($ticket);
-        });
-        $this->travelTo('2026-10-06 00:00:00');
-        app(TenantContext::class)->runAs($magasin, fn () => app(CloturerCaisseAction::class)->handle($magasin, '2026-10-05'));
+        $magasin = $this->magasinAyantVenduLe5Octobre(RegimeTva::ReelNormalMensuel);
         $magasin->forceFill(['statut' => StatutMagasin::Suspendu])->save();
         $this->travelTo('2026-10-11 01:00:00');
 
@@ -84,14 +60,34 @@ class SoumettreEReportingPeriodiqueTest extends TestCase
 
     public function test_rejouer_la_commande_le_meme_jour_ne_duplique_rien(): void
     {
-        $magasin = Magasin::factory()->create([
-            'regime_tva' => RegimeTva::ReelNormalMensuel,
-        ]);
+        $magasin = $this->magasinAyantVenduLe5Octobre(RegimeTva::ReelNormalMensuel);
+        $this->travelTo('2026-10-11 01:00:00');
 
         $this->artisan('app:soumettre-ereporting-periodique')->assertSuccessful();
         $this->artisan('app:soumettre-ereporting-periodique')->assertSuccessful();
 
         $this->assertSame(1, $this->compterSoumissions($magasin));
+    }
+
+    /**
+     * Un magasin ouvert le 05/10/2026, qui y vend un ticket de 12,00 € TTC
+     * à 10:00, puis clôture cette journée à minuit : la décade du 1er au 10
+     * octobre a une opération à déclarer.
+     */
+    private function magasinAyantVenduLe5Octobre(?RegimeTva $regimeTva): Magasin
+    {
+        $this->travelTo('2026-10-05 09:00:00');
+        $magasin = Magasin::factory()->create(['regime_tva' => $regimeTva]);
+        $this->travelTo('2026-10-05 10:00:00');
+        app(TenantContext::class)->runAs($magasin, function () {
+            $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+            $ticket = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+            app(EmettreFactureAction::class)->handle($ticket);
+        });
+        $this->travelTo('2026-10-06 00:00:00');
+        app(TenantContext::class)->runAs($magasin, fn () => app(CloturerCaisseAction::class)->handle($magasin, '2026-10-05'));
+
+        return $magasin;
     }
 
     /**

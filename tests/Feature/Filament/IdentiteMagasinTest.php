@@ -9,8 +9,10 @@ use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\IdentiteMagasin;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -282,6 +284,85 @@ class IdentiteMagasinTest extends TestCase
             ->assertFormFieldIsDisabled('code');
 
         $this->assertSame(['MABOUT', 'Ma Boutique SARL'], [$magasin->fresh()->code, $magasin->fresh()->raison_sociale]);
+    }
+
+    /**
+     * Un magasin qui n'a encore rien vendu ne numérote aucun document la
+     * nuit, ni clôture de caisse ni déclaration d'e-reporting : son code
+     * reste modifiable jusqu'à son premier document.
+     */
+    public function test_un_magasin_sans_vente_garde_son_code_modifiable_apres_les_commandes_de_la_nuit(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $magasin = $this->connecterLeProprietaire();
+        $magasin->update(['regime_tva' => RegimeTva::ReelSimplifie]);
+        $this->travelTo('2026-10-10 01:00:00');
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+        $this->artisan('app:soumettre-ereporting-periodique')->assertSuccessful();
+
+        Livewire::test(IdentiteMagasin::class)
+            ->assertFormFieldIsEnabled('code')
+            ->fillForm(['code' => 'LYON1'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('LYON1', $magasin->fresh()->code);
+    }
+
+    /**
+     * Seuls les documents du magasin rendent son code définitif : le
+     * premier document d'un autre magasin ne le verrouille pas.
+     */
+    public function test_le_premier_document_d_un_autre_magasin_ne_rend_pas_le_code_definitif(): void
+    {
+        $autreMagasin = app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $magasin = $this->connecterLeProprietaire();
+        app(TenantContext::class)->runAs($autreMagasin, fn () => $this->numeroterUnPremierDevis());
+
+        Livewire::test(IdentiteMagasin::class)->assertFormFieldIsEnabled('code');
+        $magasin->fresh()->update(['code' => 'LYON3']);
+
+        $this->assertSame('LYON3', $magasin->fresh()->code);
+        $this->assertTrue($autreMagasin->fresh()->codeEstDefinitif());
+    }
+
+    /**
+     * @return array<string, array{array<string, string>, string, string}>
+     */
+    public static function valeursPrisesPendantLEnregistrement(): array
+    {
+        return [
+            'code' => [['code' => 'LYON1'], 'code', 'Ce code est déjà utilisé : choisissez-en un autre, par exemple LYON2.'],
+            'SIRET' => [['siren' => '123456789', 'siret' => '12345678900012'], 'siret', 'Ce SIRET est déjà celui d\'un autre magasin.'],
+        ];
+    }
+
+    /**
+     * Un code ou un SIRET, libre à la validation, pris par un autre magasin
+     * juste avant l'enregistrement : l'écran le refuse comme la validation,
+     * sans erreur du serveur, et rien n'est enregistré.
+     *
+     * @param  array<string, string>  $saisie
+     */
+    #[DataProvider('valeursPrisesPendantLEnregistrement')]
+    public function test_une_valeur_prise_pendant_l_enregistrement_est_refusee_comme_par_la_validation(array $saisie, string $champ, string $message): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $concurrentEnCours = false;
+        Magasin::updating(function () use ($saisie, &$concurrentEnCours): void {
+            if (! $concurrentEnCours) {
+                $concurrentEnCours = true;
+                Magasin::factory()->create($saisie);
+            }
+        });
+
+        Livewire::test(IdentiteMagasin::class)
+            ->fillForm([...$saisie, 'raison_sociale' => 'Ma Boutique SARL'])
+            ->call('save')
+            ->assertHasFormErrors([$champ])
+            ->assertSee($message);
+
+        $this->assertSame(['MABOUT', null, null], [$magasin->fresh()->code, $magasin->fresh()->siret, $magasin->fresh()->raison_sociale]);
     }
 
     /**

@@ -17,7 +17,9 @@ use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * L'identité légale du magasin, imprimée en tête de ses devis, factures et
@@ -43,6 +45,8 @@ class IdentiteMagasin extends Page implements HasForms
         'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays',
         'email', 'telephone',
     ];
+
+    private const MESSAGE_SIRET_DEJA_UTILISE = 'Ce SIRET est déjà celui d\'un autre magasin.';
 
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
 
@@ -133,7 +137,7 @@ class IdentiteMagasin extends Page implements HasForms
                         ->unique(table: Magasin::class, ignorable: fn (): Magasin => $this->magasin())
                         ->validationMessages([
                             'regex' => 'Le SIRET compte 14 chiffres, sans espace.',
-                            'unique' => 'Ce SIRET est déjà celui d\'un autre magasin.',
+                            'unique' => self::MESSAGE_SIRET_DEJA_UTILISE,
                         ]),
                     TextInput::make('numero_tva')
                         ->label('N° TVA intracommunautaire')
@@ -180,13 +184,19 @@ class IdentiteMagasin extends Page implements HasForms
      * désactivé, et le formulaire montre ensuite ce qui est enregistré ;
      * devenu définitif pendant l'enregistrement même, il est refusé, et
      * l'écran dit pourquoi.
+     *
+     * @throws ValidationException
      */
     public function save(): void
     {
         $donnees = $this->form->getState();
 
         static::executerSansCasser(function () use ($donnees): void {
-            DB::transaction(fn () => $this->magasin()->update($donnees));
+            try {
+                DB::transaction(fn () => $this->magasin()->update($donnees));
+            } catch (UniqueConstraintViolationException $exception) {
+                throw $this->refusDuDoublon($exception);
+            }
 
             $this->form->fill($this->magasin()->only(self::CHAMPS));
 
@@ -195,6 +205,22 @@ class IdentiteMagasin extends Page implements HasForms
                 ->success()
                 ->send();
         });
+    }
+
+    /**
+     * Le code ou le SIRET, libres à la validation, peuvent être pris par un
+     * autre magasin avant l'enregistrement : l'index unique de la colonne
+     * refuse alors la modification, et l'écran le dit comme la validation
+     * l'aurait dit. Le message du pilote de la base, sans la requête, nomme
+     * l'index refusé (magasins.siret, magasins_siret_unique...) ; un code
+     * s'écrit en majuscules et un SIRET en chiffres : « siret » en
+     * minuscules n'y désigne que l'index du SIRET.
+     */
+    private function refusDuDoublon(UniqueConstraintViolationException $exception): ValidationException
+    {
+        return str_contains((string) ($exception->errorInfo[2] ?? ''), 'siret')
+            ? ValidationException::withMessages(['data.siret' => self::MESSAGE_SIRET_DEJA_UTILISE])
+            : ValidationException::withMessages(['data.code' => CodeMagasinLibre::MESSAGE_DEJA_UTILISE]);
     }
 
     private function codeEstDefinitif(): bool

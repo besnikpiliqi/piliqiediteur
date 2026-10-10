@@ -7,7 +7,6 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -24,18 +23,14 @@ use Illuminate\Support\Facades\DB;
  * Le magasin est actif dès sa création (voir Magasin::booted()) : aucune
  * vérification du SIRET (API Sirene de l'INSEE) ne précède son activation.
  *
- * Son code (voir CodeMagasin) est celui qu'on lui donne, ou, sans code
- * donné, celui que propose son nom. Un code proposé peut être pris entre
- * la proposition et l'enregistrement par une création simultanée sous le
- * même nom : l'index unique de magasins.code refuse alors l'enregistrement,
- * et la création recommence avec le code suivant, trois essais au plus.
- * Un code donné, choisi par la personne qui s'inscrit, ne se remplace
- * jamais en silence : le refus remonte (voir RegisterMagasin).
+ * Son code (voir CodeMagasin) est celui que la personne qui s'inscrit a
+ * choisi ; il ne se remplace jamais en silence : déjà pris, l'index unique
+ * de magasins.code refuse la création, et le refus remonte (voir
+ * RegisterMagasin). Sans code donné, le magasin reçoit celui que propose
+ * son nom (voir Magasin::booted()).
  */
 class CreerMagasinAction
 {
-    private const ESSAIS_AVEC_UN_CODE_PROPOSE = 3;
-
     public function __construct(private readonly SeedMagasinRolesAction $seedMagasinRoles) {}
 
     /**
@@ -44,32 +39,6 @@ class CreerMagasinAction
      * @throws UniqueConstraintViolationException
      */
     public function handle(array $donneesMagasin, User $proprietaire): Magasin
-    {
-        if (filled($donneesMagasin['code'] ?? null)) {
-            return $this->creer($donneesMagasin, $proprietaire);
-        }
-
-        $codesPris = [];
-
-        for ($essai = 1; ; $essai++) {
-            $code = CodeMagasin::proposer($donneesMagasin['nom'], $codesPris);
-
-            try {
-                return $this->creer(['code' => $code] + $donneesMagasin, $proprietaire);
-            } catch (UniqueConstraintViolationException $exception) {
-                if ($essai === self::ESSAIS_AVEC_UN_CODE_PROPOSE) {
-                    throw $exception;
-                }
-
-                $codesPris[] = $code;
-            }
-        }
-    }
-
-    /**
-     * @param  array<string, mixed>  $donneesMagasin
-     */
-    private function creer(array $donneesMagasin, User $proprietaire): Magasin
     {
         return DB::transaction(function () use ($donneesMagasin, $proprietaire) {
             $magasin = Magasin::create($donneesMagasin);

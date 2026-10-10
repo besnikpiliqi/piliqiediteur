@@ -9,6 +9,7 @@ use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -119,6 +120,22 @@ class LigneFacture extends Model
     public function quantiteCreditableRestante(): int
     {
         return $this->quantite - $this->quantiteDejaCreditee();
+    }
+
+    /**
+     * Les lignes qu'il reste à créditer, comme quantiteCreditableRestante()
+     * mais en une seule requête : celles qu'aucun avoir émis n'a encore
+     * entièrement créditées.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeCreditables(Builder $query): Builder
+    {
+        return $query->where($this->qualifyColumn('quantite'), '>', LigneAvoir::query()
+            ->selectRaw('coalesce(sum(lignes_avoir.quantite), 0)')
+            ->whereColumn('lignes_avoir.ligne_facture_id', $this->getQualifiedKeyName())
+            ->whereHas('avoir', fn (Builder $avoirs): Builder => $avoirs->where('statut', StatutAvoir::Emise)));
     }
 
     /**

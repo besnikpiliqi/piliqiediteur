@@ -305,7 +305,7 @@ class ClientResourceTest extends TestCase
 
     /**
      * Sans la permission d'archiver les clients, pas de restauration non
-     * plus.
+     * plus : ni bouton, ni effet pour une requête forgée.
      */
     public function test_un_vendeur_ne_restaure_pas_un_client_archive(): void
     {
@@ -316,7 +316,9 @@ class ClientResourceTest extends TestCase
 
         Livewire::test(ListClients::class)
             ->filterTable('trashed', false)
-            ->assertTableActionHidden('restore', $client);
+            ->assertTableActionHidden('restore', $client)
+            ->call('mountTableAction', 'restore', (string) $client->getKey())
+            ->call('callMountedTableAction');
 
         $this->assertSoftDeleted($client);
     }

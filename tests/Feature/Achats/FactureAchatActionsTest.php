@@ -28,6 +28,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Closure;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -993,6 +994,88 @@ class FactureAchatActionsTest extends TestCase
 
         $this->assertSame('FA-'.app(TenantContext::class)->magasin()->code.'-2026-000001', $validee->numero);
         $this->assertSame(5, $produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * Un nouveau produit est rattaché au fournisseur de la facture dès sa
+     * création : archivé depuis la saisie du brouillon, ce fournisseur n'en
+     * reçoit pas (message), et aucun produit n'est créé. Le brouillon reste
+     * modifiable pour ses produits existants.
+     */
+    public function test_un_brouillon_dont_le_fournisseur_est_archive_ne_cree_pas_de_nouveau_produit(): void
+    {
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste fermé']);
+        $produit = Produit::factory()->create(['taux_tva' => 20]);
+        $brouillon = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
+        ]);
+        $fournisseur->delete();
+
+        $this->assertThrows(
+            fn () => app(ModifierFactureAchatAction::class)->handle($brouillon, $fournisseur, [
+                ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
+                ['produit' => ['nom' => 'Câble USB-C', 'reference' => 'CAB-1', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 4],
+            ]),
+            LogicException::class,
+            'Le fournisseur « Grossiste fermé » a été archivé : restaurez-le depuis la liste des fournisseurs avant d\'ajouter un nouveau produit à cette facture d\'achat.',
+        );
+
+        $this->assertSame(0, Produit::withTrashed()->where('reference', 'CAB-1')->count());
+        $this->assertSame([$produit->id], $brouillon->fresh()->lignes->pluck('produit_id')->all());
+
+        app(ModifierFactureAchatAction::class)->handle($brouillon, $fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 6, 'prix_unitaire_ht' => 2],
+        ]);
+
+        $this->assertSame([6, '12.00'], [$brouillon->fresh()->lignes->sole()->quantite, $brouillon->fresh()->total_ht]);
+    }
+
+    /**
+     * Corriger une réception rattache ses produits au fournisseur de leur
+     * dernier achat validé : archivé depuis la validation, ce fournisseur
+     * ne le devient pas sans être restauré. La correction est refusée avec
+     * un message, sans mouvement de stock ni changement de fournisseur.
+     */
+    public function test_corriger_une_facture_dachat_validee_dont_le_fournisseur_est_archive_est_refuse(): void
+    {
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste fermé']);
+        $produitA = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $produitB = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir($fournisseur, [['produit_id' => $produitA->id, 'quantite' => 5, 'prix_unitaire_ht' => 2]]);
+        $fournisseur->delete();
+
+        $this->assertThrows(
+            fn () => app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+                ['produit_id' => $produitA->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
+                ['produit_id' => $produitB->id, 'quantite' => 3, 'prix_unitaire_ht' => 4],
+            ]),
+            LogicException::class,
+            'Le fournisseur « Grossiste fermé » a été archivé : restaurez-le depuis la liste des fournisseurs avant de corriger cette facture d\'achat.',
+        );
+
+        $this->assertSame([$produitA->id], $factureAchat->fresh()->lignes->pluck('produit_id')->all());
+        $this->assertSame([5, 0], [$produitA->fresh()->stock_quantite, $produitB->fresh()->stock_quantite]);
+        $this->assertNull($produitB->fresh()->fournisseur_id);
+        $this->assertSame(1, MouvementStock::query()->count());
+    }
+
+    /**
+     * Chaque ligne d'achat reçoit un produit (voir ConstructeurLigneAchat),
+     * que sa ligne d'avoir fournisseur reprend : la base refuse l'une comme
+     * l'autre sans produit.
+     */
+    public function test_la_base_refuse_une_ligne_d_achat_ou_d_avoir_fournisseur_sans_produit(): void
+    {
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir(Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2]]);
+        $avoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+            ['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 1],
+        ]);
+
+        $this->assertThrows(fn () => $factureAchat->lignes->sole()->replicate()->forceFill(['produit_id' => null])->save(), QueryException::class);
+        $this->assertThrows(fn () => $avoir->lignes->sole()->replicate()->forceFill(['produit_id' => null])->save(), QueryException::class);
+
+        $this->assertSame([1, 1], [$factureAchat->lignes()->count(), $avoir->lignes()->count()]);
     }
 
     /**

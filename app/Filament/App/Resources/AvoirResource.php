@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\LigneFacture;
@@ -28,6 +29,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rules\Exists;
 
 /**
  * Création possible de deux façons : depuis l'action rapide "Avoir" de
@@ -77,11 +79,12 @@ class AvoirResource extends Resource
         return $form->schema([
             Select::make('client_id')
                 ->label('Client')
-                // Un client archivé ne reçoit plus de nouveau document, même
-                // si ceux qu'il a déjà le gardent (voir Avoir::client()).
-                ->relationship('client', 'nom', fn (Builder $query): Builder => $query->withoutTrashed())
+                // Archivé, un client n'est plus proposé pour une vente, mais
+                // ce qu'il a acheté se retourne toujours (voir
+                // Client::scopeQuiPeuventEtreCredites()).
+                ->options(fn (): array => Client::query()->quiPeuventEtreCredites()->orderBy('nom')->pluck('nom', 'id')->all())
+                ->rule(fn (): Exists => Client::regleExisteDansLeMagasin(Client::query()->quiPeuventEtreCredites()))
                 ->searchable()
-                ->preload()
                 ->required()
                 ->live()
                 ->afterStateUpdated(function (?int $state, Set $set): void {
@@ -220,11 +223,10 @@ class AvoirResource extends Resource
     private static function lignesCreditables(int $clientId): Collection
     {
         return LigneFacture::query()
+            ->creditables()
             ->whereHas('facture', fn (Builder $query) => $query->emises()->where('client_id', $clientId))
             ->with('facture')
-            ->get()
-            ->filter(fn (LigneFacture $ligne): bool => $ligne->quantiteCreditableRestante() > 0)
-            ->values();
+            ->get();
     }
 
     public static function table(Table $table): Table

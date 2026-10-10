@@ -470,6 +470,26 @@ class ProduitResourceTest extends TestCase
     }
 
     /**
+     * Sans la permission d'archiver les produits, pas de restauration non
+     * plus : ni bouton, ni effet pour une requête forgée.
+     */
+    public function test_un_vendeur_ne_restaure_pas_un_produit_archive(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur));
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->trashed()->create();
+
+        Livewire::test(ListProduits::class)
+            ->filterTable('trashed', false)
+            ->assertTableActionHidden('restore', $produit)
+            ->call('mountTableAction', 'restore', (string) $produit->getKey())
+            ->call('callMountedTableAction');
+
+        $this->assertSoftDeleted($produit);
+    }
+
+    /**
      * Sa page de modification ne trouve plus un produit archivé (voir
      * ProduitPolicy::update()) : sa ligne n'y mène pas.
      */

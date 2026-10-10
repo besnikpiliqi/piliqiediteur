@@ -222,7 +222,8 @@ class ClientResource extends Resource
      * vente (Devis/Facture/Caisse), pour que le vendeur voie le crédit
      * disponible avant même de valider -- même s'il sera de toute façon
      * appliqué automatiquement à l'émission (voir
-     * AppliquerAvoirsDisponiblesAction).
+     * AppliquerAvoirsDisponiblesAction), y compris pour le client d'un
+     * brouillon archivé depuis.
      */
     public static function soldeCrediteurHelperText(mixed $clientId): string|Htmlable|null
     {
@@ -230,7 +231,7 @@ class ClientResource extends Resource
             return null;
         }
 
-        $solde = Client::find($clientId)?->soldeCrediteur();
+        $solde = Client::withTrashed()->find($clientId)?->soldeCrediteur();
 
         if (blank($solde) || $solde <= 0) {
             return null;

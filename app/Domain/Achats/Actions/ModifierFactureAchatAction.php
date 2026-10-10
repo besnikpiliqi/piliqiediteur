@@ -71,7 +71,15 @@ class ModifierFactureAchatAction
                 throw new LogicException("Le produit « {$produitArchive->nom} » a été archivé : restaurez-le depuis le catalogue avant de corriger cette facture d'achat.");
             }
 
-            $produitsAvant = $factureAchat->lignes->pluck('produit_id')->filter()->map(fn (int|string $produitId): int => (int) $produitId)->unique()->values()->all();
+            // Corriger la réception rattache ses produits au fournisseur de
+            // leur dernier achat validé (voir corrigerLaReception()) :
+            // archivé, comme à la validation, il ne le devient pas sans être
+            // restauré. Un brouillon, sans réception, reste modifiable.
+            if ($estValidee && $fournisseur->trashed()) {
+                throw new LogicException("Le fournisseur « {$fournisseur->nom} » a été archivé : restaurez-le depuis la liste des fournisseurs avant de corriger cette facture d'achat.");
+            }
+
+            $produitsAvant = $factureAchat->lignes->pluck('produit_id')->map(fn (int|string $produitId): int => (int) $produitId)->unique()->values()->all();
 
             $factureAchat->update([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]);
             $factureAchat->lignes()->delete();

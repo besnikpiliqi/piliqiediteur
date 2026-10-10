@@ -918,6 +918,57 @@ class FactureAchatResourceTest extends TestCase
         $this->assertSame(5, Produit::withTrashed()->find($produit->id)->stock_quantite);
     }
 
+    /**
+     * Le fournisseur d'une réception validée a été archivé : enregistrer sa
+     * correction affiche pourquoi elle est refusée, et le stock ne bouge
+     * pas.
+     */
+    public function test_corriger_une_reception_dont_le_fournisseur_est_archive_affiche_pourquoi(): void
+    {
+        $this->connecterLeProprietaire();
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste fermé']);
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
+        ]));
+        $fournisseur->delete();
+
+        Livewire::test(EditFactureAchat::class, ['record' => $factureAchat->getRouteKey()])
+            ->call('save')
+            ->assertNotified('Le fournisseur « Grossiste fermé » a été archivé : restaurez-le depuis la liste des fournisseurs avant de corriger cette facture d\'achat.');
+
+        $this->assertSame(5, $produit->fresh()->stock_quantite);
+    }
+
+    /**
+     * Rouverte, la ligne d'un produit archivé depuis la saisie du brouillon
+     * reste celle de ce produit : sa référence n'est pas prise pour celle
+     * d'un autre. C'est l'enregistrement qui la refuse, avec un message.
+     */
+    public function test_rouvrir_la_ligne_d_un_produit_archive_n_affiche_aucune_erreur_de_reference(): void
+    {
+        $this->connecterLeProprietaire();
+        $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'reference' => 'CAB-1', 'taux_tva' => 20]);
+        $brouillon = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2],
+        ]);
+        $produit->delete();
+        $component = Livewire::test(EditFactureAchat::class, ['record' => $brouillon->getRouteKey()]);
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->mountFormComponentAction('lignes', 'modifierLaLigne', arguments: ['item' => $cle])
+            ->setFormComponentActionData(['quantite' => 4])
+            ->callMountedFormComponentAction()
+            ->assertHasNoFormComponentActionErrors();
+
+        $component
+            ->call('save')
+            ->assertNotified('Le produit « Câble USB-C » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture.');
+        $this->assertSame(4, $component->get("data.lignes.{$cle}.quantite"));
+        $this->assertSame(5, $brouillon->fresh()->lignes->sole()->quantite);
+    }
+
     private function connecterLeProprietaire(): Magasin
     {
         $proprietaire = User::factory()->create();

@@ -24,7 +24,10 @@ class CreateAvoir extends CreateRecord
     protected function handleRecordCreation(array $data): Model
     {
         return static::executerOuInterrompre(fn () => app(EnregistrerAvoirAction::class)->handle(
-            Client::query()->findOrFail($data['client_id']),
+            // Limité au magasin par MagasinScope ; withTrashed() garde le
+            // client archivé dont un achat se retourne (voir
+            // Client::scopeQuiPeuventEtreCredites()).
+            Client::withTrashed()->findOrFail($data['client_id']),
             $data['lignes'],
             $data['motif'],
         ));

@@ -86,16 +86,15 @@ class AvoirFournisseur extends Model
     public function verifierQueLeStockSuffit(): void
     {
         $quantitesParProduit = $this->lignes()
-            ->whereNotNull('produit_id')
             ->get()
             ->groupBy('produit_id')
             ->map(fn (Collection $lignes): int => $lignes->sum('quantite'))
             ->sortKeys();
 
         foreach ($quantitesParProduit as $produitId => $quantite) {
-            $produit = Produit::withTrashed()->whereKey($produitId)->lockForUpdate()->first();
+            $produit = Produit::withTrashed()->whereKey($produitId)->lockForUpdate()->firstOrFail();
 
-            if ($produit !== null && $produit->suivi_stock && $quantite > $produit->stock_quantite) {
+            if ($produit->suivi_stock && $quantite > $produit->stock_quantite) {
                 throw new LogicException(self::messageStockInsuffisant($produit, $quantite));
             }
         }

@@ -17,7 +17,7 @@ return new class extends Migration
             // fournisseur (voir LigneAchat::quantiteRetournableRestante())
             // n'a de sens que pour un produit du catalogue. Il reste lié,
             // archivé compris : une fiche utilisée ne s'efface jamais.
-            $table->foreignId('produit_id')->nullable()->constrained('produits')->restrictOnDelete();
+            $table->foreignId('produit_id')->constrained('produits')->restrictOnDelete();
             $table->string('description', 255);
             $table->string('reference', 60)->nullable();
             // Nombre entier d'articles (voir QuantiteEntiere).

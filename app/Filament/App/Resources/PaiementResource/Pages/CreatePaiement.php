@@ -25,7 +25,10 @@ class CreatePaiement extends CreateRecord
 
     protected function handleRecordCreation(array $data): Model
     {
-        $client = Client::query()->findOrFail($data['client_id']);
+        // Limité au magasin par MagasinScope ; withTrashed() garde le client
+        // archivé qui règle ce qu'il doit encore (voir
+        // Client::scopeQuiPeuventRegler()).
+        $client = Client::withTrashed()->findOrFail($data['client_id']);
         $allocations = array_map(fn (array $allocation) => [
             'facture_id' => (int) $allocation['facture_id'],
             'montant' => (float) $allocation['montant'],

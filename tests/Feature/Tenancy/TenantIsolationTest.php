@@ -54,6 +54,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Closure;
 use Filament\Resources\Resource as RessourceFilament;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -284,8 +285,11 @@ class TenantIsolationTest extends TestCase
 
     /**
      * Une fiche archivée reste au magasin qui l'a créée : withTrashed() ne
-     * retire que le filtre des fiches archivées, jamais MagasinScope, et
-     * la règle « exists » d'un formulaire du magasin B ne l'accepte pas.
+     * retire que le filtre des fiches archivées, jamais MagasinScope. La
+     * règle « exists » d'un formulaire du magasin B refuse les fiches du
+     * magasin A, qu'elle exclue les fiches archivées ou qu'elle les accepte
+     * (voir BelongsToMagasin::regleExisteDansLeMagasin()), alors qu'elle
+     * accepte les mêmes fiches du magasin B.
      *
      * @param  class-string<Model>  $modelClass
      */
@@ -294,13 +298,20 @@ class TenantIsolationTest extends TestCase
     {
         $contexte = app(TenantContext::class);
         $contexte->set($this->magasinA);
-        $ficheA = $modelClass::factory()->trashed()->create();
-
+        $ficheA = $modelClass::factory()->create();
+        $ficheArchiveeA = $modelClass::factory()->trashed()->create();
         $contexte->set($this->magasinB);
+        $ficheB = $modelClass::factory()->create();
+        $ficheArchiveeB = $modelClass::factory()->trashed()->create();
+        $existe = fn (Model $fiche, ?Builder $parmi = null): bool => Validator::make(['fiche' => $fiche->getKey()], ['fiche' => [$modelClass::regleExisteDansLeMagasin($parmi)]])->passes();
 
-        $this->assertNull($modelClass::withTrashed()->find($ficheA->id));
-        $this->assertSame([], $modelClass::onlyTrashed()->pluck('id')->all());
-        $this->assertTrue(Validator::make(['fiche' => $ficheA->id], ['fiche' => [$modelClass::regleExisteDansLeMagasin()]])->fails());
+        $this->assertNull($modelClass::withTrashed()->find($ficheArchiveeA->id));
+        $this->assertSame([$ficheArchiveeB->id], $modelClass::onlyTrashed()->pluck('id')->all());
+
+        $this->assertFalse($existe($ficheA));
+        $this->assertTrue($existe($ficheB));
+        $this->assertFalse($existe($ficheArchiveeA, $modelClass::withTrashed()));
+        $this->assertTrue($existe($ficheArchiveeB, $modelClass::withTrashed()));
     }
 
     /**

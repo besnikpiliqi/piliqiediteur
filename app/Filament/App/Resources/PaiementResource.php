@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
@@ -22,6 +23,7 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Validation\Rules\Exists;
 
 /**
  * Pas de page "edit" ni d'action de suppression : un paiement enregistré
@@ -65,11 +67,12 @@ class PaiementResource extends Resource
             Section::make('Paiement')->schema([
                 Select::make('client_id')
                     ->label('Client')
-                    // Un client archivé ne règle plus rien de nouveau, même si
-                    // ses paiements le gardent (voir Paiement::client()).
-                    ->relationship('client', 'nom', fn (Builder $query): Builder => $query->withoutTrashed())
+                    // Archivé, un client n'est plus proposé pour une vente,
+                    // mais il règle toujours ce qu'il doit encore (voir
+                    // Client::scopeQuiPeuventRegler()).
+                    ->options(fn (): array => Client::query()->quiPeuventRegler()->orderBy('nom')->pluck('nom', 'id')->all())
+                    ->rule(fn (): Exists => Client::regleExisteDansLeMagasin(Client::query()->quiPeuventRegler()))
                     ->searchable()
-                    ->preload()
                     ->live()
                     ->required(),
                 Select::make('mode_paiement')

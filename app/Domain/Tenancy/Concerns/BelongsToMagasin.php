@@ -5,8 +5,10 @@ namespace App\Domain\Tenancy\Concerns;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Exists;
 
@@ -46,16 +48,25 @@ trait BelongsToMagasin
 
     /**
      * La règle « exists » d'un identifiant de ce modèle choisi dans un
-     * formulaire : une fiche du magasin actif, et pas une fiche archivée.
+     * formulaire : une fiche du magasin actif, et pas une fiche archivée --
+     * ou, avec $parmi, l'une des fiches de cette requête (archivées
+     * comprises si elle les garde, voir Client::scopeQuiPeuventRegler()).
      * La validation interroge la table sans passer par MagasinScope : une
      * règle « exists » nue accepterait l'identifiant d'une fiche d'un autre
-     * magasin, et révélerait lesquels existent.
+     * magasin, et révélerait lesquels existent. Elle reste donc limitée au
+     * magasin actif, même quand $parmi l'est déjà par MagasinScope.
+     *
+     * @param  Builder<static>|null  $parmi
      */
-    public static function regleExisteDansLeMagasin(): Exists
+    public static function regleExisteDansLeMagasin(?Builder $parmi = null): Exists
     {
         $modele = new static;
         $regle = Rule::exists($modele->getTable(), $modele->getKeyName())
             ->where('magasin_id', app(TenantContext::class)->id());
+
+        if ($parmi !== null) {
+            return $regle->where(fn (QueryBuilder $fiches): QueryBuilder => $fiches->whereIn($modele->getKeyName(), $parmi->select($modele->getQualifiedKeyName())));
+        }
 
         return in_array(SoftDeletes::class, class_uses_recursive(static::class), true)
             ? $regle->whereNull($modele->getDeletedAtColumn())

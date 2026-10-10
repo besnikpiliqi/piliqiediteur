@@ -205,7 +205,10 @@ trait AjouteDesLignesDAchat
      */
     private static function formulaireDeLigne(): array
     {
-        $produitSelectionne = fn (Get $get): ?Produit => filled($get('produit_id')) ? Produit::find($get('produit_id')) : null;
+        // Archivé compris : la ligne qui le garde se rouvre sur sa fiche,
+        // non modifiable (voir ProduitPolicy::update()), et l'enregistrement
+        // la refuse ensuite avec un message (voir ConstructeurLigneAchat).
+        $produitSelectionne = fn (Get $get): ?Produit => filled($get('produit_id')) ? Produit::withTrashed()->find($get('produit_id')) : null;
         $produitChoisi = fn (Get $get): bool => $get('origine') === self::NOUVEAU_PRODUIT || filled($get('produit_id'));
         $ficheNonModifiable = fn (Get $get): bool => ($produit = $produitSelectionne($get)) !== null && ! auth()->user()->can('update', $produit);
         $figeParSonFournisseur = fn (Get $get): bool => $produitSelectionne($get)?->vientDUneFactureAchatApi() ?? false;
@@ -339,7 +342,7 @@ trait AjouteDesLignesDAchat
             // d'achat précédent ne doit pas rester comme si elle valait
             // encore -- sauf si la personne l'a déjà changée elle-même.
             if (filled($get('prix_vente_propose')) && $get('prix_vente_ttc') === $get('prix_vente_propose')) {
-                $produit = filled($get('produit_id')) ? Produit::find($get('produit_id')) : null;
+                $produit = filled($get('produit_id')) ? Produit::withTrashed()->find($get('produit_id')) : null;
 
                 $set('prix_vente_ttc', $produit === null ? null : self::prixEnTexte((float) $produit->prix_vente_ttc));
             }
@@ -501,9 +504,7 @@ trait AjouteDesLignesDAchat
     {
         return [
             'produit_id' => $ligne->produit_id,
-            'produit' => $ligne->produit === null
-                ? ['nom' => $ligne->description, 'reference' => $ligne->reference]
-                : self::valeursDuProduit($ligne->produit),
+            'produit' => self::valeursDuProduit($ligne->produit),
             'quantite' => $ligne->quantite,
             'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
             'remise_pourcentage' => self::pourcentageEnTexte($ligne->remise_pourcentage),

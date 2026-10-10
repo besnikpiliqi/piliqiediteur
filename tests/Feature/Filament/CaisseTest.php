@@ -840,6 +840,33 @@ class CaisseTest extends TestCase
             ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('Martin') === [$proposable->id => 'Martin proposé']);
     }
 
+    /**
+     * Le client d'un panier archivé depuis reste affiché le temps d'en
+     * choisir un autre : son crédit d'avoir aussi, annoncé sous le client
+     * et déduit du reste à payer, comme pour tout client (voir
+     * ClientResource::soldeCrediteurHelperText()).
+     */
+    public function test_le_credit_d_un_client_archive_reste_annonce_et_deduit_du_reste_a_payer(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $client = Client::factory()->create();
+        $produitRendu = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $venteInitiale = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $produitRendu->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $venteInitiale->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]));
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $client->delete();
+        $component = Livewire::test(Caisse::class)->set('data.client_id', $client->id);
+        $component->set('data.lignes', [['quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]]);
+
+        $component->set('data.lignes.'.array_key_first($component->get('data.lignes')).'.produit_id', $produit->id);
+
+        $component
+            ->assertSee('Crédit disponible pour ce client : 10,00 € (sera appliqué automatiquement).')
+            ->assertSeeHtml('Total 50,00 € moins 10,00 € de crédit d&#039;avoir du client.');
+    }
+
     public function test_un_client_archive_est_refuse_a_l_encaissement(): void
     {
         $this->ouvrirLaCaisseDUnMagasin();

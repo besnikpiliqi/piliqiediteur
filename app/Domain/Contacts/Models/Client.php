@@ -5,10 +5,13 @@ namespace App\Domain\Contacts\Models;
 use App\Domain\Contacts\Concerns\Proposable;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Facturation\Enums\StatutAvoir;
+use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\ClientFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -97,6 +100,42 @@ class Client extends Model
     public function avoirs(): HasMany
     {
         return $this->hasMany(Avoir::class);
+    }
+
+    public function factures(): HasMany
+    {
+        return $this->hasMany(Facture::class);
+    }
+
+    /**
+     * Les clients à qui un paiement s'enregistre : archivé, un client n'est
+     * plus proposé pour une vente, mais il règle toujours ce qu'il doit
+     * encore (voir Facture::client()), en un seul paiement s'il le veut
+     * (voir PaiementResource).
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeQuiPeuventRegler(Builder $query): Builder
+    {
+        return $query->withTrashed()->where(fn (Builder $clients): Builder => $clients
+            ->whereNull($this->getQualifiedDeletedAtColumn())
+            ->orWhereHas('factures', fn (Builder $factures): Builder => $factures->whereIn('statut', StatutFacture::quiAttendentUnReglement())));
+    }
+
+    /**
+     * Les clients à qui un avoir se fait : archivé, un client n'est plus
+     * proposé pour une vente, mais ce qu'il a acheté se retourne toujours,
+     * sur plusieurs documents à la fois s'il le faut (voir AvoirResource).
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeQuiPeuventEtreCredites(Builder $query): Builder
+    {
+        return $query->withTrashed()->where(fn (Builder $clients): Builder => $clients
+            ->whereNull($this->getQualifiedDeletedAtColumn())
+            ->orWhereHas('factures', fn (Builder $factures): Builder => $factures->emises()->whereHas('lignes', fn (Builder $lignes): Builder => $lignes->creditables())));
     }
 
     /**

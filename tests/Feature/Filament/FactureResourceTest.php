@@ -662,6 +662,30 @@ class FactureResourceTest extends TestCase
             ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getOptionLabel() === 'Client archivé');
     }
 
+    /**
+     * Le crédit d'avoir du client d'un brouillon archivé depuis reste
+     * annoncé à sa modification : l'émission l'imputera quand même (voir
+     * AppliquerAvoirsDisponiblesAction).
+     */
+    public function test_le_credit_du_client_archive_d_un_brouillon_reste_annonce_a_sa_modification(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $ticket->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]));
+        $brouillon = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $client->delete();
+
+        Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
+            ->assertSee('Crédit disponible pour ce client : 12,00 € (sera appliqué automatiquement).');
+    }
+
     public function test_lecheance_est_prereplie_a_aujourdhui_par_defaut(): void
     {
         $proprietaire = User::factory()->create();

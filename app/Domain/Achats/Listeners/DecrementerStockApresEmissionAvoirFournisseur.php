@@ -18,11 +18,9 @@ class DecrementerStockApresEmissionAvoirFournisseur
     public function handle(AvoirFournisseurEmis $event): void
     {
         foreach ($event->avoirFournisseur->lignes as $ligne) {
-            $produit = $ligne->produit;
-
-            if ($produit !== null && $produit->suivi_stock) {
+            if ($ligne->produit->suivi_stock) {
                 $this->stock->enregistrer(
-                    produit: $produit,
+                    produit: $ligne->produit,
                     type: TypeMouvementStock::RetourFournisseur,
                     quantite: $ligne->quantite,
                     source: $event->avoirFournisseur,

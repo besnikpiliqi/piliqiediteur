@@ -138,7 +138,7 @@ class LigneAchat extends Model
         // dont le stock est effectivement suivi (voir StockLedgerService) :
         // pour les autres, stock_quantite reste figé à 0 et ne reflète
         // rien, on se fie alors uniquement au reliquat de la ligne.
-        if ($this->produit === null || ! $this->produit->suivi_stock) {
+        if (! $this->produit->suivi_stock) {
             return max(0, $resteSurLaLigne);
         }
 

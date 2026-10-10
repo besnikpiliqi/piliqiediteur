@@ -484,8 +484,8 @@ class PaiementResourceTest extends TestCase
 
     /**
      * Un paiement garde son client, même archivé depuis (voir
-     * Paiement::client()) ; ce client n'est plus proposé pour un nouveau
-     * paiement.
+     * Paiement::client()) ; ce client, qui ne doit plus rien, n'est plus
+     * proposé pour un nouveau paiement.
      */
     public function test_le_client_archive_reste_affiche_sur_ses_paiements_sans_etre_propose(): void
     {
@@ -506,6 +506,73 @@ class PaiementResourceTest extends TestCase
             ->assertTableColumnStateSet('client.nom', 'Jeanne Archivée', $paiement);
         Livewire::test(CreatePaiement::class)
             ->assertFormFieldExists('client_id', fn (Select $champ): bool => ! array_key_exists($client->id, $champ->getOptions()));
+    }
+
+    /**
+     * Archivé, un client n'est plus proposé pour une vente, mais il règle
+     * toujours ce qu'il doit : deux factures en un seul virement, le
+     * montant du paiement égal au total imputé (voir
+     * Client::scopeQuiPeuventRegler()).
+     */
+    public function test_un_client_archive_regle_deux_factures_en_un_seul_paiement(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create(['nom' => 'Société Archivée']);
+        $factureA = $this->emettreFactureDepuisLePanneau($client, 100);
+        $factureB = $this->emettreFactureDepuisLePanneau($client, 50 / 1.2);
+        $client->delete();
+
+        Livewire::test(CreatePaiement::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => ($champ->getOptions()[$client->id] ?? null) === 'Société Archivée')
+            ->fillForm([
+                'client_id' => $client->id,
+                'mode_paiement' => ModePaiement::Virement->value,
+                'montant' => 170,
+                'recu_le' => now()->toDateString(),
+                'allocations' => [
+                    ['facture_id' => $factureA->id, 'montant' => 120],
+                    ['facture_id' => $factureB->id, 'montant' => 50],
+                ],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $paiement = Paiement::query()->sole();
+        $this->assertSame([$client->id, '170.00'], [$paiement->client_id, $paiement->montant]);
+        $this->assertSame([StatutFacture::Payee, 0.0], [$factureA->fresh()->statut, $factureA->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 0.0], [$factureB->fresh()->statut, $factureB->fresh()->montantRestant()]);
+    }
+
+    /**
+     * Un client archivé qui ne doit plus rien n'est pas accepté, même par
+     * une requête forgée.
+     */
+    public function test_un_client_archive_qui_ne_doit_plus_rien_est_refuse(): void
+    {
+        $this->connecterLeProprietaire();
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client, 100);
+        Livewire::test(ListFactures::class)->callTableAction('encaisser', $facture, data: [
+            'mode_paiement' => ModePaiement::Especes->value,
+            'montant' => 120,
+            'recu_le' => now()->toDateString(),
+        ]);
+        $client->delete();
+
+        Livewire::test(CreatePaiement::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'mode_paiement' => ModePaiement::Virement->value,
+                'montant' => 120,
+                'recu_le' => now()->toDateString(),
+                'allocations' => [
+                    ['facture_id' => $facture->id, 'montant' => 120],
+                ],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+
+        $this->assertSame(['120.00'], Paiement::query()->pluck('montant')->all());
     }
 
     private function connecterLeProprietaire(): Magasin

@@ -26,7 +26,8 @@ use LogicException;
  * facture et rattaché à son fournisseur -- dans la même transaction que la
  * facture : une saisie abandonnée ne laisse aucun produit derrière elle.
  * Un produit archivé ne se reçoit plus : la ligne qui le garde est
- * refusée, avec un message, tant qu'il n'est pas restauré.
+ * refusée, avec un message, tant qu'il n'est pas restauré. Un fournisseur
+ * archivé ne reçoit pas non plus de nouveau produit.
  *
  * Le prix d'achat de la ligne et le prix de vente du produit sont deux
  * prix distincts : le prix de vente ne change jamais le prix d'achat, et
@@ -228,6 +229,13 @@ class ConstructeurLigneAchat
 
         if (! isset($attributs['nom'])) {
             throw new InvalidArgumentException('Chaque ligne d\'une facture d\'achat doit référencer un produit du catalogue, existant ou nouveau.');
+        }
+
+        // Rattaché au fournisseur de la facture dès sa création : archivé,
+        // ce fournisseur ne le deviendrait pas sans être restauré (voir
+        // ValiderFactureAchatAction).
+        if ($factureAchat->fournisseur->trashed()) {
+            throw new LogicException("Le fournisseur « {$factureAchat->fournisseur->nom} » a été archivé : restaurez-le depuis la liste des fournisseurs avant d'ajouter un nouveau produit à cette facture d'achat.");
         }
 
         return new Produit([

@@ -171,7 +171,7 @@ class FournisseurResourceTest extends TestCase
 
     /**
      * Sans la permission d'archiver les fournisseurs, pas de restauration
-     * non plus.
+     * non plus : ni bouton, ni effet pour une requête forgée.
      */
     public function test_un_observateur_ne_restaure_pas_un_fournisseur_archive(): void
     {
@@ -185,7 +185,9 @@ class FournisseurResourceTest extends TestCase
 
         Livewire::test(ListFournisseurs::class)
             ->filterTable('trashed', false)
-            ->assertTableActionHidden('restore', $fournisseur);
+            ->assertTableActionHidden('restore', $fournisseur)
+            ->call('mountTableAction', 'restore', (string) $fournisseur->getKey())
+            ->call('callMountedTableAction');
 
         $this->assertSoftDeleted($fournisseur);
     }

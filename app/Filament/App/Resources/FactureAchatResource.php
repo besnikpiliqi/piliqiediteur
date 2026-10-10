@@ -250,7 +250,7 @@ class FactureAchatResource extends Resource
         foreach ($factureAchat->lignes as $ligne) {
             $quantite = $ligne->quantiteRetournableRestante();
 
-            if ($ligne->produit?->suivi_stock) {
+            if ($ligne->produit->suivi_stock) {
                 $stockRestant[$ligne->produit_id] ??= max(0, $ligne->produit->stock_quantite);
                 $quantite = min($quantite, $stockRestant[$ligne->produit_id]);
                 $stockRestant[$ligne->produit_id] -= $quantite;

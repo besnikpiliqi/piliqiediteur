@@ -25,6 +25,7 @@ use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
@@ -271,6 +272,69 @@ class AvoirResourceTest extends TestCase
         $this->assertSame(2, $avoir->lignes()->count());
         $this->assertSame('150.00', $avoir->total_ht); // 1x50 + 2x50
         $this->assertCount(2, $avoir->facturesConcernees());
+    }
+
+    /**
+     * Archivé, un client n'est plus proposé pour une vente, mais ce qu'il a
+     * acheté se retourne toujours, sur deux de ses factures à la fois (voir
+     * Client::scopeQuiPeuventEtreCredites()).
+     */
+    public function test_un_client_archive_recoit_un_avoir_couvrant_deux_de_ses_factures(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create(['nom' => 'Société Archivée']);
+        $ligneA = $this->emettreFactureDepuisLePanneau($client)->lignes->firstOrFail();
+        $ligneB = $this->emettreFactureDepuisLePanneau($client)->lignes->firstOrFail();
+        $client->delete();
+
+        Livewire::test(CreateAvoir::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => ($champ->getOptions()[$client->id] ?? null) === 'Société Archivée')
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [
+                    ['ligne_facture_id' => $ligneA->id, 'quantite' => 1],
+                    ['ligne_facture_id' => $ligneB->id, 'quantite' => 2],
+                ],
+                'motif' => 'Retour de deux achats',
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $avoir = Avoir::query()->sole();
+        $this->assertSame([$client->id, StatutAvoir::Emise], [$avoir->client_id, $avoir->statut]);
+        $this->assertSame(['150.00', '30.00', '180.00'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
+        $this->assertCount(2, $avoir->facturesConcernees());
+    }
+
+    /**
+     * Un client archivé dont tout a déjà été crédité n'est ni proposé ni
+     * accepté, même par une requête forgée.
+     */
+    public function test_un_client_archive_sans_rien_a_crediter_n_est_ni_propose_ni_accepte(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $facture = $this->emettreFactureDepuisLePanneau($client);
+        Livewire::test(ListFactures::class)->callTableAction('avoir', $facture, data: ['motif' => 'Retour complet']);
+        $client->delete();
+
+        Livewire::test(CreateAvoir::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => ! array_key_exists($client->id, $champ->getOptions()))
+            ->fillForm([
+                'client_id' => $client->id,
+                'lignes' => [['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1]],
+                'motif' => 'Second retour',
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['client_id' => 'exists']);
+
+        $this->assertSame(1, Avoir::query()->count());
     }
 
     /**

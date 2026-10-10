@@ -416,11 +416,14 @@ class Caisse extends Page implements HasForms
     /**
      * Même montant que celui qu'appliquera AppliquerAvoirsDisponiblesAction :
      * tout le crédit disponible du client, dans la limite du total (jamais
-     * pour le client comptoir, voir Client::soldeCrediteur()).
+     * pour le client comptoir, voir Client::soldeCrediteur()). Celui d'un
+     * panier dont le client a été archivé depuis reste affiché, comme son
+     * nom et le texte d'aide du crédit (voir
+     * ClientResource::soldeCrediteurHelperText()).
      */
     private function creditApplique(Get $get, float $totalTtc): float
     {
-        $soldeCrediteur = Client::query()->find($get('client_id'))?->soldeCrediteur() ?? 0.0;
+        $soldeCrediteur = Client::withTrashed()->find($get('client_id'))?->soldeCrediteur() ?? 0.0;
 
         return min($soldeCrediteur, $totalTtc);
     }

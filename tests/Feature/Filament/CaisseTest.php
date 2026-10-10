@@ -1024,6 +1024,31 @@ class CaisseTest extends TestCase
     }
 
     /**
+     * Tant que ses réglages communs ne sont pas ceux du magasin principal
+     * de sa société (K5), la caisse dit quel réglage diffère et quelle
+     * valeur prendre, désactive « Encaisser », et le domaine refuse le
+     * ticket.
+     */
+    public function test_la_caisse_d_un_magasin_non_aligne_sur_le_principal_de_sa_societe_n_encaisse_pas(): void
+    {
+        $principal = Magasin::factory()->create(['siren' => '732829320', 'siret' => '73282932000074', 'raison_sociale' => 'Dupont SARL', 'numero_tva' => 'FR44732829320', 'regime_tva' => RegimeTva::ReelNormalMensuel]);
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $magasin->update(['siren' => '732829320', 'siret' => '73282932000082', ...$principal->only(['regime_tva', 'option_debits_tva', 'numero_tva', 'raison_sociale', 'forme_juridique', 'capital_social', 'immatriculation'])]);
+        $principal->update(['raison_sociale' => 'Dupont Frères']);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $refus = 'Ce magasin n\'émet ni facture ni ticket tant que ses réglages communs ne sont pas ceux du magasin principal de votre société (SIREN 732829320) ; à prendre : raison sociale « Dupont Frères » (Identité du magasin).';
+
+        Livewire::test(Caisse::class)
+            ->assertSee($refus)
+            ->assertSeeHtml('disabled="disabled" type="submit"')
+            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes'])
+            ->call('encaisser')
+            ->assertNotified($refus);
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
      * Une vente abandonnée avant l'encaissement s'inscrit au journal des
      * événements, avec son nombre de lignes et son total en centimes, et
      * le panier se vide ; le journal reste intègre.

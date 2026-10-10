@@ -14,7 +14,12 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\ClotureCaisse;
@@ -62,6 +67,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Finder\SplFileInfo;
 use Tests\TestCase;
@@ -83,6 +89,11 @@ use Tests\TestCase;
  * Côté panneau, chaque ressource dont un enregistrement a sa propre URL
  * répond 404 à un membre d'un autre magasin, sans révéler que
  * l'enregistrement existe.
+ *
+ * Deux magasins d'une même société (même SIREN) restent isolés de la même
+ * façon : un retour ou un paiement se fait dans le magasin qui a vendu
+ * (J6). Seuls leurs réglages communs se lisent de l'un à l'autre (voir
+ * ReglagesCommunsDeLaSocieteTest).
  */
 class TenantIsolationTest extends TestCase
 {
@@ -334,6 +345,51 @@ class TenantIsolationTest extends TestCase
     }
 
     /**
+     * Un retour se fait dans le magasin qui a vendu (J6), même entre deux
+     * magasins d'une même société : depuis l'autre magasin, la ligne de
+     * la facture est introuvable, et aucun avoir ne naît.
+     */
+    public function test_un_magasin_de_la_meme_societe_ne_fait_pas_d_avoir_sur_une_vente_d_un_autre(): void
+    {
+        $memeSociete = Magasin::factory()->deLaSocieteDe($this->magasinA)->create();
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+        $ligneVendue = $this->venteEmise()->lignes()->sole();
+        $contexte->set($memeSociete);
+
+        $this->assertThrows(
+            fn () => app(CreerAvoirAction::class)->handle(Client::factory()->create(), [['ligne_facture_id' => $ligneVendue->id, 'quantite' => 1]]),
+            InvalidArgumentException::class,
+            'Cette ligne de facture est introuvable.',
+        );
+
+        $this->assertSame(0, Avoir::query()->withoutGlobalScope(MagasinScope::class)->count());
+    }
+
+    /**
+     * Un paiement se fait dans le magasin qui a vendu (J6) : depuis un
+     * autre magasin de la même société, la facture est introuvable, et
+     * rien n'est encaissé.
+     */
+    public function test_un_magasin_de_la_meme_societe_n_encaisse_pas_une_vente_d_un_autre(): void
+    {
+        $memeSociete = Magasin::factory()->deLaSocieteDe($this->magasinA)->create();
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+        $vente = $this->venteEmise();
+        $contexte->set($memeSociete);
+
+        $this->assertThrows(
+            fn () => app(EnregistrerPaiementAction::class)->handle(Client::factory()->create(), ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $vente->id, 'montant' => '12.00']]),
+            ModelNotFoundException::class,
+        );
+
+        $this->assertSame(0, Paiement::query()->withoutGlobalScope(MagasinScope::class)->count());
+        $contexte->set($this->magasinA);
+        $this->assertSame(StatutFacture::Emise, $vente->fresh()->statut);
+    }
+
+    /**
      * @return array<string, array{0: class-string<RessourceFilament>, 1: string, 2: Closure(Magasin): Model}>
      */
     public static function pagesDUnEnregistrement(): array
@@ -439,6 +495,16 @@ class TenantIsolationTest extends TestCase
         };
 
         return Model::unguarded(static fn (): Model => $modele::create([...$exiges, ...$attributs]));
+    }
+
+    /**
+     * Un ticket de 12,00 € émis dans le magasin actif, non réglé.
+     */
+    private function venteEmise(): Facture
+    {
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
     }
 
     /**

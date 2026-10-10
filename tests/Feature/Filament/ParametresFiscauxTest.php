@@ -9,6 +9,8 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\ParametresFiscaux;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -148,6 +150,115 @@ class ParametresFiscauxTest extends TestCase
         $this->actingAs($administrateur)
             ->get(ParametresFiscaux::getUrl(tenant: $magasin))
             ->assertSee('Régime de TVA');
+    }
+
+    /**
+     * Le régime de TVA et l'option pour les débits sont communs aux
+     * magasins d'une même société (J2, K5) : un autre magasin que le
+     * principal n'enregistre que ses valeurs, et chaque champ dit celle à
+     * prendre. Rien n'est enregistré ni inscrit au journal.
+     */
+    public function test_un_autre_magasin_de_la_societe_n_enregistre_que_les_parametres_du_principal(): void
+    {
+        $principal = $this->principalDeLaSociete();
+        $magasin = $this->connecterUnMagasinDeLaSociete($principal);
+
+        Livewire::test(ParametresFiscaux::class)
+            ->fillForm([
+                'regime_tva' => RegimeTva::ReelNormalTrimestriel->value,
+                'option_debits_tva' => true,
+            ])
+            ->call('save')
+            ->assertHasFormErrors(['regime_tva', 'option_debits_tva'])
+            ->assertSee('Réglage commun à tous les magasins de votre société (SIREN 732829320), fixé par son magasin principal : prenez « Réel normal (déclaration mensuelle) ».')
+            ->assertSee('Réglage commun à tous les magasins de votre société (SIREN 732829320), fixé par son magasin principal : prenez « désactivée ».');
+
+        $this->assertSame([RegimeTva::ReelNormalMensuel, false], [$magasin->fresh()->regime_tva, $magasin->fresh()->option_debits_tva]);
+        $this->assertSame(0, EnregistrementFiscal::query()->withoutGlobalScopes()->where('magasin_id', $magasin->id)->where('chaine', ChaineFiscale::Evenement->value)->where('type', '270')->count());
+    }
+
+    public function test_un_autre_magasin_attend_le_regime_que_le_principal_n_a_pas_encore_choisi(): void
+    {
+        $principal = $this->principalDeLaSociete(['regime_tva' => null]);
+        $magasin = $this->connecterUnMagasinDeLaSociete($principal);
+
+        Livewire::test(ParametresFiscaux::class)
+            ->fillForm(['regime_tva' => RegimeTva::FranchiseEnBase->value, 'option_debits_tva' => false])
+            ->call('save')
+            ->assertHasFormErrors(['regime_tva'])
+            ->assertSee('Réglage commun à tous les magasins de votre société (SIREN 732829320), fixé par son magasin principal, qui ne l\'a pas encore choisi : il le choisit en premier.');
+
+        $this->assertNull($magasin->fresh()->regime_tva);
+    }
+
+    /**
+     * Le principal change seul le régime de toute la société ; la page de
+     * l'autre magasin dit alors ce qu'il doit aligner.
+     */
+    public function test_le_principal_change_le_regime_et_l_autre_magasin_voit_ce_qu_il_doit_aligner(): void
+    {
+        $principal = $this->principalDeLaSociete();
+        $magasin = $this->connecterUnMagasinDeLaSociete($principal);
+        $this->connecter($principal);
+
+        Livewire::test(ParametresFiscaux::class)
+            ->fillForm(['regime_tva' => RegimeTva::ReelNormalTrimestriel->value, 'option_debits_tva' => false])
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $this->connecter($magasin);
+
+        Livewire::test(ParametresFiscaux::class)
+            ->assertSee('Réglages à aligner sur le magasin principal de votre société')
+            ->assertSee('Ce magasin n\'émet ni facture ni ticket tant que ses réglages communs ne sont pas ceux du magasin principal de votre société (SIREN 732829320) ; à prendre : régime de TVA « Réel normal (déclaration trimestrielle) » (Paramètres fiscaux).');
+        $this->assertSame(RegimeTva::ReelNormalTrimestriel, $principal->fresh()->regime_tva);
+    }
+
+    /**
+     * Le magasin principal de la société SIREN 732829320, réel normal
+     * mensuel sans option pour les débits, avec son propriétaire.
+     *
+     * @param  array<string, mixed>  $reglages
+     */
+    private function principalDeLaSociete(array $reglages = []): Magasin
+    {
+        return app(CreerMagasinAction::class)->handle([
+            'nom' => 'Bellecour',
+            'siren' => '732829320',
+            'siret' => '73282932000074',
+            'raison_sociale' => 'Dupont SARL',
+            'numero_tva' => 'FR44732829320',
+            'regime_tva' => RegimeTva::ReelNormalMensuel,
+            ...$reglages,
+        ], User::factory()->create());
+    }
+
+    /**
+     * Un autre magasin de la société du principal, avec ses réglages
+     * communs, dont le propriétaire est connecté.
+     */
+    private function connecterUnMagasinDeLaSociete(Magasin $principal): Magasin
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle([
+            'nom' => 'Ma Boutique',
+            'siren' => '732829320',
+            'siret' => '73282932000082',
+            ...$principal->only(['regime_tva', 'option_debits_tva', 'numero_tva', 'raison_sociale', 'forme_juridique', 'capital_social', 'immatriculation']),
+        ], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        return $magasin;
+    }
+
+    /**
+     * Le propriétaire du magasin, connecté à son magasin.
+     */
+    private function connecter(Magasin $magasin): void
+    {
+        app(TenantContext::class)->set($magasin);
+        $this->actingAs($this->proprietaireDe($magasin));
+        Filament::setTenant($magasin);
     }
 
     /**

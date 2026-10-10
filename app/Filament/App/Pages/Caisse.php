@@ -13,6 +13,7 @@ use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ReglagesCommunsDeLaSociete;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -64,6 +65,12 @@ use LogicException;
  * jusqu'à minuit, pas même à un professionnel (voir journeeCloturee()) ;
  * le domaine refuse en plus tout ticket et tout avoir sur ticket (voir
  * ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()).
+ *
+ * Tant que les réglages communs du magasin ne sont pas ceux du magasin
+ * principal de sa société, elle n'encaisse rien non plus : elle dit quel
+ * réglage diffère et quelle valeur prendre (voir reglagesNonAlignes()),
+ * et le domaine refuse tout ticket et toute facture (voir
+ * EmettreFactureAction).
  */
 class Caisse extends Page implements HasForms
 {
@@ -288,6 +295,20 @@ class Caisse extends Page implements HasForms
     public function journeeCloturee(): ?string
     {
         return ClotureCaisse::refusDUneVente(now(), ClotureCaisse::derniereJourneeCloturee());
+    }
+
+    /**
+     * Le refus qu'oppose le magasin à tout ticket et à toute facture, ses
+     * réglages communs n'étant pas ceux du magasin principal de sa société
+     * (voir ReglagesCommunsDeLaSociete::refusDEmission()) : affiché en tête
+     * de la caisse, « Encaisser » désactivé. Null quand il est aligné.
+     */
+    public function reglagesNonAlignes(): ?string
+    {
+        /** @var Magasin $magasin */
+        $magasin = Filament::getTenant();
+
+        return app(ReglagesCommunsDeLaSociete::class)->refusDEmission($magasin);
     }
 
     /**

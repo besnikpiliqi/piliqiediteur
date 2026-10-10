@@ -18,6 +18,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Services\CodeMagasin;
+use App\Domain\Tenancy\Services\ReglagesCommunsDeLaSociete;
 use App\Models\User;
 use Database\Factories\MagasinFactory;
 use Filament\Models\Contracts\HasName;
@@ -51,6 +52,15 @@ use LogicException;
  * verifierSonIdentiteLegale()). Il règle le délai de paiement de ses
  * factures et les mentions qu'elles impriment entre professionnels (voir
  * ParametresFactures).
+ *
+ * Sa raison sociale, sa forme juridique, son capital, son
+ * immatriculation, son n° de TVA, son régime de TVA et son option pour les
+ * débits sont communs aux magasins de son SIREN : le magasin principal de
+ * la société les fixe, un autre magasin n'enregistre que ses valeurs et
+ * n'émet ni facture ni ticket tant qu'il ne les a pas (voir
+ * ReglagesCommunsDeLaSociete et booted()). Un changement de SIREN note
+ * depuis quand il le porte, qui désigne le magasin principal par défaut,
+ * et efface la désignation de l'éditeur.
  *
  * Son statut (voir StatutMagasin) ne vient jamais d'un formulaire du
  * magasin : actif à la création, il ne changera que par l'administration
@@ -126,6 +136,8 @@ class Magasin extends Model implements HasName
         'bareme_prix_vente' => BaremePrixDeVente::class,
         'relances_automatiques' => 'boolean',
         'delai_paiement_jours' => 'integer',
+        'siren_renseigne_le' => 'datetime',
+        'designe_principal' => 'boolean',
     ];
 
     protected static function booted(): void
@@ -144,6 +156,24 @@ class Magasin extends Model implements HasName
             $magasin->mention_penalites_retard ??= self::MENTION_PENALITES_PAR_DEFAUT;
             $magasin->mention_indemnite_recouvrement ??= self::MENTION_INDEMNITE_PAR_DEFAUT;
             $magasin->mention_escompte ??= self::MENTION_ESCOMPTE_PAR_DEFAUT;
+        });
+
+        static::saving(function (Magasin $magasin) {
+            app(ReglagesCommunsDeLaSociete::class)->refuserUnEcartAEnregistrer($magasin);
+
+            if ($magasin->isDirty('siren')) {
+                $magasin->siren_renseigne_le = blank($magasin->siren) ? null : now();
+            }
+        });
+
+        // La désignation de l'éditeur ne vaut que pour le SIREN qu'il a vu
+        // (voir app:designer-magasin-principal) : elle s'efface en base,
+        // même quand ce modèle, chargé avant elle, ne la connaît pas.
+        static::updated(function (Magasin $magasin) {
+            if ($magasin->wasChanged('siren')) {
+                static::withTrashed()->whereKey($magasin->getKey())->where('designe_principal', true)->update(['designe_principal' => null]);
+                $magasin->forceFill(['designe_principal' => null])->syncOriginalAttribute('designe_principal');
+            }
         });
 
         static::updating(function (Magasin $magasin) {

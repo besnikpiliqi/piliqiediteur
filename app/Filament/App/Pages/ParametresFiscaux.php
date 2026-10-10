@@ -5,6 +5,7 @@ namespace App\Filament\App\Pages;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Filament\Concerns\AligneLesReglagesCommuns;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
@@ -14,6 +15,7 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Seul endroit où le régime de TVA du magasin se configure : en dépend
@@ -28,10 +30,15 @@ use Filament\Pages\Page;
  * magasin, avec l'ancienne et la nouvelle valeur (voir
  * JournaliseSesParametresDeConformite). Quand le registre fiscal ne peut
  * pas l'inscrire, rien n'est enregistré et l'écran dit pourquoi.
+ *
+ * Ils sont communs aux magasins d'un même SIREN, un seul assujetti : un
+ * magasin qui n'est pas le principal de sa société n'enregistre que les
+ * valeurs du principal (J2, K5, voir AligneLesReglagesCommuns et
+ * ReglagesCommunsDeLaSociete).
  */
 class ParametresFiscaux extends Page implements HasForms
 {
-    use GereLesExceptionsMetier, InteractsWithForms;
+    use AligneLesReglagesCommuns, GereLesExceptionsMetier, InteractsWithForms;
 
     protected static ?string $navigationIcon = 'heroicon-o-scale';
 
@@ -67,10 +74,11 @@ class ParametresFiscaux extends Page implements HasForms
     public function form(Form $form): Form
     {
         return $form->schema([
+            $this->encadreDesReglagesAAligner(),
             Select::make('regime_tva')
                 ->label('Régime de TVA')
                 ->options(RegimeTva::class)
-                ->helperText('Détermine la cadence de transmission de l\'e-reporting au PDP (voir la page Soumissions e-reporting) : ce n\'est pas une obligation journalière, la fréquence dépend de ce régime. En franchise, vos ventes sont à 0 % avec la mention « '.RegimeTva::MENTION_FRANCHISE.' » ; le prix TTC de vos produits ne change pas.')
+                ->helperText('Détermine la cadence de transmission de l\'e-reporting au PDP (voir la page Soumissions e-reporting) : ce n\'est pas une obligation journalière, la fréquence dépend de ce régime. Commun à tous les magasins de votre société (même SIREN), comme l\'option pour les débits : son magasin principal le fixe. En franchise, vos ventes sont à 0 % avec la mention « '.RegimeTva::MENTION_FRANCHISE.' » ; le prix TTC de vos produits ne change pas.')
                 ->required(),
             Toggle::make('option_debits_tva')
                 ->label('Option pour les débits')
@@ -78,18 +86,23 @@ class ParametresFiscaux extends Page implements HasForms
         ])->statePath('data');
     }
 
+    /**
+     * @throws ValidationException
+     */
     public function save(): void
     {
         $data = $this->form->getState();
+        $parametres = [
+            'regime_tva' => $data['regime_tva'],
+            'option_debits_tva' => $data['option_debits_tva'],
+        ];
+        $this->refuserLesReglagesCommunsDifferents($parametres);
 
         /** @var Magasin $magasin */
         $magasin = Filament::getTenant();
 
-        static::executerSansCasser(function () use ($magasin, $data): void {
-            $magasin->update([
-                'regime_tva' => $data['regime_tva'],
-                'option_debits_tva' => $data['option_debits_tva'],
-            ]);
+        static::executerSansCasser(function () use ($magasin, $parametres): void {
+            $magasin->update($parametres);
 
             Notification::make()
                 ->title('Paramètres fiscaux enregistrés')

@@ -8,6 +8,7 @@ use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Rules\CodeMagasinLibre;
 use App\Domain\Tenancy\Services\CodeMagasin;
+use App\Filament\Concerns\AligneLesReglagesCommuns;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Closure;
 use Filament\Facades\Filament;
@@ -42,13 +43,20 @@ use Illuminate\Validation\ValidationException;
  * pour facturer un professionnel (B11, K7, voir
  * Magasin::mentionsLegalesManquantes()), d'après ce qui est enregistré.
  *
+ * La raison sociale, la forme juridique, le capital, l'immatriculation et
+ * le n° de TVA sont communs aux magasins d'un même SIREN : un magasin qui
+ * n'est pas le principal de sa société n'enregistre que les valeurs du
+ * principal, et un SIREN déjà porté par d'autres magasins ne s'enregistre
+ * qu'avec tous les réglages communs de leur principal (J2, K5, voir
+ * AligneLesReglagesCommuns et ReglagesCommunsDeLaSociete).
+ *
  * Le logiciel ne gère pour l'instant que les magasins établis en France,
  * hors Guyane, Mayotte et collectivités d'outre-mer : son adresse donne le
  * territoire de TVA du magasin (voir Magasin::territoireTva()).
  */
 class IdentiteMagasin extends Page implements HasForms
 {
-    use GereLesExceptionsMetier, InteractsWithForms;
+    use AligneLesReglagesCommuns, GereLesExceptionsMetier, InteractsWithForms;
 
     /**
      * Les champs de la page, tous enregistrés tels quels sur le magasin.
@@ -103,6 +111,7 @@ class IdentiteMagasin extends Page implements HasForms
     public function form(Form $form): Form
     {
         return $form->schema([
+            $this->encadreDesReglagesAAligner(),
             Section::make('Identité incomplète pour facturer un professionnel')
                 ->icon('heroicon-o-exclamation-triangle')
                 ->iconColor('warning')
@@ -113,7 +122,7 @@ class IdentiteMagasin extends Page implements HasForms
                 ])
                 ->visible(fn (): bool => $this->magasin()->mentionsLegalesManquantes() !== []),
             Section::make('Identité légale')
-                ->description('Imprimée en tête de vos devis, factures et avoirs.')
+                ->description('Imprimée en tête de vos devis, factures et avoirs. La raison sociale, la forme juridique, le capital, l\'immatriculation et le n° de TVA sont communs à tous les magasins de votre société (même SIREN) : son magasin principal les fixe.')
                 ->schema([
                     TextInput::make('nom')
                         ->label('Nom commercial')
@@ -246,6 +255,10 @@ class IdentiteMagasin extends Page implements HasForms
     }
 
     /**
+     * Les réglages communs qui ne sont pas ceux du magasin principal de la
+     * société sont refusés champ par champ, avant toute écriture (voir
+     * AligneLesReglagesCommuns).
+     *
      * Le magasin se modifie dans une transaction : un changement de code y
      * verrouille la ligne du magasin jusqu'à son enregistrement (voir
      * Magasin::codeEstDefinitif()). Un code devenu définitif depuis
@@ -259,6 +272,7 @@ class IdentiteMagasin extends Page implements HasForms
     public function save(): void
     {
         $donnees = $this->form->getState();
+        $this->refuserLesReglagesCommunsDifferents($donnees);
 
         static::executerSansCasser(function () use ($donnees): void {
             try {

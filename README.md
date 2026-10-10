@@ -39,3 +39,5 @@ php artisan schedule:work
 ```
 
 Un magasin se crée depuis la page d'inscription du panneau (`/app/register`).
+
+Les magasins d'une même société (même SIREN) partagent leurs réglages communs (régime de TVA, option pour les débits, n° de TVA, raison sociale, forme juridique, capital, immatriculation), que fixe le magasin principal : celui qui porte le SIREN depuis le plus longtemps, ou celui que l'éditeur désigne avec `php artisan app:designer-magasin-principal {magasin}`. Un autre magasin du SIREN n'enregistre que ces valeurs et n'émet ni facture ni ticket tant qu'il ne les a pas.

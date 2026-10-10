@@ -23,11 +23,26 @@ return new class extends Migration
             // (voir Magasin::mentionsLegalesManquantes()). Le capital social,
             // facultatif, s'imprime quand il est renseigné ; l'immatriculation
             // est la mention du registre (« RCS Lyon », « RM 69 ») ou celle
-            // de la dispense qui s'applique.
+            // de la dispense qui s'applique. La raison sociale, la forme
+            // juridique, le capital, l'immatriculation, le n° de TVA, le
+            // régime de TVA et l'option pour les débits sont communs aux
+            // magasins d'un même SIREN : le magasin principal les fixe (voir
+            // ReglagesCommunsDeLaSociete).
             $table->string('raison_sociale', 200)->nullable();
             $table->string('forme_juridique', 100)->nullable();
             $table->decimal('capital_social', 14, 2)->nullable();
             $table->string('siren', 9)->nullable();
+            // Depuis quand le magasin porte ce SIREN (voir Magasin::booted()) :
+            // le magasin principal de la société est celui qui le porte
+            // depuis le plus longtemps, sauf désignation par l'éditeur (voir
+            // ReglagesCommunsDeLaSociete).
+            $table->timestamp('siren_renseigne_le')->nullable();
+            // Vrai seulement pour le magasin que l'éditeur désigne comme
+            // principal de son SIREN (voir app:designer-magasin-principal),
+            // null pour tous les autres : l'index unique (siren,
+            // designe_principal) n'en admet qu'un par SIREN. Un changement de
+            // SIREN efface la désignation.
+            $table->boolean('designe_principal')->nullable();
             $table->string('siret', 14)->nullable();
             $table->string('immatriculation', 100)->nullable();
             $table->string('numero_tva', 20)->nullable();
@@ -86,6 +101,10 @@ return new class extends Migration
             // logiciel, il l'est forcément dans la société, sans lire les
             // autres magasins de son SIREN ni dépendre d'un SIREN déclaré.
             $table->unique('code');
+            // Un seul magasin désigné principal par SIREN ; l'index sert aussi
+            // à lire les réglages communs des magasins d'un SIREN (voir
+            // ReglagesCommunsDeLaSociete).
+            $table->unique(['siren', 'designe_principal']);
             $table->index(['statut']);
         });
 

@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ReglagesCommunsDeLaSociete;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -36,6 +37,20 @@ class MagasinFactory extends Factory
             'email' => fake()->unique()->companyEmail(),
             'telephone' => fake()->phoneNumber(),
         ];
+    }
+
+    /**
+     * Un autre magasin de la société de $magasin : son SIREN, un SIRET de
+     * ce SIREN et tous ses réglages communs, que seul le magasin principal
+     * de la société fixe (voir ReglagesCommunsDeLaSociete).
+     */
+    public function deLaSocieteDe(Magasin $magasin): static
+    {
+        return $this->state(fn (): array => [
+            'siren' => $magasin->siren,
+            'siret' => $magasin->siren.fake()->unique()->numerify('#####'),
+            ...$magasin->only(array_keys(ReglagesCommunsDeLaSociete::CHAMPS)),
+        ]);
     }
 
     /**

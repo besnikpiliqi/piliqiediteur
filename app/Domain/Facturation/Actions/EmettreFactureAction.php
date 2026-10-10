@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Tenancy\Services\ReglagesCommunsDeLaSociete;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -36,6 +37,12 @@ use LogicException;
  * magasin est entré en franchise en base de TVA, ou en est sorti, depuis :
  * ses lignes doivent être recalculées, à 0 % ou à leurs taux (voir
  * ContexteDeVente::refuserSiLeRegimeAChange()).
+ *
+ * Un magasin dont les réglages communs à sa société (régime de TVA, n° de
+ * TVA, raison sociale...) ne sont pas ceux du magasin principal de son
+ * SIREN n'émet ni facture ni ticket (K5, voir
+ * ReglagesCommunsDeLaSociete::verifierQuIlEstAligne()) : le refus dit
+ * quel réglage diffère et quelle valeur prendre.
  *
  * Une facture à un professionnel exige en plus l'identité légale complète
  * du magasin (B11, voir Magasin::verifierSonIdentiteLegale()) et, pour un
@@ -74,6 +81,7 @@ class EmettreFactureAction
         private readonly RegistreFiscal $registre,
         private readonly ContenuFiscal $contenuFiscal,
         private readonly EnregistrerPaiementAction $enregistrerPaiement,
+        private readonly ReglagesCommunsDeLaSociete $reglagesCommuns,
     ) {}
 
     /**
@@ -99,6 +107,7 @@ class EmettreFactureAction
 
             ContexteDeVente::refuserSiLeTypeDeClientAChange($facture);
             ContexteDeVente::refuserSiLeRegimeAChange($facture);
+            $this->reglagesCommuns->verifierQuIlEstAligne($facture->magasin);
 
             if ($facture->estPourUnProfessionnel()) {
                 $this->refuserUneFactureProfessionnelleIncomplete($facture);

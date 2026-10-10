@@ -20,8 +20,10 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Enums\RegimeTva;
+use App\Domain\Tenancy\Exceptions\ReglagesCommunsDifferentsException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use LogicException;
@@ -419,6 +421,79 @@ class EmettreFactureActionTest extends TestCase
         );
 
         $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
+    }
+
+    /**
+     * @return array<string, array{Closure(): Client, TypeDocument}>
+     */
+    public static function clientsDUnTicketEtDUneFacture(): array
+    {
+        return [
+            'ticket' => [static fn (): Client => Client::factory()->create(), TypeDocument::TicketCaisse],
+            'facture' => [static fn (): Client => Client::factory()->professionnel()->create(), TypeDocument::Facture],
+        ];
+    }
+
+    /**
+     * Un magasin dont les réglages communs ne sont plus ceux du magasin
+     * principal de sa société, qui vient de les changer, n'émet ni ticket
+     * ni facture (K5) : le refus dit chaque réglage qui diffère, la valeur
+     * à prendre et où la prendre ; le brouillon reste, sans numéro
+     * consommé ni signature.
+     *
+     * @param  Closure(): Client  $client
+     */
+    #[DataProvider('clientsDUnTicketEtDUneFacture')]
+    public function test_un_magasin_non_aligne_sur_le_principal_de_sa_societe_n_emet_rien(Closure $client, TypeDocument $serie): void
+    {
+        $magasin = $this->magasinLaisseDerriereParSonPrincipal();
+        $brouillon = app(CreerFactureAction::class)->handle($client(), $this->uneLigne());
+
+        $this->assertThrows(
+            fn () => app(EmettreFactureAction::class)->handle($brouillon),
+            ReglagesCommunsDifferentsException::class,
+            'Ce magasin n\'émet ni facture ni ticket tant que ses réglages communs ne sont pas ceux du magasin principal de votre société (SIREN 732829320) ; à prendre : régime de TVA « Réel normal (déclaration trimestrielle) » (Paramètres fiscaux), raison sociale « Dupont Frères » (Identité du magasin).',
+        );
+
+        $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
+        $this->assertFalse(SequenceDocument::query()->where('magasin_id', $magasin->id)->where('type_document', $serie->value)->exists());
+        $this->assertSame(0, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Vente->value)->count());
+    }
+
+    /**
+     * Aligné de nouveau sur son principal, le magasin émet.
+     */
+    public function test_un_magasin_aligne_de_nouveau_sur_le_principal_emet(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $magasin = $this->magasinLaisseDerriereParSonPrincipal();
+        $magasin->update(['regime_tva' => RegimeTva::ReelNormalTrimestriel, 'raison_sociale' => 'Dupont Frères']);
+
+        $ticket = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), $this->uneLigne()));
+
+        $this->assertSame('TK-LYON2-2026-000001', $ticket->numero);
+    }
+
+    /**
+     * Le magasin LYON2, magasin actif, de la société SIREN 732829320, dont
+     * le principal SIEGE vient de passer au réel normal trimestriel et de
+     * changer de raison sociale.
+     */
+    private function magasinLaisseDerriereParSonPrincipal(): Magasin
+    {
+        $principal = Magasin::factory()->create([
+            'code' => 'SIEGE',
+            'siren' => '732829320',
+            'siret' => '73282932000074',
+            'raison_sociale' => 'Dupont SARL',
+            'numero_tva' => 'FR44732829320',
+            'regime_tva' => RegimeTva::ReelNormalMensuel,
+        ]);
+        $magasin = Magasin::factory()->deLaSocieteDe($principal)->create(['code' => 'LYON2']);
+        app(TenantContext::class)->runAs($principal, fn () => $principal->update(['regime_tva' => RegimeTva::ReelNormalTrimestriel, 'raison_sociale' => 'Dupont Frères']));
+        app(TenantContext::class)->set($magasin);
+
+        return $magasin;
     }
 
     private function magasinSansIdentiteLegale(): Magasin

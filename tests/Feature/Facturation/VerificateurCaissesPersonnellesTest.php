@@ -4,25 +4,31 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
  * Seule la clôture manuelle de la journée attend les caisses personnelles :
- * un vendeur qui n'a pas fermé la sienne bloque le bouton « Clôturer la
- * journée » (voir ListClotureCaisses), jamais la clôture automatique de
- * minuit (voir ClotureAutomatiqueCaisse), qui agrège directement les
- * factures (voir CloturerCaisseAction).
+ * un vendeur qui n'a pas fermé la sienne, ventes ou encaissements de la
+ * journée, bloque le bouton « Clôturer la journée » (voir
+ * ListClotureCaisses), jamais la clôture automatique de minuit (voir
+ * ClotureAutomatiqueCaisse), qui agrège directement les factures (voir
+ * CloturerCaisseAction).
  */
 class VerificateurCaissesPersonnellesTest extends TestCase
 {
@@ -156,11 +162,10 @@ class VerificateurCaissesPersonnellesTest extends TestCase
     }
 
     /**
-     * Comportement constaté, qui suit celui du relevé (voir
-     * FermerSaCaisseActionTest) : une vente émise puis reprise le même jour
-     * par un avoir reste une vente que la fermeture du vendeur compte, et
-     * laisse donc sa caisse ouverte jusqu'à cette fermeture, pas au-delà.
-     * Le contenu du relevé reste à décider par l'éditeur.
+     * Même règle que le relevé (B18, voir FermerSaCaisseActionTest) : une
+     * vente émise puis reprise le même jour par un avoir reste une vente
+     * que la fermeture du vendeur compte dans son TTC vendu, et laisse donc
+     * sa caisse ouverte jusqu'à cette fermeture, pas au-delà.
      */
     public function test_une_vente_corrigee_par_un_avoir_laisse_la_caisse_ouverte_jusqua_sa_fermeture(): void
     {
@@ -210,5 +215,95 @@ class VerificateurCaissesPersonnellesTest extends TestCase
 
         app(FermerSaCaisseAction::class)->handle($vendeur);
         $this->assertFalse($verificateur->vendeursAvecCaisseOuverte(now())->contains('id', $vendeur->id));
+    }
+
+    /**
+     * Un encaissement du jour que le vendeur n'a pas fermé laisse sa caisse
+     * ouverte, même sans aucune vente de sa part : il bloque la clôture
+     * manuelle et le nomme, jusqu'à sa fermeture.
+     */
+    public function test_un_encaissement_du_jour_non_ferme_laisse_la_caisse_du_vendeur_ouverte(): void
+    {
+        $magasin = Magasin::factory()->create();
+        app(TenantContext::class)->set($magasin);
+        $collegue = User::factory()->create();
+        $vendeur = User::factory()->create();
+        $facture = $this->emettreUnTicketPour($collegue, Client::factory()->create());
+        app(FermerSaCaisseAction::class)->handle($collegue);
+        $this->actingAs($vendeur);
+        $this->encaisser($facture, 12, today());
+        $verificateur = app(VerificateurCaissesPersonnelles::class);
+
+        $vendeursEnAttente = $verificateur->vendeursAvecCaisseOuverte(now());
+
+        $this->assertSame([$vendeur->id], $vendeursEnAttente->pluck('id')->all());
+        app(FermerSaCaisseAction::class)->handle($vendeur);
+        $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(now())->isEmpty());
+    }
+
+    /**
+     * La contre-passation que le propriétaire fait aujourd'hui d'un paiement
+     * d'hier du vendeur revient à la caisse du vendeur, pas à la sienne.
+     */
+    public function test_une_contre_passation_du_jour_rouvre_la_caisse_du_vendeur_du_paiement(): void
+    {
+        $magasin = Magasin::factory()->create();
+        app(TenantContext::class)->set($magasin);
+        $vendeur = User::factory()->create();
+        $proprietaire = User::factory()->create();
+        $this->travelTo(now()->subDay());
+        $facture = $this->emettreUnTicketPour($vendeur, Client::factory()->create());
+        $paiement = $this->encaisser($facture, 12, today());
+        app(FermerSaCaisseAction::class)->handle($vendeur);
+        $this->travelBack();
+        $this->actingAs($proprietaire);
+        app(ContrePasserPaiementAction::class)->handle($paiement, 'Chèque sans provision');
+
+        $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(now());
+
+        $this->assertSame([$vendeur->id], $vendeursEnAttente->pluck('id')->all());
+    }
+
+    /**
+     * Un encaissement est de la journée où il est reçu : un paiement reçu
+     * hier, saisi aujourd'hui, laisse ouverte la caisse d'hier, pas celle
+     * d'aujourd'hui.
+     */
+    public function test_un_encaissement_compte_dans_la_journee_ou_il_est_recu(): void
+    {
+        $magasin = Magasin::factory()->create();
+        app(TenantContext::class)->set($magasin);
+        $collegue = User::factory()->create();
+        $vendeur = User::factory()->create();
+        $this->travelTo(now()->subDays(2));
+        $facture = $this->emettreUnTicketPour($collegue, Client::factory()->create());
+        app(FermerSaCaisseAction::class)->handle($collegue);
+        $this->travelBack();
+        $this->actingAs($vendeur);
+        $this->encaisser($facture, 12, today()->subDay());
+        $verificateur = app(VerificateurCaissesPersonnelles::class);
+
+        $hier = $verificateur->vendeursAvecCaisseOuverte(now()->subDay());
+        $aujourdhui = $verificateur->vendeursAvecCaisseOuverte(now());
+
+        $this->assertSame([$vendeur->id], $hier->pluck('id')->all());
+        $this->assertTrue($aujourdhui->isEmpty());
+    }
+
+    private function emettreUnTicketPour(User $vendeur, Client $client): Facture
+    {
+        $this->actingAs($vendeur);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+    }
+
+    private function encaisser(Facture $facture, float $montant, CarbonInterface $recuLe): Paiement
+    {
+        return app(EnregistrerPaiementAction::class)->handle($facture->client, [
+            'mode_paiement' => ModePaiement::Especes->value,
+            'montant' => $montant,
+            'recu_le' => $recuLe->toDateString(),
+        ], [['facture_id' => $facture->id, 'montant' => $montant]]);
     }
 }

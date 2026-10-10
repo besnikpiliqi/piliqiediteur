@@ -4,11 +4,16 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -19,7 +24,9 @@ use Tests\TestCase;
  * FermerSaCaisseAction (relevé personnel) est délibérément distincte de
  * CloturerCaisseAction (clôture officielle de la journée du magasin, voir
  * CloturerCaisseActionTest) : aucune condition de blocage, pas de FK sur
- * les factures, pas de restriction aux clients particuliers.
+ * les factures, pas de restriction aux clients particuliers. Son relevé
+ * sépare le TTC vendu, les encaissements par mode, le crédit d'avoir
+ * utilisé et le reste dû (B18).
  */
 class FermerSaCaisseActionTest extends TestCase
 {
@@ -73,6 +80,28 @@ class FermerSaCaisseActionTest extends TestCase
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur);
 
         $this->assertSame(1, $cloture->nombre_ventes);
+        $this->assertSame('2026-10-07 18:00:00', $cloture->periode_debut->format('Y-m-d H:i:s'));
+    }
+
+    /**
+     * Un paiement de la veille que le vendeur n'a pas fermé, sur la facture
+     * d'un collègue, est compté par le relevé du lendemain : « Depuis »
+     * remonte aussi jusqu'à lui.
+     */
+    public function test_le_releve_part_du_plus_ancien_paiement_qu_il_compte(): void
+    {
+        $vendeur = User::factory()->create();
+        $this->travelTo('2026-10-07 09:00:00');
+        $this->actingAs(User::factory()->create());
+        $factureDUnCollegue = $this->emettreUnDocument(Client::factory()->create(), 45);
+        $this->travelTo('2026-10-07 18:00:00');
+        $this->actingAs($vendeur);
+        $this->encaisser($factureDUnCollegue, ModePaiement::Especes, 45);
+
+        $this->travelTo('2026-10-08 10:00:00');
+        $cloture = app(FermerSaCaisseAction::class)->handle($vendeur);
+
+        $this->assertSame([0, ['especes' => '45.00']], [$cloture->nombre_ventes, $cloture->fresh()->encaissements]);
         $this->assertSame('2026-10-07 18:00:00', $cloture->periode_debut->format('Y-m-d H:i:s'));
     }
 
@@ -182,15 +211,14 @@ class FermerSaCaisseActionTest extends TestCase
     }
 
     /**
-     * Comportement constaté, pas une règle arrêtée : le relevé compte en
-     * entier une vente reprise par un avoir avant la fermeture et ne déduit
-     * pas l'avoir, alors que la clôture de la journée le déduit (voir
-     * CloturerCaisseActionTest). Ici l'avoir total solde la vente restée
-     * impayée : aucun crédit ne reste au client, et cette vente n'a fait
-     * entrer aucun argent dans la caisse. Le contenu du relevé reste à
-     * décider par l'éditeur.
+     * B18 : le relevé compte en entier, dans le TTC vendu, une vente
+     * reprise par un avoir avant la fermeture, et ne déduit pas l'avoir,
+     * que la clôture de la journée déduit (voir CloturerCaisseActionTest).
+     * L'avoir total solde la vente restée impayée : son crédit d'avoir
+     * figure à part, rien n'a été encaissé, et seule la seconde vente
+     * reste due.
      */
-    public function test_une_vente_corrigee_par_un_avoir_avant_la_fermeture_reste_comptee(): void
+    public function test_une_vente_corrigee_par_un_avoir_avant_la_fermeture_reste_dans_le_ttc_vendu(): void
     {
         $vendeur = User::factory()->create();
         $client = Client::factory()->create();
@@ -204,9 +232,115 @@ class FermerSaCaisseActionTest extends TestCase
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur);
 
         $this->assertSame(0.0, $avoir->montantNonAlloue());
-        $this->assertSame(0.0, $venteCorrigee->fresh()->montantRestant());
         $this->assertSame(2, $cloture->nombre_ventes);
-        $this->assertSame('180.00', $cloture->total_ttc);
+        $this->assertSame(['180.00', [], '120.00', '60.00'], [$cloture->total_ttc, $cloture->encaissements, $cloture->credit_avoir, $cloture->reste_du]);
         $this->assertContains($venteCorrigee->id, $cloture->factures()->pluck('factures.id')->all());
+    }
+
+    /**
+     * B18 : le relevé sépare le TTC vendu, les encaissements par mode, le
+     * crédit d'avoir utilisé et le reste dû. Martin a 30,00 € de crédit (un
+     * ticket de 30,00 € payé puis repris par un avoir) et Durand doit
+     * 45,00 € d'un ticket, avant une première fermeture. Puis le vendeur
+     * vend à Martin 1 x 60,00 € (50,00 € HT), réglé par les 30,00 € de
+     * crédit et 30,00 € en espèces, émet une facture de 1 x 120,00 €
+     * (100,00 € HT) à un professionnel, impayée, et encaisse par carte les
+     * 45,00 € de l'ancien ticket.
+     */
+    public function test_le_releve_separe_le_vendu_les_encaissements_le_credit_d_avoir_et_le_reste_du(): void
+    {
+        $vendeur = User::factory()->create();
+        $martin = Client::factory()->create(['nom' => 'Martin']);
+        $this->actingAs($vendeur);
+        $ticketRepris = $this->vendreAuComptoir($martin, 30);
+        app(EnregistrerAvoirAction::class)->handle($martin, [['ligne_facture_id' => $ticketRepris->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $ancienTicket = $this->emettreUnDocument(Client::factory()->create(['nom' => 'Durand']), 45);
+        app(FermerSaCaisseAction::class)->handle($vendeur);
+        $this->assertSame(30.0, $martin->soldeCrediteur());
+
+        $this->vendreAuComptoir($martin, 60);
+        $this->emettreUnDocument(Client::factory()->professionnel()->create(), 120);
+        $this->encaisser($ancienTicket, ModePaiement::CarteBancaire, 45);
+        $cloture = app(FermerSaCaisseAction::class)->handle($vendeur);
+
+        $this->assertSame(2, $cloture->nombre_ventes);
+        $this->assertSame(['150.00', '30.00', '180.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
+        $this->assertSame(['especes' => '30.00', 'carte_bancaire' => '45.00'], $cloture->fresh()->encaissements);
+        $this->assertSame(75.0, $cloture->fresh()->totalEncaisse());
+        $this->assertSame(['30.00', '120.00'], [$cloture->credit_avoir, $cloture->reste_du]);
+    }
+
+    public function test_une_seconde_fermeture_immediate_est_a_zero_dans_chaque_rubrique(): void
+    {
+        $vendeur = User::factory()->create();
+        $this->actingAs($vendeur);
+        $ticket = $this->emettreUnDocument(Client::factory()->create(), 45);
+        $this->encaisser($ticket, ModePaiement::Especes, 45);
+        app(FermerSaCaisseAction::class)->handle($vendeur);
+
+        $seconde = app(FermerSaCaisseAction::class)->handle($vendeur);
+
+        $this->assertSame([0, '0.00', [], '0.00', '0.00'], [$seconde->nombre_ventes, $seconde->total_ttc, $seconde->fresh()->encaissements, $seconde->credit_avoir, $seconde->reste_du]);
+    }
+
+    /**
+     * Un paiement de 100,00 € en espèces saisi par erreur par le vendeur,
+     * contre-passé par le propriétaire, puis le bon paiement de 10,00 € :
+     * la contre-passation revient dans le relevé du vendeur (Espèces
+     * 10,00 €), jamais dans celui du propriétaire ; le paiement d'un
+     * autre vendeur n'y figure pas.
+     */
+    public function test_une_erreur_contre_passee_par_le_proprietaire_revient_dans_le_releve_du_vendeur(): void
+    {
+        $vendeur = User::factory()->create();
+        $proprietaire = User::factory()->create();
+        $autreVendeur = User::factory()->create();
+        $this->actingAs($vendeur);
+        $facture = $this->emettreUnDocument(Client::factory()->professionnel()->create(), 120);
+        app(FermerSaCaisseAction::class)->handle($vendeur);
+        $erreur = $this->encaisser($facture, ModePaiement::Especes, 100);
+        $this->actingAs($proprietaire);
+        app(ContrePasserPaiementAction::class)->handle($erreur, 'Montant erroné');
+        $this->actingAs($vendeur);
+        $this->encaisser($facture, ModePaiement::Especes, 10);
+        $this->actingAs($autreVendeur);
+        $this->encaisser($facture, ModePaiement::Cheque, 20);
+
+        $releveDuVendeur = app(FermerSaCaisseAction::class)->handle($vendeur);
+        $releveDuProprietaire = app(FermerSaCaisseAction::class)->handle($proprietaire);
+
+        $this->assertSame(['especes' => '10.00'], $releveDuVendeur->fresh()->encaissements);
+        $this->assertSame(3, $releveDuVendeur->paiements()->count());
+        $this->assertSame([], $releveDuProprietaire->fresh()->encaissements);
+    }
+
+    /**
+     * Une vente au comptoir, réglée en espèces après le crédit d'avoir du
+     * client.
+     */
+    private function vendreAuComptoir(Client $client, float $prixTtc): Facture
+    {
+        $produit = Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+    }
+
+    /**
+     * Un ticket, ou une facture pour un professionnel, émis sans règlement.
+     */
+    private function emettreUnDocument(Client $client, float $prixTtc): Facture
+    {
+        $produit = Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+    }
+
+    private function encaisser(Facture $facture, ModePaiement $mode, float $montant): Paiement
+    {
+        return app(EnregistrerPaiementAction::class)->handle($facture->client, [
+            'mode_paiement' => $mode->value,
+            'montant' => $montant,
+            'recu_le' => today()->toDateString(),
+        ], [['facture_id' => $facture->id, 'montant' => $montant]]);
     }
 }

@@ -141,6 +141,9 @@ class PaiementResource extends Resource
                         ->schema([
                             Select::make('facture_id')
                                 ->label('Facture')
+                                // Seulement les factures que l'utilisateur
+                                // voit (B16, voir Facture::scopeVisiblesPar()) :
+                                // un vendeur n'encaisse que les siennes.
                                 ->options(function (Get $get) {
                                     $clientId = $get('../../client_id');
 
@@ -149,6 +152,7 @@ class PaiementResource extends Resource
                                     }
 
                                     return Facture::query()
+                                        ->visiblesPar(auth()->user())
                                         ->where('client_id', $clientId)
                                         ->whereIn('statut', StatutFacture::quiAttendentUnReglement())
                                         ->get()
@@ -165,7 +169,7 @@ class PaiementResource extends Resource
                                 // montantAProposer()), une fois déduit ce
                                 // qu'il soldera des autres factures choisies.
                                 ->afterStateUpdated(function (mixed $state, Set $set, Get $get): void {
-                                    $facture = filled($state) ? Facture::find($state) : null;
+                                    $facture = self::factureVisible($state);
 
                                     $set('montant', $facture === null ? null : self::montantAProposer(
                                         $facture->montantRestant(),
@@ -182,7 +186,7 @@ class PaiementResource extends Resource
                                 // ne devient pas un crédit (contrairement à
                                 // un avoir), seule une imputation partielle
                                 // (acompte) reste permise.
-                                ->maxValue(fn (Get $get): float => Facture::find($get('facture_id'))?->montantRestant() ?? Caisse::MONTANT_MAXIMUM),
+                                ->maxValue(fn (Get $get): float => self::factureVisible($get('facture_id'))?->montantRestant() ?? Caisse::MONTANT_MAXIMUM),
                         ])
                         ->columns(2)
                         ->defaultItems(1)
@@ -199,6 +203,18 @@ class PaiementResource extends Resource
                         }),
                 ]),
         ]);
+    }
+
+    /**
+     * La facture choisie dans une imputation, si l'utilisateur la voit
+     * (B16) : ni son reste dû ni le montant qui la règle ne se lisent
+     * depuis un identifiant forgé.
+     */
+    private static function factureVisible(mixed $factureId): ?Facture
+    {
+        $identifiant = filter_var($factureId, FILTER_VALIDATE_INT);
+
+        return $identifiant === false ? null : Facture::query()->visiblesPar(auth()->user())->find($identifiant);
     }
 
     /**
@@ -266,8 +282,8 @@ class PaiementResource extends Resource
         $credit = $creditDisponible;
 
         foreach (is_array($allocations) ? $allocations : [] as $allocation) {
-            $autre = filled($allocation['facture_id'] ?? null) && (int) $allocation['facture_id'] !== $facture->getKey()
-                ? Facture::find($allocation['facture_id'])
+            $autre = (int) ($allocation['facture_id'] ?? 0) !== $facture->getKey()
+                ? self::factureVisible($allocation['facture_id'] ?? null)
                 : null;
             $montantImpute = self::montantSaisi($allocation['montant'] ?? null);
 

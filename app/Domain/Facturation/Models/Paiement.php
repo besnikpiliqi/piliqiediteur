@@ -7,8 +7,10 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
@@ -110,5 +112,31 @@ class Paiement extends Model
     public function estUneContrePassation(): bool
     {
         return $this->contre_passe_paiement_id !== null;
+    }
+
+    /**
+     * Fermetures de caisse personnelles qui ont compté ce paiement (une
+     * seule au plus, voir ClotureCaissePersonnelle::paiements()).
+     */
+    public function cloturesCaissePersonnelles(): BelongsToMany
+    {
+        return $this->belongsToMany(ClotureCaissePersonnelle::class, 'clotures_caisse_personnelles_paiements');
+    }
+
+    /**
+     * Les paiements qui reviennent au relevé d'un vendeur (voir
+     * FermerSaCaisseAction) et qu'aucune de ses fermetures n'a encore
+     * comptés : ceux qu'il a enregistrés, et les contre-passations de ses
+     * paiements, quel qu'en soit l'auteur -- une erreur de saisie que le
+     * propriétaire corrige revient dans le relevé de celui qui l'a faite,
+     * jamais dans celui du propriétaire.
+     */
+    public function scopeNonFermesParLeVendeur(Builder $query, int $vendeurId): Builder
+    {
+        return $query
+            ->where(fn (Builder $paiements) => $paiements
+                ->where(fn (Builder $saisis) => $saisis->whereNull('contre_passe_paiement_id')->where('cree_par', $vendeurId))
+                ->orWhereHas('contrePasse', fn (Builder $originaux) => $originaux->where('cree_par', $vendeurId)))
+            ->whereDoesntHave('cloturesCaissePersonnelles');
     }
 }

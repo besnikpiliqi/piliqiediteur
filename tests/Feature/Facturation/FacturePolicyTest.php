@@ -7,6 +7,8 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
@@ -19,8 +21,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Confidentialité par vendeur, décision produit : sans
- * FACTURE_VIEW_TOUTES, un vendeur ne voit que les factures qu'il a
+ * Confidentialité entre vendeurs (B16) : sans FACTURE_VIEW_TOUTES, un
+ * vendeur ne voit, n'envoie et n'encaisse que les factures qu'il a
  * lui-même créées (voir app/Policies/FacturePolicy.php).
  */
 class FacturePolicyTest extends TestCase
@@ -124,6 +126,67 @@ class FacturePolicyTest extends TestCase
         app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
 
         $this->assertFalse($proprietaireB->can('envoyer', $factureDeA));
+    }
+
+    /**
+     * B16 : un vendeur encaisse sa propre facture tant qu'elle attend un
+     * règlement.
+     */
+    public function test_un_vendeur_encaisse_sa_propre_facture(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $facture = $this->emettreUneFactureEnTantQue($vendeur, $magasin);
+
+        $this->assertTrue($vendeur->can('encaisser', $facture));
+    }
+
+    /**
+     * @return array<string, array{list<string>, bool}>
+     */
+    public static function autorisationsDevantLaFactureDUnCollegue(): array
+    {
+        return [
+            'sans la vue de toute l\'équipe' => [[PermissionRegistry::FACTURE_VIEW, PermissionRegistry::PAIEMENT_CREER], false],
+            'avec la vue de toute l\'équipe' => [[PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::PAIEMENT_CREER], true],
+        ];
+    }
+
+    /**
+     * @param  list<string>  $autorisations
+     */
+    #[DataProvider('autorisationsDevantLaFactureDUnCollegue')]
+    public function test_encaisser_la_facture_d_un_collegue_exige_la_vue_de_toute_l_equipe(array $autorisations, bool $peutEncaisser): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $collegue = $this->membre($magasin, RoleMagasin::Vendeur);
+        $membre = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
+        $facture = $this->emettreUneFactureEnTantQue($collegue, $magasin);
+
+        $this->assertSame($peutEncaisser, $membre->can('encaisser', $facture));
+    }
+
+    public function test_une_facture_payee_ne_s_encaisse_plus(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $facture = $this->emettreUneFactureEnTantQue($vendeur, $magasin);
+        app(EnregistrerPaiementAction::class)->handle($facture->client, [
+            'mode_paiement' => ModePaiement::Especes->value,
+            'montant' => 12,
+            'recu_le' => today()->toDateString(),
+        ], [['facture_id' => $facture->id, 'montant' => 12]]);
+
+        $this->assertFalse($vendeur->can('encaisser', $facture->fresh()));
+    }
+
+    public function test_sans_l_autorisation_d_enregistrer_un_paiement_on_n_encaisse_pas(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE]);
+        $facture = $this->emettreUneFactureEnTantQue($vendeur, $magasin);
+
+        $this->assertFalse($vendeur->can('encaisser', $facture));
     }
 
     private function emettreUneFactureEnTantQue(User $auteur, Magasin $magasin): Facture

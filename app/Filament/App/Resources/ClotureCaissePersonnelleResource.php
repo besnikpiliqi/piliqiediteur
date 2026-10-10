@@ -57,7 +57,20 @@ class ClotureCaissePersonnelleResource extends Resource
                 Tables\Columns\TextColumn::make('periode_debut')->label('Depuis')->dateTime('d/m/Y H:i'),
                 Tables\Columns\TextColumn::make('cloturee_a')->label('Jusqu\'à')->dateTime('d/m/Y H:i')->sortable(),
                 Tables\Columns\TextColumn::make('nombre_ventes')->label('Ventes'),
-                Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR'),
+                // Les quatre rubriques du relevé (B18, voir
+                // ClotureCaissePersonnelle), chacune à part.
+                Tables\Columns\TextColumn::make('total_ttc')->label('TTC vendu')->money('EUR'),
+                Tables\Columns\TextColumn::make('total_encaisse')
+                    ->label('Encaissé')
+                    ->state(fn (ClotureCaissePersonnelle $record): float => $record->totalEncaisse())
+                    ->money('EUR'),
+                Tables\Columns\TextColumn::make('encaissements')
+                    ->label('Par mode de paiement')
+                    ->state(fn (ClotureCaissePersonnelle $record): array => $record->encaissementsEnClair())
+                    ->listWithLineBreaks()
+                    ->placeholder('—'),
+                Tables\Columns\TextColumn::make('credit_avoir')->label('Crédit d\'avoir')->money('EUR'),
+                Tables\Columns\TextColumn::make('reste_du')->label('Reste dû')->money('EUR'),
             ])
             ->bulkActions([]);
     }

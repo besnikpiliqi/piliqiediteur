@@ -4,11 +4,14 @@ namespace App\Filament\App\Resources\PaiementResource\Pages;
 
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Models\Facture;
 use App\Filament\App\Resources\PaiementResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
 use Filament\Resources\Pages\CreateRecord;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
 
 /**
  * Ne construit jamais un Paiement directement : la création et
@@ -16,6 +19,14 @@ use Illuminate\Database\Eloquent\Model;
  * sont entièrement déléguées à EnregistrerPaiementAction, pour garantir
  * les mêmes garanties qu'un encaissement déclenché ailleurs (ex : action
  * rapide "Encaisser" sur FactureResource).
+ *
+ * Un vendeur n'encaisse que ses factures (B16) : chaque facture imputée
+ * doit être une facture que l'utilisateur voit, sinon la demande est
+ * refusée (403) sans rien enregistrer, même avec un identifiant forgé
+ * hors des choix proposés (voir PaiementResource). La page elle-même
+ * exige l'autorisation d'enregistrer un paiement (voir
+ * PaiementPolicy::create()). Ce qui reste dû de chaque facture se
+ * vérifie ensuite sous verrou par l'action, avec son message.
  */
 class CreatePaiement extends CreateRecord
 {
@@ -23,6 +34,9 @@ class CreatePaiement extends CreateRecord
 
     protected static string $resource = PaiementResource::class;
 
+    /**
+     * @throws AuthorizationException
+     */
     protected function handleRecordCreation(array $data): Model
     {
         // Limité au magasin par MagasinScope ; withTrashed() garde le client
@@ -33,6 +47,10 @@ class CreatePaiement extends CreateRecord
             'facture_id' => (int) $allocation['facture_id'],
             'montant' => (float) $allocation['montant'],
         ], $data['allocations']);
+
+        foreach (Facture::query()->whereKey(array_column($allocations, 'facture_id'))->get() as $facture) {
+            Gate::authorize('view', $facture);
+        }
 
         // Le formulaire bloque déjà toute saisie dépassant le restant dû
         // via maxValue() : ce garde-fou ne se déclenche qu'en cas de

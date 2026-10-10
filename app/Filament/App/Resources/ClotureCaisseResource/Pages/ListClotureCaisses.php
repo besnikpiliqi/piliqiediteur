@@ -75,8 +75,9 @@ class ListClotureCaisses extends ListRecords
      * ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()).
      *
      * Seule la clôture manuelle attend les caisses personnelles : tant
-     * qu'un vendeur n'a pas fermé ses ventes de l'une de ces journées, le
-     * bouton reste désactivé et nomme les vendeurs à relancer (voir
+     * qu'un vendeur n'a pas fermé ses ventes ou ses encaissements de l'une
+     * de ces journées, le bouton reste désactivé et nomme les vendeurs à
+     * relancer (voir
      * VerificateurCaissesPersonnelles). La clôture automatique de minuit,
      * elle, clôture toujours.
      */

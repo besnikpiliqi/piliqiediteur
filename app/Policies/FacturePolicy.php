@@ -8,10 +8,11 @@ use App\Domain\Facturation\Models\Facture;
 use App\Models\User;
 
 /**
- * Confidentialité par vendeur (décision produit explicite) : sans
- * FACTURE_VIEW_TOUTES, un utilisateur ne voit que les factures qu'il a
- * lui-même créées. Les clients restent partagés (voir ClientPolicy) --
- * seul l'historique de vente est cloisonné.
+ * Confidentialité entre vendeurs (B16) : sans FACTURE_VIEW_TOUTES, un
+ * utilisateur ne voit, n'envoie et n'encaisse que les factures qu'il a
+ * lui-même créées (voir Facture::scopeVisiblesPar() pour les listes). Les
+ * clients restent partagés (voir ClientPolicy) -- seul l'historique de
+ * vente est cloisonné.
  */
 class FacturePolicy extends MagasinPolicy
 {
@@ -65,6 +66,20 @@ class FacturePolicy extends MagasinPolicy
     public function envoyer(User $user, Facture $facture): bool
     {
         return $this->view($user, $facture) && $user->can(PermissionRegistry::FACTURE_ENVOYER);
+    }
+
+    /**
+     * Encaisser une facture (action « Encaisser », voir FactureResource) :
+     * une facture que l'utilisateur voit (un vendeur, les siennes), avec
+     * l'autorisation d'enregistrer un paiement, tant qu'elle attend un
+     * règlement et qu'il en reste quelque chose à payer.
+     */
+    public function encaisser(User $user, Facture $facture): bool
+    {
+        return $this->view($user, $facture)
+            && $user->can(PermissionRegistry::PAIEMENT_CREER)
+            && $facture->statut->attendUnReglement()
+            && $facture->montantRestant() > 0;
     }
 
     /**

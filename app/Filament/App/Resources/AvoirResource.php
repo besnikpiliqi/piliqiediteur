@@ -29,8 +29,10 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rules\Exists;
 
 /**
@@ -122,7 +124,7 @@ class AvoirResource extends Resource
                     Hidden::make('ligne_facture_id'),
                     TextInput::make('facture_numero')->label('Document')->disabled()->dehydrated(false),
                     TextInput::make('description')->label('Produit / description')->disabled()->dehydrated(false),
-                    self::champQuantiteRetournee('Quantité à créditer', fn (Get $get): int => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
+                    self::champQuantiteRetournee('Quantité à créditer', fn (Get $get): ?int => self::ligneVisible($get('ligne_facture_id'))?->quantiteCreditableRestante()),
                 ])
                 ->columns(4)
                 ->addable(false)
@@ -245,7 +247,9 @@ class AvoirResource extends Resource
 
     /**
      * Les lignes des documents émis du client qu'aucun avoir n'a encore
-     * entièrement créditées.
+     * entièrement créditées, parmi les documents que l'utilisateur voit
+     * (B16, voir Facture::scopeVisiblesPar()) : un vendeur ne crédite que
+     * ses ventes.
      *
      * @return Collection<int, LigneFacture>
      */
@@ -253,9 +257,44 @@ class AvoirResource extends Resource
     {
         return LigneFacture::query()
             ->creditables()
-            ->whereHas('facture', fn (Builder $query) => $query->emises()->where('client_id', $clientId))
+            ->whereHas('facture', fn (Builder $query) => $query->emises()->visiblesPar(auth()->user())->where('client_id', $clientId))
             ->with('facture')
             ->get();
+    }
+
+    /**
+     * Un vendeur ne crédite que ses ventes (B16) : chaque ligne demandée,
+     * ici comme dans l'action « Avoir » de FactureResource, appartient à
+     * un document que l'utilisateur voit, sinon la demande est refusée
+     * (403) avant que rien ne s'enregistre, même avec un identifiant forgé
+     * hors des lignes proposées. Une ligne d'un autre magasin n'est pas
+     * lue ici (MagasinScope) : EnregistrerAvoirAction la refuse.
+     *
+     * @param  array<array-key, array{ligne_facture_id: mixed}>  $lignes
+     *
+     * @throws AuthorizationException
+     */
+    public static function autoriserLesLignesACrediter(array $lignes): void
+    {
+        $identifiants = array_map('intval', array_column($lignes, 'ligne_facture_id'));
+
+        foreach (LigneFacture::query()->whereKey($identifiants)->with('facture')->get() as $ligne) {
+            Gate::authorize('view', $ligne->facture);
+        }
+    }
+
+    /**
+     * La ligne choisie, ici comme dans l'action « Avoir » de
+     * FactureResource, si l'utilisateur voit son document (B16) : sa
+     * quantité encore créditable ne se lit pas depuis un identifiant forgé.
+     */
+    public static function ligneVisible(mixed $ligneFactureId): ?LigneFacture
+    {
+        $identifiant = filter_var($ligneFactureId, FILTER_VALIDATE_INT);
+
+        return $identifiant === false ? null : LigneFacture::query()
+            ->whereHas('facture', fn (Builder $query) => $query->visiblesPar(auth()->user()))
+            ->find($identifiant);
     }
 
     public static function table(Table $table): Table

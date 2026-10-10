@@ -15,7 +15,7 @@ use Filament\Forms\Get;
 trait SaisitUneQuantiteRetournee
 {
     /**
-     * @param  Closure(Get): int  $quantiteRestante
+     * @param  Closure(Get): ?int  $quantiteRestante  null pour une ligne que l'utilisateur ne voit pas : le champ n'en révèle aucun plafond, et l'autorisation ou l'action refuse la demande
      */
     protected static function champQuantiteRetournee(string $libelle, Closure $quantiteRestante): TextInput
     {
@@ -23,7 +23,7 @@ trait SaisitUneQuantiteRetournee
             ->label($libelle)
             ->integer()
             ->minValue(1)
-            ->maxValue(fn (Get $get): int => $quantiteRestante($get))
+            ->maxValue(fn (Get $get): ?int => $quantiteRestante($get))
             ->required();
     }
 }

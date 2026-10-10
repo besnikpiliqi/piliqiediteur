@@ -91,9 +91,9 @@ final class PermissionRegistry
     // Factures
     public const FACTURE_VIEW = 'facture.view';
 
-    // Sans cette permission, un utilisateur ne voit que les factures
-    // qu'il a lui-même créées (voir FacturePolicy) -- confidentialité du
-    // CA par vendeur, décision prise explicitement avec le client.
+    // Sans cette permission, un utilisateur ne voit et n'encaisse que les
+    // factures qu'il a lui-même créées, et son tableau de bord montre
+    // « Mes ventes » (B16, voir FacturePolicy et Facture::scopeVisiblesPar()).
     public const FACTURE_VIEW_TOUTES = 'facture.view_toutes';
 
     public const FACTURE_CREATE = 'facture.create';

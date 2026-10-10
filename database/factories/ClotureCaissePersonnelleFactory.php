@@ -17,6 +17,7 @@ class ClotureCaissePersonnelleFactory extends Factory
         return [
             'periode_debut' => now()->subHours(4),
             'cloturee_a' => now(),
+            'encaissements' => [],
         ];
     }
 }

@@ -431,6 +431,90 @@ class AvoirResourceTest extends TestCase
             ->assertCanNotSeeTableRecords([$avoirDeA]);
     }
 
+    /**
+     * B16 : un vendeur ne crédite que ses ventes. Le client a acheté au
+     * vendeur A et au vendeur B : le formulaire de B ne lui propose que la
+     * ligne de son propre ticket.
+     */
+    public function test_le_formulaire_d_un_vendeur_ne_propose_que_les_lignes_de_ses_ventes(): void
+    {
+        ['vendeurB' => $vendeurB, 'client' => $client, 'venteDeB' => $venteDeB] = $this->clientDesDeuxVendeurs();
+        $this->actingAs($vendeurB);
+
+        $formulaire = Livewire::test(CreateAvoir::class)->fillForm(['client_id' => $client->id]);
+
+        $this->assertSame([$venteDeB->lignes->sole()->id], array_column(array_values($formulaire->instance()->form->getRawState()['lignes']), 'ligne_facture_id'));
+    }
+
+    /**
+     * La ligne du vendeur A, forgée dans le formulaire du vendeur B, est
+     * refusée (403) : aucun avoir, et la ligne reste entièrement
+     * créditable.
+     */
+    public function test_la_ligne_d_un_collegue_forgee_dans_le_formulaire_est_refusee(): void
+    {
+        ['vendeurB' => $vendeurB, 'client' => $client, 'venteDeA' => $venteDeA] = $this->clientDesDeuxVendeurs();
+        $this->actingAs($vendeurB);
+
+        $formulaire = Livewire::test(CreateAvoir::class)
+            ->fillForm(['client_id' => $client->id, 'motif' => 'Retour'])
+            ->fillForm(['lignes' => [['ligne_facture_id' => $venteDeA->lignes->sole()->id, 'quantite' => 1]]])
+            ->call('create');
+
+        $formulaire->assertForbidden();
+        $this->assertSame(0, Avoir::query()->count());
+        $this->assertSame(1, $venteDeA->lignes->sole()->quantiteCreditableRestante());
+    }
+
+    /**
+     * Même refus depuis l'action « Avoir » de sa propre facture, où la
+     * ligne du collègue est forgée parmi les lignes à créditer.
+     */
+    public function test_la_ligne_d_un_collegue_forgee_dans_l_action_avoir_est_refusee(): void
+    {
+        ['vendeurB' => $vendeurB, 'venteDeA' => $venteDeA, 'venteDeB' => $venteDeB] = $this->clientDesDeuxVendeurs();
+        $this->actingAs($vendeurB);
+
+        $liste = Livewire::test(ListFactures::class)
+            ->mountTableAction('avoir', $venteDeB)
+            ->setTableActionData([
+                'lignes' => [['ligne_facture_id' => $venteDeA->lignes->sole()->id, 'quantite' => 1]],
+                'motif' => 'Retour',
+            ])
+            ->call('callMountedTableAction');
+
+        $liste->assertForbidden();
+        $this->assertSame(0, Avoir::query()->count());
+    }
+
+    /**
+     * Un client qui a acheté un article au vendeur A et un au vendeur B,
+     * deux vendeurs autorisés à voir et créer les avoirs.
+     *
+     * @return array{vendeurB: User, client: Client, venteDeA: Facture, venteDeB: Facture}
+     */
+    private function clientDesDeuxVendeurs(): array
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $autorisations = [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER];
+        $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
+        $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
+        $client = Client::factory()->create();
+        $venteDeA = $this->emettreUnTicketEnTantQue($vendeurA, $client);
+        $venteDeB = $this->emettreUnTicketEnTantQue($vendeurB, $client);
+        Filament::setTenant($magasin);
+
+        return ['vendeurB' => $vendeurB, 'client' => $client, 'venteDeA' => $venteDeA, 'venteDeB' => $venteDeB];
+    }
+
+    private function emettreUnTicketEnTantQue(User $vendeur, Client $client): Facture
+    {
+        $this->actingAs($vendeur);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+    }
+
     private function emettreUnAvoirEnTantQue(User $auteur): Avoir
     {
         $this->actingAs($auteur);

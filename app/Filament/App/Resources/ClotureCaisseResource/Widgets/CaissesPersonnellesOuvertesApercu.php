@@ -14,10 +14,10 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  * attaché explicitement via ListClotureCaisses::getHeaderWidgets().
  *
  * Alerte le gérant AVANT qu'il ne clôture manuellement si un vendeur a
- * encore des ventes de l'une des journées à clôturer qu'il n'a pas fermées
- * de son côté (voir VerificateurCaissesPersonnelles) -- le bouton
- * « Clôturer la journée » reste de toute façon désactivé tant que la liste
- * n'est pas vide (voir ListClotureCaisses::getHeaderActions()).
+ * encore des ventes ou des encaissements de l'une des journées à clôturer
+ * qu'il n'a pas fermés de son côté (voir VerificateurCaissesPersonnelles)
+ * -- le bouton « Clôturer la journée » reste de toute façon désactivé tant
+ * que la liste n'est pas vide (voir ListClotureCaisses::getHeaderActions()).
  */
 class CaissesPersonnellesOuvertesApercu extends BaseWidget
 {

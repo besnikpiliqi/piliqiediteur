@@ -2,6 +2,8 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
 use Database\Factories\ClotureCaissePersonnelleFactory;
@@ -11,27 +13,38 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
- * Relevé personnel des ventes d'UN vendeur : toutes celles qu'aucune de ses
- * fermetures n'a encore comptées, y compris celles d'un jour précédent. Sa
- * période (periode_debut) part de sa dernière fermeture, ou du début de la
- * journée s'il n'en a encore fait aucune, ou de sa plus ancienne vente
- * comptée si elle est antérieure.
+ * Relevé « Fermer ma caisse » d'UN vendeur (voir FermerSaCaisseAction), en
+ * quatre rubriques séparées (B18) :
+ *  - les ventes : celles qu'il a émises et qu'aucune de ses fermetures
+ *    n'a encore comptées, y compris celles d'un jour précédent ; leur
+ *    nombre et leur TTC vendu, avec le HT et la TVA (total_ttc, total_ht,
+ *    total_tva). Une vente reprise depuis par un avoir y compte en
+ *    entier : le relevé ne déduit pas les avoirs, que la clôture de la
+ *    journée déduit le jour de leur émission (voir CloturerCaisseAction) ;
+ *  - les encaissements, par mode de paiement : les paiements qu'il a
+ *    enregistrés depuis sa dernière fermeture, sur ces ventes comme sur
+ *    des factures plus anciennes, et, en négatif, les contre-passations
+ *    de ses paiements, quel qu'en soit l'auteur (voir
+ *    Paiement::scopeNonFermesParLeVendeur()) -- ce que doit contenir
+ *    chaque tiroir ;
+ *  - le crédit d'avoir imputé sur ces ventes à la fermeture (credit_avoir) :
+ *    ce qui les a réglées sans entrer en caisse ;
+ *  - ce qu'il en reste dû à la fermeture (reste_du).
+ *
+ * Sa période (periode_debut) part de sa dernière fermeture, ou du début de
+ * la journée s'il n'en a encore fait aucune, ou de la plus ancienne vente
+ * ou du plus ancien paiement compté s'il est antérieur.
  *
  * Un outil de réconciliation de fin de service, PAS un document fiscal.
  * Contrairement à ClotureCaisse (la clôture officielle de la journée du
  * magasin, réservée au propriétaire ou à qui il en délègue la permission),
  * un vendeur peut toujours fermer SA PROPRE caisse, sans permission
- * spéciale -- voir FermerSaCaisseAction.
- *
- * N'agrège PAS que les ventes aux particuliers (contrairement à
- * ClotureCaisse) : toutes les factures du vendeur comptent, l'objectif
- * étant de vérifier sa propre caisse, pas l'e-reporting. Les avoirs n'y
- * entrent pas : une vente reprise par un avoir y compte en entier, alors
- * que la clôture de la journée déduit l'avoir le jour de son émission
- * (voir CloturerCaisseAction). Les ventes comptées sont notées dans une
- * table à part (voir factures()), jamais sur la facture elle-même : une
- * facture déjà incluse ici reste pleinement éligible à la clôture
- * officielle de la journée.
+ * spéciale. Toutes ses ventes comptent, aux particuliers comme aux
+ * professionnels : l'objectif est de vérifier sa propre caisse, pas
+ * l'e-reporting. Les ventes et les paiements comptés sont notés dans des
+ * tables à part (voir factures() et paiements()), jamais sur les documents
+ * eux-mêmes : une facture déjà incluse ici reste pleinement éligible à la
+ * clôture officielle de la journée.
  */
 class ClotureCaissePersonnelle extends Model
 {
@@ -40,7 +53,7 @@ class ClotureCaissePersonnelle extends Model
 
     protected $table = 'clotures_caisse_personnelles';
 
-    // Tout le reste (périodes, totaux) n'est jamais en mass assignment,
+    // Tout le reste (périodes, rubriques) n'est jamais en mass assignment,
     // uniquement via FermerSaCaisseAction.
     protected $fillable = [];
 
@@ -50,6 +63,9 @@ class ClotureCaissePersonnelle extends Model
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
         'total_ttc' => 'decimal:2',
+        'encaissements' => 'array',
+        'credit_avoir' => 'decimal:2',
+        'reste_du' => 'decimal:2',
     ];
 
     protected static function booted(): void
@@ -71,5 +87,38 @@ class ClotureCaissePersonnelle extends Model
     public function factures(): BelongsToMany
     {
         return $this->belongsToMany(Facture::class, 'clotures_caisse_personnelles_factures');
+    }
+
+    /**
+     * Les paiements comptés par cette fermeture, contre-passations
+     * comprises -- chacun ne l'est jamais que par une seule (voir
+     * Paiement::scopeNonFermesParLeVendeur()).
+     */
+    public function paiements(): BelongsToMany
+    {
+        return $this->belongsToMany(Paiement::class, 'clotures_caisse_personnelles_paiements');
+    }
+
+    /**
+     * Le total encaissé, tous modes confondus, contre-passations déduites.
+     */
+    public function totalEncaisse(): float
+    {
+        return app(CalculateurLigne::class)->sommer($this->encaissements);
+    }
+
+    /**
+     * « Espèces : 30,00 € », un par mode de paiement encaissé, dans
+     * l'ordre des modes.
+     *
+     * @return list<string>
+     */
+    public function encaissementsEnClair(): array
+    {
+        return array_values(array_map(
+            fn (string $mode, string $montant): string => ModePaiement::from($mode)->getLabel().' : '.number_format((float) $montant, 2, ',', ' ').' €',
+            array_keys($this->encaissements),
+            $this->encaissements,
+        ));
     }
 }

@@ -100,8 +100,8 @@ enum RoleMagasin: string implements HasLabel
                 PermissionRegistry::CAISSE_SECURISEE_CONSULTER,
             ],
             // Un vendeur crée/émet ses propres devis et factures, mais ne
-            // voit que celles qu'il a lui-même créées (voir FacturePolicy)
-            // et ne les corrige pas par un avoir. Clôturer LA JOURNÉE DU
+            // voit et n'encaisse que celles qu'il a lui-même créées (voir
+            // FacturePolicy) et ne les corrige pas par un avoir. Clôturer LA JOURNÉE DU
             // MAGASIN (ClotureCaisse) ne lui est pas coché non plus ; il
             // ferme en revanche toujours SA PROPRE caisse (voir
             // FermerSaCaisseAction), sans autorisation dédiée puisqu'elle

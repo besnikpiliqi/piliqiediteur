@@ -8,12 +8,16 @@ use App\Filament\App\Resources\AvoirResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\RevientALaListe;
 use Filament\Resources\Pages\CreateRecord;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
 
 /**
  * Crée et émet l'avoir d'un seul geste, comme l'action rapide de
  * FactureResource (voir EnregistrerAvoirAction) : aucun brouillon d'avoir
  * n'existe jamais dans l'interface, pas même après un refus.
+ *
+ * Un vendeur ne crédite que ses ventes (B16, voir
+ * AvoirResource::autoriserLesLignesACrediter()).
  */
 class CreateAvoir extends CreateRecord
 {
@@ -21,8 +25,13 @@ class CreateAvoir extends CreateRecord
 
     protected static string $resource = AvoirResource::class;
 
+    /**
+     * @throws AuthorizationException
+     */
     protected function handleRecordCreation(array $data): Model
     {
+        AvoirResource::autoriserLesLignesACrediter($data['lignes']);
+
         return static::executerOuInterrompre(fn () => app(EnregistrerAvoirAction::class)->handle(
             // Limité au magasin par MagasinScope ; withTrashed() garde le
             // client archivé dont un achat se retourne (voir

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
@@ -192,6 +193,20 @@ class Facture extends Model implements DocumentEnvoyable
     public function scopeEmises(Builder $query): Builder
     {
         return $query->where('statut', '!=', StatutFacture::Brouillon);
+    }
+
+    /**
+     * Les factures que cet utilisateur voit (B16, voir FacturePolicy::view()) :
+     * toutes avec l'autorisation « voir celles de toute l'équipe », sinon
+     * seulement celles qu'il a créées. Toute liste de factures, de leurs
+     * lignes ou de ce qu'il en reste dû passe par ici : un montant visible
+     * dans un tableau ou un menu est déjà une fuite.
+     */
+    public function scopeVisiblesPar(Builder $query, User $user): Builder
+    {
+        return $user->can(PermissionRegistry::FACTURE_VIEW_TOUTES)
+            ? $query
+            : $query->where('cree_par', $user->getKey());
     }
 
     /**

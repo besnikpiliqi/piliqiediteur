@@ -70,26 +70,20 @@ class FactureResource extends Resource
     protected static ?string $pluralModelLabel = 'factures';
 
     /**
-     * Confidentialité par vendeur (voir FacturePolicy) : sans
-     * FACTURE_VIEW_TOUTES, la liste elle-même ne doit montrer que les
-     * factures créées par l'utilisateur courant -- une policy sur l'accès
-     * direct ne suffit pas, un montant visible dans un tableau est déjà
-     * une fuite.
+     * Confidentialité entre vendeurs (B16) : la liste elle-même ne montre
+     * que les factures que l'utilisateur voit (voir
+     * Facture::scopeVisiblesPar()) -- une policy sur l'accès direct ne
+     * suffit pas, un montant visible dans un tableau est déjà une fuite.
      */
     public static function getEloquentQuery(): Builder
     {
         // withSum évite un N+1 sur montantPaye()/montantCrediteParAvoir()
         // pour chaque ligne du tableau.
-        $query = parent::getEloquentQuery()
+        return parent::getEloquentQuery()
+            ->visiblesPar(auth()->user())
             ->with('client')
             ->withSum('allocationsPaiement as montant_paye_somme', 'montant_alloue')
             ->withSum('allocationsAvoir as montant_credite_somme', 'montant_alloue');
-
-        if (! auth()->user()->can(PermissionRegistry::FACTURE_VIEW_TOUTES)) {
-            $query->where('cree_par', auth()->id());
-        }
-
-        return $query;
     }
 
     public static function form(Form $form): Form
@@ -498,9 +492,7 @@ class FactureResource extends Resource
                             ->validationMessages(['before_or_equal' => 'Un paiement ne peut pas être reçu à une date future.']),
                     ])
                     ->requiresConfirmation()
-                    ->visible(fn (Facture $record) => $record->montantRestant() > 0
-                        && $record->statut->attendUnReglement()
-                        && auth()->user()->can(PermissionRegistry::PAIEMENT_CREER))
+                    ->visible(fn (Facture $record): bool => auth()->user()->can('encaisser', $record))
                     ->action(fn (Facture $record, array $data) => static::executerSansCasser(fn () => app(EnregistrerPaiementAction::class)->handle($record->client, [
                         'mode_paiement' => $data['mode_paiement'],
                         'montant' => $data['montant'],
@@ -531,7 +523,7 @@ class FactureResource extends Resource
                                     ->label('Produit / description')
                                     ->disabled()
                                     ->dehydrated(false),
-                                self::champQuantiteRetournee('Quantité à créditer', fn (Get $get): int => LigneFacture::find($get('ligne_facture_id'))?->quantiteCreditableRestante() ?? 0),
+                                self::champQuantiteRetournee('Quantité à créditer', fn (Get $get): ?int => AvoirResource::ligneVisible($get('ligne_facture_id'))?->quantiteCreditableRestante()),
                             ])
                             ->columns(3)
                             ->addable(false)
@@ -554,9 +546,10 @@ class FactureResource extends Resource
                     ->visible(fn (Facture $record) => $record->statut !== StatutFacture::Brouillon
                         && $record->possedeDesLignesCreditables()
                         && auth()->user()->can(PermissionRegistry::AVOIR_CREER))
-                    ->action(fn (Facture $record, array $data) => static::executerSansCasser(
-                        fn () => app(EnregistrerAvoirAction::class)->handle($record->client, $data['lignes'], $data['motif']),
-                    )),
+                    ->action(function (Facture $record, array $data): void {
+                        AvoirResource::autoriserLesLignesACrediter($data['lignes']);
+                        static::executerSansCasser(fn () => app(EnregistrerAvoirAction::class)->handle($record->client, $data['lignes'], $data['motif']));
+                    }),
             ])
             // Seuls les brouillons partent : une facture déjà émise se
             // corrige par un avoir (voir l'action "avoir" ci-dessus).

@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -15,13 +16,16 @@ use Illuminate\Support\Collection;
  * personnels.
  *
  * Seule la clôture manuelle en tient compte : tant qu'un vendeur a des
- * ventes de l'une des journées à clôturer qu'il n'a pas fermées de son
- * côté, le bouton « Clôturer la journée » reste désactivé et nomme ces
- * vendeurs (voir ListClotureCaisses), pour que leur relevé personnel (leur
- * outil de réconciliation de fin de service) ne parte pas en retard. La
- * clôture automatique de minuit (voir ClotureAutomatiqueCaisse) ne le
- * consulte jamais : une journée est toujours clôturée, même si personne
- * n'intervient.
+ * ventes ou des encaissements de l'une des journées à clôturer qu'il n'a
+ * pas fermés de son côté, le bouton « Clôturer la journée » reste
+ * désactivé et nomme ces vendeurs (voir ListClotureCaisses), pour que leur
+ * relevé personnel (leur outil de réconciliation de fin de service) ne
+ * parte pas en retard. Une vente est de la journée de son émission, un
+ * encaissement de celle où il est reçu, une contre-passation comprise,
+ * qui revient au vendeur du paiement qu'elle corrige (voir
+ * Paiement::scopeNonFermesParLeVendeur()). La clôture automatique de
+ * minuit (voir ClotureAutomatiqueCaisse) ne le consulte jamais : une
+ * journée est toujours clôturée, même si personne n'intervient.
  */
 class VerificateurCaissesPersonnelles
 {
@@ -45,16 +49,18 @@ class VerificateurCaissesPersonnelles
      */
     public function vendeursAvecCaisseOuverte(CarbonInterface $date): Collection
     {
-        $vendeurIds = Facture::query()
-            ->emisLe($date)
-            ->whereNotNull('cree_par')
-            ->distinct()
-            ->pluck('cree_par');
-
-        return $vendeurIds
-            ->map(fn (int $vendeurId) => User::find($vendeurId))
+        $paiementsDuJour = Paiement::query()->whereDate('recu_le', $date->toDateString());
+        $vendeurIds = Facture::query()->emisLe($date)->distinct()->pluck('cree_par')
+            ->merge((clone $paiementsDuJour)->whereNull('contre_passe_paiement_id')->distinct()->pluck('cree_par'))
+            ->merge(Paiement::query()->whereIn('id', (clone $paiementsDuJour)->select('contre_passe_paiement_id'))->distinct()->pluck('cree_par'))
             ->filter()
-            ->filter(fn (User $vendeur) => $this->aUneVenteNonFermee($vendeur, $date))
+            ->unique();
+
+        return User::query()
+            ->whereKey($vendeurIds->all())
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (User $vendeur): bool => $this->aUneVenteNonFermee($vendeur, $date) || $this->aUnEncaissementNonFerme($vendeur, $date))
             ->values();
     }
 
@@ -68,6 +74,19 @@ class VerificateurCaissesPersonnelles
         return Facture::query()
             ->nonFermeesParLeVendeur($vendeur->id)
             ->emisLe($date)
+            ->exists();
+    }
+
+    /**
+     * Un paiement reçu ce jour-là qui revient au relevé du vendeur (le
+     * sien, ou la contre-passation de l'un des siens) et qu'aucune de ses
+     * fermetures n'a encore compté.
+     */
+    private function aUnEncaissementNonFerme(User $vendeur, CarbonInterface $date): bool
+    {
+        return Paiement::query()
+            ->nonFermesParLeVendeur($vendeur->id)
+            ->whereDate('recu_le', $date->toDateString())
             ->exists();
     }
 }

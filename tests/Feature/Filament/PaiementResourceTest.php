@@ -490,6 +490,85 @@ class PaiementResourceTest extends TestCase
     }
 
     /**
+     * B16 : un vendeur n'encaisse que ses factures. Le client doit
+     * 120,00 € au vendeur A et 50,00 € au vendeur B : B ne se voit proposer
+     * que la sienne.
+     */
+    public function test_un_vendeur_ne_se_voit_proposer_que_ses_factures(): void
+    {
+        ['vendeurB' => $vendeurB, 'client' => $client, 'factureDeB' => $factureDeB] = $this->clientQuiDoitAuxDeuxVendeurs();
+        $this->actingAs($vendeurB);
+
+        $formulaire = Livewire::test(CreatePaiement::class)->fillForm(['client_id' => $client->id, 'allocations' => [['facture_id' => null]]]);
+
+        $formulaire->assertFormFieldExists('allocations.0.facture_id', fn (Select $champ): bool => collect($champ->getOptions())->all() === [
+            $factureDeB->id => "{$factureDeB->numero} — restant : 50,00 €",
+        ]);
+    }
+
+    public function test_le_proprietaire_se_voit_proposer_les_factures_de_toute_l_equipe(): void
+    {
+        ['magasin' => $magasin, 'client' => $client, 'factureDeA' => $factureDeA, 'factureDeB' => $factureDeB] = $this->clientQuiDoitAuxDeuxVendeurs();
+        $this->actingAs($this->proprietaireDe($magasin));
+
+        $formulaire = Livewire::test(CreatePaiement::class)->fillForm(['client_id' => $client->id, 'allocations' => [['facture_id' => null]]]);
+
+        $formulaire->assertFormFieldExists('allocations.0.facture_id', fn (Select $champ): bool => collect($champ->getOptions())->keys()->sort()->values()->all() === [$factureDeA->id, $factureDeB->id]);
+    }
+
+    /**
+     * La facture du vendeur A, forgée dans le formulaire du vendeur B hors
+     * des choix proposés, est refusée (403) : aucun paiement, et elle
+     * reste due.
+     */
+    public function test_la_facture_d_un_collegue_forgee_est_refusee_sans_rien_enregistrer(): void
+    {
+        ['vendeurB' => $vendeurB, 'client' => $client, 'factureDeA' => $factureDeA] = $this->clientQuiDoitAuxDeuxVendeurs();
+        $this->actingAs($vendeurB);
+
+        $formulaire = Livewire::test(CreatePaiement::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'mode_paiement' => ModePaiement::Especes->value,
+                'montant' => 120,
+                'recu_le' => now()->toDateString(),
+                'allocations' => [['facture_id' => $factureDeA->id, 'montant' => 120]],
+            ])
+            ->call('create');
+
+        $formulaire->assertForbidden();
+        $this->assertSame(0, Paiement::query()->count());
+        $this->assertSame([StatutFacture::Emise, 120.0], [$factureDeA->fresh()->statut, $factureDeA->fresh()->montantRestant()]);
+    }
+
+    /**
+     * Le client doit 120,00 € sur le ticket du vendeur A et 50,00 € sur
+     * celui du vendeur B, deux vendeurs aux autorisations de leur rôle.
+     *
+     * @return array{magasin: Magasin, vendeurB: User, client: Client, factureDeA: Facture, factureDeB: Facture}
+     */
+    private function clientQuiDoitAuxDeuxVendeurs(): array
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur);
+        $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur);
+        $client = Client::factory()->create();
+        $factureDeA = $this->emettreUnTicketEnTantQue($vendeurA, $client, 120);
+        $factureDeB = $this->emettreUnTicketEnTantQue($vendeurB, $client, 50);
+        Filament::setTenant($magasin);
+
+        return ['magasin' => $magasin, 'vendeurB' => $vendeurB, 'client' => $client, 'factureDeA' => $factureDeA, 'factureDeB' => $factureDeB];
+    }
+
+    private function emettreUnTicketEnTantQue(User $vendeur, Client $client, float $prixTtc): Facture
+    {
+        $this->actingAs($vendeur);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+    }
+
+    /**
      * Un paiement garde son client, même archivé depuis (voir
      * Paiement::client()) ; ce client, qui ne doit plus rien, n'est plus
      * proposé pour un nouveau paiement.

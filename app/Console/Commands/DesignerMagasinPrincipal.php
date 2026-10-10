@@ -7,7 +7,6 @@ use App\Domain\Tenancy\Services\ReglagesCommunsDeLaSociete;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -36,11 +35,7 @@ class DesignerMagasinPrincipal extends Command
     public function handle(ReglagesCommunsDeLaSociete $reglagesCommuns): int
     {
         $identifiant = (string) $this->argument('magasin');
-        $magasin = Magasin::query()
-            ->where(fn (Builder $magasins): Builder => ctype_digit($identifiant)
-                ? $magasins->whereKey((int) $identifiant)
-                : $magasins->where('uuid', $identifiant))
-            ->first();
+        $magasin = Magasin::trouverParIdentifiantOuUuid($identifiant);
 
         if ($magasin === null) {
             $this->error("Aucun magasin « {$identifiant} ».");

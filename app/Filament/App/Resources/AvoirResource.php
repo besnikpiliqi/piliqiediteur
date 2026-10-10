@@ -233,7 +233,7 @@ class AvoirResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('numero')->label('Numéro')->searchable(),
+                Tables\Columns\TextColumn::make('numero')->label('Numéro')->rechercheSansAccents(),
                 FactureResource::clientColumn(),
                 Tables\Columns\TextColumn::make('factures_concernees')
                     ->label('Factures créditées')

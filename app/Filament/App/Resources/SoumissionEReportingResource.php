@@ -83,7 +83,7 @@ class SoumissionEReportingResource extends Resource
         return $table
             ->defaultSort('periode_debut', 'desc')
             ->columns([
-                Tables\Columns\TextColumn::make('numero')->label('Numéro')->searchable(),
+                Tables\Columns\TextColumn::make('numero')->label('Numéro')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('periode_debut')->label('Période du')->date('d/m/Y')->sortable(),
                 Tables\Columns\TextColumn::make('periode_fin')->label('au')->date('d/m/Y'),
                 Tables\Columns\TextColumn::make('date_limite_transmission')->label('Limite légale')->date('d/m/Y'),

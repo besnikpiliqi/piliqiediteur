@@ -25,6 +25,7 @@ use Filament\Models\Contracts\HasName;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -137,6 +138,42 @@ class Magasin extends Model implements HasName
         'delai_paiement_jours' => 'integer',
         'designe_principal' => 'boolean',
     ];
+
+    /**
+     * Le magasin d'un identifiant ou d'un uuid tapé par l'éditeur (voir
+     * caisse:verifier et app:designer-magasin-principal), null s'il
+     * n'existe pas. Un texte qui n'est ni l'un ni l'autre ne désigne aucun
+     * magasin : la colonne uuid, typée sous PostgreSQL, n'est alors pas
+     * interrogée.
+     */
+    public static function trouverParIdentifiantOuUuid(string $identifiant): ?self
+    {
+        return match (true) {
+            ctype_digit($identifiant) => static::query()->find((int) $identifiant),
+            Str::isUuid($identifiant) => static::query()->firstWhere('uuid', $identifiant),
+            default => null,
+        };
+    }
+
+    /**
+     * Le magasin de l'adresse du panneau (/app/{uuid}, voir
+     * AppPanelProvider) : une adresse qui ne porte pas un uuid ne désigne
+     * aucun magasin (404), sans interroger la colonne uuid, typée sous
+     * PostgreSQL.
+     *
+     * @param  mixed  $query
+     * @param  mixed  $value
+     * @param  string|null  $field
+     * @return mixed
+     */
+    public function resolveRouteBindingQuery($query, $value, $field = null)
+    {
+        if (($field ?? $this->getRouteKeyName()) === 'uuid' && ! Str::isUuid((string) $value)) {
+            throw (new ModelNotFoundException)->setModel(self::class, [$value]);
+        }
+
+        return parent::resolveRouteBindingQuery($query, $value, $field);
+    }
 
     protected static function booted(): void
     {

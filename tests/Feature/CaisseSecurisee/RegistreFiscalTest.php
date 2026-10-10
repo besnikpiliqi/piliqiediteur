@@ -284,13 +284,14 @@ class RegistreFiscalTest extends TestCase
     }
 
     /**
-     * Sous MySQL et MariaDB (REPEATABLE READ), une lecture sans verrou relit
-     * la photo prise à la première lecture de la transaction, et ignore ce
-     * qu'une autre caisse a validé depuis. Ici la photo du registre est
-     * vide, mais la ligne de tête, lue verrouillée, sait qu'une autre caisse
-     * du magasin a déjà inscrit l'initialisation et quatre ventes : c'est
-     * elle qui décide de la séquence, de la signature précédente et des
-     * événements à inscrire.
+     * Sous PostgreSQL (READ COMMITTED), une lecture verrouillée du dernier
+     * enregistrement d'une chaîne qui a attendu ne revoit que les lignes
+     * trouvées avant d'attendre, et ignorerait ce qu'une autre caisse a
+     * validé pendant ce temps. Ici le registre est vide, mais la ligne de
+     * tête, lue verrouillée, sait qu'une autre caisse du magasin a déjà
+     * inscrit l'initialisation et quatre ventes : c'est elle qui décide de
+     * la séquence, de la signature précédente et des événements à
+     * inscrire.
      */
     public function test_l_etat_des_chaines_se_lit_sur_la_ligne_de_tete_verrouillee_et_non_sur_une_photo_du_registre(): void
     {
@@ -615,7 +616,7 @@ class RegistreFiscalTest extends TestCase
         $this->magasinActif();
         $enregistrement = $this->enregistrer();
 
-        $this->assertThrows(fn () => $modifier($enregistrement->id), QueryException::class, 'enregistrements_fiscaux : table en ajout seul, modification refusée');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $modifier($enregistrement->id)), QueryException::class, 'enregistrements_fiscaux : table en ajout seul, modification refusée');
 
         $this->assertSame($enregistrement->contenu, DB::table('enregistrements_fiscaux')->where('id', $enregistrement->id)->value('contenu'));
     }
@@ -640,7 +641,7 @@ class RegistreFiscalTest extends TestCase
         $this->magasinActif();
         $enregistrement = $this->enregistrer();
 
-        $this->assertThrows(fn () => $supprimer($enregistrement->id), QueryException::class, 'enregistrements_fiscaux : table en ajout seul, suppression refusée');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $supprimer($enregistrement->id)), QueryException::class, 'enregistrements_fiscaux : table en ajout seul, suppression refusée');
 
         $this->assertModelExists($enregistrement);
     }

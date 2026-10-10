@@ -55,6 +55,7 @@ class AppliquerAvoirsDisponiblesAction
                 ->where('client_id', $facture->client_id)
                 ->where('statut', StatutAvoir::Emise)
                 ->orderBy('date_emission')
+                ->orderBy('id')
                 ->lockForUpdate()
                 ->get()
                 ->filter(fn (Avoir $avoir) => $avoir->montantNonAlloue() > 0);

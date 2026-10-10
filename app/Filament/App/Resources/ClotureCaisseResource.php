@@ -162,7 +162,7 @@ class ClotureCaisseResource extends Resource
         return $table
             ->defaultSort('date_cloture', 'desc')
             ->columns([
-                Tables\Columns\TextColumn::make('numero')->label('Numéro')->searchable(),
+                Tables\Columns\TextColumn::make('numero')->label('Numéro')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('date_cloture')->label('Journée')->date('d/m/Y')->sortable(),
                 Tables\Columns\TextColumn::make('nombre_ventes')->label('Ventes'),
                 Tables\Columns\TextColumn::make('nombre_avoirs')->label('Avoirs'),

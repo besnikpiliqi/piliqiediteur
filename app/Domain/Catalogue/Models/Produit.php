@@ -196,14 +196,28 @@ class Produit extends Model
      */
     public function dernierPrixDAchatHt(): float
     {
-        return (float) ($this->lignesAchat()->orderByDesc('facture_achat_id')->orderByDesc('ordre')->value('prix_unitaire_ht')
+        return (float) ($this->lignesAchat()->orderByDesc('facture_achat_id')->orderByDesc('ordre')->orderByDesc('id')->value('prix_unitaire_ht')
             ?? app(CalculateurLigne::class)->arrondirAuCentime((float) $this->cmup_ht));
     }
 
     /**
+     * Vrai quand un autre produit du magasin, archivés compris, porte déjà
+     * cette référence, quelle que soit la casse (« ABC » et « abc » sont
+     * la même référence) : l'index unique (magasin_id, lower(reference))
+     * la refuserait. La comparaison passe par le même lower() que l'index.
+     */
+    public static function referenceDejaPrise(string $reference, ?self $sauf = null): bool
+    {
+        return static::withTrashed()
+            ->whereRaw('lower(reference) = lower(?)', [$reference])
+            ->when($sauf?->exists, fn (Builder $produits) => $produits->whereKeyNot($sauf->getKey()))
+            ->exists();
+    }
+
+    /**
      * La base refuse deux produits du magasin avec la même référence
-     * (archivés compris) : mieux vaut le dire clairement qu'échouer sur
-     * l'index unique.
+     * (archivés compris, sans tenir compte de la casse) : mieux vaut le
+     * dire clairement qu'échouer sur l'index unique.
      */
     private function verifierQueSaReferenceEstLibre(): void
     {
@@ -211,12 +225,7 @@ class Produit extends Model
             return;
         }
 
-        $dejaPrise = static::withTrashed()
-            ->where('reference', $this->reference)
-            ->when($this->exists, fn (Builder $produits) => $produits->whereKeyNot($this->getKey()))
-            ->exists();
-
-        if ($dejaPrise) {
+        if (self::referenceDejaPrise($this->reference, $this)) {
             throw new InvalidArgumentException("La référence « {$this->reference} » est déjà celle d'un autre produit.");
         }
     }
@@ -227,9 +236,9 @@ class Produit extends Model
      * par magasin, jamais remise à zéro (pas de periodKey, contrairement
      * aux documents fiscaux qui se réinitialisent chaque année) -- un
      * catalogue produit n'a pas de notion d'exercice. Une référence saisie
-     * à la main peut déjà porter ce format (PRD-000001) : le numéro suivant
-     * est alors pris, jusqu'au premier qu'aucun produit du magasin ne
-     * porte, archivés compris.
+     * à la main peut déjà porter ce format (PRD-000001, ou prd-000001) : le
+     * numéro suivant est alors pris, jusqu'au premier qu'aucun produit du
+     * magasin ne porte, archivés compris.
      */
     private function referenceAutomatiqueLibre(): string
     {
@@ -238,7 +247,7 @@ class Produit extends Model
                 app(TenantContext::class)->magasin(),
                 TypeDocument::Produit,
             );
-        } while (static::withTrashed()->where('reference', $reference)->exists());
+        } while (self::referenceDejaPrise($reference));
 
         return $reference;
     }

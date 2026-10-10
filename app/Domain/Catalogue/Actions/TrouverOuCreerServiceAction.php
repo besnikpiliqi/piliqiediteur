@@ -3,7 +3,6 @@
 namespace App\Domain\Catalogue\Actions;
 
 use App\Domain\Catalogue\Models\Service;
-use Illuminate\Database\UniqueConstraintViolationException;
 use InvalidArgumentException;
 
 /**
@@ -31,17 +30,14 @@ class TrouverOuCreerServiceAction
             throw new InvalidArgumentException('Le nom du service ne doit pas dépasser '.Service::LONGUEUR_MAXIMALE_NOM.' caractères.');
         }
 
-        $cle = ['nom_normalise' => Service::normaliserNom($nom)];
-
-        try {
-            $service = Service::query()->where($cle)->first() ?? Service::create(['nom' => $nom]);
-        } catch (UniqueConstraintViolationException) {
-            // Deux caisses DU MÊME MAGASIN viennent de créer le même service
-            // au même instant : l'unicité (magasin_id, nom_normalise) a
-            // tranché, on reprend celui de l'autre caisse. Les services d'un
-            // autre magasin ne sont jamais vus ici (MagasinScope).
-            $service = Service::query()->where($cle)->firstOrFail();
-        }
+        // Deux caisses DU MÊME MAGASIN qui créent le même service au même
+        // instant : l'unicité (magasin_id, nom_normalise) tranche, et
+        // firstOrCreate() reprend celui de l'autre caisse. La création se
+        // tente dans un point de sauvegarde, que le refus de l'index
+        // annule seul : sous PostgreSQL, une erreur SQL annulerait sinon
+        // toute la transaction de l'appelant. Les services d'un autre
+        // magasin ne sont jamais vus ici (MagasinScope).
+        $service = Service::query()->firstOrCreate(['nom_normalise' => Service::normaliserNom($nom)], ['nom' => $nom]);
 
         if (! $service->actif) {
             $service->update(['actif' => true]);

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Laravel\Boost\Install\GuidelineConfig;
 use Laravel\Boost\Install\SkillComposer;
@@ -13,7 +14,8 @@ use Tests\TestCase;
  * Aucun paquet inutilisé et aucun outil Node (décisions de l'éditeur) :
  * Filament Shield et Sanctum, retirés, n'exposent plus ni route ni
  * commande, et rien de ce que lisent les agents ne renvoie à un outil
- * absent du projet.
+ * absent du projet. La base, PostgreSQL ou SQLite, trie les textes dans
+ * le même ordre.
  */
 class OutillageTest extends TestCase
 {
@@ -34,6 +36,21 @@ class OutillageTest extends TestCase
         ));
 
         $this->assertSame([], $commandesDesPaquetsRetires);
+    }
+
+    /**
+     * PostgreSQL, en collation déterministe C.UTF-8, trie les textes dans
+     * l'ordre binaire, comme SQLite : majuscules d'abord, lettres
+     * accentuées après « z », « . » avant « _ ». Un contenu signé trié en
+     * SQL (les autorisations du journal des événements, voir
+     * User::autorisationsCocheesDans()) garde ainsi le même ordre sur les
+     * deux moteurs ; une collation linguistique le changerait.
+     */
+    public function test_la_base_trie_les_textes_dans_l_ordre_binaire(): void
+    {
+        $textes = DB::select("select column1 as texte from (values ('Éco'), ('facture_achat.view'), ('eco'), ('facture.view'), ('FAC-1')) as textes order by column1");
+
+        $this->assertSame(['FAC-1', 'eco', 'facture.view', 'facture_achat.view', 'Éco'], array_column($textes, 'texte'));
     }
 
     /**

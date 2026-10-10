@@ -203,7 +203,7 @@ class VerifierIntegriteActionTest extends TestCase
         $this->vendre();
         $this->verifier(complet: true);
         $controle = EnregistrementFiscal::query()->where('type', '280')->sole();
-        DB::unprepared('DROP TRIGGER enregistrements_fiscaux_ajout_seul_update');
+        $this->retirerLeDeclencheur('enregistrements_fiscaux', 'enregistrements_fiscaux_ajout_seul_update');
         DB::table('enregistrements_fiscaux')->where('magasin_id', $magasin->id)->where('id', $controle->id)
             ->update(['contenu' => str_replace('"vente":{"sequence":1', '"vente":{"sequence":9', $controle->contenu)]);
 

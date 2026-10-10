@@ -113,7 +113,8 @@ class ClotureCaisse extends Model
      * clôturée sur la ligne de verrou (voir
      * RegistreFiscal::derniereJourneeCloturee()), jamais dans cette table
      * sans verrou. Un ticket émis pendant la clôture de sa journée attend
-     * qu'elle soit terminée, puis se voit refusé, même sous MySQL.
+     * qu'elle soit terminée, puis se voit refusé : la ligne de verrou,
+     * relue après l'attente, porte la journée qu'elle vient de clôturer.
      *
      * @param  InstantFiscal  $instant  l'instant de l'émission, que donne le registre fiscal
      *

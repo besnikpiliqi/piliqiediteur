@@ -20,7 +20,11 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->string('type');
             $table->morphs('notifiable');
-            $table->text('data');
+            // json et non text : la cloche de Filament et
+            // User::effacerLesNotificationsDu() filtrent sur ses clés
+            // (data->format, data->magasin_id), ce que PostgreSQL ne fait
+            // que sur une colonne json.
+            $table->json('data');
             $table->timestamp('read_at')->nullable();
             $table->timestamps();
         });

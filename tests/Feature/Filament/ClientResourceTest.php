@@ -209,6 +209,48 @@ class ClientResourceTest extends TestCase
         $clients->each(fn (Client $client) => $this->assertNotSoftDeleted($client));
     }
 
+    /**
+     * La liste des clients se cherche sans tenir compte de la casse ni des
+     * accents, et ne montre jamais l'homonyme d'un autre magasin.
+     */
+    public function test_la_recherche_de_la_liste_des_clients_ignore_la_casse_et_les_accents(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $homonymeDUnAutreMagasin = Client::factory()->create(['nom' => 'Hélène Martin']);
+        $this->connecterLeProprietaire();
+        $helene = Client::factory()->create(['nom' => 'Hélène Martin']);
+        $paul = Client::factory()->create(['nom' => 'Paul Durand']);
+
+        Livewire::test(ListClients::class)
+            ->searchTable('HELENE')
+            ->assertCanSeeTableRecords([$helene])
+            ->assertCanNotSeeTableRecords([$paul, $homonymeDUnAutreMagasin]);
+    }
+
+    public function test_la_recherche_du_client_de_la_caisse_ignore_la_casse_et_les_accents(): void
+    {
+        $this->connecterLeProprietaire();
+        $helene = Client::factory()->create(['nom' => 'Hélène Martin']);
+        Client::factory()->create(['nom' => 'Paul Durand']);
+
+        Livewire::test(Caisse::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('helene') === [$helene->id => 'Hélène Martin']);
+    }
+
+    /**
+     * Le client d'une facture se choisit dans une liste recherchée côté
+     * serveur (relationProposable()), elle aussi sans casse ni accents.
+     */
+    public function test_la_recherche_du_client_d_une_facture_ignore_la_casse_et_les_accents(): void
+    {
+        $this->connecterLeProprietaire();
+        $helene = Client::factory()->create(['nom' => 'Hélène Martin']);
+        Client::factory()->create(['nom' => 'Paul Durand']);
+
+        Livewire::test(CreateFacture::class)
+            ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('HÉLENE') === [$helene->id => 'Hélène Martin']);
+    }
+
     private function connecterLeProprietaire(): void
     {
         $proprietaire = User::factory()->create();

@@ -12,6 +12,7 @@ use Filament\Models\Contracts\HasTenants;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -42,6 +43,27 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         static::creating(function (User $user) {
             $user->uuid ??= (string) Str::uuid();
         });
+    }
+
+    /**
+     * Une adresse e-mail de compte s'enregistre et se compare en
+     * minuscules, sans espaces autour : « A@x.fr » et « a@x.fr » sont la
+     * même adresse, qui ne sert jamais à un second compte (index unique de
+     * users.email). La connexion et « Mot de passe oublié » la cherchent
+     * ainsi (voir FournisseurDesComptes), et les formulaires la valident
+     * déjà sous cette forme (voir la macro adresseDeConnexion()).
+     */
+    public static function normaliserEmail(string $email): string
+    {
+        return mb_strtolower(trim($email));
+    }
+
+    /**
+     * @return Attribute<string, string|null>
+     */
+    protected function email(): Attribute
+    {
+        return Attribute::make(set: static fn (?string $email): ?string => $email === null ? null : self::normaliserEmail($email));
     }
 
     /**

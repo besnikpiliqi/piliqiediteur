@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\Schema;
  * Le registre fiscal (art. 286 I-3° bis du CGI, voir RegistreFiscal) : on
  * n'y fait qu'ajouter. Chaque ligne garde le contenu exact qu'elle signe
  * et la signature de la ligne précédente de sa chaîne ; la base refuse
- * toute modification et toute suppression (voir DeclencheursDeProtection).
+ * toute modification, toute suppression et tout vidage (voir
+ * DeclencheursDeProtection).
  */
 return new class extends Migration
 {
@@ -35,8 +36,8 @@ return new class extends Migration
             // En UTC à la seconde (voir HorodatageUtc).
             $table->dateTime('horodatage');
             // Le JSON exact qui est signé, relu tel quel pour vérifier la
-            // signature : jamais une colonne json, dont MySQL réordonne les
-            // clés.
+            // signature : un texte, jamais une colonne jsonb, qui réordonne
+            // les clés et retire les espaces.
             $table->longText('contenu');
             // Null pour le premier enregistrement de la chaîne.
             $table->string('signature_precedente', 200)->nullable();
@@ -54,8 +55,9 @@ return new class extends Migration
             // chaque document. Faute de statistiques, SQLite prendrait
             // sinon l'index précédent, et parcourrait chaque fois tous les
             // enregistrements du même type (tous les paiements, par
-            // exemple).
-            $table->index(['document_type', 'document_id', 'chaine', 'type']);
+            // exemple). Nommé : le nom dérivé par Laravel dépasserait les 63
+            // caractères d'un identifiant PostgreSQL.
+            $table->index(['document_type', 'document_id', 'chaine', 'type'], 'enregistrements_fiscaux_document_index');
         });
 
         DeclencheursDeProtection::ajoutSeul('enregistrements_fiscaux');
@@ -64,5 +66,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('enregistrements_fiscaux');
+        DeclencheursDeProtection::retirer('enregistrements_fiscaux');
     }
 };

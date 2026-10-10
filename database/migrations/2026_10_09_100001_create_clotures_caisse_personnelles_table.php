@@ -31,8 +31,8 @@ return new class extends Migration
             // bloque jamais, la clôture officielle de la journée du
             // magasin (voir ClotureCaisse).
 
-            // Nom explicite : celui que Laravel dériverait dépasse les 64
-            // caractères qu'accepte MySQL.
+            // Nom explicite : celui que Laravel dériverait dépasse les 63
+            // caractères d'un identifiant PostgreSQL.
             $table->index(['magasin_id', 'cree_par', 'cloturee_a'], 'ccp_magasin_vendeur_cloturee_a_index');
         });
 

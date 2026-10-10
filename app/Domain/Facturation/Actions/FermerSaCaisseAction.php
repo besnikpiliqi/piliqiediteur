@@ -19,6 +19,16 @@ use Illuminate\Support\Facades\DB;
  * Aucune condition de blocage : contrairement à CloturerCaisseAction, un
  * vendeur peut fermer sa caisse aussi souvent qu'il le souhaite, y compris
  * sans aucune nouvelle vente depuis la précédente fois (relevé à zéro).
+ *
+ * Deux fermetures du même vendeur au même instant (double clic, deux
+ * onglets) se suivent : la seconde attend le verrou que la première a
+ * pris sur la fiche du vendeur, puis relit tout après elle. Sous
+ * PostgreSQL (READ COMMITTED), chaque lecture qui suit le verrou voit
+ * donc la fermeture validée entre-temps : la seconde part d'elle, sans
+ * compter une seconde fois ses ventes ni heurter la clé primaire de
+ * clotures_caisse_personnelles_factures. FOR NO KEY UPDATE, et non FOR
+ * UPDATE : les ventes que le vendeur émet pendant ce temps vérifient
+ * leur clé étrangère vers sa fiche sans l'attendre.
  */
 class FermerSaCaisseAction
 {
@@ -27,10 +37,11 @@ class FermerSaCaisseAction
     public function handle(User $vendeur): ClotureCaissePersonnelle
     {
         return DB::transaction(function () use ($vendeur) {
+            User::query()->whereKey($vendeur->getKey())->lock('for no key update')->first();
+
             $derniere = ClotureCaissePersonnelle::query()
                 ->where('cree_par', $vendeur->getKey())
                 ->orderByDesc('id')
-                ->lockForUpdate()
                 ->first();
 
             // Les ventes jamais encore comptées par une fermeture, et non

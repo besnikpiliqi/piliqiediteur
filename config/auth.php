@@ -57,20 +57,17 @@ return [
     | providers to represent the model / table. These providers may then
     | be assigned to any extra authentication guards you have defined.
     |
-    | Supported: "database", "eloquent"
+    | Supported: "database", "eloquent", "comptes"
     |
     */
 
     'providers' => [
+        // Les comptes, cherchés par leur adresse e-mail en minuscules (voir
+        // FournisseurDesComptes, déclaré dans AppServiceProvider).
         'users' => [
-            'driver' => 'eloquent',
+            'driver' => 'comptes',
             'model' => env('AUTH_MODEL', User::class),
         ],
-
-        // 'users' => [
-        //     'driver' => 'database',
-        //     'table' => 'users',
-        // ],
     ],
 
     /*

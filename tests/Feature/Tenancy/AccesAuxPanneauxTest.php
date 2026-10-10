@@ -74,6 +74,21 @@ class AccesAuxPanneauxTest extends TestCase
         $reponse->assertForbidden();
     }
 
+    /**
+     * Une adresse dont le magasin n'est pas un uuid ne désigne aucun
+     * magasin : 404, jamais l'erreur de la colonne uuid, typée sous
+     * PostgreSQL.
+     */
+    public function test_une_adresse_qui_ne_porte_pas_un_uuid_de_magasin_est_introuvable(): void
+    {
+        $proprietaire = User::factory()->create();
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+
+        $reponse = $this->actingAs($proprietaire)->get('/app/pas-un-uuid');
+
+        $reponse->assertNotFound();
+    }
+
     private function membreSuspendu(Magasin $magasin): User
     {
         $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);

@@ -1072,8 +1072,8 @@ class FactureAchatActionsTest extends TestCase
             ['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 1],
         ]);
 
-        $this->assertThrows(fn () => $factureAchat->lignes->sole()->replicate()->forceFill(['produit_id' => null])->save(), QueryException::class);
-        $this->assertThrows(fn () => $avoir->lignes->sole()->replicate()->forceFill(['produit_id' => null])->save(), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $factureAchat->lignes->sole()->replicate()->forceFill(['produit_id' => null])->save()), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $avoir->lignes->sole()->replicate()->forceFill(['produit_id' => null])->save()), QueryException::class);
 
         $this->assertSame([1, 1], [$factureAchat->lignes()->count(), $avoir->lignes()->count()]);
     }

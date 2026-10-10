@@ -126,11 +126,7 @@ class VerifierIntegriteFiscale extends Command
         $identifiant = $this->argument('magasin');
 
         if ($identifiant !== null) {
-            $magasin = Magasin::query()
-                ->where(fn (Builder $magasins): Builder => ctype_digit((string) $identifiant)
-                    ? $magasins->whereKey((int) $identifiant)
-                    : $magasins->where('uuid', $identifiant))
-                ->first();
+            $magasin = Magasin::trouverParIdentifiantOuUuid((string) $identifiant);
 
             return $magasin === null ? null : collect([$magasin]);
         }

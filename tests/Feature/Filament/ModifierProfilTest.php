@@ -121,6 +121,27 @@ class ModifierProfilTest extends TestCase
         $this->assertSame('paul@example.test', $vendeur->fresh()->email);
     }
 
+    /**
+     * « PRISE@Example.test » est la même adresse que « prise@example.test » :
+     * elle reste refusée.
+     */
+    public function test_une_adresse_deja_prise_sous_une_autre_casse_est_refusee(): void
+    {
+        User::factory()->create(['email' => 'prise@example.test']);
+        $vendeur = $this->creerVendeur();
+        $this->actingAs($vendeur);
+
+        Livewire::test(ModifierProfil::class)
+            ->fillForm([
+                'email' => ' PRISE@Example.test ',
+                'mot_de_passe_actuel' => 'ancien-mot-de-passe',
+            ])
+            ->call('save')
+            ->assertHasFormErrors(['email' => 'Cette adresse e-mail ne peut pas être utilisée.']);
+
+        $this->assertSame('paul@example.test', $vendeur->fresh()->email);
+    }
+
     public function test_un_nom_vide_est_refuse(): void
     {
         $vendeur = $this->creerVendeur();

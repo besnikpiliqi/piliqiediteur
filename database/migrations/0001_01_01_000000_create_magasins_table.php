@@ -106,13 +106,15 @@ return new class extends Migration
         });
 
         // Supprimé, un magasin reste en base avec deleted_at : la base
-        // refuse elle-même sa suppression définitive, même par une requête
-        // qui ne passe pas par le modèle (voir aussi Magasin::forceDelete()).
+        // refuse elle-même sa suppression définitive et le vidage de la
+        // table, même par une requête qui ne passe pas par le modèle (voir
+        // aussi Magasin::forceDelete()).
         DeclencheursDeProtection::sansSuppression('magasins');
     }
 
     public function down(): void
     {
         Schema::dropIfExists('magasins');
+        DeclencheursDeProtection::retirer('magasins');
     }
 };

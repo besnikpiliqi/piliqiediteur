@@ -17,6 +17,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
+use Closure;
 use ErrorException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\JoinClause;
@@ -84,12 +85,11 @@ use ValueError;
  * hors de leur série se retiennent jusqu'à la fin de la vérification.
  *
  * Rien n'est verrouillé, pour ne jamais arrêter les ventes : tout se lit
- * dans une même transaction, qui donne sous MySQL et MariaDB (REPEATABLE
- * READ) une photo cohérente de la base, sans qu'une vente validée en cours
- * de route n'y paraisse à moitié. Ce qui s'inscrit pendant la vérification
- * sera vérifié par la suivante. Les clôtures de caisse et les archives ne
- * sont pas encore vérifiées : leur forme définitive attend les décisions
- * de l'éditeur.
+ * dans une même photo de la base (voir dansUnInstantaneCoherent()), sans
+ * qu'une vente validée en cours de route n'y paraisse à moitié. Ce qui
+ * s'inscrit pendant la vérification sera vérifié par la suivante. Les
+ * clôtures de caisse et les archives ne sont pas encore vérifiées : leur
+ * forme définitive attend les décisions de l'éditeur.
  */
 class VerificateurIntegrite
 {
@@ -189,7 +189,7 @@ class VerificateurIntegrite
         $this->imputationsIntrouvables = [];
         $this->dernieresImputationsLues = [];
 
-        DB::transaction(function () use ($reprises): void {
+        $this->dansUnInstantaneCoherent(function () use ($reprises): void {
             $this->verifierLesChainesInconnues();
 
             foreach (ChaineFiscale::cases() as $chaine) {
@@ -203,6 +203,36 @@ class VerificateurIntegrite
         });
 
         return $this->rapport;
+    }
+
+    /**
+     * Toutes les lectures de la vérification voient la même photo de la
+     * base, prise à sa première lecture :
+     * - sous PostgreSQL, dont le niveau par défaut (READ COMMITTED) prend
+     *   une nouvelle photo à chaque requête, la transaction s'ouvre en
+     *   REPEATABLE READ READ ONLY, réglé par sa toute première
+     *   instruction. Une transaction en lecture seule ne subit jamais
+     *   d'erreur de sérialisation ; elle refuse en plus toute écriture.
+     *   Appelée dans une transaction déjà ouverte (les tests, que
+     *   RefreshDatabase enveloppe chacun dans la sienne), elle en garde le
+     *   niveau : PostgreSQL ne le change qu'en tête de la transaction la
+     *   plus externe, jamais dans un point de sauvegarde ;
+     * - sous SQLite, une transaction lit toujours une même photo.
+     */
+    private function dansUnInstantaneCoherent(Closure $verification): void
+    {
+        $connexion = DB::connection();
+
+        if ($connexion->getDriverName() !== 'pgsql' || $connexion->transactionLevel() > 0) {
+            $connexion->transaction($verification);
+
+            return;
+        }
+
+        $connexion->transaction(function () use ($connexion, $verification): void {
+            $connexion->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
+            $verification();
+        });
     }
 
     /**

@@ -6,6 +6,7 @@ use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -82,14 +83,17 @@ class TrouverOuCreerServiceActionTest extends TestCase
 
     /**
      * Deux caisses du même magasin créent le même service au même instant :
-     * l'autre caisse a inséré le sien entre la recherche et la création.
+     * l'autre caisse a inséré le sien entre la recherche et la création,
+     * juste après la requête qui ne l'a pas trouvé. La création se tente
+     * dans un point de sauvegarde, que le refus de l'index annule seul :
+     * sous PostgreSQL, la transaction du test reste utilisable.
      */
     public function test_un_service_cree_entre_temps_par_une_autre_caisse_est_repris_et_reactive(): void
     {
         $magasinId = app(TenantContext::class)->id();
         $insere = false;
-        Service::creating(function () use (&$insere, $magasinId): void {
-            if (! $insere) {
+        DB::listen(function (QueryExecuted $requete) use (&$insere, $magasinId): void {
+            if (! $insere && str_starts_with($requete->sql, 'select') && str_contains($requete->sql, '"services"')) {
                 $insere = true;
                 DB::table('services')->insert([
                     'magasin_id' => $magasinId,

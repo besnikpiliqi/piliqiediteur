@@ -5,7 +5,6 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Models\Magasin;
-use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -32,14 +31,17 @@ use Illuminate\Support\Facades\DB;
  *     unique (magasin_id, type_document, period_key).
  *  2. Deux créations simultanées de la PREMIÈRE séquence d'un magasin/type
  *     (aucune ligne à verrouiller tant qu'elle n'existe pas) : gérée via
- *     createOrFirst(), qui rattrape la violation de contrainte unique côté
- *     "perdant" de la course plutôt que de planter.
+ *     createOrFirst(). Le "perdant" de la course tente sa création dans un
+ *     point de sauvegarde, que le refus de la clé unique annule seul (sous
+ *     PostgreSQL, une erreur SQL annulerait sinon toute la transaction de
+ *     l'émission), puis relit la ligne du gagnant, validée entre-temps.
  *
  * Une fois la ligne de séquence garantie existante, lockForUpdate()
- * sérialise tous les incréments suivants (verrou pessimiste InnoDB).
- * Sous SQLite (dev/tests), lockForUpdate() est un no-op silencieux : la
- * logique reste correcte en mono-processus, mais la garantie anti
- * race-condition réelle ne vaut que sous MySQL/Postgres en production.
+ * sérialise tous les incréments suivants (SELECT ... FOR UPDATE). Sous
+ * SQLite (développement et tests), lockForUpdate() est un no-op
+ * silencieux : la logique reste correcte en mono-processus, mais la
+ * garantie contre les accès simultanés ne vaut que sous PostgreSQL, en
+ * production.
  */
 class DocumentNumberingService
 {
@@ -75,16 +77,11 @@ class DocumentNumberingService
             return $sequence;
         }
 
-        try {
-            SequenceDocument::query()->createOrFirst($critere, [
-                'prefixe' => $this->prefixe($magasin, $type, $periodKey),
-                'prochain_numero' => 1,
-                'rembourrage' => 6,
-            ]);
-        } catch (UniqueConstraintViolationException) {
-            // L'autre transaction a gagné la course de création : on
-            // continue, le verrou ci-dessous trouvera sa ligne.
-        }
+        SequenceDocument::query()->createOrFirst($critere, [
+            'prefixe' => $this->prefixe($magasin, $type, $periodKey),
+            'prochain_numero' => 1,
+            'rembourrage' => 6,
+        ]);
 
         // Re-sélection OBLIGATOIRE avec verrou : createOrFirst() ne pose
         // aucun lock, qu'on ait créé la ligne ou récupéré celle du

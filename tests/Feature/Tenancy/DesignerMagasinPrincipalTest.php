@@ -133,6 +133,17 @@ class DesignerMagasinPrincipalTest extends TestCase
     }
 
     /**
+     * Ni un identifiant ni un uuid : aucun magasin, sans interroger la
+     * colonne uuid, typée sous PostgreSQL.
+     */
+    public function test_un_texte_qui_n_est_ni_un_identifiant_ni_un_uuid_est_refuse(): void
+    {
+        $this->artisan('app:designer-magasin-principal', ['magasin' => 'bellecour', '--force' => true])
+            ->expectsOutputToContain('Aucun magasin « bellecour ».')
+            ->assertFailed();
+    }
+
+    /**
      * Le magasin Bellecour de la société SIREN 732829320, réel normal
      * mensuel.
      */

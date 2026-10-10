@@ -147,7 +147,7 @@ class Avoir extends Model implements DocumentEnvoyable
 
     public function lignes(): HasMany
     {
-        return $this->hasMany(LigneAvoir::class)->orderBy('ordre');
+        return $this->hasMany(LigneAvoir::class)->orderBy('ordre')->orderBy('id');
     }
 
     /**

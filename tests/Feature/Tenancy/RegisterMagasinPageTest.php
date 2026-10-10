@@ -108,6 +108,25 @@ class RegisterMagasinPageTest extends TestCase
     }
 
     /**
+     * L'adresse d'un compte existant, tapée sous une autre casse, est la
+     * même adresse : l'inscription est refusée sans créer de second
+     * compte.
+     */
+    public function test_une_adresse_deja_utilisee_sous_une_autre_casse_est_refusee(): void
+    {
+        User::factory()->create(['email' => 'jeanne@maboutique.fr']);
+
+        Livewire::test(RegisterMagasin::class)
+            ->fillForm([...$this->inscription(), 'email' => 'Jeanne@MaBoutique.FR'])
+            ->call('register')
+            ->assertHasFormErrors(['email' => 'unique']);
+
+        $this->assertGuest();
+        $this->assertSame(1, User::query()->count());
+        $this->assertSame(0, Magasin::query()->count());
+    }
+
+    /**
      * Un code pris par une inscription simultanée juste avant
      * l'enregistrement est refusé comme un code déjà pris, et l'inscription
      * s'annule entière : l'adresse e-mail reste libre pour recommencer.

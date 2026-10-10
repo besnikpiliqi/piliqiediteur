@@ -82,8 +82,8 @@ class FournisseurResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('nom')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('siret')->label('SIRET')->searchable(),
+                Tables\Columns\TextColumn::make('nom')->rechercheSansAccents()->sortable(),
+                Tables\Columns\TextColumn::make('siret')->label('SIRET')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('email'),
             ])
             ->filters([

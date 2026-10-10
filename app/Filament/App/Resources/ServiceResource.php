@@ -87,7 +87,7 @@ class ServiceResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('nom')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('nom')->rechercheSansAccents()->sortable(),
                 Tables\Columns\IconColumn::make('actif')->label('Proposé à la caisse')->boolean(),
                 Tables\Columns\TextColumn::make('created_at')->label('Créé le')->date('d/m/Y')->sortable(),
             ])

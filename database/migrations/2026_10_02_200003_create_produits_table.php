@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -45,9 +46,15 @@ return new class extends Migration
             // stock, et se restaure.
             $table->softDeletes();
 
-            $table->unique(['magasin_id', 'reference']);
             $table->index(['magasin_id', 'code_barres']);
         });
+
+        // Une référence est unique dans le magasin sans tenir compte de la
+        // casse (« ABC » et « abc » sont la même référence), archivés
+        // compris, et s'enregistre telle que saisie : index unique sur
+        // l'expression lower(reference), que Produit::referenceDejaPrise()
+        // reprend pour la validation.
+        DB::statement('CREATE UNIQUE INDEX produits_magasin_reference_unique ON produits (magasin_id, lower(reference))');
     }
 
     public function down(): void

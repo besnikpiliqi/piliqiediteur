@@ -120,8 +120,8 @@ class CreerMagasinActionTest extends TestCase
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'siren' => '123456789', 'siret' => '12345678900012'], User::factory()->create());
         $magasin->delete();
 
-        $this->assertThrows(fn () => Magasin::withTrashed()->whereKey($magasin->id)->forceDelete(), QueryException::class, 'magasins : suppression définitive refusée');
-        $this->assertThrows(fn () => DB::table('magasins')->where('id', $magasin->id)->delete(), QueryException::class, 'magasins : suppression définitive refusée');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => Magasin::withTrashed()->whereKey($magasin->id)->forceDelete()), QueryException::class, 'magasins : suppression définitive refusée');
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('magasins')->where('id', $magasin->id)->delete()), QueryException::class, 'magasins : suppression définitive refusée');
 
         $this->assertSame('12345678900012', Magasin::withTrashed()->find($magasin->id)?->siret);
     }

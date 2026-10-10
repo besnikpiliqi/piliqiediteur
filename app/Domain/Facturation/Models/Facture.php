@@ -245,7 +245,7 @@ class Facture extends Model implements DocumentEnvoyable
 
     public function lignes(): HasMany
     {
-        return $this->hasMany(LigneFacture::class)->orderBy('ordre');
+        return $this->hasMany(LigneFacture::class)->orderBy('ordre')->orderBy('id');
     }
 
     public function transmissionsPdp(): MorphMany

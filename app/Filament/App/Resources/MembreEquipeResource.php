@@ -68,6 +68,7 @@ class MembreEquipeResource extends Resource
             Section::make('Nouveau membre')->schema([
                 TextInput::make('name')->label('Nom complet')->required()->maxLength(255),
                 TextInput::make('email')
+                    ->adresseDeConnexion()
                     ->email()
                     ->required()
                     ->maxLength(255)
@@ -147,8 +148,8 @@ class MembreEquipeResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('utilisateur.name')->label('Nom')->searchable(),
-                Tables\Columns\TextColumn::make('utilisateur.email')->label('Email')->searchable(),
+                Tables\Columns\TextColumn::make('utilisateur.name')->label('Nom')->rechercheSansAccents(),
+                Tables\Columns\TextColumn::make('utilisateur.email')->label('Email')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('role')->label('Rôle')->badge(),
                 Tables\Columns\TextColumn::make('statut')->label('Statut')->badge(),
                 Tables\Columns\TextColumn::make('joined_at')->label('Membre depuis')->date('d/m/Y'),

@@ -19,8 +19,9 @@ use Illuminate\Support\Facades\DB;
  * page de connexion.
  *
  * Le nouveau mot de passe est facultatif : laissé vide, l'ancien reste.
- * L'adresse e-mail est unique parmi tous les comptes, supprimés compris,
- * et le refus ne dit pas à qui elle appartient. Une fois l'adresse
+ * L'adresse e-mail, enregistrée en minuscules (voir
+ * User::normaliserEmail()), est unique parmi tous les comptes, supprimés
+ * compris, et le refus ne dit pas à qui elle appartient. Une fois l'adresse
  * changée, un lien « Mot de passe oublié » déjà envoyé à l'ancienne ne
  * sert plus.
  *
@@ -58,6 +59,7 @@ class ModifierProfil extends EditProfile
     protected function getEmailFormComponent(): Component
     {
         return parent::getEmailFormComponent()
+            ->adresseDeConnexion()
             ->validationMessages([
                 'unique' => 'Cette adresse e-mail ne peut pas être utilisée.',
             ]);

@@ -67,9 +67,10 @@ class Service extends Model
      * et « MAIN D'OEUVRE » désignent le même service, comme « Remplacement
      * écran » et « REMPLACEMENT ECRAN ». Accents, ligatures, majuscules,
      * tirets et apostrophes typographiques des claviers de téléphone sont
-     * ignorés, en PHP et non par la collation de la base : SQLite et MySQL
-     * décident pareil. Un nom sans aucune lettre latine (que des emojis)
-     * garde sa propre écriture plutôt que de devenir une clé vide.
+     * ignorés, en PHP et non par la collation de la base : SQLite et
+     * PostgreSQL décident pareil. Un nom sans aucune lettre latine (que
+     * des emojis) garde sa propre écriture plutôt que de devenir une clé
+     * vide.
      */
     public static function normaliserNom(string $nom): string
     {

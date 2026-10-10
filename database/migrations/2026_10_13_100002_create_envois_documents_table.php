@@ -34,8 +34,10 @@ return new class extends Migration
 
             $table->index(['magasin_id', 'statut']);
             // Jamais deux fois le même niveau de relance pour un document :
-            // un envoi simple (niveau nul) peut, lui, se répéter.
-            $table->unique(['document_type', 'document_id', 'niveau_relance']);
+            // un envoi simple (niveau nul) peut, lui, se répéter. Nom
+            // explicite : celui que Laravel dériverait dépasse les 63
+            // caractères d'un identifiant PostgreSQL.
+            $table->unique(['document_type', 'document_id', 'niveau_relance'], 'envois_documents_relance_unique');
         });
     }
 

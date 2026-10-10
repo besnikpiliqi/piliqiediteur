@@ -203,11 +203,11 @@ class CreerMembreMagasinActionTest extends TestCase
         $hashDuMotDePasse = $comptable->password;
 
         $this->assertThrows(
-            fn () => $magasinB->utilisateurs()->attach($comptable->getKey(), [
+            $this->dansUnPointDeSauvegarde(fn () => $magasinB->utilisateurs()->attach($comptable->getKey(), [
                 'role' => RoleMagasin::Comptable->value,
                 'statut' => StatutMembreMagasin::Actif->value,
                 'joined_at' => now(),
-            ]),
+            ])),
             UniqueConstraintViolationException::class,
         );
         $this->assertThrows(
@@ -253,6 +253,44 @@ class CreerMembreMagasinActionTest extends TestCase
         $this->assertTrue(Hash::check('mot-de-passe-dalice', $alice->password));
         $this->assertFalse(Auth::validate(['email' => 'alice@boutique-a.test', 'password' => 'choisi-par-b']));
         $this->assertFalse($magasinB->membres()->where('user_id', $alice->id)->exists());
+    }
+
+    /**
+     * « Alice@Boutique-A.TEST » est la même adresse que
+     * « alice@boutique-a.test » : elle ne sert pas davantage à un nouveau
+     * membre d'un autre magasin.
+     */
+    public function test_une_adresse_deja_utilisee_sous_une_autre_casse_est_refusee(): void
+    {
+        $alice = User::factory()->create(['email' => 'alice@boutique-a.test']);
+        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $alice);
+        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
+
+        $this->assertThrows(
+            fn () => app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasinB), $magasinB, [
+                'name' => 'Pirate',
+                'email' => ' Alice@Boutique-A.TEST ',
+                'password' => 'choisi-par-b',
+            ], RoleMagasin::Observateur),
+            ValidationException::class,
+            'Cette adresse e-mail ne peut pas être utilisée pour un nouveau membre.',
+        );
+
+        $this->assertSame(1, User::query()->where('email', 'alice@boutique-a.test')->count());
+        $this->assertFalse($magasinB->membres()->where('user_id', $alice->id)->exists());
+    }
+
+    public function test_l_adresse_d_un_nouveau_membre_s_enregistre_en_minuscules_sans_espaces(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+
+        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
+            'name' => 'Paul',
+            'email' => '  Paul.Vendeur@Example.TEST ',
+            'password' => 'mot-de-passe-sur',
+        ], RoleMagasin::Vendeur);
+
+        $this->assertSame('paul.vendeur@example.test', $vendeur->fresh()->email);
     }
 
     /**

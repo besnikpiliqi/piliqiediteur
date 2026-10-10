@@ -55,11 +55,12 @@ use LogicException;
  * et la clé du dernier enregistrement du magasin, et sa dernière journée de
  * caisse clôturée (voir derniereJourneeCloturee()). Cet état ne se lit que
  * sur cette ligne, verrouillée, jamais dans enregistrements_fiscaux ni
- * clotures_caisse : sous MySQL et MariaDB (REPEATABLE READ), une lecture
- * sans verrou relit la photo prise à la première lecture de la transaction
- * et ignorerait ce qu'une autre caisse a inscrit ou clôturé depuis, et une
- * lecture verrouillée du dernier enregistrement d'une chaîne poserait un
- * verrou d'intervalle jusque sur les enregistrements d'un autre magasin.
+ * clotures_caisse : sous PostgreSQL (READ COMMITTED), une lecture
+ * verrouillée qui a dû attendre ne revoit que les lignes qu'elle avait
+ * trouvées avant d'attendre, et ignorerait l'enregistrement ou la clôture
+ * qu'une autre caisse a validés pendant ce temps ; la ligne de tête, qui
+ * existe toujours, se relit au contraire à jour une fois le verrou
+ * obtenu, comme tout ce que lisent les requêtes suivantes.
  *
  * Les verrous se prennent toujours dans cet ordre : le registre, puis la
  * ligne du document, puis sequences_documents (voir

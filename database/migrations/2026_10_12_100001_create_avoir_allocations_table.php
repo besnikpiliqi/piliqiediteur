@@ -11,7 +11,8 @@ use Illuminate\Support\Facades\Schema;
  * (voir ImputerAvoirSurSesFacturesAction) ou celle de la facture qui
  * absorbe un crédit (voir AppliquerAvoirsDisponiblesAction), et figure
  * dans le contenu signé de ce document au registre fiscal ; la base refuse
- * toute modification et toute suppression (voir DeclencheursDeProtection).
+ * toute modification, toute suppression et tout vidage (voir
+ * DeclencheursDeProtection).
  */
 return new class extends Migration
 {
@@ -39,5 +40,6 @@ return new class extends Migration
     public function down(): void
     {
         Schema::dropIfExists('avoir_allocations');
+        DeclencheursDeProtection::retirer('avoir_allocations');
     }
 };

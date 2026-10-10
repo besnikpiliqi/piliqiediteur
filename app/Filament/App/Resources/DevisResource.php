@@ -118,8 +118,8 @@ class DevisResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->searchable(),
-                Tables\Columns\TextColumn::make('client.nom')->label('Client')->searchable(),
+                Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
+                Tables\Columns\TextColumn::make('client.nom')->label('Client')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('statut')->badge(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('date_validite')->label('Validité')->date('d/m/Y'),

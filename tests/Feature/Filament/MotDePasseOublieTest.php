@@ -42,6 +42,24 @@ class MotDePasseOublieTest extends TestCase
         Notification::assertSentTo($proprietaire, LienDeReinitialisation::class);
     }
 
+    /**
+     * Le compte se retrouve par son adresse quelle que soit la casse tapée
+     * (voir FournisseurDesComptes).
+     */
+    public function test_la_demande_avec_l_adresse_tapee_en_majuscules_envoie_le_lien(): void
+    {
+        Notification::fake();
+        $proprietaire = User::factory()->create(['email' => 'patron@boutique.test']);
+        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+
+        Livewire::test(RequestPasswordReset::class)
+            ->fillForm(['email' => 'Patron@Boutique.TEST'])
+            ->call('request')
+            ->assertHasNoFormErrors();
+
+        Notification::assertSentTo($proprietaire, LienDeReinitialisation::class);
+    }
+
     public function test_la_demande_et_le_lien_recu_sont_rediges_en_francais(): void
     {
         Notification::fake();

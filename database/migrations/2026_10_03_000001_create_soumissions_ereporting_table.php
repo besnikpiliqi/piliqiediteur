@@ -32,7 +32,8 @@ return new class extends Migration
             // Une seule soumission par période exacte et par magasin :
             // garantit l'idempotence de la commande planifiée (voir
             // GenererSoumissionEReportingAction). Nom explicite : celui
-            // que Laravel dériverait dépasse les 64 caractères de MySQL.
+            // que Laravel dériverait dépasse les 63 caractères d'un
+            // identifiant PostgreSQL.
             $table->unique(['magasin_id', 'periode_debut', 'periode_fin'], 'soumissions_ereporting_periode_unique');
             $table->unique(['magasin_id', 'numero']);
         });

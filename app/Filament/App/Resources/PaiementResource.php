@@ -151,7 +151,7 @@ class PaiementResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('recu_le')->label('Reçu le')->date('d/m/Y')->sortable(),
-                Tables\Columns\TextColumn::make('client.nom')->label('Client')->searchable(),
+                Tables\Columns\TextColumn::make('client.nom')->label('Client')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('mode_paiement')->label('Mode')->badge(),
                 Tables\Columns\TextColumn::make('montant')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('allocations')

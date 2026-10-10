@@ -69,7 +69,7 @@ class AvoirFournisseur extends Model
 
     public function lignes(): HasMany
     {
-        return $this->hasMany(LigneAvoirFournisseur::class)->orderBy('ordre');
+        return $this->hasMany(LigneAvoirFournisseur::class)->orderBy('ordre')->orderBy('id');
     }
 
     /**

@@ -161,8 +161,8 @@ class FactureAchatResource extends Resource
         return $table
             ->defaultSort('created_at', 'desc')
             ->columns([
-                Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->searchable(),
-                Tables\Columns\TextColumn::make('fournisseur.nom')->label('Fournisseur')->searchable(),
+                Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
+                Tables\Columns\TextColumn::make('fournisseur.nom')->label('Fournisseur')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('numero_fournisseur')->label('N° fournisseur')->toggleable(),
                 Tables\Columns\TextColumn::make('statut')->badge(),
                 Tables\Columns\TextColumn::make('source')->badge()->toggleable(),

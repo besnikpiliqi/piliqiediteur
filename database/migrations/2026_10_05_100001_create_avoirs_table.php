@@ -55,9 +55,8 @@ return new class extends Migration
             $table->string('numero', 40)->nullable();
             $table->string('statut', 20)->default('brouillon');
             // L'instant du registre fiscal à l'émission, en UTC à la seconde
-            // (voir HorodateSonEmission) : dateTime, que MySQL ne convertit
-            // jamais selon le fuseau de la connexion, contrairement à
-            // timestamp.
+            // (voir HorodateSonEmission) : une date et une heure sans fuseau,
+            // écrites et relues telles quelles.
             $table->dateTime('date_emission')->nullable();
             $table->string('devise', 3)->default('EUR');
             $table->text('motif')->nullable();

@@ -16,7 +16,9 @@ return new class extends Migration
             // Append-only : pas d'updated_at, un événement ne se corrige pas.
             $table->timestamp('survenu_le')->useCurrent();
 
-            $table->index(['transmission_pdp_id', 'survenu_le']);
+            // Nom explicite : celui que Laravel dériverait dépasse les 63
+            // caractères d'un identifiant PostgreSQL.
+            $table->index(['transmission_pdp_id', 'survenu_le'], 'evenements_transmission_pdp_survenu_le_index');
         });
     }
 

@@ -18,14 +18,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->string('nom', Service::LONGUEUR_MAXIMALE_NOM);
-            // Clé de doublon calculée en PHP (voir Service::normaliserNom()) :
-            // comparée octet par octet, pour que MySQL ne rapproche pas en
-            // plus ce que SQLite distingue.
-            $cle = $table->string('nom_normalise', Service::LONGUEUR_MAXIMALE_CLE);
-
-            if (in_array(Schema::getConnection()->getDriverName(), ['mysql', 'mariadb'], true)) {
-                $cle->collation('utf8mb4_bin');
-            }
+            // Clé de doublon calculée en PHP (voir Service::normaliserNom()),
+            // que PostgreSQL et SQLite comparent octet par octet.
+            $table->string('nom_normalise', Service::LONGUEUR_MAXIMALE_CLE);
 
             // Un service n'est jamais supprimé (des lignes de vente y
             // renvoient) : on l'archive pour le retirer de la caisse.

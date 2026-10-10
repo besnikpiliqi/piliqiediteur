@@ -80,6 +80,16 @@ class RegisterMagasin extends Register
             });
     }
 
+    /**
+     * L'adresse de connexion du propriétaire, validée en minuscules comme
+     * elle sera enregistrée : déjà prise sous une autre casse, elle est
+     * refusée comme doublon (voir User::normaliserEmail()).
+     */
+    protected function getEmailFormComponent(): Component
+    {
+        return parent::getEmailFormComponent()->adresseDeConnexion();
+    }
+
     protected function getCodeMagasinFormComponent(): Component
     {
         return TextInput::make('code')

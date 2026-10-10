@@ -12,6 +12,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\PanierDeCaisse;
+use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ReglagesCommunsDeLaSociete;
 use App\Filament\App\Resources\ClientResource;
@@ -189,8 +190,10 @@ class Caisse extends Page implements HasForms
                     // Un client archivé n'est plus proposé pour une vente, ni
                     // accepté ; celui d'un panier enregistré avant son
                     // archivage reste affiché, le temps d'en choisir un autre.
-                    ->getSearchResultsUsing(fn (string $search) => Client::query()
-                        ->where('nom', 'like', "%{$search}%")
+                    // La recherche ignore la casse et les accents.
+                    ->getSearchResultsUsing(fn (string $search) => RechercheSansAccents::appliquer(Client::query(), $search, ['nom'])
+                        ->orderBy('nom')
+                        ->orderBy('id')
                         ->limit(50)
                         ->pluck('nom', 'id'))
                     ->getOptionLabelUsing(fn ($value) => Client::withTrashed()->find($value)?->nom)

@@ -145,7 +145,7 @@ class VerificateurIntegriteTest extends TestCase
      */
     private function falsifierLEnregistrement(EnregistrementFiscal $enregistrement, array $colonnes): void
     {
-        DB::unprepared('DROP TRIGGER enregistrements_fiscaux_ajout_seul_update');
+        $this->retirerLeDeclencheur('enregistrements_fiscaux', 'enregistrements_fiscaux_ajout_seul_update');
         DB::table('enregistrements_fiscaux')->where('magasin_id', $enregistrement->magasin_id)->where('id', $enregistrement->id)->update($colonnes);
     }
 
@@ -325,7 +325,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasin = $this->magasinActif();
         $documents = $this->activite();
         $enregistrementDeLAvoir = $this->enregistrementDe($documents['avoir'], ChaineFiscale::Vente);
-        DB::unprepared('DROP TRIGGER enregistrements_fiscaux_ajout_seul_delete');
+        $this->retirerLeDeclencheur('enregistrements_fiscaux', 'enregistrements_fiscaux_ajout_seul_delete');
 
         DB::table('enregistrements_fiscaux')->where('magasin_id', $magasin->id)->where('id', $enregistrementDeLAvoir->id)->delete();
 
@@ -395,7 +395,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->magasinActif();
         $this->activite();
         $initialisation = $this->enregistrement(ChaineFiscale::Evenement, 1);
-        DB::unprepared('DROP TRIGGER enregistrements_fiscaux_ajout_seul_update');
+        $this->retirerLeDeclencheur('enregistrements_fiscaux', 'enregistrements_fiscaux_ajout_seul_update');
 
         DB::table('enregistrements_fiscaux')->where('magasin_id', $initialisation->magasin_id)->where('id', $initialisation->id)->update(['horodatage' => '2026-10-09 07:00:00']);
 
@@ -811,6 +811,11 @@ class VerificateurIntegriteTest extends TestCase
         ], $this->anomalies($this->verifier()));
     }
 
+    /**
+     * « NaN » (pas un nombre) : le montant illisible qu'accepte une colonne
+     * numeric de PostgreSQL, qui refuse tout autre texte ; SQLite le garde
+     * en texte.
+     */
     public function test_une_imputation_au_montant_illisible_est_detectee(): void
     {
         $magasin = $this->magasinActif();
@@ -820,7 +825,7 @@ class VerificateurIntegriteTest extends TestCase
             'magasin_id' => $magasin->id,
             'avoir_id' => $documents['avoirSurFacture']->id,
             'facture_id' => $documents['ticket']->id,
-            'montant_alloue' => 'douze euros',
+            'montant_alloue' => 'NaN',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -854,7 +859,7 @@ class VerificateurIntegriteTest extends TestCase
     {
         $magasin = $this->magasinActif();
         $documents = $this->activite();
-        DB::unprepared('DROP TRIGGER avoir_allocations_ajout_seul_delete');
+        $this->retirerLeDeclencheur('avoir_allocations', 'avoir_allocations_ajout_seul_delete');
 
         DB::table('avoir_allocations')->where('magasin_id', $magasin->id)->where('avoir_id', $documents['avoir']->id)->delete();
 
@@ -951,7 +956,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->activite();
         $pointsDeReprise = $this->verifier()->pointsDeReprise();
         $this->encaisser(Client::factory()->create(), [[$this->produit('THE', 8), 1]], ModePaiement::Especes);
-        DB::unprepared('DROP TRIGGER enregistrements_fiscaux_ajout_seul_delete');
+        $this->retirerLeDeclencheur('enregistrements_fiscaux', 'enregistrements_fiscaux_ajout_seul_delete');
 
         DB::table('enregistrements_fiscaux')->where('magasin_id', $magasin->id)->where('id', $this->enregistrement(ChaineFiscale::Vente, 5)->id)->delete();
 
@@ -1043,7 +1048,7 @@ class VerificateurIntegriteTest extends TestCase
         $magasinA = $this->magasinActif();
         $ticketDeA = $this->encaisser(Client::factory()->create(), [[$this->produit('THE', 8), 1]], ModePaiement::Especes);
         $enregistrementDeA = $this->enregistrementDe($ticketDeA, ChaineFiscale::Vente);
-        DB::unprepared('DROP TRIGGER enregistrements_fiscaux_ajout_seul_update');
+        $this->retirerLeDeclencheur('enregistrements_fiscaux', 'enregistrements_fiscaux_ajout_seul_update');
 
         DB::table('enregistrements_fiscaux')->where('magasin_id', $magasinB->id)->where('id', $enregistrementDeB->id)->update(['document_id' => $ticketDeA->id]);
         DB::table('enregistrements_fiscaux')->where('magasin_id', $magasinA->id)->where('id', $enregistrementDeA->id)->update(['document_id' => $ticketDeB->id]);

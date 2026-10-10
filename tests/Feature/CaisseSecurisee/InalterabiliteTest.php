@@ -313,8 +313,8 @@ class InalterabiliteTest extends TestCase
         $id = $modele::query()->sole()->id;
         $avant = $this->ligneEnBase($table, $id);
 
-        $this->assertThrows(fn () => DB::table($table)->where('id', $id)->update([$montant => '1.00']), QueryException::class, "{$table} : table en ajout seul, modification refusée");
-        $this->assertThrows(fn () => DB::table($table)->where('id', $id)->delete(), QueryException::class, "{$table} : table en ajout seul, suppression refusée");
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table($table)->where('id', $id)->update([$montant => '1.00'])), QueryException::class, "{$table} : table en ajout seul, modification refusée");
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table($table)->where('id', $id)->delete()), QueryException::class, "{$table} : table en ajout seul, suppression refusée");
 
         $this->assertSame($avant, $this->ligneEnBase($table, $id));
     }
@@ -390,7 +390,7 @@ class InalterabiliteTest extends TestCase
         // requête passe outre les garde-fous des modèles (un magasin, lui,
         // ne se supprime jamais définitivement, voir le déclencheur de sa
         // table).
-        $this->assertThrows(fn () => $referencee->newQueryWithoutScopes()->whereKey($referencee->getKey())->delete(), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $referencee->newQueryWithoutScopes()->whereKey($referencee->getKey())->delete()), QueryException::class);
 
         $this->assertModelExists($referencee);
         $this->assertSame($facture->numero, $facture->fresh()->numero);

@@ -102,7 +102,7 @@ class Devis extends Model implements DocumentEnvoyable
 
     public function lignes(): HasMany
     {
-        return $this->hasMany(LigneDevis::class)->orderBy('ordre');
+        return $this->hasMany(LigneDevis::class)->orderBy('ordre')->orderBy('id');
     }
 
     public function factures(): HasMany

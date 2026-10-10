@@ -18,8 +18,11 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\SoumissionEReporting;
+use App\Domain\Recherche\ConnecteurSqlite;
+use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\MagasinUser;
+use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Models\User;
 use App\Policies\AvoirFournisseurPolicy;
 use App\Policies\AvoirPolicy;
@@ -39,12 +42,15 @@ use App\Policies\SoumissionEReportingPolicy;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Tables\Columns\TextColumn;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\ServiceProvider;
@@ -59,10 +65,14 @@ class AppServiceProvider extends ServiceProvider
      * toutes les écritures fiscales de la transaction, transactions
      * imbriquées comprises (voir RegistreFiscal), et s'oublie entre deux
      * requêtes ou deux jobs.
+     *
+     * Chaque connexion SQLite reçoit la fonction des recherches sans casse
+     * ni accents (voir ConnecteurSqlite).
      */
     public function register(): void
     {
         $this->app->scoped(RegistreFiscal::class);
+        $this->app->bind('db.connector.sqlite', ConnecteurSqlite::class);
     }
 
     /**
@@ -100,8 +110,12 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(SoumissionEReporting::class, SoumissionEReportingPolicy::class);
         Gate::policy(EnregistrementFiscal::class, EnregistrementFiscalPolicy::class);
 
+        Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app['hash'], $config['model']));
+
         $this->nommerLesModelesPolymorphes();
         $this->declarerLaSaisieEnDirect();
+        $this->declarerLaRechercheSansAccents();
+        $this->declarerLAdresseDeConnexion();
         $this->limiterLesChoixAuMagasin();
         $this->nommerLesChampsDansLesMessages();
         $this->ecrireLesDatesEnFrancaisDansLesMessages();
@@ -186,7 +200,8 @@ class AppServiceProvider extends ServiceProvider
      * Le client ou le fournisseur d'un document se choisit avec
      * relationProposable() plutôt que relationship() : seules les fiches
      * non archivées sont proposées, plus celle déjà rattachée (voir
-     * Proposable).
+     * Proposable), et la recherche ignore la casse et les accents (voir
+     * RechercheSansAccents).
      *
      * La valeur déjà enregistrée sur la fiche modifiée n'est jamais
      * revérifiée : elle n'a pas été choisie dans ce formulaire, et une
@@ -220,7 +235,49 @@ class AppServiceProvider extends ServiceProvider
                 static fn (Builder $query, Select $component, ?Model $record): Builder => $query->proposables(
                     $record?->getOriginal($component->getRelationship()->getForeignKeyName()),
                 ),
-            );
+            )->getSearchResultsUsing(static function (Select $component, string $search) use ($attributAffiche): array {
+                /** @var BelongsTo<Model, Model> $relation */
+                $relation = Relation::noConstraints(static fn (): Relation => $component->getRelationship());
+                $cle = $relation->getRelated()->getKeyName();
+                $proposables = $relation->getQuery()->proposables($component->getRecord()?->getOriginal($relation->getForeignKeyName()));
+
+                return RechercheSansAccents::appliquer($proposables, $search, [$attributAffiche])
+                    ->orderBy($attributAffiche)
+                    ->orderBy($cle)
+                    ->limit($component->getOptionsLimit())
+                    ->pluck($attributAffiche, $cle)
+                    ->all();
+            });
+        });
+    }
+
+    /**
+     * Une colonne de tableau recherchée sans tenir compte de la casse ni
+     * des accents (voir RechercheSansAccents), à la place de searchable() :
+     * « creme » trouve « Crème ». Une colonne « relation.colonne » cherche
+     * dans la fiche liée.
+     */
+    private function declarerLaRechercheSansAccents(): void
+    {
+        TextColumn::macro('rechercheSansAccents', function (): TextColumn {
+            /** @var TextColumn $this */
+            return $this->searchable(query: RechercheSansAccents::dans($this->getName()));
+        });
+    }
+
+    /**
+     * L'adresse e-mail d'un compte (inscription, profil, nouveau membre)
+     * se valide déjà en minuscules et sans espaces autour, comme elle sera
+     * enregistrée (voir User::normaliserEmail()) : « A@x.fr » est refusée
+     * comme doublon de « a@x.fr ».
+     */
+    private function declarerLAdresseDeConnexion(): void
+    {
+        TextInput::macro('adresseDeConnexion', function (): TextInput {
+            /** @var TextInput $this */
+            return $this
+                ->mutateStateForValidationUsing(static fn (?string $state): ?string => $state === null ? null : User::normaliserEmail($state))
+                ->dehydrateStateUsing(static fn (?string $state): ?string => $state === null ? null : User::normaliserEmail($state));
         });
     }
 

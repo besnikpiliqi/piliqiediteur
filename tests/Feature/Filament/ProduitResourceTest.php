@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\ProduitResource;
@@ -38,6 +39,8 @@ use Tests\TestCase;
 class ProduitResourceTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const MESSAGE_REFERENCE_PRISE = 'Cette référence est déjà celle d\'un autre produit, peut-être archivé : affichez les produits archivés pour le restaurer.';
 
     private function connecterProprietaire(): void
     {
@@ -256,9 +259,45 @@ class ProduitResourceTest extends TestCase
         Livewire::test(CreateProduit::class)
             ->fillForm(['reference' => 'ECR-1', 'nom' => 'Autre écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
             ->call('create')
-            ->assertHasFormErrors(['reference' => 'unique']);
+            ->assertHasFormErrors(['reference' => fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_REFERENCE_PRISE]]);
 
         $this->assertSame(1, Produit::query()->count());
+    }
+
+    /**
+     * « ABC » et « abc » sont la même référence (index unique sur
+     * lower(reference)) : la saisie est refusée comme un doublon, au lieu
+     * d'échouer sur l'index.
+     */
+    public function test_une_reference_deja_prise_sous_une_autre_casse_est_refusee(): void
+    {
+        $this->connecterProprietaire();
+        Produit::factory()->create(['reference' => 'ABC']);
+
+        Livewire::test(CreateProduit::class)
+            ->fillForm(['reference' => 'abc', 'nom' => 'Autre écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
+            ->call('create')
+            ->assertHasFormErrors(['reference' => fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_REFERENCE_PRISE]]);
+
+        $this->assertSame(['ABC'], Produit::query()->pluck('reference')->all());
+    }
+
+    /**
+     * L'unicité ne vaut que dans le magasin : la référence d'un produit
+     * d'un autre magasin, sous quelque casse que ce soit, reste libre.
+     */
+    public function test_une_reference_prise_dans_un_autre_magasin_est_acceptee(): void
+    {
+        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        Produit::factory()->create(['reference' => 'ABC']);
+        $this->connecterProprietaire();
+
+        Livewire::test(CreateProduit::class)
+            ->fillForm(['reference' => 'abc', 'nom' => 'Écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertDatabaseHas('produits', ['reference' => 'abc', 'magasin_id' => app(TenantContext::class)->id()]);
     }
 
     /**
@@ -275,7 +314,7 @@ class ProduitResourceTest extends TestCase
         Livewire::test(CreateProduit::class)
             ->fillForm(['reference' => 'ECR-1', 'nom' => 'Autre écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
             ->call('create')
-            ->assertHasFormErrors(['reference' => fn (array $reglesEnEchec, array $messages): bool => $messages === ['Cette référence est déjà celle d\'un autre produit, peut-être archivé : affichez les produits archivés pour le restaurer.']]);
+            ->assertHasFormErrors(['reference' => fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_REFERENCE_PRISE]]);
 
         $this->assertSame(1, Produit::withTrashed()->count());
     }
@@ -539,6 +578,27 @@ class ProduitResourceTest extends TestCase
 
         $this->assertSame(ProduitResource::getUrl('edit', ['record' => $produit]), $table->getRecordUrl($produit));
         $this->assertNull($table->getRecordUrl($archive));
+    }
+
+    /**
+     * La recherche de produit des devis, des factures et de la caisse (voir
+     * ProduitResource::rechercher()) ignore la casse et les accents, sur le
+     * nom comme sur la référence.
+     */
+    public function test_la_recherche_de_produit_a_la_vente_ignore_la_casse_et_les_accents(): void
+    {
+        $this->connecterProprietaire();
+        $ecran = Produit::factory()->create(['nom' => 'Écran OLED', 'reference' => 'ECR-1']);
+        $protection = Produit::factory()->create(['nom' => 'Protection', 'reference' => 'Écran-verre']);
+        Produit::factory()->create(['nom' => 'Chargeur', 'reference' => 'CHG-1']);
+
+        $selectProduit = collect(DevisResource::ligneSchema())
+            ->first(fn ($component): bool => $component instanceof Select && $component->getName() === 'produit_id');
+
+        $resultats = $selectProduit->getSearchResults('ecran');
+        ksort($resultats);
+
+        $this->assertSame([$ecran->id => 'Écran OLED (ECR-1)', $protection->id => 'Protection (Écran-verre)'], $resultats);
     }
 
     /**

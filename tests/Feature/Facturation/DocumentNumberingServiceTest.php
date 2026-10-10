@@ -3,9 +3,12 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Tenancy\Models\Magasin;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -140,5 +143,42 @@ class DocumentNumberingServiceTest extends TestCase
         $numero = app(DocumentNumberingService::class)->suivant($magasin, TypeDocument::Facture, '2026');
 
         $this->assertSame('FAC-LYON9-2026-000001', $numero);
+    }
+
+    /**
+     * Deux caisses du même magasin numérotent au même instant le premier
+     * document d'une série : l'autre caisse a créé la série juste après la
+     * requête qui ne l'a pas trouvée. La création se tente dans un point
+     * de sauvegarde, que le refus de la clé unique annule seul : sous
+     * PostgreSQL, la transaction reste utilisable et la numérotation
+     * continue sur la série de l'autre caisse.
+     */
+    public function test_une_serie_creee_entre_temps_par_une_autre_caisse_est_reprise(): void
+    {
+        $magasin = Magasin::factory()->create(['code' => 'LYON1']);
+        $creeeEntreTemps = false;
+        DB::listen(function (QueryExecuted $requete) use (&$creeeEntreTemps, $magasin): void {
+            if (! $creeeEntreTemps && str_starts_with($requete->sql, 'select') && str_contains($requete->sql, '"sequences_documents"')) {
+                $creeeEntreTemps = true;
+                DB::table('sequences_documents')->insert([
+                    'magasin_id' => $magasin->id,
+                    'type_document' => TypeDocument::Facture->value,
+                    'period_key' => '2026',
+                    'prefixe' => 'FAC-LYON1-2026-',
+                    'prochain_numero' => 1,
+                    'rembourrage' => 6,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        });
+        $service = app(DocumentNumberingService::class);
+
+        $premier = $service->suivant($magasin, TypeDocument::Facture, '2026');
+        $second = $service->suivant($magasin, TypeDocument::Facture, '2026');
+
+        $this->assertTrue($creeeEntreTemps);
+        $this->assertSame(['FAC-LYON1-2026-000001', 'FAC-LYON1-2026-000002'], [$premier, $second]);
+        $this->assertSame(1, SequenceDocument::query()->where('magasin_id', $magasin->id)->count());
     }
 }

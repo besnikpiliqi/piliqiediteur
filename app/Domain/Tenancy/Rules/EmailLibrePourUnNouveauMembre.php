@@ -11,8 +11,9 @@ use Illuminate\Contracts\Validation\ValidationRule;
  * Un nouveau membre a toujours un compte neuf, qui n'appartiendra qu'à ce
  * magasin (voir CreerMembreMagasinAction) : un magasin ne crée donc un
  * membre qu'avec une adresse e-mail qu'aucun compte n'utilise encore, même
- * supprimé (l'adresse reste unique en base). Une adresse prise ne fait
- * jamais entrer son compte dans un autre magasin.
+ * supprimé (l'adresse reste unique en base), quelle que soit la casse
+ * (voir User::normaliserEmail()). Une adresse prise ne fait jamais entrer
+ * son compte dans un autre magasin.
  *
  * Le refus ne dit rien des autres magasins. Seule une personne déjà
  * rattachée à CE magasin, quel que soit son statut, est désignée comme
@@ -28,7 +29,7 @@ class EmailLibrePourUnNouveauMembre implements ValidationRule
             return;
         }
 
-        $compte = User::withTrashed()->where('email', $value)->first();
+        $compte = User::withTrashed()->where('email', User::normaliserEmail($value))->first();
 
         if ($compte === null) {
             return;

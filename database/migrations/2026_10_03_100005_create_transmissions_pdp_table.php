@@ -27,7 +27,9 @@ return new class extends Migration
             $table->timestamp('statut_maj_le')->nullable();
             $table->timestamps();
 
-            $table->unique(['prestataire_pdp', 'transmission_externe_id']);
+            // Nom explicite : celui que Laravel dériverait dépasse les 63
+            // caractères d'un identifiant PostgreSQL.
+            $table->unique(['prestataire_pdp', 'transmission_externe_id'], 'transmissions_pdp_externe_unique');
             $table->index(['magasin_id', 'statut']);
         });
     }

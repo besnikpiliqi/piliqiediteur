@@ -19,6 +19,7 @@ use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\MentionsFiscales;
+use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource\Pages;
 use App\Filament\Concerns\EnvoieLesDocuments;
@@ -343,8 +344,8 @@ class FactureResource extends Resource
 
     /**
      * La même colonne dans les listes des factures et des avoirs ; la
-     * recherche trouve le nom imprimé sur le document comme celui de la
-     * fiche du client aujourd'hui.
+     * recherche, sans casse ni accents, trouve le nom imprimé sur le
+     * document comme celui de la fiche du client aujourd'hui.
      */
     public static function clientColumn(): Tables\Columns\TextColumn
     {
@@ -352,9 +353,7 @@ class FactureResource extends Resource
             ->label('Client')
             ->state(fn (Facture|Avoir $record): ?string => $record->nomDuClient())
             ->placeholder('—')
-            ->searchable(query: fn (Builder $query, string $search): Builder => $query->where(fn (Builder $documents): Builder => $documents
-                ->where('client_nom', 'like', "%{$search}%")
-                ->orWhereHas('client', fn (Builder $client): Builder => $client->where('nom', 'like', "%{$search}%"))));
+            ->searchable(query: RechercheSansAccents::dans('client_nom', 'client.nom'));
     }
 
     /**
@@ -399,7 +398,7 @@ class FactureResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->searchable(),
+                Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
                 self::clientColumn(),
                 Tables\Columns\TextColumn::make('statut')->badge(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),

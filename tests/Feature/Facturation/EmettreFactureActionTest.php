@@ -268,12 +268,13 @@ class EmettreFactureActionTest extends TestCase
     }
 
     /**
-     * Sous MySQL (REPEATABLE READ), un ticket qui attend la fin de la
-     * clôture de sa journée relirait sans verrou la photo prise avant elle,
-     * sans la clôture. Le refus se fonde donc sur la journée que la clôture
-     * note sur la ligne de verrou du registre fiscal, relue sous ce verrou
-     * : ici, la ligne de verrou note la journée alors qu'aucune clôture
-     * n'est visible, comme pour ce ticket.
+     * Sous PostgreSQL (READ COMMITTED), une lecture verrouillée de
+     * clotures_caisse qui a attendu la fin de la clôture de la journée ne
+     * revoit que les lignes trouvées avant d'attendre, sans la clôture que
+     * celle-ci vient d'inscrire. Le refus se fonde donc sur la journée que
+     * la clôture note sur la ligne de verrou du registre fiscal, relue à
+     * jour sous ce verrou : ici, la ligne de verrou note la journée alors
+     * qu'aucune clôture n'existe en base.
      */
     public function test_le_refus_apres_la_cloture_se_fonde_sur_la_journee_notee_sous_le_verrou_du_registre(): void
     {

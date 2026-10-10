@@ -300,9 +300,9 @@ class ClientResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('nom')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('nom')->rechercheSansAccents()->sortable(),
                 Tables\Columns\TextColumn::make('type_client')->label('Type')->badge()->sortable(),
-                Tables\Columns\TextColumn::make('email')->searchable(),
+                Tables\Columns\TextColumn::make('email')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('telephone'),
                 Tables\Columns\TextColumn::make('ville'),
                 // Un avoir n'est jamais remboursé par ce logiciel (pas

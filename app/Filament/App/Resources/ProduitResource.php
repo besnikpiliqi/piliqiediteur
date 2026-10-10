@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
@@ -23,7 +24,6 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Number;
-use Illuminate\Validation\Rules\Unique;
 use InvalidArgumentException;
 
 class ProduitResource extends Resource
@@ -61,14 +61,15 @@ class ProduitResource extends Resource
                 ->label('Référence')
                 ->helperText('Laissez vide pour une référence générée automatiquement.')
                 ->maxLength(60)
-                // Archivés compris, comme l'index unique de la table (voir
-                // Produit::verifierQueSaReferenceEstLibre()).
-                ->unique(
-                    table: Produit::class,
-                    ignorable: $produitModifie,
-                    modifyRuleUsing: fn (Unique $rule): Unique => $rule->where('magasin_id', app(TenantContext::class)->id()),
-                )
-                ->validationMessages(['unique' => 'Cette référence est déjà celle d\'un autre produit, peut-être archivé : affichez les produits archivés pour le restaurer.']),
+                // Archivés compris et sans tenir compte de la casse, comme
+                // l'index unique de la table (voir
+                // Produit::referenceDejaPrise()) ; parmi les produits du
+                // magasin seulement (MagasinScope).
+                ->rule(static fn (TextInput $component): Closure => static function (string $attribute, mixed $value, Closure $fail) use ($component, $produitModifie): void {
+                    if (is_string($value) && Produit::referenceDejaPrise($value, $component->evaluate($produitModifie))) {
+                        $fail('Cette référence est déjà celle d\'un autre produit, peut-être archivé : affichez les produits archivés pour le restaurer.');
+                    }
+                }),
             TextInput::make('code_barres')->label('Code-barres')->maxLength(50),
             TextInput::make('nom')->required()->maxLength(200)->columnSpanFull(),
             TextInput::make('taille')->maxLength(20),
@@ -94,8 +95,9 @@ class ProduitResource extends Resource
 
     /**
      * Recherche côté serveur plutôt qu'une liste préchargée : par nom,
-     * référence ou code-barres, pour qu'une douchette USB (qui se contente
-     * de « taper » les chiffres scannés dans le champ actif) retrouve le
+     * référence ou code-barres, sans casse ni accents (voir
+     * RechercheSansAccents), pour qu'une douchette USB (qui se contente de
+     * « taper » les chiffres scannés dans le champ actif) retrouve le
      * produit aussi vite qu'en tapant son nom.
      *
      * @param  Builder<Produit>  $produits
@@ -103,11 +105,9 @@ class ProduitResource extends Resource
      */
     public static function rechercher(Builder $produits, string $recherche): array
     {
-        return $produits
-            ->where(fn (Builder $produits) => $produits
-                ->where('nom', 'like', "%{$recherche}%")
-                ->orWhere('reference', 'like', "%{$recherche}%")
-                ->orWhere('code_barres', 'like', "%{$recherche}%"))
+        return RechercheSansAccents::appliquer($produits, $recherche, ['nom', 'reference', 'code_barres'])
+            ->orderBy('nom')
+            ->orderBy('id')
             ->limit(50)
             ->get()
             ->mapWithKeys(fn (Produit $produit): array => [$produit->id => "{$produit->nom} ({$produit->reference})"])
@@ -269,8 +269,8 @@ class ProduitResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('reference')->label('Référence')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('nom')->searchable()->sortable(),
+                Tables\Columns\TextColumn::make('reference')->label('Référence')->rechercheSansAccents()->sortable(),
+                Tables\Columns\TextColumn::make('nom')->rechercheSansAccents()->sortable(),
                 Tables\Columns\TextColumn::make('prix_vente_ttc')->label('PV TTC')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('taux_tva')->label('TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
                 Tables\Columns\TextColumn::make('stock_quantite')

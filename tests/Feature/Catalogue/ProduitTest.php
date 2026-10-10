@@ -13,7 +13,9 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -61,6 +63,38 @@ class ProduitTest extends TestCase
         $this->expectExceptionObject(new InvalidArgumentException('La référence « MA-REF-PERSO » est déjà celle d\'un autre produit.'));
 
         Produit::factory()->create(['reference' => 'MA-REF-PERSO']);
+    }
+
+    /**
+     * « ABC » et « abc » sont la même référence : le modèle le dit avant
+     * que l'index unique (magasin_id, lower(reference)) ne refuse.
+     */
+    public function test_une_reference_deja_prise_sous_une_autre_casse_est_refusee(): void
+    {
+        Produit::factory()->create(['reference' => 'MA-REF-PERSO']);
+
+        $this->expectExceptionObject(new InvalidArgumentException('La référence « ma-ref-perso » est déjà celle d\'un autre produit.'));
+
+        Produit::factory()->create(['reference' => 'ma-ref-perso']);
+    }
+
+    /**
+     * La base elle-même refuse une référence déjà prise sous une autre
+     * casse, même par une requête qui ne passe pas par le modèle ; la
+     * référence reste enregistrée telle que saisie.
+     */
+    public function test_la_base_refuse_une_reference_deja_prise_sous_une_autre_casse(): void
+    {
+        $produit = Produit::factory()->create(['reference' => 'ABC']);
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('produits')->insert([
+            'magasin_id' => $produit->magasin_id,
+            'reference' => 'abc',
+            'nom' => 'Doublon',
+            'taux_tva' => 20,
+        ])), UniqueConstraintViolationException::class);
+
+        $this->assertSame(['ABC'], Produit::query()->pluck('reference')->all());
     }
 
     public function test_deux_produits_sans_reference_dans_le_meme_magasin_recoivent_des_numeros_distincts(): void
@@ -165,7 +199,7 @@ class ProduitTest extends TestCase
         $utiliser($produit);
         $produit->delete();
 
-        $this->assertThrows(fn () => $produit->forceDelete(), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $produit->forceDelete()), QueryException::class);
 
         $this->assertSoftDeleted($produit);
     }
@@ -179,7 +213,7 @@ class ProduitTest extends TestCase
         Produit::factory()->create()->rattacherAuFournisseur($fournisseur->id);
         $fournisseur->delete();
 
-        $this->assertThrows(fn () => $fournisseur->forceDelete(), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $fournisseur->forceDelete()), QueryException::class);
 
         $this->assertSoftDeleted($fournisseur);
     }

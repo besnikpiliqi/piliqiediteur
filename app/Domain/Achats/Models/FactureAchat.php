@@ -89,7 +89,7 @@ class FactureAchat extends Model
 
     public function lignes(): HasMany
     {
-        return $this->hasMany(LigneAchat::class)->orderBy('ordre');
+        return $this->hasMany(LigneAchat::class)->orderBy('ordre')->orderBy('id');
     }
 
     public function avoirsFournisseur(): HasMany
@@ -122,7 +122,7 @@ class FactureAchat extends Model
      */
     public function produitArchive(): ?Produit
     {
-        return Produit::onlyTrashed()->whereIn('id', $this->lignes()->select('produit_id'))->orderBy('nom')->first();
+        return Produit::onlyTrashed()->whereIn('id', $this->lignes()->select('produit_id'))->orderBy('nom')->orderBy('id')->first();
     }
 
     /**

@@ -11,8 +11,10 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 /**
@@ -38,6 +40,32 @@ class SeedMagasinRolesActionTest extends TestCase
         sort($toutes);
         $this->assertSame('owner', $role->name);
         $this->assertSame($toutes, $autorisations);
+    }
+
+    /**
+     * Deux magasins qui s'inscrivent au même instant : l'autre inscription
+     * a créé les autorisations après que celle-ci a lu le cache des
+     * autorisations, qui les croit encore absentes. Elles ne sont pas
+     * recréées (l'index unique (name, guard_name) les refuserait) et le
+     * rôle du propriétaire les porte toutes.
+     */
+    public function test_des_autorisations_creees_entre_temps_par_une_autre_inscription_sont_reprises(): void
+    {
+        app(PermissionRegistrar::class)->getPermissions();
+        DB::table('permissions')->insert(array_map(static fn (string $permission): array => [
+            'name' => $permission,
+            'guard_name' => 'web',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], PermissionRegistry::toutes()));
+
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+
+        $role = Role::query()->where('magasin_id', $magasin->id)->sole();
+        $toutes = PermissionRegistry::toutes();
+        sort($toutes);
+        $this->assertSame(count($toutes), DB::table('permissions')->count());
+        $this->assertSame($toutes, $role->permissions->pluck('name')->sort()->values()->all());
     }
 
     /**

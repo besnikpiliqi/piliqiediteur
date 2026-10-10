@@ -8,9 +8,14 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Closure;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Process\InvokedProcess;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Testing\TestResponse;
+use Laravel\SerializableClosure\SerializableClosure;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -91,6 +96,92 @@ abstract class TestCase extends BaseTestCase
         ]);
 
         return $magasin;
+    }
+
+    /**
+     * L'opération, exécutée dans un point de sauvegarde (une transaction
+     * imbriquée dans celle du test) : sous PostgreSQL, une erreur SQL
+     * annule toute la transaction en cours, et le test ne pourrait plus
+     * rien lire ensuite ; le point de sauvegarde n'annule que l'opération
+     * refusée, sur les deux moteurs.
+     */
+    protected function dansUnPointDeSauvegarde(Closure $operation): Closure
+    {
+        return static fn (): mixed => DB::transaction($operation);
+    }
+
+    /**
+     * Retire un déclencheur de protection (voir DeclencheursDeProtection),
+     * comme le ferait un administrateur de la base, pour falsifier une
+     * table en ajout seul le temps d'un test. Le DDL de PostgreSQL et de
+     * SQLite est transactionnel : le retour en arrière de la transaction
+     * du test le rétablit.
+     */
+    protected function retirerLeDeclencheur(string $table, string $declencheur): void
+    {
+        DB::unprepared(DB::connection()->getDriverName() === 'pgsql'
+            ? "DROP TRIGGER {$declencheur} ON {$table}"
+            : "DROP TRIGGER {$declencheur}");
+    }
+
+    /**
+     * Deux processus ne partagent une base qu'avec un serveur de base de
+     * données : les tests de concurrence ne tournent que sous PostgreSQL,
+     * la base SQLite des tests vivant dans la mémoire de leur processus.
+     */
+    protected function exigerUnServeurDeBaseDeDonnees(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Deux processus ne partagent une base qu\'avec un serveur : ce test ne tourne que sous PostgreSQL.');
+        }
+    }
+
+    /**
+     * Lance l'opération dans un autre processus PHP, sur la base du test
+     * (voir tests/Fixtures/processus-concurrent.php), sans attendre sa
+     * fin : une seconde caisse qui agit au même instant. L'opération ne
+     * voit que ce que le test a validé ; elle est statique et ne capture
+     * que des valeurs simples (des identifiants).
+     */
+    protected function demarrerUnProcessusConcurrent(Closure $operation): InvokedProcess
+    {
+        $demande = serialize([
+            'base' => DB::connection()->getDatabaseName(),
+            'caisse_securisee' => config('caisse_securisee'),
+            'operation' => new SerializableClosure($operation),
+        ]);
+
+        return Process::path(base_path())
+            ->timeout(60)
+            ->input(base64_encode($demande))
+            ->start([PHP_BINARY, base_path('tests/Fixtures/processus-concurrent.php')]);
+    }
+
+    /**
+     * Attend que l'autre processus attende un verrou que tient le test, ou
+     * qu'il ait fini, dix secondes au plus. L'attente se lit dans
+     * pg_stat_activity par une connexion à part, hors de la transaction du
+     * test, fermée ensuite.
+     */
+    protected function attendreQueLeProcessusAttendeUnVerrou(InvokedProcess $processus): void
+    {
+        $observateur = DB::getDefaultConnection().'_observateur';
+        config(["database.connections.{$observateur}" => DB::connection()->getConfig()]);
+        $limite = microtime(true) + 10;
+
+        try {
+            while ($processus->running() && microtime(true) < $limite) {
+                $attentes = DB::connection($observateur)->selectOne("select count(*) as nombre from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'")->nombre;
+
+                if ($attentes > 0) {
+                    return;
+                }
+
+                usleep(20_000);
+            }
+        } finally {
+            DB::purge($observateur);
+        }
     }
 
     /**

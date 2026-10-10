@@ -37,6 +37,11 @@ use LogicException;
  * ses lignes doivent être recalculées, à 0 % ou à leurs taux (voir
  * ContexteDeVente::refuserSiLeRegimeAChange()).
  *
+ * Une facture à un professionnel exige en plus l'identité légale complète
+ * du magasin (B11, voir Magasin::verifierSonIdentiteLegale()) et, pour un
+ * client établi en France, son SIREN : sinon elle reste un brouillon,
+ * sans numéro consommé ni signature. Les tickets restent possibles.
+ *
  * Tout se fait dans une seule transaction, dans cet ordre (art. 286 I-3°
  * bis du CGI) :
  *  1. le registre fiscal du magasin est verrouillé, avant la facture et la
@@ -44,9 +49,12 @@ use LogicException;
  *     l'émission ;
  *  2. la facture, relue verrouillée, prend la copie de son client (nom,
  *     adresse, identifiants), son numéro, dans la série et l'année de cet
- *     instant à l'heure de Paris, et cet instant, en UTC, pour date
- *     d'émission (voir HorodateSonEmission) -- un ticket n'est plus émis
- *     une fois sa journée clôturée, jusqu'à minuit (voir
+ *     instant à l'heure de Paris, cet instant, en UTC, pour date
+ *     d'émission (voir HorodateSonEmission), et son échéance : le jour de
+ *     cet instant à Paris plus le délai de paiement du client, sinon celui
+ *     du magasin (B7, voir Magasin::delaiDePaiementPour()), jamais dans le
+ *     passé : un brouillon n'en a pas. Un ticket n'est plus émis une fois
+ *     sa journée clôturée, jusqu'à minuit (voir
  *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
  *  3. FactureEmise sort le stock, applique le crédit d'avoir du client et
  *     prépare la transmission PDP ;
@@ -92,6 +100,10 @@ class EmettreFactureAction
             ContexteDeVente::refuserSiLeTypeDeClientAChange($facture);
             ContexteDeVente::refuserSiLeRegimeAChange($facture);
 
+            if ($facture->estPourUnProfessionnel()) {
+                $this->refuserUneFactureProfessionnelleIncomplete($facture);
+            }
+
             $typeDocument = $facture->serie();
 
             if ($typeDocument === TypeDocument::TicketCaisse) {
@@ -105,6 +117,7 @@ class EmettreFactureAction
                 'numero' => $numero,
                 'statut' => StatutFacture::Emise,
                 'date_emission' => $instant->utc,
+                'date_echeance' => $instant->enHeureLocale()->addDays($facture->magasin->delaiDePaiementPour($facture->client))->toDateString(),
             ])->save();
 
             // Synchrone et dans la même transaction : voir le commentaire
@@ -126,6 +139,23 @@ class EmettreFactureAction
 
             return $facture;
         });
+    }
+
+    /**
+     * Une facture à un professionnel imprime l'identité légale complète du
+     * magasin et, pour un client établi en France, son SIREN (B12) : la
+     * fiche du client, dont le type vient d'être contrôlé, est celle que
+     * la facture copie à son émission.
+     *
+     * @throws LogicException
+     */
+    private function refuserUneFactureProfessionnelleIncomplete(Facture $facture): void
+    {
+        $facture->magasin->verifierSonIdentiteLegale();
+
+        if ($facture->client->estEtabliEnFrance() && blank($facture->client->siren)) {
+            throw new LogicException('Renseignez le SIREN de ce client avant d\'émettre sa facture.');
+        }
     }
 
     /**

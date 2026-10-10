@@ -876,45 +876,55 @@ class FactureResourceTest extends TestCase
             ->assertSee('Crédit disponible pour ce client : 12,00 € (sera appliqué automatiquement).');
     }
 
-    public function test_lecheance_est_prereplie_a_aujourdhui_par_defaut(): void
+    /**
+     * L'échéance ne se saisit pas : le formulaire annonce qu'elle se fixe à
+     * l'émission, avec le délai du client choisi, sinon celui du magasin
+     * (B7).
+     */
+    public function test_l_echeance_s_annonce_fixee_a_l_emission_avec_le_delai_du_client(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
+        $client = Client::factory()->professionnel()->create(['delai_paiement_jours' => 45]);
 
         Livewire::test(CreateFacture::class)
-            ->assertFormSet(['date_echeance' => now()->toDateString()]);
+            ->assertSee('Fixée à l&#039;émission : date d&#039;émission + 30 jours', escape: false)
+            ->fillForm(['client_id' => $client->id])
+            ->assertSee('Fixée à l&#039;émission : date d&#039;émission + 45 jours', escape: false);
     }
 
     /**
-     * Une échéance dans le passé n'a pas de sens pour un document qui vient
-     * d'être créé : seule une date à partir d'aujourd'hui est acceptée, et
-     * le message écrit la date comme on l'écrit en français.
+     * Une facture créée depuis le panneau reste sans échéance tant qu'elle
+     * est un brouillon, et prend la sienne le jour de son émission : jamais
+     * dans le passé.
      */
-    public function test_impossible_de_choisir_une_echeance_dans_le_passe(): void
+    public function test_le_brouillon_cree_depuis_le_panneau_prend_son_echeance_a_son_emission(): void
     {
-        $this->travelTo('2026-10-09 10:00:00');
+        $this->travelTo('2026-10-01 10:00:00');
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-
         Livewire::test(CreateFacture::class)
             ->fillForm([
                 'client_id' => $client->id,
-                'date_echeance' => '2026-10-08',
                 'lignes' => [
                     ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
             ])
             ->call('create')
-            ->assertHasFormErrors(['date_echeance' => 'Le champ échéance doit être une date postérieure ou égale au 09/10/2026.']);
+            ->assertHasNoFormErrors();
+        $brouillon = Facture::query()->sole();
+        $this->assertNull($brouillon->date_echeance);
+        $this->travelTo('2026-10-09 10:00:00');
 
-        $this->assertSame(0, Facture::query()->count());
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $brouillon);
+
+        $this->assertSame('2026-11-08', $brouillon->fresh()->date_echeance->toDateString());
     }
 
     public function test_creer_et_emettre_une_facture_depuis_le_panneau(): void
@@ -1252,12 +1262,12 @@ class FactureResourceTest extends TestCase
     public function test_la_page_de_detail_affiche_le_statut_pdp_pour_un_client_professionnel(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->completerIdentiteLegale(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire));
         MandatPdp::factory()->create(['magasin_id' => $magasin->id]);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
-        $client = Client::factory()->create(['type_client' => TypeClient::Professionnel]);
+        $client = Client::factory()->professionnel()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client);
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])

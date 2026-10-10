@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
@@ -18,14 +19,17 @@ use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\MentionsFiscales;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource\Pages;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section as FormSection;
 use Filament\Forms\Components\Select;
@@ -103,14 +107,12 @@ class FactureResource extends Resource
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE))),
-                DatePicker::make('date_echeance')
+                // L'échéance ne se saisit pas : elle se calcule à l'émission,
+                // date d'émission + délai du client choisi, sinon délai du
+                // magasin (B7, voir EmettreFactureAction).
+                Placeholder::make('echeance')
                     ->label('Échéance')
-                    // today() et non now() : minDate compare au jour, pas à
-                    // l'heure courante -- avec now(), toute heure passée
-                    // minuit aurait rendu invalide la valeur par défaut du
-                    // jour même (minuit < l'heure actuelle).
-                    ->default(today())
-                    ->minDate(today()),
+                    ->content(fn (Get $get): string => self::echeanceAnnoncee($get('client_id'))),
                 Textarea::make('conditions_paiement')->label('Conditions de paiement')->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
@@ -126,6 +128,21 @@ class FactureResource extends Resource
         ]);
     }
 
+    /**
+     * L'échéance qu'aura la facture : la date de son émission plus le
+     * délai du client choisi, sinon celui du magasin (voir
+     * Magasin::delaiDePaiementPour()). Le client est lu dans le magasin
+     * actif, archivé compris pour un brouillon qui le garde.
+     */
+    private static function echeanceAnnoncee(mixed $clientId): string
+    {
+        /** @var Magasin $magasin */
+        $magasin = Filament::getTenant();
+        $delai = $magasin->delaiDePaiementPour(blank($clientId) ? null : Client::withTrashed()->find($clientId));
+
+        return 'Fixée à l\'émission : date d\'émission + '.$delai.' jour'.($delai > 1 ? 's' : '');
+    }
+
     public static function infolist(Infolist $infolist): Infolist
     {
         return $infolist->schema([
@@ -134,7 +151,7 @@ class FactureResource extends Resource
                 TextEntry::make('statut')->badge(),
                 self::clientEntry(),
                 TextEntry::make('date_emission')->label('Émise le')->dateTime('d/m/Y')->placeholder('—'),
-                TextEntry::make('date_echeance')->label('Échéance')->date('d/m/Y')->placeholder('—'),
+                TextEntry::make('date_echeance')->label('Échéance')->date('d/m/Y')->placeholder('Fixée à l\'émission'),
                 TextEntry::make('creePar.name')->label('Créée par'),
             ])->columns(3),
 
@@ -423,7 +440,7 @@ class FactureResource extends Resource
                     ->icon('heroicon-o-paper-airplane')
                     ->color('success')
                     ->requiresConfirmation()
-                    ->modalDescription('Un numéro définitif sera attribué et le stock sera décrémenté. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
+                    ->modalDescription('Un numéro définitif sera attribué, l\'échéance fixée et le stock décrémenté. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && auth()->user()->can('emettre', $record))
                     ->action(fn (Facture $record) => static::executerSansCasser(fn () => app(EmettreFactureAction::class)->handle($record))),
                 Tables\Actions\Action::make('encaisser')

@@ -84,6 +84,16 @@
         <div class="pied">{{ $facture->conditions_paiement }}</div>
     @endif
 
+    {{-- Entre professionnels : pénalités de retard, indemnité forfaitaire
+         pour frais de recouvrement et escompte, réglés par le magasin (art.
+         L441-9 du Code de commerce, voir Magasin::mentionsEntreProfessionnels()) ;
+         rien sur un ticket de caisse. --}}
+    @if($facture->estPourUnProfessionnel())
+        @foreach($facture->magasin->mentionsEntreProfessionnels() as $mention)
+            <div class="pied">{{ $mention }}</div>
+        @endforeach
+    @endif
+
     {{-- Catégorie de l'opération, franchise de TVA, option pour les débits :
          voir MentionsFiscales. --}}
     @foreach(app(\App\Domain\Facturation\Services\MentionsFiscales::class)->pour($facture) as $mention)

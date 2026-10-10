@@ -46,7 +46,7 @@ class EnvoieLesDocumentsTest extends TestCase
     public function test_la_modale_propose_l_adresse_du_client_et_envoie_a_l_adresse_choisie(): void
     {
         Mail::fake();
-        $this->connecterLeProprietaire();
+        $this->completerIdentiteLegale($this->connecterLeProprietaire());
         $facture = $this->emettreFacture(Client::factory()->professionnel()->create(['email' => 'compta@client.fr']));
 
         Livewire::test(ListFactures::class)
@@ -104,7 +104,7 @@ class EnvoieLesDocumentsTest extends TestCase
         Mail::fake();
         $this->connecterLeProprietaire();
         $client = Client::factory()->create(['email' => 'archive@exemple.fr']);
-        $facture = $this->emettreFacture($client, ['date_echeance' => '2026-10-01']);
+        $facture = $this->emettreFactureEchueLe($client, '2026-10-01');
         $client->delete();
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
@@ -166,7 +166,7 @@ class EnvoieLesDocumentsTest extends TestCase
         $this->travelTo('2026-10-15 10:00:00');
         Mail::fake();
         $this->connecterLeProprietaire();
-        $facture = $this->emettreFacture(Client::factory()->create(['email' => 'client@exemple.fr']), ['date_echeance' => '2026-10-01']);
+        $facture = $this->emettreFactureEchueLe(Client::factory()->create(['email' => 'client@exemple.fr']), '2026-10-01');
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
             ->mountAction('relancer')
@@ -188,7 +188,7 @@ class EnvoieLesDocumentsTest extends TestCase
     {
         $this->travelTo('2026-10-15 10:00:00');
         $this->connecterLeProprietaire();
-        $facture = $this->emettreFacture(Client::factory()->create(), ['date_echeance' => '2026-10-31']);
+        $facture = $this->emettreFacture(Client::factory()->create(['delai_paiement_jours' => 16]));
 
         Livewire::test(ListFactures::class)->assertTableActionHidden('relancer', $facture);
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])->assertActionHidden('relancer');
@@ -262,7 +262,7 @@ class EnvoieLesDocumentsTest extends TestCase
      */
     public function test_sans_la_permission_d_envoyer_les_actions_d_envoi_n_apparaissent_pas(): void
     {
-        $this->travelTo('2026-10-15 10:00:00');
+        $this->travelTo('2026-10-01 10:00:00');
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $vendeur = app(CreerMembreMagasinAction::class)->handle(
             $this->proprietaireDe($magasin),
@@ -274,7 +274,8 @@ class EnvoieLesDocumentsTest extends TestCase
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         app(TenantContext::class)->set($magasin);
-        $facture = $this->emettreFacture(Client::factory()->create(), ['date_echeance' => '2026-10-01']);
+        $facture = $this->emettreFacture(Client::factory()->create(['delai_paiement_jours' => 0]));
+        $this->travelTo('2026-10-15 10:00:00');
 
         Livewire::test(ListFactures::class)
             ->assertTableActionVisible('telecharger_pdf', $facture)
@@ -317,12 +318,28 @@ class EnvoieLesDocumentsTest extends TestCase
     }
 
     /**
-     * @param  array<string, mixed>  $attributs
+     * Une facture de 120,00 € TTC.
      */
-    private function emettreFacture(Client $client, array $attributs = []): Facture
+    private function emettreFacture(Client $client): Facture
     {
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]], $attributs);
+        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
         return app(EmettreFactureAction::class)->handle($facture);
+    }
+
+    /**
+     * Une facture de 120,00 € TTC émise le jour de son échéance, à un client
+     * payable comptant (délai de 0 jour, B7) ; le test reprend ensuite à
+     * l'instant où il en était.
+     */
+    private function emettreFactureEchueLe(Client $client, string $echeance): Facture
+    {
+        $maintenant = now()->toImmutable();
+        $client->update(['delai_paiement_jours' => 0]);
+        $this->travelTo("{$echeance} 10:00:00");
+        $facture = $this->emettreFacture($client);
+        $this->travelTo($maintenant);
+
+        return $facture;
     }
 }

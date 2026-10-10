@@ -321,8 +321,8 @@ class MagasinEnLectureSeuleTest extends TestCase
     {
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->travelTo('2026-10-01 09:00:00');
-        $magasin = $this->ouvrirLeMagasin();
-        $facture = $this->factureEchueLe('2026-10-01');
+        $magasin = $this->completerIdentiteLegale($this->ouvrirLeMagasin());
+        $facture = $this->factureEchueAujourdhui();
         $this->passerEn($magasin, $statut);
         $this->travelTo('2026-10-20 09:00:00');
 
@@ -377,8 +377,8 @@ class MagasinEnLectureSeuleTest extends TestCase
     public function test_les_factures_en_retard_sont_marquees(StatutMagasin $statut): void
     {
         $this->travelTo('2026-10-01 09:00:00');
-        $magasin = $this->ouvrirLeMagasin();
-        $facture = $this->factureEchueLe('2026-10-01');
+        $magasin = $this->completerIdentiteLegale($this->ouvrirLeMagasin());
+        $facture = $this->factureEchueAujourdhui();
         $this->passerEn($magasin, $statut);
         $this->travelTo('2026-10-03 00:15:00');
 
@@ -392,9 +392,9 @@ class MagasinEnLectureSeuleTest extends TestCase
     {
         Mail::fake();
         $this->travelTo('2026-10-01 09:00:00');
-        $magasin = $this->ouvrirLeMagasin();
+        $magasin = $this->completerIdentiteLegale($this->ouvrirLeMagasin());
         $magasin->update(['relances_automatiques' => true, 'delais_relance' => [7, 15, 30]]);
-        $this->factureEchueLe('2026-10-01');
+        $this->factureEchueAujourdhui();
         $this->passerEn($magasin, $statut);
         $this->travelTo('2026-10-20 09:00:00');
 
@@ -465,14 +465,14 @@ class MagasinEnLectureSeuleTest extends TestCase
     }
 
     /**
-     * Une facture professionnelle de 12,00 € TTC, impayée, échue le jour
-     * donné.
+     * Une facture professionnelle de 12,00 € TTC, impayée, émise maintenant
+     * à un client payable comptant : échue le jour même (B7).
      */
-    private function factureEchueLe(string $echeance): Facture
+    private function factureEchueAujourdhui(): Facture
     {
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(['email' => 'client@exemple.fr']), [
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(['email' => 'client@exemple.fr', 'delai_paiement_jours' => 0]), [
             ['produit_id' => $this->produit()->id, 'quantite' => 1],
-        ], ['date_echeance' => $echeance]);
+        ]);
 
         return app(EmettreFactureAction::class)->handle($brouillon);
     }

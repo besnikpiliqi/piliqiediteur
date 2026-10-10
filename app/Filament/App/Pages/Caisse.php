@@ -12,10 +12,12 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\PanierDeCaisse;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
@@ -27,6 +29,8 @@ use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 use Illuminate\Validation\Rules\Exists;
 use InvalidArgumentException;
 use LogicException;
@@ -171,7 +175,8 @@ class Caisse extends Page implements HasForms
                 Select::make('client_id')
                     ->label('Client')
                     ->live()
-                    ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id'))
+                    ->helperText(fn (Get $get) => $this->factureImpossible($get('client_id'))
+                        ?? ClientResource::soldeCrediteurHelperText($get('client_id'))
                         ?? 'Par défaut : le client comptoir générique, pour une vente anonyme.')
                     ->searchable()
                     // Un client archivé n'est plus proposé pour une vente, ni
@@ -283,6 +288,33 @@ class Caisse extends Page implements HasForms
     public function journeeCloturee(): ?string
     {
         return ClotureCaisse::refusDUneVente(now(), ClotureCaisse::derniereJourneeCloturee());
+    }
+
+    /**
+     * Une vente à un professionnel est une facture : tant que l'identité
+     * légale du magasin est incomplète, son émission sera refusée (voir
+     * Magasin::verifierSonIdentiteLegale()), et la caisse le dit dès le
+     * choix du client. Null pour un particulier, ou une identité complète.
+     */
+    private function factureImpossible(mixed $clientId): ?Htmlable
+    {
+        $client = blank($clientId) ? null : Client::withTrashed()->find($clientId);
+
+        if (! $client?->estProfessionnel()) {
+            return null;
+        }
+
+        /** @var Magasin $magasin */
+        $magasin = Filament::getTenant();
+        $manquantes = $magasin->mentionsLegalesManquantes();
+
+        if ($manquantes === []) {
+            return null;
+        }
+
+        // En couleur, comme le crédit du client : ce message doit arrêter
+        // le vendeur avant qu'il ne saisisse la vente.
+        return new HtmlString('<span style="color: #b91c1c; font-weight: 600;">'.e('Facture impossible : identité du magasin incomplète ('.implode(', ', $manquantes).').').'</span>');
     }
 
     /**

@@ -11,6 +11,7 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Casts\NumeroTvaNormalise;
 use App\Domain\Facturation\Enums\TerritoireTva;
 use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Exceptions\IdentiteDuMagasinIncompleteException;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -44,6 +45,13 @@ use LogicException;
  * documents : proposé depuis son nom s'il n'est pas choisi, il ne change
  * plus dès son premier document (voir codeEstDefinitif()).
  *
+ * Son identité légale (voir IdentiteMagasin) peut rester incomplète tant
+ * qu'il ne vend qu'à des particuliers : seule une facture à un
+ * professionnel, ou son avoir, l'exige complète (voir
+ * verifierSonIdentiteLegale()). Il règle le délai de paiement de ses
+ * factures et les mentions qu'elles impriment entre professionnels (voir
+ * ParametresFactures).
+ *
  * Son statut (voir StatutMagasin) ne vient jamais d'un formulaire du
  * magasin : actif à la création, il ne changera que par l'administration
  * de l'éditeur (étape 13 de la feuille de route). Un magasin ne se
@@ -61,13 +69,33 @@ class Magasin extends Model implements HasName
      */
     public const DELAIS_RELANCE_PAR_DEFAUT = [7, 15, 30];
 
+    /**
+     * Les mentions des factures entre professionnels (art. L441-9 du Code
+     * de commerce, B9) que chaque magasin reçoit à sa création et règle
+     * ensuite (Paramètres > Factures) : pénalités de trois fois le taux
+     * d'intérêt légal, indemnité forfaitaire de 40 €, pas d'escompte.
+     */
+    public const MENTION_PENALITES_PAR_DEFAUT = 'Pénalités de retard : trois fois le taux d\'intérêt légal, exigibles dès le lendemain de la date d\'échéance.';
+
+    public const MENTION_INDEMNITE_PAR_DEFAUT = 'Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.';
+
+    public const MENTION_ESCOMPTE_PAR_DEFAUT = 'Pas d\'escompte pour paiement anticipé.';
+
+    /**
+     * Le délai de paiement de ses factures, en jours après leur émission,
+     * quand le client n'a pas le sien (B7).
+     */
+    public const DELAI_PAIEMENT_PAR_DEFAUT = 30;
+
     protected $fillable = [
         'nom',
         'code',
         'raison_sociale',
         'forme_juridique',
+        'capital_social',
         'siren',
         'siret',
+        'immatriculation',
         'numero_tva',
         'adresse',
         'complement_adresse',
@@ -82,16 +110,22 @@ class Magasin extends Model implements HasName
         'bareme_prix_vente',
         'relances_automatiques',
         'delais_relance',
+        'delai_paiement_jours',
+        'mention_penalites_retard',
+        'mention_indemnite_recouvrement',
+        'mention_escompte',
     ];
 
     protected $casts = [
         'statut' => StatutMagasin::class,
+        'capital_social' => 'decimal:2',
         'numero_tva' => NumeroTvaNormalise::class,
         'regime_tva' => RegimeTva::class,
         'option_debits_tva' => 'boolean',
         'prix_vente_automatique' => 'boolean',
         'bareme_prix_vente' => BaremePrixDeVente::class,
         'relances_automatiques' => 'boolean',
+        'delai_paiement_jours' => 'integer',
     ];
 
     protected static function booted(): void
@@ -106,6 +140,10 @@ class Magasin extends Model implements HasName
             $magasin->bareme_prix_vente ??= BaremePrixDeVente::parDefaut();
             $magasin->relances_automatiques ??= false;
             $magasin->delais_relance ??= self::DELAIS_RELANCE_PAR_DEFAUT;
+            $magasin->delai_paiement_jours ??= self::DELAI_PAIEMENT_PAR_DEFAUT;
+            $magasin->mention_penalites_retard ??= self::MENTION_PENALITES_PAR_DEFAUT;
+            $magasin->mention_indemnite_recouvrement ??= self::MENTION_INDEMNITE_PAR_DEFAUT;
+            $magasin->mention_escompte ??= self::MENTION_ESCOMPTE_PAR_DEFAUT;
         });
 
         static::updating(function (Magasin $magasin) {
@@ -218,6 +256,80 @@ class Magasin extends Model implements HasName
     public function estEnFranchiseDeTva(): bool
     {
         return $this->regime_tva?->estFranchise() ?? false;
+    }
+
+    /**
+     * Les mentions de l'identité légale qui manquent encore pour émettre
+     * une facture à un professionnel (B11, K7), dans l'ordre de l'identité
+     * du magasin : raison sociale, forme juridique, SIREN, SIRET,
+     * immatriculation (registre, ou mention de la dispense), adresse, code
+     * postal, ville, et le n° de TVA intracommunautaire, sauf en franchise
+     * en base (« le cas échéant », art. 242 nonies A de l'annexe II au
+     * CGI). Le capital social, imprimé quand il est renseigné, n'est pas
+     * exigé (H2) ; le pays est toujours la France (voir IdentiteMagasin).
+     *
+     * @return list<string>
+     */
+    public function mentionsLegalesManquantes(): array
+    {
+        $mentions = [
+            'raison sociale' => $this->raison_sociale,
+            'forme juridique' => $this->forme_juridique,
+            'SIREN' => $this->siren,
+            'SIRET' => $this->siret,
+            'immatriculation' => $this->immatriculation,
+            'adresse' => $this->adresse,
+            'code postal' => $this->code_postal,
+            'ville' => $this->ville,
+        ];
+
+        if (! $this->estEnFranchiseDeTva()) {
+            $mentions['n° de TVA intracommunautaire'] = $this->numero_tva;
+        }
+
+        return array_keys(array_filter($mentions, blank(...)));
+    }
+
+    /**
+     * Garde de l'émission d'une facture à un professionnel, ou de son
+     * avoir (voir EmettreFactureAction et EmettreAvoirAction) : refusée
+     * tant que l'identité légale du magasin est incomplète.
+     *
+     * @throws IdentiteDuMagasinIncompleteException
+     */
+    public function verifierSonIdentiteLegale(): void
+    {
+        $manquantes = $this->mentionsLegalesManquantes();
+
+        if ($manquantes !== []) {
+            throw new IdentiteDuMagasinIncompleteException($manquantes);
+        }
+    }
+
+    /**
+     * Le délai de paiement d'une facture de ce client, en jours après son
+     * émission (B7) : le sien s'il en a un, sinon celui du magasin, qui
+     * vaut aussi tant qu'aucun client n'est choisi (voir FactureResource).
+     */
+    public function delaiDePaiementPour(?Client $client): int
+    {
+        return $client?->delai_paiement_jours ?? $this->delai_paiement_jours;
+    }
+
+    /**
+     * Les mentions qu'imprime une facture à un professionnel (B9), dans
+     * l'ordre : pénalités de retard, indemnité forfaitaire pour frais de
+     * recouvrement, escompte.
+     *
+     * @return array{penalites_retard: string, indemnite_recouvrement: string, escompte: string}
+     */
+    public function mentionsEntreProfessionnels(): array
+    {
+        return [
+            'penalites_retard' => $this->mention_penalites_retard,
+            'indemnite_recouvrement' => $this->mention_indemnite_recouvrement,
+            'escompte' => $this->mention_escompte,
+        ];
     }
 
     public static function parametresDeConformite(): array

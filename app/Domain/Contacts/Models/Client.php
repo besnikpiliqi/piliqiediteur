@@ -69,6 +69,7 @@ class Client extends Model
         'type_client' => TypeClient::class,
         'numero_tva' => NumeroTvaNormalise::class,
         'etabli_en_france' => 'boolean',
+        'delai_paiement_jours' => 'integer',
         'mode_paiement_prefere' => ModePaiement::class,
         'est_comptoir' => 'boolean',
     ];

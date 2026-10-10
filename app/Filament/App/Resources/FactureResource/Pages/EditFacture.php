@@ -58,7 +58,6 @@ class EditFacture extends EditRecord
         $client = Client::withTrashed()->findOrFail($data['client_id']);
 
         return static::executerOuInterrompre(fn () => app(ModifierFactureAction::class)->handle($record, $client, $data['lignes'], [
-            'date_echeance' => $data['date_echeance'] ?? null,
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,
         ]));

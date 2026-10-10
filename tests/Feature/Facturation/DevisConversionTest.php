@@ -20,6 +20,7 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use LogicException;
 use Tests\TestCase;
 
@@ -180,6 +181,25 @@ class DevisConversionTest extends TestCase
         $this->assertStringStartsWith('FAC-', $facture->numero);
         $this->assertSame([['83.17', '16.63', '99.80'], ['11.94', '0.66', '12.60']], $facture->lignes->map(fn (LigneFacture $ligne): array => [$ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc])->all());
         $this->assertSame(['95.11', '17.29', '112.40'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+    }
+
+    /**
+     * La facture tirée d'un devis est un brouillon sans échéance : elle
+     * prend la sienne à son émission, date d'émission + délai du magasin
+     * (B7), et non à la conversion.
+     */
+    public function test_la_facture_tiree_d_un_devis_prend_son_echeance_a_son_emission(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-05 10:00:00', 'Europe/Paris'));
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $devis = app(AccepterDevisAction::class)->handle($this->envoyerDevis(Client::factory()->professionnel()->create(), $produit));
+        $brouillon = app(CreerFactureDepuisDevisAction::class)->handle($devis);
+        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+
+        $facture = app(EmettreFactureAction::class)->handle($brouillon);
+
+        $this->assertNull($brouillon->date_echeance);
+        $this->assertSame('2026-11-08', $facture->date_echeance->toDateString());
     }
 
     public function test_convertir_un_devis_garde_le_service_de_chaque_ligne_de_service(): void

@@ -60,12 +60,9 @@ class InalterabiliteTest extends TestCase
         return Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
     }
 
-    /**
-     * @param  array<string, mixed>  $attributs
-     */
-    private function emettre(Client $client, int $quantite = 3, array $attributs = []): Facture
+    private function emettre(Client $client, int $quantite = 3): Facture
     {
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => $quantite]], $attributs));
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => $quantite]]));
     }
 
     /**
@@ -210,8 +207,9 @@ class InalterabiliteTest extends TestCase
      */
     public function test_le_statut_de_reglement_d_une_facture_emise_evolue_encore(): void
     {
-        $client = Client::factory()->professionnel()->create();
-        $facture = $this->emettre($client, 3, ['date_echeance' => today()->subDay()->toDateString()]);
+        $this->travelTo('2026-10-08 10:00:00');
+        $client = Client::factory()->professionnel()->create(['delai_paiement_jours' => 0]);
+        $facture = $this->emettre($client);
         $payer = fn (string $montant): Paiement => app(EnregistrerPaiementAction::class)->handle(
             $client,
             ['mode_paiement' => ModePaiement::Virement->value, 'montant' => $montant, 'recu_le' => today()->toDateString()],
@@ -220,6 +218,7 @@ class InalterabiliteTest extends TestCase
 
         $payer('20.00');
         $partiellementPayee = $facture->fresh()->statut;
+        $this->travelTo('2026-10-09 10:00:00');
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
         $enRetard = $facture->fresh()->statut;
         $payer('40.00');

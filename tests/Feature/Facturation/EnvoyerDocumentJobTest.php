@@ -43,7 +43,7 @@ class EnvoyerDocumentJobTest extends TestCase
     {
         Mail::fake();
         $this->magasin(['nom' => 'Ma Boutique', 'email' => 'contact@ma-boutique.fr']);
-        $facture = $this->emettreFacture(Client::factory()->professionnel()->create(), ['date_echeance' => '2026-11-30']);
+        $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
 
         $envoi = app(EnvoyerDocumentAction::class)->handle($facture, 'compta@client.fr', "Bonjour Paul,\nVoici la facture de la réparation.", null);
 
@@ -63,10 +63,15 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->assertNull($envoi->erreur);
     }
 
+    /**
+     * Émise le 31 octobre, au délai de paiement du magasin (30 jours), la
+     * facture est à régler au plus tard le 30 novembre.
+     */
     public function test_l_e_mail_presente_le_document_puis_le_message_de_l_expediteur(): void
     {
+        $this->travelTo('2026-10-31 10:00:00');
         $this->magasin(['nom' => 'Ma Boutique', 'telephone' => '01 23 45 67 89']);
-        $facture = $this->emettreFacture(Client::factory()->professionnel()->create(), ['date_echeance' => '2026-11-30']);
+        $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
         $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['message' => "Bonjour Paul,\n\nVoici la facture de la réparation."]);
 
         $mail = new DocumentMail($envoi, '%PDF', 'facture.pdf');
@@ -160,7 +165,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->travelTo('2026-10-15 10:00:00');
         Mail::fake();
         $this->magasin();
-        $facture = $this->emettreFacture(Client::factory()->create(), ['date_echeance' => '2026-09-30']);
+        $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
 
         app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null);
 
@@ -194,7 +199,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->travelTo('2026-10-15 10:00:00');
         Mail::fake();
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
-        $facture = $this->emettreFacture(Client::factory()->create(), ['date_echeance' => '2026-09-30']);
+        $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
         Queue::fake([EnvoyerDocumentJob::class]);
         $relance = app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null);
         $this->payer($facture, 120);
@@ -238,7 +243,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->travelTo('2026-10-15 10:00:00');
         Mail::fake();
         $magasin = $this->magasin();
-        $facture = $this->emettreFacture(Client::factory()->create(), ['date_echeance' => '2026-09-30']);
+        $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
         Queue::fake([EnvoyerDocumentJob::class]);
         $relance = app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null);
         $this->payer($facture, 50);
@@ -299,7 +304,7 @@ class EnvoyerDocumentJobTest extends TestCase
      */
     public function test_un_echec_passe_l_envoi_en_echec_et_previent_l_expediteur(): void
     {
-        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $magasin = $this->completerIdentiteLegale($this->magasinAvecProprietaire('Ma Boutique'));
         $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'secret123'], RoleMagasin::Vendeur);
         $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
         $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['destinataire' => 'compta@client.fr', 'envoye_par' => $vendeur->id]);
@@ -426,14 +431,28 @@ class EnvoyerDocumentJobTest extends TestCase
 
     /**
      * Une facture de 120,00 € TTC.
-     *
-     * @param  array<string, mixed>  $attributs
      */
-    private function emettreFacture(Client $client, array $attributs = []): Facture
+    private function emettreFacture(Client $client): Facture
     {
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]], $attributs);
+        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
         return app(EmettreFactureAction::class)->handle($facture);
+    }
+
+    /**
+     * Une facture de 120,00 € TTC émise le jour de son échéance, à un client
+     * payable comptant (délai de 0 jour, B7) ; le test reprend ensuite à
+     * l'instant où il en était.
+     */
+    private function emettreFactureEchueLe(Client $client, string $echeance): Facture
+    {
+        $maintenant = now()->toImmutable();
+        $client->update(['delai_paiement_jours' => 0]);
+        $this->travelTo("{$echeance} 10:00:00");
+        $facture = $this->emettreFacture($client);
+        $this->travelTo($maintenant);
+
+        return $facture;
     }
 
     private function payer(Facture $facture, float $montant): void

@@ -285,6 +285,10 @@ class VerificateurIntegriteTest extends TestCase
         ], $this->anomalies($this->verifier()));
     }
 
+    /**
+     * L'avoir qui corrige la facture cite sa date d'émission : il ne
+     * correspond plus non plus à ce qu'il a signé.
+     */
     public function test_une_date_d_emission_effacee_en_base_est_detectee_sans_interrompre_la_verification(): void
     {
         $magasin = $this->magasinActif();
@@ -295,6 +299,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->assertSame([
             [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
             [90, 'La facture FAC-LYON1-2026-000001 porte la date d\'émission illisible, qui n\'est pas l\'instant de sa signature (09/10/2026 à 10:00:00).'],
+            [90, 'L\'avoir AV-LYON1-2026-000002 ne correspond plus à ce qui a été signé à son émission (documents_corriges).'],
         ], $this->anomalies($this->verifier()));
     }
 
@@ -860,7 +865,8 @@ class VerificateurIntegriteTest extends TestCase
 
     /**
      * Un ticket du 9 octobre 2026 dont la date d'émission recule au
-     * 31 décembre 2025 n'est plus dans l'année de son numéro.
+     * 31 décembre 2025 n'est plus dans l'année de son numéro ; l'avoir qui
+     * le corrige, et cite sa date, ne correspond plus à ce qu'il a signé.
      */
     public function test_un_numero_hors_de_l_annee_d_emission_de_son_document_est_detecte(): void
     {
@@ -872,6 +878,7 @@ class VerificateurIntegriteTest extends TestCase
         $this->assertSame([
             [90, 'Le ticket TK-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
             [90, 'Le ticket TK-LYON1-2026-000001 porte la date d\'émission du 31/12/2025 à 13:00:00, qui n\'est pas l\'instant de sa signature (09/10/2026 à 10:00:00).'],
+            [90, 'L\'avoir AV-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (documents_corriges).'],
             [90, 'Le ticket TK-LYON1-2026-000001 est numéroté dans l\'année 2026 mais émis le 31/12/2025 à 13:00:00.'],
         ], $this->anomalies($this->verifier()));
     }

@@ -7,6 +7,10 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
  * @extends Factory<Magasin>
+ *
+ * Un magasin à l'identité légale complète : il facture des professionnels
+ * comme des particuliers. sansIdentiteLegale() donne celui qui vient de
+ * s'inscrire, qui n'a encore que son nom.
  */
 class MagasinFactory extends Factory
 {
@@ -20,6 +24,7 @@ class MagasinFactory extends Factory
             'forme_juridique' => 'SAS',
             'siren' => $siren = fake()->unique()->numerify('#########'),
             'siret' => $siren.fake()->numerify('#####'),
+            'immatriculation' => 'RCS Paris',
             'numero_tva' => 'FR'.fake()->numerify('##').$siren,
             'adresse' => fake()->streetAddress(),
             // Toujours en métropole : un code postal tiré au hasard pourrait
@@ -31,5 +36,24 @@ class MagasinFactory extends Factory
             'email' => fake()->unique()->companyEmail(),
             'telephone' => fake()->phoneNumber(),
         ];
+    }
+
+    /**
+     * Sans identité légale : ni raison sociale, ni forme juridique, ni
+     * SIREN, SIRET, immatriculation, n° de TVA ou adresse.
+     */
+    public function sansIdentiteLegale(): static
+    {
+        return $this->state(fn (): array => [
+            'raison_sociale' => null,
+            'forme_juridique' => null,
+            'siren' => null,
+            'siret' => null,
+            'immatriculation' => null,
+            'numero_tva' => null,
+            'adresse' => null,
+            'code_postal' => null,
+            'ville' => null,
+        ]);
     }
 }

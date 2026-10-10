@@ -109,6 +109,9 @@ class IdentiteMagasinTest extends TestCase
             'pays hors de France' => [['pays' => 'BE'], 'pays', 'Le logiciel ne gère pour l\'instant que les magasins établis en France.'],
             'code postal en Guyane' => [['code_postal' => '97300'], 'code_postal', 'Le logiciel ne gère pas encore les magasins situés en Guyane, à Mayotte ou dans une collectivité d\'outre-mer.'],
             'code postal à Saint-Martin' => [['code_postal' => '97150'], 'code_postal', 'Le logiciel ne gère pas encore les magasins situés en Guyane, à Mayotte ou dans une collectivité d\'outre-mer.'],
+            'capital négatif' => [['capital_social' => '-5'], 'capital_social', 'Le capital social ne peut pas être négatif.'],
+            'capital au millième' => [['capital_social' => '10000.555'], 'capital_social', 'Le capital social se saisit au centime près.'],
+            'immatriculation de 101 caractères' => [['immatriculation' => str_repeat('R', 101)], 'immatriculation', 'Le champ immatriculation ne doit pas dépasser 100 caractères.'],
             'e-mail sans domaine' => [['email' => 'contact@'], 'email', 'Cette adresse e-mail n\'est pas valide.'],
             'e-mail de 151 caractères' => [['email' => 'contact@'.str_repeat('a', 63).'.'.str_repeat('b', 63).'.'.str_repeat('c', 12).'.fr'], 'email', 'Le champ e-mail ne doit pas dépasser 150 caractères.'],
         ];
@@ -131,6 +134,45 @@ class IdentiteMagasinTest extends TestCase
         $this->assertNull($magasin->fresh()->siret);
         $this->assertNull($magasin->fresh()->code_postal);
         $this->assertSame('FR', $magasin->fresh()->pays);
+    }
+
+    /**
+     * Le capital social, facultatif, s'enregistre au centime ; vidé, il ne
+     * s'imprime plus (H2).
+     */
+    public function test_le_capital_social_s_enregistre_puis_se_vide(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+
+        Livewire::test(IdentiteMagasin::class)->fillForm(['capital_social' => '10000'])->call('save')->assertHasNoFormErrors();
+        $this->assertSame('10000.00', $magasin->fresh()->capital_social);
+
+        Livewire::test(IdentiteMagasin::class)
+            ->assertFormSet(['capital_social' => '10000.00'])
+            ->fillForm(['capital_social' => ''])
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $this->assertNull($magasin->fresh()->capital_social);
+    }
+
+    /**
+     * Tant qu'il manque une mention de l'identité légale, un encadré en
+     * tête de la page dit lesquelles empêchent de facturer un professionnel
+     * (B11, K7) ; il disparaît une fois l'identité complète.
+     */
+    public function test_l_encadre_liste_les_mentions_qui_manquent_pour_facturer_un_professionnel(): void
+    {
+        $this->connecterLeProprietaire();
+
+        Livewire::test(IdentiteMagasin::class)
+            ->assertSee('Identité incomplète pour facturer un professionnel')
+            ->assertSee('ces mentions manquent : raison sociale, forme juridique, SIREN, SIRET, immatriculation, adresse, code postal, ville, n° de TVA intracommunautaire.')
+            ->fillForm([...$this->identiteComplete(), 'siren' => '', 'siret' => ''])
+            ->call('save')
+            ->assertSee('ces mentions manquent : SIREN, SIRET.')
+            ->fillForm($this->identiteComplete())
+            ->call('save')
+            ->assertDontSee('Identité incomplète pour facturer un professionnel');
     }
 
     /**
@@ -454,6 +496,7 @@ class IdentiteMagasinTest extends TestCase
             'forme_juridique' => 'SARL',
             'siren' => '123456789',
             'siret' => '12345678900012',
+            'immatriculation' => 'RCS Marseille',
             'numero_tva' => 'FR32123456789',
             'adresse' => '12 quai des Pêcheurs',
             'complement_adresse' => 'Bâtiment B',

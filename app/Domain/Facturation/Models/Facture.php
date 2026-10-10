@@ -60,14 +60,13 @@ class Facture extends Model implements DocumentEnvoyable
 
     protected $table = 'factures';
 
-    // numero, statut, date_emission, totaux, type et copie du client,
-    // franchise de TVA :
-    // jamais en mass assignment, uniquement via les Actions dédiées (voir
-    // app/Domain/Facturation/Actions).
+    // numero, statut, date_emission, date_echeance, totaux, type et copie
+    // du client, franchise de TVA : jamais en mass assignment, uniquement
+    // via les Actions dédiées (voir app/Domain/Facturation/Actions) --
+    // l'échéance se calcule à l'émission (voir EmettreFactureAction).
     protected $fillable = [
         'client_id',
         'devis_id',
-        'date_echeance',
         'devise',
         'conditions_paiement',
         'notes',

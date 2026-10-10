@@ -507,7 +507,7 @@ class CaisseTest extends TestCase
      */
     public function test_une_vente_a_un_professionnel_affiche_et_encaisse_le_total_calcule_depuis_le_ht_des_lignes(): void
     {
-        $this->ouvrirLaCaisseDUnMagasin();
+        $this->completerIdentiteLegale($this->ouvrirLaCaisseDUnMagasin());
         $professionnel = Client::factory()->professionnel()->create();
         $sacoche = Produit::factory()->create(['prix_vente_ttc' => '49.90', 'taux_tva' => 20, 'suivi_stock' => false]);
         $livre = Produit::factory()->create(['prix_vente_ttc' => '4.20', 'taux_tva' => 5.5, 'suivi_stock' => false]);
@@ -1265,6 +1265,35 @@ class CaisseTest extends TestCase
             ->assertNotified('La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
 
         $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * Une vente à un professionnel est une facture : tant que l'identité
+     * légale du magasin est incomplète, la caisse le dit dès le choix du
+     * client, et refuse l'encaissement sans rien enregistrer, ni facture ni
+     * paiement (B11). Un particulier n'est pas concerné.
+     */
+    public function test_une_vente_a_un_professionnel_est_refusee_tant_que_l_identite_du_magasin_est_incomplete(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $professionnel = Client::factory()->professionnel()->create();
+        $particulier = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $refus = 'Facture impossible : identité du magasin incomplète (raison sociale, forme juridique, SIREN, SIRET, immatriculation, adresse, code postal, ville, n° de TVA intracommunautaire).';
+
+        Livewire::test(Caisse::class)
+            ->fillForm(['client_id' => $particulier->id])
+            ->assertDontSee($refus, escape: true)
+            ->fillForm([
+                'client_id' => $professionnel->id,
+                'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => '12.00', 'remise_pourcentage' => 0]],
+                'mode_paiement' => 'carte_bancaire',
+            ])
+            ->assertSee($refus, escape: true)
+            ->call('encaisser')
+            ->assertNotified('Pour émettre une facture à un professionnel, complétez d\'abord l\'identité du magasin (Paramètres > Identité du magasin) : raison sociale, forme juridique, SIREN, SIRET, immatriculation, adresse, code postal, ville, n° de TVA intracommunautaire.');
+
+        $this->assertSame([0, 0], [Facture::query()->count(), Paiement::query()->count()]);
     }
 
     private function ouvrirLaCaisseDUnMagasin(): Magasin

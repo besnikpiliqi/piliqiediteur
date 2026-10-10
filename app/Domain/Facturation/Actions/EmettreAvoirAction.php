@@ -21,8 +21,11 @@ use LogicException;
 /**
  * Même logique que EmettreFactureAction : l'avoir ne reçoit son numéro
  * légal qu'à l'émission, moment où le stock est restauré (voir
- * AvoirEmis/RestaurerStockApresEmissionAvoir), et dans la même
- * transaction, dans cet ordre :
+ * AvoirEmis/RestaurerStockApresEmissionAvoir). Comme la facture qu'il
+ * rectifie, l'avoir d'une facture à un professionnel exige l'identité
+ * légale complète du magasin (B11, voir
+ * Magasin::verifierSonIdentiteLegale()) ; celui d'un ticket reste
+ * possible. Tout se fait dans la même transaction, dans cet ordre :
  *  1. le registre fiscal du magasin est verrouillé, avant l'avoir et la
  *     numérotation (voir RegistreFiscal) ; il donne l'instant de
  *     l'émission ;
@@ -73,6 +76,10 @@ class EmettreAvoirAction
                 throw new LogicException('Impossible d\'émettre un avoir sans lignes : il ne corrige aucun document.');
             }
 
+            if ($avoir->estPourUnProfessionnel()) {
+                $avoir->magasin->verifierSonIdentiteLegale();
+            }
+
             if ($avoir->corrigeDesTickets()) {
                 ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($avoir->magasin, $instant);
             }
@@ -99,7 +106,7 @@ class EmettreAvoirAction
             if ($contenu['document']['corrige'] === 'ticket') {
                 $this->registre->journaliser(CodeEvenement::AnnulationDeTicket, [
                     'avoir' => $avoir->numero,
-                    'tickets' => $contenu['document']['documents_corriges'],
+                    'tickets' => array_column($contenu['document']['documents_corriges'], 'numero'),
                     'montant_ttc' => $contenu['document']['totaux']['ttc'],
                     'sequence_vente' => $enregistrement->sequence,
                     'motif' => $avoir->motif,

@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -13,14 +15,17 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
+use App\Domain\Facturation\Exceptions\IdentiteDuMagasinIncompleteException;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\SequenceDocument;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class EmettreFactureActionTest extends TestCase
@@ -124,7 +129,7 @@ class EmettreFactureActionTest extends TestCase
 
     public function test_une_vente_a_un_professionnel_recoit_un_numero_de_facture(): void
     {
-        $client = Client::factory()->create(['type_client' => TypeClient::Professionnel]);
+        $client = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
         $facture = app(CreerFactureAction::class)->handle($client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
@@ -148,7 +153,7 @@ class EmettreFactureActionTest extends TestCase
         );
 
         $ticket = $creerEtEmettre(Client::factory()->create());
-        $facture = $creerEtEmettre(Client::factory()->create(['type_client' => TypeClient::Professionnel]));
+        $facture = $creerEtEmettre(Client::factory()->professionnel()->create());
 
         $this->assertSame(['TK-LYON1-2026-000001', TypeDocument::TicketCaisse], [$ticket->numero, $ticket->serie()]);
         $this->assertSame(['FAC-LYON1-2026-000001', TypeDocument::Facture], [$facture->numero, $facture->serie()]);
@@ -157,7 +162,7 @@ class EmettreFactureActionTest extends TestCase
     public function test_les_tickets_et_les_factures_ont_des_numerotations_independantes(): void
     {
         $clientParticulier = Client::factory()->create();
-        $clientPro = Client::factory()->create(['type_client' => TypeClient::Professionnel]);
+        $clientPro = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
 
         $creerEtEmettre = fn (Client $client) => app(EmettreFactureAction::class)->handle(
@@ -280,5 +285,159 @@ class EmettreFactureActionTest extends TestCase
         $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($brouillon), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
 
         $this->assertSame([StatutFacture::Brouillon, 0], [$brouillon->fresh()->statut, ClotureCaisse::query()->count()]);
+    }
+
+    /**
+     * @return array<string, array{int|null, int, string}> le délai du client, celui du magasin et l'échéance attendue
+     */
+    public static function delaisDePaiement(): array
+    {
+        return [
+            'délai du client de 45 jours' => [45, 30, '2026-11-23'],
+            'client sans délai, magasin à 30 jours' => [null, 30, '2026-11-08'],
+            'client sans délai, magasin à 15 jours' => [null, 15, '2026-10-24'],
+            'client payable comptant' => [0, 30, '2026-10-09'],
+        ];
+    }
+
+    /**
+     * L'échéance est la date d'émission plus le délai du client, sinon
+     * celui du magasin (B7).
+     */
+    #[DataProvider('delaisDePaiement')]
+    public function test_l_echeance_est_la_date_d_emission_plus_le_delai_du_client_sinon_celui_du_magasin(?int $delaiDuClient, int $delaiDuMagasin, string $echeance): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        app(TenantContext::class)->magasin()->update(['delai_paiement_jours' => $delaiDuMagasin]);
+        $client = Client::factory()->professionnel()->create(['delai_paiement_jours' => $delaiDuClient]);
+
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, $this->uneLigne()));
+
+        $this->assertSame($echeance, $facture->date_echeance->toDateString());
+    }
+
+    /**
+     * Un brouillon n'a pas d'échéance : elle se calcule le jour où il est
+     * émis, jamais le jour où il a été créé, et n'est donc jamais dans le
+     * passé.
+     */
+    public function test_l_echeance_d_un_brouillon_se_calcule_le_jour_de_son_emission(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-01 10:00:00', 'Europe/Paris'));
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), $this->uneLigne());
+        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+
+        $ticket = app(EmettreFactureAction::class)->handle($brouillon);
+
+        $this->assertNull($brouillon->date_echeance);
+        $this->assertSame('2026-11-08', $ticket->date_echeance->toDateString());
+    }
+
+    /**
+     * Sans identité légale complète, le magasin ne facture pas un
+     * professionnel (B11, K7) : le brouillon reste, aucun numéro de
+     * facture n'est consommé et rien n'est signé. Une fois l'identité
+     * complétée, la facture prend le premier numéro.
+     */
+    public function test_une_facture_a_un_professionnel_attend_l_identite_complete_du_magasin(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $magasin = $this->magasinSansIdentiteLegale();
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->uneLigne());
+
+        $this->assertThrows(
+            fn () => app(EmettreFactureAction::class)->handle($brouillon),
+            IdentiteDuMagasinIncompleteException::class,
+            'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité du magasin (Paramètres > Identité du magasin) : raison sociale, forme juridique, SIREN, SIRET, immatriculation, adresse, code postal, ville, n° de TVA intracommunautaire.',
+        );
+
+        $this->assertSame([StatutFacture::Brouillon, null, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero, $brouillon->fresh()->date_echeance]);
+        $this->assertFalse(SequenceDocument::query()->where('magasin_id', $magasin->id)->where('type_document', TypeDocument::Facture->value)->exists());
+        $this->assertSame(0, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Vente->value)->count());
+
+        $this->completerIdentiteLegale($magasin);
+        $facture = app(EmettreFactureAction::class)->handle($brouillon);
+
+        $this->assertSame('FAC-MABOUT-2026-000001', $facture->numero);
+    }
+
+    /**
+     * Les tickets restent possibles sans identité légale.
+     */
+    public function test_un_ticket_s_emet_sans_identite_legale_du_magasin(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        $this->magasinSansIdentiteLegale();
+
+        $ticket = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), $this->uneLigne()));
+
+        $this->assertSame('TK-MABOUT-2026-000001', $ticket->numero);
+    }
+
+    /**
+     * En franchise en base, le n° de TVA intracommunautaire ne figure sur
+     * la facture que « le cas échéant » : il n'est pas exigé.
+     */
+    public function test_un_magasin_en_franchise_sans_numero_de_tva_facture_un_professionnel(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        app(TenantContext::class)->magasin()->update(['regime_tva' => RegimeTva::FranchiseEnBase, 'numero_tva' => null]);
+
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->uneLigne()));
+
+        $this->assertSame('FAC-LYON1-2026-000001', $facture->numero);
+    }
+
+    public function test_un_magasin_redevable_de_la_tva_sans_numero_de_tva_ne_facture_pas_un_professionnel(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
+        app(TenantContext::class)->magasin()->update(['regime_tva' => RegimeTva::ReelNormalMensuel, 'numero_tva' => null]);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->uneLigne());
+
+        $this->assertThrows(
+            fn () => app(EmettreFactureAction::class)->handle($brouillon),
+            IdentiteDuMagasinIncompleteException::class,
+            'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité du magasin (Paramètres > Identité du magasin) : n° de TVA intracommunautaire.',
+        );
+
+        $this->assertSame(StatutFacture::Brouillon, $brouillon->fresh()->statut);
+    }
+
+    /**
+     * Un professionnel établi en France est identifié par son SIREN (B12)
+     * : sa facture attend qu'il soit renseigné.
+     */
+    public function test_la_facture_d_un_professionnel_etabli_en_france_attend_son_siren(): void
+    {
+        $client = Client::factory()->create(['type_client' => TypeClient::Professionnel]);
+        $brouillon = app(CreerFactureAction::class)->handle($client, $this->uneLigne());
+
+        $this->assertThrows(
+            fn () => app(EmettreFactureAction::class)->handle($brouillon),
+            LogicException::class,
+            'Renseignez le SIREN de ce client avant d\'émettre sa facture.',
+        );
+
+        $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
+    }
+
+    private function magasinSansIdentiteLegale(): Magasin
+    {
+        $magasin = Magasin::factory()->sansIdentiteLegale()->create(['code' => 'MABOUT']);
+        app(TenantContext::class)->set($magasin);
+
+        return $magasin;
+    }
+
+    /**
+     * Une ligne d'un article à 12,00 € TTC.
+     *
+     * @return list<array{produit_id: int, quantite: int}>
+     */
+    private function uneLigne(): array
+    {
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return [['produit_id' => $produit->id, 'quantite' => 1]];
     }
 }

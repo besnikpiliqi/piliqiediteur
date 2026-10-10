@@ -71,6 +71,29 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Complète l'identité légale d'un magasin créé avec son seul nom (voir
+     * CreerMagasinAction), comme son propriétaire dans Paramètres >
+     * Identité du magasin : il peut alors émettre des factures à des
+     * professionnels (voir Magasin::mentionsLegalesManquantes()).
+     */
+    protected function completerIdentiteLegale(Magasin $magasin): Magasin
+    {
+        $magasin->update([
+            'raison_sociale' => 'Ma Boutique',
+            'forme_juridique' => 'SAS',
+            'siren' => '732829320',
+            'siret' => '73282932000074',
+            'immatriculation' => 'RCS Lyon',
+            'adresse' => '1 place Bellecour',
+            'code_postal' => '69001',
+            'ville' => 'Lyon',
+            'numero_tva' => 'FR44732829320',
+        ]);
+
+        return $magasin;
+    }
+
+    /**
      * Une vraie requête HTTP démarre sans magasin actif : seul le
      * middleware du panneau (BindTenantContextFromFilamentTenant) le
      * positionne, depuis l'URL. Une requête de test repart donc d'un

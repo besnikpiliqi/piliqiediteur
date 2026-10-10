@@ -13,6 +13,7 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Events\AvoirEmis;
+use App\Domain\Facturation\Exceptions\IdentiteDuMagasinIncompleteException;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
@@ -820,5 +821,33 @@ class AvoirActionsTest extends TestCase
             'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.',
         );
         $this->assertSame(0, Avoir::query()->count());
+    }
+
+    /**
+     * L'avoir d'une facture à un professionnel la rectifie et porte la
+     * même identité légale du magasin (B11) : si elle est devenue
+     * incomplète, il ne s'émet pas, et rien n'en reste. L'avoir d'un
+     * ticket, lui, reste possible.
+     */
+    public function test_l_avoir_d_une_facture_professionnelle_attend_l_identite_complete_du_magasin(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $professionnel = Client::factory()->professionnel()->create();
+        $particulier = Client::factory()->create();
+        $facture = $this->emettreFacture($professionnel, $produit);
+        $ticket = $this->emettreFacture($particulier, $produit);
+        app(TenantContext::class)->magasin()->update(['raison_sociale' => null, 'siren' => null]);
+
+        $this->assertThrows(
+            fn () => app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]),
+            IdentiteDuMagasinIncompleteException::class,
+            'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité du magasin (Paramètres > Identité du magasin) : raison sociale, SIREN.',
+        );
+        $this->assertSame(0, Avoir::query()->count());
+
+        $avoir = app(EnregistrerAvoirAction::class)->handle($particulier, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
+
+        $this->assertSame(['AV-LYON1-2026-000001', '12.00'], [$avoir->numero, $avoir->total_ttc]);
     }
 }

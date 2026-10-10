@@ -173,6 +173,7 @@ class EmissionSigneeTest extends TestCase
             'forme_juridique' => 'SARL',
             'siren' => '552100554',
             'siret' => '55210055400013',
+            'immatriculation' => 'RCS Paris',
             'numero_tva' => 'FR40552100554',
             'adresse' => '12 rue des Lilas',
             'code_postal' => '75011',
@@ -232,7 +233,7 @@ class EmissionSigneeTest extends TestCase
                 'cree_par' => $vendeuse->id,
                 'devis_id' => null,
                 'devise' => 'EUR',
-                'date_echeance' => null,
+                'date_echeance' => '2026-11-08',
                 'conditions_paiement' => null,
                 'notes' => null,
                 'lignes' => [
@@ -250,8 +251,10 @@ class EmissionSigneeTest extends TestCase
                     'nom' => 'Boutique Lefèvre',
                     'raison_sociale' => 'Lefèvre et Fils',
                     'forme_juridique' => 'SARL',
+                    'capital_social' => null,
                     'siren' => '552100554',
                     'siret' => '55210055400013',
+                    'immatriculation' => 'RCS Paris',
                     'numero_tva' => 'FR40552100554',
                     'adresse' => '12 rue des Lilas',
                     'complement_adresse' => null,
@@ -262,6 +265,11 @@ class EmissionSigneeTest extends TestCase
                     'telephone' => '01 23 45 67 89',
                     'regime_tva' => 'reel_normal_mensuel',
                     'option_debits_tva' => false,
+                    'mentions' => [
+                        'penalites_retard' => 'Pénalités de retard : trois fois le taux d\'intérêt légal, exigibles dès le lendemain de la date d\'échéance.',
+                        'indemnite_recouvrement' => 'Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.',
+                        'escompte' => 'Pas d\'escompte pour paiement anticipé.',
+                    ],
                 ],
                 'categorie_operation' => 'livraison_de_biens',
                 'mentions' => ["Catégorie de l'opération : Livraison de biens"],
@@ -373,7 +381,7 @@ class EmissionSigneeTest extends TestCase
         $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320']);
         $produit = $this->produit('CAF-250', 'Café moulu 250 g', 12);
 
-        $facture = $this->emettre($client, [[$produit, 10]], ['date_echeance' => '2026-11-08', 'conditions_paiement' => 'Paiement à 30 jours', 'notes' => 'Livraison au dépôt']);
+        $facture = $this->emettre($client, [[$produit, 10]], ['conditions_paiement' => 'Paiement à 30 jours', 'notes' => 'Livraison au dépôt']);
 
         $donnees = $this->contenu($this->enregistrementDe($facture, ChaineFiscale::Vente))['donnees'];
         $this->assertSame([['evenement', 1, '260'], ['vente', 1, 'facture']], $this->registre());
@@ -387,6 +395,34 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame([], $donnees['contexte']['reglements']);
         $this->assertSame([], $donnees['contexte']['credits_avoir']);
         $this->assertSame(StatutFacture::Emise, $facture->statut);
+    }
+
+    /**
+     * Le capital social, l'immatriculation et les mentions entre
+     * professionnels réglés par le magasin le jour de l'émission (H2, B9,
+     * K7) se signent avec l'émetteur : la facture se reproduit telle
+     * qu'émise même s'il les change ensuite.
+     */
+    public function test_l_emetteur_signe_son_capital_son_immatriculation_et_ses_mentions_entre_professionnels(): void
+    {
+        $this->magasinActif([
+            'capital_social' => '10000.00',
+            'immatriculation' => 'RCS Lyon',
+            'mention_penalites_retard' => 'Pénalités : 3 fois le taux légal.',
+            'mention_indemnite_recouvrement' => 'Indemnité de recouvrement : 40 €.',
+            'mention_escompte' => 'Escompte de 1 % sous 8 jours.',
+        ]);
+        $facture = $this->emettre(Client::factory()->professionnel()->create(), [[$this->produit('A-020', 'Article à 20 €', 20), 1]]);
+        app(TenantContext::class)->magasin()->update(['capital_social' => '20000.00', 'mention_escompte' => 'Pas d\'escompte.']);
+
+        $emetteur = $this->contenu($this->enregistrementDe($facture, ChaineFiscale::Vente))['donnees']['contexte']['emetteur'];
+
+        $this->assertSame([1000000, 'RCS Lyon'], [$emetteur['capital_social'], $emetteur['immatriculation']]);
+        $this->assertSame([
+            'penalites_retard' => 'Pénalités : 3 fois le taux légal.',
+            'indemnite_recouvrement' => 'Indemnité de recouvrement : 40 €.',
+            'escompte' => 'Escompte de 1 % sous 8 jours.',
+        ], $emetteur['mentions']);
     }
 
     /**
@@ -480,7 +516,7 @@ class EmissionSigneeTest extends TestCase
             'devise' => 'EUR',
             'motif' => 'Article abîmé',
             'corrige' => 'ticket',
-            'documents_corriges' => ['TK-LYON1-2026-000001'],
+            'documents_corriges' => [['numero' => 'TK-LYON1-2026-000001', 'date_emission' => '2026-10-09']],
             'lignes' => [
                 ['ordre' => 0, 'nature' => 'bien', 'produit_id' => $produit->id, 'reference' => 'A-020', 'description' => 'Article à 20 €', 'quantite' => -1, 'prix_unitaire_ht' => 1667, 'prix_unitaire_ttc' => 2000, 'taux_tva' => 2000, 'remise' => 0, 'ht' => -1667, 'tva' => -333, 'ttc' => -2000, 'origine' => ['ligne_facture_id' => $ligne->id, 'facture_id' => $ticket->id, 'numero' => 'TK-LYON1-2026-000001']],
             ],
@@ -507,7 +543,7 @@ class EmissionSigneeTest extends TestCase
      */
     public function test_un_avoir_sur_une_facture_signe_son_imputation_sans_annulation_de_ticket(): void
     {
-        $this->freezeTime();
+        $this->travelTo('2026-10-09 10:15:30');
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create();
         $produit = $this->produit('A-020', 'Article à 20 €', 20);
@@ -516,7 +552,7 @@ class EmissionSigneeTest extends TestCase
         $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
 
         $donnees = $this->contenu($this->enregistrementDe($avoir, ChaineFiscale::Vente))['donnees'];
-        $this->assertSame(['facture', ['FAC-LYON1-2026-000001']], [$donnees['document']['corrige'], $donnees['document']['documents_corriges']]);
+        $this->assertSame(['facture', [['numero' => 'FAC-LYON1-2026-000001', 'date_emission' => '2026-10-09']]], [$donnees['document']['corrige'], $donnees['document']['documents_corriges']]);
         $this->assertSame([['facture_id' => $facture->id, 'numero' => 'FAC-LYON1-2026-000001', 'montant' => 2000]], $donnees['contexte']['imputations']);
         $this->assertSame([['evenement', 1, '260'], ['vente', 1, 'facture'], ['vente', 2, 'avoir']], $this->registre());
     }

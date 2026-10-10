@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Closure;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -36,6 +37,11 @@ use Illuminate\Validation\ValidationException;
  * modifie ici jusqu'au premier document ; le champ se désactive ensuite
  * (voir Magasin::codeEstDefinitif()).
  *
+ * L'identité peut rester incomplète tant que le magasin ne vend qu'à des
+ * particuliers : un encadré en tête de la page dit ce qui manque encore
+ * pour facturer un professionnel (B11, K7, voir
+ * Magasin::mentionsLegalesManquantes()), d'après ce qui est enregistré.
+ *
  * Le logiciel ne gère pour l'instant que les magasins établis en France,
  * hors Guyane, Mayotte et collectivités d'outre-mer : son adresse donne le
  * territoire de TVA du magasin (voir Magasin::territoireTva()).
@@ -48,10 +54,15 @@ class IdentiteMagasin extends Page implements HasForms
      * Les champs de la page, tous enregistrés tels quels sur le magasin.
      */
     private const CHAMPS = [
-        'nom', 'code', 'raison_sociale', 'forme_juridique', 'siren', 'siret', 'numero_tva',
+        'nom', 'code', 'raison_sociale', 'forme_juridique', 'capital_social', 'siren', 'siret', 'immatriculation', 'numero_tva',
         'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays',
         'email', 'telephone',
     ];
+
+    /**
+     * Le plus grand capital que la colonne decimal(14,2) enregistre.
+     */
+    private const CAPITAL_MAXIMUM = 999999999999.99;
 
     private const MESSAGE_SIRET_DEJA_UTILISE = 'Ce SIRET est déjà celui d\'un autre magasin.';
 
@@ -92,6 +103,15 @@ class IdentiteMagasin extends Page implements HasForms
     public function form(Form $form): Form
     {
         return $form->schema([
+            Section::make('Identité incomplète pour facturer un professionnel')
+                ->icon('heroicon-o-exclamation-triangle')
+                ->iconColor('warning')
+                ->schema([
+                    Placeholder::make('mentions_manquantes')
+                        ->hiddenLabel()
+                        ->content(fn (): string => 'Vos tickets de caisse restent possibles, mais aucune facture à un professionnel ne peut être émise tant que ces mentions manquent : '.implode(', ', $this->magasin()->mentionsLegalesManquantes()).'.'),
+                ])
+                ->visible(fn (): bool => $this->magasin()->mentionsLegalesManquantes() !== []),
             Section::make('Identité légale')
                 ->description('Imprimée en tête de vos devis, factures et avoirs.')
                 ->schema([
@@ -120,6 +140,20 @@ class IdentiteMagasin extends Page implements HasForms
                         ->label('Forme juridique')
                         ->placeholder('SAS, SARL, entreprise individuelle...')
                         ->maxLength(100),
+                    TextInput::make('capital_social')
+                        ->label('Capital social')
+                        ->helperText('Imprimé sur vos documents quand il est renseigné.')
+                        ->numeric()
+                        ->rule('decimal:0,2')
+                        ->minValue(0)
+                        ->maxValue(self::CAPITAL_MAXIMUM)
+                        ->suffix('€')
+                        ->validationMessages([
+                            'numeric' => 'Le capital social est un montant en euros.',
+                            'decimal' => 'Le capital social se saisit au centime près.',
+                            'min' => 'Le capital social ne peut pas être négatif.',
+                            'max' => 'Le capital social ne peut pas dépasser 999 999 999 999,99 €.',
+                        ]),
                     TextInput::make('siren')
                         ->label('SIREN')
                         ->maxLength(9)
@@ -150,6 +184,11 @@ class IdentiteMagasin extends Page implements HasForms
                             'regex' => 'Le SIRET compte 14 chiffres, sans espace.',
                             'unique' => self::MESSAGE_SIRET_DEJA_UTILISE,
                         ]),
+                    TextInput::make('immatriculation')
+                        ->label('Immatriculation')
+                        ->placeholder('RCS Lyon')
+                        ->helperText('RCS suivi de la ville du greffe (ex. RCS Lyon), RM suivi du département pour un artisan (ex. RM 69), ou la mention de la dispense qui s\'applique.')
+                        ->maxLength(100),
                     // Saisi avec ses séparateurs s'il le faut : il s'enregistre
                     // sans eux (voir NumeroTvaNormalise), comme celui d'un
                     // client ou d'un fournisseur.

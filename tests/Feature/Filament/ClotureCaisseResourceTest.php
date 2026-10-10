@@ -164,7 +164,7 @@ class ClotureCaisseResourceTest extends TestCase
      */
     public function test_la_modale_previent_quand_aucune_vente_au_comptoir_n_est_en_attente(): void
     {
-        $magasin = $this->ouvrirLeMagasin();
+        $magasin = $this->completerIdentiteLegale($this->ouvrirLeMagasin());
         $this->travelTo('2026-10-09 10:00:00');
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [

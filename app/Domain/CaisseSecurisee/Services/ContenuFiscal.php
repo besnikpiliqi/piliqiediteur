@@ -30,13 +30,15 @@ use Illuminate\Support\Collection;
  *   comptoir, lu sur sa fiche où seul CreerMagasinAction le pose),
  *   franchise de TVA (voir ContexteDeVente), auteur, devise, échéance,
  *   conditions, notes ou motif, lignes, ventilation par taux et totaux.
- *   Un avoir s'y écrit en négatif (quantités et montants) et chacune de
- *   ses lignes y référence la ligne et le numéro du ticket ou de la
- *   facture qu'elle corrige. Une date d'émission effacée ou un client
+ *   Un avoir s'y écrit en négatif (quantités et montants), cite le numéro
+ *   et la date d'émission de chaque ticket ou facture qu'il corrige, et
+ *   chacune de ses lignes y référence la ligne et le numéro du document
+ *   qu'elle corrige. Une date d'émission effacée ou un client
  *   introuvable dans le magasin s'y recalcule vide, pour que la
  *   vérification de l'intégrité le signale au lieu de s'interrompre ;
  * - « contexte », figé à l'émission parce qu'il change ensuite ailleurs :
- *   l'identité du magasin émetteur, la catégorie de l'opération, les
+ *   l'identité du magasin émetteur (capital social et mentions entre
+ *   professionnels compris), la catégorie de l'opération, les
  *   mentions fiscales imprimées (voir MentionsFiscales), et ce qui a
  *   réglé le document dans la même transaction (paiements et crédits
  *   d'avoir d'une facture, imputations d'un avoir sur ses factures). Un
@@ -176,7 +178,12 @@ class ContenuFiscal
             'devise' => $avoir->devise,
             'motif' => $avoir->motif,
             'corrige' => $avoir->corrigeDesTickets() ? 'ticket' : 'facture',
-            'documents_corriges' => $documentsCorriges->pluck('numero')->all(),
+            'documents_corriges' => $documentsCorriges
+                ->map(fn (Facture $facture): array => [
+                    'numero' => $facture->numero,
+                    'date_emission' => $facture->date_emission?->toDateString(),
+                ])
+                ->all(),
             ...$this->lignesEtTotaux($avoir->lignes, $avoir, -1),
         ];
     }
@@ -259,10 +266,13 @@ class ContenuFiscal
     }
 
     /**
-     * L'identité du magasin le jour de l'émission (voir IdentiteMagasin et
-     * ParametresFiscaux), qu'il peut changer ensuite.
+     * L'identité du magasin le jour de l'émission (voir IdentiteMagasin,
+     * ParametresFiscaux et ParametresFactures), qu'il peut changer
+     * ensuite : le capital social en centimes (vide s'il n'est pas
+     * renseigné) et les mentions qu'imprime une facture à un professionnel
+     * (voir Magasin::mentionsEntreProfessionnels()).
      *
-     * @return array<string, string|bool|null>
+     * @return array<string, mixed>
      */
     private function emetteur(Magasin $magasin): array
     {
@@ -270,8 +280,10 @@ class ContenuFiscal
             'nom' => $magasin->nom,
             'raison_sociale' => $magasin->raison_sociale,
             'forme_juridique' => $magasin->forme_juridique,
+            'capital_social' => $magasin->capital_social === null ? null : $this->calculateur->enCentiemes($magasin->capital_social),
             'siren' => $magasin->siren,
             'siret' => $magasin->siret,
+            'immatriculation' => $magasin->immatriculation,
             'numero_tva' => $magasin->numero_tva,
             'adresse' => $magasin->adresse,
             'complement_adresse' => $magasin->complement_adresse,
@@ -282,6 +294,7 @@ class ContenuFiscal
             'telephone' => $magasin->telephone,
             'regime_tva' => $magasin->regime_tva?->value,
             'option_debits_tva' => (bool) $magasin->option_debits_tva,
+            'mentions' => $magasin->mentionsEntreProfessionnels(),
         ];
     }
 

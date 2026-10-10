@@ -18,11 +18,18 @@ return new class extends Migration
             // DocumentNumberingService) : définitif dès son premier document.
             $table->string('code', 10);
             // Identité légale imprimée sur les devis, factures et avoirs
-            // (voir IdentiteMagasin et documents/pdf/en-tete.blade.php).
+            // (voir IdentiteMagasin et documents/pdf/en-tete.blade.php) :
+            // incomplète, elle n'empêche que les factures aux professionnels
+            // (voir Magasin::mentionsLegalesManquantes()). Le capital social,
+            // facultatif, s'imprime quand il est renseigné ; l'immatriculation
+            // est la mention du registre (« RCS Lyon », « RM 69 ») ou celle
+            // de la dispense qui s'applique.
             $table->string('raison_sociale', 200)->nullable();
             $table->string('forme_juridique', 100)->nullable();
+            $table->decimal('capital_social', 14, 2)->nullable();
             $table->string('siren', 9)->nullable();
             $table->string('siret', 14)->nullable();
+            $table->string('immatriculation', 100)->nullable();
             $table->string('numero_tva', 20)->nullable();
             $table->string('adresse')->nullable();
             $table->string('complement_adresse')->nullable();
@@ -56,6 +63,16 @@ return new class extends Migration
             // et restent gardés quand le magasin les désactive.
             $table->boolean('relances_automatiques')->default(false);
             $table->json('delais_relance');
+            // Échéance d'une facture : date d'émission + délai du client,
+            // sinon ce délai (voir Magasin::delaiDePaiementPour()).
+            $table->unsignedSmallInteger('delai_paiement_jours')->default(30);
+            // Mentions imprimées sur les factures aux professionnels (art.
+            // L441-9 du Code de commerce, voir ParametresFactures) : chaque
+            // magasin démarre avec les textes du logiciel (voir
+            // Magasin::booted()), qu'il règle comme il veut.
+            $table->string('mention_penalites_retard', 500);
+            $table->string('mention_indemnite_recouvrement', 500);
+            $table->string('mention_escompte', 500);
             $table->timestamps();
             $table->softDeletes();
 

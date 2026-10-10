@@ -27,7 +27,8 @@ use Tests\TestCase;
 
 /**
  * Délais de relance de chaque magasin dans ces tests : 7, 15 et 30 jours
- * après l'échéance (l'exemple du logiciel), échéance au 1er octobre 2026.
+ * après l'échéance (l'exemple du logiciel), échéance au 1er octobre 2026 :
+ * les factures y sont émises ce jour-là à des clients payables comptant.
  */
 class RelancerFacturesImpayeesTest extends TestCase
 {
@@ -159,7 +160,7 @@ class RelancerFacturesImpayeesTest extends TestCase
         $corrigeeParAvoir = $this->factureImpayee($magasin, 'avoir@exemple.fr');
         app(EnregistrerAvoirAction::class)->handle($corrigeeParAvoir->client, [['ligne_facture_id' => $corrigeeParAvoir->lignes->first()->id, 'quantite' => 1]], 'Erreur');
         $sansAdresse = $this->factureImpayee($magasin, null);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], ['date_echeance' => '2026-10-01']);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(['delai_paiement_jours' => 0]), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         $partiellementPayee = $this->factureImpayee($magasin, 'partielle@exemple.fr');
         $this->payer($partiellementPayee, 20);
 
@@ -257,13 +258,14 @@ class RelancerFacturesImpayeesTest extends TestCase
     }
 
     /**
-     * Une facture de 120,00 € TTC échue le 1er octobre 2026.
+     * Une facture de 120,00 € TTC émise maintenant à un client payable
+     * comptant (délai de 0 jour) : échue le jour même (B7).
      */
     private function factureImpayee(Magasin $magasin, ?string $emailDuClient): Facture
     {
         app(TenantContext::class)->set($magasin);
-        $client = Client::factory()->create(['email' => $emailDuClient]);
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]], ['date_echeance' => '2026-10-01']);
+        $client = Client::factory()->create(['email' => $emailDuClient, 'delai_paiement_jours' => 0]);
+        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
         return app(EmettreFactureAction::class)->handle($facture);
     }

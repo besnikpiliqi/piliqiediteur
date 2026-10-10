@@ -6,8 +6,15 @@
     @include('documents.pdf.styles')
 </head>
 <body>
+    {{-- Un avoir cite le numéro et la date d'émission de chaque document
+         qu'il rectifie, une ligne chacun ; une date effacée en base, que
+         signale la vérification de l'intégrité, n'empêche pas d'imprimer
+         l'avoir. --}}
     @php
-        $facturesConcernees = $avoir->facturesConcernees();
+        $documentsCorriges = $avoir->facturesConcernees()->map(
+            fn (\App\Domain\Facturation\Models\Facture $facture): string => 'Sur '.mb_strtolower($facture->libelleDocument()).' '.$facture->numero
+                .($facture->date_emission ? ' du '.$facture->date_emission->format('d/m/Y') : ''),
+        );
     @endphp
 
     @include('documents.pdf.en-tete', [
@@ -17,7 +24,7 @@
         'details' => array_filter([
             $avoir->numero ?? 'Brouillon (non émis)',
             $avoir->date_emission ? 'Émis le '.$avoir->date_emission->format('d/m/Y') : null,
-            'Sur facture'.($facturesConcernees->count() > 1 ? 's' : '').' '.$facturesConcernees->pluck('numero')->implode(', '),
+            ...$documentsCorriges,
         ]),
     ])
 

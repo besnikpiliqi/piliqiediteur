@@ -152,6 +152,44 @@ class AvoirPdfGeneratorTest extends TestCase
         $this->assertStringNotContainsString('Client professionnel :', $this->rendu($avoirSurTicket));
     }
 
+    /**
+     * Un avoir cite le numéro et la date d'émission de chaque document
+     * qu'il rectifie, une ligne chacun.
+     */
+    public function test_lavoir_cite_le_numero_et_la_date_de_chaque_document_qu_il_rectifie(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'MABOUT']));
+        $client = Client::factory()->professionnel()->create();
+        $this->travelTo('2026-10-09 10:00:00');
+        $premiere = $this->emettreUneFacture($client);
+        $this->travelTo('2026-10-12 10:00:00');
+        $seconde = $this->emettreUneFacture($client);
+
+        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [
+            ['ligne_facture_id' => $premiere->lignes->firstOrFail()->id, 'quantite' => 1],
+            ['ligne_facture_id' => $seconde->lignes->firstOrFail()->id, 'quantite' => 1],
+        ]);
+
+        $this->assertStringContainsString(
+            '<br>Sur facture FAC-MABOUT-2026-000001 du 09/10/2026<br>Sur facture FAC-MABOUT-2026-000002 du 12/10/2026</div>',
+            $this->compacte($this->rendu($avoir)),
+        );
+    }
+
+    /**
+     * Sur un ticket, l'avoir le nomme comme tel.
+     */
+    public function test_lavoir_sur_un_ticket_cite_le_ticket_et_sa_date(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'MABOUT']));
+        $client = Client::factory()->create();
+        $this->travelTo('2026-10-09 10:00:00');
+
+        $avoir = $this->crediter($client, $this->emettreUneFacture($client));
+
+        $this->assertStringContainsString('<br>Sur ticket de caisse TK-MABOUT-2026-000001 du 09/10/2026</div>', $this->compacte($this->rendu($avoir)));
+    }
+
     private function emettreUneFacture(Client $client): Facture
     {
         $produit = Produit::factory()->create(['suivi_stock' => false]);

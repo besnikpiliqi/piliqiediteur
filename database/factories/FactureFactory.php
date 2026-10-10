@@ -19,7 +19,6 @@ class FactureFactory extends Factory
         return [
             'client_id' => Client::factory(),
             'type_client' => fn (array $attributs): TypeClient => Client::query()->withTrashed()->findOrFail($attributs['client_id'])->type_client,
-            'date_echeance' => now()->addDays(30)->toDateString(),
         ];
     }
 }

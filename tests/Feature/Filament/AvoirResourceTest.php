@@ -372,12 +372,12 @@ class AvoirResourceTest extends TestCase
     public function test_le_formulaire_fait_choisir_tickets_ou_factures_avant_de_proposer_les_lignes(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->completerIdentiteLegale(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire));
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
         $ticket = $this->emettreFactureDepuisLePanneau($client);
-        $client->update(['type_client' => TypeClient::Professionnel, 'siret' => '73282932000074']);
+        $client->update(['type_client' => TypeClient::Professionnel, 'siret' => '55210055400013']);
         $this->emettreFactureDepuisLePanneau($client);
 
         $formulaire = Livewire::test(CreateAvoir::class)

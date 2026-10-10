@@ -56,7 +56,7 @@ class TypeClientFigeTest extends TestCase
 
     private function emettre(Client $client): Facture
     {
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, $this->uneLigneA120Euros(), ['date_echeance' => '2026-11-08']));
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, $this->uneLigneA120Euros()));
     }
 
     private function rendu(Facture $facture): string
@@ -66,7 +66,8 @@ class TypeClientFigeTest extends TestCase
 
     /**
      * Le ticket de « Jean Ancien », particulier, émis le 9 octobre 2026 à
-     * 10 h, impayé ; à 15 h, sa fiche devient « Marc Nouveau »,
+     * 10 h, impayé, à échéance du 8 novembre (délai du magasin de 30
+     * jours) ; à 15 h, sa fiche devient « Marc Nouveau »,
      * professionnel, SIREN 111222333.
      *
      * @return array{0: Client, 1: Facture}

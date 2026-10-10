@@ -187,9 +187,9 @@ class FacturePdfGeneratorTest extends TestCase
     }
 
     /**
-     * Les mentions du vendeur (voir IdentiteMagasin) : raison sociale et
-     * forme juridique, adresse complète, SIREN, SIRET, n° de TVA et
-     * coordonnées.
+     * Les mentions du vendeur (voir IdentiteMagasin) : raison sociale,
+     * forme juridique et capital social (H2), adresse complète, SIREN,
+     * SIRET, immatriculation (K7), n° de TVA et coordonnées.
      */
     public function test_la_facture_imprime_l_identite_legale_du_magasin(): void
     {
@@ -197,8 +197,10 @@ class FacturePdfGeneratorTest extends TestCase
             'nom' => 'Boutique du Port',
             'raison_sociale' => 'Martin et Fils',
             'forme_juridique' => 'SARL',
+            'capital_social' => '10000.00',
             'siren' => '123456789',
             'siret' => '12345678900012',
+            'immatriculation' => 'RCS Marseille',
             'numero_tva' => 'FR32123456789',
             'adresse' => '12 quai des Pêcheurs',
             'complement_adresse' => 'Bâtiment B',
@@ -216,16 +218,17 @@ class FacturePdfGeneratorTest extends TestCase
 
         $this->assertStringContainsString(
             '<div class="magasin-nom">Boutique du Port</div>'
-            .'Martin et Fils SARL<br>12 quai des Pêcheurs<br>Bâtiment B<br>13002 Marseille<br>FR<br>'
-            .'SIREN : 123456789<br>SIRET : 12345678900012<br>TVA intracommunautaire : FR32123456789<br>'
+            .'Martin et Fils SARL au capital de 10 000,00 €<br>12 quai des Pêcheurs<br>Bâtiment B<br>13002 Marseille<br>FR<br>'
+            .'SIREN : 123456789<br>SIRET : 12345678900012<br>RCS Marseille<br>TVA intracommunautaire : FR32123456789<br>'
             .'Tél. 04 91 00 00 00 · contact@boutique-du-port.fr',
             preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], $html),
         );
     }
 
     /**
-     * Un magasin qui n'a pas encore rempli son identité n'imprime ni ligne
-     * vide ni libellé sans valeur.
+     * Un magasin qui n'a pas encore rempli son identité, et ne vend donc
+     * qu'à des particuliers, n'imprime ni ligne vide ni libellé sans
+     * valeur.
      */
     public function test_l_identite_non_renseignee_ne_s_imprime_pas(): void
     {
@@ -235,6 +238,7 @@ class FacturePdfGeneratorTest extends TestCase
             'forme_juridique' => null,
             'siren' => null,
             'siret' => null,
+            'immatriculation' => null,
             'numero_tva' => null,
             'adresse' => null,
             'complement_adresse' => null,
@@ -244,7 +248,7 @@ class FacturePdfGeneratorTest extends TestCase
             'telephone' => null,
             'email' => null,
         ]));
-        $facture = $this->factureEmise();
+        $facture = $this->ticketEmis();
 
         $html = view('factures.pdf', [
             'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
@@ -255,6 +259,66 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertStringNotContainsString('SIREN', $enTete);
         $this->assertStringNotContainsString('TVA intracommunautaire', $enTete);
         $this->assertStringNotContainsString('Tél.', $enTete);
+    }
+
+    /**
+     * Un capital social non renseigné ne s'imprime pas : la raison sociale
+     * et la forme juridique restent seules sur leur ligne.
+     */
+    public function test_un_capital_social_non_renseigne_ne_s_imprime_pas(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['raison_sociale' => 'Martin et Fils', 'forme_juridique' => 'SARL', 'capital_social' => null]));
+        $facture = $this->factureEmise();
+
+        $html = view('factures.pdf', [
+            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
+        ])->render();
+
+        $this->assertStringContainsString('</div>Martin et Fils SARL<br>', $this->compacte($html));
+        $this->assertStringNotContainsString('au capital', $html);
+    }
+
+    /**
+     * Entre professionnels, la facture imprime les pénalités de retard,
+     * l'indemnité forfaitaire de 40 € et l'absence d'escompte (B9), après
+     * son échéance ; un ticket de caisse n'en imprime aucune.
+     */
+    public function test_seule_une_facture_a_un_professionnel_imprime_les_mentions_entre_professionnels(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $mentions = [
+            'Pénalités de retard : trois fois le taux d\'intérêt légal, exigibles dès le lendemain de la date d\'échéance.',
+            'Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.',
+            'Pas d\'escompte pour paiement anticipé.',
+        ];
+        $rendu = fn (Facture $facture): string => view('factures.pdf', [
+            'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
+        ])->render();
+
+        $facture = $rendu($this->factureEmise());
+        $ticket = $rendu($this->ticketEmis());
+
+        $this->assertStringContainsString('Échéance le ', $facture);
+        $this->assertSame([3, 0], [
+            collect($mentions)->filter(fn (string $mention): bool => str_contains($facture, '<div class="pied">'.e($mention).'</div>'))->count(),
+            collect($mentions)->filter(fn (string $mention): bool => str_contains($ticket, e($mention)))->count(),
+        ]);
+    }
+
+    /**
+     * Les mentions sont celles que le magasin a réglées (Paramètres >
+     * Factures).
+     */
+    public function test_la_facture_imprime_les_mentions_reglees_par_le_magasin(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['mention_escompte' => 'Escompte de 1 % pour paiement sous 8 jours.']));
+
+        $html = view('factures.pdf', [
+            'facture' => $this->factureEmise()->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
+        ])->render();
+
+        $this->assertStringContainsString('<div class="pied">Escompte de 1 % pour paiement sous 8 jours.</div>', $html);
+        $this->assertStringNotContainsString(e('Pas d\'escompte pour paiement anticipé.'), $html);
     }
 
     public function test_le_nom_de_fichier_utilise_le_numero_ou_brouillon(): void
@@ -424,6 +488,15 @@ class FacturePdfGeneratorTest extends TestCase
         $produit = Produit::factory()->create(['suivi_stock' => false]);
 
         return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 1],
+        ]));
+    }
+
+    private function ticketEmis(): Facture
+    {
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
+
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
     }

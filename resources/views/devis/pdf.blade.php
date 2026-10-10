@@ -18,7 +18,7 @@
 
     @include('documents.pdf.client', [
         'client' => \App\Domain\Facturation\Services\CopieClient::depuisClient($devis->client),
-        'professionnel' => $devis->estPourUnProfessionnel(),
+        'professionnel' => $devis->client->estProfessionnel(),
         'titre' => 'Établi pour',
     ])
 

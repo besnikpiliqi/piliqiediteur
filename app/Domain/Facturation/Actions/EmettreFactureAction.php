@@ -99,7 +99,7 @@ class EmettreFactureAction
 
             $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, $instant->enHeureLocale()->format('Y'));
 
-            $facture->figerLeClient($client);
+            $facture->figerLeClient();
             $facture->forceFill([
                 'numero' => $numero,
                 'statut' => StatutFacture::Emise,

@@ -56,20 +56,15 @@ class Devis extends Model implements DocumentEnvoyable
     /**
      * Un document légal garde son client, même archivé depuis (voir les
      * SoftDeletes de Client) : il se réimprime et se renvoie. Un devis ne
-     * fige pas son client : il imprime sa fiche telle qu'elle est.
+     * fige pas son client : il imprime sa fiche telle qu'elle est, son nom,
+     * son adresse et, si elle est celle d'un professionnel, ses
+     * identifiants. Le type écrit au dernier enregistrement du devis
+     * (type_client) ne sert qu'à la facture qui en sortira (voir
+     * CreerFactureDepuisDevisAction).
      */
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class)->withTrashed();
-    }
-
-    /**
-     * Le type du client écrit au dernier enregistrement du devis : les
-     * identifiants du client ne s'impriment que pour un professionnel.
-     */
-    public function estPourUnProfessionnel(): bool
-    {
-        return $this->type_client === TypeClient::Professionnel;
     }
 
     public function lignes(): HasMany

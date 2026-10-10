@@ -3,22 +3,23 @@
 namespace App\Domain\Facturation\Concerns;
 
 use App\Domain\Contacts\Enums\TypeClient;
-use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Services\CopieClient;
 
 /**
  * Un ticket, une facture ou un avoir émis ne change plus jamais : il garde
- * le client tel qu'il était le jour de son émission, son nom, son adresse,
+ * le client tel qu'il l'a imprimé à son émission, son nom, son adresse,
  * ses identifiants et son type, même si la fiche du client change ensuite.
  *
  * Le type du client (type_client) s'écrit à chaque enregistrement du
- * brouillon et se contrôle à l'émission (voir EmettreFactureAction) ;
- * l'avoir prend celui des documents qu'il corrige (voir CreerAvoirAction).
- * La copie du client (colonnes client_*) se prend à l'émission (voir
- * figerLeClient()) et se signe au registre fiscal (voir ContenuFiscal) :
- * une fois le document numéroté, ProtegeLesDonneesValidees refuse de la
- * modifier, et la vérification de l'intégrité révèle une écriture directe
- * en base.
+ * brouillon d'une facture et se contrôle à son émission (voir
+ * EmettreFactureAction) ; l'avoir prend celui des documents qu'il corrige
+ * (voir CreerAvoirAction). La copie du client (colonnes client_*) vient de
+ * la même source que le type (voir clientAFiger()) : la fiche du client
+ * pour une facture, le document corrigé pour un avoir. Elle se prend à
+ * l'émission (voir figerLeClient()) et se signe au registre fiscal (voir
+ * ContenuFiscal) : une fois le document numéroté, ProtegeLesDonneesValidees
+ * refuse de la modifier, et la vérification de l'intégrité révèle une
+ * écriture directe en base.
  */
 trait FigeLeClient
 {
@@ -31,14 +32,20 @@ trait FigeLeClient
     }
 
     /**
-     * Copie la fiche du client sur le document, à son émission, dans la
-     * même sauvegarde que son numéro.
+     * Le client que le document imprimera une fois émis, pris sur la même
+     * source que son type.
      */
-    public function figerLeClient(Client $client): void
+    abstract protected function clientAFiger(): CopieClient;
+
+    /**
+     * Copie le client sur le document, à son émission, dans la même
+     * sauvegarde que son numéro.
+     */
+    public function figerLeClient(): void
     {
         $colonnes = [];
 
-        foreach (CopieClient::depuisClient($client)->enTableau() as $champ => $valeur) {
+        foreach ($this->clientAFiger()->enTableau() as $champ => $valeur) {
             $colonnes["client_{$champ}"] = $valeur;
         }
 
@@ -47,12 +54,13 @@ trait FigeLeClient
 
     /**
      * Le client que le document imprime : sa copie figée une fois le
-     * document numéroté, la fiche du client tant qu'il est un brouillon.
+     * document numéroté, celle qu'il prendra à son émission tant qu'il est
+     * un brouillon.
      */
     public function copieClient(): CopieClient
     {
         if ($this->numero === null) {
-            return CopieClient::depuisClient($this->client);
+            return $this->clientAFiger();
         }
 
         return new CopieClient(
@@ -68,6 +76,19 @@ trait FigeLeClient
             identifiantEtranger: $this->client_identifiant_etranger,
             etabliEnFrance: $this->client_etabli_en_france,
         );
+    }
+
+    /**
+     * Le nom du client affiché dans les listes et sur la fiche du
+     * document : celui de la fiche du client tant que le document est un
+     * brouillon, le nom figé une fois numéroté. Un document numéroté dont
+     * la copie a été effacée en base, ce que signale la vérification de
+     * l'intégrité, s'affiche alors sans nom au lieu d'empêcher d'afficher
+     * les listes et sa fiche.
+     */
+    public function nomDuClient(): ?string
+    {
+        return $this->numero === null ? $this->client->nom : $this->client_nom;
     }
 
     /**

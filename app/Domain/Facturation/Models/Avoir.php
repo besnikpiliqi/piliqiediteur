@@ -12,6 +12,7 @@ use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\CopieClient;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
 use Carbon\CarbonInterface;
@@ -33,8 +34,9 @@ use Illuminate\Support\Collection;
  * (voir AvoirPolicy et la migration create_avoirs_table). Une fois
  * numéroté, il ne se modifie plus du tout (voir
  * ProtegeLesDonneesValidees) : il est signé tel qu'émis au registre fiscal
- * (voir EmettreAvoirAction), avec la copie de son client prise ce jour-là
- * et le type de client des documents qu'il corrige (voir FigeLeClient).
+ * (voir EmettreAvoirAction), avec le client des documents qu'il corrige,
+ * son type, son nom, son adresse et ses identifiants, tels que ces
+ * documents les ont figés (voir FigeLeClient).
  */
 class Avoir extends Model implements DocumentEnvoyable
 {
@@ -82,12 +84,28 @@ class Avoir extends Model implements DocumentEnvoyable
 
     /**
      * Un document légal garde son client, même archivé depuis (voir les
-     * SoftDeletes de Client) : il se renvoie, et il imprime la copie de ce
-     * client prise à son émission (voir copieClient()).
+     * SoftDeletes de Client) : il se renvoie, et son crédit s'impute sur
+     * les factures de ce client. Il imprime la copie du client prise à son
+     * émission (voir copieClient()).
      */
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class)->withTrashed();
+    }
+
+    /**
+     * Le client tel que l'a figé le document qu'il corrige, et non la fiche
+     * du client le jour de l'avoir : il corrige des documents d'un même
+     * client, tous du même type (voir CreerAvoirAction), dont il prend déjà
+     * le type, et s'adresse à celui à qui ils ont été émis. S'il en corrige
+     * plusieurs, il prend la copie du plus récent.
+     */
+    protected function clientAFiger(): CopieClient
+    {
+        return $this->facturesConcernees()
+            ->sortBy([['date_emission', 'desc'], ['id', 'desc']])
+            ->firstOrFail()
+            ->copieClient();
     }
 
     /**

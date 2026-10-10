@@ -395,6 +395,26 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
+     * Garde d'EmettreAvoirAction appelée directement : un brouillon écrit
+     * sans lignes, que CreerAvoirAction refuse de créer, ne corrige aucun
+     * document dont il prendrait le client ; il ne reçoit aucun numéro.
+     */
+    public function test_un_brouillon_d_avoir_sans_lignes_ne_s_emet_pas(): void
+    {
+        $brouillon = new Avoir;
+        $brouillon->forceFill(['client_id' => Client::factory()->create()->id, 'type_client' => TypeClient::Particulier])->save();
+
+        $this->assertThrows(
+            fn () => app(EmettreAvoirAction::class)->handle($brouillon),
+            LogicException::class,
+            'Impossible d\'émettre un avoir sans lignes : il ne corrige aucun document.',
+        );
+
+        $this->assertSame([StatutAvoir::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
+        $this->assertDatabaseCount('sequences_documents', 0);
+    }
+
+    /**
      * Garde d'EmettreAvoirAction appelée directement, hors
      * EnregistrerAvoirAction : deux brouillons créés à part sur le même
      * article ; le second, émis après le premier, ne trouve plus rien à

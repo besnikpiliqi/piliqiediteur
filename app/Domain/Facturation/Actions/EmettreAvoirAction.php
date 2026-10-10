@@ -26,10 +26,11 @@ use LogicException;
  *  1. le registre fiscal du magasin est verrouillé, avant l'avoir et la
  *     numérotation (voir RegistreFiscal) ; il donne l'instant de
  *     l'émission ;
- *  2. l'avoir, relu verrouillé, arrête ses montants, prend la copie de
- *     son client tel qu'il est ce jour-là (voir FigeLeClient), reçoit son
- *     numéro, dans l'année de cet instant à l'heure de Paris, et cet
- *     instant, en UTC, pour date d'émission (voir HorodateSonEmission) --
+ *  2. l'avoir, relu verrouillé, arrête ses montants, prend la copie du
+ *     client figée sur le document qu'il corrige, le plus récent s'il en
+ *     corrige plusieurs (voir Avoir::clientAFiger()), reçoit son numéro,
+ *     dans l'année de cet instant à l'heure de Paris, et cet instant, en
+ *     UTC, pour date d'émission (voir HorodateSonEmission) --
  *     un avoir sur des tickets, que compte la clôture de sa journée (voir
  *     Avoir::corrigeDesTickets()), n'est plus émis une fois cette journée
  *     clôturée, jusqu'à minuit (voir
@@ -68,6 +69,10 @@ class EmettreAvoirAction
                 throw new LogicException("Impossible d'émettre un avoir au statut [{$avoir->statut->value}].");
             }
 
+            if ($avoir->lignes->isEmpty()) {
+                throw new LogicException('Impossible d\'émettre un avoir sans lignes : il ne corrige aucun document.');
+            }
+
             if ($avoir->corrigeDesTickets()) {
                 ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($avoir->magasin, $instant);
             }
@@ -76,7 +81,7 @@ class EmettreAvoirAction
 
             $numero = $this->numerotation->suivant($avoir->magasin, TypeDocument::Avoir, $instant->enHeureLocale()->format('Y'));
 
-            $avoir->figerLeClient($avoir->client);
+            $avoir->figerLeClient();
             $avoir->forceFill([
                 'numero' => $numero,
                 'statut' => StatutAvoir::Emise,

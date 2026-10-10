@@ -13,20 +13,22 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Arr;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Un ticket, une facture ou un avoir émis garde le client et le type de
- * client du jour de son émission, quoi que devienne la fiche ensuite ; un
- * brouillon dont le client a changé de type ne s'émet qu'une fois
- * réenregistré.
+ * Un ticket ou une facture émis garde le client et le type de client du
+ * jour de son émission, quoi que devienne la fiche ensuite, et l'avoir qui
+ * le corrige garde les siens ; un brouillon dont le client a changé de
+ * type ne s'émet qu'une fois réenregistré.
  */
 class TypeClientFigeTest extends TestCase
 {
@@ -156,10 +158,11 @@ class TypeClientFigeTest extends TestCase
 
     /**
      * Le retour du ticket, le lendemain, corrige un ticket : il en garde le
-     * type de client, particulier, et se déduit de la clôture de son jour,
-     * mais il porte l'identité du client au jour de l'avoir.
+     * client, particulier, « Jean Ancien », sans identifiant, et non la
+     * fiche devenue « Marc Nouveau », professionnel, et se déduit de la
+     * clôture de son jour.
      */
-    public function test_l_avoir_sur_le_ticket_garde_son_type_et_prend_l_identite_du_jour_de_l_avoir(): void
+    public function test_l_avoir_sur_le_ticket_garde_le_type_et_l_identite_du_client_du_ticket(): void
     {
         $magasin = $this->magasin();
         [$client, $ticket] = $this->ticketDontLeClientDevientProfessionnel();
@@ -169,10 +172,93 @@ class TypeClientFigeTest extends TestCase
 
         $avoir = app(EnregistrerAvoirAction::class)->handle($client->fresh(), [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
 
-        $this->assertSame(['AV-MABOUT-2026-000001', TypeClient::Particulier, 'Marc Nouveau', '120.00'], [$avoir->numero, $avoir->type_client, $avoir->client_nom, $avoir->total_ttc]);
+        $this->assertSame(['AV-MABOUT-2026-000001', TypeClient::Particulier, 'Jean Ancien', null, '120.00'], [$avoir->numero, $avoir->type_client, $avoir->client_nom, $avoir->client_siren, $avoir->total_ttc]);
+        $this->assertSame(
+            ['type_client' => 'particulier', 'nom' => 'Jean Ancien', 'siren' => null],
+            Arr::only($this->clientSigne($avoir), ['type_client', 'nom', 'siren']),
+        );
         $this->travelTo('2026-10-10 19:00:00');
         $cloture = app(CloturerCaisseAction::class)->handle($magasin, now());
         $this->assertSame([0, 1, '-120.00'], [$cloture->nombre_ventes, $cloture->nombre_avoirs, $cloture->total_ttc]);
         $this->assertSame($cloture->id, $avoir->fresh()->cloture_caisse_id);
+    }
+
+    /**
+     * L'avoir d'une facture à « Atelier Durand », dont la fiche est
+     * redevenue particulier (SIREN, SIRET et n° de TVA effacés), reste un
+     * avoir entre professionnels avec les identifiants de la facture qu'il
+     * corrige : sur son PDF comme dans ce qu'il signe.
+     */
+    public function test_l_avoir_d_une_facture_garde_les_identifiants_du_professionnel_redevenu_particulier(): void
+    {
+        $this->magasin();
+        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320']);
+        $facture = $this->emettre($client);
+        $client->update(['type_client' => TypeClient::Particulier]);
+
+        $avoir = app(EnregistrerAvoirAction::class)->handle($client->fresh(), [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
+
+        $this->assertSame([null, null, null], [$client->fresh()->siren, $client->fresh()->siret, $client->fresh()->numero_tva]);
+        $this->assertSame(
+            ['AV-MABOUT-2026-000001', TypeClient::Professionnel, 'Atelier Durand', '732829320', '73282932000074', 'FR44732829320', '120.00'],
+            [$avoir->numero, $avoir->type_client, $avoir->client_nom, $avoir->client_siren, $avoir->client_siret, $avoir->client_numero_tva, $avoir->total_ttc],
+        );
+        $this->assertSame(
+            ['type_client' => 'professionnel', 'nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320'],
+            Arr::only($this->clientSigne($avoir), ['type_client', 'nom', 'siren', 'siret', 'numero_tva']),
+        );
+        $pdf = view('avoirs.pdf', ['avoir' => $avoir->load('client', 'lignes.ligneFacture.facture', 'magasin')])->render();
+        $this->assertStringContainsString('SIREN : 732829320', $pdf);
+        $this->assertStringContainsString('SIRET : 73282932000074', $pdf);
+        $this->assertStringContainsString('N° TVA : FR44732829320', $pdf);
+    }
+
+    /**
+     * Un avoir sur deux factures d'un même professionnel, émises avant et
+     * après son déménagement, prend le client de la dernière émise, même
+     * quand son brouillon a été créé le premier et que les lignes de
+     * l'avoir citent d'abord l'autre.
+     */
+    public function test_l_avoir_de_plusieurs_factures_prend_le_client_de_la_derniere_emise(): void
+    {
+        $this->magasin();
+        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '732829320', 'adresse' => '3 rue des Forges', 'code_postal' => '69002', 'ville' => 'Lyon']);
+        $this->travelTo('2026-10-08 09:00:00');
+        $emiseEnDernier = app(CreerFactureAction::class)->handle($client, $this->uneLigneA120Euros());
+        $emiseEnPremier = app(CreerFactureAction::class)->handle($client, $this->uneLigneA120Euros());
+        $this->travelTo('2026-10-08 10:00:00');
+        $emiseEnPremier = app(EmettreFactureAction::class)->handle($emiseEnPremier);
+        $client->update(['nom' => 'Atelier Durand et Fils', 'adresse' => '18 avenue Jean Jaurès', 'code_postal' => '69007']);
+        $this->travelTo('2026-10-09 10:00:00');
+        $emiseEnDernier = app(EmettreFactureAction::class)->handle($emiseEnDernier);
+        $client->update(['nom' => 'Durand Industries', 'adresse' => '1 place Bellecour']);
+        $this->travelTo('2026-10-10 10:00:00');
+
+        $avoir = app(EnregistrerAvoirAction::class)->handle($client->fresh(), [
+            ['ligne_facture_id' => $emiseEnPremier->lignes->sole()->id, 'quantite' => 1],
+            ['ligne_facture_id' => $emiseEnDernier->lignes->sole()->id, 'quantite' => 1],
+        ]);
+
+        $this->assertSame(['FAC-MABOUT-2026-000001', 'FAC-MABOUT-2026-000002'], [$emiseEnPremier->numero, $emiseEnDernier->numero]);
+        $this->assertSame(
+            ['Atelier Durand et Fils', '18 avenue Jean Jaurès', '69007', 'Lyon', '732829320', '240.00'],
+            [$avoir->client_nom, $avoir->client_adresse, $avoir->client_code_postal, $avoir->client_ville, $avoir->client_siren, $avoir->total_ttc],
+        );
+    }
+
+    /**
+     * Le client que le document a signé au registre fiscal à son émission.
+     *
+     * @return array<string, mixed>
+     */
+    private function clientSigne(Facture|Avoir $document): array
+    {
+        $enregistrement = EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Vente->value)
+            ->where('document_type', $document->getMorphClass())
+            ->where('document_id', $document->getKey())
+            ->sole();
+
+        return json_decode($enregistrement->contenu, true, flags: JSON_THROW_ON_ERROR)['donnees']['document']['client'];
     }
 }

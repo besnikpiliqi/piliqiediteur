@@ -6,10 +6,11 @@ use App\Domain\Contacts\Models\Client;
 
 /**
  * Le client tel qu'un document de vente l'imprime et le signe : son nom,
- * son adresse et ses identifiants. Un ticket, une facture ou un avoir en
- * prend la copie à son émission (voir FigeLeClient) et la garde pour
- * toujours, quoi que devienne la fiche du client ; un brouillon ou un devis
- * la lit sur la fiche.
+ * son adresse et ses identifiants. Un ticket ou une facture en prend la
+ * copie sur la fiche du client à son émission, un avoir sur le document
+ * qu'il corrige (voir FigeLeClient), et la garde pour toujours, quoi que
+ * devienne la fiche ; un brouillon de facture ou un devis la lit sur la
+ * fiche.
  */
 final readonly class CopieClient
 {

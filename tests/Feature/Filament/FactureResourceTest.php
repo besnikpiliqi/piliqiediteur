@@ -31,6 +31,7 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -1141,6 +1142,34 @@ class FactureResourceTest extends TestCase
         $liste->searchTable('Marc Nouveau')
             ->assertCanSeeTableRecords([$emise, $brouillon])
             ->assertCanNotSeeTableRecords([$autre]);
+    }
+
+    /**
+     * Un brouillon numéroté directement en base n'a pas de copie du client :
+     * la liste et sa fiche s'affichent quand même, sans nom, pour que le
+     * propriétaire voie le document que signale la vérification de
+     * l'intégrité.
+     */
+    public function test_un_document_numerote_en_base_sans_copie_du_client_n_empeche_pas_l_affichage(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(['nom' => 'Jean Ancien']), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $intacte = $this->emettreFactureDepuisLePanneau(Client::factory()->create(['nom' => 'Paul Tiers']));
+
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
+        $numerote = $brouillon->fresh();
+
+        Livewire::test(ListFactures::class)
+            ->assertCanSeeTableRecords([$numerote, $intacte])
+            ->assertTableColumnStateSet('client_nom', null, $numerote)
+            ->assertTableColumnStateSet('client_nom', 'Paul Tiers', $intacte);
+        Livewire::test(ViewFacture::class, ['record' => $numerote->getRouteKey()])
+            ->assertSee('TK-MABOUT-2026-000009')
+            ->assertDontSee('Jean Ancien');
     }
 
     public function test_la_liste_ne_montre_que_les_factures_du_vendeur_sans_vue_totale(): void

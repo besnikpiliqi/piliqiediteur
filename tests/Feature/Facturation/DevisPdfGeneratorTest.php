@@ -3,6 +3,7 @@
 namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
@@ -48,6 +49,27 @@ class DevisPdfGeneratorTest extends TestCase
         ] as $attendu) {
             $this->assertStringContainsString($attendu, $html);
         }
+    }
+
+    /**
+     * Un devis ne fige pas son client : envoyé après que la fiche de
+     * « Jean Ancien », particulier, est devenue « Marc Nouveau »,
+     * professionnel, il imprime la fiche du jour, nom et SIREN compris.
+     */
+    public function test_le_pdf_imprime_le_nom_et_les_identifiants_de_la_fiche_du_jour(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $client = Client::factory()->create(['nom' => 'Jean Ancien']);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20]);
+        $devis = app(CreerDevisAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $client->update(['nom' => 'Marc Nouveau', 'type_client' => TypeClient::Professionnel, 'siren' => '111222333']);
+
+        $devis = app(EmettreDevisAction::class)->handle($devis);
+
+        $this->assertStringContainsString(
+            '<div class="bloc-client"><div class="titre">Établi pour</div><strong>Marc Nouveau</strong><br>SIREN : 111222333<br></div>',
+            preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], view('devis.pdf', ['devis' => $devis->load('client', 'lignes', 'magasin')])->render()),
+        );
     }
 
     private function devisEnvoye(): Devis

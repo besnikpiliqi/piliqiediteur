@@ -24,9 +24,11 @@ return new class extends Migration
             // particulier pour des tickets de caisse, professionnel pour
             // des factures.
             $table->string('type_client', 20);
-            // La copie du client prise à l'émission de l'avoir, son
-            // identité de ce jour-là (voir FigeLeClient), comme pour une
-            // facture (voir factures.client_nom). Vides sur un brouillon.
+            // La copie du client prise à l'émission de l'avoir sur le
+            // document qu'il corrige, le plus récent s'il en corrige
+            // plusieurs, et non sur la fiche du client (voir
+            // Avoir::clientAFiger()) : mêmes colonnes que
+            // factures.client_nom. Vides sur un brouillon.
             $table->string('client_nom', 150)->nullable();
             $table->string('client_adresse')->nullable();
             $table->string('client_complement_adresse')->nullable();

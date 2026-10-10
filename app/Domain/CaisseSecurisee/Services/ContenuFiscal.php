@@ -23,13 +23,16 @@ use Illuminate\Support\Collection;
  *
  * Un ticket, une facture ou un avoir (document()) signe deux blocs :
  *
- * - « document », qui se recalcule depuis ses seules colonnes figées et
- *   celles de ses lignes : numéro, date d'émission, client (son type et la
- *   copie de sa fiche prise à l'émission, voir FigeLeClient), auteur,
+ * - « document », qui se recalcule depuis ses colonnes figées et celles
+ *   de ses lignes : numéro, date d'émission, client (son type et la copie
+ *   prise à l'émission, voir FigeLeClient, ainsi que le drapeau du client
+ *   comptoir, lu sur sa fiche où seul CreerMagasinAction le pose), auteur,
  *   devise, échéance, conditions, notes ou motif, lignes, ventilation par
  *   taux et totaux. Un avoir s'y écrit en négatif (quantités et montants)
  *   et chacune de ses lignes y référence la ligne et le numéro du ticket
- *   ou de la facture qu'elle corrige ;
+ *   ou de la facture qu'elle corrige. Une date d'émission effacée ou un
+ *   client introuvable dans le magasin s'y recalcule vide, pour que la
+ *   vérification de l'intégrité le signale au lieu de s'interrompre ;
  * - « contexte », figé à l'émission parce qu'il change ensuite ailleurs :
  *   l'identité du magasin émetteur, la catégorie de l'opération, et ce
  *   qui a réglé le document dans la même transaction
@@ -106,7 +109,7 @@ class ContenuFiscal
 
         return [
             'numero' => $facture->numero,
-            'date_emission' => $facture->date_emission->toIso8601String(),
+            'date_emission' => $facture->date_emission?->toIso8601String(),
             'client' => $this->clientFige($facture),
             'cree_par' => $this->identifiant($facture->cree_par),
             'devis_id' => $this->identifiant($facture->devis_id),
@@ -158,7 +161,7 @@ class ContenuFiscal
 
         return [
             'numero' => $avoir->numero,
-            'date_emission' => $avoir->date_emission->toIso8601String(),
+            'date_emission' => $avoir->date_emission?->toIso8601String(),
             'client' => $this->clientFige($avoir),
             'cree_par' => $this->identifiant($avoir->cree_par),
             'devise' => $avoir->devise,
@@ -275,8 +278,8 @@ class ContenuFiscal
     /**
      * Le client du ticket, de la facture ou de l'avoir, lu sur ses colonnes
      * figées à l'émission (voir FigeLeClient) : son identifiant, le client
-     * comptoir ou non, le type écrit sur le document et la copie de sa
-     * fiche.
+     * comptoir ou non (vide si le client_id ne désigne plus un client du
+     * magasin), le type écrit sur le document et la copie du client.
      *
      * @return array<string, int|string|bool|null>
      */
@@ -284,7 +287,7 @@ class ContenuFiscal
     {
         return [
             'id' => (int) $document->client_id,
-            'comptoir' => $document->client->estComptoir(),
+            'comptoir' => $document->client?->estComptoir(),
             'type_client' => $document->type_client->value,
             ...$document->copieClient()->enTableau(),
         ];

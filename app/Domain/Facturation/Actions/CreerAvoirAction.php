@@ -30,9 +30,11 @@ use LogicException;
  * Jamais de tickets de caisse et de factures dans un même avoir : leurs
  * circuits fiscaux diffèrent (clôture de caisse et e-reporting, ou
  * facture électronique), et un avoir n'en suit qu'un (voir
- * Facture::serie()). Il prend donc le type de client, figé à leur
- * émission, des documents qu'il corrige : particulier pour des tickets,
- * professionnel pour des factures (voir FigeLeClient).
+ * Facture::serie()). Il prend donc le client des documents qu'il corrige,
+ * tel qu'ils l'ont figé à leur émission : leur type dès sa création,
+ * particulier pour des tickets, professionnel pour des factures, et à son
+ * émission la copie de son nom, de son adresse et de ses identifiants
+ * (voir Avoir::clientAFiger()).
  *
  * L'avoir créé ici reste un brouillon jusqu'à son émission : l'interface
  * passe toujours par EnregistrerAvoirAction, qui fait les deux d'un seul

@@ -21,6 +21,7 @@ use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\CopieClient;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Integrations\Pdp\Models\TransmissionPdp;
@@ -153,6 +154,15 @@ class Facture extends Model implements DocumentEnvoyable
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class)->withTrashed();
+    }
+
+    /**
+     * La fiche du client, telle qu'elle est le jour de l'émission : celle
+     * dont le type est contrôlé à l'émission (voir EmettreFactureAction).
+     */
+    protected function clientAFiger(): CopieClient
+    {
+        return CopieClient::depuisClient($this->client);
     }
 
     public function creePar(): BelongsTo

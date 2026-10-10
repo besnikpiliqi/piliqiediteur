@@ -304,15 +304,18 @@ class FactureResource extends Resource
     }
 
     /**
-     * Le client tel que le document l'imprime (voir FigeLeClient) : sa copie
-     * prise à l'émission, la fiche du client tant qu'il est un brouillon.
-     * Partagé par les fiches des factures et des avoirs.
+     * Le nom du client (voir FigeLeClient::nomDuClient()) : celui figé à
+     * l'émission, celui de la fiche tant que le document est un brouillon.
+     * Un document numéroté dont la copie a été effacée en base s'affiche
+     * quand même, sans nom. Partagé par les fiches des factures et des
+     * avoirs.
      */
     public static function clientEntry(): TextEntry
     {
         return TextEntry::make('client_nom')
             ->label('Client')
-            ->state(fn (Facture|Avoir $record): string => $record->copieClient()->nom);
+            ->state(fn (Facture|Avoir $record): ?string => $record->nomDuClient())
+            ->placeholder('—');
     }
 
     /**
@@ -324,7 +327,8 @@ class FactureResource extends Resource
     {
         return Tables\Columns\TextColumn::make('client_nom')
             ->label('Client')
-            ->state(fn (Facture|Avoir $record): string => $record->copieClient()->nom)
+            ->state(fn (Facture|Avoir $record): ?string => $record->nomDuClient())
+            ->placeholder('—')
             ->searchable(query: fn (Builder $query, string $search): Builder => $query->where(fn (Builder $documents): Builder => $documents
                 ->where('client_nom', 'like', "%{$search}%")
                 ->orWhereHas('client', fn (Builder $client): Builder => $client->where('nom', 'like', "%{$search}%"))));

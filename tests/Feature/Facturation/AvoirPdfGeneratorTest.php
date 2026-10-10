@@ -103,8 +103,8 @@ class AvoirPdfGeneratorTest extends TestCase
 
     /**
      * Un avoir sur un ticket corrige une vente à un particulier : il
-     * n'imprime aucun identifiant, même si son client, devenu
-     * professionnel depuis, en a un le jour de l'avoir.
+     * imprime le client du ticket, sans identifiant, même si sa fiche,
+     * devenue celle d'un professionnel depuis, en a un le jour de l'avoir.
      */
     public function test_lavoir_sur_un_ticket_n_imprime_aucun_identifiant_du_client(): void
     {
@@ -116,7 +116,7 @@ class AvoirPdfGeneratorTest extends TestCase
         $avoir = $this->crediter($client->fresh(), $ticket);
 
         $this->assertStringContainsString(
-            '<div class="bloc-client"><div class="titre">Émis à</div><strong>Marc Nouveau</strong><br></div>',
+            '<div class="bloc-client"><div class="titre">Émis à</div><strong>Jean Ancien</strong><br></div>',
             $this->compacte($this->rendu($avoir)),
         );
     }

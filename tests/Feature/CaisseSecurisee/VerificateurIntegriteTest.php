@@ -227,6 +227,39 @@ class VerificateurIntegriteTest extends TestCase
         ], $this->anomalies($this->verifier()));
     }
 
+    /**
+     * Sous MagasinScope, un client_id réécrit vers la fiche d'un autre
+     * magasin ne désigne plus aucun client : la facture et l'avoir sont
+     * signalés, et la vérification va jusqu'au bout.
+     */
+    public function test_un_client_d_un_autre_magasin_reecrit_en_base_est_detecte_sans_interrompre_la_verification(): void
+    {
+        $magasin = $this->magasinActif();
+        $documents = $this->activite();
+        $clientDAilleurs = app(TenantContext::class)->runAs(Magasin::factory()->create(['code' => 'AUTRE']), fn (): Client => Client::factory()->professionnel()->create());
+
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['client_id' => $clientDAilleurs->id]);
+        DB::table('avoirs')->where('magasin_id', $magasin->id)->where('id', $documents['avoirSurFacture']->id)->update(['client_id' => $clientDAilleurs->id]);
+
+        $this->assertSame([
+            [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (client).'],
+            [90, 'L\'avoir AV-LYON1-2026-000002 ne correspond plus à ce qui a été signé à son émission (client).'],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    public function test_une_date_d_emission_effacee_en_base_est_detectee_sans_interrompre_la_verification(): void
+    {
+        $magasin = $this->magasinActif();
+        $documents = $this->activite();
+
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['date_emission' => null]);
+
+        $this->assertSame([
+            [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (date_emission).'],
+            [90, 'La facture FAC-LYON1-2026-000001 porte la date d\'émission illisible, qui n\'est pas l\'instant de sa signature (09/10/2026 à 10:00:00).'],
+        ], $this->anomalies($this->verifier()));
+    }
+
     public function test_une_date_d_emission_modifiee_en_base_n_est_plus_l_instant_de_la_signature(): void
     {
         $magasin = $this->magasinActif();

@@ -311,7 +311,9 @@ class ClientResource extends Resource
      * récente à la plus ancienne, anciens n° compris. Relues à chaque
      * affichage : une vérification faite depuis la page (voir
      * verifierSurVies()) y apparaît aussitôt. Montrée dès que le n° se
-     * vérifie sur VIES, ou qu'une vérification existe.
+     * vérifie sur VIES, ou qu'une vérification existe, sur la fiche en
+     * lecture seule (voir ViewClient), que voit quiconque peut voir le
+     * client, comme sur la page de modification.
      */
     private static function sectionDesVerificationsVies(): Section
     {
@@ -332,11 +334,12 @@ class ClientResource extends Resource
 
     /**
      * Le bouton « Vérifier sur VIES », dans la liste des clients et sur la
-     * fiche (voir EditClient) : pour un professionnel dont le n° de TVA est
-     * d'un État membre de l'Union ou d'Irlande du Nord, à qui peut modifier
-     * le client (voir ClientPolicy::update()). La vérification se conserve
-     * (voir VerifierNumeroTvaAction) ; VIES indisponible, l'écran le dit, et
-     * rien n'est conservé.
+     * fiche (voir ViewClient et EditClient) : pour un professionnel dont le
+     * n° de TVA est d'un État membre de l'Union ou d'Irlande du Nord, à qui
+     * peut modifier le client (voir ClientPolicy::update()). C'est le n°
+     * enregistré qui se vérifie, et la notification le cite. La
+     * vérification se conserve (voir VerifierNumeroTvaAction) ; VIES
+     * indisponible, l'écran le dit, et rien n'est conservé.
      *
      * @template TAction of MountableAction
      *
@@ -358,12 +361,12 @@ class ClientResource extends Resource
     private static function notifierLaVerification(ConsultationVies $consultation): void
     {
         if (! $consultation->valide) {
-            Notification::make()->title('N° de TVA inconnu de VIES : la vente reste à la TVA française.')->warning()->send();
+            Notification::make()->title("N° de TVA {$consultation->numero_tva} inconnu de VIES : la vente reste à la TVA française.")->warning()->send();
 
             return;
         }
 
-        Notification::make()->title("N° de TVA valide sur VIES ({$consultation->reference()}).")->success()->send();
+        Notification::make()->title("N° de TVA {$consultation->numero_tva} valide sur VIES ({$consultation->reference()}).")->success()->send();
     }
 
     public static function table(Table $table): Table
@@ -394,6 +397,7 @@ class ClientResource extends Resource
                 static::filtreDesArchives(),
             ])
             ->actions([
+                Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
                 static::verifierSurVies(Tables\Actions\Action::make('verifier_sur_vies')),
                 static::actionRestaurer(),
@@ -410,6 +414,7 @@ class ClientResource extends Resource
         return [
             'index' => Pages\ListClients::route('/'),
             'create' => Pages\CreateClient::route('/create'),
+            'view' => Pages\ViewClient::route('/{record}'),
             'edit' => Pages\EditClient::route('/{record}/edit'),
         ];
     }

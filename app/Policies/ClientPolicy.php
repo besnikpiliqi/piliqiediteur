@@ -30,8 +30,8 @@ class ClientPolicy extends MagasinPolicy
     /**
      * Un client archivé se restaure avant de se modifier : sa page de
      * modification ne le trouve plus. Ce refus retire aussi, dans la liste
-     * des clients archivés, le bouton « Modifier » et le lien de sa ligne
-     * (voir ClientResource::table()).
+     * des clients archivés, le bouton « Modifier » (voir
+     * ClientResource::table()) ; sa fiche reste lisible (voir ViewClient).
      */
     public function update(User $user, Client $client): bool
     {

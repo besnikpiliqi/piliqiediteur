@@ -21,8 +21,10 @@ use LogicException;
  * Le client se relit dans le magasin actif (MagasinScope) : c'est le n°
  * enregistré sur sa fiche qui se vérifie, jamais une copie en mémoire, et
  * jamais la fiche d'un autre magasin. Le magasin s'identifie auprès de
- * VIES par son propre n° de TVA, lu sur son émetteur (voir Emetteur), pour
- * que la consultation reçoive un n° de preuve.
+ * VIES par son propre n° de TVA, pour que la consultation reçoive un n° de
+ * preuve. Ce n° se lit, comme ses autres réglages fiscaux, par
+ * Emetteur::duMagasin() et jamais dans sa colonne : ces réglages passeront
+ * du magasin à sa société en ce seul endroit.
  *
  * L'appel à VIES, qui peut durer plusieurs secondes, a lieu hors de toute
  * transaction : il ne retient aucun verrou, et la vérification

@@ -5,12 +5,10 @@ namespace App\Domain\Contacts\Models;
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Une vérification du n° de TVA d'un client professionnel sur VIES (voir
@@ -54,20 +52,6 @@ class ConsultationVies extends Model
     protected function regleDInalterabilite(): string
     {
         return 'Une vérification VIES est une preuve : elle ne se modifie ni ne se supprime.';
-    }
-
-    /**
-     * Le client vérifié, même archivé depuis (voir les SoftDeletes de
-     * Client) : la preuve reste la sienne.
-     */
-    public function client(): BelongsTo
-    {
-        return $this->belongsTo(Client::class)->withTrashed();
-    }
-
-    public function consulteePar(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'consultee_par');
     }
 
     /**

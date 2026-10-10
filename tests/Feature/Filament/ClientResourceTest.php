@@ -14,11 +14,13 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\ClientResource\Pages\CreateClient;
 use App\Filament\App\Resources\ClientResource\Pages\EditClient;
 use App\Filament\App\Resources\ClientResource\Pages\ListClients;
+use App\Filament\App\Resources\ClientResource\Pages\ViewClient;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
@@ -52,6 +54,11 @@ class ClientResourceTest extends TestCase
     private const MESSAGE_PROPRE_NUMERO_TVA = 'Ce n° de TVA est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
 
     private const URL_VIES = 'https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number';
+
+    /**
+     * Ce que la fiche dit de la vérification que crée consultationValide().
+     */
+    private const PREUVE_VIES = 'Le n° DE123456789 est valide sur VIES selon la consultation WAPI1 du 09/10/2026 à 14:32.';
 
     public function test_un_proprietaire_peut_afficher_la_liste_des_clients_de_son_magasin(): void
     {
@@ -254,6 +261,23 @@ class ClientResourceTest extends TestCase
 
         Livewire::test(CreateFacture::class)
             ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('HÉLENE') === [$helene->id => 'Hélène Martin']);
+    }
+
+    /**
+     * Une vérification qui a trouvé valide le n° DE123456789 du client, le
+     * 09/10/2026 à 14:32 à Paris (12:32 en UTC), sous le n° de consultation
+     * WAPI1.
+     */
+    private function consultationValide(Client $client): ConsultationVies
+    {
+        return ConsultationVies::forceCreate([
+            'client_id' => $client->id,
+            'numero_tva' => 'DE123456789',
+            'valide' => true,
+            'identifiant_consultation' => 'WAPI1',
+            'consultee_le' => CarbonImmutable::parse('2026-10-09 12:32:10', 'UTC'),
+            'reponse' => '{"valid":true,"requestIdentifier":"WAPI1"}',
+        ]);
     }
 
     private function connecterLeProprietaire(): void
@@ -848,8 +872,8 @@ class ClientResourceTest extends TestCase
 
     /**
      * VIES ne vérifie que les n° de TVA de l'Union (et d'Irlande du Nord)
-     * : le bouton n'apparaît, dans la liste comme sur la fiche, que pour
-     * un professionnel qui en a un.
+     * : le bouton n'apparaît, dans la liste comme sur la fiche, en lecture
+     * seule ou en modification, que pour un professionnel qui en a un.
      */
     public function test_le_bouton_verifier_sur_vies_n_apparait_que_pour_un_professionnel_de_l_union(): void
     {
@@ -862,6 +886,8 @@ class ClientResourceTest extends TestCase
             ->assertTableActionVisible('verifier_sur_vies', $allemand)
             ->assertTableActionHidden('verifier_sur_vies', $particulier)
             ->assertTableActionHidden('verifier_sur_vies', $suisse);
+        Livewire::test(ViewClient::class, ['record' => $allemand->getRouteKey()])->assertActionVisible('verifier_sur_vies');
+        Livewire::test(ViewClient::class, ['record' => $particulier->getRouteKey()])->assertActionHidden('verifier_sur_vies');
         Livewire::test(EditClient::class, ['record' => $allemand->getRouteKey()])->assertActionVisible('verifier_sur_vies');
         Livewire::test(EditClient::class, ['record' => $particulier->getRouteKey()])->assertActionHidden('verifier_sur_vies');
     }
@@ -899,7 +925,7 @@ class ClientResourceTest extends TestCase
 
         Livewire::test(EditClient::class, ['record' => $allemand->getRouteKey()])
             ->callAction('verifier_sur_vies')
-            ->assertNotified('N° de TVA valide sur VIES (consultation WAPIAAAAW1234567 du 09/10/2026 à 14:32).')
+            ->assertNotified('N° de TVA DE123456789 valide sur VIES (consultation WAPIAAAAW1234567 du 09/10/2026 à 14:32).')
             ->assertSeeText('Le n° DE123456789 est valide sur VIES selon la consultation WAPIAAAAW1234567 du 09/10/2026 à 14:32.')
             ->assertSeeText('ACME GMBH');
 
@@ -915,7 +941,7 @@ class ClientResourceTest extends TestCase
 
         Livewire::test(ListClients::class)
             ->callTableAction('verifier_sur_vies', $allemand)
-            ->assertNotified('N° de TVA inconnu de VIES : la vente reste à la TVA française.');
+            ->assertNotified('N° de TVA DE999999999 inconnu de VIES : la vente reste à la TVA française.');
 
         $this->assertFalse($allemand->consultationsVies()->sole()->valide);
     }
@@ -932,6 +958,161 @@ class ClientResourceTest extends TestCase
             ->assertNotified('Le service européen VIES ne répond pas pour ce pays : réessayez dans quelques minutes. Sans n° de TVA vérifié, la vente reste à la TVA française.');
 
         $this->assertSame(0, ConsultationVies::query()->count());
+    }
+
+    /**
+     * VIES vérifie le n° enregistré sur la fiche : tant que le formulaire
+     * en montre un autre, rien n'est vérifié, et l'écran demande de
+     * l'enregistrer d'abord.
+     */
+    public function test_un_numero_modifie_sans_etre_enregistre_n_est_pas_verifie_sur_vies(): void
+    {
+        $this->connecterLeProprietaire();
+        $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
+        Http::preventStrayRequests();
+        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '123456789', 'valid' => true])]);
+
+        Livewire::test(EditClient::class, ['record' => $allemand->getRouteKey()])
+            ->fillForm(['numero_tva' => 'DE 999 999 999'])
+            ->callAction('verifier_sur_vies')
+            ->assertNotified('Enregistrez d\'abord le n° de TVA modifié : VIES vérifie le n° enregistré sur la fiche, DE123456789.')
+            ->assertFormSet(['numero_tva' => 'DE 999 999 999']);
+
+        Http::assertNothingSent();
+        $this->assertSame(0, ConsultationVies::query()->count());
+    }
+
+    /**
+     * Le n° du formulaire se compare tel qu'il s'enregistre : ressaisi
+     * avec ses séparateurs, c'est le n° enregistré, qui se vérifie.
+     */
+    public function test_le_numero_enregistre_ressaisi_avec_ses_separateurs_se_verifie_sur_vies(): void
+    {
+        $this->connecterLeProprietaire();
+        $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
+        $this->travelTo('2026-10-09 14:32:10');
+        Http::preventStrayRequests();
+        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '123456789', 'valid' => true, 'requestIdentifier' => 'WAPI1'])]);
+
+        Livewire::test(EditClient::class, ['record' => $allemand->getRouteKey()])
+            ->fillForm(['numero_tva' => 'de 123.456.789'])
+            ->callAction('verifier_sur_vies')
+            ->assertNotified('N° de TVA DE123456789 valide sur VIES (consultation WAPI1 du 09/10/2026 à 14:32).');
+
+        $this->assertSame('DE123456789', $allemand->consultationsVies()->sole()->numero_tva);
+    }
+
+    /**
+     * Une vérification VIES est une preuve fiscale : qui voit les clients
+     * la consulte sur leur fiche, même sans le droit de les modifier, donc
+     * sans « Modifier » ni « Vérifier sur VIES ».
+     */
+    #[DataProvider('rolesQuiVoientLesClientsSansLesModifier')]
+    public function test_un_membre_qui_voit_les_clients_sans_les_modifier_consulte_leurs_verifications_vies(RoleMagasin $role): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $membre = $this->membre($magasin, $role);
+        $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
+        $this->consultationValide($allemand);
+
+        $this->actingAs($membre)
+            ->get(ClientResource::getUrl('view', ['record' => $allemand, 'tenant' => $magasin]))
+            ->assertOk()
+            ->assertSeeText(self::PREUVE_VIES);
+        Filament::setTenant($magasin);
+        Livewire::test(ViewClient::class, ['record' => $allemand->getRouteKey()])
+            ->assertActionHidden('edit')
+            ->assertActionHidden('verifier_sur_vies');
+    }
+
+    /**
+     * @return array<string, array{0: RoleMagasin}>
+     */
+    public static function rolesQuiVoientLesClientsSansLesModifier(): array
+    {
+        return [
+            'comptable' => [RoleMagasin::Comptable],
+            'observateur' => [RoleMagasin::Observateur],
+        ];
+    }
+
+    /**
+     * Un magasin suspendu ou fermé reste consultable : ses vérifications
+     * VIES aussi, mais il n'en fait plus, même par une requête forgée.
+     */
+    #[DataProvider('statutsEnLectureSeule')]
+    public function test_les_verifications_vies_restent_consultables_dans_un_magasin_en_lecture_seule(StatutMagasin $statut): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
+        $this->consultationValide($allemand);
+        $magasin->forceFill(['statut' => $statut])->save();
+        Http::preventStrayRequests();
+        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '123456789', 'valid' => true])]);
+
+        $this->actingAs($proprietaire)
+            ->get(ClientResource::getUrl('view', ['record' => $allemand, 'tenant' => $magasin]))
+            ->assertOk()
+            ->assertSeeText(self::PREUVE_VIES);
+        Filament::setTenant($magasin);
+        Livewire::test(ViewClient::class, ['record' => $allemand->getRouteKey()])
+            ->assertActionHidden('verifier_sur_vies')
+            ->call('mountAction', 'verifier_sur_vies')
+            ->call('callMountedAction');
+
+        Http::assertNothingSent();
+        $this->assertSame(1, ConsultationVies::query()->count());
+    }
+
+    /**
+     * @return array<string, array{0: StatutMagasin}>
+     */
+    public static function statutsEnLectureSeule(): array
+    {
+        return [
+            'suspendu' => [StatutMagasin::Suspendu],
+            'fermé' => [StatutMagasin::Ferme],
+        ];
+    }
+
+    /**
+     * Une fiche archivée reste lisible : dans la liste des archivés, sa
+     * ligne propose « Voir », sans « Modifier » ni « Vérifier sur VIES »,
+     * et sa fiche, qui se dit archivée, montre ses vérifications VIES.
+     */
+    public function test_les_verifications_vies_d_un_client_archive_restent_consultables(): void
+    {
+        $this->connecterLeProprietaire();
+        $allemand = Client::factory()->etranger('DE', 'DE123456789')->trashed()->create();
+        $this->consultationValide($allemand);
+
+        Livewire::test(ListClients::class)
+            ->filterTable('trashed', false)
+            ->assertTableActionVisible('view', $allemand)
+            ->assertTableActionHidden('edit', $allemand)
+            ->assertTableActionHidden('verifier_sur_vies', $allemand);
+        $this->get(ClientResource::getUrl('view', ['record' => $allemand]))
+            ->assertOk()
+            ->assertSeeText('Client archivé : il n\'est plus proposé pour une nouvelle vente. Restaurez-le depuis la liste des clients archivés pour le modifier.')
+            ->assertSeeText(self::PREUVE_VIES);
+    }
+
+    /**
+     * La fiche en lecture seule trouve un client archivé, jamais celui
+     * d'un autre magasin : 404, sans rien dire de son existence.
+     */
+    public function test_la_fiche_du_client_archive_d_un_autre_magasin_est_introuvable(): void
+    {
+        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $clientA = Client::factory()->trashed()->create();
+        $proprietaireB = User::factory()->create();
+        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+
+        $this->assertSame($magasinA->id, $clientA->magasin_id);
+        $this->actingAs($proprietaireB)
+            ->get(ClientResource::getUrl('view', ['record' => $clientA, 'tenant' => $magasinB]))
+            ->assertNotFound();
     }
 
     /**

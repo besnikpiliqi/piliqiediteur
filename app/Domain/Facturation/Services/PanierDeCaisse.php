@@ -38,6 +38,7 @@ class PanierDeCaisse
         private readonly RegistreFiscal $registre,
         private readonly LignesRetirees $lignesRetirees,
         private readonly CalculateurLigne $calculateur,
+        private readonly ConstructeurLigneDocument $constructeurLigne,
     ) {}
 
     /**
@@ -121,7 +122,7 @@ class PanierDeCaisse
             $this->registre->journaliser(CodeEvenement::TransactionAbandonnee, [
                 'origine' => 'caisse',
                 'nombre_lignes' => count($panier->lignes),
-                'total_ttc' => $this->totalTtcEnCentimes($panier->lignes),
+                'total_ttc' => $this->totalTtcEnCentimes($panier),
             ]);
 
             $panier->delete();
@@ -153,7 +154,7 @@ class PanierDeCaisse
                     'journee' => $journee,
                     'vendeur_id' => (int) $panier->user_id,
                     'nombre_lignes' => count($panier->lignes),
-                    'total_ttc' => $this->totalTtcEnCentimes($panier->lignes),
+                    'total_ttc' => $this->totalTtcEnCentimes($panier),
                 ]);
 
                 $panier->delete();
@@ -266,15 +267,16 @@ class PanierDeCaisse
     }
 
     /**
-     * Le total TTC des lignes, calculé comme à l'écran de la caisse (voir
-     * CalculateurLigne::montantsDUneVenteSaisie()), en centimes.
-     *
-     * @param  array<string, array<string, mixed>>  $lignes
+     * Le total TTC des lignes du panier, calculé comme à l'écran de la
+     * caisse et à l'encaissement (voir ConstructeurLigneDocument::apercu()),
+     * pour son client, en centimes.
      */
-    private function totalTtcEnCentimes(array $lignes): ?int
+    private function totalTtcEnCentimes(PanierCaisse $panier): ?int
     {
+        $contexte = ContexteDeVente::pour(Client::withTrashed()->find($panier->client_id), app(TenantContext::class)->magasin());
+
         try {
-            $total = $this->calculateur->totaliser(array_map(fn (array $ligne): array => $this->calculateur->montantsDUneVenteSaisie($ligne), array_values($lignes)))['total_ttc'];
+            $total = $this->calculateur->totaliser($this->constructeurLigne->apercu($panier->lignes, $contexte))['total_ttc'];
 
             return $this->calculateur->enCentiemes(number_format($total, 2, '.', ''));
         } catch (InvalidArgumentException) {

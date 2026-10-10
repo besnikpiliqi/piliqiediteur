@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ProduitResource\Pages;
@@ -134,16 +135,38 @@ class ProduitResource extends Resource
                 ->required()
                 ->saisieEnDirect()
                 ->helperText(fn (Get $get) => self::detailPrixDeVente($get)),
+            // Saisi librement (B2), le taux du territoire du magasin par
+            // défaut : un taux qui n'y est pas en vigueur est signalé, sans
+            // être refusé (X8).
             TextInput::make('taux_tva')
                 ->label('Taux de TVA (%)')
                 ->numeric()
                 ->minValue(0)
                 ->maxValue(100)
                 ->required()
-                ->default(20)
+                ->default(fn (): string => DevisResource::pourcentageEnTexte(app(TenantContext::class)->magasin()->tauxTvaParDefaut()))
                 ->formatStateUsing(fn (mixed $state): mixed => blank($state) ? $state : DevisResource::pourcentageEnTexte($state))
+                ->helperText(fn (mixed $state): ?string => self::aideSurLeTauxDeTva($state))
                 ->saisieEnDirect(),
         ];
+    }
+
+    /**
+     * En franchise en base, le rappel que les ventes se font sans TVA au
+     * prix TTC indiqué (B10) ; et un taux saisi qui n'est pas en vigueur
+     * sur le territoire du magasin (X8).
+     */
+    private static function aideSurLeTauxDeTva(mixed $taux): ?string
+    {
+        $magasin = app(TenantContext::class)->magasin();
+        $aides = array_filter([
+            $magasin->estEnFranchiseDeTva()
+                ? 'Votre magasin est en franchise en base : vos ventes sont facturées sans TVA ('.RegimeTva::ARTICLE_FRANCHISE.'), au prix TTC indiqué.'
+                : null,
+            $magasin->territoireTva()?->aideSiTauxInhabituel($taux),
+        ]);
+
+        return $aides === [] ? null : implode(' ', $aides);
     }
 
     /**
@@ -157,8 +180,9 @@ class ProduitResource extends Resource
     }
 
     /**
-     * "Soit 33,33 € HT + 6,67 € de TVA" : le détail exact qu'une ligne de
-     * vente reprendra pour cet article (voir CalculateurLigne).
+     * "Soit 33,33 € HT + 6,67 € de TVA" : le détail du prix au taux de la
+     * fiche, celui qu'une ligne de vente reprendra pour cet article hors
+     * franchise en base (voir ConstructeurLigneDocument).
      */
     public static function detailPrixDeVente(Get $get): ?string
     {

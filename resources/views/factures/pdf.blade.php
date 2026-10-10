@@ -77,19 +77,14 @@
         </table>
     @endif
 
-    {{-- Mention obligatoire (art. 242 nonies A de l'annexe II au CGI) :
-         tirée de la nature des lignes, voir NatureLigne. --}}
-    <div class="pied">Catégorie de l'opération : {{ \App\Domain\Facturation\Enums\CategorieOperation::depuisNatures($facture->lignes->pluck('nature'))->getLabel() }}</div>
-
     @if($facture->conditions_paiement)
         <div class="pied">{{ $facture->conditions_paiement }}</div>
     @endif
 
-    {{-- Mention obligatoire quand le magasin a opté pour la TVA d'après les
-         débits (art. 242 nonies A de l'annexe II au CGI, voir
-         ParametresFiscaux). --}}
-    @if($facture->magasin->option_debits_tva)
-        <div class="pied">Option pour le paiement de la taxe d'après les débits</div>
-    @endif
+    {{-- Catégorie de l'opération, franchise de TVA, option pour les débits :
+         voir MentionsFiscales. --}}
+    @foreach(app(\App\Domain\Facturation\Services\MentionsFiscales::class)->pour($facture) as $mention)
+        <div class="pied">{{ $mention }}</div>
+    @endforeach
 </body>
 </html>

@@ -70,7 +70,7 @@ class ParametresFiscaux extends Page implements HasForms
             Select::make('regime_tva')
                 ->label('Régime de TVA')
                 ->options(RegimeTva::class)
-                ->helperText('Détermine la cadence de transmission de l\'e-reporting au PDP (voir la page Soumissions e-reporting) : ce n\'est pas une obligation journalière, la fréquence dépend de ce régime.')
+                ->helperText('Détermine la cadence de transmission de l\'e-reporting au PDP (voir la page Soumissions e-reporting) : ce n\'est pas une obligation journalière, la fréquence dépend de ce régime. En franchise, vos ventes sont à 0 % avec la mention « '.RegimeTva::MENTION_FRANCHISE.' » ; le prix TTC de vos produits ne change pas.')
                 ->required(),
             Toggle::make('option_debits_tva')
                 ->label('Option pour les débits')

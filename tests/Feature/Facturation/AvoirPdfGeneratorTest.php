@@ -41,7 +41,7 @@ class AvoirPdfGeneratorTest extends TestCase
             'avoir' => $avoir->load('client', 'lignes.ligneFacture.facture', 'magasin'),
         ])->render();
 
-        $this->assertStringContainsString("Option pour le paiement de la taxe d'après les débits", $html);
+        $this->assertStringContainsString(e("Option pour le paiement de la taxe d'après les débits"), $html);
     }
 
     /**

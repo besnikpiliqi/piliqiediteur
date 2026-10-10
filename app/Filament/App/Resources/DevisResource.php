@@ -3,7 +3,6 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
@@ -14,19 +13,14 @@ use App\Filament\App\Resources\DevisResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDeVente;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
-use App\Filament\Concerns\SaisitLesPrixDeLigne;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Filament\Forms\Components\Actions\Action;
-use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
-use Filament\Forms\Set;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
@@ -39,7 +33,6 @@ class DevisResource extends Resource
     use AjouteDesLignesDeVente;
     use EnvoieLesDocuments;
     use GereLesExceptionsMetier;
-    use SaisitLesPrixDeLigne;
     use SupprimeEnMasseLigneParLigne;
 
     protected static ?string $model = Devis::class;
@@ -86,68 +79,6 @@ class DevisResource extends Resource
                 self::totauxDuDocument(),
             ]),
         ]);
-    }
-
-    /**
-     * Partagé avec FactureResource et la Caisse. Une ligne vend un produit
-     * du catalogue ou un service du magasin (voir AjouteDesLignesDeVente) :
-     * sa description vient du catalogue et ne se corrige que dans la fiche
-     * du produit ou du service, et seul le PU TTC se saisit -- le PU HT en
-     * est la conversion. Une ligne de service n'a ni produit à chercher ni
-     * PU HT affiché.
-     *
-     * @return array<Component>
-     */
-    public static function ligneSchema(): array
-    {
-        return [
-            Hidden::make('service_id'),
-            Select::make('produit_id')
-                ->label('Produit')
-                ->helperText('Recherchez par nom, référence, ou scannez le code-barres.')
-                ->searchable()
-                // Un produit archivé n'est plus proposé ; celui d'une ligne
-                // déjà composée reste affiché, et le document ne s'enregistre
-                // plus tant qu'il n'est pas restauré ou retiré (voir
-                // ConstructeurLigneDocument).
-                ->getSearchResultsUsing(fn (string $search): array => ProduitResource::rechercher(Produit::query(), $search))
-                ->getOptionLabelUsing(fn ($value) => Produit::withTrashed()->find($value)?->nom)
-                ->required(fn (Get $get): bool => ! self::estUneLigneDeService($get))
-                ->live()
-                ->columnSpan(2)
-                ->visible(fn (Get $get): bool => ! self::estUneLigneDeService($get))
-                ->afterStateUpdated(function (?int $state, Set $set) {
-                    $produit = $state ? Produit::find($state) : null;
-
-                    if ($produit === null) {
-                        return;
-                    }
-
-                    $set('description', $produit->nom);
-                    $set('reference', $produit->reference);
-                    $set('prix_unitaire_ht', (string) $produit->prix_vente_ht);
-                    $set('prix_unitaire_ttc', (string) $produit->prix_vente_ttc);
-                    $set('taux_tva', self::pourcentageEnTexte($produit->taux_tva));
-                }),
-            TextInput::make('description')
-                ->label(fn (Get $get): string => self::estUneLigneDeService($get) ? 'Service' : 'Description')
-                ->disabled()
-                // Reprend la place du produit et du PU HT, absents d'une
-                // ligne de service.
-                ->columnSpan(fn (Get $get): int => self::estUneLigneDeService($get) ? 5 : 2),
-            // live() et non live(onBlur: true) sur tous les champs de la
-            // ligne : le total (et, dans la Caisse, la monnaie à rendre) se
-            // met à jour pendant la saisie, pas seulement au clic ailleurs.
-            TextInput::make('quantite')->integer()->minValue(1)->required()->default(1)->saisieEnDirect(),
-            ...self::champsPrixDeLigne(),
-            TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->minValue(0)->maxValue(100)->default(0)->saisieEnDirect(),
-            self::totalDeLigne(),
-        ];
-    }
-
-    public static function estUneLigneDeService(Get $get): bool
-    {
-        return filled($get('service_id'));
     }
 
     /**

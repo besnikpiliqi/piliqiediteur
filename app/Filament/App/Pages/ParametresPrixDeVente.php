@@ -59,7 +59,7 @@ class ParametresPrixDeVente extends Page implements HasForms
         $this->form->fill([
             'actif' => $magasin->prix_vente_automatique,
             ...$magasin->bareme_prix_vente->versTableau(),
-            'essai_taux_tva' => 20,
+            'essai_taux_tva' => $magasin->tauxTvaParDefaut(),
         ]);
     }
 
@@ -142,7 +142,6 @@ class ParametresPrixDeVente extends Page implements HasForms
                         ->label('TVA')
                         ->numeric()
                         ->suffix('%')
-                        ->default(20)
                         ->live(debounce: 400)
                         ->dehydrated(false),
                     Placeholder::make('essai_prix_vente')

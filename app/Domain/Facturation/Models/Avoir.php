@@ -44,9 +44,9 @@ class Avoir extends Model implements DocumentEnvoyable
 
     protected $table = 'avoirs';
 
-    // numero, statut, date_emission, totaux, type et copie du client :
-    // jamais en mass assignment, uniquement via EnregistrerAvoirAction
-    // (CreerAvoirAction puis EmettreAvoirAction).
+    // numero, statut, date_emission, totaux, type et copie du client,
+    // franchise de TVA : jamais en mass assignment, uniquement via
+    // EnregistrerAvoirAction (CreerAvoirAction puis EmettreAvoirAction).
     protected $fillable = [
         'client_id',
         'motif',
@@ -55,6 +55,7 @@ class Avoir extends Model implements DocumentEnvoyable
 
     protected $casts = [
         'statut' => StatutAvoir::class,
+        'franchise_en_base' => 'boolean',
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
         'total_ttc' => 'decimal:2',

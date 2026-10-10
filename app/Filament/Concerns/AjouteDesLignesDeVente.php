@@ -3,17 +3,29 @@
 namespace App\Filament\Concerns;
 
 use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\ConstructeurLigneDocument;
+use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ServiceResource;
 use Closure;
 use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Component;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Support\Enums\ActionSize;
 use Filament\Support\Enums\MaxWidth;
@@ -23,9 +35,16 @@ use InvalidArgumentException;
  * Les lignes d'une vente (caisse, facture, devis) : chacune vend un produit
  * du catalogue ou un service du magasin, jamais une ligne libre (voir
  * ConstructeurLigneDocument). Deux boutons sous les lignes les ajoutent.
+ *
+ * Les montants affichés pendant la saisie passent par le même
+ * constructeur que l'enregistrement réel, avec le client choisi et le
+ * régime de TVA du magasin (voir apercuDesLignes()) : l'écran ne peut
+ * jamais afficher un centime différent de ce qui sera enregistré.
  */
 trait AjouteDesLignesDeVente
 {
+    use SaisitLesPrixDeLigne;
+
     /**
      * @return array<Component>
      */
@@ -46,6 +65,229 @@ trait AjouteDesLignesDeVente
                 self::actionAjouterUnService(),
             ])->alignCenter(),
         ];
+    }
+
+    /**
+     * Les lignes saisies, calculées comme à leur enregistrement pour ce
+     * client (voir ConstructeurLigneDocument::apercu()), par clé de ligne ;
+     * une ligne pas encore complète n'y est pas.
+     *
+     * @param  array<array-key, mixed>  $lignes
+     * @return array<array-key, array<string, mixed>>
+     */
+    public static function apercuDesLignes(array $lignes, mixed $clientId): array
+    {
+        return app(ConstructeurLigneDocument::class)->apercu($lignes, self::contexteDeVente($clientId));
+    }
+
+    /**
+     * Une ligne vend un produit du catalogue ou un service du magasin : sa
+     * description vient du catalogue et ne se corrige que dans la fiche du
+     * produit ou du service, et seul le PU TTC se saisit -- le PU HT en est
+     * la conversion. Une ligne de service n'a ni produit à chercher ni PU
+     * HT affiché.
+     *
+     * @return array<Component>
+     */
+    public static function ligneSchema(): array
+    {
+        return [
+            Hidden::make('service_id'),
+            Select::make('produit_id')
+                ->label('Produit')
+                ->helperText('Recherchez par nom, référence, ou scannez le code-barres.')
+                ->searchable()
+                // Un produit archivé n'est plus proposé ; celui d'une ligne
+                // déjà composée reste affiché, et le document ne s'enregistre
+                // plus tant qu'il n'est pas restauré ou retiré (voir
+                // ConstructeurLigneDocument).
+                ->getSearchResultsUsing(fn (string $search): array => ProduitResource::rechercher(Produit::query(), $search))
+                ->getOptionLabelUsing(fn ($value) => Produit::withTrashed()->find($value)?->nom)
+                ->required(fn (Get $get): bool => ! self::estUneLigneDeService($get))
+                ->live()
+                ->columnSpan(2)
+                ->visible(fn (Get $get): bool => ! self::estUneLigneDeService($get))
+                ->afterStateUpdated(function (?int $state, Get $get, Set $set) {
+                    $produit = $state ? Produit::find($state) : null;
+
+                    if ($produit === null) {
+                        return;
+                    }
+
+                    $set('description', $produit->nom);
+                    $set('reference', $produit->reference);
+                    $set('prix_unitaire_ttc', self::prixEnTexte((float) $produit->prix_vente_ttc));
+                    self::appliquerLeTauxDuProduit($produit, $get, $set);
+                }),
+            TextInput::make('description')
+                ->label(fn (Get $get): string => self::estUneLigneDeService($get) ? 'Service' : 'Description')
+                ->disabled()
+                // Reprend la place du produit et du PU HT, absents d'une
+                // ligne de service.
+                ->columnSpan(fn (Get $get): int => self::estUneLigneDeService($get) ? 5 : 2),
+            // live() et non live(onBlur: true) sur tous les champs de la
+            // ligne : le total (et, dans la Caisse, la monnaie à rendre) se
+            // met à jour pendant la saisie, pas seulement au clic ailleurs.
+            TextInput::make('quantite')->integer()->minValue(1)->required()->default(1)->saisieEnDirect(),
+            ...self::champsPrixDeLigne(),
+            TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->minValue(0)->maxValue(100)->default(0)->saisieEnDirect(),
+            self::totalDeLigne(),
+        ];
+    }
+
+    public static function estUneLigneDeService(Get $get): bool
+    {
+        return filled($get('service_id'));
+    }
+
+    /**
+     * PU HT, PU TTC et TVA d'une ligne de vente : seul le PU TTC se saisit
+     * (le prix affiché au client, repris tel quel de la fiche du produit),
+     * le PU HT n'en est que la conversion au centime, affichée à côté.
+     *
+     * Le taux d'une ligne de produit est celui de sa fiche (voir
+     * ConstructeurLigneDocument) : affiché, il ne se modifie pas et ne
+     * part pas avec le formulaire. Celui d'une ligne de service se saisit,
+     * le taux du territoire du magasin par défaut (voir
+     * Magasin::tauxTvaParDefaut()). En franchise en base, toute ligne est à
+     * 0 % : le taux d'un produit affiche 0, celui d'un service ne se saisit
+     * pas.
+     *
+     * @return array<Component>
+     */
+    private static function champsPrixDeLigne(): array
+    {
+        return [
+            TextInput::make('prix_unitaire_ht')
+                ->label('PU HT')
+                ->numeric()
+                // Une ligne de service ne montre que son TTC.
+                ->visible(fn (Get $get): bool => ! self::estUneLigneDeService($get))
+                ->disabled(),
+            TextInput::make('prix_unitaire_ttc')
+                ->label('PU TTC')
+                ->numeric()
+                ->minValue(0)
+                ->saisieEnDirect()
+                ->required()
+                // Le PU HT d'une ligne de produit suit le PU TTC saisi, au
+                // taux affiché ; une ligne de service n'en montre pas, son
+                // HT figure sous son total (voir totalDeLigne()).
+                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
+                    if (blank($state) || self::estUneLigneDeService($get)) {
+                        return;
+                    }
+
+                    try {
+                        $set('prix_unitaire_ht', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $state, (float) $get('taux_tva'))));
+                    } catch (InvalidArgumentException) {
+                        // Prix hors limites (voir sa validation) : rien à convertir.
+                    }
+                }),
+            TextInput::make('taux_tva')
+                ->label('TVA %')
+                ->numeric()
+                ->minValue(0)
+                ->maxValue(100)
+                ->required(fn (Get $get): bool => self::estUneLigneDeService($get))
+                ->default(fn (): string => self::pourcentageEnTexte(self::magasin()->tauxTvaParDefaut()))
+                ->disabled(fn (Get $get): bool => ! self::estUneLigneDeService($get))
+                ->hidden(fn (Get $get): bool => self::estUneLigneDeService($get) && self::magasin()->estEnFranchiseDeTva())
+                ->helperText(fn (Get $get): ?string => self::magasin()->estEnFranchiseDeTva() ? 'TVA non applicable' : null)
+                ->saisieEnDirect()
+                // Une ligne rouverte (brouillon, devis, panier de la caisse)
+                // reprend le taux de la fiche du produit et le régime du
+                // magasin d'aujourd'hui, ceux avec lesquels elle sera
+                // enregistrée.
+                ->afterStateHydrated(function (Get $get, Set $set): void {
+                    $produit = self::estUneLigneDeService($get) || blank($get('produit_id'))
+                        ? null
+                        : Produit::withTrashed()->find($get('produit_id'));
+
+                    if ($produit !== null) {
+                        self::appliquerLeTauxDuProduit($produit, $get, $set);
+                    }
+                }),
+        ];
+    }
+
+    /**
+     * Le taux de la fiche du produit, ou 0 en franchise, et le PU HT qui en
+     * découle.
+     */
+    private static function appliquerLeTauxDuProduit(Produit $produit, Get $get, Set $set): void
+    {
+        $tauxTva = self::magasin()->estEnFranchiseDeTva() ? 0.0 : (float) $produit->taux_tva;
+
+        $set('taux_tva', self::pourcentageEnTexte($tauxTva));
+
+        if (blank($get('prix_unitaire_ttc'))) {
+            return;
+        }
+
+        try {
+            $set('prix_unitaire_ht', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $get('prix_unitaire_ttc'), $tauxTva)));
+        } catch (InvalidArgumentException) {
+            // Prix hors limites (voir sa validation) : rien à convertir.
+        }
+    }
+
+    /**
+     * Le HT et la TVA de la ligne à côté de son TTC, comme la facture. Un
+     * taux de service qui n'est pas en vigueur sur le territoire du
+     * magasin est signalé, sans être refusé (X8).
+     */
+    private static function totalDeLigne(): Placeholder
+    {
+        return Placeholder::make('total_ligne')
+            ->label('Total TTC')
+            ->columnSpanFull()
+            ->content(fn (Get $get): string => self::montantEnTexte((float) (self::montantsDeLaLigne($get)['montant_ttc'] ?? 0)))
+            ->helperText(function (Get $get): string {
+                $montants = self::montantsDeLaLigne($get);
+                $detail = self::montantEnTexte((float) ($montants['montant_ht'] ?? 0)).' HT + '.self::montantEnTexte((float) ($montants['montant_tva'] ?? 0)).' de TVA';
+                $aide = self::estUneLigneDeService($get) && ! self::magasin()->estEnFranchiseDeTva()
+                    ? self::magasin()->territoireTva()?->aideSiTauxInhabituel($get('taux_tva'))
+                    : null;
+
+                return $aide === null ? $detail : "{$detail} · {$aide}";
+            });
+    }
+
+    /**
+     * @return iterable<array<string, mixed>>
+     */
+    protected static function montantsDesLignesSaisies(Get $get): iterable
+    {
+        return self::apercuDesLignes($get('lignes') ?? [], $get('client_id'));
+    }
+
+    /**
+     * La ligne lue depuis l'un de ses champs, calculée comme à son
+     * enregistrement ; vide tant qu'elle n'est pas complète.
+     *
+     * @return array<string, mixed>
+     */
+    private static function montantsDeLaLigne(Get $get): array
+    {
+        return self::apercuDesLignes([self::ligneSaisie($get)], $get('../../client_id'))[0] ?? [];
+    }
+
+    /**
+     * Le client choisi s'il est du magasin actif (MagasinScope), archivé
+     * compris, et le magasin actif, dont le régime de TVA et le territoire
+     * décident du calcul.
+     */
+    private static function contexteDeVente(mixed $clientId): ContexteDeVente
+    {
+        $identifiant = is_bool($clientId) ? false : filter_var($clientId, FILTER_VALIDATE_INT);
+
+        return ContexteDeVente::pour($identifiant === false ? null : Client::withTrashed()->find($identifiant), self::magasin());
+    }
+
+    private static function magasin(): Magasin
+    {
+        return app(TenantContext::class)->magasin();
     }
 
     private static function actionAjouterUnProduit(): Action
@@ -148,8 +390,8 @@ trait AjouteDesLignesDeVente
 
     /**
      * Comme le bouton natif du Repeater : la nouvelle ligne reçoit les
-     * valeurs par défaut de ses champs (quantité 1, TVA 20 %...), puis
-     * celles données ici.
+     * valeurs par défaut de ses champs (quantité 1, taux du territoire du
+     * magasin...), puis celles données ici.
      *
      * @param  array<string, mixed>  $valeurs
      */

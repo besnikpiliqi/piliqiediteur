@@ -24,6 +24,10 @@ return new class extends Migration
             // particulier pour des tickets de caisse, professionnel pour
             // des factures.
             $table->string('type_client', 20);
+            // Repris des factures que l'avoir corrige, toutes émises en
+            // franchise en base de TVA ou toutes hors franchise (voir
+            // CreerAvoirAction) : l'avoir en imprime la mention.
+            $table->boolean('franchise_en_base')->default(false);
             // La copie du client prise à l'émission de l'avoir sur le
             // document qu'il corrige, le plus récent s'il en corrige
             // plusieurs, et non sur la fiche du client (voir

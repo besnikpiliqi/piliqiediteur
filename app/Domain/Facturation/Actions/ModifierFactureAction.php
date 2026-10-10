@@ -12,6 +12,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
+use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\LignesRetirees;
 use LogicException;
 
@@ -36,9 +37,11 @@ use LogicException;
  *
  * Comme CreerFactureAction, elle reçoit le client déjà résolu par une
  * requête limitée au magasin, jamais un client_id brut venu du formulaire,
- * et note de nouveau son type : un brouillon réenregistré après que son
- * client a changé de type s'émet dans l'autre série (voir
- * EmettreFactureAction).
+ * et note de nouveau son type et le régime de TVA du magasin, avec
+ * lesquels les lignes se recalculent : un brouillon réenregistré après que
+ * son client a changé de type s'émet dans l'autre série, et celui
+ * réenregistré après un changement de régime du magasin s'émet de nouveau
+ * (voir EmettreFactureAction).
  */
 class ModifierFactureAction
 {
@@ -70,11 +73,12 @@ class ModifierFactureAction
                 ->map(fn (LigneFacture $ligne): array => $this->lignesRetirees->comparable($ligne->produit_id, $ligne->service_id, $ligne->description, $ligne->quantite, $ligne->prix_unitaire_ttc))
                 ->all();
 
-            $facture->fill($attributs)->forceFill(['client_id' => $client->getKey(), 'type_client' => $client->type_client])->save();
+            $contexte = ContexteDeVente::pour($client, $facture->magasin);
+            $facture->fill($attributs)->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
 
             $facture->lignes()->delete();
 
-            $lignesConstruites = $this->constructeurLigne->construireToutes($lignes);
+            $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
 
             foreach ($lignesConstruites as $ligne) {
                 $facture->lignes()->create($ligne);

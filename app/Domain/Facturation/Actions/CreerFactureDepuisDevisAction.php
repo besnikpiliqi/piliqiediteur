@@ -15,9 +15,10 @@ use LogicException;
  * voir EmettreFactureAction) -- aucun recalcul de prix, comme
  * CreerAvoirAction reprend les lignes de la facture plutôt que de les
  * reconstruire via ConstructeurLigneDocument. La facture prend aussi le
- * type de client du devis : si le client a changé de type depuis,
- * l'émission le signale (voir EmettreFactureAction). Converti, le devis
- * n'est plus modifiable (voir Devis::estModifiable()).
+ * type de client du devis et sa franchise de TVA : si le client a changé
+ * de type depuis, ou le magasin de régime, l'émission le signale (voir
+ * EmettreFactureAction). Converti, le devis n'est plus modifiable (voir
+ * Devis::estModifiable()).
  */
 class CreerFactureDepuisDevisAction
 {
@@ -42,6 +43,7 @@ class CreerFactureDepuisDevisAction
                 'client_id' => $devis->client_id,
                 'devis_id' => $devis->id,
                 'type_client' => $devis->type_client,
+                'franchise_en_base' => $devis->franchise_en_base,
             ])->save();
 
             foreach ($devis->lignes as $ligne) {

@@ -143,7 +143,7 @@ class FacturePdfGeneratorTest extends TestCase
             'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
         ])->render();
 
-        $this->assertSame($optionDebits, str_contains($html, "Option pour le paiement de la taxe d'après les débits"));
+        $this->assertSame($optionDebits, str_contains($html, e("Option pour le paiement de la taxe d'après les débits")));
     }
 
     /**
@@ -180,7 +180,7 @@ class FacturePdfGeneratorTest extends TestCase
             'facture' => $facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'),
         ])->render();
 
-        $this->assertStringContainsString("Catégorie de l'opération : {$categorie}</div>", $html);
+        $this->assertStringContainsString(e("Catégorie de l'opération : {$categorie}").'</div>', $html);
     }
 
     /**

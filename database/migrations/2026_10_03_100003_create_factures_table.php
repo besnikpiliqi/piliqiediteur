@@ -22,6 +22,14 @@ return new class extends Migration
             // EmettreFactureAction) : il choisit la série, ticket de caisse
             // ou facture, puis ne change plus.
             $table->string('type_client', 20);
+            // Le magasin vendait-il en franchise en base de TVA (lignes à
+            // 0 %, mention « TVA non applicable », voir ContexteDeVente) ?
+            // Écrit avec le type du client à chaque enregistrement du
+            // brouillon, ou repris du devis converti, et contrôlé à
+            // l'émission contre le régime du magasin à cet instant (voir
+            // EmettreFactureAction) ; ensuite, la mention se lit ici, jamais
+            // sur le régime actuel du magasin (voir MentionsFiscales).
+            $table->boolean('franchise_en_base')->default(false);
             // La copie du client prise à l'émission (voir FigeLeClient) :
             // nom, adresse et identifiants tels qu'ils s'impriment et se
             // signent au registre fiscal, que la fiche du client change ou

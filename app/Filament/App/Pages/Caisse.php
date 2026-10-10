@@ -184,8 +184,7 @@ class Caisse extends Page implements HasForms
                     ->getOptionLabelUsing(fn ($value) => Client::withTrashed()->find($value)?->nom)
                     ->rule(fn (): Exists => Client::regleExisteDansLeMagasin())
                     // Form explicitement modelé sur Client : ce Select
-                    // n'utilise pas relationship(), voir le commentaire
-                    // équivalent dans DevisResource::ligneSchema().
+                    // n'utilise pas relationship(), qui le ferait sinon.
                     ->createOptionForm(fn (Form $form): Form => $form
                         ->model(Client::class)
                         ->schema(ClientResource::creationRapideSchema()))
@@ -375,21 +374,16 @@ class Caisse extends Page implements HasForms
     }
 
     /**
-     * Passe par CalculateurLigne (même service que celui qui calcule
-     * réellement la facture persistée via EnregistrerVenteCaisseAction) :
-     * sans ça, cet aperçu -- et donc la monnaie à rendre affichée au
-     * vendeur -- pouvait afficher un total différent de quelques centimes
-     * par rapport à ce qui est effectivement encaissé, selon comment
-     * l'arrondi tombait sur chaque ligne avant d'être sommée.
-     *
-     * @param  list<array<string, mixed>>  $lignes
+     * Calculé par le même constructeur de lignes que la vente encaissée
+     * (voir EnregistrerVenteCaisseAction et
+     * ConstructeurLigneDocument::apercu()), pour le client choisi et le
+     * régime de TVA du magasin : le total -- et donc la monnaie à rendre
+     * affichée au vendeur -- est au centime près celui qui sera encaissé.
      */
-    private function totalTtc(array $lignes): float
+    private function totalTtc(Get $get): float
     {
-        $montants = collect($lignes)->map(fn (array $ligne) => DevisResource::montantsDeLigneSaisie($ligne));
-
         try {
-            return app(CalculateurLigne::class)->totaliser($montants)['total_ttc'];
+            return app(CalculateurLigne::class)->totaliser(DevisResource::apercuDesLignes($get('lignes') ?? [], $get('client_id')))['total_ttc'];
         } catch (InvalidArgumentException) {
             // Montant absurde en cours de frappe : la validation le refusera.
             return 0.0;
@@ -404,7 +398,7 @@ class Caisse extends Page implements HasForms
      */
     private function resteAPayer(Get $get): float
     {
-        $totalTtc = $this->totalTtc($get('lignes') ?? []);
+        $totalTtc = $this->totalTtc($get);
 
         try {
             return app(CalculateurLigne::class)->soustraire($totalTtc, $this->creditApplique($get, $totalTtc));
@@ -430,7 +424,7 @@ class Caisse extends Page implements HasForms
 
     private function detailCreditApplique(Get $get): ?string
     {
-        $totalTtc = $this->totalTtc($get('lignes') ?? []);
+        $totalTtc = $this->totalTtc($get);
         $credit = $this->creditApplique($get, $totalTtc);
 
         if ($credit <= 0) {

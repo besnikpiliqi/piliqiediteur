@@ -23,6 +23,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -556,8 +557,36 @@ class CaisseTest extends TestCase
         $this->assertNull($ligne['service_id']);
         $this->assertNull($ligne['produit_id']);
         $this->assertSame(1, $ligne['quantite']);
-        $this->assertSame(20, $ligne['taux_tva']);
+        $this->assertSame('20', $ligne['taux_tva']);
         $component->assertFormFieldIsVisible('lignes.'.array_key_first($component->get('data.lignes')).'.produit_id');
+    }
+
+    /**
+     * En franchise en base, toute vente est à 0 % au même prix TTC (B10) :
+     * le taux d'une ligne de produit est désactivé, vaut 0 et le dit, et
+     * le ticket encaissé n'a aucune TVA.
+     */
+    public function test_en_franchise_le_taux_d_un_produit_est_desactive_et_vaut_zero(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class)
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit');
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.produit_id", $produit->id)
+            ->assertFormFieldIsDisabled("lignes.{$cle}.taux_tva")
+            ->assertSet("data.lignes.{$cle}.taux_tva", '0')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '12.00')
+            ->assertSee('TVA non applicable')
+            ->call('encaisser')
+            ->assertHasNoFormErrors();
+
+        $ticket = Facture::query()->sole();
+        $this->assertSame(['12.00', '0.00', '12.00'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
+        $this->assertSame('0.00', $ticket->lignes->sole()->taux_tva);
     }
 
     public function test_un_service_coche_devient_une_ligne_de_service_sans_produit_ni_pu_ht(): void

@@ -3,108 +3,25 @@
 namespace App\Filament\Concerns;
 
 use App\Domain\Facturation\Services\CalculateurLigne;
-use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Placeholder;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Get;
-use Filament\Forms\Set;
 use InvalidArgumentException;
 
 /**
- * Prix et totaux d'une ligne de document, à l'écran : calculés comme à
- * l'enregistrement réel, par le même calculateur (voir
- * montantsDeLigneSaisie()).
+ * Prix et totaux des lignes d'un document à l'écran, partagés par les
+ * lignes de vente (voir AjouteDesLignesDeVente) et d'achat (voir
+ * AjouteDesLignesDAchat) : chacune calcule ses montants comme à
+ * l'enregistrement réel (voir montantsDesLignesSaisies()).
  */
 trait SaisitLesPrixDeLigne
 {
     /**
-     * PU HT, PU TTC et TVA d'une ligne de vente : seul le PU TTC se saisit
-     * (le prix affiché au client, repris tel quel de la fiche du produit),
-     * le PU HT n'en est que la conversion au centime, affichée à côté.
+     * Les montants des lignes saisies du document, calculés comme à leur
+     * enregistrement ; $get lit le formulaire au niveau du document.
      *
-     * @return array<Component>
+     * @return iterable<array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}>
      */
-    protected static function champsPrixDeLigne(): array
-    {
-        return [
-            TextInput::make('prix_unitaire_ht')
-                ->label('PU HT')
-                ->numeric()
-                // Une ligne de service (voir DevisResource::ligneSchema()) ne
-                // montre que son TTC.
-                ->visible(fn (Get $get): bool => blank($get('service_id')))
-                ->disabled(),
-            TextInput::make('prix_unitaire_ttc')
-                ->label('PU TTC')
-                ->numeric()
-                ->minValue(0)
-                ->saisieEnDirect()
-                ->required()
-                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
-                    if (blank($state)) {
-                        // Sur une ligne de service, le PU HT est caché : s'il
-                        // gardait sa valeur, l'aperçu afficherait encore
-                        // l'ancien total alors que le TTC a été effacé.
-                        if (filled($get('service_id'))) {
-                            $set('prix_unitaire_ht', null);
-                        }
-
-                        return;
-                    }
-
-                    try {
-                        $set('prix_unitaire_ht', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $state, self::tauxTvaDeLigne($get))));
-                    } catch (InvalidArgumentException) {
-                        // Taux de TVA invalide (voir sa validation) : rien à convertir.
-                    }
-                }),
-            TextInput::make('taux_tva')
-                ->label('TVA %')
-                ->numeric()
-                ->minValue(0)
-                ->maxValue(100)
-                ->required()
-                ->default(20)
-                ->saisieEnDirect()
-                // Le PU TTC ne bouge jamais au changement de taux : seul son
-                // PU HT est recalculé.
-                ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
-                    // Saisie incomplète en cours ("5," en route vers "5,5") :
-                    // rien à recalculer tant que le taux n'est pas un nombre
-                    // entre 0 et 100.
-                    if (blank($state) || (float) $state < 0 || (float) $state > 100 || blank($get('prix_unitaire_ttc'))) {
-                        return;
-                    }
-
-                    try {
-                        $set('prix_unitaire_ht', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $get('prix_unitaire_ttc'), (float) $state)));
-                    } catch (InvalidArgumentException) {
-                        // Prix hors limites (voir sa validation) : rien à convertir.
-                    }
-                }),
-        ];
-    }
-
-    /**
-     * Passe par le même résolveur et le même calculateur que
-     * l'enregistrement réel de la ligne : l'aperçu ne peut jamais afficher
-     * un centime différent de ce qui sera enregistré. Montre le HT et la
-     * TVA de la ligne à côté de son TTC, comme la facture.
-     */
-    protected static function totalDeLigne(): Placeholder
-    {
-        return Placeholder::make('total_ligne')
-            ->label('Total TTC')
-            ->columnSpanFull()
-            ->content(fn (Get $get): string => self::montantEnTexte(
-                self::montantsDeLigneSaisie(self::ligneSaisie($get))['montant_ttc'],
-            ))
-            ->helperText(function (Get $get): string {
-                $montants = self::montantsDeLigneSaisie(self::ligneSaisie($get));
-
-                return self::montantEnTexte($montants['montant_ht']).' HT + '.self::montantEnTexte($montants['montant_tva']).' de TVA';
-            });
-    }
+    abstract protected static function montantsDesLignesSaisies(Get $get): iterable;
 
     /**
      * Totaux du document en cours de saisie, sommés séparément comme à
@@ -117,8 +34,7 @@ trait SaisitLesPrixDeLigne
             ->columnSpanFull()
             ->content(function (Get $get): string {
                 try {
-                    $totaux = app(CalculateurLigne::class)->totaliser(collect($get('lignes') ?? [])
-                        ->map(fn (array $ligne): array => self::montantsDeLigneSaisie($ligne)));
+                    $totaux = app(CalculateurLigne::class)->totaliser(self::montantsDesLignesSaisies($get));
                 } catch (InvalidArgumentException) {
                     return '—';
                 }
@@ -135,24 +51,15 @@ trait SaisitLesPrixDeLigne
     }
 
     /**
-     * Les montants d'une ligne de vente en cours de saisie (voir
-     * CalculateurLigne::montantsDUneVenteSaisie()), que les lignes d'achat
-     * redéfinissent (voir AjouteDesLignesDAchat).
+     * La ligne telle qu'elle est saisie, lue depuis l'un de ses champs.
      *
-     * @param  array<string, mixed>  $ligne
-     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
-     */
-    public static function montantsDeLigneSaisie(array $ligne): array
-    {
-        return app(CalculateurLigne::class)->montantsDUneVenteSaisie($ligne);
-    }
-
-    /**
      * @return array<string, mixed>
      */
     private static function ligneSaisie(Get $get): array
     {
         return [
+            'produit_id' => $get('produit_id'),
+            'service_id' => $get('service_id'),
             'prix_unitaire_ht' => $get('prix_unitaire_ht'),
             'prix_unitaire_ttc' => $get('prix_unitaire_ttc'),
             'quantite' => $get('quantite'),
@@ -177,14 +84,5 @@ trait SaisitLesPrixDeLigne
     public static function pourcentageEnTexte(float|string|null $pourcentage): string
     {
         return (string) (float) $pourcentage;
-    }
-
-    /**
-     * TVA par défaut (20 %) tant que le champ taux_tva n'a pas encore été
-     * hydraté, cohérent avec son propre ->default(20).
-     */
-    private static function tauxTvaDeLigne(Get $get): float
-    {
-        return (float) ($get('taux_tva') ?? 20);
     }
 }

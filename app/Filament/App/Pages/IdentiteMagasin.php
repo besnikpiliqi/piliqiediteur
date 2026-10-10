@@ -3,6 +3,7 @@
 namespace App\Filament\App\Pages;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Facturation\Enums\TerritoireTva;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Rules\CodeMagasinLibre;
@@ -33,6 +34,10 @@ use Illuminate\Validation\ValidationException;
  * Le code du magasin, qui figure dans les numéros de tous ses documents, se
  * modifie ici jusqu'au premier document ; le champ se désactive ensuite
  * (voir Magasin::codeEstDefinitif()).
+ *
+ * Le logiciel ne gère pour l'instant que les magasins établis en France,
+ * hors Guyane, Mayotte et collectivités d'outre-mer : son adresse donne le
+ * territoire de TVA du magasin (voir Magasin::territoireTva()).
  */
 class IdentiteMagasin extends Page implements HasForms
 {
@@ -48,6 +53,8 @@ class IdentiteMagasin extends Page implements HasForms
     ];
 
     private const MESSAGE_SIRET_DEJA_UTILISE = 'Ce SIRET est déjà celui d\'un autre magasin.';
+
+    private const MESSAGE_TERRITOIRE_NON_GERE = 'Le logiciel ne gère pas encore les magasins situés en Guyane, à Mayotte ou dans une collectivité d\'outre-mer.';
 
     protected static ?string $navigationIcon = 'heroicon-o-building-storefront';
 
@@ -153,15 +160,26 @@ class IdentiteMagasin extends Page implements HasForms
                 ->schema([
                     TextInput::make('adresse')->maxLength(255)->columnSpanFull(),
                     TextInput::make('complement_adresse')->label('Complément d\'adresse')->maxLength(255)->columnSpanFull(),
-                    TextInput::make('code_postal')->label('Code postal')->maxLength(10),
+                    // Le code postal donne le territoire de TVA du magasin, et
+                    // donc le taux proposé pour ses ventes (voir
+                    // TerritoireTva) : la Guyane, Mayotte et les collectivités
+                    // d'outre-mer, aux règles propres, ne sont pas encore
+                    // gérées.
+                    TextInput::make('code_postal')
+                        ->label('Code postal')
+                        ->maxLength(10)
+                        ->rule(fn (): Closure => function (string $attribute, mixed $codePostal, Closure $fail): void {
+                            if (! (TerritoireTva::depuisAdresse('FR', (string) $codePostal)?->estPrisEnCharge() ?? false)) {
+                                $fail(self::MESSAGE_TERRITOIRE_NON_GERE);
+                            }
+                        }),
                     TextInput::make('ville')->maxLength(100),
                     TextInput::make('pays')
                         ->label('Pays')
-                        ->helperText('Code du pays à deux lettres : FR, BE, CH...')
+                        ->helperText('Code du pays à deux lettres : FR.')
                         ->required()
-                        ->maxLength(2)
-                        ->regex('/^[A-Z]{2}$/')
-                        ->validationMessages(['regex' => 'Le code du pays compte deux lettres majuscules : FR, BE, CH...']),
+                        ->in(['FR'])
+                        ->validationMessages(['in' => 'Le logiciel ne gère pour l\'instant que les magasins établis en France.']),
                 ])
                 ->columns(2),
             Section::make('Coordonnées')

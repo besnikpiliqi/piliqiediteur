@@ -6,6 +6,8 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
+use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -19,7 +21,8 @@ use LogicException;
  *
  * Comme CreerDevisAction, elle reçoit le client déjà résolu par une
  * requête limitée au magasin, jamais un client_id brut venu du formulaire,
- * et note de nouveau son type.
+ * et note de nouveau son type et le régime de TVA du magasin, avec
+ * lesquels les lignes se recalculent.
  */
 class ModifierDevisAction
 {
@@ -39,10 +42,11 @@ class ModifierDevisAction
         }
 
         return DB::transaction(function () use ($devis, $client, $lignes, $attributs) {
-            $devis->fill($attributs)->forceFill(['client_id' => $client->getKey(), 'type_client' => $client->type_client])->save();
+            $contexte = ContexteDeVente::pour($client, app(TenantContext::class)->magasin());
+            $devis->fill($attributs)->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
             $devis->lignes()->delete();
 
-            $lignesConstruites = $this->constructeurLigne->construireToutes($lignes);
+            $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
 
             foreach ($lignesConstruites as $ligne) {
                 $devis->lignes()->create($ligne);

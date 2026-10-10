@@ -34,6 +34,11 @@
         <div class="pied">{{ $devis->notes }}</div>
     @endif
 
+    {{-- La franchise de TVA, s'il y a lieu : voir MentionsFiscales. --}}
+    @foreach(app(\App\Domain\Facturation\Services\MentionsFiscales::class)->pour($devis) as $mention)
+        <div class="pied">{{ $mention }}</div>
+    @endforeach
+
     <div class="accord">Date et signature du client, précédées de la mention « Bon pour accord »</div>
 </body>
 </html>

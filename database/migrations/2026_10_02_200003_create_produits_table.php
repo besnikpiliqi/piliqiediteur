@@ -29,7 +29,9 @@ return new class extends Migration
             // centime (voir Produit::synchroniserPrixDeVente()).
             $table->decimal('prix_vente_ttc', 12, 2)->default(0);
             $table->decimal('prix_vente_ht', 12, 2)->default(0);
-            $table->decimal('taux_tva', 5, 2)->default(20.00);
+            // Toujours donné à la création : le taux par défaut dépend du
+            // territoire du magasin (voir Magasin::tauxTvaParDefaut()).
+            $table->decimal('taux_tva', 5, 2);
             // Cache dénormalisé : la source de vérité est le ledger
             // mouvements_stock. Ne JAMAIS écrire cette colonne ailleurs que
             // dans StockLedgerService (voir app/Domain/Stock/Services).

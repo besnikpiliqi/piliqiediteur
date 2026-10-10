@@ -36,6 +36,10 @@ use LogicException;
  * émission la copie de son nom, de son adresse et de ses identifiants
  * (voir Avoir::clientAFiger()).
  *
+ * Jamais non plus de documents émis en franchise en base de TVA et
+ * d'autres : l'avoir reprend leur franchise, dont il imprime la mention
+ * (voir MentionsFiscales), et ses lignes leurs taux, 0 % en franchise.
+ *
  * L'avoir créé ici reste un brouillon jusqu'à son émission : l'interface
  * passe toujours par EnregistrerAvoirAction, qui fait les deux d'un seul
  * geste.
@@ -65,6 +69,7 @@ class CreerAvoirAction
         return DB::transaction(function () use ($client, $lignesSelectionnees, $motif) {
             $lignesDeLAvoir = [];
             $typeClient = null;
+            $franchiseEnBase = null;
 
             foreach (array_values($lignesSelectionnees) as $index => $selection) {
                 $ligneFacture = LigneFacture::query()
@@ -91,6 +96,12 @@ class CreerAvoirAction
 
                 if ($facture->type_client !== $typeClient) {
                     throw new InvalidArgumentException('Un avoir ne mélange jamais des tickets de caisse et des factures : faites un avoir pour les tickets, et un autre pour les factures.');
+                }
+
+                $franchiseEnBase ??= $facture->franchise_en_base;
+
+                if ($facture->franchise_en_base !== $franchiseEnBase) {
+                    throw new InvalidArgumentException('Un avoir ne mélange pas des factures émises en franchise de TVA et d\'autres : faites deux avoirs.');
                 }
 
                 $restante = $ligneFacture->quantiteCreditableRestante();
@@ -120,6 +131,7 @@ class CreerAvoirAction
             $avoir->forceFill([
                 'client_id' => $client->getKey(),
                 'type_client' => $typeClient,
+                'franchise_en_base' => $franchiseEnBase,
                 ...$this->calculateurLigne->totaliser($lignesDeLAvoir),
             ])->save();
 

@@ -228,6 +228,23 @@ class VerificateurIntegriteTest extends TestCase
     }
 
     /**
+     * La franchise de TVA d'un document se signe avec lui : réécrite en
+     * base, elle ferait imprimer ou retirer la mention « TVA non
+     * applicable » d'un document émis.
+     */
+    public function test_une_franchise_de_tva_reecrite_en_base_est_detectee(): void
+    {
+        $magasin = $this->magasinActif();
+        $documents = $this->activite();
+
+        DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $documents['facture']->id)->update(['franchise_en_base' => true]);
+
+        $this->assertSame([
+            [90, 'La facture FAC-LYON1-2026-000001 ne correspond plus à ce qui a été signé à son émission (franchise_en_base).'],
+        ], $this->anomalies($this->verifier()));
+    }
+
+    /**
      * Sous MagasinScope, un client_id réécrit vers la fiche d'un autre
      * magasin ne désigne plus aucun client : la facture et l'avoir sont
      * signalés, et la vérification va jusqu'au bout.

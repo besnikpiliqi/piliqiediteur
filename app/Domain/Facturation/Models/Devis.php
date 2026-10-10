@@ -23,10 +23,11 @@ class Devis extends Model implements DocumentEnvoyable
 
     protected $table = 'devis';
 
-    // numero, statut, date_emission, les totaux et le type du client sont
-    // volontairement absents : ils ne sont écrits que par les actions des
-    // devis (CreerDevisAction, ModifierDevisAction, EmettreDevisAction...),
-    // jamais par mass assignment depuis une requête utilisateur.
+    // numero, statut, date_emission, les totaux, le type du client et la
+    // franchise de TVA sont volontairement absents : ils ne sont écrits que
+    // par les actions des devis (CreerDevisAction, ModifierDevisAction,
+    // EmettreDevisAction...), jamais par mass assignment depuis une requête
+    // utilisateur.
     protected $fillable = [
         'client_id',
         'date_validite',
@@ -38,6 +39,7 @@ class Devis extends Model implements DocumentEnvoyable
     protected $casts = [
         'statut' => StatutDevis::class,
         'type_client' => TypeClient::class,
+        'franchise_en_base' => 'boolean',
         'date_emission' => 'datetime',
         'date_validite' => 'date',
         'total_ht' => 'decimal:2',

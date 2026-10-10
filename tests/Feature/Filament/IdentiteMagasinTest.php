@@ -4,6 +4,7 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
@@ -14,6 +15,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\IdentiteMagasin;
+use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -104,7 +106,9 @@ class IdentiteMagasinTest extends TestCase
             'SIRET d\'un autre SIREN' => [['siren' => '123456789', 'siret' => '98765432100012'], 'siret', 'Le SIRET commence par les 9 chiffres du SIREN.'],
             'SIRET sans SIREN' => [['siren' => '', 'siret' => '12345678900012'], 'siren', 'Indiquez le SIREN, par lequel commence le SIRET.'],
             'n° de TVA sans code pays' => [['numero_tva' => '12 123456789'], 'numero_tva', 'Le n° de TVA commence par les deux lettres du pays (FR...), suivies de 2 à 13 chiffres ou lettres ; les espaces, points et tirets ne comptent pas.'],
-            'pays en minuscules' => [['pays' => 'fr'], 'pays', 'Le code du pays compte deux lettres majuscules : FR, BE, CH...'],
+            'pays hors de France' => [['pays' => 'BE'], 'pays', 'Le logiciel ne gère pour l\'instant que les magasins établis en France.'],
+            'code postal en Guyane' => [['code_postal' => '97300'], 'code_postal', 'Le logiciel ne gère pas encore les magasins situés en Guyane, à Mayotte ou dans une collectivité d\'outre-mer.'],
+            'code postal à Saint-Martin' => [['code_postal' => '97150'], 'code_postal', 'Le logiciel ne gère pas encore les magasins situés en Guyane, à Mayotte ou dans une collectivité d\'outre-mer.'],
             'e-mail sans domaine' => [['email' => 'contact@'], 'email', 'Cette adresse e-mail n\'est pas valide.'],
             'e-mail de 151 caractères' => [['email' => 'contact@'.str_repeat('a', 63).'.'.str_repeat('b', 63).'.'.str_repeat('c', 12).'.fr'], 'email', 'Le champ e-mail ne doit pas dépasser 150 caractères.'],
         ];
@@ -125,7 +129,28 @@ class IdentiteMagasinTest extends TestCase
             ->assertSee($message);
 
         $this->assertNull($magasin->fresh()->siret);
+        $this->assertNull($magasin->fresh()->code_postal);
         $this->assertSame('FR', $magasin->fresh()->pays);
+    }
+
+    /**
+     * Le code postal donne le territoire de TVA du magasin : à la
+     * Martinique, une ligne de service propose 8,5 % (B2).
+     */
+    public function test_un_magasin_de_la_martinique_propose_8_5_pour_cent_sur_un_service(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $service = Service::factory()->create(['nom' => 'Pose écran']);
+
+        Livewire::test(IdentiteMagasin::class)
+            ->fillForm([...$this->identiteComplete(), 'code_postal' => '97200', 'ville' => 'Fort-de-France'])
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $component = Livewire::test(CreateFacture::class)
+            ->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['services' => [$service->id]]);
+
+        $this->assertSame('97200', $magasin->fresh()->code_postal);
+        $this->assertSame('8.5', collect($component->get('data.lignes'))->firstWhere('service_id', $service->id)['taux_tva']);
     }
 
     /**

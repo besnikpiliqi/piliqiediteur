@@ -19,6 +19,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\MandatPdp;
 use App\Filament\App\Resources\AvoirResource;
@@ -420,28 +421,91 @@ class FactureResourceTest extends TestCase
 
     /**
      * "5," ou "5." en route vers "5,5" n'est pas encore un nombre : le
-     * navigateur l'envoie vide. Un taux vide ne doit rien recalculer, sans
-     * quoi le PU HT sautait à la valeur du TTC (TVA à 0 %) en pleine frappe.
+     * navigateur l'envoie vide. Le taux d'un service -- seul taux qui se
+     * saisit, celui d'un produit étant celui de sa fiche (C15) -- vide en
+     * pleine frappe ne fait jamais tomber la ligne à 0 % (12,00 € HT sans
+     * TVA) : elle reste au taux du magasin jusqu'au taux tapé, et son PU
+     * TTC ne bouge pas.
      */
-    public function test_un_taux_de_tva_en_cours_de_frappe_ne_recalcule_rien(): void
+    public function test_un_taux_de_tva_en_cours_de_frappe_ne_fait_pas_tomber_la_ligne_a_zero(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
+        $service = Service::factory()->create(['nom' => 'Pose écran']);
 
-        $component = Livewire::test(CreateFacture::class)
-            ->fillForm(['client_id' => Client::factory()->create()->id]);
+        $component = Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => Client::factory()->create()->id,
+            'lignes' => [['service_id' => $service->id, 'description' => 'Pose écran', 'quantite' => 1, 'prix_unitaire_ttc' => '12', 'taux_tva' => '20', 'remise_pourcentage' => 0]],
+        ]);
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
-            ->set("data.lignes.{$cle}.prix_unitaire_ttc", '12')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '10.00')
+            ->assertSee('10,00 € HT + 2,00 € de TVA')
             ->set("data.lignes.{$cle}.taux_tva", '')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '10.00')
+            ->assertSee('10,00 € HT + 2,00 € de TVA')
+            ->assertDontSee('12,00 € HT + 0,00 € de TVA')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '12')
             ->set("data.lignes.{$cle}.taux_tva", '5.5')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '11.37');
+            ->assertSee('11,37 € HT + 0,63 € de TVA')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '12');
+    }
+
+    /**
+     * Un brouillon rouvert après le passage du magasin en franchise en base
+     * reprend le régime d'aujourd'hui : ses lignes de produit affichent
+     * 0 %, et réenregistré, il s'émet sans TVA au même prix TTC -- ce que
+     * demande le refus de l'émission (voir EmettreFactureAction).
+     */
+    public function test_un_brouillon_rouvert_apres_le_passage_en_franchise_se_recalcule_a_zero_pour_cent(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3]]);
+        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+
+        $component = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()]);
+        $cle = array_key_first($component->get('data.lignes'));
+        $component
+            ->assertSet("data.lignes.{$cle}.taux_tva", '0')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '12.00')
+            ->assertSee('Total HT 36,00 € · TVA 0,00 € · Total TTC 36,00 €')
+            ->call('save')
+            ->assertHasNoFormErrors();
+        $facture = app(EmettreFactureAction::class)->handle($brouillon->fresh());
+
+        $this->assertTrue($facture->franchise_en_base);
+        $this->assertSame(['36.00', '0.00', '36.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+    }
+
+    /**
+     * Le taux d'un service se saisit librement (B2) : un taux qui n'est
+     * pas en vigueur en métropole est signalé sous la ligne, sans empêcher
+     * d'enregistrer (X8).
+     */
+    public function test_un_taux_de_service_inhabituel_est_signale_sans_etre_refuse(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $service = Service::factory()->create(['nom' => 'Pose écran']);
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm([
+                'client_id' => Client::factory()->create()->id,
+                'lignes' => [['service_id' => $service->id, 'description' => 'Pose écran', 'quantite' => 1, 'prix_unitaire_ttc' => '11.96', 'taux_tva' => '19.6', 'remise_pourcentage' => 0]],
+            ])
+            ->assertSee('Taux inhabituel pour un magasin en métropole (en vigueur : 20 ; 10 ; 5,5 ; 2,1 %) : vérifiez votre saisie.')
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $ligne = Facture::query()->sole()->lignes->sole();
+        $this->assertSame(['19.60', '10.00', '1.96', '11.96'], [$ligne->taux_tva, $ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc]);
     }
 
     /**
@@ -1282,11 +1346,14 @@ class FactureResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
-        $component = Livewire::test(CreateFacture::class)->fillForm(['client_id' => Client::factory()->create()->id]);
+        $service = Service::factory()->create(['nom' => 'Réparation']);
+        $component = Livewire::test(CreateFacture::class)->fillForm([
+            'client_id' => Client::factory()->create()->id,
+            'lignes' => [['service_id' => $service->id, 'description' => 'Réparation', 'quantite' => 1, 'taux_tva' => '20', 'remise_pourcentage' => 0]],
+        ]);
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
-            ->set("data.lignes.{$cle}.description", 'Réparation')
             ->set("data.lignes.{$cle}.prix_unitaire_ttc", '12')
             ->set("data.lignes.{$cle}.taux_tva", '-100')
             ->set("data.lignes.{$cle}.prix_unitaire_ttc", '15')

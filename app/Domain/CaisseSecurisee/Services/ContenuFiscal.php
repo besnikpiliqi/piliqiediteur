@@ -12,6 +12,7 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\MentionsFiscales;
 use App\Domain\Tenancy\Models\Magasin;
 use Illuminate\Support\Collection;
 
@@ -26,19 +27,21 @@ use Illuminate\Support\Collection;
  * - « document », qui se recalcule depuis ses colonnes figées et celles
  *   de ses lignes : numéro, date d'émission, client (son type et la copie
  *   prise à l'émission, voir FigeLeClient, ainsi que le drapeau du client
- *   comptoir, lu sur sa fiche où seul CreerMagasinAction le pose), auteur,
- *   devise, échéance, conditions, notes ou motif, lignes, ventilation par
- *   taux et totaux. Un avoir s'y écrit en négatif (quantités et montants)
- *   et chacune de ses lignes y référence la ligne et le numéro du ticket
- *   ou de la facture qu'elle corrige. Une date d'émission effacée ou un
- *   client introuvable dans le magasin s'y recalcule vide, pour que la
+ *   comptoir, lu sur sa fiche où seul CreerMagasinAction le pose),
+ *   franchise de TVA (voir ContexteDeVente), auteur, devise, échéance,
+ *   conditions, notes ou motif, lignes, ventilation par taux et totaux.
+ *   Un avoir s'y écrit en négatif (quantités et montants) et chacune de
+ *   ses lignes y référence la ligne et le numéro du ticket ou de la
+ *   facture qu'elle corrige. Une date d'émission effacée ou un client
+ *   introuvable dans le magasin s'y recalcule vide, pour que la
  *   vérification de l'intégrité le signale au lieu de s'interrompre ;
  * - « contexte », figé à l'émission parce qu'il change ensuite ailleurs :
- *   l'identité du magasin émetteur, la catégorie de l'opération, et ce
- *   qui a réglé le document dans la même transaction
- *   (paiements et crédits d'avoir d'une facture, imputations d'un avoir
- *   sur ses factures). Un document qui vient d'être émis n'a pas pu en
- *   recevoir avant : un brouillon n'attend aucun règlement.
+ *   l'identité du magasin émetteur, la catégorie de l'opération, les
+ *   mentions fiscales imprimées (voir MentionsFiscales), et ce qui a
+ *   réglé le document dans la même transaction (paiements et crédits
+ *   d'avoir d'une facture, imputations d'un avoir sur ses factures). Un
+ *   document qui vient d'être émis n'a pas pu en recevoir avant : un
+ *   brouillon n'attend aucun règlement.
  *
  * Un paiement (encaissement()) signe son mode, son montant, sa référence,
  * sa date de réception, la fiche de son client ce jour-là et ce qu'il
@@ -46,7 +49,10 @@ use Illuminate\Support\Collection;
  */
 class ContenuFiscal
 {
-    public function __construct(private readonly CalculateurLigne $calculateur) {}
+    public function __construct(
+        private readonly CalculateurLigne $calculateur,
+        private readonly MentionsFiscales $mentions,
+    ) {}
 
     /**
      * @return array{document: array<string, mixed>, contexte: array<string, mixed>}
@@ -111,6 +117,7 @@ class ContenuFiscal
             'numero' => $facture->numero,
             'date_emission' => $facture->date_emission?->toIso8601String(),
             'client' => $this->clientFige($facture),
+            'franchise_en_base' => $facture->franchise_en_base,
             'cree_par' => $this->identifiant($facture->cree_par),
             'devis_id' => $this->identifiant($facture->devis_id),
             'devise' => $facture->devise,
@@ -131,6 +138,7 @@ class ContenuFiscal
         return [
             'emetteur' => $this->emetteur($facture->magasin),
             'categorie_operation' => CategorieOperation::depuisNatures($facture->lignes->pluck('nature'))->value,
+            'mentions' => $this->mentions->pour($facture),
             'reglements' => $facture->allocationsPaiement->sortBy('id')
                 ->map(fn (PaiementAllocation $allocation): array => [
                     'paiement_id' => (int) $allocation->paiement_id,
@@ -163,6 +171,7 @@ class ContenuFiscal
             'numero' => $avoir->numero,
             'date_emission' => $avoir->date_emission?->toIso8601String(),
             'client' => $this->clientFige($avoir),
+            'franchise_en_base' => $avoir->franchise_en_base,
             'cree_par' => $this->identifiant($avoir->cree_par),
             'devise' => $avoir->devise,
             'motif' => $avoir->motif,
@@ -182,6 +191,7 @@ class ContenuFiscal
         return [
             'emetteur' => $this->emetteur($avoir->magasin),
             'categorie_operation' => CategorieOperation::depuisNatures($avoir->lignes->pluck('nature'))->value,
+            'mentions' => $this->mentions->pour($avoir),
             'imputations' => $avoir->allocations->sortBy('id')
                 ->map(fn (AvoirAllocation $allocation): array => [
                     'facture_id' => (int) $allocation->facture_id,

@@ -228,6 +228,7 @@ class EmissionSigneeTest extends TestCase
                     'identifiant_etranger' => null,
                     'etabli_en_france' => true,
                 ],
+                'franchise_en_base' => false,
                 'cree_par' => $vendeuse->id,
                 'devis_id' => null,
                 'devise' => 'EUR',
@@ -263,6 +264,7 @@ class EmissionSigneeTest extends TestCase
                     'option_debits_tva' => false,
                 ],
                 'categorie_operation' => 'livraison_de_biens',
+                'mentions' => ["Catégorie de l'opération : Livraison de biens"],
                 'reglements' => [['paiement_id' => $paiement->id, 'mode' => 'carte_bancaire', 'reference' => 'TRX-42', 'montant' => 2950]],
                 'credits_avoir' => [],
             ],
@@ -278,6 +280,23 @@ class EmissionSigneeTest extends TestCase
         $this->assertAucunFlottant($this->contenu($vente));
         $this->assertAucunFlottant($this->contenu($encaissement));
         $this->assertSame(StatutFacture::Payee, $ticket->statut);
+    }
+
+    /**
+     * Une vente en franchise en base signe sa franchise et la mention
+     * qu'elle imprime (B10) ; l'option pour les débits, sans objet sans TVA
+     * due, n'y figure pas.
+     */
+    public function test_une_vente_en_franchise_signe_sa_franchise_et_sa_mention(): void
+    {
+        $this->magasinActif(['regime_tva' => RegimeTva::FranchiseEnBase, 'option_debits_tva' => true]);
+        $ticket = $this->encaisser(Client::factory()->create(), [[$this->produit('CAF-250', 'Café moulu 250 g', 12), 1]]);
+
+        $donnees = $this->contenu($this->enregistrementDe($ticket, ChaineFiscale::Vente))['donnees'];
+
+        $this->assertTrue($donnees['document']['franchise_en_base']);
+        $this->assertSame([['taux' => 0, 'ht' => 1200, 'tva' => 0, 'ttc' => 1200]], $donnees['document']['ventilation']);
+        $this->assertSame(["Catégorie de l'opération : Livraison de biens", 'TVA non applicable, art. 293 B du CGI'], $donnees['contexte']['mentions']);
     }
 
     /**
@@ -437,6 +456,7 @@ class EmissionSigneeTest extends TestCase
                 'identifiant_etranger' => null,
                 'etabli_en_france' => true,
             ],
+            'franchise_en_base' => false,
             'cree_par' => $vendeuse->id,
             'devise' => 'EUR',
             'motif' => 'Article abîmé',

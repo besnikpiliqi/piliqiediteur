@@ -378,6 +378,17 @@ trait AjouteDesLignesDAchat
     }
 
     /**
+     * @return list<array{montant_ht: float, montant_tva: float, montant_ttc: float}>
+     */
+    protected static function montantsDesLignesSaisies(Get $get): array
+    {
+        return array_values(array_map(
+            fn (mixed $ligne): array => is_array($ligne) ? self::montantsDeLigneSaisie($ligne) : self::AUCUN_MONTANT,
+            $get('lignes') ?? [],
+        ));
+    }
+
+    /**
      * Une ligne d'achat en cours de saisie, calculée comme à
      * l'enregistrement (voir ConstructeurLigneAchat) : depuis son PU HT,
      * la TVA sur le HT de la ligne. Une saisie pas encore valable ne donne
@@ -386,7 +397,7 @@ trait AjouteDesLignesDAchat
      * @param  array<string, mixed>  $ligne
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
      */
-    public static function montantsDeLigneSaisie(array $ligne): array
+    private static function montantsDeLigneSaisie(array $ligne): array
     {
         try {
             return app(CalculateurLigne::class)->montantsDAchat(
@@ -441,7 +452,7 @@ trait AjouteDesLignesDAchat
             'taille' => $produit?->taille,
             'couleur' => $produit?->couleur,
             'prix_vente_ttc' => $produit === null ? null : self::prixEnTexte((float) $produit->prix_vente_ttc),
-            'taux_tva' => self::pourcentageEnTexte($produit->taux_tva ?? 20),
+            'taux_tva' => self::pourcentageEnTexte($produit->taux_tva ?? app(TenantContext::class)->magasin()->tauxTvaParDefaut()),
             'suivi_stock' => $produit->suivi_stock ?? true,
             'seuil_alerte' => $produit->seuil_alerte ?? 0,
         ];
@@ -488,7 +499,7 @@ trait AjouteDesLignesDAchat
             'quantite' => $ligne['quantite'] ?? 1,
             'prix_unitaire_ht' => $ligne['prix_unitaire_ht'] ?? null,
             'remise_pourcentage' => $ligne['remise_pourcentage'] ?? 0,
-            'taux_tva' => $ligne['taux_tva'] ?? ($ligne['produit']['taux_tva'] ?? 20),
+            'taux_tva' => $ligne['taux_tva'] ?? ($ligne['produit']['taux_tva'] ?? self::pourcentageEnTexte(app(TenantContext::class)->magasin()->tauxTvaParDefaut())),
             'prix_vente_propose' => $ligne['prix_vente_propose'] ?? null,
         ];
     }

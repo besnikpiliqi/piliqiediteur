@@ -239,7 +239,7 @@ class ConstructeurLigneAchat
         }
 
         return new Produit([
-            'taux_tva' => $donnees['taux_tva'] ?? 20,
+            'taux_tva' => $donnees['taux_tva'] ?? $factureAchat->magasin->tauxTvaParDefaut(),
             ...$attributs,
             'fournisseur_id' => $factureAchat->fournisseur_id,
         ]);

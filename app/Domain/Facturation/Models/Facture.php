@@ -60,7 +60,8 @@ class Facture extends Model implements DocumentEnvoyable
 
     protected $table = 'factures';
 
-    // numero, statut, date_emission, totaux, type et copie du client :
+    // numero, statut, date_emission, totaux, type et copie du client,
+    // franchise de TVA :
     // jamais en mass assignment, uniquement via les Actions dédiées (voir
     // app/Domain/Facturation/Actions).
     protected $fillable = [
@@ -74,6 +75,7 @@ class Facture extends Model implements DocumentEnvoyable
 
     protected $casts = [
         'statut' => StatutFacture::class,
+        'franchise_en_base' => 'boolean',
         'date_echeance' => 'date',
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',

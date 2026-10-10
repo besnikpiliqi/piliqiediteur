@@ -12,6 +12,7 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -340,6 +341,38 @@ class ProduitResourceTest extends TestCase
             ->call('callMountedTableBulkAction');
 
         $produits->each(fn (Produit $produit) => $this->assertNotSoftDeleted($produit));
+    }
+
+    /**
+     * Le taux se saisit librement (B2) : 19,6 %, qui n'est plus en vigueur
+     * en métropole, est signalé sous le champ, et le produit s'enregistre
+     * quand même (X8).
+     */
+    public function test_un_taux_inhabituel_est_signale_et_s_enregistre(): void
+    {
+        $this->connecterProprietaire();
+
+        Livewire::test(CreateProduit::class)
+            ->fillForm(['nom' => 'Écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 12, 'taux_tva' => '19.6'])
+            ->assertSee('Taux inhabituel pour un magasin en métropole (en vigueur : 20 ; 10 ; 5,5 ; 2,1 %) : vérifiez votre saisie.')
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame('19.60', Produit::query()->sole()->taux_tva);
+    }
+
+    /**
+     * Un magasin en franchise en base garde le taux de ses produits, mais
+     * la fiche rappelle qu'il vend sans TVA, au prix TTC indiqué (B10).
+     */
+    public function test_la_fiche_d_un_magasin_en_franchise_rappelle_qu_il_vend_sans_tva(): void
+    {
+        $this->connecterProprietaire();
+        Filament::getTenant()->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+
+        Livewire::test(CreateProduit::class)
+            ->assertFormSet(['taux_tva' => '20'])
+            ->assertSee('Votre magasin est en franchise en base : vos ventes sont facturées sans TVA (art. 293 B du CGI), au prix TTC indiqué.');
     }
 
     /**

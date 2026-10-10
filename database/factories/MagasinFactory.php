@@ -22,7 +22,10 @@ class MagasinFactory extends Factory
             'siret' => $siren.fake()->numerify('#####'),
             'numero_tva' => 'FR'.fake()->numerify('##').$siren,
             'adresse' => fake()->streetAddress(),
-            'code_postal' => fake()->postcode(),
+            // Toujours en métropole : un code postal tiré au hasard pourrait
+            // tomber en Corse ou outre-mer, et changer le taux de TVA
+            // proposé (voir TerritoireTva).
+            'code_postal' => fake()->numerify('75###'),
             'ville' => fake()->city(),
             'pays' => 'FR',
             'email' => fake()->unique()->companyEmail(),

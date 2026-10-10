@@ -134,6 +134,41 @@ class CreerFactureActionTest extends TestCase
         $this->assertSame('18.00', $ligne->montant_tva);
     }
 
+    /**
+     * Le taux d'une ligne de produit est celui de sa fiche (C15) : un autre
+     * taux envoyé avec la ligne est ignoré.
+     */
+    public function test_le_taux_d_une_ligne_de_produit_est_celui_de_sa_fiche(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
+
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'taux_tva' => 0, 'quantite' => 3],
+        ]);
+
+        $ligne = $facture->lignes->sole();
+        $this->assertSame(['20.00', '10.00', '30.00', '6.00', '36.00'], [$ligne->taux_tva, $ligne->prix_unitaire_ht, $ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc]);
+    }
+
+    /**
+     * Le taux d'un service se saisit ; sans taux, c'est celui du
+     * territoire du magasin (B2) : 8,5 % à la Martinique.
+     */
+    public function test_une_ligne_de_service_sans_taux_prend_celui_du_territoire_du_magasin(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['code_postal' => '97200']));
+        $client = Client::factory()->create();
+        $service = Service::factory()->create();
+
+        $facture = app(CreerFactureAction::class)->handle($client, [
+            ['service_id' => $service->id, 'prix_unitaire_ttc' => '108.50', 'quantite' => 1],
+        ]);
+
+        $ligne = $facture->lignes->sole();
+        $this->assertSame(['8.50', '100.00', '8.50', '108.50'], [$ligne->taux_tva, $ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc]);
+    }
+
     public function test_le_snapshot_de_la_ligne_ne_change_pas_si_le_produit_change_ensuite(): void
     {
         $client = Client::factory()->create();
@@ -251,6 +286,19 @@ class CreerFactureActionTest extends TestCase
         }
 
         $this->assertSame(0, Facture::query()->count());
+    }
+
+    public function test_un_produit_d_un_autre_magasin_est_introuvable(): void
+    {
+        $produitAutreMagasin = Produit::factory()->create();
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $client = Client::factory()->create();
+
+        $this->expectException(ModelNotFoundException::class);
+
+        app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produitAutreMagasin->id, 'quantite' => 1],
+        ]);
     }
 
     public function test_un_service_d_un_autre_magasin_est_introuvable(): void

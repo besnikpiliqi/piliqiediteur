@@ -464,11 +464,13 @@ class DevisResourceTest extends TestCase
     }
 
     /**
-     * Changer le taux de TVA d'une ligne doit recalculer le HT à partir du
-     * TTC (qui fait référence), jamais l'inverse -- sans quoi le prix TTC
-     * visé changerait sous les yeux du vendeur au seul changement de taux.
+     * Changer le taux de TVA d'un service -- seul taux qui se saisit, celui
+     * d'un produit étant celui de sa fiche (C15) -- recalcule son HT à
+     * partir du TTC (qui fait référence), jamais l'inverse : sans quoi le
+     * prix TTC visé changerait sous les yeux du vendeur au seul changement
+     * de taux.
      */
-    public function test_changer_le_taux_de_tva_dune_ligne_recalcule_le_ht_sans_changer_le_ttc_affiche(): void
+    public function test_changer_le_taux_de_tva_d_un_service_recalcule_le_ht_sans_changer_le_ttc_affiche(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
@@ -476,11 +478,12 @@ class DevisResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
+        $service = Service::factory()->create(['nom' => 'Pose']);
 
         $component = Livewire::test(CreateDevis::class)
             ->fillForm([
                 'client_id' => $client->id,
-                'lignes' => [['description' => 'Pose', 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
+                'lignes' => [['service_id' => $service->id, 'description' => 'Pose', 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
             ]);
 
         $cle = array_key_first($component->get('data.lignes'));
@@ -489,7 +492,9 @@ class DevisResourceTest extends TestCase
 
         $this->assertSame(12.0, (float) $component->get("data.lignes.{$cle}.prix_unitaire_ttc"));
         // 12,00 / 1,055 = 11,374... -> 11,37 € HT, au centime.
-        $this->assertSame(11.37, (float) $component->get("data.lignes.{$cle}.prix_unitaire_ht"));
+        $component
+            ->assertSee('11,37 € HT + 0,63 € de TVA')
+            ->assertSee('Total HT 11,37 € · TVA 0,63 € · Total TTC 12,00 €');
     }
 
     /**

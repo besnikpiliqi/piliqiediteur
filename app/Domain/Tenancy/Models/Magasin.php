@@ -9,6 +9,7 @@ use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Casts\NumeroTvaNormalise;
+use App\Domain\Facturation\Enums\TerritoireTva;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Enums\RegimeTva;
@@ -184,6 +185,39 @@ class Magasin extends Model implements HasName
 
             throw new LogicException("Ce magasin est {$statut} : seules la consultation et les téléchargements restent possibles.");
         }
+    }
+
+    /**
+     * Le territoire de TVA du magasin, d'après son adresse (voir
+     * TerritoireTva::depuisAdresse()) : null hors des territoires que le
+     * logiciel connaît, ce que refuse l'identité du magasin (voir
+     * IdentiteMagasin).
+     */
+    public function territoireTva(): ?TerritoireTva
+    {
+        return TerritoireTva::depuisAdresse($this->pays, $this->code_postal);
+    }
+
+    /**
+     * Le taux proposé pour une vente ou un nouveau produit, saisi ensuite
+     * librement (B2) : le taux normal de son territoire, 20 % en métropole,
+     * 8,5 % en Guadeloupe, en Martinique ou à La Réunion. Un magasin hors
+     * des territoires connus, que l'identité du magasin refuse, retombe sur
+     * celui de la métropole.
+     */
+    public function tauxTvaParDefaut(): float
+    {
+        return ($this->territoireTva() ?? TerritoireTva::Metropole)->tauxNormal();
+    }
+
+    /**
+     * Le magasin vend-il aujourd'hui en franchise en base de TVA (B10) ?
+     * Un brouillon note la réponse quand il s'enregistre (voir
+     * ContexteDeVente) ; l'émission la contrôle.
+     */
+    public function estEnFranchiseDeTva(): bool
+    {
+        return $this->regime_tva?->estFranchise() ?? false;
     }
 
     public static function parametresDeConformite(): array

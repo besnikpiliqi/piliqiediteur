@@ -14,7 +14,9 @@ use InvalidArgumentException;
  *    sur la fiche du produit), sa TVA et son PU TTC, avec PU HT + TVA =
  *    PU TTC ; la ligne multiplie séparément le HT et le TTC par la
  *    quantité, sa TVA étant leur différence (montantsDeVente()) : 2 x
- *    40,00 € TTC = 66,66 € HT + 13,34 € de TVA = 80,00 € TTC.
+ *    40,00 € TTC = 66,66 € HT + 13,34 € de TVA = 80,00 € TTC. Un magasin
+ *    en franchise en base vend à 0 % (voir ConstructeurLigneDocument) :
+ *    son PU HT est son PU TTC, et 2 x 40,00 € font 80,00 € HT, sans TVA.
  * 2. Un achat part du PU HT du fournisseur, multiplié par la quantité,
  *    puis la TVA se calcule une seule fois sur le HT de la ligne
  *    (montantsDAchat()) : 10 x 1,18 € HT = 11,80 € HT + 2,36 € de TVA
@@ -56,40 +58,6 @@ class CalculateurLigne
             $this->montantNetCentimes($this->versUnites($prixUnitaireHt, 100), $quantite, $remiseCentiemes),
             $this->montantNetCentimes($this->versUnites($prixUnitaireTtc, 100), $quantite, $remiseCentiemes),
         );
-    }
-
-    /**
-     * Une ligne de vente telle qu'elle est saisie, avant d'être enregistrée
-     * (caisse, facture, devis, panier de caisse enregistré), calculée comme
-     * à l'enregistrement réel (voir ConstructeurLigneDocument) : depuis son
-     * PU TTC arrondi au centime, son PU HT en étant la conversion. Une
-     * saisie pas encore valable (prix vide ou négatif, quantité vide ou à
-     * virgule, taux ou remise hors de 0-100 %) ne donne aucun montant,
-     * plutôt qu'un montant faux (1,5 compté comme 1).
-     *
-     * @param  array<string, mixed>  $ligne  prix_unitaire_ttc, taux_tva, quantite et remise_pourcentage saisis
-     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
-     */
-    public function montantsDUneVenteSaisie(array $ligne): array
-    {
-        try {
-            $prixUnitaireTtc = $this->arrondirAuCentime((float) (filled($ligne['prix_unitaire_ttc'] ?? null)
-                ? $ligne['prix_unitaire_ttc']
-                : throw new InvalidArgumentException('PU TTC à saisir.')));
-
-            if ($prixUnitaireTtc < 0) {
-                throw new InvalidArgumentException('PU TTC négatif.');
-            }
-
-            return $this->montantsDeVente(
-                $this->prixUnitaireHtDepuisTtc($prixUnitaireTtc, (float) ($ligne['taux_tva'] ?? 0)),
-                $prixUnitaireTtc,
-                QuantiteEntiere::depuisSaisie($ligne['quantite'] ?? null),
-                (float) ($ligne['remise_pourcentage'] ?? 0),
-            );
-        } catch (InvalidArgumentException) {
-            return ['montant_ht' => 0.0, 'montant_tva' => 0.0, 'montant_ttc' => 0.0];
-        }
     }
 
     /**

@@ -17,6 +17,10 @@ return new class extends Migration
             // ne fige pas son client : il imprime sa fiche telle qu'elle
             // est.
             $table->string('type_client', 20);
+            // Le magasin vendait-il en franchise en base de TVA au dernier
+            // enregistrement du devis (voir ContexteDeVente) ? Comme le type
+            // du client, la facture qui en est tirée le reprend.
+            $table->boolean('franchise_en_base')->default(false);
             // nullable tant que le devis est en brouillon : la numérotation
             // n'intervient qu'à l'envoi (voir DocumentNumberingService).
             $table->string('numero', 40)->nullable();

@@ -1,6 +1,6 @@
 # Piliqi Editeur
 
-Logiciel de gestion vendu en SaaS à des magasins. Chaque magasin travaille dans son propre espace, strictement isolé des autres : clients, produits, documents et réglages ne sont jamais partagés.
+Logiciel de gestion vendu en SaaS à des entreprises (sociétés ou entrepreneurs individuels, appelées « sociétés » dans le logiciel) pour leurs magasins. Chaque société est strictement isolée des autres et, dans une société, chaque magasin travaille dans son propre espace : clients, produits, fournisseurs, documents, stock, caisse et réglages locaux ne sont jamais partagés ; l'identité légale et les réglages fiscaux communs sont ceux de la société.
 
 Il couvre :
 

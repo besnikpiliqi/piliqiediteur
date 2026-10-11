@@ -18,8 +18,9 @@ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
  * motivée, qui ne vaut que pour la part « éditeur » de ce que le signal
  * exige (un signal qui exige aussi un courrier reste actif sans lui, voir
  * SignalDeRisque::leveePar()) ; ou un doute de l'éditeur, constaté, qui
- * bloque la validation jusqu'à sa levée. La société est validée si la
- * levée le permet.
+ * bloque la validation jusqu'à sa levée. La ligne de la levée cite le
+ * signal, sa justification et le SIREN examiné, pour lequel seul elle
+ * vaut. La société est validée si la levée le permet.
  */
 class LeverUnSignalAction
 {
@@ -35,7 +36,11 @@ class LeverUnSignalAction
     {
         $this->refuserSiDejaDecidee($societe);
 
-        $ligne = app(TenantContext::class)->runAsSociete($societe, fn (): VerificationSociete => $this->registre->noter($societe, TypeVerification::Manuelle, ResultatVerification::Concluante, ['decision' => 'signal_leve'], signal: $signal, editeur: $editeur));
+        $ligne = app(TenantContext::class)->runAsSociete($societe, fn (): VerificationSociete => $this->registre->noter($societe, TypeVerification::Manuelle, ResultatVerification::Concluante, [
+            'siren' => $societe->siren,
+            'decision' => 'signal_leve',
+            'justification' => $editeur->justification,
+        ], signal: $signal, editeur: $editeur));
 
         $this->validerLaSociete->siPossible($societe->fresh(), $editeur);
 
@@ -58,7 +63,7 @@ class LeverUnSignalAction
     private function refuserSiDejaDecidee(Societe $societe): void
     {
         if ($societe->estValidee() || $societe->estRefusee()) {
-            throw new VerificationRefuseeException('Cette société est déjà validée ou refusée.');
+            throw new VerificationRefuseeException(RefuserLaSocieteAction::MESSAGE_DEJA_DECIDEE);
         }
     }
 }

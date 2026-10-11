@@ -22,8 +22,10 @@ enum ActionAuditee: string implements HasLabel
     case PieceEffacee = 'piece_effacee';
     case PiecesConsultees = 'pieces_consultees';
     case AccordDirigeantDemande = 'accord_dirigeant_demande';
+    case AccordDirigeantAnnule = 'accord_dirigeant_annule';
     case CodeEnvoye = 'code_envoye';
     case CodeSaisi = 'code_saisi';
+    case CodeAnnule = 'code_annule';
     case SocieteValidee = 'societe_validee';
     case SocieteRefusee = 'societe_refusee';
     case ReclamationOuverte = 'reclamation_ouverte';
@@ -51,8 +53,10 @@ enum ActionAuditee: string implements HasLabel
             self::PieceEffacee => 'Pièce effacée',
             self::PiecesConsultees => 'Pièces consultées par l\'éditeur',
             self::AccordDirigeantDemande => 'Accord d\'un dirigeant demandé',
+            self::AccordDirigeantAnnule => 'Demande d\'accord d\'un dirigeant annulée',
             self::CodeEnvoye => 'Code de confirmation envoyé',
             self::CodeSaisi => 'Code de confirmation saisi',
+            self::CodeAnnule => 'Code de confirmation annulé',
             self::SocieteValidee => 'Société validée',
             self::SocieteRefusee => 'Société refusée',
             self::ReclamationOuverte => 'Réclamation ouverte',
@@ -66,8 +70,8 @@ enum ActionAuditee: string implements HasLabel
     public function categorie(): CategorieAudit
     {
         return match ($this) {
-            self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees, self::AccordDirigeantDemande,
-            self::CodeEnvoye, self::CodeSaisi, self::SocieteValidee, self::SocieteRefusee, self::ReclamationOuverte => CategorieAudit::Verification,
+            self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees, self::AccordDirigeantDemande, self::AccordDirigeantAnnule,
+            self::CodeEnvoye, self::CodeSaisi, self::CodeAnnule, self::SocieteValidee, self::SocieteRefusee, self::ReclamationOuverte => CategorieAudit::Verification,
             default => CategorieAudit::Operations,
         };
     }
@@ -91,9 +95,11 @@ enum ActionAuditee: string implements HasLabel
             self::PieceEffacee => ['type_piece', 'motif'],
             self::PiecesConsultees => ['pieces'],
             self::AccordDirigeantDemande => ['dirigeant', 'role'],
+            self::AccordDirigeantAnnule => ['dirigeant', 'raison'],
             self::CodeEnvoye => ['motif', 'canal', 'source_adresse', 'reference_envoi'],
             self::CodeSaisi => ['motif', 'resultat', 'tentatives'],
-            self::SocieteValidee => ['preuve', 'beneficiaire', 'sirets'],
+            self::CodeAnnule => ['motif', 'raison'],
+            self::SocieteValidee => ['preuve', 'beneficiaire', 'personne_verifiee', 'qualite_du_titulaire', 'sirets'],
             self::SocieteRefusee, self::ReclamationOuverte, self::DemonstrationOuverte, self::DemonstrationFermee => ['motif'],
             self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'etablissement_verifie'],
         };

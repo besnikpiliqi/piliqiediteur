@@ -52,18 +52,24 @@ use LogicException;
  * - un établissement hors des territoires que le logiciel gère est
  *   refusé (voir TerritoireTva::estPrisEnCharge()).
  *
- * Puis, dans une transaction : le magasin, toujours dans cette société,
- * quel que soit l'identifiant de société d'une requête (il ne se lit
- * jamais dans les données reçues) ; son client comptoir ; les
- * autorisations que le propriétaire cochera pour son équipe (voir
- * SeedMagasinRolesAction) ; le contrôle Sirene au registre des
- * vérifications ; sa création au journal d'audit. Dans une société déjà
- * validée, le magasin se met aussitôt en activité : son SIRET se réserve,
- * sa première période d'activité s'ouvre, et les droits implicites du
+ * Puis, dans une transaction ouverte sous le verrou de la ligne de la
+ * société (FOR NO KEY UPDATE sous PostgreSQL : il attend la validation,
+ * qui la verrouille FOR UPDATE, et la fait attendre, sans bloquer les
+ * écritures qui ne font que la référencer, comme les entrées du journal
+ * d'audit) : le magasin, toujours dans cette société, quel que soit
+ * l'identifiant de société d'une requête (il ne se lit jamais dans les
+ * données reçues) ; son client comptoir ; les autorisations que le
+ * propriétaire cochera pour son équipe (voir SeedMagasinRolesAction) ; le
+ * contrôle Sirene au registre des vérifications ; sa création au journal
+ * d'audit. Dans une société validée, telle que la relit ce verrou (et non
+ * telle qu'elle était au début de la requête, avant le contrôle Sirene),
+ * le magasin se met aussitôt en activité : son SIRET se réserve, sa
+ * première période d'activité s'ouvre, et les droits implicites du
  * propriétaire dans ce nouveau magasin s'inscrivent à son journal des
  * événements (voir MiseEnActiviteDesMagasins) ; dans une société en cours
  * de vérification, tout cela se fait à sa validation (voir
- * ValiderLaSocieteAction).
+ * ValiderLaSocieteAction), qui, sous le même verrou, compte ce magasin
+ * dès qu'il existe.
  */
 class CreerEtablissementAction
 {
@@ -109,6 +115,7 @@ class CreerEtablissementAction
             }
 
             return DB::transaction(function () use ($auteur, $societe, $valides, $siret, $consultation, $etablissement): Magasin {
+                $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
                 $magasin = Magasin::forceCreate([
                     'societe_id' => $societe->getKey(),
                     'nom' => $valides['nom'],
@@ -120,8 +127,9 @@ class CreerEtablissementAction
                 ]);
 
                 $this->seedMagasinRoles->handle();
+                $magasin->setRelation('societe', $verrouillee);
 
-                app(TenantContext::class)->runAs($magasin, function () use ($auteur, $societe, $magasin): void {
+                app(TenantContext::class)->runAs($magasin, function () use ($auteur, $verrouillee, $magasin): void {
                     // Vente au comptoir (particulier anonyme, sans
                     // coordonnées saisies) : plutôt que de forcer un nom à
                     // chaque vente, un client générique réutilisable existe
@@ -134,7 +142,7 @@ class CreerEtablissementAction
                         'est_comptoir' => true,
                     ]);
 
-                    if ($societe->estValidee()) {
+                    if ($verrouillee->estValidee()) {
                         $this->miseEnActivite->mettreEnActivite($magasin, $auteur);
                     }
                 });

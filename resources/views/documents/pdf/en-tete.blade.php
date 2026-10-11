@@ -5,8 +5,10 @@
     droite. L'émetteur d'un document émis est celui qu'il a signé (voir
     FigeSonEmetteur), jamais la société ni le magasin d'aujourd'hui.
 
-    Un document du magasin de démonstration porte son filigrane en travers
-    de chaque page et en tête (voir Emetteur::filigrane()).
+    Un document du magasin de démonstration porte « DÉMONSTRATION — SANS
+    VALEUR » en travers de chaque page, et son bandeau en tête, celui d'un
+    ticket disant de ne pas le remettre à un client (voir
+    Emetteur::filigrane() et Emetteur::bandeauDeDemonstration()).
 
     @param \App\Domain\Facturation\Services\Emetteur $emetteur
     @param string $titre
@@ -14,10 +16,9 @@
     @param list<string> $details une ligne chacun : numéro, dates...
     @param bool $estUnTicket un ticket de caisse, que la démonstration interdit de remettre
 --}}
-@php($filigrane = $emetteur->filigrane($estUnTicket ?? false))
-@if ($filigrane !== null)
-    <div class="filigrane">{{ $filigrane }}</div>
-    <div class="bandeau-demonstration">{{ $filigrane }}</div>
+@if ($emetteur->filigrane() !== null)
+    <div class="filigrane">{{ $emetteur->filigrane() }}</div>
+    <div class="bandeau-demonstration">{{ $emetteur->bandeauDeDemonstration($estUnTicket ?? false) }}</div>
 @endif
 <table class="en-tete">
     <tr>

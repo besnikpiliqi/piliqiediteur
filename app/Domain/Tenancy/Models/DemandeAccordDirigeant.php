@@ -14,8 +14,10 @@ use LogicException;
  * un dirigeant inscrit au registre national des entreprises (voir
  * DemanderAccordDUnDirigeantAction et ApprouverMandatAction) : le lien
  * envoyé au dirigeant porte son jeton, dont seule l'empreinte SHA-256 se
- * garde. Elle vaut sept jours ; approuvée ou refusée, une fois, elle ne
- * change plus, et ne s'efface pas.
+ * garde. Elle vaut sept jours, pour le SIREN de l'entreprise de ce
+ * dirigeant ; approuvée, refusée ou annulée (le SIREN de la société
+ * corrigé avant la validation, voir CorrigerSirenAvantValidationAction),
+ * une fois, elle ne change plus, et ne s'efface pas.
  *
  * @property array<string, mixed> $representant_rne
  */
@@ -36,15 +38,16 @@ class DemandeAccordDirigeant extends Model
         'expire_le' => 'datetime',
         'approuvee_le' => 'datetime',
         'refusee_le' => 'datetime',
+        'annulee_le' => 'datetime',
     ];
 
     protected static function booted(): void
     {
         static::updating(function (DemandeAccordDirigeant $demande): void {
-            $corrigees = array_diff(array_keys($demande->getDirty()), ['approuvee_le', 'refusee_le', 'verification_identite_id', 'updated_at']);
+            $corrigees = array_diff(array_keys($demande->getDirty()), ['approuvee_le', 'refusee_le', 'annulee_le', 'verification_identite_id', 'updated_at']);
 
-            if ($corrigees !== [] || $demande->getOriginal('approuvee_le') !== null || $demande->getOriginal('refusee_le') !== null) {
-                throw new LogicException('Une demande d\'accord ne se corrige jamais : seule sa réponse se pose, une fois.');
+            if ($corrigees !== [] || $demande->getOriginal('approuvee_le') !== null || $demande->getOriginal('refusee_le') !== null || $demande->getOriginal('annulee_le') !== null) {
+                throw new LogicException('Une demande d\'accord ne se corrige jamais : seule sa réponse, ou son annulation, se pose, une fois.');
             }
         });
 
@@ -64,7 +67,7 @@ class DemandeAccordDirigeant extends Model
 
     public function estEnAttente(): bool
     {
-        return $this->approuvee_le === null && $this->refusee_le === null && $this->expire_le->isFuture();
+        return $this->approuvee_le === null && $this->refusee_le === null && $this->annulee_le === null && $this->expire_le->isFuture();
     }
 
     /**

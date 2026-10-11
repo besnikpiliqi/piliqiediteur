@@ -13,9 +13,13 @@ use Illuminate\Support\Facades\Schema;
  * CodesDeConfirmation) : seul le code haché (Hash::make) est gardé, jamais
  * le code lui-même. Un seul code actif par SIREN et par motif dans tout le
  * logiciel (index unique partiel codes_confirmation_un_actif), cinq essais,
- * usage unique, trente jours après son dépôt.
+ * usage unique, trente jours après son dépôt (expire_le).
  *
- * Une ligne ne s'efface jamais : elle prouve l'envoi et la remise.
+ * Une ligne prouve l'envoi et la remise : son suivi se pose, mais elle ne
+ * s'efface qu'une fois passée la fin de sa conservation
+ * (conserver_jusqu_au, nulle jusqu'à la fin de la relation avec la
+ * société, comme le registre des vérifications) ; la base refuse tout
+ * autre effacement.
  */
 return new class extends Migration
 {
@@ -49,6 +53,9 @@ return new class extends Migration
             $table->timestamp('annule_le')->nullable();
             // Le propriétaire qui l'a demandé ; null pour l'éditeur.
             $table->foreignId('demande_par')->nullable()->constrained('users')->restrictOnDelete();
+            // La fin de sa conservation, en UTC : cinq ans après la fin de
+            // la relation avec la société (Q4), nulle jusque-là.
+            $table->dateTime('conserver_jusqu_au')->nullable();
             $table->timestamps();
 
             $table->index(['siren', 'envoye_le']);
@@ -57,7 +64,7 @@ return new class extends Migration
 
         DB::statement('CREATE UNIQUE INDEX codes_confirmation_un_actif ON codes_confirmation (siren, motif) WHERE utilise_le IS NULL AND annule_le IS NULL');
 
-        DeclencheursDeProtection::sansSuppression('codes_confirmation');
+        DeclencheursDeProtection::suppressionApresConservation('codes_confirmation', 'conserver_jusqu_au');
     }
 
     public function down(): void

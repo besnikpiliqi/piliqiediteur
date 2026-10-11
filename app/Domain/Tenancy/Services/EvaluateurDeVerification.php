@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
@@ -33,7 +34,10 @@ use Illuminate\Support\Facades\DB;
  *        identifié, saisi dans le compte.
  * Chaque signal de risque se lève par ce qu'il exige (voir
  * SignauxDeRisque). Les preuves B ne valent que pour le propriétaire
- * actuel : celles d'un autre compte ne prouvent rien de lui.
+ * actuel : celles d'un autre compte ne prouvent rien de lui. Les preuves B
+ * et C ne valent que pour le SIREN actuel de la société (voir
+ * VerificationSociete::vautPourLeSiren()) : après une correction du SIREN
+ * avant la validation, elles se refont pour le nouveau.
  *
  * Les seules lectures hors de la société, sur son SIREN et limitées à des
  * booléens, jamais à l'identité d'une autre société : une autre société
@@ -52,8 +56,8 @@ class EvaluateurDeVerification
             $magasinsReelsActifs = $societe->magasinsReels()->where('statut', StatutMagasin::Actif->value)->orderBy('id')->get();
             [$autreValidee, $autrePreuve, $revocation] = $this->lecturesDuSiren($societe);
 
-            $preuves = $this->preuvesDuProprietaire($lignes, $proprietaire);
-            $adresseControlee = SignauxDeRisque::adresseControlee($lignes, TypeVerification::Courrier) || SignauxDeRisque::adresseControlee($lignes, TypeVerification::Lre);
+            $preuves = $this->preuvesDuProprietaire($lignes, $proprietaire, $societe->siren);
+            $adresseControlee = SignauxDeRisque::adresseControlee($lignes, TypeVerification::Courrier, $societe->siren) || SignauxDeRisque::adresseControlee($lignes, TypeVerification::Lre, $societe->siren);
 
             return new EtatDeVerification(
                 entrepriseEtEtablissements: $this->entrepriseActive($societe, $lignes) && $magasinsReelsActifs->every(fn ($magasin): bool => $magasin->etablissement_verifie_le !== null),
@@ -77,14 +81,19 @@ class EvaluateurDeVerification
     }
 
     /**
+     * Les preuves concluantes du propriétaire actuel : son identité, et
+     * celles qui tiennent à l'entreprise, pour le SIREN actuel seulement.
+     *
      * @param  Collection<int, VerificationSociete>  $lignes
      * @return array{identite: bool, b1: bool, b2: bool, b3: bool, b4: bool}
      */
-    private function preuvesDuProprietaire(Collection $lignes, ?User $proprietaire): array
+    private function preuvesDuProprietaire(Collection $lignes, ?User $proprietaire, ?string $siren): array
     {
         $concluantes = $proprietaire === null ? collect() : $lignes->filter(fn (VerificationSociete $ligne): bool => $ligne->estConcluante() && (int) $ligne->beneficiaire_id === $proprietaire->getKey());
-        $a = fn (TypeVerification $type): bool => $concluantes->contains(fn (VerificationSociete $ligne): bool => $ligne->type === $type && ($type !== TypeVerification::Manuelle || $ligne->signal === null));
-        $identite = $a(TypeVerification::Identite);
+        $identite = $concluantes->contains(fn (VerificationSociete $ligne): bool => $ligne->type === TypeVerification::Identite);
+        $a = fn (TypeVerification $type): bool => $concluantes->contains(fn (VerificationSociete $ligne): bool => $ligne->type === $type
+            && $ligne->vautPourLeSiren($siren)
+            && ($type !== TypeVerification::Manuelle || $ligne->signal === null));
 
         return [
             'identite' => $identite,
@@ -110,9 +119,9 @@ class EvaluateurDeVerification
     /**
      * Les trois réponses lues sur le SIREN, hors de la société : une autre
      * société validée et non révoquée ; une autre société, ni révoquée ni
-     * refusée, qui a prouvé sa qualité de représentant (identité rapprochée,
-     * mandat, plateforme, ou pièces examinées avec le code du courrier) ;
-     * une société révoquée. Des booléens seulement.
+     * refusée, qui a prouvé sa qualité de représentant pour ce SIREN
+     * (identité rapprochée, mandat, plateforme, ou pièces examinées avec le
+     * code du courrier) ; une société révoquée. Des booléens seulement.
      *
      * @return array{0: bool, 1: bool, 2: bool}
      */
@@ -123,6 +132,7 @@ class EvaluateurDeVerification
         $autrePreuve = DB::table('verifications_societe as preuve')
             ->whereIn('preuve.societe_id', $autres()->where('statut', '<>', StatutSociete::Revoquee->value)->whereNull('refusee_le')->select('id'))
             ->where('preuve.resultat', ResultatVerification::Concluante->value)
+            ->where('preuve.details->siren', $societe->siren)
             ->where(fn ($preuves) => $preuves
                 ->whereIn('preuve.type', [TypeVerification::RneRepresentants->value, TypeVerification::Mandat->value, TypeVerification::PdpKyb->value])
                 ->orWhere(fn ($pieces) => $pieces
@@ -131,7 +141,9 @@ class EvaluateurDeVerification
                     ->whereExists(fn ($courrier) => $courrier->from('verifications_societe as courrier')
                         ->whereColumn('courrier.societe_id', 'preuve.societe_id')
                         ->whereIn('courrier.type', [TypeVerification::Courrier->value, TypeVerification::Lre->value])
-                        ->where('courrier.resultat', ResultatVerification::Concluante->value))))
+                        ->where('courrier.resultat', ResultatVerification::Concluante->value)
+                        ->where('courrier.details->siren', $societe->siren)
+                        ->where('courrier.details->motif', MotifCode::Verification->value))))
             ->exists();
 
         return [

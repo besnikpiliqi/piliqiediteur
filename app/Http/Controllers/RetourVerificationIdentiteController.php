@@ -18,9 +18,11 @@ use Illuminate\Http\Request;
  * la session PILIQI qui l'a ouverte, au compte qui l'a ouverte, et une
  * seule fois. Sa référence et son state doivent être ceux que cette
  * session a gardés ; ils en sont retirés aussitôt, et le résultat se lit
- * chez le prestataire (voir RecevoirResultatIdentiteAction). Autrement :
- * « Cette vérification d'identité n'a pas été ouverte ici. », et rien
- * n'est écrit.
+ * chez le prestataire (voir RecevoirResultatIdentiteAction) : conclu s'il
+ * est connu ; encore en cours, ce retour vérifié se note, et le rappel du
+ * prestataire le conclura. Autrement : « Cette vérification d'identité
+ * n'a pas été ouverte ici. », et rien n'est écrit ; le rappel du
+ * prestataire n'y conclura rien non plus.
  */
 class RetourVerificationIdentiteController
 {
@@ -45,7 +47,7 @@ class RetourVerificationIdentiteController
         }
 
         try {
-            $ligne = $recevoir->handle($reference, $identite->resultat($reference, $state));
+            $ligne = $recevoir->handle($reference, $identite->resultat($reference, $state), retourVerifie: true);
             Notification::make()->title($ligne === null ? 'La vérification de votre identité est toujours en cours.' : 'Le résultat de la vérification de votre identité est enregistré.')->success()->send();
         } catch (IdentiteIndisponibleException $indisponible) {
             Notification::make()->title($indisponible->getMessage())->danger()->send();

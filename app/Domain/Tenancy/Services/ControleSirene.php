@@ -174,9 +174,18 @@ class ControleSirene
             ...($etablissement === null ? [] : [
                 'etat_administratif' => $etablissement->actif ? 'actif' : 'ferme',
                 'rattache' => $etablissement->estRattacheA($magasin->societe->siren),
-                'adresse' => implode(', ', array_filter([$etablissement->adresse, $etablissement->complementAdresse, trim("{$etablissement->codePostal} {$etablissement->ville}")], filled(...))),
+                'adresse' => self::adresseEnUneLigne($etablissement),
             ]),
         ], $auteur);
+    }
+
+    /**
+     * L'adresse de l'établissement en une ligne, telle que le registre des
+     * vérifications la retient : « 1 RUE DE LA REPUBLIQUE, 75001 PARIS ».
+     */
+    public static function adresseEnUneLigne(EtablissementSirene $etablissement): string
+    {
+        return implode(', ', array_filter([$etablissement->adresse, $etablissement->complementAdresse, trim("{$etablissement->codePostal} {$etablissement->ville}")], filled(...)));
     }
 
     /**

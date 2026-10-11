@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\LeverUnSignalAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
@@ -16,8 +17,10 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\EtatDeVerification;
 use App\Domain\Tenancy\Services\EvaluateurDeVerification;
 use App\Domain\Tenancy\Services\RegistreDesVerifications;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
+use Database\Factories\MagasinFactory;
 use Database\Factories\SocieteFactory;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
@@ -73,6 +76,47 @@ class ValiderLaSocieteConcurrenceTest extends TestCase
     }
 
     /**
+     * Un magasin se crée dans le processus du test pendant que la société,
+     * validable, se valide dans un autre : la validation attend le verrou
+     * de la société que tient la création, puis reprend avec la nouvelle
+     * liste de ses magasins. Les deux magasins ont leur SIRET réservé et
+     * leur période d'activité ouverte : le nouveau vend, et produira ses
+     * tickets Z.
+     */
+    public function test_un_magasin_cree_pendant_la_validation_de_la_societe_est_mis_en_activite(): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $societe = $this->inscrireUneSociete();
+        $editeur = new InterventionDeLEditeur('Doute levé après examen du dossier', 'DOSSIER-2026-0003', ['alice']);
+        app(LeverUnSignalAction::class)->signalerUnDoute($societe, $editeur);
+        $this->verifierLIdentiteDuProprietaire($societe);
+        app(RegistreDesVerifications::class)->noter($societe, TypeVerification::Manuelle, ResultatVerification::Concluante, ['siren' => $societe->siren, 'decision' => 'signal_leve', 'justification' => $editeur->justification], signal: SignalDeRisque::DecisionEditeur, editeur: $editeur);
+        $this->assertTrue($this->evaluer($societe)->estValidable());
+        $societeId = $societe->id;
+        $concurrente = null;
+        DB::listen(function (QueryExecuted $requete) use (&$concurrente, $societeId): void {
+            if ($concurrente === null && str_starts_with($requete->sql, 'insert into "magasins"')) {
+                $concurrente = $this->demarrerUnProcessusConcurrent(static function () use ($societeId): void {
+                    app(ValiderLaSocieteAction::class)->siPossible(Societe::query()->findOrFail($societeId));
+                });
+                $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
+            }
+        });
+        app(TenantContext::class)->clear();
+
+        $nouveau = app(CreerEtablissementAction::class)->handle($societe->proprietaire, $societe, ['nom' => 'Nouveau magasin', 'nic' => MagasinFactory::nicLibre($societe)]);
+
+        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
+        $resultat = $concurrente->wait();
+        $this->assertTrue($resultat->successful(), $resultat->errorOutput());
+        $this->assertTrue($societe->fresh()->estValidee());
+        $magasins = $societe->magasinsReels()->orderBy('id')->pluck('id')->all();
+        $this->assertSame($magasins, SiretMagasin::query()->orderBy('magasin_id')->pluck('magasin_id')->all());
+        $this->assertSame($magasins, PeriodeActivite::query()->whereNull('fin')->orderBy('magasin_id')->pluck('magasin_id')->all());
+        $this->assertTrue($nouveau->fresh()->peutVendre());
+    }
+
+    /**
      * Chaque société prouve la qualité de sa propriétaire et reçoit le
      * code du courrier, sous le doute de l'éditeur qui la retient ; puis
      * l'éditeur lève, chez chacune, son doute et le signal des inscriptions
@@ -92,7 +136,7 @@ class ValiderLaSocieteConcurrenceTest extends TestCase
 
         foreach ($societes as $societe) {
             foreach ([SignalDeRisque::DecisionEditeur, SignalDeRisque::InscriptionsConcurrentes] as $signal) {
-                app(RegistreDesVerifications::class)->noter($societe, TypeVerification::Manuelle, ResultatVerification::Concluante, ['decision' => 'signal_leve'], signal: $signal, editeur: $editeur);
+                app(RegistreDesVerifications::class)->noter($societe, TypeVerification::Manuelle, ResultatVerification::Concluante, ['siren' => $societe->siren, 'decision' => 'signal_leve', 'justification' => $editeur->justification], signal: $signal, editeur: $editeur);
             }
         }
     }

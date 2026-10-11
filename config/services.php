@@ -75,7 +75,7 @@ return [
      | ServiceEnvoiRecommande) : leur pilote, faux seulement tant que
      | l'éditeur n'a pas choisi ses prestataires (jamais en production),
      | l'adresse et la clé de leur API, et le secret qui signe leurs rappels
-     | (voir RappelDePrestataire).
+     | (voir RappelsDesPrestatairesController).
      */
     'identite' => [
         'pilote' => env('IDENTITE_PILOTE'),

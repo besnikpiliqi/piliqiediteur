@@ -74,13 +74,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // chaque chaîne (voir PurgerJournalAudit).
         $schedule->command(PurgerTraces::class)->dailyAt('04:00');
         $schedule->command(PurgerJournalAudit::class)->dailyAt('04:15');
-        // À 4 h 30 : les pièces de vérification déposées depuis trente
-        // jours sans décision de l'éditeur s'effacent (voir
-        // EffacerPiecesVerification) ; à 4 h 45, les magasins de
-        // démonstration inactifs depuis trente jours, ou d'une société
-        // validée ou refusée, se ferment (voir FermerDemonstrationsInactives).
-        $schedule->command(EffacerPiecesVerification::class)->dailyAt('04:30');
+        // À 4 h 45, les magasins de démonstration inactifs depuis trente
+        // jours, ou d'une société validée ou refusée, se ferment (voir
+        // FermerDemonstrationsInactives).
         $schedule->command(FermerDemonstrationsInactives::class)->dailyAt('04:45');
+        // Chaque heure : les pièces de vérification qui atteindraient leurs
+        // trente jours avant le passage suivant sans décision de l'éditeur,
+        // et les copies restées d'un envoi abandonné ou d'un examen
+        // interrompu, s'effacent (voir EffacerPiecesVerification).
+        $schedule->command(EffacerPiecesVerification::class)->hourly();
         // Chaque heure : les demandes d'inscription expirées depuis 48
         // heures s'effacent (voir PurgerDemandesInscription), et les
         // contrôles Sirene restés impossibles reprennent (voir

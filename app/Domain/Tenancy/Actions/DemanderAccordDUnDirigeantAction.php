@@ -75,13 +75,14 @@ class DemanderAccordDUnDirigeantAction
 
             $jeton = Str::random(64);
 
-            $demande = DB::transaction(function () use ($proprietaire, $candidat, $email, $jeton): DemandeAccordDirigeant {
-                if (DemandeAccordDirigeant::query()->whereNull('approuvee_le')->whereNull('refusee_le')->where('expire_le', '>', now())->lockForUpdate()->exists()) {
+            $demande = DB::transaction(function () use ($proprietaire, $societe, $candidat, $email, $jeton): DemandeAccordDirigeant {
+                if (DemandeAccordDirigeant::query()->whereNull('approuvee_le')->whereNull('refusee_le')->whereNull('annulee_le')->where('expire_le', '>', now())->lockForUpdate()->exists()) {
                     throw new VerificationRefuseeException(self::MESSAGE_DEMANDE_EN_ATTENTE);
                 }
 
                 $demande = tap((new DemandeAccordDirigeant)->forceFill([
                     'demande_par' => $proprietaire->getKey(),
+                    'siren' => $societe->siren,
                     'email_dirigeant' => $email,
                     'representant_rne' => ['representant' => $candidat['representant']->enTableau(), 'chaine' => $candidat['chaine']],
                     'jeton_hache' => DemandeAccordDirigeant::empreinte($jeton),

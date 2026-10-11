@@ -22,15 +22,18 @@ use Illuminate\Support\Facades\RateLimiter;
 /**
  * Le propriétaire saisit le code reçu par courrier recommandé, ou par
  * lettre recommandée électronique une fois acceptée (voir
- * EnvoyerCodeDeConfirmationAction) : le code actif de sa société, comparé
- * à son empreinte sous le verrou de sa ligne. Juste, il sert, une seule
- * fois, et le contrôle de l'adresse s'inscrit au registre des
- * vérifications (C) ; la société est validée si elle peut l'être (voir
- * ValiderLaSocieteAction). Faux, il compte un essai : au cinquième, le
- * code s'annule et le signal essais_repetes bloque les voies
- * automatiques jusqu'à la décision de l'éditeur. Expiré, annulé ou déjà
- * utilisé, il ne sert plus. Cinq saisies par heure au plus, en plus du
- * compteur.
+ * EnvoyerCodeDeConfirmationAction) : la saisie se compare à l'empreinte de
+ * chacun des codes actifs de sa société (celui de la vérification, et
+ * celui d'une réclamation, peuvent l'être ensemble), sous le verrou de
+ * leurs lignes. Juste, elle sert le code qu'elle désigne, une seule fois,
+ * et le contrôle de l'adresse s'inscrit au registre des vérifications
+ * (C), avec le motif de ce code ; la société est validée si elle peut
+ * l'être (voir ValiderLaSocieteAction). Fausse, elle compte un essai sur
+ * chacun : au cinquième, un code s'annule et le signal essais_repetes
+ * bloque les voies automatiques jusqu'à la décision de l'éditeur. Un code
+ * expiré, annulé ou déjà utilisé ne sert plus ; celui d'une lettre
+ * électronique pas encore acceptée ne se compare pas. Cinq saisies par
+ * heure au plus, en plus du compteur.
  */
 class SaisirCodeDeConfirmationAction
 {
@@ -85,47 +88,69 @@ class SaisirCodeDeConfirmationAction
     }
 
     /**
-     * @return array{0: bool, 1: bool} le code est-il juste, et vient-il d'être annulé ?
+     * @return array{0: bool, 1: bool} le code est-il juste, et un code vient-il d'être annulé ?
      *
      * @throws VerificationRefuseeException
      */
     private function comparer(User $proprietaire, Societe $societe, string $saisie): array
     {
-        $code = CodeConfirmation::query()
+        $actifs = CodeConfirmation::query()
             ->whereNull('utilise_le')
             ->whereNull('annule_le')
             ->where('expire_le', '>', now())
+            ->orderBy('id')
             ->lockForUpdate()
-            ->first() ?? throw new VerificationRefuseeException(self::MESSAGE_AUCUN_CODE);
+            ->get();
 
-        if ($code->canal === CanalEnvoi::LreQualifiee && $code->remis_le === null) {
+        if ($actifs->isEmpty()) {
+            throw new VerificationRefuseeException(self::MESSAGE_AUCUN_CODE);
+        }
+
+        $saisissables = $actifs->reject(fn (CodeConfirmation $code): bool => $code->canal === CanalEnvoi::LreQualifiee && $code->remis_le === null);
+
+        if ($saisissables->isEmpty()) {
             throw new VerificationRefuseeException(self::MESSAGE_LRE_NON_ACCEPTEE);
         }
 
-        if (! $this->codes->correspond($saisie, $code->code_hache)) {
-            $tentatives = $code->tentatives + 1;
-            $annule = $tentatives >= CodeConfirmation::ESSAIS_PERMIS;
-            $code->forceFill(['tentatives' => $tentatives, ...($annule ? ['annule_le' => now()] : [])])->save();
-            $this->journalAudit->inscrire(ActionAuditee::CodeSaisi, $proprietaire, null, null, ['motif' => $code->motif->value, 'resultat' => 'faux', 'tentatives' => $tentatives], $code);
+        $juste = $saisissables->first(fn (CodeConfirmation $code): bool => $this->codes->correspond($saisie, $code->code_hache));
 
-            if ($annule) {
+        if ($juste === null) {
+            $annules = $saisissables->filter(fn (CodeConfirmation $code): bool => $this->compterUnEssaiFaux($proprietaire, $code));
+
+            if ($annules->isNotEmpty()) {
                 $this->registre->noter($societe, TypeVerification::Signal, ResultatVerification::AExaminer, ['constat' => CodeConfirmation::ESSAIS_PERMIS.' codes faux'], signal: SignalDeRisque::EssaisRepetes);
             }
 
-            return [false, $annule];
+            return [false, $annules->isNotEmpty()];
         }
 
-        $code->forceFill(['utilise_le' => now()])->save();
-        $this->journalAudit->inscrire(ActionAuditee::CodeSaisi, $proprietaire, null, null, ['motif' => $code->motif->value, 'resultat' => 'juste', 'tentatives' => $code->tentatives + 1], $code);
-        $this->registre->noter($societe, $code->canal->typeDeVerification(), ResultatVerification::Concluante, [
-            'envoi_id' => $code->getKey(),
-            'motif' => $code->motif->value,
-            ...($code->canal === CanalEnvoi::RecommandeAr
-                ? ['source_adresse' => $code->destinataire['source'] ?? null]
-                : ['dirigeant' => $code->destinataire['dirigeant'] ?? null]),
-            'reference_envoi' => $code->reference_envoi,
-        ], $proprietaire, fournisseur: 'recommande', reference: $code->reference_envoi);
+        $juste->forceFill(['utilise_le' => now()])->save();
+        $this->journalAudit->inscrire(ActionAuditee::CodeSaisi, $proprietaire, null, null, ['motif' => $juste->motif->value, 'resultat' => 'juste', 'tentatives' => $juste->tentatives + 1], $juste);
+        $this->registre->noter($societe, $juste->canal->typeDeVerification(), ResultatVerification::Concluante, [
+            'siren' => $juste->siren,
+            'envoi_id' => $juste->getKey(),
+            'motif' => $juste->motif->value,
+            ...($juste->canal === CanalEnvoi::RecommandeAr
+                ? ['source_adresse' => $juste->destinataire['source'] ?? null]
+                : ['dirigeant' => $juste->destinataire['dirigeant'] ?? null]),
+            'reference_envoi' => $juste->reference_envoi,
+        ], $proprietaire, fournisseur: 'recommande', reference: $juste->reference_envoi);
 
         return [true, false];
+    }
+
+    /**
+     * Compte un essai faux sur ce code, annulé au cinquième.
+     *
+     * @return bool le code vient-il d'être annulé ?
+     */
+    private function compterUnEssaiFaux(User $proprietaire, CodeConfirmation $code): bool
+    {
+        $tentatives = $code->tentatives + 1;
+        $annule = $tentatives >= CodeConfirmation::ESSAIS_PERMIS;
+        $code->forceFill(['tentatives' => $tentatives, ...($annule ? ['annule_le' => now()] : [])])->save();
+        $this->journalAudit->inscrire(ActionAuditee::CodeSaisi, $proprietaire, null, null, ['motif' => $code->motif->value, 'resultat' => 'faux', 'tentatives' => $tentatives], $code);
+
+        return $annule;
     }
 }

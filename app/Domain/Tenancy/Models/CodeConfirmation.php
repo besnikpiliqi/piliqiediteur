@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Enums\CanalEnvoi;
 use App\Domain\Tenancy\Enums\MotifCode;
@@ -17,9 +18,11 @@ use LogicException;
  * annulé, ni expiré ; un seul l'est par SIREN et par motif dans tout le
  * logiciel.
  *
- * Seuls son suivi (référence, remise, retour), ses essais, son usage et
- * son annulation se posent ; ses autres colonnes ne se corrigent jamais,
- * et il ne s'efface pas.
+ * Seuls son suivi (référence, remise, retour), ses essais, son usage, son
+ * annulation et la fin de sa conservation se posent ; ses autres colonnes
+ * ne se corrigent jamais. Il ne s'efface pas par le modèle, et la base
+ * refuse son effacement avant la fin de sa conservation (voir
+ * DeclencheursDeProtection::suppressionApresConservation()).
  *
  * @property array<string, mixed> $destinataire
  */
@@ -48,12 +51,13 @@ class CodeConfirmation extends Model
         'tentatives' => 'integer',
         'utilise_le' => 'datetime',
         'annule_le' => 'datetime',
+        'conserver_jusqu_au' => HorodatageUtc::class,
     ];
 
     /**
      * Les colonnes qui changent après l'envoi.
      */
-    private const COLONNES_QUI_CHANGENT = ['reference_envoi', 'envoye_le', 'remis_le', 'retourne_le', 'tentatives', 'utilise_le', 'annule_le', 'updated_at'];
+    private const COLONNES_QUI_CHANGENT = ['reference_envoi', 'envoye_le', 'remis_le', 'retourne_le', 'tentatives', 'utilise_le', 'annule_le', 'conserver_jusqu_au', 'updated_at'];
 
     protected static function booted(): void
     {

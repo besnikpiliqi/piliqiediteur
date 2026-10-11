@@ -19,13 +19,25 @@ use App\Integrations\Rne\RneIndisponibleException;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Reçoit le résultat d'une vérification d'identité démarrée (voir
  * DemarrerVerificationIdentiteAction et ApprouverMandatAction) : au retour
- * de la personne, dont la session PILIQI a gardé le state (voir
- * RetourVerificationIdentiteController), ou par le rappel signé du
- * prestataire (voir RappelsDesPrestatairesController).
+ * de la personne dans la session PILIQI qui l'a ouverte, son state vérifié
+ * (voir RetourVerificationIdentiteController et
+ * AccordDirigeantController), ou par le rappel signé du prestataire (voir
+ * RappelsDesPrestatairesController).
+ *
+ * La liaison à la session qui l'a ouverte protège du relais à la victime
+ * (section 7.3 de la conception) : un usurpateur qui fait passer sa session
+ * à un vrai dirigeant ne reçoit pas le retour, qui se fait dans le
+ * navigateur de ce dirigeant. Aussi le résultat ne se conclut-il jamais
+ * sans ce retour vérifié : au retour, il se conclut s'il est connu, et,
+ * s'il est encore en cours chez le prestataire, le retour vérifié se note
+ * (une ligne en attente, retour_verifie) ; le rappel du prestataire ne
+ * conclut ensuite que la session dont le retour s'est ainsi noté, et
+ * n'écrit rien sinon.
  *
  * La session se retrouve par sa référence, toutes sociétés confondues (le
  * rappel arrive sans société), puis tout se fait dans sa société. Elle ne
@@ -38,7 +50,8 @@ use Illuminate\Support\Facades\Gate;
  * RapprochementDesDirigeants) : rapprochée, elle prouve sa qualité de
  * représentant (B1) ; sans dirigeant correspondant, elle ne prouve rien
  * (signal identite_non_concluante) ; le registre injoignable laisse le
- * rapprochement en attente, réessayable (voir rapprocherDeNouveau()). La
+ * rapprochement en attente, réessayable (voir rapprocherDeNouveau()),
+ * comme après une correction du SIREN avant la validation. La
  * troisième vérification échouée lève le signal essais_repetes. Celle d'un
  * dirigeant sollicité pour un mandat conclut sa demande (voir
  * ApprouverMandatAction::conclure()). Puis la société est validée si elle
@@ -58,19 +71,17 @@ class RecevoirResultatIdentiteAction
     ) {}
 
     /**
-     * @return VerificationSociete|null la ligne du résultat, null quand rien n'est écrit (référence inconnue, déjà reçue, ou toujours en cours)
+     * @param  bool  $retourVerifie  le résultat vient-il du retour de la personne dans la session qui a ouvert la vérification, son state vérifié ? Non pour le rappel du prestataire.
+     * @return VerificationSociete|null la ligne du résultat, null quand rien n'est conclu (référence inconnue, déjà reçue, toujours en cours, ou rappel sans retour vérifié)
      */
-    public function handle(string $reference, ResultatDIdentite $resultat): ?VerificationSociete
+    public function handle(string $reference, ResultatDIdentite $resultat, bool $retourVerifie): ?VerificationSociete
     {
-        if ($resultat->statut === ResultatVerification::EnAttente) {
-            return null;
-        }
-
         $demarree = VerificationSociete::withoutGlobalScope(SocieteScope::class)
             ->where('type', TypeVerification::Identite->value)
             ->where('fournisseur', DemarrerVerificationIdentiteAction::FOURNISSEUR)
             ->where('reference', $reference)
             ->where('resultat', ResultatVerification::EnAttente->value)
+            ->orderBy('id')
             ->first();
 
         if ($demarree === null) {
@@ -79,16 +90,27 @@ class RecevoirResultatIdentiteAction
 
         $societe = Societe::query()->findOrFail($demarree->societe_id);
 
-        $ligne = app(TenantContext::class)->runAsSociete($societe, fn (): ?VerificationSociete => DB::transaction(function () use ($societe, $demarree, $reference, $resultat): ?VerificationSociete {
+        $ligne = app(TenantContext::class)->runAsSociete($societe, fn (): ?VerificationSociete => DB::transaction(function () use ($societe, $demarree, $reference, $resultat, $retourVerifie): ?VerificationSociete {
             VerificationSociete::query()->whereKey($demarree->getKey())->lockForUpdate()->first();
+            $deLaSession = VerificationSociete::query()->where('type', TypeVerification::Identite->value)->where('reference', $reference)->orderBy('id')->get();
 
-            $dejaRecue = VerificationSociete::query()
-                ->where('type', TypeVerification::Identite->value)
-                ->where('reference', $reference)
-                ->where('resultat', '<>', ResultatVerification::EnAttente->value)
-                ->exists();
+            if ($deLaSession->contains(fn (VerificationSociete $ligne): bool => $ligne->resultat !== ResultatVerification::EnAttente)) {
+                return null;
+            }
 
-            if ($dejaRecue) {
+            $retourNote = $deLaSession->contains(fn (VerificationSociete $ligne): bool => ($ligne->details['retour_verifie'] ?? false) === true);
+
+            if (! $retourVerifie && ! $retourNote) {
+                Log::info('Rappel d\'identité sans retour vérifié de la personne : rien n\'est conclu.', ['societe_id' => $societe->getKey(), 'reference' => $reference]);
+
+                return null;
+            }
+
+            if ($resultat->statut === ResultatVerification::EnAttente) {
+                if ($retourVerifie && ! $retourNote) {
+                    $this->registre->noter($societe, TypeVerification::Identite, ResultatVerification::EnAttente, ['retour_verifie' => true], beneficiaire: $demarree->beneficiaire, fournisseur: DemarrerVerificationIdentiteAction::FOURNISSEUR, reference: $reference);
+                }
+
                 return null;
             }
 
@@ -109,8 +131,10 @@ class RecevoirResultatIdentiteAction
     }
 
     /**
-     * Rapproche de nouveau la dernière identité vérifiée du propriétaire,
-     * quand le registre national ne répondait pas à sa réception.
+     * Rapproche de nouveau la dernière identité vérifiée du propriétaire
+     * des dirigeants de l'entreprise de son SIREN actuel : quand le
+     * registre national ne répondait pas, ou quand le SIREN a été corrigé
+     * depuis (voir rapprochementEnAttente()).
      *
      * @throws VerificationRefuseeException
      */
@@ -121,20 +145,34 @@ class RecevoirResultatIdentiteAction
                 throw new VerificationRefuseeException(DemarrerVerificationIdentiteAction::MESSAGE_SANS_AUTORISATION);
             }
 
-            $duProprietaire = VerificationSociete::query()->where('beneficiaire_id', $proprietaire->getKey())->orderBy('id')->get();
-            $identite = $duProprietaire->last(fn (VerificationSociete $ligne): bool => $ligne->type === TypeVerification::Identite && $ligne->estConcluante());
-            $dernierRapprochement = $duProprietaire->last(fn (VerificationSociete $ligne): bool => $ligne->type === TypeVerification::RneRepresentants);
+            $identite = self::rapprochementEnAttente($proprietaire, $societe->fresh());
 
-            if ($identite === null || $dernierRapprochement?->resultat !== ResultatVerification::Indisponible) {
+            if ($identite === null) {
                 throw new VerificationRefuseeException(self::MESSAGE_RIEN_A_RAPPROCHER);
             }
 
-            return $this->rapprocher($societe, $proprietaire, ResultatDIdentite::depuisLesDetails($identite->details), $identite);
+            return $this->rapprocher($societe->fresh(), $proprietaire, ResultatDIdentite::depuisLesDetails($identite->details), $identite);
         });
 
         $this->validerLaSociete->siPossible($societe->fresh());
 
         return $ligne;
+    }
+
+    /**
+     * La dernière identité vérifiée du propriétaire, quand elle attend
+     * d'être rapprochée des dirigeants de l'entreprise du SIREN actuel :
+     * aucun rapprochement n'a été fait pour lui (SIREN corrigé depuis), ou
+     * le dernier n'a pas pu l'être, le registre ne répondant pas. Null
+     * autrement. Lu dans la société active.
+     */
+    public static function rapprochementEnAttente(User $proprietaire, Societe $societe): ?VerificationSociete
+    {
+        $duProprietaire = VerificationSociete::query()->where('beneficiaire_id', $proprietaire->getKey())->orderBy('id')->get();
+        $identite = $duProprietaire->last(fn (VerificationSociete $ligne): bool => $ligne->type === TypeVerification::Identite && $ligne->estConcluante());
+        $dernierRapprochement = $duProprietaire->last(fn (VerificationSociete $ligne): bool => $ligne->type === TypeVerification::RneRepresentants && $ligne->vautPourLeSiren($societe->siren));
+
+        return $identite !== null && ($dernierRapprochement === null || $dernierRapprochement->resultat === ResultatVerification::Indisponible) ? $identite : null;
     }
 
     private function conclure(Societe $societe, User $proprietaire, string $reference, ResultatDIdentite $resultat): VerificationSociete

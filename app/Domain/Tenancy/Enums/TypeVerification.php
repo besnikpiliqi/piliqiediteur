@@ -57,6 +57,13 @@ enum TypeVerification: string implements HasLabel
      * Les détails que la ligne retient, et seulement eux : jamais l'image
      * ni le numéro d'une pièce d'identité, ni l'adresse de la personne.
      *
+     * Chaque preuve tenant à l'entreprise (rapprochement des dirigeants,
+     * mandat, plateforme, code d'un courrier ou d'une lettre électronique,
+     * décision de l'éditeur) retient le SIREN qu'elle prouve : après une
+     * correction du SIREN avant la validation, celles de l'ancien ne
+     * valent plus (voir VerificationSociete::vautPourLeSiren()). L'identité
+     * vérifiée, celle de la personne, n'en dépend pas.
+     *
      * @return list<string>
      */
     public function detailsRetenus(): array
@@ -65,12 +72,12 @@ enum TypeVerification: string implements HasLabel
             self::SireneUnite => ['siren', 'etat_administratif', 'categorie_juridique', 'denomination', 'diffusion_partielle'],
             self::SireneEtablissement => ['siret', 'etat_administratif', 'rattache', 'adresse'],
             self::RneRepresentants => ['siren', 'identite_id', 'chaine', 'role', 'debut_fonction'],
-            self::Identite => ['nom', 'nom_usage', 'prenoms', 'naissance', 'niveau_garantie', 'consentement', 'demande_accord_id'],
-            self::Mandat => ['demande_accord_id', 'dirigeant', 'role', 'identite_id'],
-            self::Courrier => ['envoi_id', 'motif', 'source_adresse', 'reference_envoi'],
-            self::Lre => ['envoi_id', 'motif', 'dirigeant', 'reference_envoi'],
-            self::PdpKyb => ['company_verification_status', 'user_identity_verification_status', 'nom', 'prenoms'],
-            self::Manuelle => ['pieces', 'decision'],
+            self::Identite => ['nom', 'nom_usage', 'prenoms', 'naissance', 'niveau_garantie', 'consentement', 'demande_accord_id', 'retour_verifie'],
+            self::Mandat => ['siren', 'demande_accord_id', 'dirigeant', 'role', 'debut_fonction', 'identite_id'],
+            self::Courrier => ['siren', 'envoi_id', 'motif', 'source_adresse', 'reference_envoi'],
+            self::Lre => ['siren', 'envoi_id', 'motif', 'dirigeant', 'reference_envoi'],
+            self::PdpKyb => ['siren', 'company_verification_status', 'user_identity_verification_status', 'nom', 'prenoms'],
+            self::Manuelle => ['siren', 'pieces', 'decision', 'justification'],
             self::Signal => ['constat'],
             self::LettreInformation => ['reference_envoi', 'personne_verifiee', 'source_adresse'],
         };

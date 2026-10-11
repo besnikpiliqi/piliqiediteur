@@ -56,7 +56,7 @@ class AccordDirigeantController
         }
 
         try {
-            $recevoir->handle($reference, $identite->resultat($reference, $state));
+            $recevoir->handle($reference, $identite->resultat($reference, $state), retourVerifie: true);
         } catch (IdentiteIndisponibleException $indisponible) {
             return $this->page($jeton, ApprouverMandatAction::demandeEnAttente($jeton), $indisponible->getMessage());
         }

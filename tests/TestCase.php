@@ -173,7 +173,7 @@ abstract class TestCase extends BaseTestCase
 
         $demarree = app(DemarrerVerificationIdentiteAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe, true, 'http://localhost/verification/identite/retour');
 
-        return app(RecevoirResultatIdentiteAction::class)->handle($demarree['session']->reference, $identite->resultat($demarree['session']->reference, $demarree['state']));
+        return app(RecevoirResultatIdentiteAction::class)->handle($demarree['session']->reference, $identite->resultat($demarree['session']->reference, $demarree['state']), retourVerifie: true);
     }
 
     /**

@@ -21,6 +21,9 @@ use Illuminate\Support\Facades\Log;
  * rien, avec une ligne au journal de l'application ; un rappel juste rejoué
  * dans le délai ne refait rien, chaque référence ne se traitant qu'une
  * fois (voir RecevoirResultatIdentiteAction et SuivreLesEnvoisAction).
+ * Le rappel d'une vérification d'identité ne conclut que la session dont
+ * la personne est revenue dans la session PILIQI qui l'avait ouverte (voir
+ * RecevoirResultatIdentiteAction) : seul, il n'écrit rien.
  */
 class RappelsDesPrestatairesController
 {
@@ -35,7 +38,7 @@ class RappelsDesPrestatairesController
         $reference = $requete->json('reference');
 
         if (is_string($reference) && $reference !== '') {
-            $recevoir->handle($reference, ResultatDIdentite::depuisLaReponse($requete->json()->all()));
+            $recevoir->handle($reference, ResultatDIdentite::depuisLaReponse($requete->json()->all()), retourVerifie: false);
         }
 
         return response()->json(['recu' => true]);

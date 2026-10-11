@@ -73,8 +73,10 @@ return new class extends Migration
             $table->timestamp('validee_le')->nullable();
             // Refus définitif : lecture seule pour toujours.
             $table->timestamp('refusee_le')->nullable();
-            // Réclamation d'un SIREN validé par une autre société, ouverte
-            // par l'éditeur.
+            // Réclamation d'un SIREN validé par une autre société : signalée
+            // une fois à l'éditeur quand elle devient possible, puis
+            // ouverte par lui.
+            $table->timestamp('reclamation_signalee_le')->nullable();
             $table->timestamp('reclamation_ouverte_le')->nullable();
             $table->timestamps();
 

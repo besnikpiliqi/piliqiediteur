@@ -5,14 +5,18 @@ namespace App\Domain\Tenancy\Actions;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
+use App\Domain\Tenancy\Models\CodeConfirmation;
+use App\Domain\Tenancy\Models\DemandeAccordDirigeant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Rules\NicValide;
 use App\Domain\Tenancy\Rules\SirenValide;
 use App\Domain\Tenancy\Rules\SiretValide;
+use App\Domain\Tenancy\Services\AnnulationDesCodes;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\JournalAudit;
+use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -47,6 +51,18 @@ use LogicException;
  * reste de l'identité (capital, immatriculation) est celui que le
  * propriétaire a saisi, et ne change pas.
  *
+ * Les vérifications de la qualité de représentant et de l'adresse se
+ * refont pour le nouveau SIREN (section 7.7 de la conception) : celles de
+ * l'ancien restent au registre, mais ne valent plus (voir
+ * VerificationSociete::vautPourLeSiren()) ; les codes encore actifs de la
+ * société, partis vers le siège de l'ancien SIREN, s'annulent ; les
+ * demandes d'accord qui attendent un dirigeant de l'ancienne entreprise
+ * s'annulent ; les pièces qui attendent l'examen de l'éditeur, déposées
+ * pour l'ancienne entreprise, s'effacent. L'identité vérifiée du
+ * propriétaire, celle de sa personne, reste : elle se rapproche des
+ * dirigeants du nouveau SIREN (voir
+ * RecevoirResultatIdentiteAction::rapprocherDeNouveau()).
+ *
  * Tout se fait sous le verrou des registres de tous les magasins réels de
  * la société (le magasin de démonstration n'a ni SIREN ni SIRET), qui
  * reçoivent le nouveau SIREN, et chacun son nouveau SIRET, à leur journal
@@ -54,7 +70,8 @@ use LogicException;
  * JournaliseSesParametresDeConformite). Les contrôles Sirene s'inscrivent
  * au registre des vérifications, et la correction au journal d'audit,
  * avec les anciennes et les nouvelles valeurs des identifiants et de
- * l'identité qui ont changé.
+ * l'identité qui ont changé ; chaque code, demande d'accord et pièce
+ * annulé ou effacé s'y inscrit aussi.
  */
 class CorrigerSirenAvantValidationAction
 {
@@ -66,6 +83,8 @@ class CorrigerSirenAvantValidationAction
         private readonly ControleSirene $controleSirene,
         private readonly RegistreFiscal $registre,
         private readonly JournalAudit $journalAudit,
+        private readonly PiecesDeVerification $pieces,
+        private readonly AnnulationDesCodes $annulationDesCodes,
     ) {}
 
     /**
@@ -158,10 +177,32 @@ class CorrigerSirenAvantValidationAction
                     'sirets' => array_map(strval(...), $sirets),
                     ...$enregistree->identiteAuditee(),
                 ], $enregistree);
+                $this->annulerLesPreuvesEnCours($enregistree, $auteur);
 
                 return $enregistree;
             });
         });
+    }
+
+    /**
+     * Annule ce qui attendait encore pour l'ancien SIREN, dans la société
+     * active : ses codes actifs (les plis partis vers l'ancien siège), ses
+     * demandes d'accord en attente (un dirigeant de l'ancienne entreprise),
+     * et efface les pièces qui attendaient l'examen de l'éditeur ; chacun
+     * au journal d'audit.
+     */
+    private function annulerLesPreuvesEnCours(Societe $societe, User $auteur): void
+    {
+        CodeConfirmation::query()->whereNull('utilise_le')->whereNull('annule_le')->orderBy('id')->lockForUpdate()->get()
+            ->each(fn (CodeConfirmation $code) => $this->annulationDesCodes->annuler($code, AnnulationDesCodes::SIREN_CORRIGE, $auteur));
+
+        DemandeAccordDirigeant::query()->whereNull('approuvee_le')->whereNull('refusee_le')->whereNull('annulee_le')->orderBy('id')->lockForUpdate()->get()
+            ->each(function (DemandeAccordDirigeant $demande) use ($auteur): void {
+                $demande->forceFill(['annulee_le' => now()])->save();
+                $this->journalAudit->inscrire(ActionAuditee::AccordDirigeantAnnule, $auteur, null, null, ['dirigeant' => $demande->representant()->libelle(), 'raison' => AnnulationDesCodes::SIREN_CORRIGE], $demande);
+            });
+
+        $this->pieces->effacerToutes($societe, PiecesDeVerification::MOTIF_SIREN_CORRIGE);
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Services;
 
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Tenancy\Actions\RefuserLaSocieteAction;
 use App\Domain\Tenancy\Actions\ValiderLaSocieteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
@@ -26,7 +27,9 @@ use Illuminate\Support\Facades\Log;
  *   jamais été préremplie : le contrôle concluant la complète depuis le
  *   répertoire, chaque champ encore vide seulement (voir
  *   ControleSirene::identiteDepuisSirene()), et une entreprise cessée fait
- *   refuser la société pour toujours (lecture seule définitive).
+ *   refuser la société pour toujours (lecture seule définitive), comme un
+ *   refus de l'éditeur (voir RefuserLaSocieteAction : pièces effacées,
+ *   codes annulés, démonstration fermée, propriétaire prévenu).
  *   L'établissement d'un magasin réel actif « à vérifier » : il devient
  *   vérifié, et peut vendre, quand le répertoire le confirme, son adresse
  *   reprise de Sirene ; un contrôle négatif s'inscrit, et le magasin reste
@@ -37,10 +40,11 @@ use Illuminate\Support\Facades\Log;
  *   qu'elle a saisie, même vidée (un n° de TVA retiré ne revient pas), et
  *   l'établissement reste vérifié ; seule la catégorie juridique lue au
  *   répertoire suit sa dernière lecture. Un écart (entreprise cessée,
- *   établissement fermé ou inconnu) s'inscrit au registre des
- *   vérifications et se signale au propriétaire et à l'éditeur, une
- *   catégorie juridique différente à l'éditeur, sans rien bloquer : ni les
- *   ventes ni les paiements ne s'arrêtent ; l'éditeur décide.
+ *   catégorie juridique différente, établissement fermé ou inconnu,
+ *   adresse d'un magasin qui n'est plus celle de son établissement)
+ *   s'inscrit au registre des vérifications et se signale au propriétaire
+ *   et à l'éditeur, sans rien bloquer : ni les ventes ni les paiements ne
+ *   s'arrêtent ; l'éditeur décide (section 7.10 de la conception).
  *
  * Ce qui s'écrit sur la société (identité complétée, catégorie lue, refus)
  * s'inscrit à son journal d'audit, le système pour auteur, avec les
@@ -54,6 +58,7 @@ class ReverificationSirene
         private readonly JournalAudit $journalAudit,
         private readonly AlerteEditeur $alerteEditeur,
         private readonly ValiderLaSocieteAction $validerLaSociete,
+        private readonly RefuserLaSocieteAction $refuserLaSociete,
     ) {}
 
     public function reprendre(Societe $societe, bool $toutes): void
@@ -95,7 +100,7 @@ class ReverificationSirene
         $unite = $consultation['unite'];
         $identite = $consultation['resultat'] === ResultatVerification::Concluante && $unite !== null ? $this->controle->identiteDepuisSirene($unite) : null;
 
-        $categorieLueAvant = $this->registre->sousVerrouDesMagasins($societe->magasinsReels()->orderBy('id')->get(), function () use ($societe, $consultation, $unite, $identite): ?string {
+        [$categorieLueAvant, $refusee] = $this->registre->sousVerrouDesMagasins($societe->magasinsReels()->orderBy('id')->get(), function () use ($societe, $consultation, $unite, $identite): array {
             $this->controle->noterUnite($societe, $consultation);
             $enregistree = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
             $avant = $enregistree->identiteAuditee();
@@ -110,13 +115,20 @@ class ReverificationSirene
                 $this->journalAudit->inscrireLesChangements(ActionAuditee::IdentiteModifiee, null, null, $avant, $enregistree->identiteAuditee(), $enregistree);
             }
 
-            if ($aCompleter && $unite !== null && ! $unite->active) {
-                $enregistree->forceFill(['refusee_le' => now()])->save();
-                $this->journalAudit->inscrire(ActionAuditee::SocieteRefusee, null, null, null, ['motif' => $consultation['motif']], $enregistree);
+            $refusee = $aCompleter && $unite !== null && ! $unite->active;
+
+            if ($refusee) {
+                $this->refuserLaSociete->refuserSousVerrou($enregistree, $consultation['motif']);
             }
 
-            return $avant['categorie_juridique_insee'];
+            return [$avant['categorie_juridique_insee'], $refusee];
         });
+
+        if ($refusee) {
+            $this->refuserLaSociete->apresLeRefus($societe->fresh(), $consultation['motif']);
+
+            return;
+        }
 
         if (! $societe->estValidee()) {
             return;
@@ -124,12 +136,12 @@ class ReverificationSirene
 
         if ($consultation['resultat'] === ResultatVerification::Negative) {
             Log::warning('Revérification Sirene : écart sur une société validée.', ['societe_id' => $societe->getKey(), 'motif' => $consultation['motif']]);
-            $this->signalerLEcart($societe, $consultation['motif']);
+            $this->signalerLEcart($societe, $consultation['motif'], negative: true);
         }
 
-        if ($identite !== null && $categorieLueAvant !== $identite['categorie_juridique_insee']) {
+        if ($identite !== null && $categorieLueAvant !== null && $categorieLueAvant !== $identite['categorie_juridique_insee']) {
             Log::warning('Revérification Sirene : catégorie juridique différente pour une société validée.', ['societe_id' => $societe->getKey(), 'avant' => $categorieLueAvant, 'apres' => $identite['categorie_juridique_insee']]);
-            $this->alerteEditeur->alerter($societe, 'Catégorie juridique différente au répertoire Sirene', ["Catégorie lue avant : {$categorieLueAvant} ; lue aujourd'hui : {$identite['categorie_juridique_insee']}. La forme choisie par la société ne change pas."]);
+            $this->signalerLEcart($societe, "Catégorie juridique lue avant : {$categorieLueAvant} ; lue aujourd'hui : {$identite['categorie_juridique_insee']}. La forme choisie par la société ne change pas.");
         }
     }
 
@@ -149,19 +161,31 @@ class ReverificationSirene
             }
         });
 
-        if ($magasin->etablissement_verifie_le !== null && $consultation['resultat'] === ResultatVerification::Negative) {
-            Log::warning('Revérification Sirene : écart sur un établissement vérifié.', ['magasin_id' => $magasin->getKey(), 'motif' => $consultation['motif']]);
-            $this->signalerLEcart($societe, "{$magasin->nom} (SIRET {$magasin->siret}) : {$consultation['motif']}");
+        if ($magasin->etablissement_verifie_le === null) {
+            return;
+        }
+
+        $ecart = match (true) {
+            $consultation['resultat'] === ResultatVerification::Negative => $consultation['motif'],
+            $consultation['resultat'] === ResultatVerification::Concluante && $etablissement !== null && SignauxDeRisque::adresseDiffere($magasin, ControleSirene::adresseEnUneLigne($etablissement)) => 'L\'adresse du magasin n\'est plus celle que le répertoire donne de son établissement : '.ControleSirene::adresseEnUneLigne($etablissement).'.',
+            default => null,
+        };
+
+        if ($ecart !== null) {
+            Log::warning('Revérification Sirene : écart sur un établissement vérifié.', ['magasin_id' => $magasin->getKey(), 'motif' => $ecart]);
+            $this->signalerLEcart($societe, "{$magasin->nom} (SIRET {$magasin->siret}) : {$ecart}", $consultation['resultat'] === ResultatVerification::Negative);
         }
     }
 
     /**
      * Un écart après la validation : le propriétaire et l'éditeur sont
-     * prévenus, rien ne se bloque.
+     * prévenus, rien ne se bloque. Le répertoire dit-il l'entreprise
+     * cessée, ou l'établissement fermé ou inconnu (négative), ou seulement
+     * une catégorie ou une adresse différente ?
      */
-    private function signalerLEcart(Societe $societe, string $motif): void
+    private function signalerLEcart(Societe $societe, string $motif, bool $negative = false): void
     {
-        $this->alerteEditeur->alerter($societe, 'Revérification Sirene négative d\'une société validée', [$motif, 'Rien n\'est bloqué : à vous de décider (suspension à l\'étape 13).']);
+        $this->alerteEditeur->alerter($societe, $negative ? 'Revérification Sirene négative d\'une société validée' : 'Revérification Sirene : écart sur une société validée', [$motif, 'Rien n\'est bloqué : à vous de décider (suspension à l\'étape 13).']);
         $societe->proprietaire?->notify(new AvisDeVerification($societe, 'Écart au répertoire Sirene', "{$motif} Vos ventes continuent ; l'éditeur, prévenu, pourra vous contacter."));
     }
 

@@ -257,13 +257,19 @@ class VerificationSociete extends Page
                 Select::make('type')->label('Pièce')->options(TypePiece::class)->required(),
                 FileUpload::make('fichier')->label('Fichier')->storeFiles(false)->maxSize(DeposerUnePieceAction::TAILLE_MAXIMALE_EN_OCTETS / 1024)->acceptedFileTypes(['application/pdf', 'image/jpeg', 'image/png'])->required(),
             ])
-            ->action(fn (array $data) => static::executerSansCasser(function () use ($data): void {
+            ->action(function (array $data): void {
                 /** @var TemporaryUploadedFile $fichier */
                 $fichier = $data['fichier'];
-                app(DeposerUnePieceAction::class)->handle(auth()->user(), $this->societe(), TypePiece::from($data['type']), (string) $fichier->get());
-                $fichier->delete();
-                Notification::make()->title('Pièce déposée : l\'éditeur est prévenu.')->success()->send();
-            }));
+
+                try {
+                    static::executerSansCasser(function () use ($data, $fichier): void {
+                        app(DeposerUnePieceAction::class)->handle(auth()->user(), $this->societe(), TypePiece::from($data['type']), (string) $fichier->get());
+                        Notification::make()->title('Pièce déposée : l\'éditeur est prévenu.')->success()->send();
+                    });
+                } finally {
+                    $fichier->delete();
+                }
+            });
     }
 
     public function recevoirUnCourrierAction(): Action
@@ -357,10 +363,6 @@ class VerificationSociete extends Page
 
     private function rapprochementEnAttente(): bool
     {
-        return LigneDeVerification::query()
-            ->where('type', TypeVerification::RneRepresentants->value)
-            ->where('beneficiaire_id', auth()->id())
-            ->orderByDesc('id')
-            ->value('resultat') === ResultatVerification::Indisponible;
+        return RecevoirResultatIdentiteAction::rapprochementEnAttente(auth()->user(), $this->societe()) !== null;
     }
 }

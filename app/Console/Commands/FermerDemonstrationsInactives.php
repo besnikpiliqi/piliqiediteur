@@ -23,7 +23,9 @@ use Throwable;
  * aucune vente ni aucun encaissement depuis trente jours, ni depuis sa
  * dernière ouverture : il ne produit plus de ticket Z sans fin, et se
  * rouvre à la demande tant que la société n'est ni validée ni refusée
- * (voir OuvrirLaDemonstrationAction). La panne d'un magasin n'arrête pas
+ * (voir OuvrirLaDemonstrationAction). Les magasins se parcourent par
+ * identifiant croissant : chaque démonstration fermée sort du filtre, et
+ * un parcours par pages en sauterait. La panne d'un magasin n'arrête pas
  * les suivants.
  */
 #[Signature('app:fermer-demonstrations-inactives')]
@@ -42,7 +44,7 @@ class FermerDemonstrationsInactives extends Command
             ->with('societe')
             ->where('est_demonstration', true)
             ->where('statut', StatutMagasin::Actif->value)
-            ->orderBy('id')
+            ->lazyById()
             ->each(function (Magasin $demonstration) use ($fermer, $limite, &$fermees, &$enEchec): void {
                 if (! $demonstration->societe->estValidee() && ! $demonstration->societe->estRefusee() && ! self::estInactiveDepuis($demonstration, $limite)) {
                     return;

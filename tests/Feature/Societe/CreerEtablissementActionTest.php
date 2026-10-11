@@ -29,6 +29,7 @@ use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use Closure;
+use Database\Factories\MagasinFactory;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -455,6 +456,29 @@ class CreerEtablissementActionTest extends TestCase
         $ligne->fresh()->forceFill(['retire_le' => now()])->save();
         $this->assertThrows(fn () => $ligne->fresh()->forceFill(['retire_le' => now()->addDay()])->save(), LogicException::class, 'Une ligne du registre des SIRET ne se corrige jamais');
         $this->assertSame($magasin->siret, $ligne->fresh()->siret);
+    }
+
+    /**
+     * La société est validée après que la requête de création l'a chargée
+     * (pendant le contrôle Sirene, par exemple) : le magasin se met en
+     * activité d'après la société relue sous son verrou, et non d'après
+     * l'instance chargée avant.
+     */
+    public function test_un_magasin_cree_avec_la_societe_chargee_avant_sa_validation_se_met_en_activite(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $chargeeAvant = Societe::query()->findOrFail($societe->id);
+        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->assertTrue($societe->fresh()->estValidee());
+        app(TenantContext::class)->clear();
+
+        $nouveau = app(CreerEtablissementAction::class)->handle($chargeeAvant->proprietaire, $chargeeAvant, ['nom' => 'Nouveau magasin', 'nic' => MagasinFactory::nicLibre($chargeeAvant)]);
+
+        $this->assertSame(
+            [1, 1],
+            [SiretMagasin::query()->where('magasin_id', $nouveau->id)->whereNull('libere_le')->count(), PeriodeActivite::query()->where('magasin_id', $nouveau->id)->whereNull('fin')->count()],
+        );
+        $this->assertTrue($nouveau->fresh()->peutVendre());
     }
 
     /**

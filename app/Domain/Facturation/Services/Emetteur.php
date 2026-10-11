@@ -26,7 +26,8 @@ use Illuminate\Support\Str;
  *
  * Le magasin de démonstration imprime une identité fictive, sans SIREN ni
  * SIRET ni aucun champ libre du magasin, et chacun de ses documents porte
- * « DÉMONSTRATION — SANS VALEUR » (voir deDemonstration() et filigrane()).
+ * « DÉMONSTRATION — SANS VALEUR » (voir deDemonstration(), filigrane() et
+ * bandeauDeDemonstration()).
  */
 final readonly class Emetteur
 {
@@ -238,16 +239,26 @@ final readonly class Emetteur
     }
 
     /**
-     * Le filigrane d'un document du magasin de démonstration, null pour un
-     * magasin réel : un ticket ne se remet jamais à un client.
+     * Le filigrane de tout document du magasin de démonstration, ticket
+     * compris, null pour un magasin réel.
      */
-    public function filigrane(bool $estUnTicket): ?string
+    public function filigrane(): ?string
+    {
+        return $this->estDemonstration ? 'DÉMONSTRATION — SANS VALEUR' : null;
+    }
+
+    /**
+     * Le bandeau en tête d'un document du magasin de démonstration, null
+     * pour un magasin réel : un ticket dit en plus qu'il ne se remet jamais
+     * à un client.
+     */
+    public function bandeauDeDemonstration(bool $estUnTicket): ?string
     {
         if (! $this->estDemonstration) {
             return null;
         }
 
-        return $estUnTicket ? 'TICKET DE DÉMONSTRATION — NE PAS REMETTRE À UN CLIENT' : 'DÉMONSTRATION — SANS VALEUR';
+        return $estUnTicket ? 'TICKET DE DÉMONSTRATION — NE PAS REMETTRE À UN CLIENT' : $this->filigrane();
     }
 
     /**

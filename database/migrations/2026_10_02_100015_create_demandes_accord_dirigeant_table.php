@@ -9,7 +9,8 @@ use Illuminate\Support\Facades\Schema;
  * Les demandes d'accord qu'un propriétaire qui n'est pas dirigeant adresse
  * à un dirigeant inscrit au registre national des entreprises (voir
  * DemandeAccordDirigeant) : un lien haché valable sept jours, ouvert par le
- * dirigeant, qui vérifie son identité puis approuve, ou refuse, le mandat.
+ * dirigeant, qui vérifie son identité puis approuve, ou refuse, le mandat ;
+ * annulée quand le SIREN de la société est corrigé avant la validation.
  * Une demande ne s'efface jamais.
  */
 return new class extends Migration
@@ -20,6 +21,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('societe_id')->constrained('societes')->restrictOnDelete();
             $table->foreignId('demande_par')->constrained('users')->restrictOnDelete();
+            // Le SIREN de l'entreprise dont le dirigeant est visé : le
+            // mandat ne vaut que pour lui.
+            $table->string('siren', 9);
             $table->string('email_dirigeant');
             // Le dirigeant visé, tel que le registre le donne : nom,
             // prénoms, mois et année de naissance, rôle, et la chaîne qui
@@ -31,6 +35,8 @@ return new class extends Migration
             $table->timestamp('expire_le');
             $table->timestamp('approuvee_le')->nullable();
             $table->timestamp('refusee_le')->nullable();
+            // Le SIREN de la société a été corrigé avant toute réponse.
+            $table->timestamp('annulee_le')->nullable();
             // La ligne qui prouve l'identité du dirigeant qui a approuvé.
             $table->foreignId('verification_identite_id')->nullable()->constrained('verifications_societe')->restrictOnDelete();
             $table->timestamps();

@@ -505,9 +505,9 @@ class EmetteurFigeTest extends TestCase
         foreach (['Martin et Fils', (string) $societe->siren, 'RCS Lyon', 'Bellecour'] as $identiteReelle) {
             $this->assertStringNotContainsString($identiteReelle, json_encode($signe, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
         }
-        $this->assertSame('DÉMONSTRATION — SANS VALEUR', $emetteur->filigrane(false));
+        $this->assertSame('DÉMONSTRATION — SANS VALEUR', $emetteur->filigrane());
         $this->assertEquals($emetteur, Emetteur::duContenuSigne($signe));
-        $this->assertNull(Emetteur::duMagasin($societe->magasinsReels()->sole())->filigrane(false));
+        $this->assertNull(Emetteur::duMagasin($societe->magasinsReels()->sole())->filigrane());
     }
 
     /**

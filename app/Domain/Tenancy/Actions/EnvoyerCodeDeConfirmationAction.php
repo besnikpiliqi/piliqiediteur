@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\AdresseOfficielle;
 use App\Domain\Tenancy\Services\AlerteEditeur;
+use App\Domain\Tenancy\Services\AnnulationDesCodes;
 use App\Domain\Tenancy\Services\CodesDeConfirmation;
 use App\Domain\Tenancy\Services\EvaluateurDeVerification;
 use App\Domain\Tenancy\Services\JournalAudit;
@@ -22,6 +23,7 @@ use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\EnvoiRecommande\EnvoiRecommandeIndisponibleException;
 use App\Integrations\Rne\RneIndisponibleException;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -48,11 +50,17 @@ use InvalidArgumentException;
  * d'une autre inscription du même SIREN, le propriétaire lit un refus qui
  * n'en révèle rien (MESSAGE_EXAMEN), et l'éditeur est alerté.
  *
+ * L'éditeur peut remplacer le code actif d'une autre inscription du même
+ * SIREN et du même motif (celui qu'un usurpateur a demandé, qui retient le
+ * courrier du vrai titulaire) : ce code s'annule, journalisé dans sa
+ * société (voir AnnulationDesCodes), avant que le nouveau parte.
+ *
  * Seule l'empreinte du code se garde (voir CodesDeConfirmation) ; le code
- * en clair ne va qu'au pli. Le pli dit la dénomination, le SIREN, l'objet,
- * le code, son expiration, où le saisir, et à qui signaler une demande
- * qu'on n'a pas faite. Un prestataire qui ne répond pas n'envoie rien et
- * n'enregistre rien.
+ * en clair ne va qu'au pli. Le pli dit la dénomination officielle lue le
+ * jour même avec l'adresse (jamais la raison sociale saisie dans le
+ * compte), le SIREN, l'objet, le code, son expiration, où le saisir, et à
+ * qui signaler une demande qu'on n'a pas faite. Un prestataire qui ne
+ * répond pas n'envoie rien et n'enregistre rien.
  */
 class EnvoyerCodeDeConfirmationAction
 {
@@ -83,22 +91,28 @@ class EnvoyerCodeDeConfirmationAction
         private readonly ServiceEnvoiRecommande $envoi,
         private readonly JournalAudit $journalAudit,
         private readonly AlerteEditeur $alerteEditeur,
+        private readonly AnnulationDesCodes $annulationDesCodes,
     ) {}
 
     /**
      * @param  User|null  $proprietaire  le propriétaire qui le demande, ou null pour l'éditeur
      * @param  array{rang: int, email: string}|null  $lre  le dirigeant destinataire d'une lettre électronique, par son rang parmi les candidats du registre, et son adresse
+     * @param  bool  $remplacerLeCodeEnCours  l'éditeur annule d'abord le code actif de ce SIREN et de ce motif, quelle que soit l'inscription qui l'a reçu
      *
      * @throws VerificationRefuseeException
-     * @throws InvalidArgumentException quand ni le propriétaire ni l'éditeur ne le demande, ou les deux
+     * @throws InvalidArgumentException quand ni le propriétaire ni l'éditeur ne le demande, ou les deux, ou qu'un propriétaire voudrait remplacer un code
      */
-    public function handle(Societe $societe, MotifCode $motif, CanalEnvoi $canal = CanalEnvoi::RecommandeAr, ?User $proprietaire = null, ?InterventionDeLEditeur $editeur = null, ?array $lre = null): CodeConfirmation
+    public function handle(Societe $societe, MotifCode $motif, CanalEnvoi $canal = CanalEnvoi::RecommandeAr, ?User $proprietaire = null, ?InterventionDeLEditeur $editeur = null, ?array $lre = null, bool $remplacerLeCodeEnCours = false): CodeConfirmation
     {
         if (($proprietaire === null) === ($editeur === null)) {
             throw new InvalidArgumentException('Un code part à la demande du propriétaire, ou de l\'éditeur.');
         }
 
-        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $motif, $canal, $proprietaire, $editeur, $lre): CodeConfirmation {
+        if ($remplacerLeCodeEnCours && $editeur === null) {
+            throw new InvalidArgumentException('Seul l\'éditeur remplace un code en cours.');
+        }
+
+        return app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $motif, $canal, $proprietaire, $editeur, $lre, $remplacerLeCodeEnCours): CodeConfirmation {
             if ($proprietaire !== null) {
                 $this->verifierLaDemandeDuProprietaire($proprietaire, $societe, $motif);
             }
@@ -108,8 +122,12 @@ class EnvoyerCodeDeConfirmationAction
             $expireLe = now()->addDays(CodeConfirmation::DUREE_DE_VALIDITE_EN_JOURS);
 
             try {
-                return DB::transaction(function () use ($societe, $motif, $canal, $proprietaire, $editeur, $destinataire, $code, $expireLe): CodeConfirmation {
+                return DB::transaction(function () use ($societe, $motif, $canal, $proprietaire, $editeur, $destinataire, $code, $expireLe, $remplacerLeCodeEnCours): CodeConfirmation {
                     $this->annulerLesCodesExpires($societe, $motif);
+
+                    if ($remplacerLeCodeEnCours) {
+                        $this->codesActifsDuSiren($societe, $motif)->each(fn (CodeConfirmation $enCours) => $this->annulationDesCodes->annuler($enCours, AnnulationDesCodes::REMPLACE_PAR_L_EDITEUR, editeur: $editeur));
+                    }
 
                     $confirmation = tap((new CodeConfirmation)->forceFill([
                         'siren' => $societe->siren,
@@ -123,7 +141,7 @@ class EnvoyerCodeDeConfirmationAction
                     ]))->save();
 
                     $objet = config('app.name').' — '.$motif->getLabel();
-                    $corps = self::corps($societe, $motif, $code, $expireLe->format('d/m/Y'));
+                    $corps = self::corps((string) $societe->siren, $destinataire instanceof AdressePostale ? $destinataire->denomination : null, $motif, $code, $expireLe->format('d/m/Y'));
                     $reference = $destinataire instanceof AdressePostale
                         ? $this->envoi->envoyerCourrier($destinataire, $objet, $corps)
                         : $this->envoi->envoyerLre($destinataire['dirigeant'], $destinataire['email'], $objet, $corps);
@@ -149,19 +167,22 @@ class EnvoyerCodeDeConfirmationAction
     }
 
     /**
-     * Le corps du pli : la dénomination et le SIREN, l'objet, le code, son
-     * expiration, où le saisir, et à qui signaler une demande qu'on n'a pas
-     * faite.
+     * Le corps du pli : la dénomination officielle, lue avec l'adresse (ou
+     * le seul SIREN, pour une lettre électronique), le SIREN, l'objet, le
+     * code, son expiration, où le saisir, et à qui signaler une demande
+     * qu'on n'a pas faite. Rien de ce que le compte a saisi : un usurpateur
+     * n'écrit pas au siège de sa victime à côté du code.
      *
+     * @param  string|null  $denomination  la dénomination lue au répertoire Sirene ou au registre national
      * @return list<string>
      */
-    public static function corps(Societe $societe, MotifCode $motif, string $code, string $expireLe): array
+    public static function corps(string $siren, ?string $denomination, MotifCode $motif, string $code, string $expireLe): array
     {
         $application = config('app.name');
         $editeur = config('editeur.email') ?: 'l\'éditeur du logiciel';
 
         return [
-            "{$societe->getFilamentName()} — SIREN {$societe->siren}",
+            (filled($denomination) ? "{$denomination} — " : '')."SIREN {$siren}",
             "Objet : {$motif->getLabel()} sur {$application}.",
             "Votre code de confirmation : {$code}",
             "Ce code est valable jusqu'au {$expireLe} et ne sert qu'une fois : saisissez-le dans l'espace d'administration de votre société sur ".config('app.url').', page « Vérification ».',
@@ -203,7 +224,7 @@ class EnvoyerCodeDeConfirmationAction
     {
         $this->alerteEditeur->alerter($societe, 'Courrier demandé alors qu\'une autre inscription du même SIREN en a déjà reçu', [
             'Le propriétaire de cette société a demandé un courrier recommandé ; le code en route, ou les plis des trente derniers jours, viennent d\'une autre société du même SIREN.',
-            'Examinez les deux inscriptions, et envoyez au besoin le courrier : php artisan editeur:courrier:envoyer '.$societe->getKey().' --motif=verification',
+            'Examinez les deux inscriptions, et envoyez au besoin le courrier, en annulant le code de l\'autre inscription : php artisan editeur:courrier:envoyer '.$societe->getKey().' --motif=verification --remplacer',
         ]);
 
         return self::MESSAGE_EXAMEN;
@@ -238,6 +259,24 @@ class EnvoyerCodeDeConfirmationAction
             'email' => $email,
             'representant' => $candidat['representant']->enTableau(),
         ];
+    }
+
+    /**
+     * Les codes actifs de ce SIREN et de ce motif, toutes inscriptions
+     * confondues (un au plus), verrouillés : lecture limitée à ce SIREN.
+     *
+     * @return Collection<int, CodeConfirmation>
+     */
+    private function codesActifsDuSiren(Societe $societe, MotifCode $motif): Collection
+    {
+        return CodeConfirmation::withoutGlobalScope(SocieteScope::class)
+            ->where('siren', $societe->siren)
+            ->where('motif', $motif->value)
+            ->whereNull('utilise_le')
+            ->whereNull('annule_le')
+            ->orderBy('id')
+            ->lockForUpdate()
+            ->get();
     }
 
     /**

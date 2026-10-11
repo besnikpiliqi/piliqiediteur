@@ -22,9 +22,11 @@ use Illuminate\Support\Facades\DB;
  * rappel signé du prestataire (voir RappelsDesPrestatairesController) ou
  * en l'interrogeant chaque heure (voir app:suivre-envois-recommandes) :
  * - un courrier remis contre signature note sa remise ;
- * - une lettre électronique acceptée ne note sa remise que si la personne
- *   que le prestataire qualifié a identifiée est le dirigeant visé (voir
- *   RapprochementDesDirigeants::correspond()) : sinon son code s'annule ;
+ * - une lettre électronique acceptée ne note sa remise que si le
+ *   prestataire qualifié a établi l'identité de la personne qui l'a
+ *   acceptée (statut concluant), et que cette personne est le dirigeant
+ *   visé (voir RapprochementDesDirigeants::correspond()) : sinon son code
+ *   s'annule ;
  * - un pli revenu à l'expéditeur annule son code et constate le signal
  *   adresse_contradictoire.
  * Idempotent : un pli déjà remis, revenu, utilisé ou annulé ne change
@@ -87,8 +89,11 @@ class SuivreLesEnvoisAction
                 return true;
             }
 
+            $identite = $suivi->identiteDuDestinataire;
             $accepteParLeDirigeant = $verrouille->canal !== CanalEnvoi::LreQualifiee
-                || ($suivi->identiteDuDestinataire !== null && RapprochementDesDirigeants::correspond($suivi->identiteDuDestinataire, RepresentantRne::depuisTableau($verrouille->destinataire['representant'])));
+                || ($identite !== null
+                    && $identite->statut === ResultatVerification::Concluante
+                    && RapprochementDesDirigeants::correspond($identite, RepresentantRne::depuisTableau($verrouille->destinataire['representant'])));
 
             $verrouille->forceFill($accepteParLeDirigeant ? ['remis_le' => now()] : ['annule_le' => now()])->save();
 

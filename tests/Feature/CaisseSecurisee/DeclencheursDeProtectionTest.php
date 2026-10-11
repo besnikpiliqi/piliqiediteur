@@ -20,8 +20,9 @@ use Tests\TestCase;
  * PostgreSQL et SQLite. La migration échoue partout ailleurs. Leur refus
  * des modifications et des suppressions est vérifié sur les tables de
  * l'application par RegistreFiscalTest et InalterabiliteTest (ajout seul),
- * par CreerEtablissementActionTest (sans suppression) et par TraceEvenementTest
- * (effacement après expiration) ; celui du vidage et du remplacement
+ * par CreerEtablissementActionTest (sans suppression), par TraceEvenementTest
+ * (effacement après expiration) et par VerificationSocieteTest (suppression
+ * après conservation, sur les codes de courrier) ; celui du vidage et du remplacement
  * (INSERT OR REPLACE, sous SQLite) l'est ici, sur une table créée pour le
  * test.
  */
@@ -40,6 +41,7 @@ class DeclencheursDeProtectionTest extends TestCase
             'ajout seul' => [static fn (string $table) => DeclencheursDeProtection::ajoutSeul($table)],
             'sans suppression' => [static fn (string $table) => DeclencheursDeProtection::sansSuppression($table)],
             'effacement après expiration' => [static fn (string $table) => DeclencheursDeProtection::effacementApresExpiration($table)],
+            'suppression après conservation' => [static fn (string $table) => DeclencheursDeProtection::suppressionApresConservation($table, 'expire_le')],
         ];
     }
 
@@ -54,6 +56,7 @@ class DeclencheursDeProtectionTest extends TestCase
             'ajout seul' => ['refuser toute modification, toute suppression et tout vidage'],
             'sans suppression' => ['refuser toute suppression définitive et tout vidage'],
             'effacement après expiration' => ['refuser toute modification, tout vidage et toute suppression avant expiration'],
+            'suppression après conservation' => ['refuser tout vidage et toute suppression avant la fin de la conservation'],
         ]);
     }
 

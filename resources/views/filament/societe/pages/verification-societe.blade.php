@@ -40,6 +40,9 @@
         @php($identite = $this->identiteVerifiee())
         @if ($identite !== null)
             <p>Identité vérifiée : {{ trim(($identite['prenoms'][0] ?? '').' '.($identite['nom'] ?? '')) }}@if (($identite['naissance'] ?? null) !== null), née ou né en {{ $identite['naissance'] }}@endif.</p>
+            @if ($etat->validee && ! auth()->user()->aSaQualiteVerifiee())
+                <p>{{ sprintf(\App\Domain\Tenancy\Actions\ValiderLaSocieteAction::MESSAGE_QUALITE_D_UN_AUTRE, trim(($identite['prenoms'][0] ?? '').' '.($identite['nom'] ?? ''))) }}</p>
+            @endif
         @endif
     </x-filament::section>
 

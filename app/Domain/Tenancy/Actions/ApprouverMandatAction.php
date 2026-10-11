@@ -31,8 +31,10 @@ use Illuminate\Support\Str;
  *   {société} » ;
  * - conclure() (appelé par RecevoirResultatIdentiteAction) : son identité
  *   vérifiée et rapprochée du dirigeant visé approuve le mandat, qui
- *   prouve la qualité de mandataire du demandeur (B2) ; une identité qui
- *   n'est pas celle du dirigeant visé ne prouve rien et clôt la demande ;
+ *   prouve la qualité de mandataire du demandeur (B2) pour le SIREN de la
+ *   demande, avec le jour où ce dirigeant a pris ses fonctions (voir
+ *   SignauxDeRisque, dirigeant récent) ; une identité qui n'est pas celle
+ *   du dirigeant visé ne prouve rien et clôt la demande ;
  * - refuser() : il refuse, et le demandeur en est prévenu.
  *
  * La demande se retrouve par l'empreinte de son jeton, toutes sociétés
@@ -106,9 +108,11 @@ class ApprouverMandatAction
 
         $demande->forceFill($approuve ? ['approuvee_le' => now(), 'verification_identite_id' => $identite->getKey()] : ['refusee_le' => now()])->save();
         $this->registre->noter($societe, TypeVerification::Mandat, $approuve ? ResultatVerification::Concluante : ResultatVerification::Negative, [
+            'siren' => $demande->siren,
             'demande_accord_id' => $demande->getKey(),
             'dirigeant' => $representant->libelle(),
             'role' => $representant->role,
+            'debut_fonction' => $representant->debutFonction,
             'identite_id' => $identite->getKey(),
         ], beneficiaire: $demande->demandeur, fournisseur: DemarrerVerificationIdentiteAction::FOURNISSEUR);
 
@@ -141,6 +145,7 @@ class ApprouverMandatAction
             $verrouillee->forceFill(['refusee_le' => now()])->save();
             $representant = $verrouillee->representant();
             $this->registre->noter($verrouillee->societe, TypeVerification::Mandat, ResultatVerification::Negative, [
+                'siren' => $verrouillee->siren,
                 'demande_accord_id' => $verrouillee->getKey(),
                 'dirigeant' => $representant->libelle(),
                 'role' => $representant->role,

@@ -165,9 +165,9 @@ class MagasinDeDemonstrationTest extends TestCase
         $pdfDuDevis = app(DevisPdfGenerator::class)->html($devis);
 
         $this->assertStringContainsString('TICKET DE DÉMONSTRATION — NE PAS REMETTRE À UN CLIENT', $pdfDuTicket);
-        $this->assertStringContainsString('DÉMONSTRATION — SANS VALEUR', $pdfDuDevis);
 
         foreach ([$pdfDuTicket, $pdfDuDevis] as $pdf) {
+            $this->assertStringContainsString('DÉMONSTRATION — SANS VALEUR', $pdf);
             $this->assertStringContainsString('ENTREPRISE DE DÉMONSTRATION', $pdf);
             $this->assertStringNotContainsString($societe->siren, $pdf);
             $this->assertStringNotContainsString($societe->magasinsReels()->sole()->siret, $pdf);

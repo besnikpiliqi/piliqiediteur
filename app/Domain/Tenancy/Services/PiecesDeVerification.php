@@ -16,8 +16,8 @@ use Illuminate\Support\Facades\Storage;
  * (Crypt::encryptString, avec la clé de l'application), déchiffrés pour la
  * seule consultation de l'éditeur (voir editeur:societe:pieces), effacés
  * dès sa décision ou au plus tard trente jours après leur dépôt (voir
- * app:effacer-pieces-verification). Une copie de pièce d'identité ne se
- * garde jamais au-delà.
+ * app:effacer-pieces-verification), comme les dossiers d'examen restés.
+ * Une copie de pièce d'identité ne se garde jamais au-delà.
  */
 class PiecesDeVerification
 {
@@ -27,7 +27,39 @@ class PiecesDeVerification
 
     public const MOTIF_DELAI = 'delai';
 
+    /**
+     * Le SIREN de la société a été corrigé avant la validation : les pièces
+     * déposées pour l'ancienne entreprise ne prouvent rien de la nouvelle
+     * (voir CorrigerSirenAvantValidationAction).
+     */
+    public const MOTIF_SIREN_CORRIGE = 'siren_corrige';
+
+    /**
+     * Le début du nom des dossiers temporaires, dans storage/app/private,
+     * où l'éditeur lit les pièces déchiffrées (voir editeur:societe:pieces).
+     */
+    public const PREFIXE_DES_DOSSIERS_D_EXAMEN = 'examen-';
+
     public function __construct(private readonly JournalAudit $journalAudit) {}
+
+    /**
+     * Le chemin d'un nouveau dossier d'examen, au nom imprévisible.
+     */
+    public static function nouveauDossierDExamen(): string
+    {
+        return storage_path('app/private/'.self::PREFIXE_DES_DOSSIERS_D_EXAMEN.bin2hex(random_bytes(8)));
+    }
+
+    /**
+     * Les dossiers d'examen qui existent encore (voir
+     * app:effacer-pieces-verification).
+     *
+     * @return list<string>
+     */
+    public static function dossiersDExamen(): array
+    {
+        return glob(storage_path('app/private/'.self::PREFIXE_DES_DOSSIERS_D_EXAMEN.'*'), GLOB_ONLYDIR) ?: [];
+    }
 
     /**
      * Range le fichier chiffré de la société, et rend son chemin.

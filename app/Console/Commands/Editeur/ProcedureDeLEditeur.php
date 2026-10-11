@@ -29,6 +29,15 @@ use LogicException;
  */
 abstract class ProcedureDeLEditeur extends Command
 {
+    /**
+     * L'option des procédures qui envoient un code de courrier : annuler
+     * d'abord le code actif d'une autre inscription du même SIREN, et ce
+     * qu'en dit leur résumé.
+     */
+    public const OPTION_REMPLACER = '{--remplacer : Annule d\'abord le code actif d\'une autre inscription du même SIREN pour ce motif, journalisé dans sa société}';
+
+    public const RESUME_REMPLACER = 'Le code actif d\'une autre inscription du même SIREN pour ce motif sera annulé d\'abord.';
+
     public const OPTIONS_COMMUNES = '{--justification= : Pourquoi l\'éditeur intervient, en vingt caractères au moins} {--piece= : La référence de la pièce qui fonde l\'intervention} {--confirmer= : La valeur attendue, retapée d\'avance (le SIREN de la société)}';
 
     /**

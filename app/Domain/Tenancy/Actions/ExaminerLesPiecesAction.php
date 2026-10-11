@@ -21,13 +21,15 @@ use Illuminate\Support\Facades\DB;
  * L'éditeur conclut l'examen des pièces déposées par le propriétaire
  * (B4, voir editeur:societe:valider) : la décision s'inscrit au registre
  * des vérifications, avec les seuls types des pièces examinées, jamais
- * leur contenu ; les fichiers s'effacent aussitôt ; et, s'il n'est pas
- * déjà en route ou saisi, le code du courrier recommandé part à l'adresse
- * officielle (C), car des pièces, publiques ou falsifiables, ne valent
- * jamais seules. La société est validée d'elle-même à la saisie du code,
- * si son évaluation le permet. Aucun signal n'est levé par cet examen.
- * Tout se fait en une transaction : si le courrier ne peut pas partir,
- * rien n'est inscrit et les pièces restent, pour un nouvel examen.
+ * leur contenu, sa justification et le SIREN que l'éditeur a confirmé,
+ * pour lequel seul elle vaut ; les fichiers s'effacent aussitôt ; et,
+ * s'il n'est pas déjà en route ou saisi pour ce SIREN, le code du
+ * courrier recommandé part à l'adresse officielle (C), car des pièces,
+ * publiques ou falsifiables, ne valent jamais seules. La société est
+ * validée d'elle-même à la saisie du code, si son évaluation le permet.
+ * Aucun signal n'est levé par cet examen. Tout se fait en une
+ * transaction : si le courrier ne peut pas partir, rien n'est inscrit et
+ * les pièces restent, pour un nouvel examen.
  */
 class ExaminerLesPiecesAction
 {
@@ -42,15 +44,16 @@ class ExaminerLesPiecesAction
     ) {}
 
     /**
+     * @param  bool  $remplacerLeCodeEnCours  annuler d'abord le code actif d'une autre inscription du même SIREN (voir EnvoyerCodeDeConfirmationAction)
      * @return CodeConfirmation|null le code qui vient de partir, null s'il était déjà en route ou saisi
      *
      * @throws VerificationRefuseeException
      */
-    public function handle(Societe $societe, InterventionDeLEditeur $editeur): ?CodeConfirmation
+    public function handle(Societe $societe, InterventionDeLEditeur $editeur, bool $remplacerLeCodeEnCours = false): ?CodeConfirmation
     {
-        $code = app(TenantContext::class)->runAsSociete($societe, fn (): ?CodeConfirmation => DB::transaction(function () use ($societe, $editeur): ?CodeConfirmation {
+        $code = app(TenantContext::class)->runAsSociete($societe, fn (): ?CodeConfirmation => DB::transaction(function () use ($societe, $editeur, $remplacerLeCodeEnCours): ?CodeConfirmation {
             if ($societe->estValidee() || $societe->estRefusee()) {
-                throw new VerificationRefuseeException('Cette société est déjà validée ou refusée.');
+                throw new VerificationRefuseeException(RefuserLaSocieteAction::MESSAGE_DEJA_DECIDEE);
             }
 
             $examinees = PieceVerification::query()->whereNull('effacee_le')->orderBy('id')->lockForUpdate()->get();
@@ -60,16 +63,23 @@ class ExaminerLesPiecesAction
             }
 
             $this->registre->noter($societe, TypeVerification::Manuelle, ResultatVerification::Concluante, [
+                'siren' => $societe->siren,
                 'pieces' => $examinees->map(fn (PieceVerification $piece): string => $piece->type->value)->values()->all(),
                 'decision' => 'qualite_de_representant_examinee_sur_pieces',
+                'justification' => $editeur->justification,
             ], beneficiaire: $societe->proprietaire()->first(), editeur: $editeur);
             $this->pieces->effacerToutes($societe, PiecesDeVerification::MOTIF_DECISION, $editeur);
 
-            $courrierEnRoute = CodeConfirmation::query()->where('motif', MotifCode::Verification->value)->whereNull('annule_le')->where(fn ($codes) => $codes->whereNotNull('utilise_le')->orWhere('expire_le', '>', now()))->exists();
+            $courrierEnRoute = CodeConfirmation::query()
+                ->where('siren', $societe->siren)
+                ->where('motif', MotifCode::Verification->value)
+                ->whereNull('annule_le')
+                ->where(fn ($codes) => $codes->whereNotNull('utilise_le')->orWhere('expire_le', '>', now()))
+                ->exists();
 
             return $courrierEnRoute || $this->evaluateur->evaluer($societe)->adresseControlee
                 ? null
-                : $this->envoyerCode->handle($societe, MotifCode::Verification, CanalEnvoi::RecommandeAr, editeur: $editeur);
+                : $this->envoyerCode->handle($societe, MotifCode::Verification, CanalEnvoi::RecommandeAr, editeur: $editeur, remplacerLeCodeEnCours: $remplacerLeCodeEnCours);
         }));
 
         $this->validerLaSociete->siPossible($societe->fresh(), $editeur);

@@ -116,6 +116,7 @@ class Societe extends Model implements HasName
         'statut' => StatutSociete::class,
         'validee_le' => 'datetime',
         'refusee_le' => 'datetime',
+        'reclamation_signalee_le' => 'datetime',
         'reclamation_ouverte_le' => 'datetime',
     ];
 

@@ -80,4 +80,17 @@ class VerificationSociete extends Model
     {
         return $this->resultat === ResultatVerification::Concluante;
     }
+
+    /**
+     * La ligne vaut-elle pour ce SIREN ? Une preuve tenant à l'entreprise
+     * (rapprochement des dirigeants, mandat, plateforme, code d'un courrier
+     * ou d'une lettre électronique, décision de l'éditeur) ne vaut que pour
+     * le SIREN qu'elle a retenu (voir TypeVerification::detailsRetenus()) :
+     * après une correction du SIREN avant la validation, celles de l'ancien
+     * ne prouvent rien du nouveau.
+     */
+    public function vautPourLeSiren(?string $siren): bool
+    {
+        return $siren !== null && ($this->details['siren'] ?? null) === $siren;
+    }
 }

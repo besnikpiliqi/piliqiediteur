@@ -92,6 +92,23 @@ class RapprochementDesDirigeants
             && $identite->naissance === $representant->naissance;
     }
 
+    /**
+     * Cette identité est-elle celle que nomme le compte, tel que son
+     * titulaire l'a saisi ? Chaque mot du premier prénom vérifié, et du nom
+     * de naissance ou d'usage vérifié, figure dans le nom du compte, sans
+     * tenir compte des accents, de la casse ni de l'ordre : « Jeanne
+     * Dupont » et « DUPONT Jeanne » nomment Jeanne DUPONT, « Marc Lefort »
+     * non.
+     */
+    public static function nommeLeTitulaire(ResultatDIdentite $identite, string $nomDuCompte): bool
+    {
+        $mots = fn (?string $texte): array => array_values(array_filter(preg_split('/[^A-Z]+/', Str::upper(Str::ascii((string) $texte))) ?: []));
+        $duCompte = $mots($nomDuCompte);
+        $figure = fn (?string $texte): bool => ($attendus = $mots($texte)) !== [] && array_diff($attendus, $duCompte) === [];
+
+        return $figure($identite->prenoms[0] ?? null) && ($figure($identite->nom) || $figure($identite->nomUsage));
+    }
+
     private static function normaliser(?string $texte): string
     {
         return (string) preg_replace('/[^A-Z]/', '', Str::upper(Str::ascii((string) $texte)));

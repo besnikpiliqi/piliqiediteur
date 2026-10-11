@@ -403,7 +403,7 @@ class ContrePasserPaiementActionTest extends TestCase
 
         $this->magasinActif();
         $tablesEnAjoutSeul = collect(DB::select("select distinct c.relname as nom from pg_trigger t join pg_class c on c.oid = t.tgrelid where t.tgname like '%\\_ajout\\_seul\\_update'"))->pluck('nom')->sort()->values()->all();
-        $this->assertSame(['avoir_allocations', 'consultations_vies', 'enregistrements_fiscaux', 'paiement_allocations', 'paiements'], $tablesEnAjoutSeul);
+        $this->assertSame(['avoir_allocations', 'bordereaux_detaxe', 'consultations_vies', 'enregistrements_fiscaux', 'paiement_allocations', 'paiements', 'preuves_operation'], $tablesEnAjoutSeul);
         $verrous = [];
         DB::listen(static function (QueryExecuted $requete) use ($tablesEnAjoutSeul, &$verrous): void {
             $tables = implode('|', $tablesEnAjoutSeul);

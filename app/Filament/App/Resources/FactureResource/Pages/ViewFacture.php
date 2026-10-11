@@ -2,12 +2,32 @@
 
 namespace App\Filament\App\Resources\FactureResource\Pages;
 
+use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
+use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
+use App\Domain\Facturation\Enums\TypePreuve;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Filament\App\Resources\FactureResource;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 
+/**
+ * La fiche d'une facture ou d'un ticket. Ce qui suit la vente sans la
+ * changer s'y enregistre, à qui peut l'émettre (voir
+ * FacturePolicy::justifier()) : les preuves de son exonération (voir
+ * AjouterPreuveOperationAction) et le bordereau de détaxe d'un ticket
+ * (voir NoterBordereauDetaxeAction). Chaque bouton n'apparaît que là où
+ * son action l'accepte (voir leurs refusPour()).
+ */
 class ViewFacture extends ViewRecord
 {
+    use GereLesExceptionsMetier;
+
     protected static string $resource = FactureResource::class;
 
     protected function getHeaderActions(): array
@@ -16,6 +36,75 @@ class ViewFacture extends ViewRecord
             FactureResource::telechargerLePdf(Actions\Action::make('telecharger_pdf')),
             FactureResource::envoyerParEmail(Actions\Action::make('envoyer_par_email')),
             FactureResource::relancer(Actions\Action::make('relancer')),
+            $this->ajouterUnePreuve(),
+            $this->noterLeBordereauDeDetaxe(),
         ];
+    }
+
+    /**
+     * Un document d'un type que la nature de la vente admet (voir
+     * PreuvesRequises::typesAdmis()), avec sa référence, sa date et qui
+     * l'a établi.
+     */
+    private function ajouterUnePreuve(): Actions\Action
+    {
+        return Actions\Action::make('ajouter_preuve')
+            ->label('Ajouter une preuve')
+            ->icon('heroicon-o-document-check')
+            ->visible(fn (Facture $record): bool => AjouterPreuveOperationAction::refusPour($record) === null)
+            ->authorize('justifier')
+            ->form(fn (Facture $record): array => [
+                Select::make('type')
+                    ->label('Type de preuve')
+                    ->options(collect(PreuvesRequises::typesAdmis($record->nature_operation))
+                        ->mapWithKeys(fn (TypePreuve $type): array => [$type->value => $type->getLabel()])
+                        ->all())
+                    ->required(),
+                TextInput::make('reference')
+                    ->label('Référence')
+                    ->helperText('Le n° que porte le document : MRN, n° du CN23, de la lettre de voiture, de la facture du transporteur...')
+                    ->required()
+                    ->maxLength(100),
+                DatePicker::make('date_document')
+                    ->label('Date du document')
+                    ->maxDate(today()),
+                TextInput::make('emetteur')
+                    ->label('Établie par')
+                    ->helperText('La douane, le transporteur, l\'assureur ou l\'acquéreur. Deux documents de transport doivent venir de deux parties indépendantes du magasin et du client.')
+                    ->maxLength(150),
+            ])
+            ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
+                app(AjouterPreuveOperationAction::class)->handle($record, TypePreuve::from($data['type']), $data['reference'], $data['date_document'] ?? null, $data['emetteur'] ?? null);
+
+                Notification::make()->title('Preuve enregistrée.')->success()->send();
+            }));
+    }
+
+    /**
+     * Le n° du bordereau émis dans PABLO pour un voyageur : noté sur la
+     * fiche, jamais sur le ticket. Un ticket de 100 € TTC ou moins se
+     * détaxe quand même, mais la notification l'avertit.
+     */
+    private function noterLeBordereauDeDetaxe(): Actions\Action
+    {
+        return Actions\Action::make('noter_bordereau_detaxe')
+            ->label('Noter le bordereau de détaxe (BVE)')
+            ->icon('heroicon-o-globe-europe-africa')
+            ->visible(fn (Facture $record): bool => NoterBordereauDetaxeAction::refusPour($record) === null)
+            ->authorize('justifier')
+            ->modalDescription('Le ticket reste à la TVA française : sa TVA ne se régularise qu\'après le visa du bordereau à la sortie de l\'Union européenne. Une faute se corrige en notant le bon n°, le dernier noté fait foi.')
+            ->form([
+                TextInput::make('numero')
+                    ->label('N° du bordereau (BVE)')
+                    ->required()
+                    ->maxLength(30),
+            ])
+            ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
+                $bordereau = app(NoterBordereauDetaxeAction::class)->handle($record, $data['numero']);
+                $notification = Notification::make()->title("Bordereau de détaxe n° {$bordereau->numero} noté.");
+                $avertissement = $bordereau->avertissement();
+
+                ($avertissement === null ? $notification->success() : $notification->warning()->body($avertissement))->send();
+            }));
     }
 }

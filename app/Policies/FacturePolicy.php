@@ -60,6 +60,17 @@ class FacturePolicy extends MagasinPolicy
     }
 
     /**
+     * Enregistrer une preuve de l'exonération d'une facture (voir
+     * AjouterPreuveOperationAction) ou noter le bordereau de détaxe d'un
+     * ticket (voir NoterBordereauDetaxeAction) : ce qui suit une vente
+     * émise, à qui peut l'émettre, sur une facture qu'il voit.
+     */
+    public function justifier(User $user, Facture $facture): bool
+    {
+        return $this->emettre($user, $facture);
+    }
+
+    /**
      * Envoyer par e-mail ou relancer : seulement une facture que
      * l'utilisateur voit (confidentialité par vendeur, voir view()).
      */

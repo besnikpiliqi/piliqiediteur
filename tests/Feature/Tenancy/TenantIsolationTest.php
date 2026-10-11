@@ -15,14 +15,19 @@ use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
+use App\Domain\Facturation\Models\BordereauDetaxe;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Devis;
@@ -34,6 +39,7 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
@@ -123,9 +129,10 @@ class TenantIsolationTest extends TestCase
     /**
      * Modèles de magasin qui n'ont pas de fabrique : les documents fiscaux
      * et le registre ne s'écrivent que signés, par leurs actions, et une
-     * vérification VIES, preuve, que par la sienne. Avoir,
-     * AvoirAllocation, ConsultationVies, EnregistrementFiscal, Paiement,
-     * PaiementAllocation, SoumissionEReporting et TeteRegistreFiscal sont
+     * vérification VIES, une preuve d'exonération ou un bordereau de
+     * détaxe, que par la sienne. Avoir, AvoirAllocation, BordereauDetaxe,
+     * ConsultationVies, EnregistrementFiscal, Paiement, PaiementAllocation,
+     * PreuveOperation, SoumissionEReporting et TeteRegistreFiscal sont
      * aussi dans modelesCrees(), écrits directement par ces tests (voir
      * creerEnregistrement()).
      *
@@ -134,6 +141,7 @@ class TenantIsolationTest extends TestCase
     private const MODELES_SANS_FABRIQUE = [
         Avoir::class,
         AvoirAllocation::class,
+        BordereauDetaxe::class,
         ConsultationVies::class,
         EnregistrementFiscal::class,
         LigneAchat::class,
@@ -144,6 +152,7 @@ class TenantIsolationTest extends TestCase
         MouvementStock::class,
         Paiement::class,
         PaiementAllocation::class,
+        PreuveOperation::class,
         SoumissionEReporting::class,
         TeteRegistreFiscal::class,
         TransmissionPdp::class,
@@ -189,7 +198,7 @@ class TenantIsolationTest extends TestCase
                 $modele,
                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
             ]])
-            ->merge(collect([Avoir::class, AvoirAllocation::class, ConsultationVies::class, EnregistrementFiscal::class, Paiement::class, PaiementAllocation::class, SoumissionEReporting::class, TeteRegistreFiscal::class])
+            ->merge(collect([Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, SoumissionEReporting::class, TeteRegistreFiscal::class])
                 ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
                     $modele,
                     static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
@@ -393,6 +402,30 @@ class TenantIsolationTest extends TestCase
     }
 
     /**
+     * Une preuve d'exonération ou un bordereau de détaxe se note dans le
+     * magasin qui a vendu : depuis un autre magasin de la même société,
+     * la vente est introuvable, et rien ne s'enregistre.
+     */
+    public function test_un_magasin_de_la_meme_societe_ne_justifie_pas_une_vente_d_un_autre(): void
+    {
+        $memeSociete = Magasin::factory()->deLaSocieteDe($this->magasinA)->create();
+        $contexte = app(TenantContext::class);
+        $contexte->set($this->magasinA);
+        $ticket = $this->venteEmise();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $export = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], [
+            'nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
+        ]));
+        $contexte->set($memeSociete);
+
+        $this->assertThrows(fn () => app(AjouterPreuveOperationAction::class)->handle($export, TypePreuve::Mrn, '26FR000000123456E1'), ModelNotFoundException::class);
+        $this->assertThrows(fn () => app(NoterBordereauDetaxeAction::class)->handle($ticket, '2026FR000123456'), ModelNotFoundException::class);
+
+        $this->assertSame(0, PreuveOperation::query()->withoutGlobalScope(MagasinScope::class)->count());
+        $this->assertSame(0, BordereauDetaxe::query()->withoutGlobalScope(MagasinScope::class)->count());
+    }
+
+    /**
      * @return array<string, array{0: class-string<RessourceFilament>, 1: string, 2: Closure(Magasin): Model}>
      */
     public static function pagesDUnEnregistrement(): array
@@ -450,7 +483,8 @@ class TenantIsolationTest extends TestCase
      * Un enregistrement du magasin actif d'un modèle sans fabrique, écrit
      * directement, sans l'action qui l'écrit d'ordinaire : un avoir
      * brouillon, un paiement ou une imputation non signés, une
-     * vérification VIES sans appel à VIES, une ligne du registre fiscal
+     * vérification VIES sans appel à VIES, une preuve d'exonération ou un
+     * bordereau de détaxe sur un brouillon, une ligne du registre fiscal
      * sans l'événement d'initialisation du magasin, une ligne de verrou,
      * une soumission d'e-reporting sans clôture. Seule
      * l'isolation est vérifiée ici. Comme une fabrique, il accepte des
@@ -467,6 +501,10 @@ class TenantIsolationTest extends TestCase
                 'avoir_id' => self::creerEnregistrement(Avoir::class)->getKey(),
                 'facture_id' => Facture::factory()->create()->getKey(),
                 'montant_alloue' => '20.00',
+            ],
+            BordereauDetaxe::class => [
+                'facture_id' => Facture::factory()->create()->getKey(),
+                'numero' => '2026FR000123456',
             ],
             ConsultationVies::class => [
                 'client_id' => Client::factory()->etranger('DE', 'DE123456789')->create()->getKey(),
@@ -496,6 +534,11 @@ class TenantIsolationTest extends TestCase
                 'paiement_id' => self::creerEnregistrement(Paiement::class)->getKey(),
                 'facture_id' => Facture::factory()->create()->getKey(),
                 'montant_alloue' => '120.00',
+            ],
+            PreuveOperation::class => [
+                'facture_id' => Facture::factory()->create()->getKey(),
+                'type' => TypePreuve::Mrn,
+                'reference' => '26FR000000123456E1',
             ],
             SoumissionEReporting::class => [
                 'periode_debut' => '2026-09-01',

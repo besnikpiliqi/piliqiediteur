@@ -8,6 +8,7 @@ use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
@@ -16,15 +17,18 @@ use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
+use App\Domain\Facturation\Models\BordereauDetaxe;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\MentionsFiscales;
+use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource\Pages;
@@ -92,6 +96,28 @@ class FactureResource extends Resource
             ->with('client')
             ->withSum('allocationsPaiement as montant_paye_somme', 'montant_alloue')
             ->withSum('allocationsAvoir as montant_credite_somme', 'montant_alloue');
+    }
+
+    /**
+     * Le nombre de factures exonérées dont une preuve manque encore (voir
+     * Facture::scopePreuvesAFournir()), parmi celles que l'utilisateur
+     * voit (B16) ; aucun badge quand il n'y en a pas.
+     */
+    public static function getNavigationBadge(): ?string
+    {
+        $nombre = Facture::query()->visiblesPar(auth()->user())->preuvesAFournir()->count();
+
+        return $nombre === 0 ? null : (string) $nombre;
+    }
+
+    public static function getNavigationBadgeColor(): string
+    {
+        return 'warning';
+    }
+
+    public static function getNavigationBadgeTooltip(): ?string
+    {
+        return 'Factures dont une preuve d\'exonération reste à fournir';
     }
 
     public static function form(Form $form): Form
@@ -170,6 +196,8 @@ class FactureResource extends Resource
             ])->columns(3),
 
             self::livraisonSection(),
+            self::preuvesSection(),
+            self::detaxeSection(),
 
             InfolistSection::make('Lignes')->schema([
                 self::lignesEntry($infolist->getRecord()),
@@ -355,6 +383,107 @@ class FactureResource extends Resource
     }
 
     /**
+     * Les preuves de l'exonération d'une facture émise d'une nature qui en
+     * admet (voir PreuvesRequises) : « Complet », ou ce qui reste à
+     * fournir, l'attestation de l'acquéreur avec le jour où elle est
+     * attendue ; puis les références enregistrées, relues à chaque
+     * affichage, pour qu'une preuve ajoutée depuis la fiche (voir
+     * ViewFacture) y paraisse aussitôt.
+     */
+    private static function preuvesSection(): InfolistSection
+    {
+        return InfolistSection::make('Preuves de l\'exonération')
+            ->description('Les références des documents qui prouvent l\'expédition des biens et justifient l\'exonération. Sans elles, la vente devra être corrigée par un avoir et une nouvelle facture à la TVA française.')
+            ->visible(fn (Facture $record): bool => AjouterPreuveOperationAction::refusPour($record) === null)
+            ->schema([
+                TextEntry::make('etat_des_preuves')
+                    ->label('État')
+                    ->state(fn (Facture $record): array => self::etatDesPreuves($record))
+                    ->listWithLineBreaks()
+                    ->color(fn (string $state): string => str_starts_with($state, 'À fournir') ? 'warning' : 'success'),
+                RepeatableEntry::make('preuves_enregistrees')
+                    ->label('Preuves enregistrées')
+                    ->state(fn (Facture $record) => $record->preuvesOperation()->with('notePar')->get())
+                    ->visible(fn (Facture $record): bool => $record->preuvesOperation()->exists())
+                    ->schema([
+                        TextEntry::make('type')->label('Type')->state(fn (PreuveOperation $record): string => $record->type->getLabel()),
+                        TextEntry::make('reference')->label('Référence')->state(fn (PreuveOperation $record): string => $record->reference),
+                        TextEntry::make('date_document')->label('Date du document')->state(fn (PreuveOperation $record) => $record->date_document)->date('d/m/Y')->placeholder('—'),
+                        TextEntry::make('emetteur')->label('Établie par')->state(fn (PreuveOperation $record): ?string => $record->emetteur)->placeholder('—'),
+                        TextEntry::make('note')
+                            ->label('Enregistrée')
+                            ->state(fn (PreuveOperation $record): string => 'le '.$record->created_at->format('d/m/Y à H:i').($record->notePar === null ? '' : ' par '.$record->notePar->name)),
+                    ])
+                    ->columns(5),
+            ]);
+    }
+
+    /**
+     * Ce que la fiche dit des preuves d'une facture : « Complet », ou une
+     * ligne « À fournir » par preuve qui manque, ou rien à fournir pour
+     * une vente entièrement corrigée par des avoirs.
+     *
+     * @return list<string>
+     */
+    private static function etatDesPreuves(Facture $facture): array
+    {
+        $preuves = app(PreuvesRequises::class);
+
+        if (! $preuves->concerne($facture)) {
+            return ['Aucune preuve à fournir : la vente est entièrement corrigée par des avoirs'];
+        }
+
+        $manquantes = $preuves->manquantes($facture);
+
+        return $manquantes === [] ? ['Complet'] : array_map(fn (string $manquante): string => "À fournir : {$manquante}", $manquantes);
+    }
+
+    /**
+     * Le n° du bordereau de détaxe d'un ticket (voir
+     * NoterBordereauDetaxeAction), affiché ici et jamais sur le ticket, qui
+     * reproduit le document tel qu'émis : le dernier noté, qui fait foi,
+     * avec l'avertissement d'un ticket de 100 € TTC ou moins, puis ceux
+     * qu'il a remplacés. Relus à chaque affichage, comme les preuves.
+     */
+    private static function detaxeSection(): InfolistSection
+    {
+        return InfolistSection::make('Détaxe')
+            ->description('Le ticket reste à la TVA française : sa TVA ne se régularise qu\'après le visa du bordereau à la sortie de l\'Union européenne.')
+            ->visible(fn (Facture $record): bool => $record->bordereauxDetaxe()->exists())
+            ->schema([
+                TextEntry::make('bordereau_detaxe')
+                    ->label('N° du bordereau de détaxe (BVE)')
+                    ->state(fn (Facture $record): ?string => self::bordereauQuiFaitFoi($record)?->numero)
+                    ->helperText(fn (Facture $record): ?string => self::bordereauQuiFaitFoi($record)?->avertissement()),
+                TextEntry::make('bordereau_detaxe_note')
+                    ->label('Noté')
+                    ->state(function (Facture $record): ?string {
+                        $bordereau = self::bordereauQuiFaitFoi($record);
+
+                        return $bordereau === null ? null : 'le '.$bordereau->created_at->format('d/m/Y à H:i').($bordereau->notePar === null ? '' : ' par '.$bordereau->notePar->name);
+                    }),
+                TextEntry::make('bordereaux_detaxe_remplaces')
+                    ->label('N° remplacés')
+                    ->state(fn (Facture $record): array => $record->bordereauxDetaxe()->get()->slice(0, -1)
+                        ->map(fn (BordereauDetaxe $bordereau): string => "{$bordereau->numero}, noté le {$bordereau->created_at->format('d/m/Y à H:i')}")
+                        ->values()
+                        ->all())
+                    ->listWithLineBreaks()
+                    ->visible(fn (Facture $record): bool => $record->bordereauxDetaxe()->count() > 1),
+            ])
+            ->columns(3);
+    }
+
+    /**
+     * Le dernier n° de bordereau de détaxe noté sur le ticket, relu en base,
+     * avec qui l'a noté.
+     */
+    private static function bordereauQuiFaitFoi(Facture $ticket): ?BordereauDetaxe
+    {
+        return $ticket->bordereauDetaxe()->with('notePar')->first()?->setRelation('facture', $ticket);
+    }
+
+    /**
      * Lignes d'un document (facture, avoir, devis, facture d'achat, avoir
      * fournisseur) : pour chaque article son PU HT, son PU TTC et son taux,
      * puis le HT, la TVA et le TTC de la ligne (voir CalculateurLigne). Un
@@ -503,6 +632,13 @@ class FactureResource extends Resource
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('statut')->options(StatutFacture::class),
+                // Les factures exonérées dont une preuve manque encore (voir
+                // Facture::scopePreuvesAFournir()), que compte aussi le
+                // badge du menu (voir getNavigationBadge()).
+                Tables\Filters\Filter::make('preuves_a_fournir')
+                    ->label('Preuves à fournir')
+                    ->toggle()
+                    ->query(fn (Builder $query): Builder => $query->preuvesAFournir()),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

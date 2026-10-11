@@ -227,6 +227,44 @@ class FacturePolicyTest extends TestCase
         $this->assertSame($attendues, $autorisees);
     }
 
+    /**
+     * @return array<string, array{RoleMagasin, bool}>
+     */
+    public static function rolesQuiJustifientLesVentesDeLEquipe(): array
+    {
+        return [
+            'administrateur' => [RoleMagasin::Administrateur, true],
+            'comptable' => [RoleMagasin::Comptable, false],
+            'vendeur' => [RoleMagasin::Vendeur, false],
+            'observateur' => [RoleMagasin::Observateur, false],
+        ];
+    }
+
+    /**
+     * Noter une preuve d'exonération ou le bordereau de détaxe d'un ticket :
+     * sur une vente que l'on voit (un vendeur, les siennes), avec
+     * l'autorisation d'émettre ; le comptable, qui voit tout sans émettre,
+     * ne le peut pas.
+     */
+    #[DataProvider('rolesQuiJustifientLesVentesDeLEquipe')]
+    public function test_justifier_une_vente_du_proprietaire_selon_le_role(RoleMagasin $role, bool $peutJustifier): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $membre = $this->membre($magasin, $role);
+        $facture = $this->emettreUneFactureEnTantQue($proprietaire, $magasin);
+
+        $this->assertSame($peutJustifier, $membre->can('justifier', $facture));
+    }
+
+    public function test_un_vendeur_justifie_ses_propres_ventes(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+
+        $this->assertTrue($vendeur->can('justifier', $this->emettreUneFactureEnTantQue($vendeur, $magasin)));
+    }
+
     private function emettreUneFactureEnTantQue(User $auteur, Magasin $magasin): Facture
     {
         $this->actingAs($auteur);

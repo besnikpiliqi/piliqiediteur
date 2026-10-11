@@ -28,6 +28,7 @@ use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\CopieClient;
+use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Integrations\Pdp\Models\TransmissionPdp;
@@ -41,6 +42,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -60,7 +62,10 @@ use LogicException;
  * qu'émise au registre fiscal (voir EmettreFactureAction), avec la copie de
  * son client et le type de ce client (voir FigeLeClient), l'émetteur
  * qu'elle imprime pour toujours (voir FigeSonEmetteur), sa nature
- * d'opération et sa livraison (voir NoteSaNatureDOperation).
+ * d'opération et sa livraison (voir NoteSaNatureDOperation). Ce qui la
+ * suit sans la changer s'enregistre à côté, hors de son contenu signé :
+ * les preuves de son exonération (voir preuvesOperation()) et, pour un
+ * ticket, le n° du bordereau de détaxe (voir bordereauDetaxe()).
  */
 class Facture extends Model implements DocumentEnvoyable
 {
@@ -298,6 +303,43 @@ class Facture extends Model implements DocumentEnvoyable
     public function lignes(): HasMany
     {
         return $this->hasMany(LigneFacture::class)->orderBy('ordre')->orderBy('id');
+    }
+
+    /**
+     * Les références des preuves qui justifient son exonération (I4, voir
+     * PreuvesRequises), de la première enregistrée à la dernière.
+     */
+    public function preuvesOperation(): HasMany
+    {
+        return $this->hasMany(PreuveOperation::class)->orderBy('id');
+    }
+
+    /**
+     * Les n° de bordereau de détaxe notés sur ce ticket (I3, voir
+     * NoterBordereauDetaxeAction), du premier noté au dernier : une faute
+     * de saisie se corrige en notant le bon n°.
+     */
+    public function bordereauxDetaxe(): HasMany
+    {
+        return $this->hasMany(BordereauDetaxe::class)->orderBy('id');
+    }
+
+    /**
+     * Le n° de bordereau de détaxe qui fait foi : le dernier noté.
+     */
+    public function bordereauDetaxe(): HasOne
+    {
+        return $this->hasOne(BordereauDetaxe::class)->latestOfMany();
+    }
+
+    /**
+     * Les factures émises dont l'exonération attend encore une preuve
+     * (voir PreuvesRequises::incompletes()) : le filtre et le badge
+     * « Preuves à fournir » de la liste des factures.
+     */
+    public function scopePreuvesAFournir(Builder $query): Builder
+    {
+        return app(PreuvesRequises::class)->incompletes($query);
     }
 
     public function transmissionsPdp(): MorphMany

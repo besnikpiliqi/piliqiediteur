@@ -129,12 +129,16 @@ class CalculateurLigne
     /**
      * La TVA d'un taux sur les lignes vendues à un professionnel (voir le
      * point 2 du commentaire de classe) : calculée une seule fois sur le
-     * total HT de ces lignes, puis répartie entre elles, dans leur ordre.
-     * Chaque ligne prend la TVA du cumul des HT jusqu'à elle moins celle du
-     * cumul jusqu'à la précédente : la somme des parts vaut exactement la
-     * TVA du total HT (règle BR-CO-17 de la facture électronique). Trois
-     * lignes de 0,08 € HT à 20 % prennent 0,02 €, 0,01 € et 0,02 €, les
-     * 0,05 € de 20 % de 0,24 €.
+     * total HT de ces lignes, puis répartie entre elles par cumul, dans
+     * leur ordre sur le document -- règle de l'éditeur (R4, « Prix et TVA
+     * des ventes » dans CLAUDE.md). Chaque ligne prend la TVA arrondie du
+     * cumul des HT jusqu'à elle moins celle du cumul jusqu'à la précédente :
+     * la somme des parts vaut exactement la TVA du total HT (règle BR-CO-17
+     * de la facture électronique), et l'ordre des lignes décide de qui
+     * reçoit le centime d'arrondi. Trois lignes de 0,08 € HT à 20 % prennent
+     * 0,02 €, 0,01 € et 0,02 €, les 0,05 € de 20 % de 0,24 €. Un retour
+     * ne crédite jamais plus que cette part (voir
+     * retourDeLigneProfessionnelle()).
      *
      * @param  list<float|string>  $montantsHt  les HT des lignes de ce taux, dans leur ordre
      * @return list<float> la TVA de chaque ligne, dans le même ordre

@@ -587,9 +587,8 @@ class EmissionSigneeTest extends TestCase
             'code' => 190,
             'libelle' => 'Annulation de ticket (avoir sur des tickets de caisse)',
             'details' => ['avoir' => 'AV-LYON1-2026-000001', 'tickets' => ['TK-LYON1-2026-000001'], 'montant_ttc' => -2000, 'sequence_vente' => 2, 'motif' => 'Article abîmé'],
-            'ip' => null,
-            'agent_utilisateur' => null,
         ], $this->contenu($annulation)['donnees']);
+        $this->assertDatabaseMissing('traces_evenements', ['enregistrement_fiscal_id' => $annulation->id]);
         $this->assertSignatureValide($vente);
         $this->assertSignatureValide($annulation);
     }

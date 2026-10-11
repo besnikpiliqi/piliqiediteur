@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Pages;
 use Carbon\CarbonImmutable;
+use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
@@ -32,6 +33,10 @@ use Illuminate\Support\Str;
  * exact, à copier pour vérifier la signature hors de l'application ;
  * l'export CSV du journal des événements (voir ListEnregistrementsFiscaux)
  * reprend aussi ce texte pour chaque événement technique.
+ *
+ * L'adresse IP et le navigateur d'un événement technique ne sont pas
+ * signés : ils viennent de sa trace (voir TraceEvenement), que seul le
+ * propriétaire du magasin lit, tant qu'elle n'est pas effacée.
  */
 class EnregistrementFiscalResource extends Resource
 {
@@ -68,15 +73,15 @@ class EnregistrementFiscalResource extends Resource
                     ->placeholder('Aucun'),
             ])->columns(3),
 
-            InfolistSection::make('Événement technique')
-                ->visible(fn (EnregistrementFiscal $record): bool => $record->chaine === ChaineFiscale::Evenement)
+            InfolistSection::make('Trace technique')
+                ->description('Hors du contenu signé, effacée après 1 an.')
+                ->visible(fn (EnregistrementFiscal $record): bool => $record->chaine === ChaineFiscale::Evenement
+                    && auth()->user()->estProprietaireDe(Filament::getTenant()))
                 ->schema([
-                    TextEntry::make('adresse_ip')->label('Adresse IP')
-                        ->state(fn (EnregistrementFiscal $record): ?string => $record->contenuSigne()['donnees']['ip'] ?? null)
-                        ->placeholder('Aucune (traitement automatique)'),
-                    TextEntry::make('navigateur')->label('Navigateur')
-                        ->state(fn (EnregistrementFiscal $record): ?string => $record->contenuSigne()['donnees']['agent_utilisateur'] ?? null)
-                        ->placeholder('Aucun (traitement automatique)'),
+                    TextEntry::make('trace.ip')->label('Adresse IP')
+                        ->placeholder('Aucune (traitement automatique, ou trace effacée)'),
+                    TextEntry::make('trace.agent_utilisateur')->label('Navigateur')
+                        ->placeholder('Aucun (traitement automatique, ou trace effacée)'),
                 ])->columns(2),
 
             InfolistSection::make('Signature')->schema([

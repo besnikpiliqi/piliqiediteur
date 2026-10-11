@@ -9,6 +9,7 @@ use App\Domain\Achats\Models\LigneAvoirFournisseur;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
+use App\Domain\CaisseSecurisee\Models\TraceEvenement;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -128,12 +129,13 @@ class TenantIsolationTest extends TestCase
 
     /**
      * Modèles de magasin qui n'ont pas de fabrique : les documents fiscaux
-     * et le registre ne s'écrivent que signés, par leurs actions, et une
-     * vérification VIES, une preuve d'exonération ou un bordereau de
-     * détaxe, que par la sienne. Avoir, AvoirAllocation, BordereauDetaxe,
-     * ConsultationVies, EnregistrementFiscal, Paiement, PaiementAllocation,
-     * PreuveOperation, SoumissionEReporting et TeteRegistreFiscal sont
-     * aussi dans modelesCrees(), écrits directement par ces tests (voir
+     * et le registre ne s'écrivent que signés, par leurs actions, la trace
+     * d'un événement technique qu'avec lui, et une vérification VIES, une
+     * preuve d'exonération ou un bordereau de détaxe, que par la sienne.
+     * Avoir, AvoirAllocation, BordereauDetaxe, ConsultationVies,
+     * EnregistrementFiscal, Paiement, PaiementAllocation, PreuveOperation,
+     * SoumissionEReporting, TeteRegistreFiscal et TraceEvenement sont aussi
+     * dans modelesCrees(), écrits directement par ces tests (voir
      * creerEnregistrement()).
      *
      * @var list<class-string<Model>>
@@ -155,6 +157,7 @@ class TenantIsolationTest extends TestCase
         PreuveOperation::class,
         SoumissionEReporting::class,
         TeteRegistreFiscal::class,
+        TraceEvenement::class,
         TransmissionPdp::class,
     ];
 
@@ -198,7 +201,7 @@ class TenantIsolationTest extends TestCase
                 $modele,
                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
             ]])
-            ->merge(collect([Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, SoumissionEReporting::class, TeteRegistreFiscal::class])
+            ->merge(collect([Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, SoumissionEReporting::class, TeteRegistreFiscal::class, TraceEvenement::class])
                 ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
                     $modele,
                     static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
@@ -230,14 +233,14 @@ class TenantIsolationTest extends TestCase
         $enregistrementB = $creer();
 
         // Sous le contexte B, seule la liste de B doit apparaître.
-        $ids = $modelClass::query()->pluck('id')->all();
-        $this->assertSame([$enregistrementB->id], $ids);
+        $ids = $modelClass::query()->pluck($enregistrementB->getKeyName())->all();
+        $this->assertSame([$enregistrementB->getKey()], $ids);
 
         // Un find() direct sur l'ID de A doit échouer comme si l'enregistrement n'existait pas.
-        $this->assertNull($modelClass::find($enregistrementA->id));
+        $this->assertNull($modelClass::find($enregistrementA->getKey()));
 
         $this->expectException(ModelNotFoundException::class);
-        $modelClass::findOrFail($enregistrementA->id);
+        $modelClass::findOrFail($enregistrementA->getKey());
     }
 
     /**
@@ -546,6 +549,12 @@ class TenantIsolationTest extends TestCase
                 'date_limite_transmission' => '2026-10-10',
             ],
             TeteRegistreFiscal::class => [],
+            TraceEvenement::class => [
+                'enregistrement_fiscal_id' => self::creerEnregistrement(EnregistrementFiscal::class)->getKey(),
+                'ip' => '203.0.113.7',
+                'agent_utilisateur' => 'Navigateur de test',
+                'expire_le' => CarbonImmutable::parse('2027-10-09 08:00:00', 'UTC'),
+            ],
         };
 
         return Model::unguarded(static fn (): Model => $modele::create([...$exiges, ...$attributs]));

@@ -3,6 +3,7 @@
 use App\Console\Commands\ClotureAutomatiqueCaisse;
 use App\Console\Commands\ExpirerDevis;
 use App\Console\Commands\MarquerFacturesEnRetard;
+use App\Console\Commands\PurgerTraces;
 use App\Console\Commands\RelancerFacturesImpayees;
 use App\Console\Commands\SoumettreEReportingPeriodique;
 use App\Console\Commands\VerifierIntegriteFiscale;
@@ -42,6 +43,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // magasin, incrémentale, complète une fois par mois à un jour
         // propre à chaque magasin (voir VerifierIntegriteFiscale).
         $schedule->command(VerifierIntegriteFiscale::class)->dailyAt('03:00');
+        // À 4 h : les traces techniques (adresse IP et navigateur) dont la
+        // durée de conservation est passée s'effacent (voir PurgerTraces).
+        $schedule->command(PurgerTraces::class)->dailyAt('04:00');
         // Les relances écrivent aux clients : en matinée plutôt qu'en pleine
         // nuit, et bien après le passage en retard des factures de la veille.
         $schedule->command(RelancerFacturesImpayees::class)->dailyAt('09:00');

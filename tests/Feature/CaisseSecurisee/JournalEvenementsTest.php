@@ -128,15 +128,15 @@ class JournalEvenementsTest extends TestCase
         $this->get("/app/{$magasin->uuid}/clients")->assertSuccessful();
 
         $this->assertSame(['260', '80'], $this->codes($magasin));
-        $contenu = $this->dernier($magasin, CodeEvenement::OuvertureDeSession)->contenuSigne();
+        $ouverture = $this->dernier($magasin, CodeEvenement::OuvertureDeSession);
+        $contenu = $ouverture->contenuSigne();
         $this->assertSame(['id' => $proprietaire->id, 'nom' => 'Alice Martin'], $contenu['operateur']);
         $this->assertSame([
             'code' => 80,
             'libelle' => 'Ouverture de session dans le magasin',
             'details' => [],
-            'ip' => '203.0.113.7',
-            'agent_utilisateur' => 'Navigateur de test',
         ], $contenu['donnees']);
+        $this->assertSame(['203.0.113.7', 'Navigateur de test'], app(TenantContext::class)->runAs($magasin, fn (): array => [$ouverture->trace->ip, $ouverture->trace->agent_utilisateur]));
     }
 
     /**

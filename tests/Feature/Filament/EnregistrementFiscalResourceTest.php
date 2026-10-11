@@ -319,9 +319,10 @@ class EnregistrementFiscalResourceTest extends TestCase
     }
 
     /**
-     * Le nom de l'opérateur et son navigateur viennent de l'utilisateur :
-     * un tableur ne les évalue pas comme des formules à l'ouverture du
-     * fichier. Le contenu signé, lui, reste exact pour la vérification.
+     * Le nom de l'opérateur et son navigateur, lu dans la trace de
+     * l'événement, viennent de l'utilisateur : un tableur ne les évalue pas
+     * comme des formules à l'ouverture du fichier. Le contenu signé, lui,
+     * reste exact pour la vérification, et le navigateur n'y est pas (S13).
      */
     public function test_l_export_csv_ne_laisse_aucune_formule_venue_de_l_utilisateur(): void
     {
@@ -340,7 +341,36 @@ class EnregistrementFiscalResourceTest extends TestCase
         $this->assertSame("'@SOMME(A1:A9) (n° {$proprietaire->id})", $ouverture[5]);
         $this->assertSame("'{$navigateur}", $ouverture[8]);
         $this->assertSame(EnregistrementFiscal::query()->where('type', '80')->sole()->contenu, $ouverture[15]);
-        $this->assertStringContainsString('"agent_utilisateur":"=HYPERLINK(', $ouverture[15]);
+        $this->assertStringNotContainsString('HYPERLINK', $ouverture[15]);
+    }
+
+    /**
+     * V1-7 : la trace d'un événement (adresse IP et navigateur) ne se lit
+     * que par le propriétaire. Le comptable, qui consulte la caisse
+     * sécurisée et exporte son journal, voit l'événement et son contenu
+     * signé, et laisse vides les deux colonnes de la trace dans l'export.
+     */
+    public function test_seul_le_proprietaire_lit_l_adresse_ip_et_le_navigateur_d_un_evenement(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
+        $proprietaire = User::factory()->create();
+        $magasin = $this->magasinDe($proprietaire);
+        $comptable = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Camille', 'email' => 'camille@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Comptable);
+        $this->actingAs($proprietaire)->withHeader('User-Agent', 'Navigateur du propriétaire')->get("/app/{$magasin->uuid}")->assertSuccessful();
+        Filament::setTenant($magasin);
+        $ouverture = EnregistrementFiscal::query()->where('type', '80')->sole();
+
+        $vueDuProprietaire = Livewire::actingAs($proprietaire)->test(ViewEnregistrementFiscal::class, ['record' => $ouverture->getRouteKey()]);
+        $vueDuComptable = Livewire::actingAs($comptable)->test(ViewEnregistrementFiscal::class, ['record' => $ouverture->getRouteKey()]);
+        $exportDuComptable = Livewire::actingAs($comptable)->test(ListEnregistrementsFiscaux::class)
+            ->callAction('exporter_journal', ['du' => '2026-10-20', 'au' => '2026-10-20']);
+
+        $vueDuProprietaire->assertSee('Trace technique')->assertSee('Navigateur du propriétaire');
+        $vueDuComptable->assertSee('80 – Ouverture de session dans le magasin')->assertDontSee('Trace technique')->assertDontSee('Navigateur du propriétaire');
+        $lignes = array_slice($this->lignesDuCsv($exportDuComptable), 1);
+        $this->assertSame(['260', '130', '80', '110'], array_column($lignes, 3));
+        $this->assertSame([['', ''], ['', ''], ['', ''], ['', '']], array_map(static fn (array $ligne): array => [$ligne[7], $ligne[8]], $lignes));
+        $this->assertDatabaseCount('traces_evenements', 2);
     }
 
     public function test_l_export_ne_reprend_que_les_evenements_de_la_periode(): void

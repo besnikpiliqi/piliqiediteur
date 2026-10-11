@@ -9,6 +9,7 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
+use App\Domain\CaisseSecurisee\Models\TraceEvenement;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
@@ -17,6 +18,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
@@ -422,8 +424,6 @@ class RegistreFiscalTest extends TestCase
             'code' => 260,
             'libelle' => 'Initialisation du registre fiscal du magasin',
             'details' => [],
-            'ip' => null,
-            'agent_utilisateur' => null,
         ], $this->contenu($initialisation)['donnees']);
     }
 
@@ -490,13 +490,18 @@ class RegistreFiscalTest extends TestCase
             'code' => 270,
             'libelle' => 'Modification d\'un paramètre ayant un impact sur la conformité',
             'details' => $details,
-            'ip' => null,
-            'agent_utilisateur' => null,
         ], $this->contenu($evenement)['donnees']);
+        $this->assertDatabaseCount('traces_evenements', 0);
     }
 
-    public function test_journaliser_note_l_adresse_ip_et_le_navigateur_de_la_requete_http(): void
+    /**
+     * S13 : l'adresse IP et le navigateur de la requête HTTP qui fait
+     * inscrire un événement technique vont dans sa trace, rangée à part et
+     * effacée après 1 an, jamais dans son contenu signé.
+     */
+    public function test_journaliser_range_l_adresse_ip_et_le_navigateur_dans_la_trace(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-10-09 10:00:00', 'Europe/Paris'));
         $magasin = $this->magasinActif();
         Route::get('/test/journaliser', function () use ($magasin): int {
             app(TenantContext::class)->set($magasin);
@@ -508,9 +513,41 @@ class RegistreFiscalTest extends TestCase
             ->withServerVariables(['REMOTE_ADDR' => '203.0.113.7'])
             ->get('/test/journaliser');
 
-        $donnees = $this->contenu(EnregistrementFiscal::query()->findOrFail($reponse->getContent()))['donnees'];
-        $this->assertSame('203.0.113.7', $donnees['ip']);
-        $this->assertSame('Mozilla/5.0 (Navigateur de test)', $donnees['agent_utilisateur']);
+        $evenement = EnregistrementFiscal::query()->findOrFail($reponse->getContent());
+        $this->assertSame(['code', 'libelle', 'details'], array_keys($this->contenu($evenement)['donnees']));
+        $this->assertSame(
+            ['203.0.113.7', 'Mozilla/5.0 (Navigateur de test)', '2027-10-09 08:00:00'],
+            [$evenement->trace->ip, $evenement->trace->agent_utilisateur, $evenement->trace->expire_le->format('Y-m-d H:i:s')],
+        );
+    }
+
+    /**
+     * Ni l'événement demandé ni celui qu'il fait inscrire d'office avant
+     * lui (l'initialisation du registre) ne signent l'adresse IP ou le
+     * navigateur de la requête : chacun n'a que sa trace.
+     */
+    public function test_aucun_contenu_signe_ne_contient_d_adresse_ip_ni_de_navigateur(): void
+    {
+        $magasin = $this->magasinActif();
+        Route::get('/test/journaliser', function () use ($magasin): string {
+            app(TenantContext::class)->set($magasin);
+            DB::transaction(fn (): EnregistrementFiscal => app(RegistreFiscal::class)->journaliser(CodeEvenement::ParametreDeConformite));
+
+            return 'ok';
+        });
+
+        $this->withHeader('User-Agent', 'Mozilla/5.0 (Navigateur de test)')
+            ->withServerVariables(['REMOTE_ADDR' => '203.0.113.7'])
+            ->get('/test/journaliser')
+            ->assertSee('ok');
+
+        $evenements = EnregistrementFiscal::query()->orderBy('id')->get();
+        $this->assertSame([['evenement', 1, '260'], ['evenement', 2, '270']], $this->registre());
+        foreach ($evenements as $evenement) {
+            $this->assertStringNotContainsString('203.0.113.7', $evenement->contenu);
+            $this->assertStringNotContainsString('Navigateur de test', $evenement->contenu);
+        }
+        $this->assertSame($evenements->modelKeys(), TraceEvenement::query()->orderBy('enregistrement_fiscal_id')->pluck('enregistrement_fiscal_id')->all());
     }
 
     public function test_un_evenement_technique_ne_s_inscrit_que_par_journaliser(): void

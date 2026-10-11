@@ -12,6 +12,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Str;
 
@@ -78,6 +79,16 @@ class EnregistrementFiscal extends Model
     public function document(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /**
+     * L'adresse IP et le navigateur d'un événement technique inscrit
+     * pendant une requête HTTP, tant qu'ils ne sont pas effacés (voir
+     * TraceEvenement) : jamais dans le contenu signé.
+     */
+    public function trace(): HasOne
+    {
+        return $this->hasOne(TraceEvenement::class, 'enregistrement_fiscal_id');
     }
 
     /**

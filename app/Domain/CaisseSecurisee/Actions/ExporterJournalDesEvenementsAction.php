@@ -10,9 +10,12 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\Exceptions\InvalidFormatException;
 use Closure;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -28,6 +31,11 @@ use InvalidArgumentException;
  * navigateur, le document qu'il référence, puis de quoi le vérifier hors
  * de l'application : la signature précédente, sa signature, l'algorithme,
  * la clé et la version du module, et le contenu exact qui est signé.
+ *
+ * L'adresse IP et le navigateur ne sont pas signés : ils viennent de la
+ * trace de l'événement (voir TraceEvenement), tant qu'elle n'est pas
+ * effacée, et seulement quand le propriétaire du magasin exporte, seul à
+ * pouvoir les lire ; ces deux colonnes restent vides sinon.
  *
  * Format : UTF-8 avec marque d'ordre des octets, séparateur
  * point-virgule, guillemets doublés (RFC 4180), pour s'ouvrir tel quel
@@ -86,23 +94,27 @@ class ExporterJournalDesEvenementsAction
             'au' => $au,
         ]));
 
-        $magasinId = app(TenantContext::class)->id();
+        $magasin = app(TenantContext::class)->magasin();
+        $magasinId = $magasin->getKey();
+        $exportateur = auth()->user();
+        $avecLesTraces = $exportateur instanceof User && $exportateur->estProprietaireDe($magasin);
 
-        return static function ($flux) use ($magasinId, $du, $au): void {
+        return static function ($flux) use ($magasinId, $du, $au, $avecLesTraces): void {
             fwrite($flux, "\u{FEFF}");
             self::ecrireUneLigne($flux, self::COLONNES);
 
-            // Le fichier s'écrit après la réponse de l'action : la requête
-            // est filtrée par magasin elle-même, sans dépendre du magasin
-            // actif à ce moment-là.
+            // Le fichier s'écrit après la réponse de l'action : les
+            // requêtes sont filtrées par magasin elles-mêmes, sans dépendre
+            // du magasin actif à ce moment-là.
             EnregistrementFiscal::query()
                 ->withoutGlobalScope(MagasinScope::class)
                 ->where('magasin_id', $magasinId)
                 ->where('chaine', ChaineFiscale::Evenement->value)
                 ->horodatesDuJourAuJour($du, $au)
+                ->when($avecLesTraces, fn (Builder $evenements): Builder => $evenements->with(['trace' => fn (HasOne $trace) => $trace->withoutGlobalScope(MagasinScope::class)->where('magasin_id', $magasinId)]))
                 ->orderBy('sequence')
                 ->lazy(500)
-                ->each(fn (EnregistrementFiscal $evenement) => self::ecrireUneLigne($flux, self::ligne($evenement)));
+                ->each(fn (EnregistrementFiscal $evenement) => self::ecrireUneLigne($flux, self::ligne($evenement, $avecLesTraces)));
         };
     }
 
@@ -122,12 +134,14 @@ class ExporterJournalDesEvenementsAction
     }
 
     /**
+     * @param  bool  $avecLaTrace  vrai quand le propriétaire exporte : sa trace a été chargée
      * @return list<string>
      */
-    private static function ligne(EnregistrementFiscal $evenement): array
+    private static function ligne(EnregistrementFiscal $evenement, bool $avecLaTrace): array
     {
         $donnees = $evenement->contenuSigne()['donnees'] ?? [];
         $details = $donnees['details'] ?? [];
+        $trace = $avecLaTrace ? $evenement->trace : null;
 
         $lecture = [
             (string) $evenement->sequence,
@@ -137,8 +151,8 @@ class ExporterJournalDesEvenementsAction
             (string) ($donnees['libelle'] ?? ''),
             $evenement->libelleDeLOperateur(),
             $details === [] ? '' : json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
-            (string) ($donnees['ip'] ?? ''),
-            (string) ($donnees['agent_utilisateur'] ?? ''),
+            (string) $trace?->ip,
+            (string) $trace?->agent_utilisateur,
             (string) $evenement->libelleDuDocument(),
         ];
 

@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
+use App\Domain\CaisseSecurisee\Models\TraceEvenement;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -47,6 +48,10 @@ use LogicException;
  *   (260) au tout premier enregistrement du magasin, le changement de
  *   version du module fiscal (250 majeure, 255 mineure) et celui de la clé
  *   de signature (270).
+ * - L'adresse IP et le navigateur de la requête qui fait inscrire un
+ *   événement technique ne sont jamais signés : ils vont dans sa trace,
+ *   rangée à part dans la même transaction et effacée après 1 an (voir
+ *   TraceEvenement).
  *
  * Toutes les écritures fiscales d'un magasin se sérialisent sur sa ligne de
  * tetes_registre_fiscal (voir verrouiller()), qui tient aussi l'état de ses
@@ -227,8 +232,9 @@ class RegistreFiscal
 
     /**
      * Inscrit un événement technique (JET) dans la chaîne des événements du
-     * magasin actif : son code et son libellé, ses détails, et l'adresse IP
-     * et le navigateur de la requête HTTP en cours, s'il y en a une.
+     * magasin actif : son code, son libellé et ses détails. L'adresse IP et
+     * le navigateur de la requête HTTP en cours, s'il y en a une, vont dans
+     * sa trace (voir inscrire()).
      *
      * @param  array<array-key, mixed>  $details  ancienne et nouvelle valeur d'un paramètre, référence d'un document...
      *
@@ -361,25 +367,18 @@ class RegistreFiscal
     }
 
     /**
-     * Les données d'un événement technique. L'adresse IP et le navigateur
-     * ne viennent que d'une requête HTTP routée : une commande ou un job
-     * n'a qu'une requête de façade, sans visiteur.
+     * Les données signées d'un événement technique : jamais l'adresse IP
+     * ni le navigateur, qui vont dans sa trace (voir inscrire()).
      *
      * @param  array<array-key, mixed>  $details
-     * @return array{code: int, libelle: string, details: array<array-key, mixed>, ip: string|null, agent_utilisateur: string|null}
+     * @return array{code: int, libelle: string, details: array<array-key, mixed>}
      */
     private function evenement(CodeEvenement $code, array $details): array
     {
-        $requete = request();
-        $visiteur = $requete->route() !== null;
-        $navigateur = $visiteur ? $requete->userAgent() : null;
-
         return [
             'code' => $code->value,
             'libelle' => $code->getLabel(),
             'details' => $details,
-            'ip' => $visiteur ? $requete->ip() : null,
-            'agent_utilisateur' => $navigateur === null ? null : mb_substr($navigateur, 0, 255),
         ];
     }
 
@@ -388,7 +387,9 @@ class RegistreFiscal
      * avance cette tête sur la ligne de verrou, dans la même transaction :
      * un point de sauvegarde annulé efface l'un et l'autre. Un
      * enregistrement de la chaîne des ventes y avance aussi les grands
-     * totaux.
+     * totaux ; un événement technique note sa trace (voir
+     * TraceEvenement::noterPour()), dans la même transaction encore : une
+     * trace qui ne s'écrit pas annule l'événement.
      *
      * @param  array<array-key, mixed>  $donnees
      */
@@ -441,6 +442,10 @@ class RegistreFiscal
             'version_module' => $this->versionDuModule,
         ]);
         $enregistrement->save();
+
+        if ($chaine === ChaineFiscale::Evenement) {
+            TraceEvenement::noterPour($enregistrement);
+        }
 
         $chaines[$chaine->value] = ['sequence' => $sequence, 'signature' => $signature, ...($grandsTotaux === null ? [] : [
             'gt_reel' => $grandsTotaux['perpetuel_reel'],

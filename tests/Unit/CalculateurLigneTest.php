@@ -185,6 +185,20 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
+     * R4 : les mêmes lignes de 0,07 €, 0,03 € et 0,07 € HT à 20 % (0,03 €
+     * de TVA sur 0,17 €) se partagent la TVA par cumul, dans leur ordre :
+     * 20 % de 0,07, 0,10 et 0,17 valent 0,014 -> 0,01, 0,02 et 0,034 ->
+     * 0,03, soit 0,01 € chacune. Dans l'ordre 0,07, 0,07, 0,03, les cumuls
+     * 0,07, 0,14 et 0,17 donnent 0,01, 0,028 -> 0,03 et 0,03 : la deuxième
+     * ligne prend 0,02 €, et la ligne de 0,03 €, dernière, rien.
+     */
+    public function test_la_tva_d_un_taux_se_repartit_par_cumul_dans_l_ordre_des_lignes(): void
+    {
+        $this->assertSame([0.01, 0.01, 0.01], $this->calculateur()->repartirLaTva([0.07, 0.03, 0.07], 20));
+        $this->assertSame([0.01, 0.02, 0.0], $this->calculateur()->repartirLaTva([0.07, 0.07, 0.03], 20));
+    }
+
+    /**
      * Une ligne de 1 000 x 1,00 € à 20 % vendue à un professionnel (833,33
      * € HT + 166,67 €) : le HT de ce qui est rendu se calcule comme la
      * facture -- 500 articles font 416,666... -> 416,67 € HT et 20 % de ce

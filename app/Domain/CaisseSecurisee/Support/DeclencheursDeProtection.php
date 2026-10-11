@@ -16,7 +16,12 @@ use RuntimeException;
  *   CGI), ni modification, ni suppression, ni vidage ;
  * - sansSuppression() : table dont aucune ligne ne s'efface ; elle se
  *   modifie, et se marque supprimée (deleted_at) quand son modèle le
- *   prévoit, mais ne se vide pas.
+ *   prévoit, mais ne se vide pas ;
+ * - effacementApresExpiration() : table dont une ligne ne se modifie
+ *   jamais et ne s'efface qu'une fois sa colonne expire_le passée (les
+ *   traces techniques, voir TraceEvenement) ; elle ne se vide pas. L'heure
+ *   de comparaison est celle du serveur de base de données, en UTC, comme
+ *   expire_le (voir HorodatageUtc).
  *
  * Seuls PostgreSQL (production) et SQLite (développement et tests) sont
  * pris en charge : sur tout autre pilote, la migration échoue au lieu de
@@ -24,11 +29,14 @@ use RuntimeException;
  * - PostgreSQL : une fonction plpgsql de refus propre à la table
  *   (refus_<table>), appelée avec son message par des déclencheurs BEFORE
  *   UPDATE et BEFORE DELETE pour chaque ligne et BEFORE TRUNCATE pour
- *   l'instruction. Le TRUNCATE ... CASCADE de Laravel déclenche aussi le
- *   refus des tables protégées qu'il viderait par cascade.
- * - SQLite : des déclencheurs BEFORE UPDATE et BEFORE DELETE ; SQLite n'a
- *   pas de TRUNCATE, et le truncate() de Laravel y devient un DELETE, que
- *   le déclencheur refuse.
+ *   l'instruction ; celle d'une table à effacement après expiration laisse
+ *   passer la suppression d'une ligne expirée. Le TRUNCATE ... CASCADE de
+ *   Laravel déclenche aussi le refus des tables protégées qu'il viderait
+ *   par cascade.
+ * - SQLite : des déclencheurs BEFORE UPDATE et BEFORE DELETE, ce dernier
+ *   limité aux lignes non expirées pour une table à effacement après
+ *   expiration ; SQLite n'a pas de TRUNCATE, et le truncate() de Laravel y
+ *   devient un DELETE, que le déclencheur refuse.
  *
  * Restent hors de leur portée, sous PostgreSQL, DROP TABLE et ALTER TABLE
  * ... DISABLE TRIGGER, permis au seul propriétaire de la table : en
@@ -61,6 +69,15 @@ final class DeclencheursDeProtection
         ]);
     }
 
+    public static function effacementApresExpiration(string $table): void
+    {
+        self::poser($table, 'effacement_apres_expiration', 'refuser toute modification, tout vidage et toute suppression avant expiration', [
+            'UPDATE' => "{$table} : modification refusée",
+            'DELETE' => "{$table} : suppression refusée avant expiration",
+            'TRUNCATE' => "{$table} : vidage refusé",
+        ], effacementApresExpiration: true);
+    }
+
     /**
      * Retire ce qui survit à la table protégée, une fois celle-ci
      * supprimée : sa fonction de refus sous PostgreSQL, rien sous SQLite.
@@ -80,16 +97,17 @@ final class DeclencheursDeProtection
      * @param  string  $protection  le suffixe du nom des déclencheurs
      * @param  string  $exigence  ce que la table doit refuser, pour le message d'un pilote non pris en charge
      * @param  array<'UPDATE'|'DELETE'|'TRUNCATE', string>  $refus  le message de refus de chaque opération
+     * @param  bool  $effacementApresExpiration  vrai pour laisser passer la suppression d'une ligne dont expire_le est passée
      */
-    private static function poser(string $table, string $protection, string $exigence, array $refus): void
+    private static function poser(string $table, string $protection, string $exigence, array $refus, bool $effacementApresExpiration = false): void
     {
         self::verifierLeNom($table);
 
         $connexion = DB::connection();
 
         $instructions = match ($pilote = $connexion->getDriverName()) {
-            'pgsql' => self::instructionsPostgres($table, $protection, $refus),
-            'sqlite' => self::instructionsSqlite($table, $protection, $refus),
+            'pgsql' => self::instructionsPostgres($table, $protection, $refus, $effacementApresExpiration),
+            'sqlite' => self::instructionsSqlite($table, $protection, $refus, $effacementApresExpiration),
             default => throw new RuntimeException("La table {$table} doit {$exigence} : le pilote de base de données « {$pilote} » n'est pas pris en charge (PostgreSQL ou SQLite)."),
         };
 
@@ -99,13 +117,20 @@ final class DeclencheursDeProtection
     }
 
     /**
+     * La fonction de refus laisse passer, pour une table à effacement après
+     * expiration, la suppression d'une ligne dont expire_le, en UTC, est
+     * passée à l'heure UTC du serveur.
+     *
      * @param  array<'UPDATE'|'DELETE'|'TRUNCATE', string>  $refus
      * @return list<string>
      */
-    private static function instructionsPostgres(string $table, string $protection, array $refus): array
+    private static function instructionsPostgres(string $table, string $protection, array $refus, bool $effacementApresExpiration): array
     {
+        $ligneExpireeEffacee = $effacementApresExpiration
+            ? "IF TG_OP = 'DELETE' THEN IF OLD.expire_le IS NOT NULL AND OLD.expire_le <= (now() AT TIME ZONE 'UTC') THEN RETURN OLD; END IF; END IF; "
+            : '';
         $instructions = [
-            "CREATE OR REPLACE FUNCTION refus_{$table}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN RAISE EXCEPTION '%', TG_ARGV[0]; END \$\$",
+            "CREATE OR REPLACE FUNCTION refus_{$table}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN {$ligneExpireeEffacee}RAISE EXCEPTION '%', TG_ARGV[0]; END \$\$",
         ];
 
         foreach ($refus as $operation => $message) {
@@ -119,16 +144,24 @@ final class DeclencheursDeProtection
     }
 
     /**
+     * Pour une table à effacement après expiration, le déclencheur BEFORE
+     * DELETE ne refuse que la suppression d'une ligne sans expire_le ou
+     * dont expire_le, en UTC (« AAAA-MM-JJ HH:MM:SS »), n'est pas encore
+     * passée à CURRENT_TIMESTAMP, l'heure UTC de SQLite au même format.
+     *
      * @param  array<'UPDATE'|'DELETE'|'TRUNCATE', string>  $refus
      * @return list<string>
      */
-    private static function instructionsSqlite(string $table, string $protection, array $refus): array
+    private static function instructionsSqlite(string $table, string $protection, array $refus, bool $effacementApresExpiration): array
     {
         $instructions = [];
 
         foreach (array_diff_key($refus, ['TRUNCATE' => true]) as $operation => $message) {
+            $condition = $effacementApresExpiration && $operation === 'DELETE'
+                ? ' WHEN OLD.expire_le IS NULL OR OLD.expire_le > CURRENT_TIMESTAMP'
+                : '';
             $instructions[] = "CREATE TRIGGER {$table}_{$protection}_".strtolower($operation)
-                ." BEFORE {$operation} ON {$table} BEGIN SELECT RAISE(ABORT, '{$message}'); END";
+                ." BEFORE {$operation} ON {$table}{$condition} BEGIN SELECT RAISE(ABORT, '{$message}'); END";
         }
 
         return $instructions;

@@ -290,7 +290,7 @@ class JournalAuditTest extends TestCase
      */
     private function inscrire(Societe $societe, ?Magasin $magasin, ActionAuditee $action = ActionAuditee::IdentiteModifiee, ?array $nouvellesValeurs = ['raison_sociale' => 'Martin et Fils']): EntreeAudit
     {
-        return app(TenantContext::class)->runAsSociete($societe, fn (): EntreeAudit => DB::transaction(fn (): EntreeAudit => app(JournalAudit::class)->inscrire($action, $magasin, null, $nouvellesValeurs)));
+        return app(TenantContext::class)->runAsSociete($societe, fn (): EntreeAudit => DB::transaction(fn (): EntreeAudit => app(JournalAudit::class)->inscrire($action, null, $magasin, null, $nouvellesValeurs)));
     }
 
     /**
@@ -301,7 +301,7 @@ class JournalAuditTest extends TestCase
     {
         Route::post("/test/auditer/{$societe->id}", fn (): int => app(TenantContext::class)->runAsSociete(
             $societe,
-            fn (): int => DB::transaction(fn (): int => app(JournalAudit::class)->inscrire(ActionAuditee::IdentiteModifiee, null, null, ['raison_sociale' => 'Martin et Fils'])->id),
+            fn (): int => DB::transaction(fn (): int => app(JournalAudit::class)->inscrire(ActionAuditee::IdentiteModifiee, null, null, null, ['raison_sociale' => 'Martin et Fils'])->id),
         ));
 
         $identifiant = $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.7'])

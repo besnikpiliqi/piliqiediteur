@@ -163,10 +163,30 @@ class IsolationDesSocietesTest extends TestCase
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('sirets_magasins')->insert(['societe_id' => $magasinA->societe_id, 'magasin_id' => $magasinB->id, 'siret' => IdentifiantsInsee::avecSaCle($magasinA->societe->siren.'0009'), 'reserve_le' => $maintenant, 'created_at' => $maintenant, 'updated_at' => $maintenant])), QueryException::class);
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('journal_audit')->insert(['societe_id' => $magasinA->societe_id, 'magasin_id' => $magasinB->id, 'categorie' => 'operations', 'sequence' => 99, 'origine' => 'systeme', 'action' => 'magasin_modifie', 'cle_id' => 'tests', 'empreinte' => str_repeat('0', 64), 'created_at' => $maintenant])), QueryException::class);
         $this->assertThrows(
-            fn () => app(TenantContext::class)->runAsSociete($magasinA->societe, fn () => DB::transaction(fn () => app(JournalAudit::class)->inscrire(ActionAuditee::MagasinModifie, $magasinB, null, ['nom' => 'B']))),
+            fn () => app(TenantContext::class)->runAsSociete($magasinA->societe, fn () => DB::transaction(fn () => app(JournalAudit::class)->inscrire(ActionAuditee::MagasinModifie, null, $magasinB, null, ['nom' => 'B']))),
             LogicException::class,
             'Une entrée du journal d\'audit ne s\'inscrit que dans la chaîne d\'un magasin de la société active.',
         );
+    }
+
+    /**
+     * Les clés étrangères composites de l'équipe d'un magasin : la base
+     * refuse de rattacher un compte au magasin d'une autre société que la
+     * sienne, quelle que soit la société écrite sur la ligne ; dans sa
+     * propre société, la même ligne s'écrit.
+     */
+    public function test_la_base_refuse_d_affecter_un_compte_au_magasin_d_une_autre_societe(): void
+    {
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'A']);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'B']);
+        $compteDeA = $this->proprietaireDe($magasinA);
+        $ligne = fn (Magasin $magasin, int $societeId): array => ['societe_id' => $societeId, 'magasin_id' => $magasin->id, 'user_id' => $compteDeA->id, 'role' => 'vendeur', 'statut' => 'actif', 'created_at' => now(), 'updated_at' => now()];
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('magasin_user')->insert($ligne($magasinB, $magasinA->societe_id))), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('magasin_user')->insert($ligne($magasinB, $magasinB->societe_id))), QueryException::class);
+
+        $this->assertSame(0, DB::table('magasin_user')->where('magasin_id', $magasinB->id)->count());
+        $this->assertTrue(DB::table('magasin_user')->insert($ligne($magasinA, $magasinA->societe_id)));
     }
 
     /**
@@ -360,7 +380,7 @@ class IsolationDesSocietesTest extends TestCase
             fn (): int => DB::transaction(function () use ($societe): int {
                 app(ControleSirene::class)->noterUnite($societe, app(ControleSirene::class)->unite($societe->siren));
 
-                return app(JournalAudit::class)->inscrire(ActionAuditee::IdentiteModifiee, null, null, ['raison_sociale' => 'B'])->id;
+                return app(JournalAudit::class)->inscrire(ActionAuditee::IdentiteModifiee, null, null, null, ['raison_sociale' => 'B'])->id;
             }),
         ));
 

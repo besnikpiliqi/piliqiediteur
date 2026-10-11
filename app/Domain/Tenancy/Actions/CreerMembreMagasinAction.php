@@ -102,6 +102,7 @@ class CreerMembreMagasinAction
             $utilisateur->save();
 
             $magasin->utilisateurs()->attach($utilisateur->getKey(), [
+                'societe_id' => $magasin->societe_id,
                 'role' => $role->value,
                 'statut' => StatutMembreMagasin::Actif->value,
                 'joined_at' => now(),

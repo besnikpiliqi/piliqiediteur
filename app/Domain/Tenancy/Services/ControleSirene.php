@@ -44,6 +44,21 @@ class ControleSirene
 
     public const MOTIF_AUTRE_ENTREPRISE = 'Cet établissement n\'est pas rattaché à cette entreprise au répertoire Sirene de l\'INSEE.';
 
+    /**
+     * Les champs de l'identité d'une société que le répertoire donne de son
+     * entreprise (voir identiteDepuisSirene()), hors le n° de TVA, que
+     * forme son SIREN.
+     */
+    public const CHAMPS_DU_REPERTOIRE = [
+        'raison_sociale',
+        'categorie_juridique_insee',
+        'forme_juridique',
+        'siege_adresse',
+        'siege_complement_adresse',
+        'siege_code_postal',
+        'siege_ville',
+    ];
+
     public const MOTIF_TERRITOIRE_NON_GERE = 'Le logiciel ne gère pas encore les magasins situés en Guyane, à Mayotte ou dans une collectivité d\'outre-mer.';
 
     public function __construct(
@@ -128,12 +143,14 @@ class ControleSirene
      * la société, qui doit être la société active.
      *
      * @param  array{resultat: ResultatVerification, unite: UniteSirene|null, motif: string|null}  $consultation  ce qu'a rendu unite()
+     * @param  User|null  $auteur  la personne dont l'action a demandé le contrôle ; null pour le système
      */
     public function noterUnite(Societe $societe, array $consultation, ?User $auteur = null): VerificationSociete
     {
         $unite = $consultation['unite'];
 
         return $this->noter($societe, null, TypeVerification::SireneUnite, $consultation['resultat'], $unite === null ? null : [
+            'siren' => $unite->siren,
             'etat_administratif' => $unite->active ? 'active' : 'cessee',
             'categorie_juridique' => $unite->categorieJuridique,
             'denomination' => $unite->denomination,
@@ -146,6 +163,7 @@ class ControleSirene
      * vérifications de sa société, qui doit être la société active.
      *
      * @param  array{resultat: ResultatVerification, etablissement: EtablissementSirene|null, motif: string|null}  $consultation  ce qu'a rendu etablissement()
+     * @param  User|null  $auteur  la personne dont l'action a demandé le contrôle ; null pour le système
      */
     public function noterEtablissement(Magasin $magasin, array $consultation, ?User $auteur = null): VerificationSociete
     {
@@ -202,7 +220,7 @@ class ControleSirene
                 'auteur_id' => $auteur?->getKey(),
             ]))->save();
 
-            $this->journalAudit->inscrire(ActionAuditee::VerificationEnregistree, $magasin, null, [
+            $this->journalAudit->inscrire(ActionAuditee::VerificationEnregistree, $auteur, $magasin, null, [
                 'type' => $type->value,
                 'resultat' => $resultat->value,
                 'fournisseur' => self::FOURNISSEUR,

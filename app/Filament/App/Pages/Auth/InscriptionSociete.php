@@ -122,7 +122,11 @@ class InscriptionSociete extends Register
         $this->refuserCeQueSireneRefuse($donnees['siren'], $donnees['siren'].$donnees['nic']);
 
         if (User::query()->where('email', $email)->exists()) {
-            Mail::to($email)->send(new CompteExistantMail(Filament::getLoginUrl(), Filament::getRequestPasswordResetUrl()));
+            $panneau = Filament::getPanel('app');
+            Mail::to($email)->send(new CompteExistantMail(
+                self::adresseDeLApplication($panneau->generateRouteName('auth.login')),
+                self::adresseDeLApplication($panneau->generateRouteName('auth.password-reset.request')),
+            ));
             $this->terminer();
 
             return null;
@@ -150,12 +154,24 @@ class InscriptionSociete extends Register
     }
 
     /**
-     * Le lien de confirmation, construit depuis APP_URL, jamais depuis
-     * l'adresse de la requête.
+     * Le lien de confirmation (voir adresseDeLApplication()).
      */
     public static function lienDeConfirmation(string $jeton): string
     {
-        return rtrim((string) config('app.url'), '/').route('inscription.afficher', ['jeton' => $jeton], absolute: false);
+        return self::adresseDeLApplication('inscription.afficher', ['jeton' => $jeton]);
+    }
+
+    /**
+     * L'adresse d'une page du logiciel telle qu'un e-mail de l'inscription
+     * la donne : construite depuis APP_URL, jamais depuis l'adresse de la
+     * requête, dont l'en-tête Host vient de qui remplit cette page ouverte
+     * à tous.
+     *
+     * @param  array<string, mixed>  $parametres
+     */
+    public static function adresseDeLApplication(string $route, array $parametres = []): string
+    {
+        return rtrim((string) config('app.url'), '/').route($route, $parametres, absolute: false);
     }
 
     protected function getSirenFormComponent(): Component

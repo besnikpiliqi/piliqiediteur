@@ -19,7 +19,7 @@ use App\Integrations\Sirene\Contracts\RepertoireSirene;
  * - tout établissement dont le NIC commence par 9, fermé.
  *
  * Un test règle en plus ses propres réponses (voir fermer(), cesser(),
- * oublier(), deplacer(), rendreInjoignable()) sur l'instance du
+ * oublier(), deplacer(), nommer(), rendreInjoignable()) sur l'instance du
  * conteneur.
  */
 class FauxRepertoireSirene implements RepertoireSirene
@@ -48,6 +48,9 @@ class FauxRepertoireSirene implements RepertoireSirene
     /** @var array<string, array{0: string, 1: string}> */
     private array $adresses = [];
 
+    /** @var array<string, string> */
+    private array $denominations = [];
+
     public function unite(string $siren): ?UniteSirene
     {
         $this->repondre($siren);
@@ -64,6 +67,7 @@ class FauxRepertoireSirene implements RepertoireSirene
             active: $siren !== self::SIREN_CESSEE && ! isset($this->cessees[$siren]),
             denomination: match (true) {
                 $diffusionPartielle => null,
+                isset($this->denominations[$siren]) => $this->denominations[$siren],
                 $entrepreneurIndividuel => 'JEANNE DUPONT',
                 default => "SOCIETE FICTIVE {$siren}",
             },
@@ -116,6 +120,14 @@ class FauxRepertoireSirene implements RepertoireSirene
     public function deplacer(string $siret, string $codePostal, string $ville): void
     {
         $this->adresses[$siret] = [$codePostal, $ville];
+    }
+
+    /**
+     * Une entreprise que le répertoire nomme ainsi.
+     */
+    public function nommer(string $siren, string $denomination): void
+    {
+        $this->denominations[$siren] = $denomination;
     }
 
     public function cesser(string $siren): void

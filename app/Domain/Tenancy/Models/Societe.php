@@ -8,9 +8,12 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Facturation\Casts\NumeroTvaNormalise;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RegimeTva;
+use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Database\Factories\SocieteFactory;
@@ -44,8 +47,13 @@ use LogicException;
  * - son SIREN ne change plus une fois validée (Q3), et son mois de fin
  *   d'exercice plus après la première vente de l'un de ses magasins (voir
  *   aVenduUneFois()) ;
+ * - ce que sa forme juridique exclut ne s'enregistre pas (voir
+ *   retirerCeQueSaFormeExclut()) ;
  * - elle ne s'efface jamais (voir forceDelete() et le déclencheur de la
  *   table societes).
+ * La mention « EI » d'une autre forme n'est refusée qu'à la saisie (voir
+ * ModifierIdentiteSocieteAction) : la dénomination que donne le répertoire
+ * Sirene s'enregistre telle qu'elle est.
  *
  * Volontairement sans SocieteScope : une société est le tenant du panneau
  * de son administration. Toute requête qui en lit une autre que celle de
@@ -55,6 +63,28 @@ class Societe extends Model implements HasName
 {
     /** @use HasFactory<SocieteFactory> */
     use HasFactory, JournaliseSesParametresDeConformite;
+
+    /**
+     * Les champs de son identité légale, tels que le journal d'audit en
+     * retient les changements (voir identiteAuditee()) : ceux que le
+     * propriétaire saisit, et la catégorie juridique lue au répertoire
+     * Sirene.
+     */
+    public const CHAMPS_DE_L_IDENTITE = [
+        'raison_sociale',
+        'forme_juridique',
+        'forme_juridique_autre',
+        'societe_commerciale',
+        'categorie_juridique_insee',
+        'capital_social',
+        'capital_variable',
+        'immatriculation',
+        'numero_tva',
+        'siege_adresse',
+        'siege_complement_adresse',
+        'siege_code_postal',
+        'siege_ville',
+    ];
 
     protected $fillable = [
         'raison_sociale',
@@ -101,9 +131,7 @@ class Societe extends Model implements HasName
                 throw new LogicException('Une société n\'est jamais à la fois validée et refusée.');
             }
 
-            if ($societe->forme_juridique !== FormeJuridique::EntrepreneurIndividuel && self::porteLaMentionEi($societe->raison_sociale)) {
-                throw new LogicException('La mention « EI » est réservée à un entrepreneur individuel : retirez-la de la raison sociale, ou choisissez cette forme juridique.');
-            }
+            $societe->retirerCeQueSaFormeExclut();
         });
 
         static::updating(function (Societe $societe): void {
@@ -229,6 +257,58 @@ class Societe extends Model implements HasName
     }
 
     /**
+     * Retire ce que sa forme juridique exclut : la réponse « société
+     * commerciale ? », qui n'a de sens que pour une autre forme ; le
+     * capital, le capital variable et le libellé de forme d'un entrepreneur
+     * individuel, qui n'en a pas. Appelé à chaque enregistrement : une
+     * forme changée par le propriétaire, par la correction du SIREN ou par
+     * le répertoire Sirene ne laisse rien de la précédente.
+     */
+    public function retirerCeQueSaFormeExclut(): void
+    {
+        if ($this->forme_juridique !== FormeJuridique::Autre) {
+            $this->societe_commerciale = null;
+        }
+
+        if ($this->estEntrepreneurIndividuel()) {
+            $this->forceFill(['capital_social' => null, 'capital_variable' => false, 'forme_juridique_autre' => null]);
+        }
+    }
+
+    /**
+     * Son identité telle que le journal d'audit la retient (voir
+     * JournalAudit::inscrireLesChangements()).
+     *
+     * @return array<string, mixed>
+     */
+    public function identiteAuditee(): array
+    {
+        return array_map(JournalAudit::valeur(...), $this->only(self::CHAMPS_DE_L_IDENTITE));
+    }
+
+    /**
+     * La dénomination que le répertoire Sirene donne de l'entreprise de son
+     * SIREN actuel, à son dernier contrôle concluant (voir
+     * ControleSirene::noterUnite()) ; null quand aucun ne la donne
+     * (diffusion partielle, INSEE injoignable depuis la correction du
+     * SIREN). Lue dans le registre des vérifications de la société active,
+     * et de cette société seulement.
+     */
+    public function denominationSirene(): ?string
+    {
+        $details = VerificationSociete::query()
+            ->where('societe_id', $this->getKey())
+            ->where('type', TypeVerification::SireneUnite->value)
+            ->where('resultat', ResultatVerification::Concluante->value)
+            ->whereNull('magasin_id')
+            ->orderByDesc('id')
+            ->first()
+            ?->details;
+
+        return ($details['siren'] ?? null) === $this->siren ? ($details['denomination'] ?? null) : null;
+    }
+
+    /**
      * La forme telle qu'une facture l'imprime : le libellé exact saisi
      * pour une autre forme ou une variante (SELARL...), sinon celui de la
      * forme ; aucun pour un entrepreneur individuel, dont la dénomination
@@ -304,12 +384,14 @@ class Societe extends Model implements HasName
 
     /**
      * Une raison sociale porte-t-elle la mention de l'entrepreneur
-     * individuel, en mot entier (« EI » ou « Entrepreneur individuel ») ?
-     * « SEIGNEUR » ou « Peinture » ne la portent pas.
+     * individuel, en mot entier (« EI » ou « Entrepreneur individuel »),
+     * quel que soit le signe qui l'entoure : « Jeanne Dupont EI »,
+     * « Jeanne Dupont (EI) » ou « Jeanne Dupont EI. » la portent ;
+     * « SEIGNEUR » ou « Peinture » non.
      */
     public static function porteLaMentionEi(?string $raisonSociale): bool
     {
-        return $raisonSociale !== null && preg_match('/(^|\s)(EI|Entrepreneur individuel)(\s|$)/iu', $raisonSociale) === 1;
+        return $raisonSociale !== null && preg_match('/(?<![\p{L}\p{N}])(EI|Entrepreneur individuel)(?![\p{L}\p{N}])/iu', $raisonSociale) === 1;
     }
 
     public function getFilamentName(): string

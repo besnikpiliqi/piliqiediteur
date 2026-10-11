@@ -175,13 +175,14 @@ final readonly class Emetteur
     /**
      * La dénomination imprimée : la raison sociale, suivie de la mention
      * « EI » pour un entrepreneur individuel quand elle ne la porte pas
-     * déjà en mot entier (S5, art. R526-27 du Code de commerce : le nom
-     * précédé ou suivi immédiatement de la mention) ; l'entrepreneur n'a
-     * rien à taper.
+     * déjà en mot entier, entre parenthèses ou suivie d'un point compris
+     * (S5, art. R526-27 du Code de commerce : le nom précédé ou suivi
+     * immédiatement de la mention, voir Societe::porteLaMentionEi()) ;
+     * l'entrepreneur n'a rien à taper.
      */
     public function denominationImprimee(): ?string
     {
-        if (blank($this->raisonSociale) || ! $this->estEntrepreneurIndividuel || preg_match('/(^|\s)(EI|Entrepreneur individuel)(\s|$)/iu', $this->raisonSociale) === 1) {
+        if (blank($this->raisonSociale) || ! $this->estEntrepreneurIndividuel || Societe::porteLaMentionEi($this->raisonSociale)) {
             return $this->raisonSociale;
         }
 

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Enums;
 
+use App\Domain\Tenancy\Models\Societe;
 use Filament\Support\Contracts\HasLabel;
 
 /**
@@ -17,6 +18,7 @@ enum ActionAuditee: string implements HasLabel
     case ParametresFiscauxModifies = 'parametres_fiscaux_modifies';
     case SirenCorrigeAvantValidation = 'siren_corrige_avant_validation';
     case VerificationEnregistree = 'verification_enregistree';
+    case SocieteRefusee = 'societe_refusee';
     case MagasinCree = 'magasin_cree';
     case MagasinModifie = 'magasin_modifie';
 
@@ -35,6 +37,7 @@ enum ActionAuditee: string implements HasLabel
             self::ParametresFiscauxModifies => 'Paramètres fiscaux modifiés',
             self::SirenCorrigeAvantValidation => 'SIREN corrigé avant la validation',
             self::VerificationEnregistree => 'Vérification enregistrée',
+            self::SocieteRefusee => 'Société refusée',
             self::MagasinCree => 'Magasin créé',
             self::MagasinModifie => 'Magasin modifié',
         };
@@ -43,7 +46,7 @@ enum ActionAuditee: string implements HasLabel
     public function categorie(): CategorieAudit
     {
         return match ($this) {
-            self::VerificationEnregistree => CategorieAudit::Verification,
+            self::VerificationEnregistree, self::SocieteRefusee => CategorieAudit::Verification,
             default => CategorieAudit::Operations,
         };
     }
@@ -59,13 +62,11 @@ enum ActionAuditee: string implements HasLabel
     {
         return match ($this) {
             self::SocieteInscrite => ['siren', 'raison_sociale', 'forme_juridique', 'proprietaire', 'premier_magasin'],
-            self::IdentiteModifiee => [
-                'raison_sociale', 'forme_juridique', 'forme_juridique_autre', 'societe_commerciale', 'capital_social', 'capital_variable',
-                'immatriculation', 'numero_tva', 'siege_adresse', 'siege_complement_adresse', 'siege_code_postal', 'siege_ville',
-            ],
+            self::IdentiteModifiee => Societe::CHAMPS_DE_L_IDENTITE,
             self::ParametresFiscauxModifies => ['regime_tva', 'option_debits_tva', 'mois_fin_exercice'],
-            self::SirenCorrigeAvantValidation => ['siren', 'sirets'],
+            self::SirenCorrigeAvantValidation => ['siren', 'sirets', ...Societe::CHAMPS_DE_L_IDENTITE],
             self::VerificationEnregistree => ['type', 'resultat', 'fournisseur', 'siret'],
+            self::SocieteRefusee => ['motif'],
             self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'etablissement_verifie'],
         };
     }

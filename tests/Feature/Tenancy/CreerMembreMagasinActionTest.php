@@ -207,6 +207,7 @@ class CreerMembreMagasinActionTest extends TestCase
 
         $this->assertThrows(
             $this->dansUnPointDeSauvegarde(fn () => $magasinB->utilisateurs()->attach($comptable->getKey(), [
+                'societe_id' => $magasinB->societe_id,
                 'role' => RoleMagasin::Comptable->value,
                 'statut' => StatutMembreMagasin::Actif->value,
                 'joined_at' => now(),
@@ -593,7 +594,7 @@ class CreerMembreMagasinActionTest extends TestCase
     private function ligneForgeePourLeProprietaire(Magasin $magasin, User $proprietaire): MagasinUser
     {
         $this->assertSame(0, MagasinUser::query()->where('user_id', $proprietaire->id)->count());
-        $magasin->utilisateurs()->attach($proprietaire->id, ['role' => RoleMagasin::Administrateur->value, 'statut' => StatutMembreMagasin::Actif->value, 'joined_at' => now()]);
+        $magasin->utilisateurs()->attach($proprietaire->id, ['societe_id' => $magasin->societe_id, 'role' => RoleMagasin::Administrateur->value, 'statut' => StatutMembreMagasin::Actif->value, 'joined_at' => now()]);
 
         return $magasin->membres()->where('user_id', $proprietaire->id)->firstOrFail();
     }

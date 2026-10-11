@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -9,6 +10,7 @@ use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Mail\CompteExistantMail;
 use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
 use App\Domain\Tenancy\Models\DemandeInscription;
+use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
@@ -25,10 +27,14 @@ use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Closure;
 use Filament\Facades\Filament;
+use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Middleware\TrustHosts;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\URL;
+use Illuminate\Validation\ValidationException;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -252,9 +258,96 @@ class InscriptionSocieteTest extends TestCase
             ->assertSee(InscriptionSociete::MESSAGE_NEUTRE);
 
         Mail::assertSent(CompteExistantMail::class, fn (CompteExistantMail $mail): bool => $mail->hasTo('jeanne@maboutique.fr')
-            && $mail->urlDeConnexion === Filament::getPanel('app')->getLoginUrl());
+            && $mail->urlDeConnexion === rtrim((string) config('app.url'), '/').'/app/login');
         Mail::assertNotSent(DemandeInscriptionMail::class);
         $this->assertSame(0, DemandeInscription::query()->count());
+    }
+
+    /**
+     * La page est ouverte à tous : ses e-mails ne prennent pas leurs liens
+     * dans l'adresse de la requête, dont l'en-tête Host vient de qui la
+     * remplit. Un hôte forgé (simulé ici par la racine que suivent les
+     * adresses absolues) n'envoie pas le titulaire d'un compte vers un
+     * autre site que celui d'APP_URL.
+     */
+    public function test_les_liens_de_l_e_mail_d_un_compte_existant_viennent_d_app_url_jamais_de_la_requete(): void
+    {
+        Mail::fake();
+        User::factory()->create(['email' => 'jeanne@maboutique.fr']);
+        URL::forceRootUrl('http://pirate.example');
+        $racine = rtrim((string) config('app.url'), '/');
+
+        $this->demander()->assertHasNoFormErrors();
+
+        Mail::assertSent(CompteExistantMail::class, fn (CompteExistantMail $mail): bool => $mail->urlDeConnexion === "{$racine}/app/login"
+            && $mail->urlMotDePasseOublie === "{$racine}/app/password-reset/request");
+        $this->assertStringNotContainsString('pirate.example', Mail::sent(CompteExistantMail::class)->sole()->render());
+    }
+
+    /**
+     * Hors du développement et des tests, seul l'hôte d'APP_URL (et ses
+     * sous-domaines) est servi : aucune adresse absolue construite depuis
+     * une requête, comme celle du « Mot de passe oublié », ne mène
+     * ailleurs.
+     */
+    public function test_seul_l_hote_d_app_url_est_un_hote_de_confiance(): void
+    {
+        $motifs = app(TrustHosts::class)->hosts();
+        $estDeConfiance = fn (string $hote): bool => collect($motifs)->contains(fn (string $motif): bool => preg_match('{'.$motif.'}i', $hote) === 1);
+
+        $this->assertTrue(app(Kernel::class)->hasMiddleware(TrustHosts::class));
+        $this->assertSame([true, false], [$estDeConfiance((string) parse_url((string) config('app.url'), PHP_URL_HOST)), $estDeConfiance('pirate.example')]);
+    }
+
+    /**
+     * Les entrées du journal d'audit de l'inscription (contrôles Sirene,
+     * premier magasin, société) ont pour auteur la personne qui l'a
+     * confirmée, bien qu'elle ne soit connectée qu'ensuite.
+     */
+    public function test_les_entrees_d_audit_de_l_inscription_ont_le_proprietaire_pour_auteur(): void
+    {
+        Mail::fake();
+        $this->demander();
+
+        $this->post($this->lienEnvoye());
+
+        $societe = Societe::query()->sole();
+        $proprietaire = User::query()->sole();
+        $this->assertSame(
+            [
+                ['verification_enregistree', 'membre', $proprietaire->id, 'Jeanne Dupont'],
+                ['magasin_cree', 'membre', $proprietaire->id, 'Jeanne Dupont'],
+                ['verification_enregistree', 'membre', $proprietaire->id, 'Jeanne Dupont'],
+                ['societe_inscrite', 'membre', $proprietaire->id, 'Jeanne Dupont'],
+            ],
+            app(TenantContext::class)->runAsSociete($societe, fn (): array => EntreeAudit::query()->orderBy('id')->get()
+                ->map(fn (EntreeAudit $entree): array => [$entree->action->value, $entree->origine, (int) $entree->auteur_id, $entree->auteur_libelle])->all()),
+        );
+    }
+
+    /**
+     * Une société dont la dénomination au répertoire porte le mot « EI »
+     * sans être un entrepreneur individuel s'inscrit sous ce nom, préremplie
+     * comme toute autre, puis complète son identité ; seule une raison
+     * sociale saisie avec la mention, pour une autre forme, est refusée.
+     */
+    public function test_une_sas_que_le_repertoire_nomme_avec_le_mot_ei_s_inscrit_et_complete_son_identite(): void
+    {
+        Mail::fake();
+        app(RepertoireSirene::class)->nommer(self::SIREN, 'EI SOLUTIONS');
+        $this->demander();
+
+        $this->post($this->lienEnvoye())->assertRedirect();
+
+        $societe = Societe::query()->sole();
+        $this->assertSame(['EI SOLUTIONS', FormeJuridique::Sas], [$societe->raison_sociale, $societe->forme_juridique]);
+        app(TenantContext::class)->clear();
+        app(ModifierIdentiteSocieteAction::class)->handle($societe->proprietaire, $societe, ['capital_social' => '1000', 'immatriculation' => 'RCS Paris']);
+        $this->assertSame(['EI SOLUTIONS', '1000.00', []], [$societe->fresh()->raison_sociale, $societe->fresh()->capital_social, $societe->fresh()->mentionsLegalesManquantes()]);
+        $this->assertThrows(
+            fn () => app(ModifierIdentiteSocieteAction::class)->handle($societe->proprietaire, $societe->fresh(), ['raison_sociale' => 'EI CONSEIL']),
+            fn (ValidationException $refus): bool => $refus->errors() === ['raison_sociale' => [ModifierIdentiteSocieteAction::MESSAGE_MENTION_EI]],
+        );
     }
 
     public function test_deux_inscriptions_en_attente_du_meme_siren_coexistent(): void

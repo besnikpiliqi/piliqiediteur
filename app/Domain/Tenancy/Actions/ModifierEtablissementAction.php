@@ -136,18 +136,7 @@ class ModifierEtablissementAction
             $this->controleSirene->noterEtablissement($enregistre, $consultation, $auteur);
         }
 
-        $apres = $this->valeursAuditees($enregistre);
-        $champsModifies = array_keys(array_diff_assoc(array_map(serialize(...), $apres), array_map(serialize(...), $avant)));
-
-        if ($champsModifies !== []) {
-            $this->journalAudit->inscrire(
-                ActionAuditee::MagasinModifie,
-                $enregistre,
-                array_intersect_key($avant, array_flip($champsModifies)),
-                array_intersect_key($apres, array_flip($champsModifies)),
-                $enregistre,
-            );
-        }
+        $this->journalAudit->inscrireLesChangements(ActionAuditee::MagasinModifie, $auteur, $enregistre, $avant, $this->valeursAuditees($enregistre), $enregistre);
 
         return $enregistre;
     }

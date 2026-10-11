@@ -14,6 +14,7 @@ use App\Console\Commands\VerifierJournalAudit;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -21,7 +22,14 @@ return Application::configure(basePath: dirname(__DIR__))
         web: __DIR__.'/../routes/web.php',
         health: '/up',
     )
-    ->withMiddleware()
+    ->withMiddleware(function (Middleware $middleware): void {
+        // Hors du développement et des tests, une requête n'est servie que
+        // pour l'hôte d'APP_URL (et ses sous-domaines) : une adresse
+        // absolue construite depuis la requête, comme celle d'un e-mail
+        // « Mot de passe oublié », ne peut pas mener ailleurs qu'au
+        // logiciel par un en-tête Host forgé.
+        $middleware->trustHosts();
+    })
     ->withSchedule(function (Schedule $schedule): void {
         // À minuit pile, heure de Paris comme tous les horaires ci-dessous
         // (voir config/app.php) : clôture, dans l'ordre, les journées de

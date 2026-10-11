@@ -23,7 +23,9 @@ use LogicException;
  * inscrit, en ajout seul, avec son auteur, ce qu'elle touche et les
  * anciennes et nouvelles valeurs que son action retient (voir
  * ActionAuditee::champsAudites()), jamais un mot de passe, un jeton, un
- * secret ni un code.
+ * secret ni un code. L'auteur est celui que l'action reçoit, jamais lu
+ * dans la session : la personne qui confirme son inscription l'est avant
+ * d'être connectée, et une commande n'a que le système pour auteur.
  *
  * Chaque entrée suit la précédente de sa chaîne : celle d'un magasin
  * quand elle le concerne, celle de la société sinon, dans sa catégorie
@@ -53,13 +55,14 @@ class JournalAudit
     private const ORIGINE_SYSTEME = 'systeme';
 
     /**
+     * @param  User|null  $auteur  la personne qui fait l'action ; null pour le système
      * @param  array<string, mixed>|null  $anciennesValeurs
      * @param  array<string, mixed>|null  $nouvellesValeurs
      *
      * @throws JournalAuditNonConfigureException
      * @throws InvalidArgumentException quand une valeur n'est pas retenue par l'action
      */
-    public function inscrire(ActionAuditee $action, ?Magasin $magasin, ?array $anciennesValeurs, ?array $nouvellesValeurs, ?Model $cible = null): EntreeAudit
+    public function inscrire(ActionAuditee $action, ?User $auteur, ?Magasin $magasin, ?array $anciennesValeurs, ?array $nouvellesValeurs, ?Model $cible = null): EntreeAudit
     {
         [$cle, $cleId] = self::cleCourante();
         $societe = app(TenantContext::class)->societe();
@@ -71,8 +74,6 @@ class JournalAudit
         self::verifierLesChamps($action, $anciennesValeurs);
         self::verifierLesChamps($action, $nouvellesValeurs);
 
-        /** @var User|null $auteur */
-        $auteur = auth()->user();
         $categorie = $action->categorie();
         $maintenant = CarbonImmutable::now()->startOfSecond();
         $duree = $categorie->dureeDeConservation();
@@ -108,6 +109,28 @@ class JournalAudit
 
             return $entree;
         });
+    }
+
+    /**
+     * Inscrit ce qu'une action a changé : les seuls champs dont la valeur
+     * diffère entre avant et après, avec leurs anciennes et leurs nouvelles
+     * valeurs ; rien quand rien n'a changé.
+     *
+     * @param  array<string, mixed>  $avant  les valeurs retenues avant l'action (voir valeur())
+     * @param  array<string, mixed>  $apres  les mêmes champs après l'action
+     *
+     * @throws JournalAuditNonConfigureException
+     * @throws InvalidArgumentException quand une valeur n'est pas retenue par l'action
+     */
+    public function inscrireLesChangements(ActionAuditee $action, ?User $auteur, ?Magasin $magasin, array $avant, array $apres, ?Model $cible = null): ?EntreeAudit
+    {
+        $champsModifies = array_flip(array_keys(array_diff_assoc(array_map(serialize(...), $apres), array_map(serialize(...), $avant))));
+
+        if ($champsModifies === []) {
+            return null;
+        }
+
+        return $this->inscrire($action, $auteur, $magasin, array_intersect_key($avant, $champsModifies), array_intersect_key($apres, $champsModifies), $cible);
     }
 
     /**

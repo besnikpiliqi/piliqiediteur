@@ -34,14 +34,26 @@ use LogicException;
  * CreerEtablissementAction). Avant la validation, aucun SIRET n'est
  * réservé : rien n'est libéré.
  *
+ * L'identité que le répertoire avait donnée de l'entreprise de l'ancien
+ * SIREN, une autre que la sienne, ne reste pas : la raison sociale, la
+ * catégorie juridique, la forme qu'elle donne et le siège deviennent ceux
+ * que le répertoire donne du nouveau SIREN (voir
+ * ControleSirene::identiteDepuisSirene()), vides quand il ne les donne pas
+ * (diffusion partielle, ou INSEE injoignable : la reprise du contrôle les
+ * complète, voir app:reverifier-sirene). Une forme qui change emporte son
+ * libellé exact et ce qu'elle exclut (voir
+ * Societe::retirerCeQueSaFormeExclut()) ; le n° de TVA, s'il était celui
+ * que formait l'ancien SIREN, devient celui que forme le nouveau ; le
+ * reste de l'identité (capital, immatriculation) est celui que le
+ * propriétaire a saisi, et ne change pas.
+ *
  * Tout se fait sous le verrou des registres de tous les magasins de la
  * société, qui reçoivent le nouveau SIREN, et chacun son nouveau SIRET, à
  * leur journal des événements (JET 270, voir
- * JournaliseSesParametresDeConformite) ; le n° de TVA, s'il était celui
- * que formait l'ancien SIREN, devient celui que forme le nouveau. Les
- * contrôles Sirene s'inscrivent au registre des vérifications, et la
- * correction au journal d'audit, avec les anciens et les nouveaux
- * identifiants.
+ * JournaliseSesParametresDeConformite). Les contrôles Sirene s'inscrivent
+ * au registre des vérifications, et la correction au journal d'audit,
+ * avec les anciennes et les nouvelles valeurs des identifiants et de
+ * l'identité qui ont changé.
  */
 class CorrigerSirenAvantValidationAction
 {
@@ -84,6 +96,11 @@ class CorrigerSirenAvantValidationAction
                 throw ValidationException::withMessages(['siren' => $unite['motif']]);
             }
 
+            $identite = [
+                ...array_fill_keys(ControleSirene::CHAMPS_DU_REPERTOIRE, null),
+                ...($unite['unite'] === null ? [] : array_intersect_key($this->controleSirene->identiteDepuisSirene($unite['unite']), array_flip(ControleSirene::CHAMPS_DU_REPERTOIRE))),
+            ];
+
             $etablissements = [];
 
             foreach ($magasins as $magasin) {
@@ -100,18 +117,25 @@ class CorrigerSirenAvantValidationAction
                 $etablissements[$magasin->getKey()] = $consultation;
             }
 
-            return $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $societe, $siren, $magasins, $sirets, $unite, $etablissements): Societe {
+            return $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $societe, $siren, $magasins, $sirets, $unite, $identite, $etablissements): Societe {
                 $enregistree = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
 
                 if ($enregistree->estValidee()) {
                     throw new LogicException(self::MESSAGE_SANS_AUTORISATION);
                 }
 
-                $avant = ['siren' => $enregistree->siren, 'sirets' => $magasins->mapWithKeys(fn (Magasin $magasin): array => [(string) $magasin->getKey() => $magasin->siret])->all()];
+                $avant = [
+                    'siren' => $enregistree->siren,
+                    'sirets' => $magasins->mapWithKeys(fn (Magasin $magasin): array => [(string) $magasin->getKey() => $magasin->siret])->all(),
+                    ...$enregistree->identiteAuditee(),
+                ];
                 $numeroTvaPropose = $enregistree->numero_tva === IdentifiantsInsee::numeroTvaPropose((string) $enregistree->siren);
+                $formeChangee = $identite['forme_juridique'] !== $enregistree->forme_juridique;
 
                 $enregistree->forceFill([
                     'siren' => $siren,
+                    ...$identite,
+                    ...($formeChangee ? ['forme_juridique_autre' => null] : []),
                     ...($numeroTvaPropose ? ['numero_tva' => IdentifiantsInsee::numeroTvaPropose($siren)] : []),
                 ])->save();
 
@@ -128,9 +152,10 @@ class CorrigerSirenAvantValidationAction
                 }
 
                 $this->controleSirene->noterUnite($enregistree, $unite, $auteur);
-                $this->journalAudit->inscrire(ActionAuditee::SirenCorrigeAvantValidation, null, $avant, [
+                $this->journalAudit->inscrireLesChangements(ActionAuditee::SirenCorrigeAvantValidation, $auteur, null, $avant, [
                     'siren' => $siren,
                     'sirets' => array_map(strval(...), $sirets),
+                    ...$enregistree->identiteAuditee(),
                 ], $enregistree);
 
                 return $enregistree;

@@ -28,10 +28,15 @@ use LogicException;
  *
  * Toute société commerciale indique son capital (art. R123-238 du Code de
  * commerce, voir FormeJuridique::exigeUnCapital()) ; un entrepreneur
- * individuel n'en a pas ; une autre forme dit si elle est commerciale. Une
- * mention encore vide s'enregistre sans valeur : l'identité se complète
- * peu à peu, et les mentions qui manquent ne bloquent que les factures à
- * un professionnel (voir Societe::mentionsLegalesManquantes()).
+ * individuel n'en a pas, et choisir cette forme efface celui d'avant (voir
+ * Societe::retirerCeQueSaFormeExclut()) ; une autre forme dit si elle est
+ * commerciale. La mention « EI » est réservée à l'entrepreneur
+ * individuel : refusée dans une raison sociale saisie pour une autre
+ * forme, sauf si c'est la dénomination même que donne le répertoire Sirene
+ * (voir Societe::denominationSirene()). Une mention encore vide
+ * s'enregistre sans valeur : l'identité se complète peu à peu, et les
+ * mentions qui manquent ne bloquent que les factures à un professionnel
+ * (voir Societe::mentionsLegalesManquantes()).
  *
  * Réservé à qui règle les paramètres de la société (voir SocietePolicy).
  * Le n° de TVA touche la conformité de la caisse : l'enregistrement se
@@ -93,26 +98,15 @@ class ModifierIdentiteSocieteAction
                 throw new LogicException(self::MESSAGE_SANS_AUTORISATION);
             }
 
-            $valides = self::normaliser($societe, $this->valider($societe, $donnees));
+            $valides = array_map(fn (mixed $valeur): mixed => is_string($valeur) && trim($valeur) === '' ? null : $valeur, $this->valider($societe, $donnees));
 
-            return $this->registre->sousVerrouDesMagasins($societe->magasins()->orderBy('id')->get(), function () use ($societe, $valides): Societe {
+            return $this->registre->sousVerrouDesMagasins($societe->magasins()->orderBy('id')->get(), function () use ($auteur, $societe, $valides): Societe {
                 $enregistree = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
-                $avant = self::valeursAuditees($enregistree);
+                $avant = $enregistree->identiteAuditee();
 
                 $enregistree->fill($valides)->save();
 
-                $apres = self::valeursAuditees($enregistree);
-                $champsModifies = array_keys(array_diff_assoc(array_map(serialize(...), $apres), array_map(serialize(...), $avant)));
-
-                if ($champsModifies !== []) {
-                    $this->journalAudit->inscrire(
-                        ActionAuditee::IdentiteModifiee,
-                        null,
-                        array_intersect_key($avant, array_flip($champsModifies)),
-                        array_intersect_key($apres, array_flip($champsModifies)),
-                        $enregistree,
-                    );
-                }
+                $this->journalAudit->inscrireLesChangements(ActionAuditee::IdentiteModifiee, $auteur, null, $avant, $enregistree->identiteAuditee(), $enregistree);
 
                 return $enregistree;
             });
@@ -123,7 +117,8 @@ class ModifierIdentiteSocieteAction
      * La saisie complète (les champs reçus sur l'identité enregistrée),
      * validée champ par champ, puis dans son ensemble : la mention « EI »,
      * la réponse « société commerciale ? » d'une autre forme, le capital
-     * d'une société commerciale, et aucun pour un entrepreneur individuel.
+     * d'une société commerciale, et aucun capital saisi pour un
+     * entrepreneur individuel (celui d'avant s'efface avec la forme).
      *
      * @param  array<string, mixed>  $donnees
      * @return array<string, mixed>
@@ -164,8 +159,8 @@ class ModifierIdentiteSocieteAction
             'immatriculation' => 'immatriculation',
         ]);
 
-        $validateur->after(function (ValidatorDeLaravel $validateur) use ($saisie, $forme, $commerciale): void {
-            if ($forme !== FormeJuridique::EntrepreneurIndividuel && is_string($saisie['raison_sociale']) && Societe::porteLaMentionEi($saisie['raison_sociale'])) {
+        $validateur->after(function (ValidatorDeLaravel $validateur) use ($societe, $saisie, $recus, $forme, $commerciale): void {
+            if ($forme !== FormeJuridique::EntrepreneurIndividuel && is_string($saisie['raison_sociale']) && Societe::porteLaMentionEi($saisie['raison_sociale']) && $saisie['raison_sociale'] !== $societe->denominationSirene()) {
                 $validateur->errors()->add('raison_sociale', self::MESSAGE_MENTION_EI);
             }
 
@@ -173,7 +168,7 @@ class ModifierIdentiteSocieteAction
                 $validateur->errors()->add('societe_commerciale', self::MESSAGE_SOCIETE_COMMERCIALE);
             }
 
-            if ($forme === FormeJuridique::EntrepreneurIndividuel && filled($saisie['capital_social'])) {
+            if ($forme === FormeJuridique::EntrepreneurIndividuel && filled($recus['capital_social'] ?? null)) {
                 $validateur->errors()->add('capital_social', self::MESSAGE_CAPITAL_D_UN_ENTREPRENEUR);
             } elseif ($forme?->exigeUnCapital($commerciale) === true && blank($saisie['capital_social'])) {
                 $validateur->errors()->add('capital_social', self::MESSAGE_CAPITAL_EXIGE);
@@ -181,42 +176,5 @@ class ModifierIdentiteSocieteAction
         });
 
         return array_intersect_key($validateur->validate(), $recus);
-    }
-
-    /**
-     * Ce qui s'enregistre : une chaîne vide sans valeur ; « société
-     * commerciale ? » pour une autre forme seulement ; ni capital ni
-     * libellé de forme pour un entrepreneur individuel.
-     *
-     * @param  array<string, mixed>  $valides
-     * @return array<string, mixed>
-     */
-    private static function normaliser(Societe $societe, array $valides): array
-    {
-        $valides = array_map(fn (mixed $valeur): mixed => is_string($valeur) && trim($valeur) === '' ? null : $valeur, $valides);
-        $forme = array_key_exists('forme_juridique', $valides)
-            ? FormeJuridique::tryFrom((string) $valides['forme_juridique'])
-            : $societe->forme_juridique;
-
-        if ($forme !== FormeJuridique::Autre) {
-            $valides['societe_commerciale'] = null;
-        }
-
-        if ($forme === FormeJuridique::EntrepreneurIndividuel) {
-            $valides = [...$valides, 'capital_social' => null, 'capital_variable' => false, 'forme_juridique_autre' => null];
-        }
-
-        return $valides;
-    }
-
-    /**
-     * Ce que le journal d'audit retient de l'identité (voir
-     * ActionAuditee::champsAudites()).
-     *
-     * @return array<string, mixed>
-     */
-    private static function valeursAuditees(Societe $societe): array
-    {
-        return array_map(JournalAudit::valeur(...), $societe->only(self::CHAMPS));
     }
 }

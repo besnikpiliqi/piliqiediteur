@@ -142,7 +142,7 @@ class CreerEtablissementAction
                 });
 
                 $this->controleSirene->noterEtablissement($magasin, $consultation, $auteur);
-                $this->journalAudit->inscrire(ActionAuditee::MagasinCree, $magasin, null, [
+                $this->journalAudit->inscrire(ActionAuditee::MagasinCree, $auteur, $magasin, null, [
                     'nom' => $magasin->nom,
                     'code_magasin' => $magasin->code,
                     'siret' => $magasin->siret,

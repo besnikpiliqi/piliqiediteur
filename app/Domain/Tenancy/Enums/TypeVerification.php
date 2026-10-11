@@ -31,7 +31,7 @@ enum TypeVerification: string implements HasLabel
     public function detailsRetenus(): array
     {
         return match ($this) {
-            self::SireneUnite => ['etat_administratif', 'categorie_juridique', 'denomination', 'diffusion_partielle'],
+            self::SireneUnite => ['siren', 'etat_administratif', 'categorie_juridique', 'denomination', 'diffusion_partielle'],
             self::SireneEtablissement => ['siret', 'etat_administratif', 'rattache', 'adresse'],
         };
     }

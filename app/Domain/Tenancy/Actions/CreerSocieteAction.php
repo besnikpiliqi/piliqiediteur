@@ -98,7 +98,7 @@ class CreerSocieteAction
                     $magasin = $this->creerEtablissement->handle($proprietaire, $nouvelle, [...$premierMagasin, 'code' => $code]);
 
                     $this->controleSirene->noterUnite($nouvelle, $consultation, $proprietaire);
-                    $this->journalAudit->inscrire(ActionAuditee::SocieteInscrite, null, null, [
+                    $this->journalAudit->inscrire(ActionAuditee::SocieteInscrite, $proprietaire, null, null, [
                         'siren' => $nouvelle->siren,
                         'raison_sociale' => $nouvelle->raison_sociale,
                         'forme_juridique' => JournalAudit::valeur($nouvelle->forme_juridique),

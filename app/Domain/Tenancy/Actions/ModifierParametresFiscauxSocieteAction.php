@@ -69,24 +69,13 @@ class ModifierParametresFiscauxSocieteAction
                 'mois_fin_exercice' => ['sometimes', 'required', 'integer', 'between:1,12'],
             ], attributes: ['regime_tva' => 'régime de TVA', 'mois_fin_exercice' => 'mois de fin d\'exercice'])->validate();
 
-            return $this->registre->sousVerrouDesMagasins($societe->magasins()->orderBy('id')->get(), function () use ($societe, $valides): Societe {
+            return $this->registre->sousVerrouDesMagasins($societe->magasins()->orderBy('id')->get(), function () use ($auteur, $societe, $valides): Societe {
                 $enregistree = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
                 $avant = self::valeursAuditees($enregistree);
 
                 $enregistree->fill($valides)->save();
 
-                $apres = self::valeursAuditees($enregistree);
-                $champsModifies = array_keys(array_diff_assoc(array_map(serialize(...), $apres), array_map(serialize(...), $avant)));
-
-                if ($champsModifies !== []) {
-                    $this->journalAudit->inscrire(
-                        ActionAuditee::ParametresFiscauxModifies,
-                        null,
-                        array_intersect_key($avant, array_flip($champsModifies)),
-                        array_intersect_key($apres, array_flip($champsModifies)),
-                        $enregistree,
-                    );
-                }
+                $this->journalAudit->inscrireLesChangements(ActionAuditee::ParametresFiscauxModifies, $auteur, null, $avant, self::valeursAuditees($enregistree), $enregistree);
 
                 return $enregistree;
             });

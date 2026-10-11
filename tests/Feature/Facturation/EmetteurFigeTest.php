@@ -419,13 +419,17 @@ class EmetteurFigeTest extends TestCase
             'la mention en tête' => ['EI Jean Martin', 'EI Jean Martin'],
             'la mention en minuscules' => ['Jean Martin ei', 'Jean Martin ei'],
             'la mention en toutes lettres' => ['Jean Martin Entrepreneur individuel', 'Jean Martin Entrepreneur individuel'],
+            'la mention entre parenthèses' => ['Jean Martin (EI)', 'Jean Martin (EI)'],
+            'la mention suivie d\'un point' => ['Jean Martin EI.', 'Jean Martin EI.'],
+            'la mention après une virgule' => ['Jean Martin,EI', 'Jean Martin,EI'],
         ];
     }
 
     /**
      * La mention « EI » s'ajoute juste après le nom quand la dénomination
      * ne la porte pas déjà en mot entier, en tête ou en fin, abrégée ou en
-     * toutes lettres ; elle ne se double jamais.
+     * toutes lettres, entourée d'espaces ou de signes ; elle ne se double
+     * jamais.
      */
     #[DataProvider('denominationsDEntrepreneurs')]
     public function test_la_mention_ei_est_ajoutee_quand_elle_manque_et_jamais_doublee(string $raisonSociale, string $denominationImprimee): void

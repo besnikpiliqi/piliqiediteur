@@ -9,6 +9,10 @@ use Illuminate\Support\Facades\Schema;
  * comptables, observateurs), avec leur rôle et leur statut dans ce
  * magasin (voir MagasinUser), créés par le propriétaire de la société ou
  * par un membre qui gère l'équipe (voir CreerMembreMagasinAction).
+ *
+ * Les clés étrangères composites (societe_id, magasin_id) et (societe_id,
+ * user_id) font refuser par la base le rattachement d'un compte au magasin
+ * d'une autre société que la sienne.
  */
 return new class extends Migration
 {
@@ -16,8 +20,9 @@ return new class extends Migration
     {
         Schema::create('magasin_user', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
+            $table->foreignId('societe_id')->constrained('societes')->restrictOnDelete();
+            $table->foreignId('magasin_id');
+            $table->foreignId('user_id');
             $table->string('role', 30);
             $table->string('statut', 20);
             $table->timestamp('joined_at')->nullable();
@@ -29,6 +34,8 @@ return new class extends Migration
             // (voir User::estProprietaire()).
             $table->unique('user_id');
             $table->index(['magasin_id', 'statut']);
+            $table->foreign(['societe_id', 'magasin_id'])->references(['societe_id', 'id'])->on('magasins')->restrictOnDelete();
+            $table->foreign(['societe_id', 'user_id'])->references(['societe_id', 'id'])->on('users')->cascadeOnDelete();
         });
     }
 

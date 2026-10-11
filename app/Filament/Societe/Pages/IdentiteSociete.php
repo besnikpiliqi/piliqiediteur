@@ -5,11 +5,8 @@ namespace App\Filament\Societe\Pages;
 use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
-use App\Domain\Tenancy\Enums\ResultatVerification;
-use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
-use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -217,20 +214,14 @@ class IdentiteSociete extends Page implements HasForms
     }
 
     /**
-     * La dénomination que donne le répertoire Sirene, quand le dernier
-     * contrôle concluant de l'entreprise en donne une autre que la raison
+     * La dénomination que donne le répertoire Sirene (voir
+     * Societe::denominationSirene()), quand elle diffère de la raison
      * sociale enregistrée.
      */
     private function ecartAvecSirene(): ?string
     {
         $societe = $this->societe();
-        $denomination = VerificationSociete::query()
-            ->where('type', TypeVerification::SireneUnite->value)
-            ->where('resultat', ResultatVerification::Concluante->value)
-            ->whereNull('magasin_id')
-            ->orderByDesc('id')
-            ->first()
-            ?->details['denomination'] ?? null;
+        $denomination = $societe->denominationSirene();
 
         return filled($denomination) && $denomination !== $societe->raison_sociale
             ? "Le répertoire Sirene de l'INSEE indique « {$denomination} »."

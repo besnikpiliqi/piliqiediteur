@@ -47,7 +47,7 @@ DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=piliqi_test DB_US
 
 `caisse:verifier` vérifie l'intégrité de la caisse sécurisée de chaque magasin (chaînes signées, documents, numérotation), l'inscrit au journal des événements et échoue au moindre défaut ; le planificateur la lance chaque nuit à 3 h, complète une fois par mois pour chaque magasin.
 
-En développement, trois commandes tournent côte à côte : le serveur du panneau, la file d'attente (e-mails et transmissions à la plateforme) et le planificateur (clôture automatique de minuit, factures en retard, e-reporting, vérification de la caisse sécurisée, relances).
+En développement, trois commandes tournent côte à côte : le serveur du panneau, la file d'attente (e-mails, courriers et transmissions à la plateforme) et le planificateur (clôture automatique de minuit et caisses personnelles, factures en retard, e-reporting, vérification de la caisse sécurisée, relances, revérifications Sirene, démonstrations inactives, effacement des traces, des pièces, des jetons et des demandes d'inscription expirés, journal d'audit expiré).
 
 ```sh
 php artisan serve
@@ -55,6 +55,4 @@ php artisan queue:listen
 php artisan schedule:work
 ```
 
-Un magasin se crée depuis la page d'inscription du panneau (`/app/register`).
-
-Les magasins d'une même société (même SIREN) partagent leurs réglages communs (régime de TVA, option pour les débits, n° de TVA, raison sociale, forme juridique, capital, immatriculation), que fixe le magasin principal : le plus ancien magasin non supprimé du SIREN, ou celui que l'éditeur désigne avec `php artisan app:designer-magasin-principal {magasin}`. Un autre magasin du SIREN n'enregistre que ces valeurs, n'émet ni facture ni ticket et ne quitte pas la société tant qu'il ne les a pas.
+Une société s'inscrit depuis `/app/register` avec son SIREN, son premier magasin (SIRET) et son propriétaire, par un lien envoyé à l'adresse du propriétaire ; elle ne vend qu'une fois validée (Sirene, qualité de représentant), et s'essaie avant dans un magasin de démonstration. Ses autres magasins se créent dans l'administration de la société (`/societe/{uuid}`). Les procédures exceptionnelles de l'éditeur : `php artisan list editeur` (opérateurs déclarés dans `EDITEUR_OPERATEURS`). Les fournisseurs externes (INSEE, INPI, vérification d'identité, envoi recommandé) se choisissent par les variables `*_PILOTE` de `.env.example` ; `faux` sert au développement et aux tests, jamais en production.

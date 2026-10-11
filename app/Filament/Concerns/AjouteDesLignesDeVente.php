@@ -155,7 +155,9 @@ trait AjouteDesLignesDeVente
      * saisi mais imposé (voir ConstructeurLigneDocument) : la ligne propose
      * alors le taux du territoire du magasin, celui qu'elle prend si le
      * magasin est sorti de la franchise ou la vente revenue en France
-     * depuis. Sinon, le champ reste caché et la ligne à 0 %.
+     * depuis, son prix sans TVA converti à ce taux (voir
+     * ChoisitLaNatureDeLOperation::natureARouvrir()). Sinon, le champ reste
+     * caché et la ligne à 0 %.
      *
      * @return list<array<string, mixed>>
      */
@@ -249,7 +251,8 @@ trait AjouteDesLignesDeVente
      * 0 % : le taux d'un produit affiche 0, celui d'un service ne se saisit
      * pas. Sans TVA française, le taux d'un produit reste affiché, celui
      * qui est retiré de son prix TTC, et le prix d'un service se saisit
-     * sans TVA, sans taux.
+     * sans TVA, sans taux ; il se convertit quand la vente entre dans la
+     * TVA française ou en sort (voir ChoisitLaNatureDeLOperation).
      *
      * @return array<Component>
      */

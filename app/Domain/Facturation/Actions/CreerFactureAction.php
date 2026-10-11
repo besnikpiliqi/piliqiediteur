@@ -17,8 +17,10 @@ use Illuminate\Support\Facades\DB;
  * magasin vend en franchise de TVA : l'un et l'autre se contrôlent à
  * l'émission (voir ContexteDeVente et EmettreFactureAction). Il note aussi
  * la nature de l'opération et la livraison reçues avec ses attributs (voir
- * NoteSaNatureDOperation), avec laquelle ses lignes se calculent ; ses
- * conditions se contrôlent à l'émission (voir ControleNatureOperation).
+ * NoteSaNatureDOperation), avec laquelle ses lignes se calculent : une
+ * nature que ce client et le régime du magasin permettent (voir
+ * ContexteDeVente::pourEnregistrer()), dont les autres conditions se
+ * contrôlent à l'émission (voir ControleNatureOperation).
  */
 class CreerFactureAction
 {
@@ -35,7 +37,7 @@ class CreerFactureAction
     {
         return DB::transaction(function () use ($client, $lignes, $attributs) {
             $facture = new Facture($attributs);
-            $contexte = ContexteDeVente::pour($client, app(TenantContext::class)->magasin(), $facture->noterSaNatureDOperation($attributs));
+            $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $facture->noterSaNatureDOperation($attributs));
             $facture->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
 
             $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);

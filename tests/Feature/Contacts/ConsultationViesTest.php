@@ -74,19 +74,20 @@ class ConsultationViesTest extends TestCase
 
     /**
      * Minuit à Paris est 22 h UTC la veille en octobre : une vérification
-     * faite à 0 h 30 à Paris compte pour ce jour, pas pour la veille ; une
-     * vérification qui a trouvé le n° inconnu ne compte jamais.
+     * faite à 0 h 30 à Paris compte pour ce jour, pas pour la veille. Une
+     * vérification qui a trouvé le n° inconnu compte aussi pour son jour :
+     * la dernière du jour décide (voir ControleNatureOperation).
      */
-    public function test_une_consultation_valide_compte_pour_son_jour_a_paris(): void
+    public function test_une_consultation_compte_pour_son_jour_a_paris(): void
     {
         $client = $this->clientAllemand();
         $veilleAuSoir = $this->consultation($client, '2026-10-09 23:30:00');
         $lendemainANuit = $this->consultation($client, '2026-10-10 00:30:00');
-        $this->consultation($client, '2026-10-10 09:00:00', valide: false);
+        $inconnuLeLendemain = $this->consultation($client, '2026-10-10 09:00:00', valide: false);
 
-        $this->assertSame([$veilleAuSoir->id], ConsultationVies::query()->valideLe('2026-10-09')->pluck('id')->all());
-        $this->assertSame([$lendemainANuit->id], ConsultationVies::query()->valideLe('2026-10-10')->pluck('id')->all());
-        $this->assertSame([$lendemainANuit->id], ConsultationVies::query()->valideLe(CarbonImmutable::parse('2026-10-10 12:00', 'Europe/Paris'))->pluck('id')->all());
+        $this->assertSame([$veilleAuSoir->id], ConsultationVies::query()->duJour('2026-10-09')->pluck('id')->all());
+        $this->assertSame([$lendemainANuit->id, $inconnuLeLendemain->id], ConsultationVies::query()->duJour('2026-10-10')->orderBy('id')->pluck('id')->all());
+        $this->assertSame([$lendemainANuit->id, $inconnuLeLendemain->id], ConsultationVies::query()->duJour(CarbonImmutable::parse('2026-10-10 12:00', 'Europe/Paris'))->orderBy('id')->pluck('id')->all());
     }
 
     public function test_la_reference_cite_le_numero_de_consultation_quand_vies_en_a_donne_un(): void

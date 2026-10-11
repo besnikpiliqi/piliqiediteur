@@ -55,7 +55,7 @@ class ModifierDevisAction
                 });
             }
 
-            $contexte = ContexteDeVente::pour($client, app(TenantContext::class)->magasin(), $devis->fill($attributs)->noterSaNatureDOperation($attributs));
+            $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $devis->fill($attributs)->noterSaNatureDOperation($attributs));
             $devis->forceFill([
                 'client_id' => $client->getKey(),
                 ...$contexte->colonnes(),

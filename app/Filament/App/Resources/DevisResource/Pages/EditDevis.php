@@ -50,14 +50,13 @@ class EditDevis extends EditRecord
     }
 
     /**
-     * Les lignes du document, telles que son formulaire les rouvre (voir
-     * AjouteDesLignesDeVente::lignesARouvrir()).
+     * Les lignes du document et sa nature, tels que son formulaire les
+     * rouvre (voir AjouteDesLignesDeVente::lignesARouvrir() et
+     * ChoisitLaNatureDeLOperation::natureARouvrir()).
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        $data['lignes'] = DevisResource::lignesARouvrir($this->record);
-
-        return $data;
+        return DevisResource::natureARouvrir($this->record, [...$data, 'lignes' => DevisResource::lignesARouvrir($this->record)]);
     }
 
     protected function handleRecordUpdate(Model $record, array $data): Model

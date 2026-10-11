@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Model;
  *
  * consultee_le est enregistrée en UTC et relue à l'heure de Paris (voir
  * HorodatageUtc) : le jour d'une vérification est celui de Paris, de
- * minuit à minuit (voir scopeValideLe()). L'instant de la vérification est
+ * minuit à minuit (voir scopeDuJour()). L'instant de la vérification est
  * aussi celui de son enregistrement : la table n'a pas d'autre date.
  */
 class ConsultationVies extends Model
@@ -65,20 +65,19 @@ class ConsultationVies extends Model
     }
 
     /**
-     * Les vérifications qui ont trouvé le n° valide tel jour à Paris, de
-     * minuit à minuit : la colonne étant en UTC, ses bornes se convertissent
-     * en UTC (voir HorodatageUtc). Une date porte son jour dans son propre
-     * fuseau, comme pour whereDate().
+     * Les vérifications faites tel jour à Paris, de minuit à minuit, qu'elles
+     * aient trouvé le n° valide ou non : la dernière décide (voir
+     * ControleNatureOperation::consultationDuJour()). La colonne étant en
+     * UTC, ses bornes se convertissent en UTC (voir HorodatageUtc). Une date
+     * porte son jour dans son propre fuseau, comme pour whereDate().
      *
      * @param  Builder<static>  $query
      * @return Builder<static>
      */
-    public function scopeValideLe(Builder $query, CarbonInterface|string $jour): Builder
+    public function scopeDuJour(Builder $query, CarbonInterface|string $jour): Builder
     {
         $minuit = CarbonImmutable::parse($jour instanceof CarbonInterface ? $jour->toDateString() : $jour, config('app.timezone'))->startOfDay();
 
-        return $query
-            ->where('valide', true)
-            ->whereBetween('consultee_le', [HorodatageUtc::enBase($minuit), HorodatageUtc::enBase($minuit->endOfDay())]);
+        return $query->whereBetween('consultee_le', [HorodatageUtc::enBase($minuit), HorodatageUtc::enBase($minuit->endOfDay())]);
     }
 }

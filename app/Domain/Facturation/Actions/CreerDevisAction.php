@@ -14,8 +14,9 @@ use Illuminate\Support\Facades\DB;
  * Crée un devis brouillon pour un client déjà résolu par une requête
  * limitée au magasin, jamais un client_id brut venu du formulaire, et note
  * le type de ce client, si le magasin vend en franchise de TVA, la nature
- * de l'opération et la livraison (voir NoteSaNatureDOperation), que
- * reprend la facture qui en est tirée (voir ContexteDeVente et
+ * de l'opération, que ce client et ce régime doivent permettre (voir
+ * ContexteDeVente::pourEnregistrer()), et la livraison (voir
+ * NoteSaNatureDOperation), que reprend la facture qui en est tirée (voir
  * CreerFactureDepuisDevisAction).
  */
 class CreerDevisAction
@@ -33,7 +34,7 @@ class CreerDevisAction
     {
         return DB::transaction(function () use ($client, $lignes, $attributs) {
             $devis = new Devis($attributs);
-            $contexte = ContexteDeVente::pour($client, app(TenantContext::class)->magasin(), $devis->noterSaNatureDOperation($attributs));
+            $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $devis->noterSaNatureDOperation($attributs));
             $devis->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
 
             $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);

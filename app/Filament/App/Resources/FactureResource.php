@@ -12,6 +12,7 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
@@ -21,6 +22,7 @@ use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\MentionsFiscales;
 use App\Domain\Recherche\RechercheSansAccents;
@@ -360,32 +362,54 @@ class FactureResource extends Resource
      * remise n'apparaît que si une ligne du document en a une : c'est elle
      * qui explique alors que PU x quantité diffère du total. Sur un
      * document de vente à un professionnel, calculé depuis le HT de chaque
-     * ligne, la note de calcul de ses PDF l'explique aussi (voir
+     * ligne, la note de calcul l'explique aussi (voir
      * MentionsFiscales::calcul()). La ligne d'une facture d'achat brouillon
      * qui garde la fiche d'un nouveau produit dit qu'il ne naîtra qu'à sa
      * validation (voir LigneAchat).
+     *
+     * Une vente sans TVA française (voir
+     * ContexteDeVente::documentRetireLaTvaDuPrix()) montre, comme ses PDF,
+     * le prix TTC du catalogue de chaque produit et la TVA qui en est
+     * retirée, à côté de son taux de 0 % : ce que le client n'a pas payé
+     * ne passe pas pour un PU TTC, et le calcul se vérifie (3 x 7,00 € ÷
+     * 1,20 = 17,50 €). Un service, saisi sans TVA, n'a ni l'un ni l'autre.
      */
     public static function lignesEntry(?Model $document): RepeatableEntry
     {
         $avecRemise = $document?->lignes->contains(fn (Model $ligne): bool => (float) $ligne->remise_pourcentage != 0) ?? false;
         $estUnAchat = $document instanceof FactureAchat || $document instanceof AvoirFournisseur;
+        $estUneVente = $document instanceof Facture || $document instanceof Avoir || $document instanceof Devis;
+        $sansTvaFrancaise = $estUneVente && ContexteDeVente::documentRetireLaTvaDuPrix($document);
+        $produitSansTvaFrancaise = fn (Model $ligne): bool => $sansTvaFrancaise && $ligne->nature === NatureLigne::Bien;
 
         return RepeatableEntry::make('lignes')
             ->label('')
-            ->helperText($document instanceof Facture || $document instanceof Avoir || $document instanceof Devis ? app(MentionsFiscales::class)->calcul($document) : null)
+            ->helperText($estUneVente ? app(MentionsFiscales::class)->calcul($document) : null)
             ->schema([
                 TextEntry::make('description')
                     ->helperText(fn (?Model $record): ?string => $record instanceof LigneAchat && $record->nouveau_produit !== null ? 'Nouveau produit, créé à la validation' : null),
                 TextEntry::make('quantite')->label('Quantité')->numeric(),
                 TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
-                TextEntry::make('prix_unitaire_ttc')->label('PU TTC')->money('EUR')->hidden($estUnAchat),
+                TextEntry::make('prix_unitaire_ttc')
+                    ->label($sansTvaFrancaise ? 'Prix catalogue TTC' : 'PU TTC')
+                    ->state(fn (Model $record): mixed => ! $sansTvaFrancaise || $produitSansTvaFrancaise($record) ? $record->prix_unitaire_ttc : null)
+                    ->placeholder('—')
+                    ->money('EUR')
+                    ->hidden($estUnAchat),
+                TextEntry::make('taux_tva_du_prix')
+                    ->label('TVA retirée')
+                    ->state(fn (Model $record): mixed => $produitSansTvaFrancaise($record) ? $record->taux_tva_du_prix : null)
+                    ->placeholder('—')
+                    ->numeric(maxDecimalPlaces: 2)
+                    ->suffix(' %')
+                    ->visible($sansTvaFrancaise),
                 TextEntry::make('taux_tva')->label('Taux TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
                 TextEntry::make('remise_pourcentage')->label('Remise')->numeric(maxDecimalPlaces: 2)->suffix(' %')->visible($avecRemise),
                 TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
                 TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
                 TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
             ])
-            ->columns(($avecRemise ? 9 : 8) - ($estUnAchat ? 1 : 0));
+            ->columns(8 + ($avecRemise ? 1 : 0) + ($sansTvaFrancaise ? 1 : 0) - ($estUnAchat ? 1 : 0));
     }
 
     /**
@@ -614,8 +638,10 @@ class FactureResource extends Resource
     /**
      * Une livraison intracommunautaire ou une prestation autoliquidée ne
      * s'émet qu'avec le n° de TVA du client trouvé valide sur VIES le jour
-     * même (voir ControleNatureOperation) : faute de vérification valide
-     * aujourd'hui, l'émission interroge d'abord VIES, hors de toute
+     * même, par la dernière vérification du jour (voir
+     * ControleNatureOperation::consultationDuJour()) : quand aucune
+     * vérification d'aujourd'hui ne l'a trouvé valide, ou que la dernière
+     * l'a trouvé inconnu, l'émission interroge d'abord VIES, hors de toute
      * transaction (voir VerifierNumeroTvaAction). VIES injoignable, rien
      * n'est émis, et le refus le dit.
      */

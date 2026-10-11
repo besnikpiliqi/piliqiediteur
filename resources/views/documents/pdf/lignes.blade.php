@@ -8,19 +8,23 @@
     HT de la ligne (1 000 x 0,83 € pour 833,33 €) : la note de calcul sous
     les lignes l'explique (voir MentionsFiscales::calcul()).
 
-    Une vente hors de la TVA française n'imprime pas de PU TTC : le client
-    paie le PU HT, sans la TVA française que comprend le prix du catalogue
-    (voir ContexteDeVente::retireLaTvaDuPrix()).
+    Une vente sans TVA française n'imprime pas de PU TTC : le client paie
+    le PU HT, sans la TVA française que comprend le prix du catalogue (voir
+    ContexteDeVente::documentRetireLaTvaDuPrix()). Elle imprime à la place
+    le prix TTC du catalogue de chaque produit et la TVA qui en est retirée,
+    à côté de son taux de 0 % : les deux données que cite la note de calcul
+    (3 x 7,00 € ÷ 1,20 = 17,50 € HT pour un professionnel, quand 3 x 5,83 €
+    font 17,49 €). Un service, saisi sans TVA, n'a ni l'un ni l'autre.
 
     @param \Illuminate\Support\Collection $lignes
     @param bool $avecFactureDOrigine un avoir indique la facture de chaque ligne
-    @param bool $avecPrixTtc faux pour une vente hors de la TVA française
+    @param bool $sansTvaFrancaise vrai pour une vente sans TVA française
     @param string|null $noteDeCalcul
 --}}
 @php
     $avecRemise = $lignes->contains(fn ($ligne) => (float) $ligne->remise_pourcentage != 0);
     $avecFactureDOrigine ??= false;
-    $avecPrixTtc ??= true;
+    $sansTvaFrancaise ??= false;
     $noteDeCalcul ??= null;
 @endphp
 
@@ -33,7 +37,10 @@
             @endif
             <th class="montant">Qté</th>
             <th class="montant">PU HT</th>
-            @if($avecPrixTtc)
+            @if($sansTvaFrancaise)
+                <th class="montant">Prix catalogue TTC</th>
+                <th class="montant">TVA retirée</th>
+            @else
                 <th class="montant">PU TTC</th>
             @endif
             <th class="montant">Taux TVA</th>
@@ -54,8 +61,14 @@
                 @endif
                 <td class="montant">{{ \Illuminate\Support\Number::format($ligne->quantite, locale: 'fr') }}</td>
                 <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ht, 2, ',', ' ') }} €</td>
-                @if($avecPrixTtc)
+                @if(! $sansTvaFrancaise)
                     <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ttc, 2, ',', ' ') }} €</td>
+                @elseif($ligne->nature === \App\Domain\Facturation\Enums\NatureLigne::Bien)
+                    <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ttc, 2, ',', ' ') }} €</td>
+                    <td class="montant">{{ \Illuminate\Support\Number::format((float) $ligne->taux_tva_du_prix, maxPrecision: 2, locale: 'fr') }} %</td>
+                @else
+                    <td class="montant">—</td>
+                    <td class="montant">—</td>
                 @endif
                 <td class="montant">{{ \Illuminate\Support\Number::format((float) $ligne->taux_tva, maxPrecision: 2, locale: 'fr') }} %</td>
                 @if($avecRemise)

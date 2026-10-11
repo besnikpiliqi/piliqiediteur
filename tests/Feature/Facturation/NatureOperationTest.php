@@ -16,6 +16,7 @@ use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -32,6 +33,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
+use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -135,6 +137,32 @@ class NatureOperationTest extends TestCase
         $this->assertStringContainsString('Exonération de TVA, article 262 I du CGI', $this->pdf($facture));
         $this->assertStringContainsString('New York', $this->pdf($facture));
         $this->assertStringNotContainsString('PU TTC', $this->pdf($facture));
+    }
+
+    /**
+     * Le PDF d'un export à un professionnel imprime, à côté du taux de 0 %,
+     * le prix TTC du catalogue et la TVA qui en est retirée, que cite sa
+     * note de calcul : 3 x 7,00 € ÷ 1,20 = 17,50 € HT, quand 3 x 5,83 €
+     * font 17,49 €. Les frais de port, saisis sans TVA, n'ont ni l'un ni
+     * l'autre.
+     */
+    public function test_le_pdf_d_un_export_a_un_professionnel_imprime_le_prix_catalogue_et_la_tva_retiree(): void
+    {
+        $this->magasin();
+        $port = Service::factory()->fraisAccessoires()->create(['nom' => 'Frais de port']);
+
+        $facture = app(EmettreFactureAction::class)->handle($this->brouillon($this->clientAmericain(), [
+            ['produit_id' => $this->produit('7.00')->id, 'quantite' => 3],
+            ['service_id' => $port->id, 'prix_unitaire_ttc' => '15.00', 'quantite' => 1],
+        ], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
+
+        $pdf = $this->pdf($facture);
+        $this->assertSame(['32.50', '0.00', '32.50'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertMatchesRegularExpression('#<th class="montant">PU HT</th>\s*<th class="montant">Prix catalogue TTC</th>\s*<th class="montant">TVA retirée</th>\s*<th class="montant">Taux TVA</th>#', $pdf);
+        $this->assertMatchesRegularExpression('#<td class="montant">3</td>\s*<td class="montant">5,83 €</td>\s*<td class="montant">7,00 €</td>\s*<td class="montant">20 %</td>\s*<td class="montant">0 %</td>\s*<td class="montant">17,50 €</td>#', $pdf);
+        $this->assertMatchesRegularExpression('#<td class="montant">1</td>\s*<td class="montant">15,00 €</td>\s*<td class="montant">—</td>\s*<td class="montant">—</td>\s*<td class="montant">0 %</td>\s*<td class="montant">15,00 €</td>#', $pdf);
+        $this->assertStringContainsString('HT de chaque ligne de produit = quantité × prix catalogue TTC ÷ (1 + TVA retirée), arrondi une fois', $pdf);
+        $this->assertStringNotContainsString('PU TTC', $pdf);
     }
 
     public function test_un_export_a_un_particulier_se_paie_0_83_euro_l_article(): void
@@ -320,6 +348,38 @@ class NatureOperationTest extends TestCase
         $this->assertSame(StatutFacture::Emise, $facture->statut);
     }
 
+    /**
+     * La dernière vérification du jour décide : trouvé valide à 8 h puis
+     * inconnu de VIES à 9 h 30, le n° ne vaut plus, et la vente reste à la
+     * TVA française.
+     */
+    public function test_une_verification_vies_invalide_plus_recente_du_meme_jour_refuse_l_exoneration(): void
+    {
+        $this->magasin();
+        $client = $this->clientAllemand();
+        $this->consultation($client, '2026-10-09 08:00');
+        $this->consultation($client, '2026-10-09 09:30', valide: false);
+        $brouillon = $this->brouillon($client, [['produit_id' => $this->produit('25.00')->id, 'quantite' => 12]], NatureOperation::LivraisonIntracommunautaire, self::LIVRAISON_BERLIN);
+
+        $this->assertEmissionRefusee($brouillon, 'Impossible d\'émettre en « Livraison intracommunautaire à un professionnel » : le n° de TVA DE123456789 n\'a pas été trouvé valide sur VIES le 09/10/2026. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
+    }
+
+    /**
+     * Inconnu de VIES à 8 h puis trouvé valide à 9 h 30 : la vérification
+     * de 9 h 30, la dernière, est retenue.
+     */
+    public function test_une_verification_vies_valide_plus_recente_du_meme_jour_est_retenue(): void
+    {
+        $this->magasin();
+        $client = $this->clientAllemand();
+        $this->consultation($client, '2026-10-09 08:00', valide: false);
+        $derniere = $this->consultation($client, '2026-10-09 09:30');
+
+        $facture = app(EmettreFactureAction::class)->handle($this->brouillon($client, [['produit_id' => $this->produit('25.00')->id, 'quantite' => 12]], NatureOperation::LivraisonIntracommunautaire, self::LIVRAISON_BERLIN));
+
+        $this->assertSame([StatutFacture::Emise, $derniere->id], [$facture->statut, $facture->consultation_vies_id]);
+    }
+
     public function test_une_prestation_autoliquidee_se_facture_sans_tva_avec_la_mention_autoliquidation(): void
     {
         $this->magasin();
@@ -390,12 +450,49 @@ class NatureOperationTest extends TestCase
         $this->assertEmissionRefusee($brouillon, 'Impossible d\'émettre en « Prestation à un professionnel hors UE » : indiquez le n° de TVA ou un autre identifiant du client sur sa fiche. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
     }
 
+    /**
+     * Une nature réservée aux professionnels ne s'enregistre même pas pour
+     * un particulier : aucun brouillon ne la garde.
+     */
     public function test_une_nature_reservee_aux_professionnels_est_refusee_a_un_particulier(): void
     {
         $this->magasin();
-        $brouillon = $this->brouillon(Client::factory()->create(), [['service_id' => Service::factory()->create()->id, 'prix_unitaire_ttc' => '100.00', 'quantite' => 1]], NatureOperation::PrestationHorsUe);
+        $service = Service::factory()->create();
 
-        $this->assertEmissionRefusee($brouillon, 'Impossible d\'émettre en « Prestation à un professionnel hors UE » : cette nature est réservée aux clients professionnels ; le client doit être établi hors de France ; indiquez le n° de TVA ou un autre identifiant du client sur sa fiche. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
+        $this->assertThrows(
+            fn () => $this->brouillon(Client::factory()->create(), [['service_id' => $service->id, 'prix_unitaire_ttc' => '100.00', 'quantite' => 1]], NatureOperation::PrestationHorsUe),
+            LogicException::class,
+            'Impossible d\'enregistrer en « Prestation à un professionnel hors UE » : cette nature est réservée aux clients professionnels. Choisissez une autre nature.',
+        );
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * Un devis réenregistré après que son client est devenu particulier ne
+     * garde pas une nature réservée aux professionnels : rien ne change,
+     * et son envoi reste refusé tant qu'il n'est pas réenregistré dans une
+     * nature permise.
+     */
+    public function test_un_devis_ne_se_reenregistre_pas_dans_une_nature_que_son_client_ne_peut_plus_choisir(): void
+    {
+        $this->magasin();
+        $client = $this->clientAllemand();
+        $service = Service::factory()->create(['nom' => 'Conseil']);
+        $lignes = [['service_id' => $service->id, 'prix_unitaire_ttc' => '500.00', 'quantite' => 1]];
+        $devis = app(CreerDevisAction::class)->handle($client, $lignes, ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]);
+        $client->update(['type_client' => TypeClient::Particulier, 'numero_tva' => null]);
+
+        $this->assertThrows(
+            fn () => app(ModifierDevisAction::class)->handle($devis, $client->fresh(), $lignes, ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]),
+            LogicException::class,
+            'Impossible d\'enregistrer en « Prestation à un professionnel de l\'UE (autoliquidation) » : cette nature est réservée aux clients professionnels. Choisissez une autre nature.',
+        );
+
+        $devis->refresh();
+        $this->assertSame([NatureOperation::PrestationUeAutoliquidation, TypeClient::Professionnel], [$devis->nature_operation, $devis->type_client]);
+        $this->assertSame(['500.00', '0.00', '500.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
+        $this->assertThrows(fn () => app(EmettreDevisAction::class)->handle($devis), LogicException::class, 'Ce client est devenu particulier depuis l\'enregistrement du brouillon : ouvrez-le et enregistrez-le de nouveau.');
     }
 
     /**
@@ -412,15 +509,23 @@ class NatureOperationTest extends TestCase
     /**
      * Un magasin en franchise en base ne facture jamais de TVA : sa
      * franchise couvre aussi ses ventes hors de France, qu'aucune autre
-     * nature n'exonère.
+     * nature n'exonère ; aucun brouillon ne s'enregistre dans une autre
+     * nature.
      */
     #[DataProvider('naturesExonerees')]
     public function test_un_magasin_en_franchise_ne_vend_qu_en_france(NatureOperation $nature): void
     {
         $this->magasin(['regime_tva' => RegimeTva::FranchiseEnBase]);
-        $brouillon = $this->brouillon($this->clientAllemand(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], $nature, self::LIVRAISON_BERLIN);
+        $client = $this->clientAllemand();
+        $produit = $this->produit();
 
-        $this->assertEmissionRefusee($brouillon, "Impossible d'émettre en « {$nature->getLabel()} » : votre magasin est en franchise en base de TVA, qui couvre aussi ses ventes hors de France. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.");
+        $this->assertThrows(
+            fn () => $this->brouillon($client, [['produit_id' => $produit->id, 'quantite' => 1]], $nature, self::LIVRAISON_BERLIN),
+            LogicException::class,
+            "Impossible d'enregistrer en « {$nature->getLabel()} » : votre magasin est en franchise en base de TVA, qui couvre aussi ses ventes hors de France. Choisissez « Vente en France ».",
+        );
+
+        $this->assertSame(0, Facture::query()->count());
     }
 
     /**
@@ -473,6 +578,27 @@ class NatureOperationTest extends TestCase
         $this->assertSame(['416.67', '0.00', '416.67'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
         $this->assertSame(['0.00', '20.00'], [$avoir->lignes->sole()->taux_tva, $avoir->lignes->sole()->taux_tva_du_prix]);
         $this->assertStringContainsString('Exonération de TVA, article 262 I du CGI', app(AvoirPdfGenerator::class)->html($avoir));
+    }
+
+    /**
+     * L'avoir d'un export à un particulier se calcule à son PU HT, le prix
+     * qu'il a payé : 1 000 articles à 1,00 € TTC à 20 % vendus 830,00 €,
+     * 500 rendus créditent 415,00 €, sans TVA, et les 500 derniers les
+     * 415,00 € qui restent, la ligne soldée au centime.
+     */
+    public function test_l_avoir_d_un_export_a_un_particulier_se_calcule_a_son_pu_ht(): void
+    {
+        $this->magasin();
+        $client = Client::factory()->create();
+        $ticket = app(EmettreFactureAction::class)->handle($this->brouillon($client, [['produit_id' => $this->produit()->id, 'quantite' => 1000]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
+        $ligne = $ticket->lignes->sole();
+
+        $premier = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]], 'Retour partiel');
+        $dernier = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]], 'Retour du reste');
+
+        $this->assertSame(['415.00', '0.00', '415.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
+        $this->assertSame(['415.00', '0.00', '415.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+        $this->assertSame(0, $ligne->fresh()->quantiteCreditableRestante());
     }
 
     public function test_un_devis_d_export_imprime_sa_mention_et_sa_livraison_sans_prix_ttc(): void

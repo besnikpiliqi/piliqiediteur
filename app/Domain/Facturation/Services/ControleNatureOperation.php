@@ -18,8 +18,14 @@ use Illuminate\Support\Collection;
  * NatureOperation) ; sinon elle reste à la TVA française, et l'émission
  * dit tout ce qui manque d'un coup (voir NatureOperationRefuseeException).
  *
- * - Un magasin en franchise en base ne vend qu'en France : sa franchise
- *   couvre aussi ses ventes à l'étranger.
+ * La nature elle-même est permise au client et au magasin : un brouillon
+ * ne s'enregistre que dans une nature que le type de son client et le
+ * régime du magasin permettent -- aucune nature réservée aux
+ * professionnels pour un particulier, la seule vente en France en
+ * franchise en base (voir ContexteDeVente::pourEnregistrer()) --, et son
+ * émission est refusée avant ce contrôle si le client a changé de type ou
+ * le magasin de régime depuis (voir EmettreFactureAction).
+ *
  * - Toute autre nature que la vente en France exige le n° de TVA du
  *   magasin, que la facture porte (règles BR-G-02, BR-IC-02 et BR-AE-02
  *   de la facture électronique). Il se lit par l'émetteur (voir
@@ -46,9 +52,10 @@ use Illuminate\Support\Collection;
  *
  * Le client contrôlé est sa fiche, celle que la facture copie à son
  * émission (voir FigeLeClient). La consultation VIES retenue est la
- * dernière qui a trouvé valide, ce jour-là à Paris, le n° exact de cette
- * fiche, cherchée dans le magasin actif (MagasinScope) : jamais une
- * consultation reçue d'un formulaire ni celle d'un autre magasin.
+ * dernière vérification faite ce jour-là à Paris du n° exact de cette
+ * fiche, si elle l'a trouvé valide (voir consultationDuJour()), cherchée
+ * dans le magasin actif (MagasinScope) : jamais une consultation reçue
+ * d'un formulaire ni celle d'un autre magasin.
  */
 class ControleNatureOperation
 {
@@ -87,19 +94,14 @@ class ControleNatureOperation
             return [];
         }
 
-        if ($facture->franchise_en_base) {
-            return ['votre magasin est en franchise en base de TVA, qui couvre aussi ses ventes hors de France'];
-        }
-
         $client = $facture->client;
         $lignes = $facture->lignes()->with('service')->get();
         $emetteur = Emetteur::duMagasin($facture->magasin);
 
         return array_values(array_filter([
-            $nature->reserveeAuxProfessionnels() && ! $facture->estPourUnProfessionnel() ? 'cette nature est réservée aux clients professionnels' : null,
             ...match (true) {
                 $nature->porteSurDesBiens() => $this->manquementsDeLaLivraison($facture, $lignes, $emetteur),
-                default => $this->manquementsDeLaPrestation($facture, $client, $lignes),
+                $nature->porteSurDesServices() => $this->manquementsDeLaPrestation($facture, $client, $lignes),
             },
             ...($nature->exigeVies() ? $this->manquementsDuNumeroTva($nature, $client, $jour) : []),
             blank($emetteur->numeroTva) ? 'renseignez le n° de TVA intracommunautaire du magasin (Paramètres > Identité du magasin)' : null,
@@ -107,9 +109,12 @@ class ControleNatureOperation
     }
 
     /**
-     * La dernière vérification, ce jour-là à Paris, qui a trouvé valide le
-     * n° de TVA qu'a aujourd'hui la fiche du client, dans le magasin actif ;
-     * null s'il n'en a pas.
+     * La dernière vérification, ce jour-là à Paris, du n° de TVA qu'a
+     * aujourd'hui la fiche du client, dans le magasin actif, si elle l'a
+     * trouvé valide ; null sinon : aucune vérification ce jour-là, ou la
+     * dernière l'a trouvé inconnu de VIES, même après une vérification
+     * valide plus tôt dans la journée -- le magasin sait alors que le n° ne
+     * vaut plus, et la vente reste à la TVA française.
      */
     public function consultationDuJour(Client $client, CarbonInterface $jour): ?ConsultationVies
     {
@@ -117,13 +122,15 @@ class ControleNatureOperation
             return null;
         }
 
-        return ConsultationVies::query()
+        $derniere = ConsultationVies::query()
             ->where('client_id', $client->getKey())
             ->where('numero_tva', $client->numero_tva)
-            ->valideLe($jour)
+            ->duJour($jour)
             ->latest('consultee_le')
             ->latest('id')
             ->first();
+
+        return $derniere?->valide ? $derniere : null;
     }
 
     /**

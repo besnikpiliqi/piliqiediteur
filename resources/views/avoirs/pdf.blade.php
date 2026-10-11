@@ -38,7 +38,7 @@
     @include('documents.pdf.lignes', [
         'lignes' => $avoir->lignes,
         'avecFactureDOrigine' => true,
-        'avecPrixTtc' => ! $avoir->nature_operation->exonere(),
+        'sansTvaFrancaise' => \App\Domain\Facturation\Services\ContexteDeVente::documentRetireLaTvaDuPrix($avoir),
         'noteDeCalcul' => app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($avoir),
     ])
 

@@ -48,11 +48,11 @@ class MentionsFiscales
 
     private const CALCUL_RETOUR_PROFESSIONNEL = 'Client professionnel : chaque retour se calcule comme sa facture, pour tous les articles rendus jusqu\'ici (HT = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA sur ce HT, dans la limite de celle de la ligne), déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.';
 
-    private const CALCUL_SANS_TVA = 'Vente sans TVA française : un produit se compte au prix TTC de son catalogue sans la TVA de son taux (PU HT au centime), un service à son prix sans TVA.';
+    private const CALCUL_SANS_TVA = 'Vente sans TVA française : PU HT de chaque produit = prix catalogue TTC ÷ (1 + TVA retirée), au centime ; un service se facture à son prix sans TVA.';
 
-    private const CALCUL_VENTE_PROFESSIONNELLE_SANS_TVA = 'Client professionnel, vente sans TVA française : HT de chaque ligne de produit = quantité × prix TTC du catalogue ÷ (1 + taux de TVA du produit), arrondi une fois ; un service se facture à son prix sans TVA.';
+    private const CALCUL_VENTE_PROFESSIONNELLE_SANS_TVA = 'Client professionnel, vente sans TVA française : HT de chaque ligne de produit = quantité × prix catalogue TTC ÷ (1 + TVA retirée), arrondi une fois ; un service se facture à son prix sans TVA.';
 
-    private const CALCUL_RETOUR_PROFESSIONNEL_SANS_TVA = 'Client professionnel, vente sans TVA française : chaque retour se calcule comme sa facture, pour tous les articles rendus jusqu\'ici (HT = quantité × prix TTC du catalogue ÷ (1 + taux de TVA du produit), arrondi une fois), déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.';
+    private const CALCUL_RETOUR_PROFESSIONNEL_SANS_TVA = 'Client professionnel, vente sans TVA française : chaque retour se calcule comme sa facture, pour tous les articles rendus jusqu\'ici (HT d\'un produit = quantité × prix catalogue TTC ÷ (1 + TVA retirée), arrondi une fois ; d\'un service, quantité × son prix sans TVA), déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.';
 
     /**
      * @param  Emetteur  $emetteur  celui qu'imprime le document : signé une fois émis (voir FigeSonEmetteur::emetteur()), le magasin d'aujourd'hui pour un brouillon ou un devis, et pour le document qu'on émet (voir ContenuFiscal)
@@ -110,18 +110,20 @@ class MentionsFiscales
      * jamais celle de la ligne facturée, sa part de la TVA de son taux,
      * qui peut différer d'un centime de la TVA de son propre HT, et le
      * dernier retour reprend ce qui reste de la ligne. Une vente sans TVA
-     * française (K3, voir ContexteDeVente::retireLaTvaDuPrix()) dit que ses
-     * produits se comptent au prix de leur catalogue sans la TVA de leur
-     * taux, que son PDF n'imprime pas, et ses services à leur prix sans
-     * TVA. Rien pour un particulier en France, ni en franchise en base, où
-     * la vente se calcule article par article à son prix TTC (voir
+     * française (K3, voir ContexteDeVente::documentRetireLaTvaDuPrix()) dit
+     * que ses produits se comptent au prix de leur catalogue sans la TVA de
+     * leur taux, deux données que ses PDF et sa fiche impriment sous ces
+     * noms (« Prix catalogue TTC », « TVA retirée ») à côté de leur taux de
+     * 0 %, et ses services à leur prix sans TVA. Rien pour un particulier en
+     * France, ni en franchise en base, où la vente se calcule article par
+     * article à son prix TTC (voir
      * ContexteDeVente::documentCalculeDepuisLeHtDeLigne()). Une
      * explication, pas une mention : elle ne se signe pas avec le document
      * (voir ContenuFiscal).
      */
     public function calcul(Facture|Avoir|Devis $document): ?string
     {
-        $sansTva = ! $document->franchise_en_base && $document->nature_operation->exonere();
+        $sansTva = ContexteDeVente::documentRetireLaTvaDuPrix($document);
 
         return match (true) {
             ! ContexteDeVente::documentCalculeDepuisLeHtDeLigne($document) => $sansTva ? self::CALCUL_SANS_TVA : null,

@@ -24,10 +24,11 @@ use LogicException;
  *
  * Un brouillon de facture ou un devis note le type du client et la
  * franchise à chaque enregistrement (colonnes()), avec la nature qu'il
- * choisit (voir NoteSaNatureDOperation) : l'émission d'une facture comme
- * l'envoi d'un devis refuse un document dont le client a changé de type
- * depuis (voir refuserSiLeTypeDeClientAChange()), ou dont le magasin a
- * changé de régime depuis (voir refuserSiLeRegimeAChange()).
+ * choisit (voir NoteSaNatureDOperation), toujours une nature que ce client
+ * et ce régime permettent (voir pourEnregistrer()) : l'émission d'une
+ * facture comme l'envoi d'un devis refuse un document dont le client a
+ * changé de type depuis (voir refuserSiLeTypeDeClientAChange()), ou dont
+ * le magasin a changé de régime depuis (voir refuserSiLeRegimeAChange()).
  */
 final readonly class ContexteDeVente
 {
@@ -55,6 +56,36 @@ final readonly class ContexteDeVente
     }
 
     /**
+     * La vente qu'enregistre un brouillon de facture ou un devis (voir
+     * pour()), dans une nature que son client et le régime du magasin
+     * permettent (voir NatureOperation::proposees()) : un magasin en
+     * franchise en base ne vend qu'en France, sa franchise couvrant aussi
+     * ses ventes hors de France, et un particulier n'achète qu'en France, à
+     * l'export ou livré dans un DOM. Le formulaire ne propose que ces
+     * natures, et rouvre en vente en France un document dont la nature
+     * n'est plus permise (voir ChoisitLaNatureDeLOperation::natureARouvrir()) ;
+     * une nature reçue d'ailleurs est refusée ici, avant que rien ne
+     * s'enregistre. Un client ou un régime qui change ensuite est refusé à
+     * l'émission comme à l'envoi (voir refuserSiLeTypeDeClientAChange() et
+     * refuserSiLeRegimeAChange()) : un document ne part donc jamais dans
+     * une nature interdite à son client ou à son magasin.
+     *
+     * @throws LogicException
+     */
+    public static function pourEnregistrer(Client $client, Magasin $magasin, NatureOperation $natureOperation): self
+    {
+        $contexte = self::pour($client, $magasin, $natureOperation);
+
+        if (! in_array($natureOperation, NatureOperation::proposees($contexte->typeClient === TypeClient::Professionnel, $contexte->franchiseEnBase), true)) {
+            throw new LogicException("Impossible d'enregistrer en « {$natureOperation->getLabel()} » : ".($contexte->franchiseEnBase
+                ? 'votre magasin est en franchise en base de TVA, qui couvre aussi ses ventes hors de France. Choisissez « '.NatureOperation::VenteEnFrance->getLabel().' ».'
+                : 'cette nature est réservée aux clients professionnels. Choisissez une autre nature.'));
+        }
+
+        return $contexte;
+    }
+
+    /**
      * Les lignes sont-elles à 0 % ? En franchise en base (B10), et hors de
      * la vente en France : une vente qui sort de la TVA française n'en
      * facture aucune.
@@ -71,12 +102,25 @@ final readonly class ContexteDeVente
      * TVA -- 1 000 articles à 1,00 € TTC à 20 % font 833,33 € pour un
      * professionnel, 830,00 € pour un particulier, à 0,83 € l'article. En
      * franchise, le client paie le même prix TTC, sans TVA, quelle que soit
-     * la nature, dont seule la vente en France s'émet (voir
-     * ControleNatureOperation).
+     * la nature, dont seule la vente en France s'enregistre (voir
+     * pourEnregistrer()).
      */
     public function retireLaTvaDuPrix(): bool
     {
-        return ! $this->franchiseEnBase && $this->natureOperation->exonere();
+        return self::sansTvaFrancaise($this->franchiseEnBase, $this->natureOperation);
+    }
+
+    /**
+     * Le prix sans la TVA française avec lequel un document a été
+     * enregistré (voir retireLaTvaDuPrix()), d'après la franchise et la
+     * nature qu'il a notées : ses lignes de produit gardent le prix TTC de
+     * leur catalogue et le taux retiré (taux_tva_du_prix), que ses PDF et
+     * sa fiche impriment à côté de son taux de 0 % pour que son calcul se
+     * vérifie (voir MentionsFiscales::calcul()).
+     */
+    public static function documentRetireLaTvaDuPrix(Facture|Avoir|Devis $document): bool
+    {
+        return self::sansTvaFrancaise($document->franchise_en_base, $document->nature_operation);
     }
 
     /**
@@ -166,5 +210,10 @@ final readonly class ContexteDeVente
     private static function depuisLeHtDeLigne(TypeClient $typeClient, bool $franchiseEnBase): bool
     {
         return $typeClient === TypeClient::Professionnel && ! $franchiseEnBase;
+    }
+
+    private static function sansTvaFrancaise(bool $franchiseEnBase, NatureOperation $natureOperation): bool
+    {
+        return ! $franchiseEnBase && $natureOperation->exonere();
     }
 }

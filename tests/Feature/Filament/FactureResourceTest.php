@@ -1877,4 +1877,143 @@ class FactureResourceTest extends TestCase
             ->assertSeeText('Livraison le 12/10/2026')
             ->assertSeeText('consultation WAPIAAAAW1234567 du 09/10/2026 à 09:15');
     }
+
+    private function clientAmericain(): Client
+    {
+        return Client::factory()->create(['nom' => 'Acme Inc.', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 12-3456789']);
+    }
+
+    /**
+     * Un export dont l'émission est refusée repasse en vente en France :
+     * les frais de port saisis 15,00 € sans TVA deviennent 18,00 € TTC à
+     * 20 %, et la page le dit -- sinon ils seraient pris pour un prix TTC,
+     * 12,50 € HT, et le magasin perdrait 2,50 € sans le savoir. Avec 1 000
+     * articles à 1,00 € TTC : 848,33 € HT, 169,67 € de TVA, 1 018,00 € TTC.
+     */
+    public function test_repasser_un_export_en_vente_en_france_convertit_le_prix_sans_tva_d_un_service_en_prix_ttc(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $client = $this->clientAmericain();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '1.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $port = Service::factory()->fraisAccessoires()->create(['nom' => 'Frais de port']);
+        $brouillon = app(CreerFactureAction::class)->handle($client, [
+            ['produit_id' => $produit->id, 'quantite' => 1000],
+            ['service_id' => $port->id, 'prix_unitaire_ttc' => '15.00', 'quantite' => 1],
+        ], ['nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US']);
+
+        $page = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
+            ->set('data.nature_operation', NatureOperation::VenteEnFrance->value);
+        $lignePort = collect($page->get('data.lignes'))->filter(fn (array $ligne): bool => (int) $ligne['service_id'] === $port->id)->keys()->sole();
+        $page->assertSet("data.lignes.{$lignePort}.prix_unitaire_ttc", '18.00')
+            ->assertNotified('Prix des services convertis')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $brouillon->refresh();
+        $fraisDePort = $brouillon->lignes->firstWhere('service_id', $port->id);
+        $this->assertSame(['15.00', '18.00', '20.00'], [$fraisDePort->montant_ht, $fraisDePort->prix_unitaire_ttc, $fraisDePort->taux_tva]);
+        $this->assertSame(['848.33', '169.67', '1018.00'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
+    }
+
+    /**
+     * Dans l'autre sens, un service saisi 18,00 € TTC en vente en France se
+     * facture 15,00 € sans TVA une fois la vente passée en prestation hors
+     * UE : le client étranger ne paie pas la TVA française comme prix.
+     */
+    public function test_sortir_une_vente_de_la_tva_francaise_convertit_le_prix_ttc_d_un_service_en_prix_sans_tva(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $conseil = Service::factory()->create(['nom' => 'Conseil']);
+        $brouillon = app(CreerFactureAction::class)->handle($this->clientAmericain(), [['service_id' => $conseil->id, 'prix_unitaire_ttc' => '18.00', 'taux_tva' => 20, 'quantite' => 1]]);
+
+        $page = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
+            ->set('data.nature_operation', NatureOperation::PrestationHorsUe->value);
+        $page->assertSet('data.lignes.'.array_key_first($page->get('data.lignes')).'.prix_unitaire_ttc', '15.00')
+            ->assertNotified('Prix des services convertis')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $brouillon->refresh();
+        $this->assertSame(NatureOperation::PrestationHorsUe, $brouillon->nature_operation);
+        $this->assertSame(['15.00', '0.00', '15.00'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
+    }
+
+    /**
+     * Choisir un particulier ramène une prestation hors UE à la vente en
+     * France : le prix de son service, saisi 15,00 € sans TVA, devient
+     * 18,00 € TTC à 20 %.
+     */
+    public function test_choisir_un_particulier_convertit_le_prix_du_service_en_ramenant_la_vente_en_france(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $service = Service::factory()->create(['nom' => 'Conseil']);
+
+        $page = Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => $this->clientAmericain()->id, 'nature_operation' => NatureOperation::PrestationHorsUe->value, 'lignes' => [['service_id' => $service->id, 'description' => 'Conseil', 'quantite' => 1, 'prix_unitaire_ttc' => '15.00', 'taux_tva' => '20']]])
+            ->fillForm(['client_id' => Client::factory()->create()->id]);
+
+        $page->assertSet('data.nature_operation', NatureOperation::VenteEnFrance->value)
+            ->assertSet('data.lignes.'.array_key_first($page->get('data.lignes')).'.prix_unitaire_ttc', '18.00')
+            ->assertNotified('Prix des services convertis');
+    }
+
+    /**
+     * Rouvert après que son client est devenu particulier, le brouillon
+     * d'une prestation autoliquidée repasse en vente en France, et la page
+     * le dit avant qu'il ne s'enregistre ainsi.
+     */
+    public function test_un_brouillon_rouvert_dans_une_nature_qui_n_est_plus_permise_repasse_en_vente_en_france(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $client = Client::factory()->etranger('DE', 'DE123456789')->create();
+        $brouillon = app(CreerFactureAction::class)->handle($client, [['service_id' => Service::factory()->create()->id, 'prix_unitaire_ttc' => '500.00', 'quantite' => 1]], ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]);
+        $client->update(['type_client' => TypeClient::Particulier, 'numero_tva' => null]);
+
+        Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
+            ->assertSet('data.nature_operation', NatureOperation::VenteEnFrance->value)
+            ->assertNotified('« Prestation à un professionnel de l\'UE (autoliquidation) » n\'est plus possible');
+    }
+
+    /**
+     * Trouvé valide à 8 h puis inconnu de VIES à 9 h : « Émettre » ne
+     * retient pas la vérification de 8 h, il interroge de nouveau VIES, et
+     * émet avec la nouvelle vérification valide.
+     */
+    public function test_une_verification_vies_invalide_plus_recente_fait_verifier_de_nouveau_avant_d_emettre(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $client = Client::factory()->etranger('DE', 'DE123456789')->create();
+        ConsultationVies::forceCreate(['client_id' => $client->id, 'numero_tva' => 'DE123456789', 'valide' => true, 'identifiant_consultation' => 'WAPIAAAAW0000001', 'consultee_le' => now()->setTime(8, 0), 'reponse' => '{"valid":true}']);
+        ConsultationVies::forceCreate(['client_id' => $client->id, 'numero_tva' => 'DE123456789', 'valide' => false, 'identifiant_consultation' => null, 'consultee_le' => now()->setTime(9, 0), 'reponse' => '{"valid":false}']);
+        $brouillon = $this->brouillonDeLivraisonIntracommunautaire($client);
+        Http::preventStrayRequests();
+        Http::fake(['https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number' => Http::response(['countryCode' => 'DE', 'vatNumber' => '123456789', 'valid' => true, 'requestIdentifier' => 'WAPIAAAAW1234567', 'name' => 'MUSTER GMBH', 'address' => '---'])]);
+
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $brouillon);
+
+        $facture = $brouillon->fresh();
+        $this->assertSame(StatutFacture::Emise, $facture->statut);
+        $this->assertSame('WAPIAAAAW1234567', $facture->consultationVies->identifiant_consultation);
+        Http::assertSentCount(1);
+    }
+
+    /**
+     * La fiche d'un export à un professionnel montre, comme son PDF, le
+     * prix TTC du catalogue et la TVA retirée à côté du taux de 0 %, jamais
+     * un « PU TTC » que le client n'a pas payé.
+     */
+    public function test_la_fiche_d_un_export_montre_le_prix_catalogue_et_la_tva_retiree_sans_pu_ttc(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '7.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($this->clientAmericain(), [['produit_id' => $produit->id, 'quantite' => 3]], [
+            'nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
+        ]));
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSeeText('Prix catalogue TTC')
+            ->assertSeeText('TVA retirée')
+            ->assertSeeText('quantité × prix catalogue TTC ÷ (1 + TVA retirée)')
+            ->assertDontSeeText('PU TTC');
+    }
 }

@@ -4,6 +4,7 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
@@ -18,6 +19,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
@@ -747,5 +749,98 @@ class DevisResourceTest extends TestCase
         $this->assertSoftDeleted($devisBrouillon);
         $this->assertNotSoftDeleted($devisConverti);
         $this->assertSame($devisConverti->id, Facture::query()->sole()->devis_id);
+    }
+
+    /**
+     * Le propriétaire connecté d'un magasin de Lyon au n° de TVA
+     * FR44732829320, qui vend hors de France.
+     */
+    private function magasinQuiVendHorsDeFrance(): Magasin
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->completerIdentiteLegale(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire));
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        return $magasin;
+    }
+
+    /**
+     * Un devis de conseil autoliquidé pour un professionnel allemand, rouvert
+     * après que sa fiche est devenue celle d'un particulier : il repasse en
+     * vente en France, son prix sans TVA devient un prix TTC (500,00 € à
+     * 20 % : 600,00 €), et la page le dit. Réenregistré, il porte la TVA
+     * française et plus la mention « Autoliquidation ».
+     */
+    public function test_un_devis_rouvert_apres_que_son_client_est_devenu_particulier_repasse_en_vente_en_france(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $client = Client::factory()->etranger('DE', 'DE123456789')->create();
+        $devis = app(CreerDevisAction::class)->handle($client, [['service_id' => Service::factory()->create(['nom' => 'Conseil'])->id, 'prix_unitaire_ttc' => '500.00', 'quantite' => 1]], ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]);
+        $client->update(['type_client' => TypeClient::Particulier, 'numero_tva' => null]);
+
+        $page = Livewire::test(EditDevis::class, ['record' => $devis->getRouteKey()]);
+        $page->assertSet('data.nature_operation', NatureOperation::VenteEnFrance->value)
+            ->assertSet('data.lignes.'.array_key_first($page->get('data.lignes')).'.prix_unitaire_ttc', '600.00')
+            ->assertNotified('« Prestation à un professionnel de l\'UE (autoliquidation) » n\'est plus possible')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $devis->refresh();
+        $this->assertSame(NatureOperation::VenteEnFrance, $devis->nature_operation);
+        $this->assertSame(['500.00', '100.00', '600.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
+        $this->assertStringNotContainsString('Autoliquidation', app(DevisPdfGenerator::class)->html($devis));
+    }
+
+    /**
+     * Un devis d'export rouvert après l'entrée du magasin en franchise en
+     * base repasse en vente en France : réenregistré, il ne cite plus
+     * l'exonération de l'export, seulement la franchise.
+     */
+    public function test_un_devis_rouvert_apres_l_entree_du_magasin_en_franchise_repasse_en_vente_en_france(): void
+    {
+        $magasin = $this->magasinQuiVendHorsDeFrance();
+        $client = Client::factory()->create(['nom' => 'Acme Inc.', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 12-3456789']);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '1.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $devis = app(CreerDevisAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1000]], [
+            'nature_operation' => NatureOperation::ExportHorsUe,
+            'livraison_adresse' => '1 Main Street',
+            'livraison_code_postal' => '10001',
+            'livraison_ville' => 'New York',
+            'livraison_pays' => 'US',
+        ]);
+        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+
+        Livewire::test(EditDevis::class, ['record' => $devis->getRouteKey()])
+            ->assertSet('data.nature_operation', NatureOperation::VenteEnFrance->value)
+            ->assertNotified('« Export hors UE expédié par le magasin » n\'est plus possible')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $devis->refresh();
+        $pdf = app(DevisPdfGenerator::class)->html($devis);
+        $this->assertSame([NatureOperation::VenteEnFrance, true, null], [$devis->nature_operation, $devis->franchise_en_base, $devis->livraison_pays]);
+        $this->assertSame(['1000.00', '0.00', '1000.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
+        $this->assertStringContainsString('TVA non applicable, art. 293 B du CGI', $pdf);
+        $this->assertStringNotContainsString('262 I', $pdf);
+    }
+
+    /**
+     * La liste des natures ne restreint ses choix qu'à l'affichage : une
+     * nature réservée aux professionnels envoyée directement pour un
+     * particulier est refusée, et aucun devis ne s'enregistre.
+     */
+    public function test_une_nature_que_le_client_ne_peut_pas_choisir_est_refusee_meme_envoyee_directement(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $service = Service::factory()->create(['nom' => 'Conseil']);
+
+        Livewire::test(CreateDevis::class)
+            ->fillForm(['client_id' => Client::factory()->create()->id, 'lignes' => [['service_id' => $service->id, 'description' => 'Conseil', 'quantite' => 1, 'prix_unitaire_ttc' => '500.00']]])
+            ->set('data.nature_operation', NatureOperation::PrestationUeAutoliquidation->value)
+            ->call('create')
+            ->assertHasFormErrors(['nature_operation' => 'Choisissez une nature proposée pour ce client.']);
+
+        $this->assertSame(0, Devis::query()->count());
     }
 }

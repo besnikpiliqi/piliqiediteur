@@ -74,7 +74,7 @@ class ModifierFactureAction
                 ->map(fn (LigneFacture $ligne): array => $this->lignesRetirees->comparable($ligne->produit_id, $ligne->service_id, $ligne->description, $ligne->quantite, $ligne->prix_unitaire_ttc))
                 ->all();
 
-            $contexte = ContexteDeVente::pour($client, $facture->magasin, $facture->fill($attributs)->noterSaNatureDOperation($attributs));
+            $contexte = ContexteDeVente::pourEnregistrer($client, $facture->magasin, $facture->fill($attributs)->noterSaNatureDOperation($attributs));
             $facture->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
 
             $facture->lignes()->delete();

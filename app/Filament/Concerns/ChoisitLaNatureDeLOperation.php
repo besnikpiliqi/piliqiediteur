@@ -5,6 +5,10 @@ namespace App\Filament\Concerns;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\TransportPar;
+use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Tenancy\Services\TenantContext;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Radio;
@@ -13,14 +17,25 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
+use Filament\Notifications\Notification;
+use InvalidArgumentException;
 
 /**
  * La nature de l'opération d'une facture ou d'un devis (I1, voir
  * NatureOperation) et la livraison qu'elle demande. Un particulier
  * choisit la vente en France, l'export ou la livraison vers un DOM ; un
  * professionnel, les six natures ; un magasin en franchise en base, la
- * vente en France seule. L'aide dit la mention imprimée et les
- * conditions, que l'émission contrôle (voir ControleNatureOperation).
+ * vente en France seule. Le choix se valide aussi côté serveur, comme à
+ * l'enregistrement (voir ContexteDeVente::pourEnregistrer()) : une liste
+ * déroulante ne restreint ses choix qu'à l'affichage. L'aide dit la
+ * mention imprimée et les conditions, que l'émission contrôle (voir
+ * ControleNatureOperation).
+ *
+ * Changer de nature peut faire entrer la vente dans la TVA française ou
+ * l'en faire sortir : le prix saisi d'un service change alors de sens, et
+ * se convertit (voir lignesAuxPrixDeLaNature()). Un document rouvert dans
+ * une nature que son client ou le régime du magasin ne permettent plus
+ * revient à la vente en France (voir natureARouvrir()).
  *
  * La section « Livraison » n'apparaît que pour des biens qui partent hors
  * de France, préremplie avec l'adresse du client : son pays est
@@ -46,9 +61,14 @@ trait ChoisitLaNatureDeLOperation
             ->default(NatureOperation::VenteEnFrance->value)
             ->selectablePlaceholder(false)
             ->required()
+            ->in(fn (Get $get): array => array_keys(self::naturesProposees($get('client_id'))))
+            ->validationMessages(['in' => 'Choisissez une nature proposée pour ce client.'])
             ->live()
             ->helperText(fn (Get $get): string => self::aideDeLaNature(NatureOperation::depuisSaisie($get('nature_operation'))))
-            ->afterStateUpdated(fn (Get $get, Set $set) => self::preremplirLaLivraison($get, $set))
+            ->afterStateUpdated(function (Get $get, Set $set, mixed $old): void {
+                self::convertirLesPrixDesServices($get, $set, NatureOperation::depuisSaisie($old));
+                self::preremplirLaLivraison($get, $set);
+            })
             ->columnSpanFull();
     }
 
@@ -88,15 +108,60 @@ trait ChoisitLaNatureDeLOperation
     /**
      * Le client choisi change les natures proposées : une nature qu'il ne
      * peut plus choisir (un particulier après un professionnel) revient à
-     * la vente en France, et une livraison encore vide prend son adresse.
+     * la vente en France, avec le prix de ses services converti, et une
+     * livraison encore vide prend son adresse.
      */
     public static function ajusterLaNatureAuClient(Get $get, Set $set): void
     {
-        if (! array_key_exists(NatureOperation::depuisSaisie($get('nature_operation'))->value, self::naturesProposees($get('client_id')))) {
+        $nature = NatureOperation::depuisSaisie($get('nature_operation'));
+
+        if (! array_key_exists($nature->value, self::naturesProposees($get('client_id')))) {
             $set('nature_operation', NatureOperation::VenteEnFrance->value);
+            self::convertirLesPrixDesServices($get, $set, $nature);
         }
 
         self::preremplirLaLivraison($get, $set);
+    }
+
+    /**
+     * Les données d'un brouillon de facture ou d'un devis telles que son
+     * formulaire les rouvre, ses lignes comprises (voir
+     * AjouteDesLignesDeVente::lignesARouvrir()) : sa nature, tant que son
+     * client et le régime du magasin la permettent encore. Sinon -- le
+     * client est devenu particulier, le magasin est entré en franchise en
+     * base --, le document revient à la vente en France, le prix de ses
+     * services converti comme pour un changement de nature (voir
+     * lignesAuxPrixDeLaNature()), et une notification le dit avant qu'il ne
+     * s'enregistre ainsi : sans quoi l'écran afficherait une nature que la
+     * liste ne propose plus, et l'enregistrement la refuserait (voir
+     * ContexteDeVente::pourEnregistrer()).
+     *
+     * @param  array<string, mixed>  $donnees
+     * @return array<string, mixed>
+     */
+    public static function natureARouvrir(Facture|Devis $document, array $donnees): array
+    {
+        $nature = $document->nature_operation;
+
+        if (array_key_exists($nature->value, self::naturesProposees($document->client_id))) {
+            return $donnees;
+        }
+
+        $lignes = self::lignesAuxPrixDeLaNature($donnees['lignes'] ?? [], ContexteDeVente::documentRetireLaTvaDuPrix($document), false);
+        $raison = app(TenantContext::class)->magasin()->estEnFranchiseDeTva()
+            ? 'Votre magasin est en franchise en base de TVA, qui couvre aussi ses ventes hors de France'
+            : 'Ce client n\'est plus un professionnel';
+
+        Notification::make()
+            ->title("« {$nature->getLabel()} » n'est plus possible")
+            ->body("{$raison} : la vente repasse en « ".NatureOperation::VenteEnFrance->getLabel().' »'
+                .($lignes === null ? '' : ', et le prix de ses services est désormais TTC')
+                .'. Vérifiez-la avant d\'enregistrer.')
+            ->warning()
+            ->persistent()
+            ->send();
+
+        return [...$donnees, 'nature_operation' => NatureOperation::VenteEnFrance->value, 'lignes' => $lignes ?? ($donnees['lignes'] ?? [])];
     }
 
     /**
@@ -127,6 +192,95 @@ trait ChoisitLaNatureDeLOperation
         return collect(NatureOperation::proposees($client?->estProfessionnel() ?? false, app(TenantContext::class)->magasin()->estEnFranchiseDeTva()))
             ->mapWithKeys(fn (NatureOperation $nature): array => [$nature->value => $nature->getLabel()])
             ->all();
+    }
+
+    /**
+     * La nature vient de changer : si la vente est entrée dans la TVA
+     * française ou en est sortie, le prix saisi de ses services se
+     * convertit (voir lignesAuxPrixDeLaNature()), et une notification le
+     * dit, pour que le vendeur le vérifie.
+     */
+    private static function convertirLesPrixDesServices(Get $get, Set $set, NatureOperation $avant): void
+    {
+        $apres = self::sansTvaFrancaise(NatureOperation::depuisSaisie($get('nature_operation')));
+        $lignes = self::lignesAuxPrixDeLaNature($get('lignes'), self::sansTvaFrancaise($avant), $apres);
+
+        if ($lignes === null) {
+            return;
+        }
+
+        $set('lignes', $lignes);
+
+        Notification::make()
+            ->title('Prix des services convertis')
+            ->body($apres
+                ? 'Sans TVA française, un service se facture sans TVA : son prix TTC est devenu son prix sans TVA, au taux de sa ligne. Vérifiez-le.'
+                : 'En France, le prix d\'un service se saisit TTC : son prix sans TVA est devenu son prix TTC, au taux de sa ligne. Vérifiez ce prix et ce taux.')
+            ->warning()
+            ->send();
+    }
+
+    /**
+     * Le prix saisi d'un service change de sens quand la vente entre dans
+     * la TVA française ou en sort (voir ContexteDeVente::retireLaTvaDuPrix()) :
+     * TTC au taux de sa ligne en France, sans TVA hors de France (K3). Il
+     * se convertit donc au taux de sa ligne, au centime comme le PU HT d'un
+     * produit (voir CalculateurLigne) : 18,00 € TTC à 20 % font 15,00 € sans
+     * TVA, et 15,00 € sans TVA font 18,00 € TTC. Une ligne de produit garde
+     * son PU TTC, celui de son catalogue, dont le calcul retire ou non la
+     * TVA ; une ligne de service sans prix ou sans taux valable reste telle
+     * quelle, sa validation le signalera. Rien ne change entre deux natures
+     * sans TVA française, ni d'une nature à l'autre en franchise en base, où
+     * tout se vend au même prix TTC ; un document d'export rouvert après
+     * l'entrée du magasin en franchise revient en France à ce prix TTC, que
+     * le client paie sans TVA (voir natureARouvrir()).
+     *
+     * Le taux d'un service vendu sans TVA française est caché : c'est celui
+     * qu'il avait en France, ou le taux du territoire du magasin pour une
+     * ligne ajoutée ou rouverte hors de France (voir
+     * AjouteDesLignesDeVente::lignesARouvrir()).
+     *
+     * @param  mixed  $lignes  les lignes du formulaire
+     * @return array<array-key, mixed>|null les lignes, prix des services convertis ; null si aucun n'a changé
+     */
+    private static function lignesAuxPrixDeLaNature(mixed $lignes, bool $sansTvaAvant, bool $sansTvaApres): ?array
+    {
+        if ($sansTvaAvant === $sansTvaApres || ! is_array($lignes)) {
+            return null;
+        }
+
+        $calculateur = app(CalculateurLigne::class);
+        $converties = false;
+
+        foreach ($lignes as $cle => $ligne) {
+            if (! is_array($ligne) || blank($ligne['service_id'] ?? null) || ! is_numeric($ligne['prix_unitaire_ttc'] ?? null) || ! is_numeric($ligne['taux_tva'] ?? null)) {
+                continue;
+            }
+
+            try {
+                $prix = $sansTvaApres
+                    ? $calculateur->prixUnitaireHtDepuisTtc((float) $ligne['prix_unitaire_ttc'], (float) $ligne['taux_tva'])
+                    : $calculateur->prixUnitaireTtcDepuisHt((float) $ligne['prix_unitaire_ttc'], (float) $ligne['taux_tva']);
+            } catch (InvalidArgumentException) {
+                continue;
+            }
+
+            // Présenté comme un prix relu en base (cast decimal:2) : "15.00".
+            $lignes[$cle]['prix_unitaire_ttc'] = number_format($prix, 2, '.', '');
+            $converties = true;
+        }
+
+        return $converties ? $lignes : null;
+    }
+
+    /**
+     * La vente de cette nature, dans le régime d'aujourd'hui du magasin,
+     * se paie-t-elle sans la TVA française (voir
+     * ContexteDeVente::retireLaTvaDuPrix()) ?
+     */
+    private static function sansTvaFrancaise(NatureOperation $nature): bool
+    {
+        return ContexteDeVente::pour(null, app(TenantContext::class)->magasin(), $nature)->retireLaTvaDuPrix();
     }
 
     private static function aideDeLaNature(NatureOperation $nature): string

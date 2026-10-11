@@ -4,11 +4,13 @@ namespace App\Console\Commands;
 
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Models\TraceEvenement;
+use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -22,6 +24,12 @@ use Throwable;
  * autres : ses traces ne se gardent pas plus longtemps. Rien d'autre ne
  * s'efface : la base refuse la suppression d'une trace avant son
  * expiration (voir DeclencheursDeProtection::effacementApresExpiration()).
+ * Une trace s'efface donc une fois expirée à l'heure de l'application et à
+ * celle du serveur de base, la seule que suit le déclencheur (voir
+ * DeclencheursDeProtection::conditionDExpiration()) : quand l'horloge de
+ * l'application devance celle de la base, une trace qui n'a expiré que
+ * pour la première attend le passage suivant au lieu de faire refuser tout
+ * son lot.
  *
  * Le nombre de traces effacées s'inscrit au journal de l'application. La
  * panne d'un magasin n'arrête pas les suivants : elle est signalée
@@ -63,21 +71,23 @@ class PurgerTraces extends Command
     /**
      * Les traces expirées du magasin actif, lot par lot.
      *
-     * @param  string  $limite  maintenant, tel que expire_le s'écrit en base (UTC)
+     * @param  string  $limite  maintenant, à l'heure de l'application, tel que expire_le s'écrit en base (UTC)
      */
     private function effacerLesTracesExpirees(string $limite): int
     {
+        $expirees = fn (): Builder => TraceEvenement::query()
+            ->where('expire_le', '<=', $limite)
+            ->whereRaw(DeclencheursDeProtection::conditionDExpiration());
         $effacees = 0;
 
         do {
-            $lot = TraceEvenement::query()
-                ->where('expire_le', '<=', $limite)
+            $lot = $expirees()
                 ->orderBy('enregistrement_fiscal_id')
                 ->limit(self::LOT)
                 ->pluck('enregistrement_fiscal_id');
 
             if ($lot->isNotEmpty()) {
-                $effacees += TraceEvenement::query()->whereKey($lot->all())->delete();
+                $effacees += $expirees()->whereKey($lot->all())->delete();
             }
         } while ($lot->count() === self::LOT);
 

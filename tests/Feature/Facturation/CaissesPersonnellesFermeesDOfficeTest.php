@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -15,18 +16,22 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Actions\RetirerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages\ListClotureCaissePersonnelles;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Exceptions;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -187,6 +192,138 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
         );
         Livewire::test(ListClotureCaissePersonnelles::class)
             ->assertTableColumnStateSet('mode_fermeture', 'Fermée par Alice Martin', $releve);
+    }
+
+    /**
+     * Qui peut clôturer la journée ferme la caisse d'un vendeur même s'il
+     * ne vend ni n'encaisse : la page des relevés lui est ouverte pour ce
+     * geste.
+     */
+    public function test_un_responsable_qui_ne_vend_ni_n_encaisse_ferme_la_caisse_d_un_vendeur(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $paul = $this->vendeur($magasin, 'Paul Martin');
+        $ticket = $this->vendreUnTicket($paul);
+        $responsable = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
+        $this->actingAs($responsable);
+
+        $this->get(ClotureCaissePersonnelleResource::getUrl('index', ['tenant' => $magasin]))->assertOk();
+        Filament::setTenant($magasin);
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->assertActionHidden('fermer_ma_caisse')
+            ->callAction('fermer_la_caisse_d_un_vendeur', ['vendeur_id' => $paul->id])
+            ->assertNotified('Caisse de Paul Martin fermée');
+
+        $releve = ClotureCaissePersonnelle::query()->sole();
+        $this->assertSame(
+            [$paul->id, ModeFermetureCaisse::Responsable, $responsable->id, [$ticket->id]],
+            [$releve->vendeur_id, $releve->mode_fermeture, $releve->fermee_par, $releve->factures->modelKeys()],
+        );
+    }
+
+    /**
+     * Le relevé d'un vendeur ne se montre qu'à lui et à qui voit ceux de
+     * toute l'équipe (cloture_caisse.view_toutes) : le propriétaire voit
+     * les montants de Paul avant de fermer sa caisse ; le gérant, qui
+     * clôture la journée sans voir les relevés de l'équipe, la ferme sans
+     * en voir aucun.
+     */
+    public function test_seul_qui_voit_les_releves_de_l_equipe_voit_les_montants_de_la_caisse_qu_il_ferme(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $paul = $this->vendeur($magasin, 'Paul Martin');
+        $this->vendreUnTicket($paul);
+        $gerant = $this->membre($magasin, RoleMagasin::Vendeur, [
+            PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE,
+            PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER,
+        ]);
+
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->mountAction('fermer_la_caisse_d_un_vendeur')
+            ->setActionData(['vendeur_id' => $paul->id])
+            ->assertSee('TTC vendu : 12,00 € (1 vente)')
+            ->assertSee('Reste dû : 12,00 €');
+        $this->actingAs($gerant);
+        $fenetreDuGerant = Livewire::test(ListClotureCaissePersonnelles::class)
+            ->mountAction('fermer_la_caisse_d_un_vendeur')
+            ->setActionData(['vendeur_id' => $paul->id]);
+
+        $fenetreDuGerant->assertSee('Son relevé ne vous sera pas montré')
+            ->assertDontSee('TTC vendu')
+            ->assertDontSee('12,00');
+        $fenetreDuGerant->callMountedAction()->assertNotified('Caisse de Paul Martin fermée');
+        $this->assertSame(ModeFermetureCaisse::Responsable, ClotureCaissePersonnelle::query()->sole()->mode_fermeture);
+    }
+
+    /**
+     * Un vendeur retiré de l'équipe garde sa caisse ouverte dans le magasin
+     * où il a vendu : un responsable la ferme pour lui.
+     */
+    public function test_un_responsable_ferme_la_caisse_d_un_vendeur_retire_de_l_equipe(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $paul = $this->vendeur($magasin, 'Paul Martin');
+        $ticket = $this->vendreUnTicket($paul);
+        app(RetirerMembreMagasinAction::class)->handle($magasin->membres()->where('user_id', $paul->id)->firstOrFail());
+
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->callAction('fermer_la_caisse_d_un_vendeur', ['vendeur_id' => $paul->id])
+            ->assertNotified('Caisse de Paul Martin fermée');
+
+        $this->assertSame([$ticket->id], ClotureCaissePersonnelle::query()->where('vendeur_id', $paul->id)->sole()->factures->modelKeys());
+    }
+
+    /**
+     * Isolation des magasins : la caisse de Bob, vendeur d'un autre
+     * magasin, ne se ferme jamais depuis celui-ci, même par une requête
+     * forgée. Aucun relevé n'y révèle son nom.
+     */
+    public function test_un_responsable_ne_ferme_jamais_la_caisse_d_un_compte_d_un_autre_magasin(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $alice = $this->proprietaireDe($magasin);
+        $autreMagasin = app(CreerMagasinAction::class)->handle(['nom' => 'Autre Boutique'], User::factory()->create());
+        $bob = $this->vendeur($autreMagasin, 'Bob Durand');
+        $this->vendreUnTicket($bob);
+        app(TenantContext::class)->set($magasin);
+
+        $this->assertFalse($alice->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $bob]));
+        $this->assertThrows(fn () => app(FermerSaCaisseAction::class)->handle($bob, $alice), AuthorizationException::class);
+        $this->assertDatabaseCount('clotures_caisse_personnelles', 0);
+    }
+
+    /**
+     * Une fermeture d'office n'a pas d'auteur, toute autre en a un : la
+     * base refuse un relevé qui dit le contraire, dont la liste ne saurait
+     * dire qui a fermé la caisse.
+     *
+     * @return array<string, array{ModeFermetureCaisse, bool}>
+     */
+    public static function auteursContraires(): array
+    {
+        return [
+            'fermée par le vendeur, sans auteur' => [ModeFermetureCaisse::Vendeur, false],
+            'fermée par un responsable, sans auteur' => [ModeFermetureCaisse::Responsable, false],
+            'fermée automatiquement, avec un auteur' => [ModeFermetureCaisse::Automatique, true],
+        ];
+    }
+
+    #[DataProvider('auteursContraires')]
+    public function test_la_base_refuse_un_releve_dont_l_auteur_contredit_le_mode_de_fermeture(ModeFermetureCaisse $mode, bool $avecAuteur): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $paul = $this->vendeur($magasin, 'Paul Martin');
+
+        $this->assertThrows(
+            $this->dansUnPointDeSauvegarde(fn () => ClotureCaissePersonnelle::factory()->create([
+                'vendeur_id' => $paul->id,
+                'mode_fermeture' => $mode,
+                'fermee_par' => $avecAuteur ? $this->proprietaireDe($magasin)->id : null,
+            ])),
+            QueryException::class,
+            'ccp_auteur_selon_le_mode',
+        );
+        $this->assertDatabaseCount('clotures_caisse_personnelles', 0);
     }
 
     /**

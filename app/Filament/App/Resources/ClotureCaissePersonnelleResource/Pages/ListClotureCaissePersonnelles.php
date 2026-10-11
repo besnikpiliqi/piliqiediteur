@@ -18,12 +18,16 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 
 /**
- * « Fermer ma caisse » : quiconque vend ou encaisse ferme la sienne.
+ * « Fermer ma caisse » : quiconque vend ou encaisse ferme la sienne, et
+ * voit son relevé avant de le fermer (voir FermerSaCaisseAction::apercu()).
  * « Fermer la caisse d'un vendeur » : qui peut clôturer la journée ferme
  * celle d'un autre membre dont la caisse est encore ouverte, pour lui
  * (voir ClotureCaissePersonnellePolicy::fermerLaCaisseDe()) ; son relevé
- * porte « Fermée par » et son nom. L'une et l'autre montrent le relevé
- * avant de le fermer (voir FermerSaCaisseAction::apercu()).
+ * porte « Fermée par » et son nom. Ce relevé reste aussi confidentiel que
+ * dans la liste (voir ClotureCaissePersonnelleResource::getEloquentQuery()) :
+ * seul qui voit les relevés de toute l'équipe (cloture_caisse.view_toutes)
+ * le voit avant de fermer ; tout autre responsable ferme la caisse sans en
+ * voir aucun montant.
  */
 class ListClotureCaissePersonnelles extends ListRecords
 {
@@ -55,7 +59,9 @@ class ListClotureCaissePersonnelles extends ListRecords
                     Placeholder::make('releve')
                         ->hiddenLabel()
                         ->visible(fn (Get $get): bool => self::vendeurChoisi($get('vendeur_id')) !== null)
-                        ->content(fn (Get $get): HtmlString => self::recapitulatif(app(FermerSaCaisseAction::class)->apercu(self::vendeurChoisi($get('vendeur_id'))), 'sa')),
+                        ->content(fn (Get $get): HtmlString|string => auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)
+                            ? self::recapitulatif(app(FermerSaCaisseAction::class)->apercu(self::vendeurChoisi($get('vendeur_id'))), 'sa')
+                            : 'Sa caisse sera fermée jusqu\'à maintenant. Son relevé ne vous sera pas montré : seuls le vendeur et qui voit les relevés de toute l\'équipe le consultent.'),
                 ])
                 ->visible(fn (): bool => auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_GERER))
                 ->action(function (array $data): void {

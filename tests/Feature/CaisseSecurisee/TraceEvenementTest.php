@@ -91,6 +91,35 @@ class TraceEvenementTest extends TestCase
         $this->assertSame(['203.0.113.7', '203.0.113.7'], DB::table('traces_evenements')->orderBy('enregistrement_fiscal_id')->pluck('ip')->all());
     }
 
+    /**
+     * Une insertion qui remplacerait la trace (INSERT OR REPLACE sous
+     * SQLite, qui efface la ligne en conflit, INSERT ... ON CONFLICT DO
+     * UPDATE sous PostgreSQL, qui la modifie) ne la falsifie pas pour la
+     * rendre effaçable : la base la refuse comme une suppression avant
+     * expiration ou comme une modification.
+     */
+    public function test_une_trace_ne_se_reecrit_pas_par_une_insertion_qui_la_remplace(): void
+    {
+        $this->magasinActif();
+        $trace = $this->trace($this->journaliser(), CarbonImmutable::now()->addYear());
+        $ligne = fn (): array => (array) DB::table('traces_evenements')->where('enregistrement_fiscal_id', $trace->getKey())->first();
+        $avant = $ligne();
+        $valeurs = '(?, ?, ?, ?, ?, ?)';
+        $colonnes = '(enregistrement_fiscal_id, magasin_id, ip, agent_utilisateur, expire_le, created_at)';
+        $remplacement = DB::connection()->getDriverName() === 'pgsql'
+            ? "INSERT INTO traces_evenements {$colonnes} VALUES {$valeurs} ON CONFLICT (enregistrement_fiscal_id) DO UPDATE SET ip = excluded.ip, expire_le = excluded.expire_le"
+            : "INSERT OR REPLACE INTO traces_evenements {$colonnes} VALUES {$valeurs}";
+
+        $this->assertThrows(
+            $this->dansUnPointDeSauvegarde(fn () => DB::statement($remplacement, [$trace->getKey(), $trace->magasin_id, '0.0.0.0', 'falsifié', '2000-01-01 00:00:00', '2000-01-01 00:00:00'])),
+            QueryException::class,
+            'traces_evenements : ',
+        );
+
+        $this->assertSame('203.0.113.7', $avant['ip']);
+        $this->assertSame($avant, $ligne());
+    }
+
     public function test_une_trace_ne_s_efface_pas_avant_son_expiration(): void
     {
         $this->magasinActif();

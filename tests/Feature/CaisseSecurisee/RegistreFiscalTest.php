@@ -497,7 +497,8 @@ class RegistreFiscalTest extends TestCase
     /**
      * S13 : l'adresse IP et le navigateur de la requête HTTP qui fait
      * inscrire un événement technique vont dans sa trace, rangée à part et
-     * effacée après 1 an, jamais dans son contenu signé.
+     * effacée après la durée de conservation des traces (1 an par défaut),
+     * jamais dans son contenu signé.
      */
     public function test_journaliser_range_l_adresse_ip_et_le_navigateur_dans_la_trace(): void
     {

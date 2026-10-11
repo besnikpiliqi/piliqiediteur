@@ -21,8 +21,9 @@ use Tests\TestCase;
  * des modifications et des suppressions est vérifié sur les tables de
  * l'application par RegistreFiscalTest et InalterabiliteTest (ajout seul),
  * par CreerMagasinActionTest (sans suppression) et par TraceEvenementTest
- * (effacement après expiration) ; celui du vidage l'est ici, sur une table
- * créée pour le test.
+ * (effacement après expiration) ; celui du vidage et du remplacement
+ * (INSERT OR REPLACE, sous SQLite) l'est ici, sur une table créée pour le
+ * test.
  */
 class DeclencheursDeProtectionTest extends TestCase
 {
@@ -76,6 +77,41 @@ class DeclencheursDeProtectionTest extends TestCase
         DB::table('table_protegee')->insert(['valeur' => 'conservée']);
 
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('table_protegee')->truncate()), QueryException::class, 'table_protegee : ');
+
+        $this->assertSame(['conservée'], DB::table('table_protegee')->pluck('valeur')->all());
+    }
+
+    /**
+     * Sous SQLite, INSERT OR REPLACE efface la ligne en conflit pour écrire
+     * la sienne, sans lancer les déclencheurs DELETE tant que
+     * recursive_triggers n'est pas actif : la connexion de l'application
+     * l'active, et chaque protection refuse alors le remplacement comme
+     * une suppression. PostgreSQL n'a pas de remplacement : son INSERT ...
+     * ON CONFLICT DO UPDATE est une modification, refusée par les tables
+     * qui refusent toute modification (voir TraceEvenementTest).
+     *
+     * @param  Closure(string): void  $poser
+     */
+    #[DataProvider('protections')]
+    public function test_insert_or_replace_n_efface_aucune_ligne_d_une_table_protegee_sous_sqlite(Closure $poser): void
+    {
+        if (DB::connection()->getDriverName() !== 'sqlite') {
+            $this->markTestSkipped('INSERT OR REPLACE n\'existe que sous SQLite.');
+        }
+
+        Schema::create('table_protegee', function (Blueprint $table) {
+            $table->id();
+            $table->string('valeur');
+            $table->dateTime('expire_le')->nullable();
+        });
+        $poser('table_protegee');
+        DB::table('table_protegee')->insert(['id' => 1, 'valeur' => 'conservée']);
+
+        $this->assertThrows(
+            $this->dansUnPointDeSauvegarde(fn () => DB::statement("INSERT OR REPLACE INTO table_protegee (id, valeur) VALUES (1, 'remplacée')")),
+            QueryException::class,
+            'table_protegee : ',
+        );
 
         $this->assertSame(['conservée'], DB::table('table_protegee')->pluck('valeur')->all());
     }

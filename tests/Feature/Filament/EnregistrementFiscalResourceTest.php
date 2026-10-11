@@ -373,6 +373,23 @@ class EnregistrementFiscalResourceTest extends TestCase
         $this->assertDatabaseCount('traces_evenements', 2);
     }
 
+    /**
+     * La fiche annonce la durée de conservation des traces réglée (Q4),
+     * ici 6 mois, et non une durée écrite en dur.
+     */
+    public function test_la_fiche_annonce_la_duree_de_conservation_reglee_des_traces(): void
+    {
+        config(['conservation.traces_en_mois' => 6]);
+        $proprietaire = User::factory()->create();
+        $magasin = $this->magasinDe($proprietaire);
+        $this->actingAs($proprietaire)->get("/app/{$magasin->uuid}")->assertSuccessful();
+        Filament::setTenant($magasin);
+        $ouverture = EnregistrementFiscal::query()->where('type', '80')->sole();
+
+        Livewire::test(ViewEnregistrementFiscal::class, ['record' => $ouverture->getRouteKey()])
+            ->assertSee('Hors du contenu signé, effacée 6 mois après l\'événement.');
+    }
+
     public function test_l_export_ne_reprend_que_les_evenements_de_la_periode(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));

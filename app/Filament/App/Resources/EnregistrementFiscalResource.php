@@ -74,7 +74,7 @@ class EnregistrementFiscalResource extends Resource
             ])->columns(3),
 
             InfolistSection::make('Trace technique')
-                ->description('Hors du contenu signé, effacée après 1 an.')
+                ->description(fn (): string => 'Hors du contenu signé, effacée '.config('conservation.traces_en_mois').' mois après l\'événement.')
                 ->visible(fn (EnregistrementFiscal $record): bool => $record->chaine === ChaineFiscale::Evenement
                     && auth()->user()->estProprietaireDe(Filament::getTenant()))
                 ->schema([

@@ -81,4 +81,45 @@ class PurgerTracesTest extends TestCase
         );
         Log::shouldHaveReceived('info')->with('Traces techniques expirées effacées.', ['nombre' => 4])->once();
     }
+
+    /**
+     * L'horloge de l'application devance d'une heure celle du serveur de
+     * base : la trace qui n'expire que dans une demi-heure pour la base
+     * (dont l'heure seule compte pour le déclencheur) attend le passage
+     * suivant, sans faire refuser le lot ni échouer la commande, et celle
+     * d'il y a un an s'efface.
+     */
+    public function test_une_trace_qui_n_a_expire_qu_a_l_heure_de_l_application_attend_sans_faire_echouer_la_purge(): void
+    {
+        $magasin = Magasin::factory()->create();
+        app(TenantContext::class)->set($magasin);
+        $ancienne = $this->traceQuiExpireLe(CarbonImmutable::now()->subYear());
+        $presqueExpiree = $this->traceQuiExpireLe(CarbonImmutable::now()->addMinutes(30));
+        $this->travel(1)->hours();
+
+        $this->artisan('app:purger-traces')
+            ->expectsOutput('1 trace(s) technique(s) effacée(s).')
+            ->assertSuccessful();
+
+        $this->assertSame([$presqueExpiree->getKey()], $this->evenementsTraces());
+        $this->assertModelMissing($ancienne);
+    }
+
+    /**
+     * La trace d'un nouvel événement technique du magasin actif, qui expire
+     * à cet instant.
+     */
+    private function traceQuiExpireLe(CarbonImmutable $expireLe): TraceEvenement
+    {
+        $evenement = DB::transaction(fn (): EnregistrementFiscal => app(RegistreFiscal::class)->journaliser(CodeEvenement::ExportDeDonnees));
+        $trace = (new TraceEvenement)->forceFill([
+            'enregistrement_fiscal_id' => $evenement->getKey(),
+            'ip' => '203.0.113.7',
+            'agent_utilisateur' => 'Navigateur de test',
+            'expire_le' => $expireLe,
+        ]);
+        $trace->save();
+
+        return $trace;
+    }
 }

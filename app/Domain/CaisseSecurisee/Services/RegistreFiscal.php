@@ -50,8 +50,8 @@ use LogicException;
  *   de signature (270).
  * - L'adresse IP et le navigateur de la requête qui fait inscrire un
  *   événement technique ne sont jamais signés : ils vont dans sa trace,
- *   rangée à part dans la même transaction et effacée après 1 an (voir
- *   TraceEvenement).
+ *   rangée à part dans la même transaction et effacée après la durée de
+ *   conservation des traces (voir TraceEvenement).
  *
  * Toutes les écritures fiscales d'un magasin se sérialisent sur sa ligne de
  * tetes_registre_fiscal (voir verrouiller()), qui tient aussi l'état de ses

@@ -36,15 +36,23 @@ use RuntimeException;
  * - SQLite : des déclencheurs BEFORE UPDATE et BEFORE DELETE, ce dernier
  *   limité aux lignes non expirées pour une table à effacement après
  *   expiration ; SQLite n'a pas de TRUNCATE, et le truncate() de Laravel y
- *   devient un DELETE, que le déclencheur refuse.
+ *   devient un DELETE, que le déclencheur refuse. Un INSERT OR REPLACE,
+ *   qui efface la ligne en conflit pour écrire la sienne, ne lance les
+ *   déclencheurs DELETE que si recursive_triggers est actif : la
+ *   connexion SQLite de l'application l'active (voir config/database.php),
+ *   et le déclencheur refuse alors le remplacement comme une suppression.
+ *   Sous PostgreSQL, un INSERT ... ON CONFLICT DO UPDATE est une
+ *   modification, que BEFORE UPDATE refuse.
  *
  * Restent hors de leur portée, sous PostgreSQL, DROP TABLE et ALTER TABLE
  * ... DISABLE TRIGGER, permis au seul propriétaire de la table : en
  * production, le compte de l'application n'est donc pas celui qui lance
  * les migrations, et il n'a ni UPDATE, ni DELETE, ni TRUNCATE sur les
- * tables en ajout seul (voir CLAUDE.md, étape 15). Sur une table en ajout
- * seul, la signature chaînée des enregistrements révèle de toute façon
- * ce qui aurait été altéré.
+ * tables en ajout seul (voir CLAUDE.md, étape 15) ; sous SQLite (le
+ * développement et les tests), une autre connexion au fichier qui
+ * n'active pas recursive_triggers. Sur une table en ajout seul, la
+ * signature chaînée des enregistrements révèle de toute façon ce qui
+ * aurait été altéré.
  *
  * Les déclencheurs disparaissent avec leur table ; la fonction de refus,
  * propre à la table sous PostgreSQL, se retire par retirer() dans le
@@ -76,6 +84,25 @@ final class DeclencheursDeProtection
             'DELETE' => "{$table} : suppression refusée avant expiration",
             'TRUNCATE' => "{$table} : vidage refusé",
         ], effacementApresExpiration: true);
+    }
+
+    /**
+     * La condition SQL, au pilote de la connexion, à laquelle le
+     * déclencheur d'une table à effacement après expiration laisse effacer
+     * une ligne : expire_le passée à l'heure UTC du serveur de base. Qui
+     * efface ces lignes (voir app:purger-traces) les choisit par elle :
+     * l'heure de l'application, que peut devancer celle du serveur de base,
+     * ne ferait refuser tout un lot pour une seule ligne.
+     */
+    public static function conditionDExpiration(): string
+    {
+        $pilote = DB::connection()->getDriverName();
+
+        if (! in_array($pilote, ['pgsql', 'sqlite'], true)) {
+            throw new RuntimeException("Le pilote de base de données « {$pilote} » n'est pas pris en charge (PostgreSQL ou SQLite).");
+        }
+
+        return self::ligneExpiree($pilote, 'expire_le');
     }
 
     /**
@@ -127,7 +154,7 @@ final class DeclencheursDeProtection
     private static function instructionsPostgres(string $table, string $protection, array $refus, bool $effacementApresExpiration): array
     {
         $ligneExpireeEffacee = $effacementApresExpiration
-            ? "IF TG_OP = 'DELETE' THEN IF OLD.expire_le IS NOT NULL AND OLD.expire_le <= (now() AT TIME ZONE 'UTC') THEN RETURN OLD; END IF; END IF; "
+            ? "IF TG_OP = 'DELETE' THEN IF ".self::ligneExpiree('pgsql', 'OLD.expire_le').' THEN RETURN OLD; END IF; END IF; '
             : '';
         $instructions = [
             "CREATE OR REPLACE FUNCTION refus_{$table}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN {$ligneExpireeEffacee}RAISE EXCEPTION '%', TG_ARGV[0]; END \$\$",
@@ -145,9 +172,8 @@ final class DeclencheursDeProtection
 
     /**
      * Pour une table à effacement après expiration, le déclencheur BEFORE
-     * DELETE ne refuse que la suppression d'une ligne sans expire_le ou
-     * dont expire_le, en UTC (« AAAA-MM-JJ HH:MM:SS »), n'est pas encore
-     * passée à CURRENT_TIMESTAMP, l'heure UTC de SQLite au même format.
+     * DELETE ne refuse que la suppression d'une ligne qui n'est pas
+     * expirée (voir ligneExpiree()).
      *
      * @param  array<'UPDATE'|'DELETE'|'TRUNCATE', string>  $refus
      * @return list<string>
@@ -158,13 +184,29 @@ final class DeclencheursDeProtection
 
         foreach (array_diff_key($refus, ['TRUNCATE' => true]) as $operation => $message) {
             $condition = $effacementApresExpiration && $operation === 'DELETE'
-                ? ' WHEN OLD.expire_le IS NULL OR OLD.expire_le > CURRENT_TIMESTAMP'
+                ? ' WHEN NOT ('.self::ligneExpiree('sqlite', 'OLD.expire_le').')'
                 : '';
             $instructions[] = "CREATE TRIGGER {$table}_{$protection}_".strtolower($operation)
                 ." BEFORE {$operation} ON {$table}{$condition} BEGIN SELECT RAISE(ABORT, '{$message}'); END";
         }
 
         return $instructions;
+    }
+
+    /**
+     * Une ligne expirée : sa colonne expire_le, en UTC, renseignée et
+     * passée à l'heure UTC du serveur de base, now() AT TIME ZONE 'UTC'
+     * sous PostgreSQL, CURRENT_TIMESTAMP sous SQLite (« AAAA-MM-JJ
+     * HH:MM:SS », le format d'expire_le en base, voir HorodatageUtc).
+     *
+     * @param  'pgsql'|'sqlite'  $pilote
+     * @param  'expire_le'|'OLD.expire_le'  $colonne  la colonne, ou celle de la ligne qu'un déclencheur efface
+     */
+    private static function ligneExpiree(string $pilote, string $colonne): string
+    {
+        $maintenant = $pilote === 'pgsql' ? "(now() AT TIME ZONE 'UTC')" : 'CURRENT_TIMESTAMP';
+
+        return "{$colonne} IS NOT NULL AND {$colonne} <= {$maintenant}";
     }
 
     private static function verifierLeNom(string $table): void

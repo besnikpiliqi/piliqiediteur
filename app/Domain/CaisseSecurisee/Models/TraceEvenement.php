@@ -6,7 +6,6 @@ use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * La trace technique d'un événement technique (JET) inscrit pendant une
@@ -70,10 +69,5 @@ class TraceEvenement extends Model
             'agent_utilisateur' => $navigateur === null ? null : mb_substr($navigateur, 0, 255),
             'expire_le' => CarbonImmutable::now()->addMonthsNoOverflow(config('conservation.traces_en_mois')),
         ])->save();
-    }
-
-    public function evenement(): BelongsTo
-    {
-        return $this->belongsTo(EnregistrementFiscal::class, 'enregistrement_fiscal_id');
     }
 }

@@ -47,6 +47,11 @@ return [
             'journal_mode' => null,
             'synchronous' => null,
             'transaction_mode' => 'DEFERRED',
+            // Sans recursive_triggers, la résolution de conflit REPLACE
+            // (INSERT OR REPLACE) efface la ligne en conflit sans lancer
+            // ses déclencheurs DELETE : ceux des tables protégées (voir
+            // DeclencheursDeProtection) ne refuseraient pas le remplacement.
+            'pragmas' => ['recursive_triggers' => 'ON'],
         ],
 
         'pgsql' => [

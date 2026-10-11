@@ -2,8 +2,12 @@
 
 namespace App\Filament\Societe\Pages;
 
+use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Filament\Concerns\GereLesExceptionsMetier;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Pages\Dashboard;
 use Illuminate\Contracts\Support\Htmlable;
@@ -11,13 +15,17 @@ use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Le tableau de bord de la société : où en est sa vérification, ce qui
- * manque à son identité pour facturer un professionnel, et ses magasins,
- * chacun avec son SIRET, son établissement (vérifié ou à vérifier) et son
- * état. Ses magasins se lisent par la société (Societe::magasins()) : ceux
+ * manque à son identité pour facturer un professionnel, ses magasins
+ * réels, chacun avec son SIRET, son établissement (vérifié ou à vérifier)
+ * et son état, et son magasin de démonstration, ouvert ici tant que la
+ * société est en cours de vérification (voir OuvrirLaDemonstrationAction).
+ * Ses magasins se lisent par la société (Societe::magasins()) : ceux
  * d'aucune autre société.
  */
 class TableauDeBord extends Dashboard
 {
+    use GereLesExceptionsMetier;
+
     protected static ?string $navigationIcon = 'heroicon-o-home';
 
     protected static ?string $navigationLabel = 'Tableau de bord';
@@ -52,15 +60,48 @@ class TableauDeBord extends Dashboard
         return match (true) {
             $societe->estRefusee() => 'L\'inscription de votre société a été refusée.',
             $societe->estValidee() => 'Votre société est validée depuis le '.$societe->validee_le->setTimezone(config('app.timezone'))->format('d/m/Y').'.',
-            default => 'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà configurer vos magasins : catalogue, équipe, paramètres et achats.',
+            default => 'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà configurer vos magasins : catalogue, équipe, paramètres et achats, et vous essayer dans le magasin de démonstration.',
         };
     }
 
     /**
+     * Ses magasins réels.
+     *
      * @return Collection<int, Magasin>
      */
     public function magasins(): Collection
     {
-        return $this->societe()->magasins()->orderBy('nom')->orderBy('id')->get();
+        return $this->societe()->magasinsReels()->orderBy('nom')->orderBy('id')->get();
+    }
+
+    public function demonstration(): ?Magasin
+    {
+        return $this->societe()->demonstration()->first();
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [$this->ouvrirLaDemonstrationAction()];
+    }
+
+    /**
+     * Ouvre, ou rouvre, le magasin de démonstration, puis y mène.
+     */
+    public function ouvrirLaDemonstrationAction(): Action
+    {
+        return Action::make('ouvrirLaDemonstration')
+            ->label(fn (): string => $this->demonstration() === null ? 'Ouvrir le magasin de démonstration' : 'Rouvrir le magasin de démonstration')
+            ->icon('heroicon-o-academic-cap')
+            ->visible(fn (): bool => (auth()->user()?->can('ouvrirLaDemonstration', $this->societe()) ?? false) && $this->demonstration()?->statut !== StatutMagasin::Actif)
+            ->requiresConfirmation()
+            ->modalDescription('Un magasin d\'entraînement, avec un catalogue fictif : vous y vendez, encaissez et clôturez comme pour de vrai, mais ses documents sont marqués « Démonstration — sans valeur », il n\'écrit à aucun client et ne transmet rien. Il se ferme à la validation de votre société, et rien n\'en passe à vos magasins réels.')
+            ->action(function () {
+                $demonstration = null;
+                static::executerSansCasser(function () use (&$demonstration): void {
+                    $demonstration = app(OuvrirLaDemonstrationAction::class)->handle(auth()->user(), $this->societe());
+                });
+
+                return $demonstration === null ? null : redirect()->to(Dashboard::getUrl(panel: 'app', tenant: $demonstration));
+            });
     }
 }

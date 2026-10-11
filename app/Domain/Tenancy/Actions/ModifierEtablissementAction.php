@@ -33,7 +33,8 @@ use LogicException;
  * magasin ne change que par le registre des SIRET réservés.
  *
  * Réservé à qui gère les magasins de la société (voir SocietePolicy), dans
- * cette société. Tout se fait sous le verrou du registre du magasin, qui
+ * cette société ; le magasin de démonstration, à l'identité fictive, ne se
+ * modifie pas. Tout se fait sous le verrou du registre du magasin, qui
  * reçoit un changement de SIRET à son journal des événements (JET 270), et
  * la ligne du magasin se relit verrouillée : un code devenu définitif
  * pendant la saisie n'est pas modifié, le reste l'est. Un code ou un
@@ -47,6 +48,8 @@ class ModifierEtablissementAction
     public const MESSAGE_TERRITOIRE_CHANGE = 'Cette adresse change le territoire de TVA du magasin : son taux par défaut et ses règles de vente en dépendent. Elle ne peut pas être enregistrée.';
 
     public const MESSAGE_SIRET_SOCIETE_VALIDEE = 'Le SIRET d\'un magasin d\'une société validée ne change que par un changement de SIRET.';
+
+    public const MESSAGE_DEMONSTRATION = 'Le magasin de démonstration, à l\'identité fictive, ne se modifie pas.';
 
     private const CHAMPS_DE_L_ADRESSE = ['adresse', 'complement_adresse', 'code_postal', 'ville', 'pays'];
 
@@ -74,6 +77,10 @@ class ModifierEtablissementAction
         return $contexte->runAsSociete($societe, function () use ($auteur, $magasin, $societe, $donnees): Magasin {
             if (Gate::forUser($auteur)->denies('gererLesMagasins', $societe)) {
                 throw new LogicException(CreerEtablissementAction::MESSAGE_SANS_AUTORISATION);
+            }
+
+            if ($magasin->est_demonstration) {
+                throw new LogicException(self::MESSAGE_DEMONSTRATION);
             }
 
             $valides = $this->valider($magasin, $donnees);

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Models\User;
@@ -11,9 +12,10 @@ use LogicException;
 
 /**
  * Les périodes d'activité des magasins (voir PeriodeActivite), leur seul
- * écrivain : une période s'ouvre à la validation de la société ou à la
- * création d'un magasin dans une société validée, et se ferme à sa
- * fermeture ; une seule est ouverte à la fois (index unique partiel
+ * écrivain : une période s'ouvre à la validation de la société, à la
+ * création d'un magasin dans une société validée ou à l'ouverture du
+ * magasin de démonstration, et se ferme à sa fermeture ; une seule est
+ * ouverte à la fois (index unique partiel
  * periodes_activite_une_ouverte). Les tickets Z ne se produisent
  * que pour les jours d'une période (voir CloturerLesJourneesAction).
  *
@@ -36,6 +38,19 @@ class PeriodesDActivite
             'debut' => now(),
             'ouverte_par' => $par?->getKey(),
         ]))->save();
+    }
+
+    /**
+     * Ferme la période ouverte du magasin, pour ce motif.
+     *
+     * @throws LogicException quand le magasin n'a aucune période ouverte
+     */
+    public function fermer(Magasin $magasin, MotifFermeture $motif, ?User $par = null): PeriodeActivite
+    {
+        $periode = PeriodeActivite::query()->where('magasin_id', $magasin->getKey())->whereNull('fin')->lockForUpdate()->first()
+            ?? throw new LogicException('Ce magasin n\'a aucune période d\'activité ouverte.');
+
+        return tap($periode->forceFill(['fin' => now(), 'motif_fin' => $motif, 'fermee_par' => $par?->getKey()]))->save();
     }
 
     /**

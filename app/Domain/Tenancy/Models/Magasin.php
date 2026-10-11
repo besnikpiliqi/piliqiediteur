@@ -65,6 +65,13 @@ use LogicException;
  * et son établissement confirmé par le répertoire Sirene (voir
  * peutVendre()). Un magasin ne se supprime jamais (voir delete() et le
  * déclencheur de la table magasins).
+ *
+ * Le magasin de démonstration d'une société (est_demonstration, voir
+ * OuvrirLaDemonstrationAction) est un magasin à part entière, avec son
+ * registre, ses séries (code DEMO) et ses clôtures, sans SIRET ni identité
+ * réelle (voir Emetteur::deDemonstration()) : il vend tant que sa société
+ * n'est ni validée ni refusée, n'écrit à aucun client et ne transmet rien
+ * (voir peutEcrireAuxClients()), et rien n'en passe aux magasins réels.
  */
 class Magasin extends Model implements HasName
 {
@@ -97,6 +104,10 @@ class Magasin extends Model implements HasName
 
     private const REFUS_SOCIETE_A_VERIFIER = 'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation.';
 
+    private const REFUS_DEMONSTRATION_TERMINEE = 'Votre société est validée : la démonstration est terminée, vendez dans vos magasins.';
+
+    private const REFUS_DEMONSTRATION_SANS_ENVOI = 'Le magasin de démonstration n\'écrit à aucun client et ne transmet rien.';
+
     protected $fillable = [
         'nom',
         'code',
@@ -119,6 +130,7 @@ class Magasin extends Model implements HasName
 
     protected $casts = [
         'statut' => StatutMagasin::class,
+        'est_demonstration' => 'boolean',
         'etablissement_verifie_le' => 'datetime',
         'suspendu_le' => 'datetime',
         'prix_vente_automatique' => 'boolean',
@@ -180,7 +192,17 @@ class Magasin extends Model implements HasName
             $magasin->mention_escompte ??= self::MENTION_ESCOMPTE_PAR_DEFAUT;
         });
 
+        static::saving(function (Magasin $magasin) {
+            if ((bool) $magasin->est_demonstration !== ($magasin->siret === null)) {
+                throw new LogicException('Seul le magasin de démonstration n\'a pas de SIRET, et il n\'en a jamais.');
+            }
+        });
+
         static::updating(function (Magasin $magasin) {
+            if ($magasin->isDirty('est_demonstration')) {
+                throw new LogicException('Un magasin réel ne devient jamais le magasin de démonstration, ni l\'inverse.');
+            }
+
             if ($magasin->isDirty('code')) {
                 $magasin->verifierQueSonCodePeutChanger();
             }
@@ -322,12 +344,14 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * Le magasin peut-il vendre ? Hors lecture seule, une fois sa société
-     * validée (voir Societe::estValidee()) et son établissement confirmé
-     * par le répertoire Sirene (etablissement_verifie_le) : ticket,
-     * facture, avoir, paiement, devis numéroté, e-mail à un client et
-     * transmission en dépendent (voir verifierQuIlPeutVendre()). Une
-     * revérification négative après la validation n'y change rien.
+     * Le magasin peut-il vendre ? Hors lecture seule, un magasin réel une
+     * fois sa société validée (voir Societe::estValidee()) et son
+     * établissement confirmé par le répertoire Sirene
+     * (etablissement_verifie_le), le magasin de démonstration tant que sa
+     * société n'est ni validée ni refusée : ticket, facture, avoir,
+     * paiement, devis numéroté, e-mail à un client et transmission en
+     * dépendent (voir verifierQuIlPeutVendre() et peutEcrireAuxClients()).
+     * Une revérification négative après la validation n'y change rien.
      */
     public function peutVendre(): bool
     {
@@ -344,6 +368,7 @@ class Magasin extends Model implements HasName
 
         return match (true) {
             $motif !== null => "{$motif} : seules la consultation et les téléchargements restent possibles.",
+            $this->est_demonstration => $this->societe->estValidee() ? self::REFUS_DEMONSTRATION_TERMINEE : null,
             ! $this->societe->estValidee() => self::REFUS_SOCIETE_A_VERIFIER,
             $this->etablissement_verifie_le === null => "L'établissement de ce magasin (SIRET {$this->siret}) n'est pas encore confirmé par le répertoire Sirene de l'INSEE : aucune vente avant sa confirmation.",
             default => null,
@@ -368,16 +393,53 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * Avant la validation de sa société, aucun PDF d'un magasin ne se
+     * Le magasin écrit-il à ses clients et transmet-il à la plateforme ?
+     * Seulement s'il peut vendre (voir peutVendre()), et jamais le magasin
+     * de démonstration : ses documents n'ont aucune valeur.
+     */
+    public function peutEcrireAuxClients(): bool
+    {
+        return $this->refusDEcrireAuxClients() === null;
+    }
+
+    /**
+     * Pourquoi il n'écrit pas à ses clients, tel que l'écran le dit ; null
+     * quand il le peut.
+     */
+    public function refusDEcrireAuxClients(): ?string
+    {
+        return $this->refusDeVente() ?? ($this->est_demonstration ? self::REFUS_DEMONSTRATION_SANS_ENVOI : null);
+    }
+
+    /**
+     * La garde des e-mails aux clients, des relances et des transmissions
+     * (voir EnvoyerDocumentAction, EnvoyerDocumentJob et la transmission à
+     * la plateforme).
+     *
+     * @throws VenteNonAutoriseeException
+     */
+    public function verifierQuIlPeutEcrireAuxClients(): void
+    {
+        $refus = $this->refusDEcrireAuxClients();
+
+        if ($refus !== null) {
+            throw new VenteNonAutoriseeException($refus);
+        }
+    }
+
+    /**
+     * Avant la validation de sa société, aucun PDF d'un magasin réel ne se
      * produit : un usurpateur ne fabrique pas un devis ou une facture au
-     * nom d'une entreprise qui n'a rien demandé. En lecture seule, les
+     * nom d'une entreprise qui n'a rien demandé. Ceux du magasin de
+     * démonstration, à l'identité fictive et marqués « Démonstration —
+     * sans valeur », se produisent toujours. En lecture seule, les
      * téléchargements restent possibles.
      *
      * @throws VenteNonAutoriseeException
      */
     public function verifierQuIlPeutImprimer(): void
     {
-        if (! $this->societe->estValidee()) {
+        if (! $this->est_demonstration && ! $this->societe->estValidee()) {
             throw new VenteNonAutoriseeException(self::REFUS_SOCIETE_A_VERIFIER);
         }
     }
@@ -411,12 +473,18 @@ class Magasin extends Model implements HasName
      * Societe::mentionsLegalesManquantes()), puis celles de
      * l'établissement : adresse, code postal et ville, que le répertoire
      * Sirene n'a pas encore données quand l'INSEE n'a pas répondu (voir
-     * CreerEtablissementAction). Son SIRET, lui, ne manque jamais.
+     * CreerEtablissementAction). Son SIRET, lui, ne manque jamais. Le
+     * magasin de démonstration, qui imprime une identité fictive, n'en
+     * attend aucune.
      *
      * @return list<string>
      */
     public function mentionsLegalesManquantes(): array
     {
+        if ($this->est_demonstration) {
+            return [];
+        }
+
         $etablissement = [
             'adresse du magasin' => $this->adresse,
             'code postal du magasin' => $this->code_postal,

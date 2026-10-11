@@ -146,6 +146,21 @@ class Societe extends Model implements HasName
     }
 
     /**
+     * La société d'un identifiant ou d'un uuid tapé par l'éditeur (voir
+     * ProcedureDeLEditeur), null si elle n'existe pas. Un texte qui n'est
+     * ni l'un ni l'autre ne désigne aucune société : la colonne uuid, typée
+     * sous PostgreSQL, n'est alors pas interrogée.
+     */
+    public static function trouverParIdentifiantOuUuid(string $identifiant): ?self
+    {
+        return match (true) {
+            ctype_digit($identifiant) => static::query()->find((int) $identifiant),
+            Str::isUuid($identifiant) => static::query()->firstWhere('uuid', $identifiant),
+            default => null,
+        };
+    }
+
+    /**
      * La société d'un uuid tapé dans l'adresse du panneau de son
      * administration (/societe/{uuid}) : un texte qui n'est pas un uuid ne
      * désigne aucune société (404), sans interroger la colonne uuid, typée
@@ -178,11 +193,35 @@ class Societe extends Model implements HasName
     }
 
     /**
+     * Tous ses magasins, magasin de démonstration compris.
+     *
      * @return HasMany<Magasin, $this>
      */
     public function magasins(): HasMany
     {
         return $this->hasMany(Magasin::class);
+    }
+
+    /**
+     * Ses établissements, chacun un SIRET : tous ses magasins sauf celui de
+     * démonstration.
+     *
+     * @return HasMany<Magasin, $this>
+     */
+    public function magasinsReels(): HasMany
+    {
+        return $this->hasMany(Magasin::class)->where('est_demonstration', false);
+    }
+
+    /**
+     * Son magasin de démonstration, s'il a été ouvert (voir
+     * OuvrirLaDemonstrationAction).
+     *
+     * @return HasOne<Magasin, $this>
+     */
+    public function demonstration(): HasOne
+    {
+        return $this->hasOne(Magasin::class)->where('est_demonstration', true);
     }
 
     /**
@@ -227,16 +266,17 @@ class Societe extends Model implements HasName
     }
 
     /**
-     * L'un de ses magasins a-t-il déjà vendu ? Un enregistrement de la
-     * chaîne des ventes dans le registre fiscal de l'un d'eux : la première
-     * vente de la société, qui verrouille son mois de fin d'exercice.
-     * Lecture hors du magasin courant, filtrée par les magasins de cette
-     * société et limitée à l'existence d'un enregistrement.
+     * L'un de ses magasins réels a-t-il déjà vendu ? Un enregistrement de
+     * la chaîne des ventes dans le registre fiscal de l'un d'eux : la
+     * première vente de la société, qui verrouille son mois de fin
+     * d'exercice ; les ventes du magasin de démonstration ne comptent pas.
+     * Lecture hors du magasin courant, filtrée par les magasins réels de
+     * cette société et limitée à l'existence d'un enregistrement.
      */
     public function aVenduUneFois(): bool
     {
         return EnregistrementFiscal::withoutGlobalScope(MagasinScope::class)
-            ->whereIn('magasin_id', $this->magasins()->select('id'))
+            ->whereIn('magasin_id', $this->magasinsReels()->select('id'))
             ->where('chaine', ChaineFiscale::Vente->value)
             ->exists();
     }
@@ -357,9 +397,10 @@ class Societe extends Model implements HasName
 
     /**
      * Les magasins dont le journal des événements note un changement de
-     * ses réglages : tous, fermés compris, par ordre de création, dont les
-     * registres se verrouillent dans cet ordre (voir
-     * JournaliseSesParametresDeConformite). Un réglage ne se modifie que
+     * ses réglages : ses magasins réels, fermés compris, par ordre de
+     * création, dont les registres se verrouillent dans cet ordre (voir
+     * JournaliseSesParametresDeConformite) ; le magasin de démonstration ne
+     * reçoit pas les réglages de la société. Un réglage ne se modifie que
      * dans le contexte de cette société, jamais dans celui d'une autre.
      *
      * @return Collection<int, Magasin>
@@ -374,7 +415,7 @@ class Societe extends Model implements HasName
             throw new LogicException('Les réglages d\'une société ne se modifient que dans son propre contexte.');
         }
 
-        return $this->magasins()->orderBy('id')->get();
+        return $this->magasinsReels()->orderBy('id')->get();
     }
 
     public static function parametresDeConformite(): array

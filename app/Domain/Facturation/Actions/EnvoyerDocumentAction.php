@@ -36,9 +36,10 @@ use LogicException;
  * magasin, n'y sont pas soumises.
  *
  * Un magasin qui ne peut pas vendre n'écrit pas à ses clients (voir
- * Magasin::verifierQuIlPeutVendre()) : ni envoi ni relance tant que sa
- * société est en cours de vérification, ni une fois le magasin suspendu
- * ou fermé, ou sa société suspendue, résiliée ou refusée.
+ * Magasin::verifierQuIlPeutEcrireAuxClients()) : ni envoi ni relance tant
+ * que sa société est en cours de vérification, ni une fois le magasin
+ * suspendu ou fermé, ou sa société suspendue, résiliée ou refusée ; le
+ * magasin de démonstration, jamais.
  *
  * L'objet de l'e-mail nomme l'émetteur du document (voir
  * EnvoiDocument::objetPour()) : un ticket, une facture ou un avoir
@@ -70,7 +71,7 @@ class EnvoyerDocumentAction
 
         return DB::transaction(function () use ($document, $destinataire, $message, $expediteur) {
             $document = $this->verrouiller($document);
-            $document->magasin->verifierQuIlPeutVendre();
+            $document->magasin->verifierQuIlPeutEcrireAuxClients();
             $this->verifierLeDebit($document, $expediteur);
 
             if ($document instanceof Devis && $document->statut === StatutDevis::Brouillon) {
@@ -116,7 +117,7 @@ class EnvoyerDocumentAction
 
         return DB::transaction(function () use ($facture, $destinataire, $expediteur) {
             $facture = $this->verrouiller($facture);
-            $facture->magasin->verifierQuIlPeutVendre();
+            $facture->magasin->verifierQuIlPeutEcrireAuxClients();
             $this->verifierLeDebit($facture, $expediteur);
 
             if (! $facture->estEchueEtImpayee()) {

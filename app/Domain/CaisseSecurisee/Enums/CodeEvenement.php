@@ -24,8 +24,10 @@ use Filament\Support\Contracts\HasLabel;
  *   statut, autorisations) et le retrait d'un membre de l'équipe
  *   (JournalDesDroits).
  * - Un paramètre ayant un impact sur la conformité suit aussi le
- *   changement du régime de TVA du magasin, de son option pour les débits
- *   et du taux de TVA d'un produit (JournaliseSesParametresDeConformite).
+ *   changement d'un réglage fiscal ou d'un identifiant de la société, du
+ *   SIRET d'un magasin et du taux de TVA d'un produit
+ *   (JournaliseSesParametresDeConformite), et celui du statut d'un magasin
+ *   (statut_magasin : ouverture et fermeture de la démonstration).
  * - L'annulation de ticket suit l'émission d'un avoir sur des tickets de
  *   caisse (voir EmettreAvoirAction).
  * - La vente abandonnée avant validation suit la suppression d'un
@@ -36,6 +38,12 @@ use Filament\Support\Contracts\HasLabel;
  *   son encaissement ou son émission, au panier de la caisse comme dans un
  *   brouillon de facture ou de ticket : ligne retirée, produit ou service
  *   remplacé, quantité baissée (voir LignesRetirees).
+ * - L'entrée en mode démonstration (mode école) suit chaque ouverture du
+ *   magasin de démonstration, et sa sortie chaque fermeture, dans le
+ *   registre de ce magasin distinct (voir OuvrirLaDemonstrationAction et
+ *   FermerLaDemonstrationAction) : ses ventes d'entraînement sont signées,
+ *   conservées et contrôlées comme les autres, sans jamais toucher le
+ *   registre d'un magasin réel.
  * - Chaque vérification de l'intégrité du registre (voir
  *   VerifierIntegriteAction) inscrit ses anomalies, une rupture de
  *   séquence ou de numérotation (95) ou un autre défaut d'intégrité (90),
@@ -48,6 +56,8 @@ enum CodeEvenement: int implements HasLabel
     case OuvertureDeSession = 80;
     case DefautDIntegrite = 90;
     case RuptureDeSequence = 95;
+    case EntreeEnModeDemonstration = 100;
+    case SortieDuModeDemonstration = 105;
     case ExportDeDonnees = 110;
     case ModificationDesDroits = 130;
     case AnnulationDeTicket = 190;
@@ -66,6 +76,8 @@ enum CodeEvenement: int implements HasLabel
             self::OuvertureDeSession => 'Ouverture de session dans le magasin',
             self::DefautDIntegrite => 'Défaut d\'intégrité détecté par la vérification',
             self::RuptureDeSequence => 'Rupture de séquence ou de numérotation détectée par la vérification',
+            self::EntreeEnModeDemonstration => 'Entrée en mode démonstration (mode école)',
+            self::SortieDuModeDemonstration => 'Sortie du mode démonstration (mode école)',
             self::ExportDeDonnees => 'Export de données',
             self::ModificationDesDroits => 'Modification des droits d\'un utilisateur',
             self::AnnulationDeTicket => 'Annulation de ticket (avoir sur des tickets de caisse)',

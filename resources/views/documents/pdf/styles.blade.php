@@ -21,4 +21,6 @@
     table.totaux .total-ttc { font-weight: bold; font-size: 13px; border-top: 1px solid #1f2933; }
     .pied { margin-top: 32px; font-size: 9px; color: #7b8794; }
     .accord { margin-top: 32px; width: 260px; margin-left: auto; height: 80px; border: 1px solid #d9e2ec; padding: 8px; font-size: 9px; color: #52606d; }
+    .filigrane { position: fixed; top: 45%; left: -10%; width: 120%; text-align: center; font-size: 34px; font-weight: bold; color: #b91c1c; opacity: 0.15; transform: rotate(-30deg); }
+    .bandeau-demonstration { margin-bottom: 12px; padding: 6px 8px; border: 2px solid #b91c1c; color: #b91c1c; font-weight: bold; text-align: center; }
 </style>

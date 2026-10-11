@@ -11,15 +11,20 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
+use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
+use App\Domain\Tenancy\Models\CodeConfirmation;
+use App\Domain\Tenancy\Models\DemandeAccordDirigeant;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TraceAudit;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Services\ControleSirene;
+use App\Domain\Tenancy\Services\EvaluateurDeVerification;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -27,6 +32,7 @@ use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -57,7 +63,10 @@ class IsolationDesSocietesTest extends TestCase
      * @var list<class-string<Model>>
      */
     private const MODELES_DE_SOCIETE = [
+        CodeConfirmation::class,
+        DemandeAccordDirigeant::class,
         EntreeAudit::class,
+        PieceVerification::class,
         TraceAudit::class,
         VerificationSociete::class,
     ];
@@ -279,7 +288,8 @@ class IsolationDesSocietesTest extends TestCase
 
     /**
      * La première vente qui verrouille le mois de fin d'exercice d'une
-     * société est celle de l'un de ses magasins, jamais d'une autre société.
+     * société est celle de l'un de ses magasins réels, jamais d'une autre
+     * société ni de son magasin de démonstration.
      */
     public function test_la_lecture_de_la_premiere_vente_ne_compte_que_les_magasins_reels_de_la_societe(): void
     {
@@ -292,6 +302,41 @@ class IsolationDesSocietesTest extends TestCase
 
         $this->vendre($autreDeA);
         $this->assertTrue($magasinA->societe->aVenduUneFois());
+
+        $enVerification = $this->inscrireUneSociete();
+        $this->actingAs($enVerification->proprietaire);
+        $this->vendre(app(OuvrirLaDemonstrationAction::class)->handle($enVerification->proprietaire, $enVerification));
+        $this->assertFalse($enVerification->fresh()->aVenduUneFois());
+    }
+
+    /**
+     * L'évaluation de la vérification d'une société ne lit, des autres
+     * sociétés du même SIREN, que trois réponses par oui ou non (une autre
+     * est-elle validée, a-t-elle prouvé sa qualité, une société de ce SIREN
+     * a-t-elle été révoquée ?) : chaque requête qui porte sur ce SIREN est
+     * un « exists », et toute autre ne lit que la société évaluée.
+     */
+    public function test_l_evaluation_ne_lit_d_une_autre_societe_du_meme_siren_que_des_booleens(): void
+    {
+        $validee = $this->inscrireUneSociete();
+        $this->verifierLIdentiteDuProprietaire($validee);
+        $societe = $this->inscrireUneSociete($validee->siren);
+        $requetes = [];
+        DB::listen(function (QueryExecuted $requete) use (&$requetes): void {
+            $requetes[] = $requete;
+        });
+
+        $etat = app(EvaluateurDeVerification::class)->evaluer($societe);
+
+        $surLeSiren = array_filter($requetes, fn (QueryExecuted $requete): bool => in_array($societe->siren, $requete->bindings, true));
+        $this->assertCount(3, $surLeSiren);
+        foreach ($requetes as $requete) {
+            in_array($requete, $surLeSiren, true)
+                ? $this->assertStringStartsWith('select exists', $requete->sql)
+                : $this->assertContains($societe->id, $requete->bindings, $requete->sql);
+        }
+        $this->assertTrue($validee->fresh()->estValidee());
+        $this->assertSame([true, false], [$etat->autreSocieteValidee, $etat->reclamationPossible()]);
     }
 
     /**

@@ -114,6 +114,10 @@ class AppPanelProvider extends PanelProvider
             ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.app.saisie-protegee'))
             // En tête de chaque page d'un magasin en lecture seule : ce qui
             // l'y met et ce qui lui reste possible (voir ControleDesDroits).
-            ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.app.magasin-en-lecture-seule', ['magasin' => Filament::getTenant()]));
+            ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.app.magasin-en-lecture-seule', ['magasin' => Filament::getTenant()]))
+            // Tant que la société n'est pas validée, ce qui reste désactivé ;
+            // dans le magasin de démonstration, que ses documents n'ont
+            // aucune valeur.
+            ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.verification-en-cours', ['magasin' => Filament::getTenant(), 'societe' => Filament::getTenant()?->societe]));
     }
 }

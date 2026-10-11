@@ -38,6 +38,18 @@ return [
             'report' => false,
         ],
 
+        // Les pièces déposées pour l'examen de la qualité de représentant
+        // d'une société (voir DeposerUnePieceAction) : chiffrées, jamais
+        // servies, effacées dès la décision de l'éditeur.
+        'verification' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/verification'),
+            'visibility' => 'private',
+            'serve' => false,
+            'throw' => true,
+            'report' => false,
+        ],
+
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

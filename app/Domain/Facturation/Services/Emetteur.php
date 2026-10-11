@@ -23,9 +23,18 @@ use Illuminate\Support\Str;
  * magasin -- siège, forme et capital compris (voir duContenuSigne() et
  * FigeSonEmetteur) ; un brouillon ou un devis l'imprime tel qu'ils sont
  * aujourd'hui (voir duMagasin()).
+ *
+ * Le magasin de démonstration imprime une identité fictive, sans SIREN ni
+ * SIRET ni aucun champ libre du magasin, et chacun de ses documents porte
+ * « DÉMONSTRATION — SANS VALEUR » (voir deDemonstration() et filigrane()).
  */
 final readonly class Emetteur
 {
+    /**
+     * La dénomination fictive du magasin de démonstration.
+     */
+    public const DENOMINATION_DE_DEMONSTRATION = 'ENTREPRISE DE DÉMONSTRATION';
+
     /**
      * @param  string|null  $formeJuridique  le libellé imprimé de la forme (voir Societe::formeImprimee())
      * @param  int|null  $capitalSocial  en centimes, null s'il n'est pas renseigné
@@ -56,15 +65,21 @@ final readonly class Emetteur
         public ?RegimeTva $regimeTva,
         public bool $optionDebitsTva,
         public array $mentionsEntreProfessionnels,
+        public bool $estDemonstration = false,
     ) {}
 
     /**
      * La société et le magasin tels qu'ils sont aujourd'hui : l'émetteur
      * que signe un document à son émission, et celui qu'imprime un
-     * brouillon ou un devis.
+     * brouillon ou un devis. Celui du magasin de démonstration est fictif
+     * (voir deDemonstration()).
      */
     public static function duMagasin(Magasin $magasin): self
     {
+        if ($magasin->est_demonstration) {
+            return self::deDemonstration($magasin);
+        }
+
         /** @var Societe $societe */
         $societe = $magasin->societe;
 
@@ -93,6 +108,51 @@ final readonly class Emetteur
             regimeTva: $societe->regime_tva,
             optionDebitsTva: (bool) $societe->option_debits_tva,
             mentionsEntreProfessionnels: $magasin->mentionsEntreProfessionnels(),
+        );
+    }
+
+    /**
+     * L'émetteur fictif du magasin de démonstration : la dénomination
+     * « ENTREPRISE DE DÉMONSTRATION », aucun SIREN, SIRET, immatriculation,
+     * n° de TVA, adresse ni coordonnée, et les mentions entre
+     * professionnels du logiciel, jamais celles qu'un magasin a saisies ;
+     * seuls le régime de TVA et l'option pour les débits de la société,
+     * qui règlent ses calculs, sont les siens.
+     */
+    public static function deDemonstration(Magasin $magasin): self
+    {
+        $societe = $magasin->societe;
+
+        return new self(
+            nom: $magasin->nom,
+            raisonSociale: self::DENOMINATION_DE_DEMONSTRATION,
+            formeJuridique: null,
+            estEntrepreneurIndividuel: false,
+            capitalSocial: null,
+            capitalVariable: false,
+            siren: null,
+            siret: null,
+            immatriculation: null,
+            numeroTva: null,
+            adresse: null,
+            complementAdresse: null,
+            codePostal: null,
+            ville: null,
+            pays: 'FR',
+            siegeAdresse: null,
+            siegeComplementAdresse: null,
+            siegeCodePostal: null,
+            siegeVille: null,
+            email: null,
+            telephone: null,
+            regimeTva: $societe->regime_tva,
+            optionDebitsTva: (bool) $societe->option_debits_tva,
+            mentionsEntreProfessionnels: [
+                'penalites_retard' => Magasin::MENTION_PENALITES_PAR_DEFAUT,
+                'indemnite_recouvrement' => Magasin::MENTION_INDEMNITE_PAR_DEFAUT,
+                'escompte' => Magasin::MENTION_ESCOMPTE_PAR_DEFAUT,
+            ],
+            estDemonstration: true,
         );
     }
 
@@ -130,13 +190,17 @@ final readonly class Emetteur
             regimeTva: $emetteur['regime_tva'] === null ? null : RegimeTva::from($emetteur['regime_tva']),
             optionDebitsTva: $emetteur['option_debits_tva'],
             mentionsEntreProfessionnels: $emetteur['mentions'],
+            estDemonstration: $emetteur['demonstration'] ?? false,
         );
     }
 
     /**
      * L'émetteur champ par champ, tel que le contenu signé au registre
      * fiscal l'écrit (voir ContenuFiscal) : sans nombre à virgule
-     * flottante, le capital social en centimes, le régime par sa valeur.
+     * flottante, le capital social en centimes, le régime par sa valeur ;
+     * celui du magasin de démonstration, et lui seul, porte
+     * « demonstration » à vrai, comme l'en-tête de ses enregistrements
+     * (voir RegistreFiscal).
      *
      * @return array<string, mixed>
      */
@@ -169,7 +233,21 @@ final readonly class Emetteur
             'regime_tva' => $this->regimeTva?->value,
             'option_debits_tva' => $this->optionDebitsTva,
             'mentions' => $this->mentionsEntreProfessionnels,
+            ...($this->estDemonstration ? ['demonstration' => true] : []),
         ];
+    }
+
+    /**
+     * Le filigrane d'un document du magasin de démonstration, null pour un
+     * magasin réel : un ticket ne se remet jamais à un client.
+     */
+    public function filigrane(bool $estUnTicket): ?string
+    {
+        if (! $this->estDemonstration) {
+            return null;
+        }
+
+        return $estUnTicket ? 'TICKET DE DÉMONSTRATION — NE PAS REMETTRE À UN CLIENT' : 'DÉMONSTRATION — SANS VALEUR';
     }
 
     /**

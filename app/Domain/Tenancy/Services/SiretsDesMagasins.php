@@ -2,11 +2,11 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Tenancy\Exceptions\SiretDejaReserveException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\SiretMagasin;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
-use LogicException;
 
 /**
  * Le registre des SIRET réservés (voir SiretMagasin), son seul écrivain :
@@ -45,7 +45,7 @@ class SiretsDesMagasins
      * SIRET déjà réservé est refusé sans annuler ce qui précède dans la
      * transaction de l'appelant, qui décide.
      *
-     * @throws LogicException quand le SIRET est déjà réservé, ou que le magasin a déjà son SIRET actuel au registre
+     * @throws SiretDejaReserveException quand le SIRET est déjà réservé, ou que le magasin a déjà son SIRET actuel au registre
      */
     public function reserver(Magasin $magasin): SiretMagasin
     {
@@ -57,7 +57,7 @@ class SiretsDesMagasins
                 'reserve_le' => now(),
             ]))->save());
         } catch (UniqueConstraintViolationException) {
-            throw new LogicException(self::MESSAGE_SIRET_RESERVE);
+            throw new SiretDejaReserveException;
         }
     }
 }

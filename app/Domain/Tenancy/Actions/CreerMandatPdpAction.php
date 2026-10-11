@@ -9,6 +9,7 @@ use App\Integrations\Pdp\Contracts\PdpGatewayInterface;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Request;
+use LogicException;
 
 /**
  * Le consentement se donne entièrement sur notre site (un clic "Accepter"
@@ -21,8 +22,15 @@ class CreerMandatPdpAction
 {
     public function __construct(private readonly PdpGatewayInterface $gateway) {}
 
+    /**
+     * @throws LogicException pour le magasin de démonstration, qui ne transmet jamais rien
+     */
     public function handle(Magasin $magasin, User $accordePar): MandatPdp
     {
+        if ($magasin->est_demonstration) {
+            throw new LogicException('Le magasin de démonstration ne transmet rien à la plateforme.');
+        }
+
         return DB::transaction(function () use ($magasin, $accordePar) {
             $mandat = MandatPdp::updateOrCreate(
                 ['magasin_id' => $magasin->getKey()],

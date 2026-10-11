@@ -29,7 +29,7 @@ use LogicException;
  *
  * Le SIREN corrigé passe le contrôle du répertoire Sirene comme à
  * l'inscription (une entreprise cessée ou inconnue est refusée), et le
- * NIC de chaque magasin se ressaisit : son SIRET, qui commence par le
+ * NIC de chaque magasin réel se ressaisit : son SIRET, qui commence par le
  * SIREN, change avec lui, contrôlé comme à la création (voir
  * CreerEtablissementAction). Avant la validation, aucun SIRET n'est
  * réservé : rien n'est libéré.
@@ -47,9 +47,10 @@ use LogicException;
  * reste de l'identité (capital, immatriculation) est celui que le
  * propriétaire a saisi, et ne change pas.
  *
- * Tout se fait sous le verrou des registres de tous les magasins de la
- * société, qui reçoivent le nouveau SIREN, et chacun son nouveau SIRET, à
- * leur journal des événements (JET 270, voir
+ * Tout se fait sous le verrou des registres de tous les magasins réels de
+ * la société (le magasin de démonstration n'a ni SIREN ni SIRET), qui
+ * reçoivent le nouveau SIREN, et chacun son nouveau SIRET, à leur journal
+ * des événements (JET 270, voir
  * JournaliseSesParametresDeConformite). Les contrôles Sirene s'inscrivent
  * au registre des vérifications, et la correction au journal d'audit,
  * avec les anciennes et les nouvelles valeurs des identifiants et de
@@ -87,7 +88,7 @@ class CorrigerSirenAvantValidationAction
             }
 
             $siren = Validator::make(['siren' => $siren], ['siren' => ['required', 'string', new SirenValide]])->validate()['siren'];
-            $magasins = $societe->magasins()->orderBy('id')->get();
+            $magasins = $societe->magasinsReels()->orderBy('id')->get();
             $sirets = $this->siretsCorriges($magasins, $siren, $nics);
 
             $unite = $this->controleSirene->unite($siren);

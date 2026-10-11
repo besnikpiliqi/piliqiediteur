@@ -53,6 +53,44 @@ return [
         'delai' => 10,
     ],
 
+    /*
+     | Le registre national des entreprises de l'INPI, qui donne les
+     | dirigeants d'une entreprise et l'adresse de son siège (voir InpiRne)
+     | : son pilote (inpi, ou faux pour le développement et les tests,
+     | jamais en production), l'adresse de son API, les identifiants de
+     | l'éditeur, et le délai en secondes au-delà duquel il est tenu pour
+     | indisponible.
+     */
+    'rne' => [
+        'pilote' => env('RNE_PILOTE', 'inpi'),
+        'url' => env('INPI_RNE_URL', 'https://registre-national-entreprises.inpi.fr/api'),
+        'identifiant' => env('INPI_RNE_IDENTIFIANT'),
+        'mot_de_passe' => env('INPI_RNE_MOT_DE_PASSE'),
+        'delai' => 10,
+    ],
+
+    /*
+     | La vérification d'identité à distance (prestataire certifié PVID,
+     | voir VerificationIdentite) et l'envoi recommandé (voir
+     | ServiceEnvoiRecommande) : leur pilote, faux seulement tant que
+     | l'éditeur n'a pas choisi ses prestataires (jamais en production),
+     | l'adresse et la clé de leur API, et le secret qui signe leurs rappels
+     | (voir RappelDePrestataire).
+     */
+    'identite' => [
+        'pilote' => env('IDENTITE_PILOTE'),
+        'url' => env('IDENTITE_URL'),
+        'cle' => env('IDENTITE_CLE'),
+        'secret_rappel' => env('IDENTITE_SECRET_RAPPEL'),
+    ],
+
+    'recommande' => [
+        'pilote' => env('RECOMMANDE_PILOTE'),
+        'url' => env('RECOMMANDE_URL'),
+        'cle' => env('RECOMMANDE_CLE'),
+        'secret_rappel' => env('RECOMMANDE_SECRET_RAPPEL'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

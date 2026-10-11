@@ -18,6 +18,18 @@
         </x-filament::section>
     @endif
 
+    @php($demonstration = $this->demonstration())
+    @if ($demonstration !== null)
+        <x-filament::section icon="heroicon-o-academic-cap">
+            <x-slot name="heading">{{ $demonstration->statut === \App\Domain\Tenancy\Enums\StatutMagasin::Ferme ? 'Démonstration (terminée)' : 'Démonstration' }}</x-slot>
+
+            <p>
+                <a href="{{ \Filament\Pages\Dashboard::getUrl(panel: 'app', tenant: $demonstration) }}" class="underline">Ouvrir le magasin de démonstration</a>
+                · ses documents n'ont aucune valeur, et rien n'en passe à vos magasins réels.
+            </p>
+        </x-filament::section>
+    @endif
+
     <x-filament::section icon="heroicon-o-building-storefront">
         <x-slot name="heading">Vos magasins</x-slot>
 

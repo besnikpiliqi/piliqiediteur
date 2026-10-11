@@ -10,6 +10,7 @@ use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\TeteJournalAudit;
 use App\Domain\Tenancy\Models\TraceAudit;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Models\User;
 use BackedEnum;
 use Carbon\CarbonImmutable;
@@ -46,23 +47,28 @@ use LogicException;
  * TraceAudit), rangée à part dans la même transaction.
  *
  * L'entrée s'inscrit dans la société active (voir TenantContext) ; celle
- * d'un magasin, dans la chaîne d'un magasin de cette société.
+ * d'un magasin, dans la chaîne d'un magasin de cette société. Une
+ * procédure de l'éditeur s'y inscrit avec son origine, sa justification et
+ * ses opérateurs (voir InterventionDeLEditeur).
  */
 class JournalAudit
 {
     private const ORIGINE_MEMBRE = 'membre';
 
+    private const ORIGINE_EDITEUR = 'editeur';
+
     private const ORIGINE_SYSTEME = 'systeme';
 
     /**
-     * @param  User|null  $auteur  la personne qui fait l'action ; null pour le système
+     * @param  User|null  $auteur  la personne qui fait l'action ; null pour le système et l'éditeur
      * @param  array<string, mixed>|null  $anciennesValeurs
      * @param  array<string, mixed>|null  $nouvellesValeurs
+     * @param  InterventionDeLEditeur|null  $editeur  la procédure de l'éditeur qui fait l'action
      *
      * @throws JournalAuditNonConfigureException
      * @throws InvalidArgumentException quand une valeur n'est pas retenue par l'action
      */
-    public function inscrire(ActionAuditee $action, ?User $auteur, ?Magasin $magasin, ?array $anciennesValeurs, ?array $nouvellesValeurs, ?Model $cible = null): EntreeAudit
+    public function inscrire(ActionAuditee $action, ?User $auteur, ?Magasin $magasin, ?array $anciennesValeurs, ?array $nouvellesValeurs, ?Model $cible = null, ?InterventionDeLEditeur $editeur = null): EntreeAudit
     {
         [$cle, $cleId] = self::cleCourante();
         $societe = app(TenantContext::class)->societe();
@@ -78,14 +84,18 @@ class JournalAudit
         $maintenant = CarbonImmutable::now()->startOfSecond();
         $duree = $categorie->dureeDeConservation();
 
-        return DB::transaction(function () use ($action, $magasin, $anciennesValeurs, $nouvellesValeurs, $cible, $cle, $cleId, $societe, $auteur, $categorie, $maintenant, $duree): EntreeAudit {
+        return DB::transaction(function () use ($action, $magasin, $anciennesValeurs, $nouvellesValeurs, $cible, $cle, $cleId, $societe, $auteur, $categorie, $maintenant, $duree, $editeur): EntreeAudit {
             $tete = $this->teteVerrouillee($societe->getKey(), $magasin?->getKey(), $categorie);
 
             $entree = (new EntreeAudit)->forceFill([
                 'magasin_id' => $magasin?->getKey(),
                 'categorie' => $categorie,
                 'sequence' => $tete->sequence + 1,
-                'origine' => $auteur === null ? self::ORIGINE_SYSTEME : self::ORIGINE_MEMBRE,
+                'origine' => match (true) {
+                    $editeur !== null => self::ORIGINE_EDITEUR,
+                    $auteur === null => self::ORIGINE_SYSTEME,
+                    default => self::ORIGINE_MEMBRE,
+                },
                 'auteur_id' => $auteur?->getKey(),
                 'auteur_libelle' => $auteur?->name,
                 'action' => $action,
@@ -93,8 +103,8 @@ class JournalAudit
                 'cible_id' => $cible?->getKey(),
                 'anciennes_valeurs' => $anciennesValeurs === null ? null : self::trier($anciennesValeurs),
                 'nouvelles_valeurs' => $nouvellesValeurs === null ? null : self::trier($nouvellesValeurs),
-                'justification' => null,
-                'operateur' => null,
+                'justification' => $editeur?->justification,
+                'operateur' => $editeur?->operateur(),
                 'cle_id' => $cleId,
                 'expire_le' => $duree === null ? null : $maintenant->add($duree),
                 'created_at' => $maintenant,
@@ -165,7 +175,7 @@ class JournalAudit
             'anciennes_valeurs' => $entree->anciennes_valeurs === null ? null : self::trier($entree->anciennes_valeurs),
             'nouvelles_valeurs' => $entree->nouvelles_valeurs === null ? null : self::trier($entree->nouvelles_valeurs),
             'justification' => $entree->justification,
-            'operateur' => $entree->operateur,
+            'operateur' => $entree->operateur === null ? null : self::trier($entree->operateur),
             'cle_id' => $entree->cle_id,
             'expire_le' => $entree->expire_le === null ? null : HorodatageUtc::enBase($entree->expire_le),
             'created_at' => HorodatageUtc::enBase($entree->created_at),

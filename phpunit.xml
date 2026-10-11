@@ -30,6 +30,9 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="SIRENE_PILOTE" value="faux"/>
+        <env name="RNE_PILOTE" value="faux"/>
+        <env name="IDENTITE_PILOTE" value="faux"/>
+        <env name="RECOMMANDE_PILOTE" value="faux"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

@@ -5,21 +5,30 @@ namespace Tests;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Actions\CreerSocieteAction;
+use App\Domain\Tenancy\Actions\DemarrerVerificationIdentiteAction;
+use App\Domain\Tenancy\Actions\RecevoirResultatIdentiteAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Integrations\Identite\Contracts\VerificationIdentite;
+use App\Integrations\Identite\FausseVerificationIdentite;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Closure;
 use Database\Factories\MagasinFactory;
+use Database\Factories\SocieteFactory;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Testing\TestResponse;
 use Laravel\SerializableClosure\SerializableClosure;
@@ -65,6 +74,17 @@ abstract class TestCase extends BaseTestCase
         ]);
 
         return $app;
+    }
+
+    /**
+     * Aucun test n'interroge un service réel : une requête HTTP sortante
+     * sans réponse simulée (Http::fake()) échoue au lieu de partir.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Http::preventStrayRequests();
     }
 
     /**
@@ -114,6 +134,46 @@ abstract class TestCase extends BaseTestCase
         app(TenantContext::class)->set($magasin);
 
         return $magasin;
+    }
+
+    /**
+     * Une société inscrite comme par la confirmation de son lien (voir
+     * CreerSocieteAction), en cours de vérification : son entreprise et son
+     * premier magasin, son siège, contrôlés au répertoire Sirene factice, son
+     * propriétaire Jeanne Dupont, la présidente que donnent le registre
+     * national factice et la vérification d'identité factice. Aucun
+     * magasin n'est le magasin actif.
+     */
+    protected function inscrireUneSociete(?string $siren = null, string $nomDuProprietaire = 'Jeanne Dupont'): Societe
+    {
+        app(TenantContext::class)->clear();
+        $siren ??= SocieteFactory::sirenFictif();
+
+        return app(CreerSocieteAction::class)->handle(
+            ['siren' => $siren],
+            ['nom' => 'Ma Boutique', 'nic' => substr(FauxRepertoireSirene::siretDuSiege($siren), 9)],
+            ['name' => $nomDuProprietaire, 'email' => fake()->unique()->safeEmail(), 'password' => 'mot-de-passe-sur'],
+        );
+    }
+
+    /**
+     * Le propriétaire de la société passe la vérification d'identité
+     * factice, avec la réponse par défaut du prestataire (Jeanne DUPONT,
+     * présidente au registre factice) ou celle donnée, de son démarrage à
+     * la réception de son résultat (voir DemarrerVerificationIdentiteAction
+     * et RecevoirResultatIdentiteAction) : la société est validée si elle
+     * peut l'être. Rend la ligne du résultat.
+     *
+     * @param  array<mixed>|null  $reponse  la réponse brute du prestataire factice
+     */
+    protected function verifierLIdentiteDuProprietaire(Societe $societe, ?array $reponse = null): ?VerificationSociete
+    {
+        $identite = app(VerificationIdentite::class);
+        $identite->repondreAvec($reponse ?? FausseVerificationIdentite::REPONSE_PAR_DEFAUT);
+
+        $demarree = app(DemarrerVerificationIdentiteAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe, true, 'http://localhost/verification/identite/retour');
+
+        return app(RecevoirResultatIdentiteAction::class)->handle($demarree['session']->reference, $identite->resultat($demarree['session']->reference, $demarree['state']));
     }
 
     /**

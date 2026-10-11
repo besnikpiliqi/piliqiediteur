@@ -3,6 +3,7 @@
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -19,16 +20,23 @@ return new class extends Migration
             // DocumentNumberingService) : unique dans la société, définitif
             // dès son premier document.
             $table->string('code', 10);
+            // Le magasin de démonstration de la société, au plus un (voir
+            // OuvrirLaDemonstrationAction) : son identité est fictive, sans
+            // SIRET, et rien n'en passe aux magasins réels.
+            $table->boolean('est_demonstration')->default(false);
             // L'établissement : son SIRET, que les documents émis gardent
             // signé, ne change qu'avec le registre des SIRET réservés
             // (voir SiretsDesMagasins), et son adresse, reprise du
             // répertoire Sirene. L'identité légale qu'il imprime en plus
-            // est celle de sa société (voir Societe et Emetteur).
-            $table->string('siret', 14);
+            // est celle de sa société (voir Societe et Emetteur). Nul pour
+            // le magasin de démonstration, et pour lui seul (voir
+            // Magasin::booted()).
+            $table->string('siret', 14)->nullable();
             // Posée au premier contrôle Sirene concluant de l'établissement
-            // (voir CreerEtablissementAction) : un magasin dont
+            // (voir CreerEtablissementAction) : un magasin réel dont
             // l'établissement n'est pas vérifié ne vend pas (voir
-            // Magasin::peutVendre()).
+            // Magasin::peutVendre()) ; la démonstration n'a pas
+            // d'établissement.
             $table->timestamp('etablissement_verifie_le')->nullable();
             $table->string('adresse')->nullable();
             $table->string('complement_adresse')->nullable();
@@ -84,6 +92,9 @@ return new class extends Migration
             $table->unique(['societe_id', 'id']);
             $table->index('statut');
         });
+
+        // Une seule démonstration par société.
+        DB::statement('CREATE UNIQUE INDEX magasins_une_demonstration_par_societe ON magasins (societe_id) WHERE est_demonstration');
 
         // Un magasin ne s'efface jamais : ses documents se conservent dix
         // ans et son SIRET reste réservé. La base refuse elle-même sa

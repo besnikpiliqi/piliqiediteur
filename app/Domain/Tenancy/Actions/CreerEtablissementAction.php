@@ -13,8 +13,7 @@ use App\Domain\Tenancy\Rules\NicValide;
 use App\Domain\Tenancy\Rules\SiretValide;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\JournalAudit;
-use App\Domain\Tenancy\Services\JournalDesDroits;
-use App\Domain\Tenancy\Services\PeriodesDActivite;
+use App\Domain\Tenancy\Services\MiseEnActiviteDesMagasins;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -59,11 +58,12 @@ use LogicException;
  * autorisations que le propriétaire cochera pour son équipe (voir
  * SeedMagasinRolesAction) ; le contrôle Sirene au registre des
  * vérifications ; sa création au journal d'audit. Dans une société déjà
- * validée, son SIRET se réserve aussitôt, sa première période d'activité
- * s'ouvre, et les droits implicites du propriétaire dans ce nouveau
- * magasin s'inscrivent à son journal des événements (JET 130, voir
- * JournalDesDroits) ; dans une société en cours de vérification, tout cela
- * se fait à sa validation.
+ * validée, le magasin se met aussitôt en activité : son SIRET se réserve,
+ * sa première période d'activité s'ouvre, et les droits implicites du
+ * propriétaire dans ce nouveau magasin s'inscrivent à son journal des
+ * événements (voir MiseEnActiviteDesMagasins) ; dans une société en cours
+ * de vérification, tout cela se fait à sa validation (voir
+ * ValiderLaSocieteAction).
  */
 class CreerEtablissementAction
 {
@@ -72,9 +72,7 @@ class CreerEtablissementAction
     public function __construct(
         private readonly ControleSirene $controleSirene,
         private readonly SeedMagasinRolesAction $seedMagasinRoles,
-        private readonly SiretsDesMagasins $siretsDesMagasins,
-        private readonly PeriodesDActivite $periodesDActivite,
-        private readonly JournalDesDroits $journalDesDroits,
+        private readonly MiseEnActiviteDesMagasins $miseEnActivite,
         private readonly JournalAudit $journalAudit,
     ) {}
 
@@ -137,7 +135,7 @@ class CreerEtablissementAction
                     ]);
 
                     if ($societe->estValidee()) {
-                        $this->ouvrirLeMagasinDUneSocieteValidee($magasin, $auteur);
+                        $this->miseEnActivite->mettreEnActivite($magasin, $auteur);
                     }
                 });
 
@@ -196,21 +194,5 @@ class CreerEtablissementAction
                 },
             ],
         ], attributes: ['nom' => 'nom du magasin', 'code' => 'code du magasin', 'nic' => 'NIC'])->validate();
-    }
-
-    /**
-     * Dans une société validée : le SIRET réservé, la première période
-     * d'activité ouverte, et les droits implicites du propriétaire dans ce
-     * magasin au journal des événements, avant nul, après relu en base. Le
-     * magasin est le magasin actif.
-     */
-    private function ouvrirLeMagasinDUneSocieteValidee(Magasin $magasin, User $auteur): void
-    {
-        $this->siretsDesMagasins->reserver($magasin);
-        $this->periodesDActivite->ouvrir($magasin, $auteur);
-
-        $proprietaire = $magasin->societe->proprietaire;
-        $avant = $this->journalDesDroits->avant($magasin, null);
-        $this->journalDesDroits->apres($magasin, $proprietaire, $avant);
     }
 }

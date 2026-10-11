@@ -11,9 +11,11 @@ use App\Domain\Tenancy\Models\MandatPdp;
  * l'appel lui-même (ça, c'est le job, dispatché seulement une fois la
  * transaction d'émission commitée -- voir SubmitFactureToPdpJob).
  *
- * Deux conditions, aucune des deux n'est une erreur si elle manque :
+ * Trois conditions, aucune n'est une erreur si elle manque :
  *  - client professionnel (un particulier relève de l'e-reporting agrégé
  *    via la clôture de caisse, pas de l'e-invoicing facture par facture) ;
+ *  - un magasin qui transmet (voir Magasin::peutEcrireAuxClients()) :
+ *    jamais le magasin de démonstration ;
  *  - mandat PDP actif pour ce magasin (sans mandat, on ne peut
  *    légalement pas transmettre en son nom).
  */
@@ -23,7 +25,7 @@ class DeclencherTransmissionPdpApresEmissionFacture
     {
         $facture = $event->facture;
 
-        if (! $facture->relevantDeLeInvoicing()) {
+        if (! $facture->relevantDeLeInvoicing() || ! $facture->magasin->peutEcrireAuxClients()) {
             return;
         }
 

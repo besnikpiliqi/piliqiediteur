@@ -1,0 +1,353 @@
+<?php
+
+namespace Tests\Feature\Societe;
+
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\CreerDevisAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\EnvoiDocument;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\SequenceDocument;
+use App\Domain\Facturation\Models\SoumissionEReporting;
+use App\Domain\Facturation\Services\DevisPdfGenerator;
+use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Tenancy\Actions\CreerMandatPdpAction;
+use App\Domain\Tenancy\Actions\FermerLaDemonstrationAction;
+use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
+use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+use App\Domain\Tenancy\Actions\RefuserLaSocieteAction;
+use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\MotifFermeture;
+use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
+use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
+use App\Domain\Tenancy\Models\EntreeAudit;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PeriodeActivite;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use Illuminate\Database\QueryException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
+use LogicException;
+use RuntimeException;
+use Tests\TestCase;
+
+/**
+ * Le magasin de démonstration d'une société en cours de vérification
+ * (voir OuvrirLaDemonstrationAction et FermerLaDemonstrationAction) : un
+ * mode école au sens de la caisse sécurisée, magasin distinct avec son
+ * registre, ses séries et ses clôtures, à l'identité fictive, qui n'écrit
+ * à aucun client, ne transmet rien et ne touche jamais un magasin réel ;
+ * il se ferme à la validation de la société.
+ */
+class MagasinDeDemonstrationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_le_proprietaire_ouvre_une_seule_demonstration_avant_la_validation(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $proprietaire = $societe->proprietaire;
+
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
+        $deNouveau = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
+
+        $this->assertSame($demonstration->id, $deNouveau->id);
+        $this->assertSame(
+            [true, 'Démonstration', 'DEMO', null, StatutMagasin::Actif],
+            [$demonstration->est_demonstration, $demonstration->nom, $demonstration->code, $demonstration->siret, $demonstration->statut],
+        );
+        $this->assertSame(1, $societe->magasins()->where('est_demonstration', true)->count());
+        app(TenantContext::class)->runAs($demonstration, function (): void {
+            $this->assertSame(['DEMO-CARNET' => 20, 'DEMO-STYLO' => 50, 'DEMO-TASSE' => 10], Produit::query()->orderBy('reference')->pluck('stock_quantite', 'reference')->all());
+            $this->assertSame(2, Service::query()->count());
+            $this->assertSame(3, Client::query()->count());
+        });
+        $this->assertThrows(
+            $this->dansUnPointDeSauvegarde(fn () => Magasin::forceCreate(['societe_id' => $societe->id, 'nom' => 'Seconde', 'code' => 'DEMO2', 'est_demonstration' => true, 'siret' => null])),
+            QueryException::class,
+        );
+        $vendeur = $this->membre($societe->magasinsReels()->sole(), RoleMagasin::Vendeur);
+        $this->assertThrows(fn () => app(OuvrirLaDemonstrationAction::class)->handle($vendeur, $societe), VerificationRefuseeException::class, OuvrirLaDemonstrationAction::MESSAGE_SANS_AUTORISATION);
+    }
+
+    public function test_l_ouverture_et_la_fin_de_la_demonstration_s_inscrivent_en_jet_100_et_105(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
+
+        $this->verifierLIdentiteDuProprietaire($societe);
+
+        $this->assertSame(['260', '100', '130', '105', '270'], $this->codesDuJournal($demonstration));
+        $statut = app(TenantContext::class)->runAs($demonstration, fn () => EnregistrementFiscal::query()->where('type', '270')->sole()->contenuSigne()['donnees']['details']);
+        $this->assertSame(['parametre' => 'statut_magasin', 'magasin' => ['id' => $demonstration->id, 'nom' => 'Démonstration'], 'ancienne_valeur' => 'actif', 'nouvelle_valeur' => 'ferme'], $statut);
+        $this->assertNotContains('100', $this->codesDuJournal($societe->magasinsReels()->sole()));
+        $this->assertNotContains('105', $this->codesDuJournal($societe->magasinsReels()->sole()));
+        $this->assertSame(
+            [ActionAuditee::DemonstrationOuverte, ActionAuditee::DemonstrationFermee],
+            app(TenantContext::class)->runAsSociete($societe, fn () => EntreeAudit::query()->where('magasin_id', $demonstration->id)->orderBy('id')->pluck('action')->all()),
+        );
+    }
+
+    public function test_la_demonstration_vend_encaisse_et_cloture_dans_son_propre_registre(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $reel = $societe->magasinsReels()->sole();
+        $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
+
+        $ticket = $this->vendre();
+        app(CloturerCaisseAction::class)->handle($demonstration, now());
+
+        $this->assertSame(['payee', 1, 1], [$ticket->fresh()->statut->value, ClotureCaisse::query()->count(), Facture::query()->count()]);
+        $chainesDeLaDemonstration = EnregistrementFiscal::query()->pluck('chaine')->map->value->unique()->sort()->values()->all();
+        $this->assertSame(['encaissement', 'evenement', 'vente'], $chainesDeLaDemonstration);
+        $this->assertSame(
+            0,
+            EnregistrementFiscal::withoutGlobalScope(MagasinScope::class)->where('magasin_id', $reel->id)->where('chaine', '!=', ChaineFiscale::Evenement->value)->count(),
+        );
+    }
+
+    public function test_ses_numeros_portent_le_code_demo_et_ne_touchent_aucune_serie_reelle(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $reel = $societe->magasinsReels()->sole();
+        $this->ouvrirLaDemonstrationEtYEntrer($societe);
+
+        $ticket = $this->vendre();
+
+        $this->assertMatchesRegularExpression('/^TK-DEMO-\d{4}-000001$/', $ticket->numero);
+        $this->assertFalse(SequenceDocument::query()->where('magasin_id', $reel->id)->exists());
+    }
+
+    public function test_aucun_e_mail_ni_aucune_transmission_ne_part_de_la_demonstration(): void
+    {
+        Mail::fake();
+        $societe = $this->inscrireUneSociete();
+        $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
+        $client = Client::query()->where('type_client', 'professionnel')->sole();
+        $client->update(['email' => 'client@example.test']);
+        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => Produit::query()->where('reference', 'DEMO-TASSE')->value('id'), 'quantite' => 1]]));
+
+        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->handle($facture, 'client@example.test', null, $societe->proprietaire), VenteNonAutoriseeException::class, 'Le magasin de démonstration n\'écrit à aucun client et ne transmet rien.');
+        $this->assertThrows(fn () => app(CreerMandatPdpAction::class)->handle($demonstration, $societe->proprietaire), LogicException::class, 'Le magasin de démonstration ne transmet rien à la plateforme.');
+        $this->assertSame(0, EnvoiDocument::query()->count());
+        Mail::assertNothingSent();
+
+        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->travel(2)->months();
+        $this->artisan('app:soumettre-ereporting-periodique')->assertSuccessful();
+        $this->assertFalse(SoumissionEReporting::withoutGlobalScope(MagasinScope::class)->where('magasin_id', $demonstration->id)->exists());
+    }
+
+    public function test_ses_documents_portent_une_identite_fictive_et_le_filigrane(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $this->ouvrirLaDemonstrationEtYEntrer($societe);
+        $ticket = $this->vendre();
+        $devis = app(CreerDevisAction::class)->handle(Client::query()->where('type_client', 'professionnel')->sole(), [['produit_id' => Produit::query()->where('reference', 'DEMO-STYLO')->value('id'), 'quantite' => 3]]);
+
+        $pdfDuTicket = app(FacturePdfGenerator::class)->html($ticket);
+        $pdfDuDevis = app(DevisPdfGenerator::class)->html($devis);
+
+        $this->assertStringContainsString('TICKET DE DÉMONSTRATION — NE PAS REMETTRE À UN CLIENT', $pdfDuTicket);
+        $this->assertStringContainsString('DÉMONSTRATION — SANS VALEUR', $pdfDuDevis);
+
+        foreach ([$pdfDuTicket, $pdfDuDevis] as $pdf) {
+            $this->assertStringContainsString('ENTREPRISE DE DÉMONSTRATION', $pdf);
+            $this->assertStringNotContainsString($societe->siren, $pdf);
+            $this->assertStringNotContainsString($societe->magasinsReels()->sole()->siret, $pdf);
+            $this->assertStringNotContainsString((string) $societe->raison_sociale, $pdf);
+        }
+    }
+
+    public function test_l_en_tete_signe_de_la_demonstration_n_a_ni_siren_ni_siret(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
+
+        $vente = $this->vendre()->enregistrementDeVente()->firstOrFail()->contenuSigne();
+
+        $this->assertSame(['uuid' => $demonstration->uuid, 'siren' => null, 'siret' => null, 'demonstration' => true], $vente['magasin']);
+        $emetteur = $vente['donnees']['contexte']['emetteur'];
+        $this->assertSame(['ENTREPRISE DE DÉMONSTRATION', null, null, true], [$emetteur['raison_sociale'], $emetteur['siren'], $emetteur['siret'], $emetteur['demonstration']]);
+    }
+
+    /**
+     * Le catalogue, les clients, les ventes et le stock de la démonstration
+     * restent dans la démonstration : un magasin réel n'en voit rien, une
+     * vente de démonstration ne verrouille pas le mois de fin d'exercice,
+     * et les réglages de la société ne s'inscrivent pas au journal de la
+     * démonstration.
+     */
+    public function test_rien_ne_passe_du_magasin_de_demonstration_aux_magasins_reels(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $reel = $societe->magasinsReels()->sole();
+        $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
+        $this->vendre();
+
+        app(TenantContext::class)->runAs($reel, function (): void {
+            $this->assertSame([0, 0, 0], [Produit::query()->count(), Facture::query()->count(), Service::query()->count()]);
+            $this->assertSame([Client::NOM_COMPTOIR], Client::query()->pluck('nom')->all());
+        });
+        $this->assertFalse($societe->fresh()->aVenduUneFois());
+
+        app(TenantContext::class)->clear();
+        app(ModifierParametresFiscauxSocieteAction::class)->handle($societe->proprietaire, $societe->fresh(), ['regime_tva' => 'reel_normal_mensuel']);
+
+        $this->assertContains('270', $this->codesDuJournal($reel));
+        $this->assertNotContains('270', $this->codesDuJournal($demonstration));
+    }
+
+    public function test_la_validation_ferme_la_demonstration_qui_reste_consultable(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
+        $ticket = $this->vendre();
+
+        $this->verifierLIdentiteDuProprietaire($societe);
+
+        $fermee = $demonstration->fresh();
+        $this->assertSame([StatutMagasin::Ferme, false], [$fermee->statut, $fermee->peutVendre()]);
+        $periode = PeriodeActivite::query()->where('magasin_id', $demonstration->id)->sole();
+        $this->assertSame(MotifFermeture::FinDemonstration, $periode->motif_fin);
+        app(TenantContext::class)->set($fermee);
+        $this->assertTrue($societe->proprietaire->can('viewAny', Facture::class));
+        $this->assertStringContainsString('TICKET DE DÉMONSTRATION', app(FacturePdfGenerator::class)->html($ticket->fresh()));
+        $this->assertThrows(fn () => app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh()), VerificationRefuseeException::class);
+    }
+
+    public function test_la_demonstration_ne_vend_plus_apres_la_validation_meme_si_sa_fermeture_a_echoue(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
+        $this->mock(FermerLaDemonstrationAction::class, fn ($fermeture) => $fermeture->shouldReceive('handle')->andThrow(new RuntimeException('Registre indisponible.')));
+
+        $this->verifierLIdentiteDuProprietaire($societe);
+
+        $this->assertTrue($societe->fresh()->estValidee());
+        $this->assertSame(StatutMagasin::Actif, $demonstration->fresh()->statut);
+        app(TenantContext::class)->set($demonstration->fresh());
+        $this->assertThrows(fn () => $this->vendre(), VenteNonAutoriseeException::class, 'Votre société est validée : la démonstration est terminée, vendez dans vos magasins.');
+
+        $this->app->forgetInstance(FermerLaDemonstrationAction::class);
+        $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
+
+        $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
+    }
+
+    public function test_une_societe_refusee_ne_rouvre_pas_sa_demonstration(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
+
+        app(RefuserLaSocieteAction::class)->handle($societe, new InterventionDeLEditeur('Pièces falsifiées, signalement du vrai dirigeant.', 'DOSSIER-42', ['alice']));
+
+        $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
+        $this->assertThrows(fn () => app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh()), VerificationRefuseeException::class, OuvrirLaDemonstrationAction::MESSAGE_SANS_AUTORISATION);
+    }
+
+    public function test_une_demonstration_inactive_30_jours_se_ferme_et_se_rouvre_avant_la_validation(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
+        $this->vendre();
+
+        $this->travel(29)->days();
+        $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
+        $this->assertSame(StatutMagasin::Actif, $demonstration->fresh()->statut);
+
+        $this->travel(2)->days();
+        $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
+        $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
+
+        $rouverte = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
+
+        $this->assertSame([$demonstration->id, StatutMagasin::Actif], [$rouverte->id, $rouverte->statut]);
+        $this->assertSame(2, PeriodeActivite::query()->where('magasin_id', $demonstration->id)->count());
+        $this->assertSame(['105', '270', '270', '100'], array_slice($this->codesDuJournal($demonstration), -4));
+        app(TenantContext::class)->runAs($demonstration, fn () => $this->assertSame(3, Produit::query()->count()));
+    }
+
+    public function test_le_verificateur_d_integrite_controle_aussi_la_demonstration(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
+        $this->vendre();
+        app(TenantContext::class)->clear();
+
+        $this->artisan('caisse:verifier', ['magasin' => $demonstration->uuid, '--complet' => true])->assertSuccessful();
+
+        $controle = app(TenantContext::class)->runAs($demonstration, fn () => EnregistrementFiscal::query()->where('type', (string) CodeEvenement::OperationDeControle->value)->sole()->contenuSigne()['donnees']['details']);
+        $this->assertSame(['complete', 'conforme', 0], [$controle['verification'], $controle['resultat'], $controle['nombre_anomalies']]);
+        $this->assertGreaterThan(0, $controle['enregistrements_verifies']['vente']);
+    }
+
+    public function test_aucun_pdf_d_un_magasin_reel_ne_se_telecharge_avant_la_validation(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $reel = $societe->magasinsReels()->sole();
+        app(TenantContext::class)->set($reel);
+        $brouillon = app(CreerFactureAction::class)->handle(Client::query()->sole(), [['service_id' => Service::factory()->create()->id, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'quantite' => 1]]);
+        $this->ouvrirLaDemonstrationEtYEntrer($societe);
+        $ticket = $this->vendre();
+
+        $this->assertThrows(fn () => app(FacturePdfGenerator::class)->html($brouillon), VenteNonAutoriseeException::class);
+        $this->assertStringContainsString('DÉMONSTRATION', app(FacturePdfGenerator::class)->html($ticket));
+    }
+
+    /**
+     * Ouvre la démonstration de la société par son propriétaire, qui s'y
+     * connecte : elle devient le magasin actif.
+     */
+    private function ouvrirLaDemonstrationEtYEntrer(Societe $societe): Magasin
+    {
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
+        app(TenantContext::class)->set($demonstration);
+        $this->actingAs($societe->proprietaire);
+
+        return $demonstration;
+    }
+
+    /**
+     * Un carnet vendu au comptoir de la démonstration, payé en espèces.
+     */
+    private function vendre(): Facture
+    {
+        return app(EnregistrerVenteCaisseAction::class)->handle(
+            Client::query()->where('est_comptoir', true)->sole(),
+            [['produit_id' => Produit::query()->where('reference', 'DEMO-CARNET')->value('id'), 'quantite' => 1]],
+            ModePaiement::Especes,
+        );
+    }
+
+    /**
+     * Les codes du journal des événements du magasin, dans l'ordre.
+     *
+     * @return list<string>
+     */
+    private function codesDuJournal(Magasin $magasin): array
+    {
+        return EnregistrementFiscal::withoutGlobalScope(MagasinScope::class)
+            ->where('magasin_id', $magasin->id)
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->orderBy('sequence')
+            ->pluck('type')
+            ->all();
+    }
+}

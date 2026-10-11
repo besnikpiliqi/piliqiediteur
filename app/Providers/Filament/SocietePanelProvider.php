@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
+use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -14,6 +15,8 @@ use Filament\Navigation\MenuItem;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -23,8 +26,8 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
  * L'espace d'administration d'une société (URL
- * /societe/{societe:uuid}/...) : son tableau de bord, son identité légale
- * et ses paramètres fiscaux, réservés à son propriétaire (voir
+ * /societe/{societe:uuid}/...) : son tableau de bord, sa vérification, son
+ * identité légale et ses paramètres fiscaux, réservés à son propriétaire (voir
  * User::canAccessPanel() et SocietePolicy). La tenancy Filament y est
  * branchée sur Societe, sans menu de changement (un compte n'appartient
  * qu'à une seule société) ; le TenantContext n'y pose que la société (voir
@@ -78,6 +81,8 @@ class SocietePanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+            ])
+            // Tant que la société n'est pas validée, ce qui reste désactivé.
+            ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.verification-en-cours', ['magasin' => null, 'societe' => Filament::getTenant()]));
     }
 }

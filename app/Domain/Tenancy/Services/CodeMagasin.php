@@ -18,11 +18,15 @@ use Illuminate\Support\Str;
  * même SIREN, dont les numéros ont pu être émis sous ce SIREN (voir
  * estPris()), et ne change plus dès le premier document du magasin (voir
  * Magasin::aNumeroteUnDocument()). Deux sociétés ont chacune leurs codes :
- * LYON1 peut exister dans l'une et dans l'autre.
+ * LYON1 peut exister dans l'une et dans l'autre. DEMO est réservé au
+ * magasin de démonstration de chaque société (FAC-DEMO-2026-000001) :
+ * aucun magasin réel ne le reçoit.
  */
 class CodeMagasin
 {
     public const FORMAT = '/^[A-Z0-9]{2,10}$/';
+
+    public const CODE_DE_LA_DEMONSTRATION = 'DEMO';
 
     public const LONGUEUR_MAXIMALE = 10;
 
@@ -72,7 +76,7 @@ class CodeMagasin
     {
         $code = $base;
 
-        for ($suffixe = 2; self::estPris($societe, $code); $suffixe++) {
+        for ($suffixe = 2; self::estReserve($code) || self::estPris($societe, $code); $suffixe++) {
             $code = substr($base, 0, self::LONGUEUR_MAXIMALE - strlen((string) $suffixe)).$suffixe;
         }
 
@@ -93,6 +97,14 @@ class CodeMagasin
     public static function estAuFormat(mixed $saisie): bool
     {
         return is_string($saisie) && preg_match(self::FORMAT, self::normaliser($saisie)) === 1;
+    }
+
+    /**
+     * Ce code est-il réservé au magasin de démonstration ?
+     */
+    public static function estReserve(string $code): bool
+    {
+        return self::normaliser($code) === self::CODE_DE_LA_DEMONSTRATION;
     }
 
     /**

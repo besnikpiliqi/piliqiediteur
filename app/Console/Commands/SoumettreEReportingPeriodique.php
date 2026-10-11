@@ -22,8 +22,9 @@ use Illuminate\Support\Carbon;
  * periode_fin) rend les exécutions suivantes des no-op silencieux pour
  * cette période (voir GenererSoumissionEReportingAction).
  *
- * Seuls les magasins des sociétés validées sont déclarés : une société en
- * cours de vérification n'a rien vendu. Une société sans régime de TVA
+ * Seuls les magasins réels des sociétés validées sont déclarés : une
+ * société en cours de vérification n'a rien vendu, et le magasin de
+ * démonstration ne transmet jamais rien. Une société sans régime de TVA
  * configuré (voir ParametresFiscauxSociete) est simplement ignorée, même
  * dégradation douce que l'absence de mandat PDP. Un magasin suspendu ou
  * fermé, ou celui d'une société suspendue ou résiliée, est déclaré comme
@@ -44,6 +45,7 @@ class SoumettreEReportingPeriodique extends Command
 
         Magasin::query()
             ->with('societe')
+            ->where('est_demonstration', false)
             ->whereHas('societe', fn (Builder $societes) => $societes->whereNotNull('validee_le')->whereNotNull('regime_tva'))
             ->orderBy('id')
             ->each(function (Magasin $magasin) use ($tenantContext, $calculateur, $genererSoumission, $aujourdHui, &$totalSoumissions) {

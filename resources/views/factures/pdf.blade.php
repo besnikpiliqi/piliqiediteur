@@ -18,6 +18,7 @@
 <body>
     @include('documents.pdf.en-tete', [
         'emetteur' => $emetteur,
+        'estUnTicket' => ! $facture->estPourUnProfessionnel(),
         'titre' => $libelleDocument,
         'details' => array_filter([
             $facture->numero ?? 'Brouillon (non émise)',

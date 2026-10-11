@@ -20,10 +20,11 @@ use LogicException;
  * Relances automatiques des factures impayées (voir bootstrap/app.php),
  * pour chaque magasin qui les a activées (Paramètres > Relances), magasin
  * par magasin : une commande n'a aucun TenantContext au démarrage. Seul un
- * magasin qui peut vendre écrit à ses clients (voir Magasin::peutVendre()) :
- * actif, non suspendu, d'une société active et validée, son établissement
- * confirmé ; la requête ne lit que ceux-là, et chacun se contrôle encore
- * avant ses relances.
+ * magasin réel qui peut vendre écrit à ses clients (voir
+ * Magasin::peutEcrireAuxClients()) : actif, non suspendu, d'une société
+ * active et validée, son établissement confirmé, jamais la démonstration ;
+ * la requête ne lit que ceux-là, et chacun se contrôle encore avant ses
+ * relances.
  *
  * Une facture échue, pas entièrement réglée, dont le client a une adresse
  * e-mail -- même archivé, il doit toujours la facture --, reçoit la
@@ -41,6 +42,7 @@ class RelancerFacturesImpayees extends Command
         $totalRelancees = 0;
 
         Magasin::query()
+            ->where('est_demonstration', false)
             ->where('statut', StatutMagasin::Actif)
             ->whereNull('suspendu_le')
             ->whereNotNull('etablissement_verifie_le')
@@ -51,7 +53,7 @@ class RelancerFacturesImpayees extends Command
             ->where('relances_automatiques', true)
             ->orderBy('id')
             ->each(function (Magasin $magasin) use ($tenantContext, $envoyer, &$totalRelancees) {
-                if (! $magasin->peutVendre()) {
+                if (! $magasin->peutEcrireAuxClients()) {
                     return;
                 }
 

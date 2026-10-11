@@ -35,7 +35,8 @@ use LogicException;
  *   tel quel (EnregistrementFiscal::contenu) : la signature se vérifie sur
  *   ces octets, jamais re-sérialisés. Il reprend l'en-tête de
  *   l'enregistrement (magasin -- son uuid, le SIREN de sa société et son
- *   SIRET --, caisse, chaîne, séquence, type, horodatage,
+ *   SIRET, nuls pour le magasin de démonstration, marqué
+ *   « demonstration » --, caisse, chaîne, séquence, type, horodatage,
  *   opérateur, version du module, clé, signature précédente, document) et
  *   ses données, où rien ne s'écrit en nombre à virgule flottante : un
  *   montant s'écrit en centimes entiers.
@@ -471,7 +472,12 @@ class RegistreFiscal
 
         $contenu = json_encode([
             'format' => self::FORMAT,
-            'magasin' => ['uuid' => $magasin->uuid, 'siren' => $magasin->societe->siren, 'siret' => $magasin->siret],
+            'magasin' => [
+                'uuid' => $magasin->uuid,
+                'siren' => $magasin->est_demonstration ? null : $magasin->societe->siren,
+                'siret' => $magasin->siret,
+                ...($magasin->est_demonstration ? ['demonstration' => true] : []),
+            ],
             'caisse' => $magasin->uuid,
             'chaine' => $chaine->value,
             'sequence' => $sequence,

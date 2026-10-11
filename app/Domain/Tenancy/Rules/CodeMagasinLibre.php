@@ -9,10 +9,10 @@ use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
 /**
- * Le code saisi pour un magasin d'une société : au format de CodeMagasin
- * (voir CodeMagasinAuFormat), et qu'aucun autre magasin de la société ne
- * porte (voir CodeMagasin::estPris()). Le refus ne dit rien du magasin qui
- * le porte.
+ * Le code saisi pour un magasin d'une société : au format de CodeMagasin,
+ * autre que DEMO (voir CodeMagasinAuFormat), et qu'aucun autre magasin de
+ * la société ne porte (voir CodeMagasin::estPris()). Le refus ne dit rien
+ * du magasin qui le porte.
  */
 class CodeMagasinLibre implements ValidationRule
 {
@@ -30,6 +30,12 @@ class CodeMagasinLibre implements ValidationRule
     {
         if (! CodeMagasin::estAuFormat($value)) {
             $fail(CodeMagasinAuFormat::MESSAGE);
+
+            return;
+        }
+
+        if (CodeMagasin::estReserve($value)) {
+            $fail(CodeMagasinAuFormat::MESSAGE_RESERVE);
 
             return;
         }

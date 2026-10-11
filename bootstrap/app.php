@@ -1,7 +1,9 @@
 <?php
 
 use App\Console\Commands\ClotureAutomatiqueCaisse;
+use App\Console\Commands\EffacerPiecesVerification;
 use App\Console\Commands\ExpirerDevis;
+use App\Console\Commands\FermerDemonstrationsInactives;
 use App\Console\Commands\MarquerFacturesEnRetard;
 use App\Console\Commands\PurgerDemandesInscription;
 use App\Console\Commands\PurgerJournalAudit;
@@ -9,6 +11,7 @@ use App\Console\Commands\PurgerTraces;
 use App\Console\Commands\RelancerFacturesImpayees;
 use App\Console\Commands\ReverifierSirene;
 use App\Console\Commands\SoumettreEReportingPeriodique;
+use App\Console\Commands\SuivreEnvoisRecommandes;
 use App\Console\Commands\VerifierIntegriteFiscale;
 use App\Console\Commands\VerifierJournalAudit;
 use Illuminate\Console\Scheduling\Schedule;
@@ -29,6 +32,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // « Mot de passe oublié », ne peut pas mener ailleurs qu'au
         // logiciel par un en-tête Host forgé.
         $middleware->trustHosts();
+        // Les rappels des prestataires arrivent sans session : ils se
+        // prouvent par leur signature (voir RappelsDesPrestatairesController).
+        $middleware->validateCsrfTokens(except: ['rappels/*']);
+        // Hors des panneaux, une page réservée aux comptes connectés (le
+        // retour de la vérification d'identité) mène à la connexion de
+        // l'administration de la société.
+        $middleware->redirectGuestsTo(fn (): string => route('filament.societe.auth.login'));
     })
     ->withSchedule(function (Schedule $schedule): void {
         // À minuit pile, heure de Paris comme tous les horaires ci-dessous
@@ -64,13 +74,24 @@ return Application::configure(basePath: dirname(__DIR__))
         // chaque chaîne (voir PurgerJournalAudit).
         $schedule->command(PurgerTraces::class)->dailyAt('04:00');
         $schedule->command(PurgerJournalAudit::class)->dailyAt('04:15');
+        // À 4 h 30 : les pièces de vérification déposées depuis trente
+        // jours sans décision de l'éditeur s'effacent (voir
+        // EffacerPiecesVerification) ; à 4 h 45, les magasins de
+        // démonstration inactifs depuis trente jours, ou d'une société
+        // validée ou refusée, se ferment (voir FermerDemonstrationsInactives).
+        $schedule->command(EffacerPiecesVerification::class)->dailyAt('04:30');
+        $schedule->command(FermerDemonstrationsInactives::class)->dailyAt('04:45');
         // Chaque heure : les demandes d'inscription expirées depuis 48
         // heures s'effacent (voir PurgerDemandesInscription), et les
         // contrôles Sirene restés impossibles reprennent (voir
         // ReverifierSirene) ; le premier du mois, à 5 h, les sociétés
-        // validées et leurs magasins sont revérifiés.
+        // validées et leurs magasins sont revérifiés, sans rien bloquer.
         $schedule->command(PurgerDemandesInscription::class)->hourly();
         $schedule->command(ReverifierSirene::class)->hourly();
+        // Chaque heure aussi : le suivi des plis recommandés à code encore
+        // en route, au cas où un rappel du prestataire se perdrait (voir
+        // SuivreEnvoisRecommandes).
+        $schedule->command(SuivreEnvoisRecommandes::class)->hourly();
         $schedule->command(ReverifierSirene::class, ['--toutes'])->monthlyOn(1, '05:00');
         // Les relances écrivent aux clients : en matinée plutôt qu'en pleine
         // nuit, et bien après le passage en retard des factures de la veille.

@@ -178,7 +178,7 @@ class IdentiteSociete extends Page implements HasForms
             ->modalDescription('Le SIREN se corrige tant que votre société n\'est pas validée. Le SIRET de chaque magasin commence par le SIREN : ressaisissez le NIC de chacun.')
             ->form(fn (): array => [
                 TextInput::make('siren')->label('SIREN corrigé')->required()->maxLength(9),
-                ...$this->societe()->magasins()->orderBy('id')->get()->map(fn (Magasin $magasin): TextInput => TextInput::make("nics.{$magasin->getKey()}")
+                ...$this->societe()->magasinsReels()->orderBy('id')->get()->map(fn (Magasin $magasin): TextInput => TextInput::make("nics.{$magasin->getKey()}")
                     ->label("NIC de {$magasin->nom}")
                     ->required()
                     ->maxLength(5))->all(),

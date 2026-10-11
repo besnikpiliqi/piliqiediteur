@@ -27,6 +27,11 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            // La qualité de représentant légal ou de mandataire de la
+            // société, prouvée pour cette personne-ci (voir
+            // ValiderLaSocieteAction et User::aSaQualiteVerifiee()) ; la
+            // vérification qui l'a prouvée la nomme pour bénéficiaire.
+            $table->timestamp('qualite_verifiee_le')->nullable();
             $table->rememberToken();
             $table->timestamps();
 

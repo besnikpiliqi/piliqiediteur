@@ -18,9 +18,19 @@ enum ActionAuditee: string implements HasLabel
     case ParametresFiscauxModifies = 'parametres_fiscaux_modifies';
     case SirenCorrigeAvantValidation = 'siren_corrige_avant_validation';
     case VerificationEnregistree = 'verification_enregistree';
+    case PieceDeposee = 'piece_deposee';
+    case PieceEffacee = 'piece_effacee';
+    case PiecesConsultees = 'pieces_consultees';
+    case AccordDirigeantDemande = 'accord_dirigeant_demande';
+    case CodeEnvoye = 'code_envoye';
+    case CodeSaisi = 'code_saisi';
+    case SocieteValidee = 'societe_validee';
     case SocieteRefusee = 'societe_refusee';
+    case ReclamationOuverte = 'reclamation_ouverte';
     case MagasinCree = 'magasin_cree';
     case MagasinModifie = 'magasin_modifie';
+    case DemonstrationOuverte = 'demonstration_ouverte';
+    case DemonstrationFermee = 'demonstration_fermee';
 
     /**
      * Les mots qui, dans un nom de champ (entre ses traits de soulignement,
@@ -37,16 +47,27 @@ enum ActionAuditee: string implements HasLabel
             self::ParametresFiscauxModifies => 'Paramètres fiscaux modifiés',
             self::SirenCorrigeAvantValidation => 'SIREN corrigé avant la validation',
             self::VerificationEnregistree => 'Vérification enregistrée',
+            self::PieceDeposee => 'Pièce déposée pour l\'éditeur',
+            self::PieceEffacee => 'Pièce effacée',
+            self::PiecesConsultees => 'Pièces consultées par l\'éditeur',
+            self::AccordDirigeantDemande => 'Accord d\'un dirigeant demandé',
+            self::CodeEnvoye => 'Code de confirmation envoyé',
+            self::CodeSaisi => 'Code de confirmation saisi',
+            self::SocieteValidee => 'Société validée',
             self::SocieteRefusee => 'Société refusée',
+            self::ReclamationOuverte => 'Réclamation ouverte',
             self::MagasinCree => 'Magasin créé',
             self::MagasinModifie => 'Magasin modifié',
+            self::DemonstrationOuverte => 'Magasin de démonstration ouvert',
+            self::DemonstrationFermee => 'Magasin de démonstration fermé',
         };
     }
 
     public function categorie(): CategorieAudit
     {
         return match ($this) {
-            self::VerificationEnregistree, self::SocieteRefusee => CategorieAudit::Verification,
+            self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees, self::AccordDirigeantDemande,
+            self::CodeEnvoye, self::CodeSaisi, self::SocieteValidee, self::SocieteRefusee, self::ReclamationOuverte => CategorieAudit::Verification,
             default => CategorieAudit::Operations,
         };
     }
@@ -65,8 +86,15 @@ enum ActionAuditee: string implements HasLabel
             self::IdentiteModifiee => Societe::CHAMPS_DE_L_IDENTITE,
             self::ParametresFiscauxModifies => ['regime_tva', 'option_debits_tva', 'mois_fin_exercice'],
             self::SirenCorrigeAvantValidation => ['siren', 'sirets', ...Societe::CHAMPS_DE_L_IDENTITE],
-            self::VerificationEnregistree => ['type', 'resultat', 'fournisseur', 'siret'],
-            self::SocieteRefusee => ['motif'],
+            self::VerificationEnregistree => ['type', 'resultat', 'fournisseur', 'siret', 'signal', 'beneficiaire'],
+            self::PieceDeposee => ['type_piece', 'empreinte'],
+            self::PieceEffacee => ['type_piece', 'motif'],
+            self::PiecesConsultees => ['pieces'],
+            self::AccordDirigeantDemande => ['dirigeant', 'role'],
+            self::CodeEnvoye => ['motif', 'canal', 'source_adresse', 'reference_envoi'],
+            self::CodeSaisi => ['motif', 'resultat', 'tentatives'],
+            self::SocieteValidee => ['preuve', 'beneficiaire', 'sirets'],
+            self::SocieteRefusee, self::ReclamationOuverte, self::DemonstrationOuverte, self::DemonstrationFermee => ['motif'],
             self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'etablissement_verifie'],
         };
     }

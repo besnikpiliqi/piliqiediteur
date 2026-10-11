@@ -49,6 +49,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     {
         return [
             'email_verified_at' => 'datetime',
+            'qualite_verifiee_le' => 'datetime',
             'password' => 'hashed',
             'role_societe' => RoleSociete::class,
             'statut' => StatutCompte::class,
@@ -124,6 +125,16 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
+     * Sa qualité de représentant légal ou de mandataire de sa société
+     * est-elle prouvée, pour lui-même (voir ValiderLaSocieteAction) ? Elle
+     * ne passe jamais d'un compte à un autre.
+     */
+    public function aSaQualiteVerifiee(): bool
+    {
+        return $this->qualite_verifiee_le !== null;
+    }
+
+    /**
      * Peut-il administrer sa société (son espace d'administration) ? Le
      * propriétaire actif seul.
      */
@@ -150,9 +161,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Les magasins qu'il peut ouvrir, par nom : tous ceux de sa société
-     * pour le propriétaire, le sien pour un membre au rattachement actif ;
-     * aucun pour un compte qui n'est pas actif.
+     * Les magasins qu'il peut ouvrir, par nom, le magasin de démonstration
+     * à part, après les autres : tous ceux de sa société pour le
+     * propriétaire, le sien pour un membre au rattachement actif ; aucun
+     * pour un compte qui n'est pas actif.
      *
      * @return Collection<int, Magasin>
      */
@@ -166,7 +178,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             ? Magasin::query()->where('societe_id', $this->societe_id)
             : $this->magasins()->wherePivot('statut', StatutMembreMagasin::Actif->value)->where('magasins.societe_id', $this->societe_id);
 
-        return $magasins->orderBy('magasins.nom')->orderBy('magasins.id')->get();
+        return $magasins->orderBy('magasins.est_demonstration')->orderBy('magasins.nom')->orderBy('magasins.id')->get();
     }
 
     /**

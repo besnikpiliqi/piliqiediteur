@@ -50,10 +50,11 @@ use Throwable;
  * modifié depuis la demande d'envoi, qu'il soit encore en brouillon ou
  * déjà reparti dans sa nouvelle version, il ne part pas avec cet e-mail,
  * écrit pour une version que le client ne recevrait pas. Un magasin qui
- * ne peut plus vendre au moment de l'envoi n'écrit pas à ses clients (voir
- * Magasin::peutVendre()) : suspendu ou fermé entre-temps, ou sa société
- * suspendue, résiliée ou refusée. Dans ces cas, l'envoi échoue sans
- * partir, et le magasin sait pourquoi.
+ * ne peut plus vendre au moment de l'envoi n'écrit pas à ses clients
+ * (voir Magasin::peutEcrireAuxClients()) : suspendu ou fermé entre-temps,
+ * ou sa société suspendue, résiliée ou refusée ; le magasin de
+ * démonstration, jamais. Dans ces cas, l'envoi échoue sans partir, et le
+ * magasin sait pourquoi.
  *
  * Idempotent : un envoi déjà envoyé ne repart jamais, même si le job est
  * rejoué. ShouldBeUnique : jamais deux exécutions du même envoi en
@@ -100,10 +101,10 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        if (! $envoi->magasin->peutVendre()) {
+        if (! $envoi->magasin->peutEcrireAuxClients()) {
             $motif = $envoi->magasin->motifDeLectureSeule('Le magasin');
             $this->echouer($envoi, $motif === null
-                ? "{$envoi->magasin->refusDeVente()} L'e-mail n'est pas parti."
+                ? "{$envoi->magasin->refusDEcrireAuxClients()} L'e-mail n'est pas parti."
                 : "{$motif} : il n'écrit plus à ses clients, l'e-mail n'est pas parti.");
 
             return;

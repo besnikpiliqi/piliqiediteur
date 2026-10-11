@@ -3,7 +3,6 @@
 namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Facturation\Enums\TerritoireTva;
-use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\TypeVerification;
@@ -25,7 +24,8 @@ use App\Models\User;
  * répond pas) sans rien écrire ; noterUnite() et noterEtablissement()
  * l'inscrivent ensuite au registre des vérifications de la société (voir
  * VerificationSociete), avec les seuls détails que retient son type, et
- * au journal d'audit, catégorie des vérifications.
+ * au journal d'audit, catégorie des vérifications (voir
+ * RegistreDesVerifications).
  *
  * Les motifs de refus ne disent que ce que le répertoire public dit
  * lui-même : jamais rien d'une autre société inscrite dans le logiciel.
@@ -63,7 +63,7 @@ class ControleSirene
 
     public function __construct(
         private readonly RepertoireSirene $repertoire,
-        private readonly JournalAudit $journalAudit,
+        private readonly RegistreDesVerifications $registre,
     ) {}
 
     /**
@@ -210,24 +210,6 @@ class ControleSirene
      */
     private function noter(Societe $societe, ?Magasin $magasin, TypeVerification $type, ResultatVerification $resultat, ?array $details, ?User $auteur): VerificationSociete
     {
-        return app(TenantContext::class)->runAsSociete($societe, function () use ($magasin, $type, $resultat, $details, $auteur): VerificationSociete {
-            $verification = tap((new VerificationSociete)->forceFill([
-                'magasin_id' => $magasin?->getKey(),
-                'type' => $type,
-                'resultat' => $resultat,
-                'fournisseur' => self::FOURNISSEUR,
-                'details' => $details,
-                'auteur_id' => $auteur?->getKey(),
-            ]))->save();
-
-            $this->journalAudit->inscrire(ActionAuditee::VerificationEnregistree, $auteur, $magasin, null, [
-                'type' => $type->value,
-                'resultat' => $resultat->value,
-                'fournisseur' => self::FOURNISSEUR,
-                'siret' => $magasin?->siret,
-            ]);
-
-            return $verification;
-        });
+        return $this->registre->noter($societe, $type, $resultat, $details, $auteur, fournisseur: self::FOURNISSEUR, magasin: $magasin);
     }
 }

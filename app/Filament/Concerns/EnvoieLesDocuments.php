@@ -78,7 +78,9 @@ trait EnvoieLesDocuments
 
     /**
      * Destinataire prérempli avec l'adresse du client, modifiable ; un
-     * message facultatif s'ajoute au texte de l'e-mail.
+     * message facultatif s'ajoute au texte de l'e-mail. Le magasin de
+     * démonstration n'écrit à aucun client (voir
+     * Magasin::peutEcrireAuxClients()).
      *
      * @template TAction of MountableAction
      *
@@ -96,7 +98,7 @@ trait EnvoieLesDocuments
                 ? 'Ce devis reçoit son numéro en partant : il ne sera plus un brouillon.'
                 : null)
             ->modalSubmitActionLabel('Envoyer')
-            ->visible(fn (Model&DocumentEnvoyable $record): bool => $record->peutEtreEnvoye() && auth()->user()->can('envoyer', $record))
+            ->visible(fn (Model&DocumentEnvoyable $record): bool => $record->peutEtreEnvoye() && ! $record->magasin->est_demonstration && auth()->user()->can('envoyer', $record))
             ->fillForm(fn (Model&DocumentEnvoyable $record): array => ['destinataire' => $record->client->email])
             ->form([
                 static::champDestinataire(),
@@ -132,7 +134,7 @@ trait EnvoieLesDocuments
             ->modalHeading(fn (Facture $record): string => 'Relance n°'.($record->niveauDeRelanceAtteint() + 1)." : {$record->libelleDocument()} {$record->numero}")
             ->modalDescription('Le client reçoit la facture en pièce jointe, avec le rappel de son montant, de son échéance et de ce qu\'il reste à payer.')
             ->modalSubmitActionLabel('Relancer')
-            ->visible(fn (Facture $record): bool => $record->estEchueEtImpayee() && auth()->user()->can('envoyer', $record))
+            ->visible(fn (Facture $record): bool => $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && auth()->user()->can('envoyer', $record))
             ->fillForm(fn (Facture $record): array => ['destinataire' => $record->client->email])
             ->form([static::champDestinataire()])
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {

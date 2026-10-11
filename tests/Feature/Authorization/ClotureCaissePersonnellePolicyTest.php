@@ -26,10 +26,8 @@ class ClotureCaissePersonnellePolicyTest extends TestCase
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur);
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur);
-        $this->actingAs($vendeurA);
-        $releveDeA = ClotureCaissePersonnelle::factory()->create();
-        $this->actingAs($vendeurB);
-        $releveDeB = ClotureCaissePersonnelle::factory()->create();
+        $releveDeA = ClotureCaissePersonnelle::factory()->create(['vendeur_id' => $vendeurA->id]);
+        $releveDeB = ClotureCaissePersonnelle::factory()->create(['vendeur_id' => $vendeurB->id]);
 
         $this->assertTrue($vendeurB->can('view', $releveDeB));
         $this->assertFalse($vendeurB->can('view', $releveDeA));
@@ -40,10 +38,29 @@ class ClotureCaissePersonnellePolicyTest extends TestCase
         $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $comptable = $this->membre($magasin, RoleMagasin::Comptable);
-        $this->actingAs($vendeur);
-        $releveDuVendeur = ClotureCaissePersonnelle::factory()->create();
+        $releveDuVendeur = ClotureCaissePersonnelle::factory()->create(['vendeur_id' => $vendeur->id]);
 
         $this->assertTrue($comptable->can('view', $releveDuVendeur));
+    }
+
+    /**
+     * R5 : qui peut clôturer la journée (cloture_caisse.gerer) ferme la
+     * caisse d'un autre membre ; un vendeur ne ferme que la sienne, et
+     * personne ne ferme la sienne par ce geste.
+     */
+    public function test_seul_qui_peut_cloturer_la_journee_ferme_la_caisse_d_un_autre_vendeur(): void
+    {
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $autreVendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $gerant = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE, PermissionRegistry::CLOTURE_CAISSE_GERER]);
+
+        $this->assertSame([true, true, false, false], [
+            $this->proprietaireDe($magasin)->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeur]),
+            $gerant->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeur]),
+            $vendeur->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $autreVendeur]),
+            $gerant->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $gerant]),
+        ]);
     }
 
     /**

@@ -53,6 +53,12 @@ use LogicException;
  * ne s'ajoute à une journée déjà agrégée. Les ventes restées ouvertes à la
  * caisse ce jour-là sont abandonnées dans la même transaction (voir
  * PanierDeCaisse::abandonnerLesVentesOuvertesLe()).
+ *
+ * Une caisse personnelle restée ouverte ne retient jamais la clôture (R5) :
+ * la clôture agrège les factures, jamais les relevés personnels, et ses
+ * appelants ferment ensuite d'office, hors de sa transaction, les caisses
+ * encore ouvertes (voir FermerLesCaissesPersonnellesAction), dont l'échec
+ * ne la défait jamais.
  */
 class CloturerCaisseAction
 {

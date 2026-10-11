@@ -157,6 +157,7 @@ class ControleDesDroitsTest extends TestCase
         $this->assertTrue($proprietaire->can('view', $brouillon));
         $this->assertTrue($proprietaire->can('cloturer', ClotureCaisse::class));
         $this->assertTrue($proprietaire->can('fermer', ClotureCaissePersonnelle::class));
+        $this->assertTrue($proprietaire->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeur]));
         $this->assertTrue($proprietaire->can('create', MagasinUser::class));
         $this->assertTrue($proprietaire->can('update', $saLigne));
         $this->assertTrue($proprietaire->can('delete', $saLigne));

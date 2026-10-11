@@ -178,7 +178,7 @@ class MagasinEnLectureSeuleTest extends TestCase
         Livewire::test(ListClotureCaissePersonnelles::class)->callAction('fermer_ma_caisse');
 
         $releve = ClotureCaissePersonnelle::query()->sole();
-        $this->assertSame([$vendeur->id, 1, '12.00'], [$releve->cree_par, $releve->nombre_ventes, $releve->total_ttc]);
+        $this->assertSame([$vendeur->id, 1, '12.00'], [$releve->vendeur_id, $releve->nombre_ventes, $releve->total_ttc]);
     }
 
     #[DataProvider('statutsEnLectureSeule')]

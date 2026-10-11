@@ -9,12 +9,14 @@ use App\Models\User;
 /**
  * Aucune permission dédiée n'est nécessaire pour fermer SA PROPRE caisse :
  * quiconque vend (facture.create) ou encaisse (paiement.creer) la ferme et
- * consulte ses relevés, voir le docblock de ClotureCaissePersonnelle. Un
- * encaissement non fermé bloque la clôture manuelle de la journée (voir
- * VerificateurCaissesPersonnelles) : qui peut encaisser doit donc pouvoir
- * le fermer, le comptable comme le vendeur. Le propriétaire et quiconque a
- * cloture_caisse.view_toutes (comptable...) voient les relevés de toute
- * l'équipe, pour la réconciliation de fin de journée.
+ * consulte ses relevés, voir le docblock de ClotureCaissePersonnelle, le
+ * comptable comme le vendeur. Qui peut clôturer la journée
+ * (cloture_caisse.gerer) ferme aussi celle d'un autre vendeur, pour lui
+ * (voir fermerLaCaisseDe()) ; et toute caisse encore ouverte se ferme
+ * d'office avec la journée (voir FermerLesCaissesPersonnellesAction). Le
+ * propriétaire et quiconque a cloture_caisse.view_toutes (comptable...)
+ * voient les relevés de toute l'équipe, pour la réconciliation de fin de
+ * journée.
  */
 class ClotureCaissePersonnellePolicy extends MagasinPolicy
 {
@@ -29,12 +31,23 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
             return false;
         }
 
-        return $user->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES) || $cloture->cree_par === $user->getKey();
+        return $user->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES) || $cloture->vendeur_id === $user->getKey();
     }
 
     public function fermer(User $user): bool
     {
         return $this->tientUneCaisse($user);
+    }
+
+    /**
+     * « Fermer la caisse d'un vendeur » : qui peut clôturer la journée
+     * ferme celle d'un autre membre, pour lui ; la sienne se ferme par
+     * fermer(). Permis dans un magasin suspendu ou fermé, comme toute
+     * clôture (voir ControleDesDroits).
+     */
+    public function fermerLaCaisseDe(User $user, User $vendeur): bool
+    {
+        return ! $vendeur->is($user) && $user->can(PermissionRegistry::CLOTURE_CAISSE_GERER);
     }
 
     public function update(User $user, ClotureCaissePersonnelle $cloture): bool

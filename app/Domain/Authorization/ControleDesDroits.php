@@ -23,9 +23,9 @@ use App\Models\User;
  * StatutMagasin::estEnLectureSeule()), il refuse tout ce qui n'y reste pas
  * permis, quels que soient les droits du membre :
  * - viewAny et view, sur tout modèle : consulter et télécharger ;
- * - clôturer la journée (ClotureCaissePolicy::cloturer()) et fermer sa
- *   caisse (ClotureCaissePersonnellePolicy::fermer()) : les clôtures
- *   continuent jusqu'au bout ;
+ * - clôturer la journée (ClotureCaissePolicy::cloturer()), fermer sa
+ *   caisse et celle d'un vendeur (ClotureCaissePersonnellePolicy::fermer()
+ *   et fermerLaCaisseDe()) : les clôtures continuent jusqu'au bout ;
  * - tout geste sur l'équipe (MembreEquipePolicy) : couper un accès reste
  *   possible ;
  * - les autorisations de PermissionRegistry::permisesEnLectureSeule().
@@ -45,6 +45,7 @@ final class ControleDesDroits
     private const CLOTURES = [
         'cloturer' => ClotureCaisse::class,
         'fermer' => ClotureCaissePersonnelle::class,
+        'fermerLaCaisseDe' => ClotureCaissePersonnelle::class,
     ];
 
     /**

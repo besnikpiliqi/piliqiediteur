@@ -3,7 +3,6 @@
 namespace App\Filament\App\Resources\ClotureCaisseResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -13,11 +12,10 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
  * Filament/App/Widgets : n'a de sens que sur la liste des clôtures,
  * attaché explicitement via ListClotureCaisses::getHeaderWidgets().
  *
- * Alerte le gérant AVANT qu'il ne clôture manuellement si un vendeur a
- * encore des ventes ou des encaissements de l'une des journées à clôturer
- * qu'il n'a pas fermés de son côté (voir VerificateurCaissesPersonnelles)
- * -- le bouton « Clôturer la journée » reste de toute façon désactivé tant
- * que la liste n'est pas vide (voir ListClotureCaisses::getHeaderActions()).
+ * Informe le gérant, avant qu'il ne clôture la journée, des vendeurs dont
+ * la caisse personnelle est encore ouverte (voir
+ * VerificateurCaissesPersonnelles) : la clôture ne les attend pas, elle les
+ * ferme d'office (voir FermerLesCaissesPersonnellesAction).
  */
 class CaissesPersonnellesOuvertesApercu extends BaseWidget
 {
@@ -28,16 +26,14 @@ class CaissesPersonnellesOuvertesApercu extends BaseWidget
 
     protected function getStats(): array
     {
-        $vendeurs = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverteCesJours(
-            app(CloturerLesJourneesAction::class)->journeesEnAttente(today()),
-        );
+        $vendeurs = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today());
 
         return [
-            Stat::make('Caisses personnelles non fermées', (string) $vendeurs->count())
+            Stat::make('Caisses personnelles ouvertes', (string) $vendeurs->count())
                 ->description($vendeurs->isEmpty()
-                    ? 'Tous les vendeurs ont fermé leur caisse pour les journées à clôturer.'
-                    : 'En attente : '.$vendeurs->pluck('name')->implode(', '))
-                ->color($vendeurs->isEmpty() ? 'success' : 'danger'),
+                    ? 'Toutes les caisses personnelles sont fermées.'
+                    : 'Fermées automatiquement à la clôture de la journée : '.$vendeurs->pluck('name')->implode(', '))
+                ->color($vendeurs->isEmpty() ? 'success' : 'warning'),
         ];
     }
 }

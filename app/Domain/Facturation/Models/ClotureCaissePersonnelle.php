@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -32,9 +33,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  *    ce qui les a réglées sans entrer en caisse ;
  *  - ce qu'il en reste dû à la fermeture (reste_du).
  *
- * Sa période (periode_debut) part de sa dernière fermeture, ou du début de
- * la journée s'il n'en a encore fait aucune, ou de la plus ancienne vente
- * ou du plus ancien paiement compté s'il est antérieur.
+ * Sa période (periode_debut) part de la borne de sa dernière fermeture, ou
+ * du début de la journée de sa borne s'il n'en a encore fait aucune, ou de
+ * la plus ancienne vente ou du plus ancien paiement compté s'il est
+ * antérieur ; elle compte les opérations jusqu'à sa borne (jusqu_au, voir
+ * FermerSaCaisseAction).
+ *
+ * Qui l'a fermée (mode_fermeture, fermee_par, voir ModeFermetureCaisse et
+ * libelleDeFermeture()) : le vendeur lui-même, un responsable pour lui, ou
+ * personne, d'office, après la clôture de la journée ou à minuit (voir
+ * FermerLesCaissesPersonnellesAction) : une caisse personnelle restée
+ * ouverte ne bloque jamais la clôture de la journée.
  *
  * Un outil de réconciliation de fin de service, PAS un document fiscal.
  * Contrairement à ClotureCaisse (la clôture officielle de la journée du
@@ -60,7 +69,9 @@ class ClotureCaissePersonnelle extends Model
     protected $fillable = [];
 
     protected $casts = [
+        'mode_fermeture' => ModeFermetureCaisse::class,
         'periode_debut' => 'datetime',
+        'jusqu_au' => 'datetime',
         'cloturee_a' => 'datetime',
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
@@ -70,16 +81,28 @@ class ClotureCaissePersonnelle extends Model
         'reste_du' => 'decimal:2',
     ];
 
-    protected static function booted(): void
+    public function vendeur(): BelongsTo
     {
-        static::creating(function (ClotureCaissePersonnelle $cloture) {
-            $cloture->cree_par ??= auth()->id();
-        });
+        return $this->belongsTo(User::class, 'vendeur_id');
     }
 
-    public function creePar(): BelongsTo
+    public function fermeePar(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'cree_par');
+        return $this->belongsTo(User::class, 'fermee_par');
+    }
+
+    /**
+     * Qui a fermé la caisse, tel que le relevé le dit : « Fermée par le
+     * vendeur », « Fermée par Claire Martin » (un responsable), ou
+     * « Fermée automatiquement ».
+     */
+    public function libelleDeFermeture(): string
+    {
+        return match ($this->mode_fermeture) {
+            ModeFermetureCaisse::Vendeur => 'Fermée par le vendeur',
+            ModeFermetureCaisse::Responsable => 'Fermée par '.$this->fermeePar->name,
+            ModeFermetureCaisse::Automatique => 'Fermée automatiquement',
+        };
     }
 
     /**

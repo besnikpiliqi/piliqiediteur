@@ -12,6 +12,7 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
@@ -22,13 +23,13 @@ use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages\ListClotureCaissePersonnelles;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ViewClotureCaisse;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -212,13 +213,12 @@ class ClotureCaisseResourceTest extends TestCase
     }
 
     /**
-     * Exigence explicite : un vendeur qui n'a pas fermé sa caisse
-     * personnelle pour la journée à clôturer bloque la clôture manuelle --
-     * jamais elle ne se ferme toute seule (voir
-     * VerificateurCaissesPersonnelles) -- et le bouton le nomme ; elle
-     * redevient possible dès qu'il la ferme.
+     * R5 : un vendeur qui n'a pas fermé sa caisse personnelle ne bloque
+     * jamais la clôture. Le bouton reste actif, la fenêtre nomme la caisse
+     * qu'elle fermera d'office, et la clôture la ferme, avec la mention
+     * « Fermée automatiquement » ; la notification le dit.
      */
-    public function test_le_bouton_est_desactive_et_nomme_le_vendeur_tant_qu_il_n_a_pas_ferme_sa_caisse(): void
+    public function test_le_bouton_reste_actif_et_la_fenetre_nomme_les_caisses_qui_seront_fermees_automatiquement(): void
     {
         $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirLeMagasin();
@@ -227,25 +227,29 @@ class ClotureCaisseResourceTest extends TestCase
         $this->actingAs($vendeur);
         $this->vendreUnTicket();
         $this->actingAs($this->proprietaireDe($magasin));
-
-        $page = Livewire::test(ListClotureCaisses::class)
-            ->assertActionDisabled('cloturer');
-
-        $this->assertSame('Caisses personnelles non fermées : Paul Martin', $page->instance()->getAction('cloturer')->getTooltip());
-
-        app(FermerSaCaisseAction::class)->handle($vendeur);
+        $this->travelTo('2026-10-09 19:00:00');
 
         Livewire::test(ListClotureCaisses::class)
-            ->assertActionEnabled('cloturer');
+            ->assertActionEnabled('cloturer')
+            ->mountAction('cloturer')
+            ->assertSee('Caisses personnelles encore ouvertes, qui seront fermées automatiquement : Paul Martin.')
+            ->callMountedAction()
+            ->assertNotified(Notification::make()->title('Journée du 09/10/2026 clôturée')->body('Caisses personnelles fermées automatiquement : Paul Martin.')->success());
+
+        $releve = ClotureCaissePersonnelle::query()->sole();
+        $this->assertSame(
+            [$vendeur->id, ModeFermetureCaisse::Automatique, null, 1, '12.00', '2026-10-09 19:00:00'],
+            [$releve->vendeur_id, $releve->mode_fermeture, $releve->fermee_par, $releve->nombre_ventes, $releve->total_ttc, $releve->jusqu_au->format('Y-m-d H:i:s')],
+        );
+        $this->assertSame(1, ClotureCaisse::query()->count());
     }
 
     /**
      * Le comptable, avec les autorisations de son rôle, encaisse sans
-     * vendre : son encaissement du jour bloque la clôture manuelle et le
-     * bouton le nomme, puis il ferme lui-même sa caisse (12,00 € en
-     * espèces) et le bouton redevient actif.
+     * vendre : la clôture de la journée ferme d'office sa caisse, avec ses
+     * 12,00 € en espèces, sans qu'il ait à la fermer lui-même.
      */
-    public function test_le_comptable_qui_encaisse_ferme_sa_caisse_et_debloque_la_cloture(): void
+    public function test_la_cloture_ferme_d_office_la_caisse_du_comptable_qui_encaisse(): void
     {
         $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirLeMagasin();
@@ -261,21 +265,15 @@ class ClotureCaisseResourceTest extends TestCase
         ], [['facture_id' => $ticket->id, 'montant' => 12]]);
         $this->actingAs($this->proprietaireDe($magasin));
 
-        $page = Livewire::test(ListClotureCaisses::class)
-            ->assertActionDisabled('cloturer');
-
-        $this->assertSame('Caisses personnelles non fermées : Claire Compta', $page->instance()->getAction('cloturer')->getTooltip());
-
-        $this->actingAs($comptable);
-        Livewire::test(ListClotureCaissePersonnelles::class)
-            ->assertActionVisible('fermer_ma_caisse')
-            ->callAction('fermer_ma_caisse');
-        $releve = ClotureCaissePersonnelle::query()->where('cree_par', $comptable->id)->sole();
-        $this->assertSame([0, ['especes' => '12.00']], [$releve->nombre_ventes, $releve->encaissements]);
-
-        $this->actingAs($this->proprietaireDe($magasin));
         Livewire::test(ListClotureCaisses::class)
-            ->assertActionEnabled('cloturer');
+            ->assertActionEnabled('cloturer')
+            ->mountAction('cloturer')
+            ->assertSee('Caisses personnelles encore ouvertes, qui seront fermées automatiquement : Claire Compta.')
+            ->callMountedAction();
+
+        $releve = ClotureCaissePersonnelle::query()->where('vendeur_id', $comptable->id)->sole();
+        $this->assertSame([ModeFermetureCaisse::Automatique, 0, ['especes' => '12.00']], [$releve->mode_fermeture, $releve->nombre_ventes, $releve->encaissements]);
+        $this->assertSame(1, ClotureCaisse::query()->count());
     }
 
     /**

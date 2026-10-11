@@ -3,7 +3,9 @@
 namespace App\Filament\App\Resources\ClotureCaisseResource\Pages;
 
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
+use App\Domain\Facturation\Actions\FermerLesCaissesPersonnellesAction;
 use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Filament\App\Resources\ClotureCaisseResource;
@@ -19,6 +21,7 @@ use Filament\Resources\Pages\ListRecords;
 use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 use Livewire\Attributes\Locked;
+use Throwable;
 
 /**
  * Le magasin clôture lui-même sa journée en cours, le soir après sa
@@ -31,6 +34,11 @@ use Livewire\Attributes\Locked;
  * s'est ouverte, gardée telle quelle par la page ($journee) ; une fenêtre
  * de confirmation ouverte avant minuit et validée après ne clôture donc
  * jamais la journée qui commence.
+ *
+ * Une caisse personnelle restée ouverte ne bloque jamais la clôture (R5) :
+ * la fenêtre nomme les caisses qu'elle fermera d'office, et elles se
+ * ferment après la clôture, avec la mention « Fermée automatiquement »
+ * (voir FermerLesCaissesPersonnellesAction).
  */
 class ListClotureCaisses extends ListRecords
 {
@@ -46,9 +54,9 @@ class ListClotureCaisses extends ListRecords
     public string $journee = '';
 
     /**
-     * Les journées à clôturer et les vendeurs qui bloquent la clôture,
-     * lus une fois par requête : une propriété privée ne survit pas d'une
-     * requête Livewire à l'autre.
+     * Les journées à clôturer et les vendeurs dont la caisse personnelle
+     * sera fermée d'office, lus une fois par requête : une propriété privée
+     * ne survit pas d'une requête Livewire à l'autre.
      *
      * @var Collection<int, string>|null
      */
@@ -70,16 +78,16 @@ class ListClotureCaisses extends ListRecords
      * Visible pour qui peut clôturer (cloture_caisse.gerer, que le
      * propriétaire coche à chaque membre), une fois la première vente du
      * magasin faite, tant que la journée n'est pas clôturée. La fenêtre de
-     * confirmation annonce chaque journée et ce qu'elle regroupe, et
+     * confirmation annonce chaque journée et ce qu'elle regroupe, nomme les
+     * caisses personnelles encore ouvertes qu'elle fermera d'office, et
      * prévient qu'ensuite plus aucune vente n'est possible ce jour-là (voir
      * ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()).
      *
-     * Seule la clôture manuelle attend les caisses personnelles : tant
-     * qu'un vendeur n'a pas fermé ses ventes ou ses encaissements de l'une
-     * de ces journées, le bouton reste désactivé et nomme les vendeurs à
-     * relancer (voir
-     * VerificateurCaissesPersonnelles). La clôture automatique de minuit,
-     * elle, clôture toujours.
+     * Jamais désactivé par une caisse personnelle : une fois les journées
+     * clôturées, chaque caisse ouverte se ferme jusqu'à l'instant de la
+     * clôture, dans sa propre transaction ; un échec, signalé au journal de
+     * l'application, laisse la clôture faite et la caisse se ferme au plus
+     * tard à minuit (voir ClotureAutomatiqueCaisse).
      */
     protected function getHeaderActions(): array
     {
@@ -97,10 +105,6 @@ class ListClotureCaisses extends ListRecords
                 ->modalSubmitActionLabel('Oui, clôturer définitivement')
                 ->visible(fn (): bool => auth()->user()->can('cloturer', ClotureCaisse::class)
                     && $this->journeesACloturer()->isNotEmpty())
-                ->disabled(fn (): bool => $this->vendeursAvecCaisseOuverte()->isNotEmpty())
-                ->tooltip(fn (): ?string => $this->vendeursAvecCaisseOuverte()->isNotEmpty()
-                    ? 'Caisses personnelles non fermées : '.$this->vendeursAvecCaisseOuverte()->pluck('name')->implode(', ')
-                    : null)
                 ->action(fn () => static::executerSansCasser(function () use ($journeeVisee, $enClair): void {
                     $clotures = app(CloturerLesJourneesAction::class)->jusquAu(Filament::getTenant(), $journeeVisee);
                     $this->journeesEnAttente = $this->vendeursEnAttente = null;
@@ -111,10 +115,15 @@ class ListClotureCaisses extends ListRecords
                         return;
                     }
 
+                    $caissesFermees = $this->fermerLesCaissesPersonnelles($journeeVisee);
+
                     Notification::make()
                         ->title($clotures->count() === 1
                             ? "Journée du {$enClair} clôturée"
                             : 'Journées du '.$clotures->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->format('d/m/Y'))->join(', ', ' et ').' clôturées')
+                        ->body($caissesFermees->isEmpty()
+                            ? null
+                            : 'Caisses personnelles fermées automatiquement : '.$caissesFermees->map(fn (ClotureCaissePersonnelle $releve): string => $releve->vendeur->name)->implode(', ').'.')
                         ->success()
                         ->send();
                 })),
@@ -133,14 +142,34 @@ class ListClotureCaisses extends ListRecords
     }
 
     /**
-     * Les vendeurs dont la caisse personnelle n'est pas fermée pour l'une
-     * des journées à clôturer.
+     * Les vendeurs dont la caisse personnelle est encore ouverte au soir de
+     * la journée visée : ceux dont la clôture fermera la caisse d'office.
      *
      * @return Collection<int, User>
      */
     private function vendeursAvecCaisseOuverte(): Collection
     {
-        return $this->vendeursEnAttente ??= app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverteCesJours($this->journeesACloturer());
+        return $this->vendeursEnAttente ??= app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(CarbonImmutable::parse($this->journee));
+    }
+
+    /**
+     * Ferme d'office, après la clôture, les caisses personnelles ouvertes
+     * jusqu'à maintenant, ou jusqu'à la fin de la journée visée si elle est
+     * déjà finie (une fenêtre confirmée après minuit). Un échec ne défait
+     * jamais la clôture : il est signalé au journal de l'application, et
+     * minuit les fermera.
+     *
+     * @return Collection<int, ClotureCaissePersonnelle>
+     */
+    private function fermerLesCaissesPersonnelles(CarbonImmutable $journeeVisee): Collection
+    {
+        try {
+            return app(FermerLesCaissesPersonnellesAction::class)->handle(Filament::getTenant(), CarbonImmutable::now()->min($journeeVisee->endOfDay()));
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return collect();
+        }
     }
 
     /**
@@ -174,6 +203,10 @@ class ListClotureCaisses extends ListRecords
 
         if ($ventesOuvertes > 0) {
             $paragraphes[] = "{$ventesOuvertes} vente(s) en cours à la caisse, jamais encaissée(s), sera(ont) abandonnée(s) et inscrite(s) au journal des événements.";
+        }
+
+        if ($this->vendeursAvecCaisseOuverte()->isNotEmpty()) {
+            $paragraphes[] = 'Caisses personnelles encore ouvertes, qui seront fermées automatiquement : '.$this->vendeursAvecCaisseOuverte()->pluck('name')->implode(', ').'.';
         }
 
         $paragraphes[] = 'Après la clôture, vous ne pourrez plus faire de ventes aujourd\'hui.';

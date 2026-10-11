@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages;
 use Filament\Resources\Resource;
@@ -11,11 +12,13 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Lecture seule : un relevé se crée uniquement via l'action "Fermer ma
- * caisse" (voir ListClotureCaissePersonnelles et FermerSaCaisseAction),
- * jamais via un formulaire create/edit classique. Voir le docblock de
- * ClotureCaissePersonnelle pour ce qui la distingue de ClotureCaisse (la
- * clôture officielle de la journée du magasin).
+ * Lecture seule : un relevé se crée uniquement par une fermeture (« Fermer
+ * ma caisse », « Fermer la caisse d'un vendeur », voir
+ * ListClotureCaissePersonnelles, ou d'office avec la journée, voir
+ * FermerLesCaissesPersonnellesAction), jamais via un formulaire
+ * create/edit classique. Voir le docblock de ClotureCaissePersonnelle pour
+ * ce qui la distingue de ClotureCaisse (la clôture officielle de la
+ * journée du magasin).
  */
 class ClotureCaissePersonnelleResource extends Resource
 {
@@ -42,7 +45,7 @@ class ClotureCaissePersonnelleResource extends Resource
         $query = parent::getEloquentQuery();
 
         if (! auth()->user()->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)) {
-            $query->where('cree_par', auth()->id());
+            $query->where('vendeur_id', auth()->id());
         }
 
         return $query;
@@ -53,9 +56,14 @@ class ClotureCaissePersonnelleResource extends Resource
         return $table
             ->defaultSort('cloturee_a', 'desc')
             ->columns([
-                Tables\Columns\TextColumn::make('creePar.name')->label('Vendeur'),
+                Tables\Columns\TextColumn::make('vendeur.name')->label('Vendeur'),
                 Tables\Columns\TextColumn::make('periode_debut')->label('Depuis')->dateTime('d/m/Y H:i'),
-                Tables\Columns\TextColumn::make('cloturee_a')->label('Jusqu\'à')->dateTime('d/m/Y H:i')->sortable(),
+                Tables\Columns\TextColumn::make('jusqu_au')->label('Jusqu\'à')->dateTime('d/m/Y H:i')->sortable(),
+                Tables\Columns\TextColumn::make('mode_fermeture')
+                    ->label('Fermeture')
+                    ->state(fn (ClotureCaissePersonnelle $record): string => $record->libelleDeFermeture())
+                    ->badge()
+                    ->color(fn (ClotureCaissePersonnelle $record): string => $record->mode_fermeture === ModeFermetureCaisse::Automatique ? 'warning' : 'gray'),
                 Tables\Columns\TextColumn::make('nombre_ventes')->label('Ventes'),
                 // Les quatre rubriques du relevé (B18, voir
                 // ClotureCaissePersonnelle), chacune à part.

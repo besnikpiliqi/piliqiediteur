@@ -11,16 +11,27 @@ return new class extends Migration
         Schema::create('clotures_caisse_personnelles', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
-            // Toujours un vendeur réel, jamais le système : contrairement
-            // à ClotureCaisse, il n'y a pas de déclenchement automatique
-            // ici (voir le docblock de FermerSaCaisseAction).
-            $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
-            // Bornes purement informatives (affichage), pas utilisées pour
-            // déterminer ce qui est compté : chaque fermeture note
-            // explicitement les ventes et les paiements qu'elle a comptés
-            // (voir clotures_caisse_personnelles_factures et
-            // clotures_caisse_personnelles_paiements).
+            // Le vendeur dont la caisse est fermée : tout membre qui vend ou
+            // encaisse. Un compte n'est jamais supprimé.
+            $table->foreignId('vendeur_id')->constrained('users')->restrictOnDelete();
+            // Qui l'a fermée (voir ModeFermetureCaisse) : le vendeur, un
+            // responsable pour lui (fermee_par), ou d'office, après la
+            // clôture de la journée ou à minuit (fermee_par vide). Le
+            // modèle et FermerSaCaisseAction gardent la cohérence des deux
+            // colonnes.
+            $table->string('mode_fermeture', 20);
+            $table->foreignId('fermee_par')->nullable()->constrained('users')->restrictOnDelete();
+            // jusqu_au : la borne des opérations comptées (les ventes émises
+            // jusqu'à cet instant, les encaissements reçus jusqu'à sa
+            // journée), maintenant pour une fermeture par le vendeur ou un
+            // responsable, la fin de la journée clôturée pour une fermeture
+            // d'office ; cloturee_a, l'instant de la fermeture ;
+            // periode_debut, purement informatif (affichage). Chaque
+            // fermeture note explicitement les ventes et les paiements
+            // qu'elle a comptés (voir clotures_caisse_personnelles_factures
+            // et clotures_caisse_personnelles_paiements).
             $table->timestamp('periode_debut');
+            $table->timestamp('jusqu_au');
             $table->timestamp('cloturee_a');
             // Les quatre rubriques du relevé (B18, voir
             // ClotureCaissePersonnelle) : le TTC vendu (avec son HT et sa
@@ -39,12 +50,11 @@ return new class extends Migration
             // caisse, sans existence fiscale -- ne remplace jamais la
             // clôture officielle de la journée du magasin (voir
             // ClotureCaisse), qu'une caisse personnelle encore ouverte ne
-            // retient que lorsqu'elle est manuelle (voir
-            // VerificateurCaissesPersonnelles).
+            // retient jamais.
 
             // Nom explicite : celui que Laravel dériverait dépasse les 63
             // caractères d'un identifiant PostgreSQL.
-            $table->index(['magasin_id', 'cree_par', 'cloturee_a'], 'ccp_magasin_vendeur_cloturee_a_index');
+            $table->index(['magasin_id', 'vendeur_id', 'cloturee_a'], 'ccp_magasin_vendeur_cloturee_a_index');
         });
 
         Schema::create('clotures_caisse_personnelles_factures', function (Blueprint $table) {

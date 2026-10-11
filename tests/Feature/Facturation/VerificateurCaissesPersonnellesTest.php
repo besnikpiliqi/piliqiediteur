@@ -23,12 +23,12 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Seule la clôture manuelle de la journée attend les caisses personnelles :
- * un vendeur qui n'a pas fermé la sienne, ventes ou encaissements de la
- * journée, bloque le bouton « Clôturer la journée » (voir
- * ListClotureCaisses), jamais la clôture automatique de minuit (voir
- * ClotureAutomatiqueCaisse), qui agrège directement les factures (voir
- * CloturerCaisseAction).
+ * La caisse personnelle d'un vendeur est ouverte au soir d'une journée tant
+ * qu'il a des ventes ou des encaissements de cette journée ou d'une journée
+ * antérieure qu'aucune de ses fermetures n'a comptés. Elle ne bloque
+ * jamais la clôture de la journée (R5) : la fenêtre de clôture nomme ces
+ * caisses (voir ListClotureCaisses), et la clôture comme minuit les ferment
+ * d'office (voir FermerLesCaissesPersonnellesAction).
  */
 class VerificateurCaissesPersonnellesTest extends TestCase
 {
@@ -219,8 +219,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
 
     /**
      * Un encaissement du jour que le vendeur n'a pas fermé laisse sa caisse
-     * ouverte, même sans aucune vente de sa part : il bloque la clôture
-     * manuelle et le nomme, jusqu'à sa fermeture.
+     * ouverte, même sans aucune vente de sa part, jusqu'à sa fermeture.
      */
     public function test_un_encaissement_du_jour_non_ferme_laisse_la_caisse_du_vendeur_ouverte(): void
     {
@@ -265,9 +264,9 @@ class VerificateurCaissesPersonnellesTest extends TestCase
     }
 
     /**
-     * Un encaissement est de la journée où il est reçu : un paiement reçu
-     * hier, saisi aujourd'hui, laisse ouverte la caisse d'hier, pas celle
-     * d'aujourd'hui.
+     * Un encaissement est de la journée où il est reçu, pas de celle où il
+     * est saisi : un paiement reçu hier, saisi aujourd'hui, laisse ouverte
+     * la caisse au soir d'hier, et pas encore au soir d'avant-hier.
      */
     public function test_un_encaissement_compte_dans_la_journee_ou_il_est_recu(): void
     {
@@ -283,11 +282,11 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $this->encaisser($facture, 12, today()->subDay());
         $verificateur = app(VerificateurCaissesPersonnelles::class);
 
+        $avantHier = $verificateur->vendeursAvecCaisseOuverte(now()->subDays(2));
         $hier = $verificateur->vendeursAvecCaisseOuverte(now()->subDay());
-        $aujourdhui = $verificateur->vendeursAvecCaisseOuverte(now());
 
+        $this->assertTrue($avantHier->isEmpty());
         $this->assertSame([$vendeur->id], $hier->pluck('id')->all());
-        $this->assertTrue($aujourdhui->isEmpty());
     }
 
     private function emettreUnTicketPour(User $vendeur, Client $client): Facture

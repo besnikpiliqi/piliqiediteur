@@ -15,8 +15,8 @@ use Illuminate\Database\Eloquent\Builder;
  * passage à l'heure d'hiver comprise.
  *
  * La colonne étant en UTC, une période de Paris se cherche par ses bornes
- * converties en UTC (emisEntre(), emisLe()), jamais par whereDate(), qui
- * comparerait la date UTC.
+ * converties en UTC (emisEntre(), emisJusquA(), emisLe()), jamais par
+ * whereDate(), qui comparerait la date UTC.
  */
 trait HorodateSonEmission
 {
@@ -32,6 +32,15 @@ trait HorodateSonEmission
     public function scopeEmisEntre(Builder $query, CarbonInterface $debut, CarbonInterface $fin): Builder
     {
         return $query->whereBetween('date_emission', [HorodatageUtc::enBase($debut), HorodatageUtc::enBase($fin)]);
+    }
+
+    /**
+     * Les documents émis jusqu'à cet instant compris, quel que soit son
+     * fuseau.
+     */
+    public function scopeEmisJusquA(Builder $query, CarbonInterface $instant): Builder
+    {
+        return $query->where('date_emission', '<=', HorodatageUtc::enBase($instant));
     }
 
     /**

@@ -2,41 +2,59 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 
 /**
- * Permet à un vendeur -- tout membre qui vend ou encaisse, voir
- * ClotureCaissePersonnellePolicy::fermer() -- de fermer SA PROPRE caisse,
- * jamais la clôture officielle de la journée du magasin (voir
- * CloturerCaisseAction, réservée à cloture_caisse.gerer). Le docblock de ClotureCaissePersonnelle décrit
- * les quatre rubriques du relevé (B18) : les ventes et leur TTC vendu, les
- * encaissements par mode de paiement, le crédit d'avoir utilisé et le
- * reste dû, la période qu'il couvre et ce qui le distingue de la clôture
- * de la journée. Avant de fermer, le vendeur voit ce relevé (voir
+ * Ferme la caisse personnelle d'un vendeur -- tout membre qui vend ou
+ * encaisse, voir ClotureCaissePersonnellePolicy::fermer() --, jamais la
+ * clôture officielle de la journée du magasin (voir CloturerCaisseAction,
+ * réservée à cloture_caisse.gerer). Le docblock de ClotureCaissePersonnelle
+ * décrit les quatre rubriques du relevé (B18) : les ventes et leur TTC
+ * vendu, les encaissements par mode de paiement, le crédit d'avoir utilisé
+ * et le reste dû, la période qu'il couvre et ce qui le distingue de la
+ * clôture de la journée. Avant de fermer, on voit ce relevé (voir
  * apercu()).
+ *
+ * Trois façons de fermer (voir ModeFermetureCaisse) :
+ * - le vendeur ferme la sienne (handle()) ;
+ * - un responsable, autorisé à clôturer la journée, ferme celle d'un
+ *   autre vendeur pour lui (handle() avec son auteur, voir
+ *   ClotureCaissePersonnellePolicy::fermerLaCaisseDe()) ;
+ * - elle est fermée d'office après la clôture de la journée et à minuit
+ *   (fermerDOffice(), voir FermerLesCaissesPersonnellesAction).
+ * Le relevé compte les ventes émises jusqu'à sa borne et les encaissements
+ * reçus jusqu'à la journée de sa borne (jusqu_au) : maintenant pour le
+ * vendeur et le responsable, la fin de la journée clôturée pour une
+ * fermeture d'office, si bien qu'une vente faite après minuit n'entre pas
+ * dans la fermeture de la veille.
  *
  * Aucune condition de blocage : contrairement à CloturerCaisseAction, un
  * vendeur peut fermer sa caisse aussi souvent qu'il le souhaite, y compris
  * sans aucune nouvelle vente ni aucun paiement depuis la précédente fois
- * (relevé à zéro).
+ * (relevé à zéro). Une fermeture d'office, elle, ne note rien quand il n'y
+ * a rien à compter.
  *
- * Deux fermetures du même vendeur au même instant (double clic, deux
- * onglets) se suivent : la seconde attend le verrou que la première a
- * pris sur la fiche du vendeur, puis relit tout après elle. Sous
- * PostgreSQL (READ COMMITTED), chaque lecture qui suit le verrou voit
- * donc la fermeture validée entre-temps : la seconde part d'elle, sans
- * compter une seconde fois ses ventes ou ses paiements ni heurter la clé
- * primaire de clotures_caisse_personnelles_factures ou de
+ * Deux fermetures de la même caisse au même instant (double clic, deux
+ * onglets, le vendeur et la fermeture d'office) se suivent : la seconde
+ * attend le verrou que la première a pris sur la fiche du vendeur, puis
+ * relit tout après elle. Sous PostgreSQL (READ COMMITTED), chaque lecture
+ * qui suit le verrou voit donc la fermeture validée entre-temps : la
+ * seconde part d'elle, sans compter une seconde fois ses ventes ou ses
+ * paiements ni heurter la clé primaire de
+ * clotures_caisse_personnelles_factures ou de
  * clotures_caisse_personnelles_paiements. FOR NO KEY UPDATE, et non FOR
  * UPDATE : les ventes et les paiements que le vendeur enregistre pendant
  * ce temps vérifient leur clé étrangère vers sa fiche sans l'attendre. Un
@@ -48,15 +66,59 @@ class FermerSaCaisseAction
 {
     public function __construct(private readonly CalculateurLigne $calculateur) {}
 
-    public function handle(User $vendeur): ClotureCaissePersonnelle
+    /**
+     * Le vendeur ferme sa caisse, ou, avec $responsable, un autre membre
+     * autorisé à clôturer la journée la ferme pour lui : tout ce qui n'est
+     * pas encore compté jusqu'à maintenant.
+     *
+     * @throws AuthorizationException quand le responsable n'est pas autorisé à fermer la caisse de ce vendeur
+     */
+    public function handle(User $vendeur, ?User $responsable = null): ClotureCaissePersonnelle
     {
-        return DB::transaction(function () use ($vendeur) {
+        if ($responsable === null || $responsable->is($vendeur)) {
+            return $this->fermer($vendeur, ModeFermetureCaisse::Vendeur, $vendeur, CarbonImmutable::now(), memeAZero: true);
+        }
+
+        Gate::forUser($responsable)->authorize('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeur]);
+
+        return $this->fermer($vendeur, ModeFermetureCaisse::Responsable, $responsable, CarbonImmutable::now(), memeAZero: true);
+    }
+
+    /**
+     * Ferme d'office la caisse du vendeur jusqu'à la borne (voir
+     * FermerLesCaissesPersonnellesAction) : null, sans rien noter, quand
+     * elle ne compte, une fois relue sous le verrou, aucune vente ni aucun
+     * paiement -- le vendeur a pu la fermer entre-temps.
+     */
+    public function fermerDOffice(User $vendeur, CarbonInterface $jusquAu): ?ClotureCaissePersonnelle
+    {
+        return $this->fermer($vendeur, ModeFermetureCaisse::Automatique, null, CarbonImmutable::instance($jusquAu), memeAZero: false);
+    }
+
+    /**
+     * Le relevé que fermerait le vendeur maintenant, sans rien enregistrer :
+     * ce que récapitule la fenêtre de fermeture avant confirmation.
+     */
+    public function apercu(User $vendeur): ClotureCaissePersonnelle
+    {
+        $maintenant = CarbonImmutable::now();
+
+        return $this->releve($vendeur, ModeFermetureCaisse::Vendeur, $vendeur, $maintenant, $this->ventesDuReleve($vendeur, $maintenant)->get(), $this->paiementsDuReleve($vendeur, $maintenant)->get());
+    }
+
+    private function fermer(User $vendeur, ModeFermetureCaisse $mode, ?User $auteur, CarbonImmutable $jusquAu, bool $memeAZero): ?ClotureCaissePersonnelle
+    {
+        return DB::transaction(function () use ($vendeur, $mode, $auteur, $jusquAu, $memeAZero): ?ClotureCaissePersonnelle {
             User::query()->whereKey($vendeur->getKey())->lock('for no key update')->first();
 
-            $factures = $this->ventesDuReleve($vendeur)->lockForUpdate()->get();
-            $paiements = $this->paiementsDuReleve($vendeur)->get();
+            $factures = $this->ventesDuReleve($vendeur, $jusquAu)->lockForUpdate()->get();
+            $paiements = $this->paiementsDuReleve($vendeur, $jusquAu)->get();
 
-            $cloture = $this->releve($vendeur, $factures, $paiements);
+            if (! $memeAZero && $factures->isEmpty() && $paiements->isEmpty()) {
+                return null;
+            }
+
+            $cloture = $this->releve($vendeur, $mode, $auteur, $jusquAu, $factures, $paiements);
             $cloture->save();
             $cloture->factures()->attach($factures->modelKeys());
             $cloture->paiements()->attach($paiements->modelKeys());
@@ -66,33 +128,32 @@ class FermerSaCaisseAction
     }
 
     /**
-     * Le relevé que fermerait le vendeur maintenant, sans rien enregistrer :
-     * ce que récapitule la fenêtre « Fermer ma caisse » avant confirmation.
-     */
-    public function apercu(User $vendeur): ClotureCaissePersonnelle
-    {
-        return $this->releve($vendeur, $this->ventesDuReleve($vendeur)->get(), $this->paiementsDuReleve($vendeur)->get());
-    }
-
-    /**
-     * Les ventes jamais encore comptées par une fermeture, et non celles
-     * d'ID supérieur à la dernière comptée : l'ID est attribué à la
-     * création du brouillon, et un brouillon créé avant une vente mais émis
-     * après la fermeture serait sinon sauté pour toujours.
+     * Les ventes émises jusqu'à la borne et jamais encore comptées par une
+     * fermeture, et non celles d'ID supérieur à la dernière comptée : l'ID
+     * est attribué à la création du brouillon, et un brouillon créé avant
+     * une vente mais émis après la fermeture serait sinon sauté pour
+     * toujours.
      *
      * @return Builder<Facture>
      */
-    private function ventesDuReleve(User $vendeur): Builder
+    private function ventesDuReleve(User $vendeur, CarbonInterface $jusquAu): Builder
     {
-        return Facture::query()->nonFermeesParLeVendeur($vendeur->getKey())->orderBy('id');
+        return Facture::query()->nonFermeesParLeVendeur($vendeur->getKey())->emisJusquA($jusquAu)->orderBy('id');
     }
 
     /**
+     * Les paiements reçus jusqu'à la journée de la borne, à l'heure de
+     * Paris, et jamais encore comptés : un encaissement est de la journée
+     * où il est reçu (voir VerificateurCaissesPersonnelles).
+     *
      * @return Builder<Paiement>
      */
-    private function paiementsDuReleve(User $vendeur): Builder
+    private function paiementsDuReleve(User $vendeur, CarbonInterface $jusquAu): Builder
     {
-        return Paiement::query()->nonFermesParLeVendeur($vendeur->getKey())->orderBy('id');
+        return Paiement::query()
+            ->nonFermesParLeVendeur($vendeur->getKey())
+            ->whereDate('recu_le', '<=', CarbonImmutable::instance($jusquAu)->setTimezone(config('app.timezone'))->toDateString())
+            ->orderBy('id');
     }
 
     /**
@@ -101,16 +162,16 @@ class FermerSaCaisseAction
      * @param  Collection<int, Facture>  $factures
      * @param  Collection<int, Paiement>  $paiements
      */
-    private function releve(User $vendeur, Collection $factures, Collection $paiements): ClotureCaissePersonnelle
+    private function releve(User $vendeur, ModeFermetureCaisse $mode, ?User $auteur, CarbonImmutable $jusquAu, Collection $factures, Collection $paiements): ClotureCaissePersonnelle
     {
         $cloture = new ClotureCaissePersonnelle;
 
         return $cloture->forceFill([
-            // Explicite plutôt que de laisser le hook du modèle déduire
-            // auth()->id() : $vendeur est le paramètre qui fait foi, pas
-            // nécessairement l'utilisateur authentifié courant.
-            'cree_par' => $vendeur->getKey(),
-            'periode_debut' => $this->debutDuReleve($vendeur, $factures, $paiements),
+            'vendeur_id' => $vendeur->getKey(),
+            'mode_fermeture' => $mode,
+            'fermee_par' => $auteur?->getKey(),
+            'periode_debut' => $this->debutDuReleve($vendeur, $jusquAu, $factures, $paiements),
+            'jusqu_au' => $jusquAu,
             'cloturee_a' => now(),
             'nombre_ventes' => $factures->count(),
             ...$this->calculateur->cumuler($factures),
@@ -121,21 +182,21 @@ class FermerSaCaisseAction
     }
 
     /**
-     * « Depuis » : la dernière fermeture du vendeur, ou le début de la
-     * journée s'il n'en a fait aucune, ou la plus ancienne vente ou le plus
-     * ancien paiement compté s'il est antérieur -- y compris ceux d'une
-     * journée précédente qu'il n'avait pas fermée.
+     * « Depuis » : la borne de la dernière fermeture du vendeur, ou le
+     * début de la journée de la borne s'il n'en a fait aucune, ou la plus
+     * ancienne vente ou le plus ancien paiement compté s'il est antérieur
+     * -- y compris ceux d'une journée précédente qu'il n'avait pas fermée.
      *
      * @param  Collection<int, Facture>  $factures
      * @param  Collection<int, Paiement>  $paiements
      */
-    private function debutDuReleve(User $vendeur, Collection $factures, Collection $paiements): CarbonInterface
+    private function debutDuReleve(User $vendeur, CarbonImmutable $jusquAu, Collection $factures, Collection $paiements): CarbonInterface
     {
         $derniere = ClotureCaissePersonnelle::query()
-            ->where('cree_par', $vendeur->getKey())
+            ->where('vendeur_id', $vendeur->getKey())
             ->orderByDesc('id')
             ->first();
-        $depuis = $derniere?->cloturee_a ?? Carbon::now()->startOfDay();
+        $depuis = $derniere?->jusqu_au ?? $jusquAu->setTimezone(config('app.timezone'))->startOfDay();
 
         foreach ([$factures->min('date_emission'), $paiements->min('created_at')] as $plusAncien) {
             if ($plusAncien !== null && $plusAncien->lt($depuis)) {

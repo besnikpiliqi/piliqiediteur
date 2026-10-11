@@ -55,7 +55,7 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
             ->assertActionVisible('fermer_ma_caisse')
             ->callAction('fermer_ma_caisse');
 
-        $releve = ClotureCaissePersonnelle::query()->where('cree_par', $vendeur->id)->firstOrFail();
+        $releve = ClotureCaissePersonnelle::query()->where('vendeur_id', $vendeur->id)->firstOrFail();
         $this->assertSame(1, $releve->nombre_ventes);
         $this->assertSame('60.00', $releve->total_ttc);
     }
@@ -79,8 +79,8 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
         Filament::setTenant($magasin);
         Livewire::test(ListClotureCaissePersonnelles::class)->callAction('fermer_ma_caisse');
 
-        $releveA = ClotureCaissePersonnelle::where('cree_par', $vendeurA->id)->firstOrFail();
-        $releveB = ClotureCaissePersonnelle::where('cree_par', $vendeurB->id)->firstOrFail();
+        $releveA = ClotureCaissePersonnelle::where('vendeur_id', $vendeurA->id)->firstOrFail();
+        $releveB = ClotureCaissePersonnelle::where('vendeur_id', $vendeurB->id)->firstOrFail();
 
         Livewire::test(ListClotureCaissePersonnelles::class)
             ->assertCanSeeTableRecords([$releveB])

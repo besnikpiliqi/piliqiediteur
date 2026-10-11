@@ -62,7 +62,7 @@ class FermerSaCaisseActionTest extends TestCase
 
         $this->assertSame(1, $cloture->nombre_ventes);
         $this->assertSame('120.00', $cloture->total_ttc);
-        $this->assertSame($vendeur->id, $cloture->cree_par);
+        $this->assertSame($vendeur->id, $cloture->vendeur_id);
     }
 
     /**

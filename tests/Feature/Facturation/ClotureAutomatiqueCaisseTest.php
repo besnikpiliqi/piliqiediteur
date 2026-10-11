@@ -92,12 +92,12 @@ class ClotureAutomatiqueCaisseTest extends TestCase
     }
 
     /**
-     * Exigence explicite : contrairement à la clôture MANUELLE (voir
-     * ListClotureCaisses, bloquée tant qu'un vendeur n'a pas fermé sa
-     * caisse personnelle, voir VerificateurCaissesPersonnelles), la
-     * commande automatique de minuit doit toujours clôturer -- elle est le
-     * filet de sécurité si personne n'intervient, jamais un chemin qui peut
-     * rester bloqué.
+     * Exigence explicite : comme la clôture manuelle (R5), la commande
+     * automatique de minuit clôture toujours, même quand un vendeur n'a pas
+     * fermé sa caisse personnelle -- elle est le filet de sécurité si
+     * personne n'intervient, jamais un chemin qui peut rester bloqué (voir
+     * CaissesPersonnellesFermeesDOfficeTest pour la fermeture d'office de
+     * cette caisse).
      */
     public function test_cloture_meme_si_le_vendeur_na_pas_ferme_sa_caisse_personnelle(): void
     {
@@ -115,9 +115,8 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $facture = app(EmettreFactureAction::class)->handle($facture);
         $this->travelBack();
 
-        // Le vendeur n'a jamais fermé sa caisse personnelle : il apparaîtrait
-        // comme "en attente" si on le vérifiait (voir
-        // VerificateurCaissesPersonnelles), mais ça ne doit rien changer ici.
+        // Le vendeur n'a jamais fermé sa caisse personnelle (voir
+        // VerificateurCaissesPersonnelles) : ça ne doit rien changer ici.
         $this->assertTrue(
             app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(now()->subDay())->contains('id', $vendeur->id)
         );

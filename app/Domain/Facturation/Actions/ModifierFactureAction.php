@@ -37,8 +37,9 @@ use LogicException;
  *
  * Comme CreerFactureAction, elle reçoit le client déjà résolu par une
  * requête limitée au magasin, jamais un client_id brut venu du formulaire,
- * et note de nouveau son type et le régime de TVA du magasin, avec
- * lesquels les lignes se recalculent : un brouillon réenregistré après que
+ * et note de nouveau son type, le régime de TVA du magasin et la nature de
+ * l'opération, avec lesquels les lignes se recalculent : un brouillon
+ * réenregistré après que
  * son client a changé de type s'émet dans l'autre série, et celui
  * réenregistré après un changement de régime du magasin s'émet de nouveau
  * (voir EmettreFactureAction).
@@ -73,8 +74,8 @@ class ModifierFactureAction
                 ->map(fn (LigneFacture $ligne): array => $this->lignesRetirees->comparable($ligne->produit_id, $ligne->service_id, $ligne->description, $ligne->quantite, $ligne->prix_unitaire_ttc))
                 ->all();
 
-            $contexte = ContexteDeVente::pour($client, $facture->magasin);
-            $facture->fill($attributs)->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
+            $contexte = ContexteDeVente::pour($client, $facture->magasin, $facture->fill($attributs)->noterSaNatureDOperation($attributs));
+            $facture->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
 
             $facture->lignes()->delete();
 

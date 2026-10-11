@@ -28,7 +28,8 @@ use LogicException;
  * elles (E1, voir repartirLaTvaParTaux()) : ses lignes ne se calculent
  * qu'ensemble. En franchise en base, toute vente se calcule article par
  * article, quel que soit le client (voir
- * ContexteDeVente::calculeDepuisLeHtDeLigne()).
+ * ContexteDeVente::calculeDepuisLeHtDeLigne()). Hors de la vente en
+ * France, elle se calcule de même, sans TVA (voir construire()).
  */
 class ConstructeurLigneDocument
 {
@@ -140,6 +141,15 @@ class ConstructeurLigneDocument
      * client, particulier ou professionnel, paie le même prix TTC sans TVA
      * (B10).
      *
+     * Hors de la vente en France (K3, voir
+     * ContexteDeVente::retireLaTvaDuPrix()), toute ligne est aussi à 0 %,
+     * mais le client paie le prix sans la TVA française : le PU TTC d'un
+     * produit comprend encore la TVA de sa fiche (taux_tva_du_prix), d'où
+     * se déduit son PU HT, le prix payé par article -- 1 000 x 1,00 € TTC à
+     * 20 % : 830,00 € pour un particulier, à 0,83 € l'article ; 833,33 €
+     * depuis le HT de la ligne pour un professionnel. Le prix d'un service,
+     * saisi, est déjà sans TVA.
+     *
      * @param  array{produit_id?: int|string|null, service_id?: int|string|null, quantite: int|string, prix_unitaire_ttc?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}  $donnees
      * @param  Collection<int, Produit>  $produits  les produits des lignes, archivés compris (voir catalogue())
      * @param  Collection<int, Service>  $services  les services des lignes
@@ -166,11 +176,13 @@ class ConstructeurLigneDocument
             throw new InvalidArgumentException('Une ligne vend un produit ou un service du catalogue.');
         }
 
-        $tauxTva = match (true) {
+        $tauxTvaDuPrix = match (true) {
             $contexte->franchiseEnBase => 0.0,
             $produit !== null => (float) $produit->taux_tva,
+            $contexte->retireLaTvaDuPrix() => 0.0,
             default => (float) (filled($donnees['taux_tva'] ?? null) ? $donnees['taux_tva'] : $contexte->tauxTvaParDefaut),
         };
+        $tauxTva = $contexte->exonere() ? 0.0 : $tauxTvaDuPrix;
 
         $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
 
@@ -182,7 +194,10 @@ class ConstructeurLigneDocument
             throw new InvalidArgumentException('Le PU TTC d\'une ligne ne peut pas être négatif.');
         }
 
-        $prixUnitaireHt = $this->calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, $tauxTva);
+        $prixUnitaireHt = $this->calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, $tauxTvaDuPrix);
+        // Le PU TTC que paie le client : sans la TVA retirée du prix, c'est
+        // son PU HT.
+        $prixUnitaireTtcPaye = $contexte->retireLaTvaDuPrix() ? $prixUnitaireHt : $prixUnitaireTtc;
         $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
 
         return [
@@ -195,11 +210,12 @@ class ConstructeurLigneDocument
             'prix_unitaire_ht' => $prixUnitaireHt,
             'prix_unitaire_ttc' => $prixUnitaireTtc,
             'taux_tva' => $tauxTva,
+            'taux_tva_du_prix' => $tauxTvaDuPrix,
             'remise_pourcentage' => $remise,
             'ordre' => $ordre,
             ...($contexte->calculeDepuisLeHtDeLigne()
-                ? ['montant_ht' => $this->calculateur->montantHtDeLigneProfessionnelle($prixUnitaireTtc, $tauxTva, $quantite, $remise)]
-                : $this->calculateur->montantsDeVente($prixUnitaireHt, $prixUnitaireTtc, $quantite, $remise)),
+                ? ['montant_ht' => $this->calculateur->montantHtDeLigneProfessionnelle($prixUnitaireTtc, $tauxTvaDuPrix, $quantite, $remise)]
+                : $this->calculateur->montantsDeVente($prixUnitaireHt, $prixUnitaireTtcPaye, $quantite, $remise)),
         ];
     }
 

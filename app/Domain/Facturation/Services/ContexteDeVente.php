@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Services;
 
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
@@ -16,14 +17,17 @@ use LogicException;
  * pour un particulier, depuis le HT de chaque ligne pour un professionnel
  * (E1, voir calculeDepuisLeHtDeLigne()) --, le régime de TVA du magasin --
  * en franchise en base, tout se vend à 0 % au même prix TTC, article par
- * article quel que soit le client (B10) -- et le taux proposé pour une
+ * article quel que soit le client (B10) --, la nature de l'opération --
+ * hors de la vente en France, tout se vend à 0 %, au prix sans la TVA
+ * française (K3, voir retireLaTvaDuPrix()) -- et le taux proposé pour une
  * ligne de service sans taux saisi, celui du territoire du magasin (B2).
  *
  * Un brouillon de facture ou un devis note le type du client et la
- * franchise à chaque enregistrement (colonnes()) : l'émission d'une
- * facture comme l'envoi d'un devis refuse un document dont le client a
- * changé de type depuis (voir refuserSiLeTypeDeClientAChange()), ou dont
- * le magasin a changé de régime depuis (voir refuserSiLeRegimeAChange()).
+ * franchise à chaque enregistrement (colonnes()), avec la nature qu'il
+ * choisit (voir NoteSaNatureDOperation) : l'émission d'une facture comme
+ * l'envoi d'un devis refuse un document dont le client a changé de type
+ * depuis (voir refuserSiLeTypeDeClientAChange()), ou dont le magasin a
+ * changé de régime depuis (voir refuserSiLeRegimeAChange()).
  */
 final readonly class ContexteDeVente
 {
@@ -31,20 +35,48 @@ final readonly class ContexteDeVente
         public TypeClient $typeClient,
         public bool $franchiseEnBase,
         public float $tauxTvaParDefaut,
+        public NatureOperation $natureOperation = NatureOperation::VenteEnFrance,
     ) {}
 
     /**
      * La vente qui s'enregistre maintenant pour ce client, dans ce magasin,
-     * avec son régime de TVA d'aujourd'hui. Un client pas encore choisi
-     * (formulaire en cours de saisie) compte comme un particulier.
+     * avec son régime de TVA d'aujourd'hui, de cette nature. Un client pas
+     * encore choisi (formulaire en cours de saisie) compte comme un
+     * particulier.
      */
-    public static function pour(?Client $client, Magasin $magasin): self
+    public static function pour(?Client $client, Magasin $magasin, NatureOperation $natureOperation = NatureOperation::VenteEnFrance): self
     {
         return new self(
             typeClient: $client->type_client ?? TypeClient::Particulier,
             franchiseEnBase: $magasin->estEnFranchiseDeTva(),
             tauxTvaParDefaut: $magasin->tauxTvaParDefaut(),
+            natureOperation: $natureOperation,
         );
+    }
+
+    /**
+     * Les lignes sont-elles à 0 % ? En franchise en base (B10), et hors de
+     * la vente en France : une vente qui sort de la TVA française n'en
+     * facture aucune.
+     */
+    public function exonere(): bool
+    {
+        return $this->franchiseEnBase || $this->natureOperation->exonere();
+    }
+
+    /**
+     * Le client paie-t-il le prix sans la TVA française (K3) ? Hors de la
+     * vente en France, hors franchise : un produit se vend au prix TTC de
+     * son catalogue ÷ (1 + son taux), et un service à son prix saisi sans
+     * TVA -- 1 000 articles à 1,00 € TTC à 20 % font 833,33 € pour un
+     * professionnel, 830,00 € pour un particulier, à 0,83 € l'article. En
+     * franchise, le client paie le même prix TTC, sans TVA, quelle que soit
+     * la nature, dont seule la vente en France s'émet (voir
+     * ControleNatureOperation).
+     */
+    public function retireLaTvaDuPrix(): bool
+    {
+        return ! $this->franchiseEnBase && $this->natureOperation->exonere();
     }
 
     /**
@@ -93,11 +125,12 @@ final readonly class ContexteDeVente
      * Une vente à un professionnel se calcule depuis le HT de chaque ligne,
      * quantité x PU TTC ÷ (1 + taux) arrondi une fois, et la TVA de chaque
      * taux sur le total HT de ses lignes (voir CalculateurLigne) ; une vente
-     * à un particulier, article par article. En franchise en base, toutes
-     * les lignes sont à 0 % et le client paie le même prix TTC, sans TVA
-     * (B10) : professionnel comme particulier, la vente se calcule article
-     * par article, remise comprise -- 9,99 € remisés de 50 % font 4,99 €
-     * pour l'un comme pour l'autre.
+     * à un particulier, article par article. Hors de la vente en France, de
+     * même, sans TVA (voir retireLaTvaDuPrix()). En franchise en base,
+     * toutes les lignes sont à 0 % et le client paie le même prix TTC, sans
+     * TVA (B10) : professionnel comme particulier, la vente se calcule
+     * article par article, remise comprise -- 9,99 € remisés de 50 % font
+     * 4,99 € pour l'un comme pour l'autre.
      */
     public function calculeDepuisLeHtDeLigne(): bool
     {

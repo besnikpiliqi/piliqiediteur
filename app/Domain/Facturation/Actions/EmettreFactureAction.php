@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Services\ReglagesCommunsDeLaSociete;
@@ -52,13 +53,21 @@ use LogicException;
  * client établi en France, son SIREN : sinon elle reste un brouillon,
  * sans numéro consommé ni signature. Les tickets restent possibles.
  *
+ * Une vente hors de la TVA française (export, livraison vers un DOM,
+ * livraison intracommunautaire, prestation à un professionnel établi hors
+ * de France) ne s'émet que si toutes les conditions de sa nature sont
+ * réunies ce jour-là (I1, I2, voir ControleNatureOperation) ; elle retient
+ * alors, s'il le faut, la vérification sur VIES du n° de TVA de son client
+ * qui la justifie.
+ *
  * Tout se fait dans une seule transaction, dans cet ordre (art. 286 I-3°
  * bis du CGI) :
  *  1. le registre fiscal du magasin actif est verrouillé, avant toute
  *     lecture, la facture et la numérotation (voir RegistreFiscal) ; il
  *     donne l'instant de l'émission ;
  *  2. la facture, relue verrouillée, prend la copie de son client (nom,
- *     adresse, identifiants), son numéro, dans la série et l'année de cet
+ *     adresse, identifiants), la vérification VIES que retient sa nature,
+ *     son numéro, dans la série et l'année de cet
  *     instant à l'heure de Paris, cet instant, en UTC, pour date
  *     d'émission (voir HorodateSonEmission), et son échéance : le jour de
  *     cet instant à Paris plus le délai de paiement du client, sinon celui
@@ -91,6 +100,7 @@ class EmettreFactureAction
         private readonly ContenuFiscal $contenuFiscal,
         private readonly EnregistrerPaiementAction $enregistrerPaiement,
         private readonly ReglagesCommunsDeLaSociete $reglagesCommuns,
+        private readonly ControleNatureOperation $controleNatureOperation,
     ) {}
 
     /**
@@ -128,12 +138,14 @@ class EmettreFactureAction
                 ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($facture->magasin, $instant);
             }
 
+            $consultationVies = $this->controleNatureOperation->verifier($facture, $instant->enHeureLocale());
             $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, $instant->enHeureLocale()->format('Y'));
 
             $facture->figerLeClient();
             $facture->forceFill([
                 'numero' => $numero,
                 'statut' => StatutFacture::Emise,
+                'consultation_vies_id' => $consultationVies?->getKey(),
                 'date_emission' => $instant->utc,
                 'date_echeance' => $instant->enHeureLocale()->addDays($facture->magasin->delaiDePaiementPour($facture->client))->toDateString(),
             ])->save();

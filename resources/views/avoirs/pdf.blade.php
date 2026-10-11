@@ -38,6 +38,7 @@
     @include('documents.pdf.lignes', [
         'lignes' => $avoir->lignes,
         'avecFactureDOrigine' => true,
+        'avecPrixTtc' => ! $avoir->nature_operation->exonere(),
         'noteDeCalcul' => app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($avoir),
     ])
 

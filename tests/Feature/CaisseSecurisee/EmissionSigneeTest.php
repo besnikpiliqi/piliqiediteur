@@ -7,16 +7,20 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TeteRegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
+use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
@@ -233,6 +237,9 @@ class EmissionSigneeTest extends TestCase
                     'etabli_en_france' => true,
                 ],
                 'franchise_en_base' => false,
+                'nature_operation' => 'vente_france',
+                'livraison' => ['adresse' => null, 'complement' => null, 'code_postal' => null, 'ville' => null, 'pays' => null, 'date' => null, 'transport_par' => null],
+                'consultation_vies_id' => null,
                 'cree_par' => $vendeuse->id,
                 'devis_id' => null,
                 'devise' => 'EUR',
@@ -240,8 +247,8 @@ class EmissionSigneeTest extends TestCase
                 'conditions_paiement' => null,
                 'notes' => null,
                 'lignes' => [
-                    ['ordre' => 0, 'nature' => 'bien', 'produit_id' => $cafe->id, 'service_id' => null, 'reference' => 'CAF-250', 'description' => 'Café moulu 250 g', 'quantite' => 2, 'prix_unitaire_ht' => 1000, 'prix_unitaire_ttc' => 1200, 'taux_tva' => 2000, 'remise' => 0, 'ht' => 2000, 'tva' => 400, 'ttc' => 2400],
-                    ['ordre' => 1, 'nature' => 'bien', 'produit_id' => $livre->id, 'service_id' => null, 'reference' => 'LIV-001', 'description' => 'Livre de recettes', 'quantite' => 1, 'prix_unitaire_ht' => 521, 'prix_unitaire_ttc' => 550, 'taux_tva' => 550, 'remise' => 0, 'ht' => 521, 'tva' => 29, 'ttc' => 550],
+                    ['ordre' => 0, 'nature' => 'bien', 'produit_id' => $cafe->id, 'service_id' => null, 'reference' => 'CAF-250', 'description' => 'Café moulu 250 g', 'quantite' => 2, 'prix_unitaire_ht' => 1000, 'prix_unitaire_ttc' => 1200, 'taux_tva' => 2000, 'taux_tva_du_prix' => 2000, 'remise' => 0, 'ht' => 2000, 'tva' => 400, 'ttc' => 2400],
+                    ['ordre' => 1, 'nature' => 'bien', 'produit_id' => $livre->id, 'service_id' => null, 'reference' => 'LIV-001', 'description' => 'Livre de recettes', 'quantite' => 1, 'prix_unitaire_ht' => 521, 'prix_unitaire_ttc' => 550, 'taux_tva' => 550, 'taux_tva_du_prix' => 550, 'remise' => 0, 'ht' => 521, 'tva' => 29, 'ttc' => 550],
                 ],
                 'ventilation' => [
                     ['taux' => 2000, 'ht' => 2000, 'tva' => 400, 'ttc' => 2400],
@@ -276,6 +283,7 @@ class EmissionSigneeTest extends TestCase
                 ],
                 'categorie_operation' => 'livraison_de_biens',
                 'mentions' => ["Catégorie de l'opération : Livraison de biens"],
+                'consultation_vies' => null,
                 'reglements' => [['paiement_id' => $paiement->id, 'mode' => 'carte_bancaire', 'reference' => 'TRX-42', 'montant' => 2950]],
                 'credits_avoir' => [],
             ],
@@ -329,6 +337,50 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame(['prix_unitaire_ht' => 83, 'prix_unitaire_ttc' => 100, 'ht' => 83333, 'tva' => 16667, 'ttc' => 100000], Arr::only($document['lignes'][0], ['prix_unitaire_ht', 'prix_unitaire_ttc', 'ht', 'tva', 'ttc']));
         $this->assertSame([['taux' => 2000, 'ht' => 83333, 'tva' => 16667, 'ttc' => 100000]], $document['ventilation']);
         $this->assertSame(['ht' => 83333, 'tva' => 16667, 'ttc' => 100000], $document['totaux']);
+    }
+
+    /**
+     * Une livraison intracommunautaire signe sa nature, sa livraison, sa
+     * ligne à 0 % au prix sans la TVA de son produit, sa mention et la
+     * vérification VIES qu'elle retient ; la vérification de l'intégrité
+     * la recalcule sans anomalie.
+     */
+    public function test_une_livraison_intracommunautaire_signe_sa_nature_sa_livraison_et_sa_verification_vies(): void
+    {
+        $this->travelTo('2026-10-09 10:15:30');
+        $magasin = $this->magasinActif();
+        $client = Client::factory()->etranger('DE', 'DE123456789')->create();
+        $consultation = ConsultationVies::forceCreate([
+            'client_id' => $client->id,
+            'numero_tva' => 'DE123456789',
+            'valide' => true,
+            'identifiant_consultation' => 'WAPIAAAAW1234567',
+            'consultee_le' => CarbonImmutable::parse('2026-10-09 09:00:00', 'Europe/Paris'),
+            'reponse' => '{"valid":true}',
+        ]);
+        $facture = $this->emettre($client, [[$this->produit('VIS-001', 'Vis à bois', 25), 12]], [
+            'nature_operation' => NatureOperation::LivraisonIntracommunautaire,
+            'livraison_adresse' => 'Musterstraße 1',
+            'livraison_code_postal' => '10115',
+            'livraison_ville' => 'Berlin',
+            'livraison_pays' => 'DE',
+            'livraison_date' => '2026-10-12',
+            'transport_par' => TransportPar::Acquereur,
+        ]);
+
+        $vente = $this->enregistrementDe($facture, ChaineFiscale::Vente);
+        $donnees = $this->contenu($vente)['donnees'];
+
+        $this->assertSignatureValide($vente);
+        $this->assertSame([
+            'nature_operation' => 'livraison_intracommunautaire',
+            'livraison' => ['adresse' => 'Musterstraße 1', 'complement' => null, 'code_postal' => '10115', 'ville' => 'Berlin', 'pays' => 'DE', 'date' => '2026-10-12', 'transport_par' => 'acquereur'],
+            'consultation_vies_id' => $consultation->id,
+        ], Arr::only($donnees['document'], ['nature_operation', 'livraison', 'consultation_vies_id']));
+        $this->assertSame(['prix_unitaire_ht' => 2083, 'prix_unitaire_ttc' => 2500, 'taux_tva' => 0, 'taux_tva_du_prix' => 2000, 'ht' => 25000, 'tva' => 0, 'ttc' => 25000], Arr::only($donnees['document']['lignes'][0], ['prix_unitaire_ht', 'prix_unitaire_ttc', 'taux_tva', 'taux_tva_du_prix', 'ht', 'tva', 'ttc']));
+        $this->assertSame(["Catégorie de l'opération : Livraison de biens", 'Exonération de TVA, article 262 ter I du CGI'], $donnees['contexte']['mentions']);
+        $this->assertSame(['numero_tva' => 'DE123456789', 'valide' => true, 'identifiant' => 'WAPIAAAAW1234567', 'consultee_le' => '2026-10-09T09:00:00+02:00'], $donnees['contexte']['consultation_vies']);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
 
     /**
@@ -517,13 +569,14 @@ class EmissionSigneeTest extends TestCase
                 'etabli_en_france' => true,
             ],
             'franchise_en_base' => false,
+            'nature_operation' => 'vente_france',
             'cree_par' => $vendeuse->id,
             'devise' => 'EUR',
             'motif' => 'Article abîmé',
             'corrige' => 'ticket',
             'documents_corriges' => [['numero' => 'TK-LYON1-2026-000001', 'date_emission' => '2026-10-09']],
             'lignes' => [
-                ['ordre' => 0, 'nature' => 'bien', 'produit_id' => $produit->id, 'reference' => 'A-020', 'description' => 'Article à 20 €', 'quantite' => -1, 'prix_unitaire_ht' => 1667, 'prix_unitaire_ttc' => 2000, 'taux_tva' => 2000, 'remise' => 0, 'ht' => -1667, 'tva' => -333, 'ttc' => -2000, 'origine' => ['ligne_facture_id' => $ligne->id, 'facture_id' => $ticket->id, 'numero' => 'TK-LYON1-2026-000001']],
+                ['ordre' => 0, 'nature' => 'bien', 'produit_id' => $produit->id, 'reference' => 'A-020', 'description' => 'Article à 20 €', 'quantite' => -1, 'prix_unitaire_ht' => 1667, 'prix_unitaire_ttc' => 2000, 'taux_tva' => 2000, 'taux_tva_du_prix' => 2000, 'remise' => 0, 'ht' => -1667, 'tva' => -333, 'ttc' => -2000, 'origine' => ['ligne_facture_id' => $ligne->id, 'facture_id' => $ticket->id, 'numero' => 'TK-LYON1-2026-000001']],
             ],
             'ventilation' => [['taux' => 2000, 'ht' => -1667, 'tva' => -333, 'ttc' => -2000]],
             'totaux' => ['ht' => -1667, 'tva' => -333, 'ttc' => -2000],

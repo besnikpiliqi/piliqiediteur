@@ -30,6 +30,32 @@ return new class extends Migration
             // EmettreFactureAction) ; ensuite, la mention se lit ici, jamais
             // sur le régime actuel du magasin (voir MentionsFiscales).
             $table->boolean('franchise_en_base')->default(false);
+            // La nature de la vente (NatureOperation) : en France, par
+            // défaut, ou hors de la TVA française (export, livraison vers un
+            // DOM, livraison intracommunautaire, prestation à un
+            // professionnel établi hors de France), écrite à chaque
+            // enregistrement du brouillon et contrôlée à l'émission (voir
+            // ControleNatureOperation) ; l'avoir qui corrige la facture la
+            // reprend.
+            $table->string('nature_operation', 40)->default('vente_france');
+            // Où et comment partent les biens d'un export, d'une livraison
+            // vers un DOM ou d'une livraison intracommunautaire (voir
+            // NatureOperation::exigeUneLivraison()) : vides pour toute autre
+            // nature. transport_par : TransportPar.
+            $table->string('livraison_adresse')->nullable();
+            $table->string('livraison_complement')->nullable();
+            $table->string('livraison_code_postal', 10)->nullable();
+            $table->string('livraison_ville', 100)->nullable();
+            $table->string('livraison_pays', 2)->nullable();
+            $table->date('livraison_date')->nullable();
+            $table->string('transport_par', 20)->nullable();
+            // La vérification sur VIES du n° de TVA du client que retient
+            // l'émission d'une livraison intracommunautaire ou d'une
+            // prestation autoliquidée : valide, du jour de l'émission, pour
+            // le n° que la facture copie (voir ControleNatureOperation).
+            // Choisie dans le magasin de la facture, jamais reçue d'un
+            // formulaire ; une preuve ne se supprime pas.
+            $table->foreignId('consultation_vies_id')->nullable()->constrained('consultations_vies')->restrictOnDelete();
             // La copie du client prise à l'émission (voir FigeLeClient) :
             // nom, adresse et identifiants tels qu'ils s'impriment et se
             // signent au registre fiscal, que la fiche du client change ou

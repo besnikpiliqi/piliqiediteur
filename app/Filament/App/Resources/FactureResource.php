@@ -6,6 +6,7 @@ use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
@@ -20,10 +21,12 @@ use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\MentionsFiscales;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource\Pages;
+use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
@@ -40,6 +43,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
@@ -53,6 +57,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class FactureResource extends Resource
 {
+    use ChoisitLaNatureDeLOperation;
     use EnvoieLesDocuments;
     use GereLesExceptionsMetier;
     use SaisitUneQuantiteRetournee;
@@ -101,6 +106,7 @@ class FactureResource extends Resource
                     ->preload()
                     ->required()
                     ->live()
+                    ->afterStateUpdated(fn (Get $get, Set $set) => self::ajusterLaNatureAuClient($get, $set))
                     ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id')))
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
@@ -111,9 +117,12 @@ class FactureResource extends Resource
                 Placeholder::make('echeance')
                     ->label('Échéance')
                     ->content(fn (Get $get): string => self::echeanceAnnoncee($get('client_id'))),
+                self::champNatureDeLOperation(),
                 Textarea::make('conditions_paiement')->label('Conditions de paiement')->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
+
+            self::sectionLivraison(),
 
             FormSection::make('Lignes')->schema([
                 // Lignes modifiables tant que la facture n'est pas émise :
@@ -151,7 +160,14 @@ class FactureResource extends Resource
                 TextEntry::make('date_emission')->label('Émise le')->dateTime('d/m/Y')->placeholder('—'),
                 TextEntry::make('date_echeance')->label('Échéance')->date('d/m/Y')->placeholder('Fixée à l\'émission'),
                 TextEntry::make('creePar.name')->label('Créée par'),
+                self::natureEntry(),
+                TextEntry::make('consultation_vies')
+                    ->label('Vérification VIES retenue')
+                    ->state(fn (Facture $record): ?string => $record->consultationVies?->reference())
+                    ->visible(fn (Facture $record): bool => $record->consultation_vies_id !== null),
             ])->columns(3),
+
+            self::livraisonSection(),
 
             InfolistSection::make('Lignes')->schema([
                 self::lignesEntry($infolist->getRecord()),
@@ -309,6 +325,34 @@ class FactureResource extends Resource
     }
 
     /**
+     * La nature de l'opération d'une facture ou d'un devis, avec la mention
+     * qu'elle imprime (voir NatureOperation).
+     */
+    public static function natureEntry(): TextEntry
+    {
+        return TextEntry::make('nature_operation')
+            ->label('Nature de l\'opération')
+            ->helperText(fn (Facture|Devis $record): ?string => $record->nature_operation->mention());
+    }
+
+    /**
+     * La livraison d'une facture ou d'un devis qui en demande une (voir
+     * NoteSaNatureDOperation::lignesDeLivraison()).
+     */
+    public static function livraisonSection(): InfolistSection
+    {
+        return InfolistSection::make('Livraison')
+            ->visible(fn (Facture|Devis $record): bool => $record->nature_operation->exigeUneLivraison())
+            ->schema([
+                TextEntry::make('livraison')
+                    ->hiddenLabel()
+                    ->state(fn (Facture|Devis $record): array => $record->lignesDeLivraison())
+                    ->listWithLineBreaks()
+                    ->placeholder('Livraison à renseigner'),
+            ]);
+    }
+
+    /**
      * Lignes d'un document (facture, avoir, devis, facture d'achat, avoir
      * fournisseur) : pour chaque article son PU HT, son PU TTC et son taux,
      * puis le HT, la TVA et le TTC de la ligne (voir CalculateurLigne). Un
@@ -458,7 +502,10 @@ class FactureResource extends Resource
                     ->requiresConfirmation()
                     ->modalDescription('Un numéro définitif sera attribué, l\'échéance fixée et le stock décrémenté. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && auth()->user()->can('emettre', $record))
-                    ->action(fn (Facture $record) => static::executerSansCasser(fn () => app(EmettreFactureAction::class)->handle($record))),
+                    ->action(fn (Facture $record) => static::executerSansCasser(function () use ($record): void {
+                        self::verifierLeNumeroTvaSurViesSiBesoin($record);
+                        app(EmettreFactureAction::class)->handle($record);
+                    })),
                 Tables\Actions\Action::make('encaisser')
                     ->label('Encaisser')
                     ->icon('heroicon-o-banknotes')
@@ -562,6 +609,25 @@ class FactureResource extends Resource
                     static::suppressionEnMasse(),
                 ]),
             ]);
+    }
+
+    /**
+     * Une livraison intracommunautaire ou une prestation autoliquidée ne
+     * s'émet qu'avec le n° de TVA du client trouvé valide sur VIES le jour
+     * même (voir ControleNatureOperation) : faute de vérification valide
+     * aujourd'hui, l'émission interroge d'abord VIES, hors de toute
+     * transaction (voir VerifierNumeroTvaAction). VIES injoignable, rien
+     * n'est émis, et le refus le dit.
+     */
+    private static function verifierLeNumeroTvaSurViesSiBesoin(Facture $facture): void
+    {
+        $client = $facture->client;
+
+        if ($facture->nature_operation->exigeVies()
+            && $client->aUnNumeroTvaVerifiableSurVies()
+            && app(ControleNatureOperation::class)->consultationDuJour($client, now()) === null) {
+            app(VerifierNumeroTvaAction::class)->handle($client);
+        }
     }
 
     public static function getPages(): array

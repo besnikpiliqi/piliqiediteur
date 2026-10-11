@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Enums;
 
+use App\Domain\Facturation\Services\TerritoireFiscal;
 use Illuminate\Support\Str;
 
 /**
@@ -27,34 +28,24 @@ enum TerritoireTva: string
     case GuyaneMayotte = 'guyane_mayotte';
 
     /**
-     * Saint-Barthélemy et Saint-Martin, collectivités d'outre-mer, ont un
-     * code postal de la Guadeloupe.
-     */
-    private const CODES_POSTAUX_COLLECTIVITES_DE_GUADELOUPE = ['97133', '97150'];
-
-    /**
      * Le territoire d'une adresse en France, d'après son code postal : 20
-     * pour la Corse, 971 (Guadeloupe), 972 (Martinique) et 974 (La
-     * Réunion), 973 (Guyane) et 976 (Mayotte) ; aucun pour une collectivité
-     * d'outre-mer (975, 977, 978, 98 et les deux codes de Saint-Barthélemy
-     * et de Saint-Martin) ni pour une adresse hors de France. Tout autre
-     * code postal, ou aucun, est en métropole.
+     * pour la Corse ; le département d'outre-mer, 971 (Guadeloupe), 972
+     * (Martinique) et 974 (La Réunion), 973 (Guyane) et 976 (Mayotte),
+     * comme pour une livraison (voir TerritoireFiscal::departementDom()) ;
+     * aucun pour une collectivité d'outre-mer (voir
+     * TerritoireFiscal::estUneCollectiviteDOutreMer()) ni pour une adresse
+     * hors de France. Tout autre code postal, ou aucun, est en métropole.
      */
     public static function depuisAdresse(?string $pays, ?string $codePostal): ?self
     {
-        if (Str::upper(trim((string) $pays)) !== 'FR') {
+        if (Str::upper(trim((string) $pays)) !== 'FR' || TerritoireFiscal::estUneCollectiviteDOutreMer('FR', $codePostal)) {
             return null;
         }
 
-        $code = (string) preg_replace('/\s+/', '', (string) $codePostal);
-
-        return match (true) {
-            str_starts_with($code, '20') => self::Corse,
-            in_array($code, self::CODES_POSTAUX_COLLECTIVITES_DE_GUADELOUPE, true) => null,
-            Str::startsWith($code, ['971', '972', '974']) => self::AntillesReunion,
-            Str::startsWith($code, ['973', '976']) => self::GuyaneMayotte,
-            Str::startsWith($code, ['975', '977', '978', '98']) => null,
-            default => self::Metropole,
+        return match (TerritoireFiscal::departementDom('FR', $codePostal)) {
+            '971', '972', '974' => self::AntillesReunion,
+            '973', '976' => self::GuyaneMayotte,
+            default => str_starts_with((string) preg_replace('/\s+/', '', (string) $codePostal), '20') ? self::Corse : self::Metropole,
         };
     }
 

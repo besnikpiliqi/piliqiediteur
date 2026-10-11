@@ -22,6 +22,18 @@ return new class extends Migration
             // que PostgreSQL et SQLite comparent octet par octet.
             $table->string('nom_normalise', Service::LONGUEUR_MAXIMALE_CLE);
 
+            // Des frais qui accompagnent la livraison de biens (port,
+            // emballage, assurance) : ils suivent la nature de la vente, et
+            // une livraison hors de France peut les porter (voir
+            // ControleNatureOperation).
+            $table->boolean('frais_accessoires')->default(false);
+            // Un service dont la loi fixe le lieu ailleurs que chez le client
+            // (immeuble, transport de personnes, location courte de
+            // véhicule, restauration, accès à un événement, art. 259 A du
+            // CGI) : jamais facturé sans TVA française à un professionnel
+            // étranger (voir ControleNatureOperation).
+            $table->boolean('lieu_specifique')->default(false);
+
             // Un service n'est jamais supprimé (des lignes de vente y
             // renvoient) : on l'archive pour le retirer de la caisse.
             $table->boolean('actif')->default(true);

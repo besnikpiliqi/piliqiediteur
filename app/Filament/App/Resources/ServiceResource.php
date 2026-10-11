@@ -14,9 +14,11 @@ use Filament\Tables\Table;
 
 /**
  * Les services que la caisse propose en cases à cocher (voir Caisse) :
- * corriger un nom mal tapé, ou retirer de la caisse un service que le
- * magasin ne fait plus. Jamais supprimé (voir ServicePolicy::delete()) :
- * les factures passées gardent de toute façon leur propre description.
+ * corriger un nom mal tapé, retirer de la caisse un service que le
+ * magasin ne fait plus, ou dire ce qu'une vente hors de France en fait
+ * (frais accessoires, lieu fixé par la loi, voir Service). Jamais supprimé
+ * (voir ServicePolicy::delete()) : les factures passées gardent de toute
+ * façon leur propre description.
  */
 class ServiceResource extends Resource
 {
@@ -43,6 +45,18 @@ class ServiceResource extends Resource
                 ->label('Proposé à la caisse')
                 ->helperText('Désactivé, il n\'apparaît plus dans les cases à cocher de la caisse. Les factures déjà faites ne changent pas.')
                 ->default(true)
+                ->columnSpanFull(),
+            // Ce qu'une vente hors de France en fait (voir
+            // ControleNatureOperation).
+            Toggle::make('frais_accessoires')
+                ->label('Frais de livraison ou accessoires : port, emballage, assurance')
+                ->helperText('Ils suivent les biens qu\'ils accompagnent : un export ou une livraison intracommunautaire peut les facturer sans TVA française.')
+                ->default(false)
+                ->columnSpanFull(),
+            Toggle::make('lieu_specifique')
+                ->label('Lieu fixé par la loi : immeuble, transport de personnes, location courte de véhicule, restauration, accès à un événement')
+                ->helperText('Jamais facturé sans TVA française à un professionnel établi à l\'étranger (art. 259 A du CGI).')
+                ->default(false)
                 ->columnSpanFull(),
         ]);
     }
@@ -89,6 +103,8 @@ class ServiceResource extends Resource
             ->columns([
                 Tables\Columns\TextColumn::make('nom')->rechercheSansAccents()->sortable(),
                 Tables\Columns\IconColumn::make('actif')->label('Proposé à la caisse')->boolean(),
+                Tables\Columns\IconColumn::make('frais_accessoires')->label('Frais accessoires')->boolean()->toggleable(),
+                Tables\Columns\IconColumn::make('lieu_specifique')->label('Lieu fixé par la loi')->boolean()->toggleable(),
                 Tables\Columns\TextColumn::make('created_at')->label('Créé le')->date('d/m/Y')->sortable(),
             ])
             ->defaultSort('nom')

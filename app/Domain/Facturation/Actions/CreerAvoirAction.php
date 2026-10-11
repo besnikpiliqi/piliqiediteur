@@ -38,7 +38,12 @@ use LogicException;
  *
  * Jamais non plus de documents émis en franchise en base de TVA et
  * d'autres : l'avoir reprend leur franchise, dont il imprime la mention
- * (voir MentionsFiscales), et ses lignes leurs taux, 0 % en franchise.
+ * (voir MentionsFiscales), et ses lignes leurs taux, 0 % en franchise. Ni
+ * de documents de natures d'opération différentes (une vente en France et
+ * un export...) : l'avoir reprend leur nature et sa mention, ses lignes
+ * se calculent comme les leurs, sans TVA hors de la vente en France, et
+ * la facture électronique interdit de mélanger une prestation hors du
+ * champ de la TVA avec une autre catégorie (règle BR-O-11).
  *
  * L'avoir créé ici reste un brouillon jusqu'à son émission : l'interface
  * passe toujours par EnregistrerAvoirAction, qui fait les deux d'un seul
@@ -70,6 +75,7 @@ class CreerAvoirAction
             $lignesDeLAvoir = [];
             $typeClient = null;
             $franchiseEnBase = null;
+            $natureOperation = null;
 
             foreach (array_values($lignesSelectionnees) as $index => $selection) {
                 $ligneFacture = LigneFacture::query()
@@ -104,6 +110,12 @@ class CreerAvoirAction
                     throw new InvalidArgumentException('Un avoir ne mélange pas des factures émises en franchise de TVA et d\'autres : faites deux avoirs.');
                 }
 
+                $natureOperation ??= $facture->nature_operation;
+
+                if ($facture->nature_operation !== $natureOperation) {
+                    throw new InvalidArgumentException('Un avoir ne mélange pas des factures de natures d\'opération différentes : faites un avoir par nature.');
+                }
+
                 $restante = $ligneFacture->quantiteCreditableRestante();
                 $quantite = QuantiteEntiere::depuisSaisie($selection['quantite'] ?? null, 'La quantité à créditer');
 
@@ -121,6 +133,7 @@ class CreerAvoirAction
                     'prix_unitaire_ht' => $ligneFacture->prix_unitaire_ht,
                     'prix_unitaire_ttc' => $ligneFacture->prix_unitaire_ttc,
                     'taux_tva' => $ligneFacture->taux_tva,
+                    'taux_tva_du_prix' => $ligneFacture->taux_tva_du_prix,
                     'remise_pourcentage' => $ligneFacture->remise_pourcentage,
                     'ordre' => $index,
                     ...$ligneFacture->montantsDuRetour($quantite),
@@ -132,6 +145,7 @@ class CreerAvoirAction
                 'client_id' => $client->getKey(),
                 'type_client' => $typeClient,
                 'franchise_en_base' => $franchiseEnBase,
+                'nature_operation' => $natureOperation,
                 ...$this->calculateurLigne->totaliser($lignesDeLAvoir),
             ])->save();
 

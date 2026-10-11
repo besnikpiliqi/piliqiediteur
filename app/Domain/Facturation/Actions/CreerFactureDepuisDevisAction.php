@@ -15,10 +15,11 @@ use LogicException;
  * voir EmettreFactureAction) -- aucun recalcul de prix, comme
  * CreerAvoirAction reprend les lignes de la facture plutôt que de les
  * reconstruire via ConstructeurLigneDocument. La facture prend aussi le
- * type de client du devis et sa franchise de TVA : si le client a changé
- * de type depuis, ou le magasin de régime, l'émission le signale (voir
- * EmettreFactureAction). Converti, le devis n'est plus modifiable (voir
- * Devis::estModifiable()).
+ * type de client du devis, sa franchise de TVA, sa nature d'opération et
+ * sa livraison : si le client a changé de type depuis, ou le magasin de
+ * régime, l'émission le signale, et elle contrôle les conditions de la
+ * nature (voir EmettreFactureAction). Converti, le devis n'est plus
+ * modifiable (voir Devis::estModifiable()).
  */
 class CreerFactureDepuisDevisAction
 {
@@ -44,6 +45,7 @@ class CreerFactureDepuisDevisAction
                 'devis_id' => $devis->id,
                 'type_client' => $devis->type_client,
                 'franchise_en_base' => $devis->franchise_en_base,
+                ...$devis->only(['nature_operation', 'livraison_adresse', 'livraison_complement', 'livraison_code_postal', 'livraison_ville', 'livraison_pays', 'livraison_date', 'transport_par']),
             ])->save();
 
             foreach ($devis->lignes as $ligne) {
@@ -57,6 +59,7 @@ class CreerFactureDepuisDevisAction
                     'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
                     'prix_unitaire_ttc' => $ligne->prix_unitaire_ttc,
                     'taux_tva' => $ligne->taux_tva,
+                    'taux_tva_du_prix' => $ligne->taux_tva_du_prix,
                     'remise_pourcentage' => $ligne->remise_pourcentage,
                     'montant_ht' => $ligne->montant_ht,
                     'montant_tva' => $ligne->montant_tva,

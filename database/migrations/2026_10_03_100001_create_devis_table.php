@@ -21,6 +21,18 @@ return new class extends Migration
             // enregistrement du devis (voir ContexteDeVente) ? Comme le type
             // du client, la facture qui en est tirée le reprend.
             $table->boolean('franchise_en_base')->default(false);
+            // La nature de la vente proposée (NatureOperation) et, pour des
+            // biens qui partent hors de France, leur livraison : mêmes
+            // colonnes que la facture, qui les reprend du devis converti
+            // (voir CreerFactureDepuisDevisAction).
+            $table->string('nature_operation', 40)->default('vente_france');
+            $table->string('livraison_adresse')->nullable();
+            $table->string('livraison_complement')->nullable();
+            $table->string('livraison_code_postal', 10)->nullable();
+            $table->string('livraison_ville', 100)->nullable();
+            $table->string('livraison_pays', 2)->nullable();
+            $table->date('livraison_date')->nullable();
+            $table->string('transport_par', 20)->nullable();
             // nullable tant que le devis est en brouillon : la numérotation
             // n'intervient qu'à l'envoi (voir DocumentNumberingService).
             $table->string('numero', 40)->nullable();

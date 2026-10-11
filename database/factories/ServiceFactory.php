@@ -24,4 +24,21 @@ class ServiceFactory extends Factory
     {
         return $this->state(['actif' => false]);
     }
+
+    /**
+     * Des frais de port, d'emballage ou d'assurance, qui suivent la
+     * livraison des biens qu'ils accompagnent.
+     */
+    public function fraisAccessoires(): static
+    {
+        return $this->state(['frais_accessoires' => true]);
+    }
+
+    /**
+     * Un service dont la loi fixe le lieu (immeuble, restauration...).
+     */
+    public function lieuSpecifique(): static
+    {
+        return $this->state(['lieu_specifique' => true]);
+    }
 }

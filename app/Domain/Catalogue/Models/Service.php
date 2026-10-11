@@ -14,9 +14,16 @@ use InvalidArgumentException;
  * Un service que le magasin réalise (remplacement d'écran, main-d'œuvre,
  * pose de protection...) : la caisse propose en cases à cocher ceux déjà
  * créés, et en crée un nouveau quand il manque (voir
- * TrouverOuCreerServiceAction). Juste un nom : le prix se saisit en TTC à
- * chaque vente, la ligne en garde une copie figée (voir
- * ConstructeurLigneDocument).
+ * TrouverOuCreerServiceAction). Un nom, sans prix : le prix se saisit à
+ * chaque vente, TTC en France, sans TVA hors de la TVA française, et la
+ * ligne en garde une copie figée (voir ConstructeurLigneDocument). Deux
+ * marques disent ce qu'une vente hors de France en fait (voir
+ * ControleNatureOperation) : des frais accessoires (port, emballage,
+ * assurance) suivent la livraison des biens qu'ils accompagnent ; un
+ * service au lieu fixé par la loi (immeuble, transport de personnes,
+ * location courte de véhicule, restauration, accès à un événement, art.
+ * 259 A du CGI) ne se facture jamais sans TVA française à un
+ * professionnel étranger.
  */
 class Service extends Model
 {
@@ -34,10 +41,14 @@ class Service extends Model
     protected $fillable = [
         'nom',
         'actif',
+        'frais_accessoires',
+        'lieu_specifique',
     ];
 
     protected $casts = [
         'actif' => 'boolean',
+        'frais_accessoires' => 'boolean',
+        'lieu_specifique' => 'boolean',
     ];
 
     protected static function booted(): void

@@ -160,6 +160,26 @@ class ServiceResourceTest extends TestCase
             ->assertTableActionHidden('edit', $serviceAutreMagasin->getKey());
     }
 
+    /**
+     * Ce qu'une vente hors de France fait d'un service (voir
+     * ControleNatureOperation) se coche dans sa fiche.
+     */
+    public function test_le_proprietaire_marque_des_frais_accessoires_et_un_lieu_fixe_par_la_loi(): void
+    {
+        $this->connecterProprietaire();
+        $port = Service::factory()->create(['nom' => 'Frais de port']);
+        $salle = Service::factory()->create(['nom' => 'Location de salle']);
+
+        Livewire::test(ManageServices::class)
+            ->callTableAction('edit', $port, data: ['nom' => 'Frais de port', 'frais_accessoires' => true])
+            ->assertHasNoTableActionErrors()
+            ->callTableAction('edit', $salle, data: ['nom' => 'Location de salle', 'lieu_specifique' => true])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame([true, false], [$port->fresh()->frais_accessoires, $port->fresh()->lieu_specifique]);
+        $this->assertSame([false, true], [$salle->fresh()->frais_accessoires, $salle->fresh()->lieu_specifique]);
+    }
+
     private function connecterProprietaire(): Magasin
     {
         $proprietaire = User::factory()->create();

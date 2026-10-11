@@ -25,6 +25,11 @@ use InvalidArgumentException;
  *    paie 830,00 € HT + 170,00 € de TVA. Chacun de ses retours se
  *    recalcule de même, par différence de cumul, le dernier soldant la
  *    ligne au centime (retourDeLigneProfessionnelle()).
+ * 2 bis. Une vente hors de la TVA française (export, livraison vers un
+ *    DOM, livraison intracommunautaire...) se calcule comme aux points 1
+ *    et 2, au taux du produit, puis sans TVA : le client paie le HT, 830,00
+ *    € pour un particulier, 833,33 € pour un professionnel (voir
+ *    ContexteDeVente::retireLaTvaDuPrix()).
  * 3. Un magasin en franchise en base vend à 0 % (voir
  *    ConstructeurLigneDocument), article par article comme au point 1,
  *    au particulier comme au professionnel (voir
@@ -167,9 +172,13 @@ class CalculateurLigne
      * montants. Le crédit d'un retour est ce cumul moins ce que les retours
      * précédents ont crédité (voir retourCumule()) : 2 x 40,00 € TTC à
      * 20 % (66,67 € HT + 13,33 € de TVA) se rendent en 33,33 € + 6,67 €,
-     * puis 33,34 € + 6,66 €, 40,00 € chaque fois.
+     * puis 33,34 € + 6,66 €, 40,00 € chaque fois. Le HT se calcule au taux
+     * que comprend le PU TTC de la ligne, la TVA à son taux : vendue hors
+     * de la TVA française, la ligne est à 0 % et son PU TTC comprend encore
+     * la TVA de son produit -- 500 des 1 000 articles à 1,00 € TTC à 20 %
+     * rendent 416,67 € HT, sans TVA.
      *
-     * @param  array{prix_unitaire_ttc: float|string, taux_tva: float|string, quantite: int, remise_pourcentage: float|string, montant_ht: float|string, montant_tva: float|string}  $ligne
+     * @param  array{prix_unitaire_ttc: float|string, taux_tva: float|string, taux_tva_du_prix: float|string, quantite: int, remise_pourcentage: float|string, montant_ht: float|string, montant_tva: float|string}  $ligne
      * @param  int  $quantiteRendue  tous les articles rendus jusqu'ici, ce retour compris
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
      *
@@ -189,17 +198,16 @@ class CalculateurLigne
             return $this->montants($htDeLaLigne, $htDeLaLigne + $tvaDeLaLigne);
         }
 
-        $tauxTva = (float) $ligne['taux_tva'];
-        $this->verifierTauxTva($tauxTva);
+        $this->verifierTauxTva((float) $ligne['taux_tva']);
+        $this->verifierTauxTva((float) $ligne['taux_tva_du_prix']);
 
-        $tauxCentiemes = $this->versUnites($tauxTva, 100);
         $htRendu = $this->htDeLigneProfessionnelleCentimes(
             $this->versUnites((float) $ligne['prix_unitaire_ttc'], 100),
-            $tauxCentiemes,
+            $this->versUnites((float) $ligne['taux_tva_du_prix'], 100),
             $quantiteRendue,
             $this->remiseEnCentiemes((float) $ligne['remise_pourcentage']),
         );
-        $tvaRendue = min($tvaDeLaLigne, $this->diviserArrondi($this->multiplier($htRendu, $tauxCentiemes), 10000));
+        $tvaRendue = min($tvaDeLaLigne, $this->diviserArrondi($this->multiplier($htRendu, $this->versUnites((float) $ligne['taux_tva'], 100)), 10000));
 
         return $this->montants($htRendu, $htRendu + $tvaRendue);
     }

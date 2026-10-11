@@ -5,9 +5,12 @@ namespace App\Domain\Facturation\Models;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
+use App\Domain\Facturation\Concerns\NoteSaNatureDOperation;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
+use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutDevis;
+use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\DevisFactory;
@@ -22,15 +25,15 @@ use LogicException;
 class Devis extends Model implements DocumentEnvoyable
 {
     /** @use HasFactory<DevisFactory> */
-    use BelongsToMagasin, EstEnvoyeParEmail, HasFactory, SoftDeletes, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, HasFactory, NoteSaNatureDOperation, SoftDeletes, VentileLaTvaParTaux;
 
     protected $table = 'devis';
 
-    // numero, statut, date_emission, les totaux, le type du client et la
-    // franchise de TVA sont volontairement absents : ils ne sont écrits que
-    // par les actions des devis (CreerDevisAction, ModifierDevisAction,
-    // EmettreDevisAction...), jamais par mass assignment depuis une requête
-    // utilisateur.
+    // numero, statut, date_emission, les totaux, le type du client, la
+    // franchise de TVA, la nature d'opération et la livraison sont
+    // volontairement absents : ils ne sont écrits que par les actions des
+    // devis (CreerDevisAction, ModifierDevisAction, EmettreDevisAction...),
+    // jamais par mass assignment depuis une requête utilisateur.
     protected $fillable = [
         'client_id',
         'date_validite',
@@ -39,10 +42,22 @@ class Devis extends Model implements DocumentEnvoyable
         'notes',
     ];
 
+    /**
+     * La vente en France tant qu'aucune nature n'est notée, comme en base.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'nature_operation' => 'vente_france',
+    ];
+
     protected $casts = [
         'statut' => StatutDevis::class,
         'type_client' => TypeClient::class,
         'franchise_en_base' => 'boolean',
+        'nature_operation' => NatureOperation::class,
+        'livraison_date' => 'date',
+        'transport_par' => TransportPar::class,
         'date_emission' => 'datetime',
         'date_validite' => 'date',
         'total_ht' => 'decimal:2',

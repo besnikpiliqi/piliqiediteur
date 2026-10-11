@@ -32,8 +32,11 @@
         'titre' => $facture->estPourUnProfessionnel() ? 'Facturé à' : 'Client',
     ])
 
+    @include('documents.pdf.livraison', ['lignes' => $facture->lignesDeLivraison()])
+
     @include('documents.pdf.lignes', [
         'lignes' => $facture->lignes,
+        'avecPrixTtc' => ! $facture->nature_operation->exonere(),
         'noteDeCalcul' => app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($facture),
     ])
 
@@ -96,8 +99,8 @@
         @endforeach
     @endif
 
-    {{-- Catégorie de l'opération, franchise de TVA, option pour les débits :
-         voir MentionsFiscales. --}}
+    {{-- Catégorie et nature de l'opération, franchise de TVA, option pour
+         les débits : voir MentionsFiscales. --}}
     @foreach(app(\App\Domain\Facturation\Services\MentionsFiscales::class)->pour($facture, $emetteur) as $mention)
         <div class="pied">{{ $mention }}</div>
     @endforeach

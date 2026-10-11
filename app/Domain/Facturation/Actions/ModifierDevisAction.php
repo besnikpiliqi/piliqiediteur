@@ -26,8 +26,8 @@ use LogicException;
  *
  * Comme CreerDevisAction, elle reçoit le client déjà résolu par une
  * requête limitée au magasin, jamais un client_id brut venu du formulaire,
- * et note de nouveau son type et le régime de TVA du magasin, avec
- * lesquels les lignes se recalculent.
+ * et note de nouveau son type, le régime de TVA du magasin et la nature de
+ * l'opération, avec lesquels les lignes se recalculent.
  */
 class ModifierDevisAction
 {
@@ -55,8 +55,8 @@ class ModifierDevisAction
                 });
             }
 
-            $contexte = ContexteDeVente::pour($client, app(TenantContext::class)->magasin());
-            $devis->fill($attributs)->forceFill([
+            $contexte = ContexteDeVente::pour($client, app(TenantContext::class)->magasin(), $devis->fill($attributs)->noterSaNatureDOperation($attributs));
+            $devis->forceFill([
                 'client_id' => $client->getKey(),
                 ...$contexte->colonnes(),
                 'statut' => StatutDevis::Brouillon,

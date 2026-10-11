@@ -30,8 +30,10 @@ use Illuminate\Support\Collection;
  *   de ses lignes : numéro, date d'émission, client (son type et la copie
  *   prise à l'émission, voir FigeLeClient, ainsi que le drapeau du client
  *   comptoir, lu sur sa fiche où seul CreerMagasinAction le pose),
- *   franchise de TVA (voir ContexteDeVente), auteur, devise, échéance,
- *   conditions, notes ou motif, lignes, ventilation par taux et totaux.
+ *   franchise de TVA (voir ContexteDeVente), nature d'opération (voir
+ *   NatureOperation) et, pour une facture, livraison et vérification VIES
+ *   retenue, auteur, devise, échéance, conditions, notes ou motif, lignes,
+ *   ventilation par taux et totaux.
  *   Un avoir s'y écrit en négatif (quantités et montants), cite le numéro
  *   et la date d'émission de chaque ticket ou facture qu'il corrige, et
  *   chacune de ses lignes y référence la ligne et le numéro du document
@@ -42,7 +44,9 @@ use Illuminate\Support\Collection;
  *   l'émetteur, tel que le magasin est ce jour-là (voir Emetteur), que le
  *   document imprime ensuite pour toujours (voir FigeSonEmetteur), la
  *   catégorie de l'opération, les mentions fiscales imprimées (voir
- *   MentionsFiscales), et ce qui a réglé le document dans la même
+ *   MentionsFiscales), pour une facture la vérification VIES qu'elle
+ *   retient (n° vérifié, résultat, n° de consultation, instant), et ce
+ *   qui a réglé le document dans la même
  *   transaction (paiements et crédits d'avoir d'une facture, bon d'avoir
  *   d'un ticket au comptoir compris, imputations d'un avoir sur les
  *   factures de son client) ; le crédit qu'impute un paiement est signé
@@ -160,6 +164,17 @@ class ContenuFiscal
             'date_emission' => $facture->date_emission?->toIso8601String(),
             'client' => $this->clientFige($facture),
             'franchise_en_base' => $facture->franchise_en_base,
+            'nature_operation' => $facture->nature_operation->value,
+            'livraison' => [
+                'adresse' => $facture->livraison_adresse,
+                'complement' => $facture->livraison_complement,
+                'code_postal' => $facture->livraison_code_postal,
+                'ville' => $facture->livraison_ville,
+                'pays' => $facture->livraison_pays,
+                'date' => $facture->livraison_date?->toDateString(),
+                'transport_par' => $facture->transport_par?->value,
+            ],
+            'consultation_vies_id' => $this->identifiant($facture->consultation_vies_id),
             'cree_par' => $this->identifiant($facture->cree_par),
             'devis_id' => $this->identifiant($facture->devis_id),
             'devise' => $facture->devise,
@@ -175,13 +190,20 @@ class ContenuFiscal
      */
     private function contexteDeLaFacture(Facture $facture): array
     {
-        $facture->load(['lignes', 'magasin', 'allocationsPaiement.paiement', 'allocationsAvoir.avoir']);
+        $facture->load(['lignes', 'magasin', 'consultationVies', 'allocationsPaiement.paiement', 'allocationsAvoir.avoir']);
         $emetteur = Emetteur::duMagasin($facture->magasin);
+        $consultation = $facture->consultationVies;
 
         return [
             'emetteur' => $emetteur->enTableau(),
             'categorie_operation' => CategorieOperation::depuisNatures($facture->lignes->pluck('nature'))->value,
             'mentions' => $this->mentions->pour($facture, $emetteur),
+            'consultation_vies' => $consultation === null ? null : [
+                'numero_tva' => $consultation->numero_tva,
+                'valide' => $consultation->valide,
+                'identifiant' => $consultation->identifiant_consultation,
+                'consultee_le' => $consultation->consultee_le->toIso8601String(),
+            ],
             'reglements' => $facture->allocationsPaiement->sortBy('id')
                 ->map(fn (PaiementAllocation $allocation): array => [
                     'paiement_id' => (int) $allocation->paiement_id,
@@ -215,6 +237,7 @@ class ContenuFiscal
             'date_emission' => $avoir->date_emission?->toIso8601String(),
             'client' => $this->clientFige($avoir),
             'franchise_en_base' => $avoir->franchise_en_base,
+            'nature_operation' => $avoir->nature_operation->value,
             'cree_par' => $this->identifiant($avoir->cree_par),
             'devise' => $avoir->devise,
             'motif' => $avoir->motif,
@@ -276,6 +299,7 @@ class ContenuFiscal
             'prix_unitaire_ht' => $this->calculateur->enCentiemes($ligne->prix_unitaire_ht),
             'prix_unitaire_ttc' => $this->calculateur->enCentiemes($ligne->prix_unitaire_ttc),
             'taux_tva' => $this->calculateur->enCentiemes($ligne->taux_tva),
+            'taux_tva_du_prix' => $this->calculateur->enCentiemes($ligne->taux_tva_du_prix),
             'remise' => $this->calculateur->enCentiemes($ligne->remise_pourcentage),
             'ht' => $sens * $this->calculateur->enCentiemes($ligne->montant_ht),
             'tva' => $sens * $this->calculateur->enCentiemes($ligne->montant_tva),

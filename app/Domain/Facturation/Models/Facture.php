@@ -12,15 +12,19 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Facturation\Concerns\EstEnvoyeParEmail;
 use App\Domain\Facturation\Concerns\FigeLeClient;
 use App\Domain\Facturation\Concerns\FigeSonEmetteur;
+use App\Domain\Facturation\Concerns\NoteSaNatureDOperation;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
+use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\CopieClient;
@@ -54,20 +58,23 @@ use LogicException;
  * Une fois numérotée, elle ne se modifie plus que dans son statut de
  * règlement (voir ProtegeLesDonneesValidees) : elle est signée telle
  * qu'émise au registre fiscal (voir EmettreFactureAction), avec la copie de
- * son client et le type de ce client (voir FigeLeClient), et l'émetteur
- * qu'elle imprime pour toujours (voir FigeSonEmetteur).
+ * son client et le type de ce client (voir FigeLeClient), l'émetteur
+ * qu'elle imprime pour toujours (voir FigeSonEmetteur), sa nature
+ * d'opération et sa livraison (voir NoteSaNatureDOperation).
  */
 class Facture extends Model implements DocumentEnvoyable
 {
     /** @use HasFactory<FactureFactory> */
-    use BelongsToMagasin, EstEnvoyeParEmail, FigeLeClient, FigeSonEmetteur, HasFactory, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, FigeLeClient, FigeSonEmetteur, HasFactory, HorodateSonEmission, NoteSaNatureDOperation, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
 
     protected $table = 'factures';
 
     // numero, statut, date_emission, date_echeance, totaux, type et copie
-    // du client, franchise de TVA : jamais en mass assignment, uniquement
-    // via les Actions dédiées (voir app/Domain/Facturation/Actions) --
-    // l'échéance se calcule à l'émission (voir EmettreFactureAction).
+    // du client, franchise de TVA, nature d'opération et livraison,
+    // consultation VIES : jamais en mass assignment, uniquement via les
+    // Actions dédiées (voir app/Domain/Facturation/Actions) -- l'échéance
+    // et la consultation VIES se fixent à l'émission (voir
+    // EmettreFactureAction).
     protected $fillable = [
         'client_id',
         'devis_id',
@@ -76,9 +83,21 @@ class Facture extends Model implements DocumentEnvoyable
         'notes',
     ];
 
+    /**
+     * La vente en France tant qu'aucune nature n'est notée, comme en base.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'nature_operation' => 'vente_france',
+    ];
+
     protected $casts = [
         'statut' => StatutFacture::class,
         'franchise_en_base' => 'boolean',
+        'nature_operation' => NatureOperation::class,
+        'livraison_date' => 'date',
+        'transport_par' => TransportPar::class,
         'date_echeance' => 'date',
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
@@ -173,6 +192,17 @@ class Facture extends Model implements DocumentEnvoyable
     public function creePar(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cree_par');
+    }
+
+    /**
+     * La vérification sur VIES du n° de TVA du client que l'émission a
+     * retenue pour une livraison intracommunautaire ou une prestation
+     * autoliquidée (voir ControleNatureOperation) ; aucune pour une autre
+     * nature, ni pour un brouillon.
+     */
+    public function consultationVies(): BelongsTo
+    {
+        return $this->belongsTo(ConsultationVies::class);
     }
 
     /**

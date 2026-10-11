@@ -29,10 +29,15 @@ return new class extends Migration
             $table->unsignedInteger('quantite');
             // Une vente part de son PU TTC ; son PU HT en est la
             // conversion au centime, article par article (voir
-            // CalculateurLigne::montantsDeVente()).
+            // CalculateurLigne::montantsDeVente()), au taux que comprend ce
+            // prix (taux_tva_du_prix) : celui de la ligne (taux_tva), sauf
+            // pour un produit vendu hors de la TVA française, dont la ligne
+            // est à 0 % et le PU TTC du catalogue comprend encore la TVA,
+            // retirée du prix payé (voir ContexteDeVente).
             $table->decimal('prix_unitaire_ht', 12, 2);
             $table->decimal('prix_unitaire_ttc', 12, 2);
             $table->decimal('taux_tva', 5, 2);
+            $table->decimal('taux_tva_du_prix', 5, 2);
             $table->decimal('remise_pourcentage', 5, 2)->default(0);
             $table->decimal('montant_ht', 12, 2);
             $table->decimal('montant_tva', 12, 2);

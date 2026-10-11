@@ -12,8 +12,10 @@ use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
+use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
@@ -38,6 +40,37 @@ use Tests\TestCase;
 class DevisResourceTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * La nature d'un devis et sa livraison s'enregistrent avec lui, et ses
+     * lignes se calculent sans TVA : la facture qui en sera tirée les
+     * reprend (voir CreerFactureDepuisDevisAction).
+     */
+    public function test_creer_un_devis_de_livraison_vers_un_dom_via_le_formulaire(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '49.90', 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(CreateDevis::class)
+            ->fillForm([
+                'client_id' => Client::factory()->create()->id,
+                'nature_operation' => NatureOperation::LivraisonDom->value,
+                'livraison_adresse' => '1 rue Victor Hugo',
+                'livraison_code_postal' => '97200',
+                'livraison_ville' => 'Fort-de-France',
+                'livraison_pays' => 'FR',
+                'lignes' => [['produit_id' => $produit->id, 'quantite' => 3, 'remise_pourcentage' => 0]],
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $devis = Devis::query()->sole();
+        $this->assertSame([NatureOperation::LivraisonDom, '97200', TransportPar::Magasin], [$devis->nature_operation, $devis->livraison_code_postal, $devis->transport_par]);
+        $this->assertSame(['124.74', '0.00', '124.74'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
+    }
 
     public function test_creer_un_devis_avec_des_lignes_via_le_formulaire(): void
     {

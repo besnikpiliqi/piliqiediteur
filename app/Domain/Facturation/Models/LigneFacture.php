@@ -37,6 +37,7 @@ class LigneFacture extends Model
         'prix_unitaire_ht',
         'prix_unitaire_ttc',
         'taux_tva',
+        'taux_tva_du_prix',
         'remise_pourcentage',
         'montant_ht',
         'montant_tva',
@@ -50,6 +51,7 @@ class LigneFacture extends Model
         'prix_unitaire_ttc' => 'decimal:2',
         'nature' => NatureLigne::class,
         'taux_tva' => 'decimal:2',
+        'taux_tva_du_prix' => 'decimal:2',
         'remise_pourcentage' => 'decimal:2',
         'montant_ht' => 'decimal:2',
         'montant_tva' => 'decimal:2',
@@ -147,8 +149,9 @@ class LigneFacture extends Model
      * ContexteDeVente::documentCalculeDepuisLeHtDeLigne()) : depuis le HT
      * de la ligne sur une facture à un professionnel (E1, K2, voir
      * CalculateurLigne::retourDeLigneProfessionnelle()), article par
-     * article sur un ticket ou sur une facture émise en franchise en base.
-     * Le dernier retour retombe ainsi exactement sur la ligne vendue.
+     * article sur un ticket ou sur une facture émise en franchise en base,
+     * à son PU TTC payé (voir prixUnitaireTtcPaye()). Le dernier retour
+     * retombe ainsi exactement sur la ligne vendue.
      *
      * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
      */
@@ -162,9 +165,24 @@ class LigneFacture extends Model
 
         return $calculateur->retourCumule(
             ContexteDeVente::documentCalculeDepuisLeHtDeLigne($this->facture)
-                ? $calculateur->retourDeLigneProfessionnelle($this->only(['prix_unitaire_ttc', 'taux_tva', 'quantite', 'remise_pourcentage', 'montant_ht', 'montant_tva']), $quantiteRendue)
-                : $calculateur->montantsDeVente((float) $this->prix_unitaire_ht, (float) $this->prix_unitaire_ttc, $quantiteRendue, (float) $this->remise_pourcentage),
+                ? $calculateur->retourDeLigneProfessionnelle($this->only(['prix_unitaire_ttc', 'taux_tva', 'taux_tva_du_prix', 'quantite', 'remise_pourcentage', 'montant_ht', 'montant_tva']), $quantiteRendue)
+                : $calculateur->montantsDeVente((float) $this->prix_unitaire_ht, $this->prixUnitaireTtcPaye(), $quantiteRendue, (float) $this->remise_pourcentage),
             $avoirsEmis->toArray(),
         );
+    }
+
+    /**
+     * Le PU TTC qu'a payé le client : son PU TTC, sauf quand la TVA qu'il
+     * comprend a été retirée du prix (vente hors de la TVA française, voir
+     * ConstructeurLigneDocument) : la ligne est alors à 0 %, et le client a
+     * payé son PU HT.
+     */
+    private function prixUnitaireTtcPaye(): float
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        return (float) ($calculateur->enCentiemes($this->taux_tva_du_prix) === $calculateur->enCentiemes($this->taux_tva)
+            ? $this->prix_unitaire_ttc
+            : $this->prix_unitaire_ht);
     }
 }

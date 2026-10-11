@@ -30,6 +30,7 @@ class CreateDevis extends CreateRecord
             'date_validite' => $data['date_validite'] ?? null,
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,
+            ...DevisResource::attributsDeLaNature($data),
         ]));
     }
 }

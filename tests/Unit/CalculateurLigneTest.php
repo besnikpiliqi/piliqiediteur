@@ -193,7 +193,7 @@ class CalculateurLigneTest extends TestCase
      */
     public function test_les_retours_d_une_ligne_professionnelle_se_calculent_comme_la_facture(): void
     {
-        $ligne = ['prix_unitaire_ttc' => '1.00', 'taux_tva' => '20.00', 'quantite' => 1000, 'remise_pourcentage' => '0.00', 'montant_ht' => '833.33', 'montant_tva' => '166.67'];
+        $ligne = ['prix_unitaire_ttc' => '1.00', 'taux_tva' => '20.00', 'taux_tva_du_prix' => '20.00', 'quantite' => 1000, 'remise_pourcentage' => '0.00', 'montant_ht' => '833.33', 'montant_tva' => '166.67'];
 
         $this->assertSame(['montant_ht' => 416.67, 'montant_tva' => 83.33, 'montant_ttc' => 500.0], $this->calculateur()->retourDeLigneProfessionnelle($ligne, 500));
         $this->assertSame(['montant_ht' => 833.33, 'montant_tva' => 166.67, 'montant_ttc' => 1000.0], $this->calculateur()->retourDeLigneProfessionnelle($ligne, 1000));
@@ -209,7 +209,7 @@ class CalculateurLigneTest extends TestCase
     public function test_deux_retours_d_un_article_a_40_euros_vendu_a_un_professionnel_creditent_40_euros_chacun(): void
     {
         $calculateur = $this->calculateur();
-        $ligne = ['prix_unitaire_ttc' => '40.00', 'taux_tva' => '20.00', 'quantite' => 2, 'remise_pourcentage' => '0.00', 'montant_ht' => '66.67', 'montant_tva' => '13.33'];
+        $ligne = ['prix_unitaire_ttc' => '40.00', 'taux_tva' => '20.00', 'taux_tva_du_prix' => '20.00', 'quantite' => 2, 'remise_pourcentage' => '0.00', 'montant_ht' => '66.67', 'montant_tva' => '13.33'];
 
         $premierRetour = $calculateur->retourCumule($calculateur->retourDeLigneProfessionnelle($ligne, 1), []);
         $secondRetour = $calculateur->retourCumule($calculateur->retourDeLigneProfessionnelle($ligne, 2), [$premierRetour]);
@@ -227,14 +227,28 @@ class CalculateurLigneTest extends TestCase
      */
     public function test_un_retour_professionnel_ne_credite_jamais_plus_que_la_tva_de_la_ligne(): void
     {
-        $ligne = ['prix_unitaire_ttc' => '0.01', 'taux_tva' => '20.00', 'quantite' => 10, 'remise_pourcentage' => '0.00', 'montant_ht' => '0.08', 'montant_tva' => '0.01'];
+        $ligne = ['prix_unitaire_ttc' => '0.01', 'taux_tva' => '20.00', 'taux_tva_du_prix' => '20.00', 'quantite' => 10, 'remise_pourcentage' => '0.00', 'montant_ht' => '0.08', 'montant_tva' => '0.01'];
 
         $this->assertSame(['montant_ht' => 0.08, 'montant_tva' => 0.01, 'montant_ttc' => 0.09], $this->calculateur()->retourDeLigneProfessionnelle($ligne, 9));
     }
 
+    /**
+     * Une ligne vendue sans TVA française à un professionnel (K3) : 1 000 x
+     * 1,00 € TTC du catalogue à 20 % font 833,33 € HT, à 0 %. Ses retours
+     * se calculent comme elle, au taux que comprend le prix : 500 articles
+     * rendent 416,67 € HT, sans TVA, et toute la ligne rend exactement la ligne.
+     */
+    public function test_les_retours_d_une_ligne_professionnelle_sans_tva_se_calculent_au_taux_du_prix(): void
+    {
+        $ligne = ['prix_unitaire_ttc' => '1.00', 'taux_tva' => '0.00', 'taux_tva_du_prix' => '20.00', 'quantite' => 1000, 'remise_pourcentage' => '0.00', 'montant_ht' => '833.33', 'montant_tva' => '0.00'];
+
+        $this->assertSame(['montant_ht' => 416.67, 'montant_tva' => 0.0, 'montant_ttc' => 416.67], $this->calculateur()->retourDeLigneProfessionnelle($ligne, 500));
+        $this->assertSame(['montant_ht' => 833.33, 'montant_tva' => 0.0, 'montant_ttc' => 833.33], $this->calculateur()->retourDeLigneProfessionnelle($ligne, 1000));
+    }
+
     public function test_un_retour_professionnel_hors_de_la_quantite_de_la_ligne_est_refuse(): void
     {
-        $ligne = ['prix_unitaire_ttc' => '40.00', 'taux_tva' => '20.00', 'quantite' => 2, 'remise_pourcentage' => '0.00', 'montant_ht' => '66.67', 'montant_tva' => '13.33'];
+        $ligne = ['prix_unitaire_ttc' => '40.00', 'taux_tva' => '20.00', 'taux_tva_du_prix' => '20.00', 'quantite' => 2, 'remise_pourcentage' => '0.00', 'montant_ht' => '66.67', 'montant_tva' => '13.33'];
 
         $this->assertThrows(fn () => $this->calculateur()->retourDeLigneProfessionnelle($ligne, 0), InvalidArgumentException::class, 'Un retour rend entre 1 article et la quantité de la ligne.');
         $this->assertThrows(fn () => $this->calculateur()->retourDeLigneProfessionnelle($ligne, 3), InvalidArgumentException::class, 'Un retour rend entre 1 article et la quantité de la ligne.');
@@ -527,6 +541,7 @@ class CalculateurLigneTest extends TestCase
             $vendue = [
                 'prix_unitaire_ttc' => $ligne['ttc'] / 100,
                 'taux_tva' => (float) $taux,
+                'taux_tva_du_prix' => (float) $taux,
                 'quantite' => $ligne['quantite'],
                 'remise_pourcentage' => $ligne['remise'] / 100,
                 'montant_ht' => $hts[$choisie] / 100,

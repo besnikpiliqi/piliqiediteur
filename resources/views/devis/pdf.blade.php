@@ -35,8 +35,11 @@
         'titre' => 'Établi pour',
     ])
 
+    @include('documents.pdf.livraison', ['lignes' => $devis->lignesDeLivraison()])
+
     @include('documents.pdf.lignes', [
         'lignes' => $devis->lignes,
+        'avecPrixTtc' => ! $devis->nature_operation->exonere(),
         'noteDeCalcul' => app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($devis),
     ])
 
@@ -50,7 +53,8 @@
         <div class="pied">{{ $devis->notes }}</div>
     @endif
 
-    {{-- La franchise de TVA, s'il y a lieu : voir MentionsFiscales. --}}
+    {{-- La nature de l'opération et la franchise de TVA, s'il y a lieu :
+         voir MentionsFiscales. --}}
     @foreach(app(\App\Domain\Facturation\Services\MentionsFiscales::class)->pour($devis, $emetteur) as $mention)
         <div class="pied">{{ $mention }}</div>
     @endforeach

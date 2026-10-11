@@ -12,6 +12,7 @@ use App\Domain\Facturation\Concerns\FigeLeClient;
 use App\Domain\Facturation\Concerns\FigeSonEmetteur;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
+use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\CopieClient;
@@ -54,17 +55,29 @@ class Avoir extends Model implements DocumentEnvoyable
     protected $table = 'avoirs';
 
     // numero, statut, date_emission, totaux, type et copie du client,
-    // franchise de TVA : jamais en mass assignment, uniquement via
-    // EnregistrerAvoirAction (CreerAvoirAction puis EmettreAvoirAction).
+    // franchise de TVA, nature d'opération : jamais en mass assignment,
+    // uniquement via EnregistrerAvoirAction (CreerAvoirAction puis
+    // EmettreAvoirAction).
     protected $fillable = [
         'client_id',
         'motif',
         'devise',
     ];
 
+    /**
+     * La vente en France tant qu'aucune nature n'est reprise, comme en
+     * base.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'nature_operation' => 'vente_france',
+    ];
+
     protected $casts = [
         'statut' => StatutAvoir::class,
         'franchise_en_base' => 'boolean',
+        'nature_operation' => NatureOperation::class,
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
         'total_ttc' => 'decimal:2',

@@ -6,6 +6,7 @@ use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneDevis;
@@ -46,11 +47,14 @@ use WeakMap;
  * ConstructeurLigneDocument). Deux boutons sous les lignes les ajoutent.
  *
  * Les montants affichés pendant la saisie passent par le même
- * constructeur que l'enregistrement réel, avec le client choisi et le
- * régime de TVA du magasin (voir apercuDesLignes()) : l'écran ne peut
- * jamais afficher un centime différent de ce qui sera enregistré. Pour un
- * client professionnel, hors franchise en base, chaque ligne affiche son
- * HT, la TVA se calculant sur le total de son taux (voir totalDeLigne()).
+ * constructeur que l'enregistrement réel, avec le client choisi, la nature
+ * de l'opération (voir ChoisitLaNatureDeLOperation) et le régime de TVA du
+ * magasin (voir apercuDesLignes()) : l'écran ne peut jamais afficher un
+ * centime différent de ce qui sera enregistré. Pour un client
+ * professionnel, hors franchise en base, chaque ligne affiche son HT, la
+ * TVA se calculant sur le total de son taux (voir totalDeLigne()). Une
+ * vente sans TVA française affiche ses lignes sans TVA, et le prix d'un
+ * service s'y saisit sans TVA.
  */
 trait AjouteDesLignesDeVente
 {
@@ -90,23 +94,26 @@ trait AjouteDesLignesDeVente
 
     /**
      * Les lignes saisies, calculées comme à leur enregistrement pour ce
-     * client (voir ConstructeurLigneDocument::apercu()), par clé de ligne ;
-     * une ligne pas encore complète n'y est pas.
+     * client et cette nature d'opération, la vente en France sans nature
+     * (la Caisse), (voir ConstructeurLigneDocument::apercu()), par clé de
+     * ligne ; une ligne pas encore complète n'y est pas.
      *
      * Le total de chaque ligne, celui du document et ceux de la Caisse
      * (reste à payer, monnaie à rendre) lisent tous ce même aperçu : il ne
      * se calcule, client et catalogue lus, qu'une fois par requête de la
-     * page pour les mêmes lignes et le même client, quel que soit le
-     * nombre de lignes.
+     * page pour les mêmes lignes, le même client et la même nature, quel
+     * que soit le nombre de lignes.
      *
      * @param  array<array-key, mixed>  $lignes
      * @return array<array-key, array<string, mixed>>
      */
-    public static function apercuDesLignes(array $lignes, mixed $clientId): array
+    public static function apercuDesLignes(array $lignes, mixed $clientId, mixed $nature = null): array
     {
+        $nature = NatureOperation::depuisSaisie($nature);
+
         return self::calculUneFoisParRequete(
-            'apercu:'.hash('xxh128', serialize([$lignes, $clientId])),
-            fn (): array => app(ConstructeurLigneDocument::class)->apercu($lignes, self::contexteDeVente($clientId)),
+            'apercu:'.hash('xxh128', serialize([$lignes, $clientId, $nature->value])),
+            fn (): array => app(ConstructeurLigneDocument::class)->apercu($lignes, self::contexteDeVente($clientId, $nature)),
         );
     }
 
@@ -144,11 +151,11 @@ trait AjouteDesLignesDeVente
      * formulaire les rouvre. Le taux d'une ligne de produit se reprend de
      * sa fiche (voir champsPrixDeLigne()) ; celui d'une ligne de service,
      * tel qu'il a été saisi -- sauf sur un document enregistré en
-     * franchise en base, où son 0 % n'a pas été saisi mais imposé (voir
-     * ConstructeurLigneDocument) : la ligne propose alors le taux du
-     * territoire du magasin, celui qu'elle prend s'il est sorti de la
-     * franchise depuis. Toujours en franchise, le champ reste caché et la
-     * ligne à 0 %.
+     * franchise en base ou sans TVA française, où son 0 % n'a pas été
+     * saisi mais imposé (voir ConstructeurLigneDocument) : la ligne propose
+     * alors le taux du territoire du magasin, celui qu'elle prend si le
+     * magasin est sorti de la franchise ou la vente revenue en France
+     * depuis. Sinon, le champ reste caché et la ligne à 0 %.
      *
      * @return list<array<string, mixed>>
      */
@@ -162,7 +169,7 @@ trait AjouteDesLignesDeVente
             'quantite' => $ligne->quantite,
             'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
             'prix_unitaire_ttc' => $ligne->prix_unitaire_ttc,
-            'taux_tva' => self::pourcentageEnTexte($document->franchise_en_base && $ligne->service_id !== null
+            'taux_tva' => self::pourcentageEnTexte(($document->franchise_en_base || $document->nature_operation->exonere()) && $ligne->service_id !== null
                 ? self::magasin()->tauxTvaParDefaut()
                 : $ligne->taux_tva),
             'remise_pourcentage' => self::pourcentageEnTexte($ligne->remise_pourcentage),
@@ -240,7 +247,9 @@ trait AjouteDesLignesDeVente
      * le taux du territoire du magasin par défaut (voir
      * Magasin::tauxTvaParDefaut()). En franchise en base, toute ligne est à
      * 0 % : le taux d'un produit affiche 0, celui d'un service ne se saisit
-     * pas.
+     * pas. Sans TVA française, le taux d'un produit reste affiché, celui
+     * qui est retiré de son prix TTC, et le prix d'un service se saisit
+     * sans TVA, sans taux.
      *
      * @return array<Component>
      */
@@ -254,7 +263,7 @@ trait AjouteDesLignesDeVente
                 ->visible(fn (Get $get): bool => ! self::estUneLigneDeService($get))
                 ->disabled(),
             TextInput::make('prix_unitaire_ttc')
-                ->label('PU TTC')
+                ->label(fn (Get $get): string => self::estUneLigneDeService($get) && self::venteSansTvaFrancaise($get) ? 'Prix (sans TVA)' : 'PU TTC')
                 ->numeric()
                 ->minValue(0)
                 ->saisieEnDirect()
@@ -281,8 +290,12 @@ trait AjouteDesLignesDeVente
                 ->required(fn (Get $get): bool => self::estUneLigneDeService($get))
                 ->default(fn (): string => self::pourcentageEnTexte(self::magasin()->tauxTvaParDefaut()))
                 ->disabled(fn (Get $get): bool => ! self::estUneLigneDeService($get))
-                ->hidden(fn (Get $get): bool => self::estUneLigneDeService($get) && self::magasin()->estEnFranchiseDeTva())
-                ->helperText(fn (Get $get): ?string => self::magasin()->estEnFranchiseDeTva() ? 'TVA non applicable' : null)
+                ->hidden(fn (Get $get): bool => self::estUneLigneDeService($get) && (self::magasin()->estEnFranchiseDeTva() || self::venteSansTvaFrancaise($get)))
+                ->helperText(fn (Get $get): ?string => match (true) {
+                    self::magasin()->estEnFranchiseDeTva() => 'TVA non applicable',
+                    self::venteSansTvaFrancaise($get) => 'Retirée du prix : aucune TVA facturée',
+                    default => null,
+                })
                 ->saisieEnDirect()
                 // Une ligne de produit rouverte (brouillon, devis, panier de
                 // la caisse) reprend le taux de sa fiche et le régime du
@@ -328,16 +341,21 @@ trait AjouteDesLignesDeVente
      * calculeDepuisLeHtDeLigne()), la ligne affiche son HT, quantité x PU
      * TTC ÷ (1 + taux) arrondi une fois : sa TVA se calcule sur le total HT
      * de son taux (E1, voir ConstructeurLigneDocument), dans les totaux du
-     * document. Un taux de service qui n'est pas en vigueur sur le
-     * territoire du magasin est signalé, sans être refusé (X8).
+     * document. Une ligne vendue sans TVA française affiche son HT, sans
+     * TVA. Un taux de service qui n'est pas en vigueur sur le territoire du
+     * magasin est signalé, sans être refusé (X8).
      */
     private static function totalDeLigne(): Placeholder
     {
         return Placeholder::make('total_ligne')
-            ->label(fn (Get $get): string => self::calculeDepuisLeHtDeLigne($get) ? 'Total HT' : 'Total TTC')
+            ->label(fn (Get $get): string => self::calculeDepuisLeHtDeLigne($get) || self::venteSansTvaFrancaise($get) ? 'Total HT' : 'Total TTC')
             ->columnSpanFull()
             ->content(fn (Get $get, Placeholder $component): string => self::montantEnTexte((float) (self::montantsDeLaLigne($get, $component)[self::calculeDepuisLeHtDeLigne($get) ? 'montant_ht' : 'montant_ttc'] ?? 0)))
             ->helperText(function (Get $get, Placeholder $component): string {
+                if (self::venteSansTvaFrancaise($get)) {
+                    return 'Sans TVA française';
+                }
+
                 $montants = self::montantsDeLaLigne($get, $component);
                 $detail = self::calculeDepuisLeHtDeLigne($get)
                     ? 'TVA calculée sur le total'
@@ -357,7 +375,17 @@ trait AjouteDesLignesDeVente
      */
     private static function calculeDepuisLeHtDeLigne(Get $get): bool
     {
-        return self::contexteDeVente($get('../../client_id'))->calculeDepuisLeHtDeLigne();
+        return self::contexteDeVente($get('../../client_id'), NatureOperation::depuisSaisie($get('../../nature_operation')))->calculeDepuisLeHtDeLigne();
+    }
+
+    /**
+     * La ligne du champ est vendue sans TVA française, à son prix sans la
+     * TVA française (voir ContexteDeVente::retireLaTvaDuPrix()) : jamais à
+     * la Caisse, qui vend en France.
+     */
+    private static function venteSansTvaFrancaise(Get $get): bool
+    {
+        return self::contexteDeVente($get('../../client_id'), NatureOperation::depuisSaisie($get('../../nature_operation')))->retireLaTvaDuPrix();
     }
 
     /**
@@ -365,7 +393,7 @@ trait AjouteDesLignesDeVente
      */
     protected static function montantsDesLignesSaisies(Get $get): iterable
     {
-        return self::apercuDesLignes($get('lignes') ?? [], $get('client_id'));
+        return self::apercuDesLignes($get('lignes') ?? [], $get('client_id'), $get('nature_operation'));
     }
 
     /**
@@ -377,21 +405,21 @@ trait AjouteDesLignesDeVente
      */
     private static function montantsDeLaLigne(Get $get, Placeholder $champ): array
     {
-        return self::apercuDesLignes($get('../../lignes') ?? [], $get('../../client_id'))[$champ->getContainer()->getStatePath(isAbsolute: false)] ?? [];
+        return self::apercuDesLignes($get('../../lignes') ?? [], $get('../../client_id'), $get('../../nature_operation'))[$champ->getContainer()->getStatePath(isAbsolute: false)] ?? [];
     }
 
     /**
      * Le client choisi s'il est du magasin actif (MagasinScope), archivé
      * compris, et le magasin actif, dont le régime de TVA et le territoire
-     * décident du calcul ; lus une seule fois par requête de la page pour
-     * le même client.
+     * décident du calcul, avec la nature choisie ; lus une seule fois par
+     * requête de la page pour le même client et la même nature.
      */
-    private static function contexteDeVente(mixed $clientId): ContexteDeVente
+    private static function contexteDeVente(mixed $clientId, NatureOperation $nature = NatureOperation::VenteEnFrance): ContexteDeVente
     {
-        return self::calculUneFoisParRequete('contexte:'.hash('xxh128', serialize($clientId)), function () use ($clientId): ContexteDeVente {
+        return self::calculUneFoisParRequete('contexte:'.hash('xxh128', serialize([$clientId, $nature->value])), function () use ($clientId, $nature): ContexteDeVente {
             $identifiant = is_bool($clientId) ? false : filter_var($clientId, FILTER_VALIDATE_INT);
 
-            return ContexteDeVente::pour($identifiant === false ? null : Client::withTrashed()->find($identifiant), self::magasin());
+            return ContexteDeVente::pour($identifiant === false ? null : Client::withTrashed()->find($identifiant), self::magasin(), $nature);
         });
     }
 
@@ -413,7 +441,8 @@ trait AjouteDesLignesDeVente
      * Cases à cocher des services que le magasin a déjà créés ; un service
      * qui n'y est pas encore se crée ici et y sera proposé la prochaine
      * fois (voir TrouverOuCreerServiceAction). Chaque service coché devient
-     * une ligne dont le vendeur saisit le prix TTC. La recherche passe par
+     * une ligne dont le vendeur saisit le prix, TTC en France, sans TVA
+     * sinon (voir champsPrixDeLigne()). La recherche passe par
      * le serveur, sans casse ni accents (voir servicesProposes()) : celle
      * d'une liste de cases à cocher de Filament, faite dans le navigateur,
      * tiendrait compte des accents.
@@ -429,7 +458,7 @@ trait AjouteDesLignesDeVente
             ->color('gray')
             ->size(ActionSize::Small)
             ->modalHeading('Ajouter un service')
-            ->modalDescription('Cochez les services réalisés : chacun devient une ligne dont vous saisissez le prix TTC.')
+            ->modalDescription('Cochez les services réalisés : chacun devient une ligne dont vous saisissez le prix.')
             ->modalSubmitActionLabel('Ajouter')
             ->modalWidth(MaxWidth::Large)
             ->form([

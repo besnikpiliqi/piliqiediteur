@@ -9,13 +9,16 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
@@ -23,6 +26,7 @@ use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\FactureResource;
@@ -33,9 +37,11 @@ use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -1640,5 +1646,235 @@ class FactureResourceTest extends TestCase
             ->assertHasFormErrors(['client_id' => 'exists']);
 
         $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * Le magasin de Lyon à l'identité légale complète, n° de TVA
+     * FR44732829320, et son propriétaire connecté, le 9 octobre 2026 à
+     * 10 h 15 à Paris.
+     */
+    private function magasinQuiVendHorsDeFrance(): Magasin
+    {
+        $this->travelTo('2026-10-09 10:15:00');
+        $proprietaire = User::factory()->create();
+        $magasin = $this->completerIdentiteLegale(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire));
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        return $magasin;
+    }
+
+    private function brouillonDeLivraisonIntracommunautaire(Client $client): Facture
+    {
+        return app(CreerFactureAction::class)->handle($client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '25.00', 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 12]], [
+            'nature_operation' => NatureOperation::LivraisonIntracommunautaire,
+            'livraison_adresse' => 'Musterstraße 1',
+            'livraison_code_postal' => '10115',
+            'livraison_ville' => 'Berlin',
+            'livraison_pays' => 'DE',
+            'livraison_date' => '2026-10-12',
+            'transport_par' => TransportPar::Magasin,
+        ]);
+    }
+
+    /**
+     * « Émettre » une livraison intracommunautaire vérifie d'abord sur VIES
+     * le n° de TVA du client, faute de vérification valide du jour, puis
+     * émet la facture avec cette vérification.
+     */
+    public function test_emettre_une_livraison_intracommunautaire_verifie_d_abord_le_numero_sur_vies(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $brouillon = $this->brouillonDeLivraisonIntracommunautaire(Client::factory()->etranger('DE', 'DE123456789')->create());
+        Http::preventStrayRequests();
+        Http::fake(['https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number' => Http::response(['countryCode' => 'DE', 'vatNumber' => '123456789', 'valid' => true, 'requestIdentifier' => 'WAPIAAAAW1234567', 'name' => 'MUSTER GMBH', 'address' => '---'])]);
+
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $brouillon);
+
+        $facture = $brouillon->fresh();
+        $this->assertSame([StatutFacture::Emise, ConsultationVies::query()->sole()->id], [$facture->statut, $facture->consultation_vies_id]);
+        $this->assertSame(['250.00', '0.00', '250.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        Http::assertSentCount(1);
+    }
+
+    public function test_une_verification_vies_valide_du_jour_evite_une_nouvelle_consultation(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $client = Client::factory()->etranger('DE', 'DE123456789')->create();
+        $consultation = ConsultationVies::forceCreate(['client_id' => $client->id, 'numero_tva' => 'DE123456789', 'valide' => true, 'identifiant_consultation' => 'WAPIAAAAW1234567', 'consultee_le' => now()->subHour(), 'reponse' => '{"valid":true}']);
+        $brouillon = $this->brouillonDeLivraisonIntracommunautaire($client);
+        Http::preventStrayRequests();
+
+        Livewire::test(ListFactures::class)->callTableAction('emettre', $brouillon);
+
+        $this->assertSame([StatutFacture::Emise, $consultation->id], [$brouillon->fresh()->statut, $brouillon->fresh()->consultation_vies_id]);
+        Http::assertNothingSent();
+    }
+
+    public function test_vies_indisponible_laisse_la_livraison_intracommunautaire_en_brouillon_et_le_dit(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $brouillon = $this->brouillonDeLivraisonIntracommunautaire(Client::factory()->etranger('DE', 'DE123456789')->create());
+        Http::preventStrayRequests();
+        Http::fake(['https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number' => Http::response(['actionSucceed' => false, 'errorWrappers' => [['error' => 'MS_UNAVAILABLE']]], 500)]);
+
+        Livewire::test(ListFactures::class)
+            ->callTableAction('emettre', $brouillon)
+            ->assertNotified('Le service européen VIES ne répond pas pour ce pays : réessayez dans quelques minutes. Sans n° de TVA vérifié, la vente reste à la TVA française.');
+
+        $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
+        $this->assertSame(0, ConsultationVies::query()->count());
+    }
+
+    public function test_un_numero_inconnu_de_vies_refuse_la_livraison_intracommunautaire(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $brouillon = $this->brouillonDeLivraisonIntracommunautaire(Client::factory()->etranger('DE', 'DE999999999')->create());
+        Http::preventStrayRequests();
+        Http::fake(['https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number' => Http::response(['countryCode' => 'DE', 'vatNumber' => '999999999', 'valid' => false])]);
+
+        Livewire::test(ListFactures::class)
+            ->callTableAction('emettre', $brouillon)
+            ->assertNotified('Impossible d\'émettre en « Livraison intracommunautaire à un professionnel » : le n° de TVA DE999999999 n\'a pas été trouvé valide sur VIES le 09/10/2026. Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
+
+        $this->assertSame(StatutFacture::Brouillon, $brouillon->fresh()->statut);
+        $this->assertFalse(ConsultationVies::query()->sole()->valide);
+    }
+
+    /**
+     * Un export saisi dans le panneau se calcule comme il s'enregistre,
+     * sans TVA, et part toujours par le magasin : le transport ne se
+     * choisit pas.
+     */
+    public function test_creer_un_export_depuis_le_panneau_enregistre_sa_nature_et_sa_livraison(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $client = Client::factory()->create(['nom' => 'Acme Inc.', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 12-3456789']);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '1.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm([
+                'client_id' => $client->id,
+                'nature_operation' => NatureOperation::ExportHorsUe->value,
+                'livraison_adresse' => '1 Main Street',
+                'livraison_code_postal' => '10001',
+                'livraison_ville' => 'New York',
+                'livraison_pays' => 'us',
+                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1000, 'remise_pourcentage' => 0]],
+            ])
+            ->assertFormFieldIsHidden('transport_par')
+            ->assertSeeText('Total HT 833,33 € · TVA 0,00 € · Total TTC 833,33 €')
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $facture = Facture::query()->sole();
+        $this->assertSame([NatureOperation::ExportHorsUe, 'US', 'New York', TransportPar::Magasin], [$facture->nature_operation, $facture->livraison_pays, $facture->livraison_ville, $facture->transport_par]);
+        $this->assertSame(['833.33', '0.00', '833.33'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+    }
+
+    /**
+     * @return array<string, array{bool, RegimeTva, list<string>}>
+     */
+    public static function naturesProposees(): array
+    {
+        return [
+            'particulier' => [false, RegimeTva::ReelNormalMensuel, ['vente_france', 'export_hors_ue', 'livraison_dom']],
+            'professionnel' => [true, RegimeTva::ReelNormalMensuel, ['vente_france', 'export_hors_ue', 'livraison_dom', 'livraison_intracommunautaire', 'prestation_ue_autoliquidation', 'prestation_hors_ue']],
+            'professionnel d\'un magasin en franchise' => [true, RegimeTva::FranchiseEnBase, ['vente_france']],
+        ];
+    }
+
+    /**
+     * @param  list<string>  $natures
+     */
+    #[DataProvider('naturesProposees')]
+    public function test_les_natures_proposees_dependent_du_client_et_du_regime_du_magasin(bool $professionnel, RegimeTva $regime, array $natures): void
+    {
+        $this->magasinQuiVendHorsDeFrance()->update(['regime_tva' => $regime]);
+        $client = $professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create();
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => $client->id])
+            ->assertFormFieldExists('nature_operation', fn (Select $champ): bool => array_keys($champ->getOptions()) === $natures);
+    }
+
+    /**
+     * Passer d'un professionnel à un particulier ramène une nature qu'il
+     * ne peut pas choisir à la vente en France.
+     */
+    public function test_choisir_un_particulier_ramene_une_nature_reservee_aux_professionnels_a_la_vente_en_france(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => Client::factory()->professionnel()->create()->id, 'nature_operation' => NatureOperation::PrestationHorsUe->value])
+            ->fillForm(['client_id' => Client::factory()->create()->id])
+            ->assertSet('data.nature_operation', NatureOperation::VenteEnFrance->value);
+    }
+
+    public function test_choisir_une_nature_avec_livraison_preremplit_l_adresse_du_client(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $client = Client::factory()->etranger('DE', 'DE123456789')->create(['adresse' => 'Musterstraße 1', 'code_postal' => '10115', 'ville' => 'Berlin']);
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => $client->id])
+            ->fillForm(['nature_operation' => NatureOperation::LivraisonIntracommunautaire->value])
+            ->assertSet('data.livraison_adresse', 'Musterstraße 1')
+            ->assertSet('data.livraison_code_postal', '10115')
+            ->assertSet('data.livraison_ville', 'Berlin')
+            ->assertSet('data.livraison_pays', 'DE')
+            ->assertFormFieldIsVisible('transport_par');
+    }
+
+    public function test_le_prix_d_un_service_se_saisit_sans_tva_hors_de_la_vente_en_france(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $service = Service::factory()->create(['nom' => 'Conseil']);
+        $client = Client::factory()->etranger('DE', 'DE123456789')->create();
+
+        $page = Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => $client->id, 'nature_operation' => NatureOperation::PrestationUeAutoliquidation->value, 'lignes' => [['service_id' => $service->id, 'description' => 'Conseil', 'quantite' => 1, 'prix_unitaire_ttc' => '500.00']]]);
+        $cle = array_key_first($page->get('data.lignes'));
+
+        $page->assertFormFieldExists("lignes.{$cle}.prix_unitaire_ttc", fn (TextInput $champ): bool => $champ->getLabel() === 'Prix (sans TVA)')
+            ->assertFormFieldIsHidden("lignes.{$cle}.taux_tva")
+            ->assertSeeText('Total HT 500,00 € · TVA 0,00 € · Total TTC 500,00 €');
+    }
+
+    /**
+     * Rouvert puis enregistré sans rien toucher, le brouillon d'une
+     * livraison intracommunautaire garde sa nature, sa livraison et son
+     * total sans TVA.
+     */
+    public function test_reenregistrer_une_livraison_intracommunautaire_sans_modification_garde_sa_nature_et_son_total(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $brouillon = $this->brouillonDeLivraisonIntracommunautaire(Client::factory()->etranger('DE', 'DE123456789')->create());
+
+        Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
+            ->assertSet('data.nature_operation', NatureOperation::LivraisonIntracommunautaire->value)
+            ->assertSet('data.transport_par', TransportPar::Magasin->value)
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $brouillon->refresh();
+        $this->assertSame([NatureOperation::LivraisonIntracommunautaire, 'Berlin', '2026-10-12', TransportPar::Magasin], [$brouillon->nature_operation, $brouillon->livraison_ville, $brouillon->livraison_date->toDateString(), $brouillon->transport_par]);
+        $this->assertSame(['250.00', '0.00', '250.00'], [$brouillon->total_ht, $brouillon->total_tva, $brouillon->total_ttc]);
+    }
+
+    public function test_la_fiche_d_une_livraison_intracommunautaire_montre_sa_nature_sa_livraison_et_sa_verification(): void
+    {
+        $this->magasinQuiVendHorsDeFrance();
+        $client = Client::factory()->etranger('DE', 'DE123456789')->create();
+        ConsultationVies::forceCreate(['client_id' => $client->id, 'numero_tva' => 'DE123456789', 'valide' => true, 'identifiant_consultation' => 'WAPIAAAAW1234567', 'consultee_le' => now()->subHour(), 'reponse' => '{"valid":true}']);
+        $facture = app(EmettreFactureAction::class)->handle($this->brouillonDeLivraisonIntracommunautaire($client));
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSeeText('Livraison intracommunautaire à un professionnel')
+            ->assertSeeText('Exonération de TVA, article 262 ter I du CGI')
+            ->assertSeeText('Musterstraße 1')
+            ->assertSeeText('Livraison le 12/10/2026')
+            ->assertSeeText('consultation WAPIAAAAW1234567 du 09/10/2026 à 09:15');
     }
 }

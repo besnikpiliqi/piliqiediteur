@@ -60,6 +60,7 @@ class EditFacture extends EditRecord
         return static::executerOuInterrompre(fn () => app(ModifierFactureAction::class)->handle($record, $client, $data['lignes'], [
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,
+            ...FactureResource::attributsDeLaNature($data),
         ]));
     }
 }

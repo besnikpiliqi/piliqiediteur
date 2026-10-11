@@ -15,7 +15,10 @@ use Illuminate\Support\Facades\DB;
  * limitée au magasin, jamais un client_id brut venu du formulaire. Le
  * brouillon note le type de ce client, qui choisit sa série, et si le
  * magasin vend en franchise de TVA : l'un et l'autre se contrôlent à
- * l'émission (voir ContexteDeVente et EmettreFactureAction).
+ * l'émission (voir ContexteDeVente et EmettreFactureAction). Il note aussi
+ * la nature de l'opération et la livraison reçues avec ses attributs (voir
+ * NoteSaNatureDOperation), avec laquelle ses lignes se calculent ; ses
+ * conditions se contrôlent à l'émission (voir ControleNatureOperation).
  */
 class CreerFactureAction
 {
@@ -26,13 +29,13 @@ class CreerFactureAction
 
     /**
      * @param  list<array<string, mixed>>  $lignes
-     * @param  array<string, mixed>  $attributs
+     * @param  array<string, mixed>  $attributs  conditions_paiement, notes, et la nature et la livraison (voir NoteSaNatureDOperation::noterSaNatureDOperation())
      */
     public function handle(Client $client, array $lignes, array $attributs = []): Facture
     {
         return DB::transaction(function () use ($client, $lignes, $attributs) {
-            $contexte = ContexteDeVente::pour($client, app(TenantContext::class)->magasin());
             $facture = new Facture($attributs);
+            $contexte = ContexteDeVente::pour($client, app(TenantContext::class)->magasin(), $facture->noterSaNatureDOperation($attributs));
             $facture->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
 
             $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);

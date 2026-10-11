@@ -11,6 +11,7 @@ use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Filament\App\Resources\DevisResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDeVente;
+use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
@@ -21,6 +22,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
@@ -31,6 +33,7 @@ use Filament\Tables\Table;
 class DevisResource extends Resource
 {
     use AjouteDesLignesDeVente;
+    use ChoisitLaNatureDeLOperation;
     use EnvoieLesDocuments;
     use GereLesExceptionsMetier;
     use SupprimeEnMasseLigneParLigne;
@@ -61,14 +64,18 @@ class DevisResource extends Resource
                     ->preload()
                     ->required()
                     ->live()
+                    ->afterStateUpdated(fn (Get $get, Set $set) => self::ajusterLaNatureAuClient($get, $set))
                     ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id')))
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE))),
                 DatePicker::make('date_validite')->label('Valide jusqu\'au'),
+                self::champNatureDeLOperation(),
                 Textarea::make('conditions_paiement')->label('Conditions de paiement')->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
+
+            self::sectionLivraison(),
 
             Section::make('Lignes')->schema([
                 // La page de modification n'est ouverte qu'à un devis
@@ -97,7 +104,10 @@ class DevisResource extends Resource
                 // la date de son dernier envoi (voir ModifierDevisAction).
                 TextEntry::make('date_emission')->label('Dernier envoi le')->dateTime('d/m/Y')->placeholder('—'),
                 TextEntry::make('date_validite')->label('Valide jusqu\'au')->date('d/m/Y')->placeholder('—'),
+                FactureResource::natureEntry(),
             ])->columns(3),
+
+            FactureResource::livraisonSection(),
 
             InfolistSection::make('Lignes')->schema([
                 FactureResource::lignesEntry($infolist->getRecord()),

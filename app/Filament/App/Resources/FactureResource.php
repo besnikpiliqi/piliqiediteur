@@ -442,8 +442,9 @@ class FactureResource extends Resource
      * Le n° du bordereau de détaxe d'un ticket (voir
      * NoterBordereauDetaxeAction), affiché ici et jamais sur le ticket, qui
      * reproduit le document tel qu'émis : le dernier noté, qui fait foi,
-     * avec l'avertissement d'un ticket de 100 € TTC ou moins, puis ceux
-     * qu'il a remplacés. Relus à chaque affichage, comme les preuves.
+     * avec l'avertissement quand les biens taxés emportés ne dépassent pas
+     * 100 € TTC (voir BordereauDetaxe::avertissement()), puis ceux qu'il a
+     * remplacés. Relus à chaque affichage, comme les preuves.
      */
     private static function detaxeSection(): InfolistSection
     {

@@ -44,7 +44,9 @@ class ViewFacture extends ViewRecord
     /**
      * Un document d'un type que la nature de la vente admet (voir
      * PreuvesRequises::typesAdmis()), avec sa référence, sa date et qui
-     * l'a établi.
+     * l'a établi. Le type se valide sur le serveur parmi ceux que la liste
+     * propose : un autre, envoyé sans passer par elle, est une erreur de
+     * saisie.
      */
     private function ajouterUnePreuve(): Actions\Action
     {
@@ -53,26 +55,32 @@ class ViewFacture extends ViewRecord
             ->icon('heroicon-o-document-check')
             ->visible(fn (Facture $record): bool => AjouterPreuveOperationAction::refusPour($record) === null)
             ->authorize('justifier')
-            ->form(fn (Facture $record): array => [
-                Select::make('type')
-                    ->label('Type de preuve')
-                    ->options(collect(PreuvesRequises::typesAdmis($record->nature_operation))
-                        ->mapWithKeys(fn (TypePreuve $type): array => [$type->value => $type->getLabel()])
-                        ->all())
-                    ->required(),
-                TextInput::make('reference')
-                    ->label('Référence')
-                    ->helperText('Le n° que porte le document : MRN, n° du CN23, de la lettre de voiture, de la facture du transporteur...')
-                    ->required()
-                    ->maxLength(100),
-                DatePicker::make('date_document')
-                    ->label('Date du document')
-                    ->maxDate(today()),
-                TextInput::make('emetteur')
-                    ->label('Établie par')
-                    ->helperText('La douane, le transporteur, l\'assureur ou l\'acquéreur. Deux documents de transport doivent venir de deux parties indépendantes du magasin et du client.')
-                    ->maxLength(150),
-            ])
+            ->form(function (Facture $record): array {
+                $types = collect(PreuvesRequises::typesAdmis($record->nature_operation))
+                    ->mapWithKeys(fn (TypePreuve $type): array => [$type->value => $type->getLabel()])
+                    ->all();
+
+                return [
+                    Select::make('type')
+                        ->label('Type de preuve')
+                        ->options($types)
+                        ->required()
+                        ->in(array_keys($types))
+                        ->validationMessages(['in' => 'Choisissez un type de preuve proposé pour cette vente.']),
+                    TextInput::make('reference')
+                        ->label('Référence')
+                        ->helperText('Le n° que porte le document : MRN, n° du CN23, de la lettre de voiture, de la facture du transporteur...')
+                        ->required()
+                        ->maxLength(100),
+                    DatePicker::make('date_document')
+                        ->label('Date du document')
+                        ->maxDate(today()),
+                    TextInput::make('emetteur')
+                        ->label('Établie par')
+                        ->helperText('La douane, le transporteur, l\'assureur ou l\'acquéreur. Deux documents de transport doivent venir de deux parties indépendantes du magasin et du client.')
+                        ->maxLength(150),
+                ];
+            })
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
                 app(AjouterPreuveOperationAction::class)->handle($record, TypePreuve::from($data['type']), $data['reference'], $data['date_document'] ?? null, $data['emetteur'] ?? null);
 
@@ -82,8 +90,9 @@ class ViewFacture extends ViewRecord
 
     /**
      * Le n° du bordereau émis dans PABLO pour un voyageur : noté sur la
-     * fiche, jamais sur le ticket. Un ticket de 100 € TTC ou moins se
-     * détaxe quand même, mais la notification l'avertit.
+     * fiche, jamais sur le ticket. Des biens taxés emportés pour 100 € TTC
+     * ou moins se détaxent quand même, mais la notification l'avertit
+     * (voir BordereauDetaxe::avertissement()).
      */
     private function noterLeBordereauDeDetaxe(): Actions\Action
     {

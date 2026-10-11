@@ -18,10 +18,12 @@ use LogicException;
  * facture émise (I4) : une déclaration d'export, un document de transport
  * ou l'attestation de réception de l'acquéreur, d'un type que sa nature
  * admet (voir PreuvesRequises::typesAdmis()). Une preuve enregistrée ne se
- * modifie ni ne se supprime (voir PreuveOperation) : la même référence du
- * même type n'est donc enregistrée qu'une fois par facture, faute de quoi
- * un document compterait deux fois parmi ceux qu'exige une livraison
- * intracommunautaire.
+ * modifie ni ne se supprime (voir PreuveOperation) : une référence n'est
+ * donc enregistrée qu'une fois par facture, quel que soit son type et
+ * sans tenir compte de la casse (« cmr-2026-0042 » est « CMR-2026-0042 »),
+ * faute de quoi un même document compterait deux fois parmi ceux
+ * qu'exige une livraison intracommunautaire, ou vaudrait à la fois la
+ * déclaration et le document de transport d'une livraison vers un DOM.
  *
  * La facture se relit, verrouillée, dans le magasin actif (MagasinScope) :
  * celle d'un autre magasin est introuvable, et deux enregistrements de la
@@ -66,8 +68,11 @@ class AjouterPreuveOperationAction
                 throw new LogicException("Ce type de preuve ne concerne pas une vente de nature « {$facture->nature_operation->getLabel()} ».");
             }
 
-            if ($facture->preuvesOperation()->where('type', $type)->where('reference', $reference)->exists()) {
-                throw new LogicException("La preuve « {$reference} » est déjà enregistrée sur cette facture.");
+            $dejaEnregistree = $facture->preuvesOperation()->pluck('reference')
+                ->first(fn (string $enregistree): bool => self::sansCasse($enregistree) === self::sansCasse($reference));
+
+            if ($dejaEnregistree !== null) {
+                throw new LogicException("La preuve « {$dejaEnregistree} » est déjà enregistrée sur cette facture.");
             }
 
             return PreuveOperation::forceCreate([
@@ -94,6 +99,16 @@ class AjouterPreuveOperationAction
             PreuvesRequises::typesAdmis($facture->nature_operation) === [] => "Une vente de nature « {$facture->nature_operation->getLabel()} » ne demande aucune preuve d'exonération.",
             default => null,
         };
+    }
+
+    /**
+     * La référence telle que la comparent les doublons : sa casse pliée
+     * (pliage simple d'Unicode), en PHP, pour que SQLite et PostgreSQL
+     * comparent de la même façon.
+     */
+    private static function sansCasse(string $reference): string
+    {
+        return mb_convert_case($reference, MB_CASE_FOLD_SIMPLE, 'UTF-8');
     }
 
     /**

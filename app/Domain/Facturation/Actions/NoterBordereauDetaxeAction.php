@@ -23,10 +23,15 @@ use LogicException;
  * détaxe : ni une facture à un professionnel, ni une vente déjà exonérée
  * par sa nature, ni un ticket vendu en franchise en base, qui n'a facturé
  * aucune TVA à rembourser. La franchise se lit sur le ticket, tel qu'il a
- * été émis, jamais sur le régime actuel du magasin. Un ticket de 100,00 €
- * TTC ou moins se détaxe quand même, les achats d'un voyageur pouvant se
- * regrouper sur trois jours consécutifs : le bordereau noté le signale
- * (voir BordereauDetaxe::avertissement()).
+ * été émis, jamais sur le régime actuel du magasin. La détaxe ne
+ * rembourse que la TVA de biens emportés dans les bagages (art. 262 I 2°
+ * du CGI) : le ticket doit garder au moins une ligne de bien taxé
+ * qu'aucun avoir émis n'a entièrement reprise (voir
+ * LigneFacture::scopeBiensTaxes()) ; un ticket de services seuls, de
+ * biens à 0 % ou entièrement rendu ne se détaxe pas. Des biens taxés
+ * gardés pour 100,00 € TTC ou moins se détaxent quand même, les achats
+ * d'un voyageur pouvant se regrouper sur trois jours consécutifs : le
+ * bordereau noté le signale (voir BordereauDetaxe::avertissement()).
  *
  * Le n° s'enregistre sans espaces autour, en majuscules : de 4 à 30
  * lettres, chiffres ou tirets. Corriger une faute note un nouveau n°, le
@@ -80,6 +85,7 @@ class NoterBordereauDetaxeAction
             $facture->statut === StatutFacture::Brouillon, $facture->serie() !== TypeDocument::TicketCaisse => 'Le bordereau de détaxe se note sur un ticket de caisse émis : la détaxe rembourse un voyageur, jamais un professionnel.',
             $facture->nature_operation !== NatureOperation::VenteEnFrance => "Ce ticket, de nature « {$facture->nature_operation->getLabel()} », ne porte aucune TVA française : la détaxe ne s'y applique pas.",
             $facture->franchise_en_base => 'Ce ticket a été vendu en franchise en base de TVA : sans TVA facturée, la détaxe n\'a rien à rembourser.',
+            ! $facture->lignes()->creditables()->biensTaxes()->exists() => 'Ce ticket ne garde aucun bien taxé à la TVA française, ni les services ni les articles rendus ne comptant : la détaxe ne s\'y applique pas.',
             default => null,
         };
     }

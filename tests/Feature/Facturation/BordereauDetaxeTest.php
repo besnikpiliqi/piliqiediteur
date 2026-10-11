@@ -4,9 +4,11 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\CaisseSecurisee\Exceptions\DonneeFiscaleInalterableException;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\BordereauDetaxe;
@@ -19,6 +21,7 @@ use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
+use Closure;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Events\QueryExecuted;
@@ -28,6 +31,7 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use Livewire\Livewire;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -66,9 +70,46 @@ class BordereauDetaxeTest extends TestCase
      */
     private function venteEmise(string $prixTtc, ?Client $client = null, array $nature = []): Facture
     {
-        $produit = Produit::factory()->create(['nom' => 'Sac à main', 'prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
+        return $this->emettre([$this->article('Sac à main', $prixTtc)], $client, $nature);
+    }
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client ?? Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], $nature));
+    /**
+     * Une vente émise de ces lignes, un ticket pour un particulier.
+     *
+     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<string, mixed>  $nature
+     */
+    private function emettre(array $lignes, ?Client $client = null, array $nature = []): Facture
+    {
+        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client ?? Client::factory()->create(), $lignes, $nature));
+    }
+
+    /**
+     * Une ligne d'un article du catalogue, à ce prix TTC et à ce taux.
+     *
+     * @return array{produit_id: int, quantite: int}
+     */
+    private function article(string $nom, string $prixTtc, int $tauxTva = 20): array
+    {
+        return ['produit_id' => Produit::factory()->create(['nom' => $nom, 'prix_vente_ttc' => $prixTtc, 'taux_tva' => $tauxTva, 'suivi_stock' => false])->id, 'quantite' => 1];
+    }
+
+    /**
+     * Une ligne d'un service du magasin, à ce prix TTC.
+     *
+     * @return array{service_id: int, prix_unitaire_ttc: string, taux_tva: int, quantite: int}
+     */
+    private function service(string $nom, string $prixTtc): array
+    {
+        return ['service_id' => Service::factory()->create(['nom' => $nom])->id, 'prix_unitaire_ttc' => $prixTtc, 'taux_tva' => 20, 'quantite' => 1];
+    }
+
+    /**
+     * Le client rend cet article de sa vente : un avoir émis le reprend.
+     */
+    private function rendre(Facture $vente, string $article): void
+    {
+        app(EnregistrerAvoirAction::class)->handle($vente->client, [['ligne_facture_id' => $vente->lignes->firstWhere('description', $article)->id, 'quantite' => 1]], 'Article rendu');
     }
 
     private function noter(Facture $ticket, string $numero): BordereauDetaxe
@@ -98,6 +139,42 @@ class BordereauDetaxeTest extends TestCase
 
         $this->assertSame(['100.01', '16.67'], [$ticket->total_ttc, $ticket->total_tva]);
         $this->assertNull($bordereau->avertissement());
+    }
+
+    /**
+     * Le seuil de plus de 100 € TTC ne compte que les biens taxés que le
+     * voyageur emporte : ni un service, ni un article rendu, repris par un
+     * avoir émis.
+     *
+     * @return array<string, array{0: Closure(self): Facture, 1: string, 2: string|null}>
+     */
+    public static function ticketsAvecServiceOuArticleRendu(): array
+    {
+        return [
+            'sac de 90,00 € gardé, foulard de 60,00 € rendu' => [static function (self $test): Facture {
+                $ticket = $test->emettre([$test->article('Sac à main', '90.00'), $test->article('Foulard', '60.00')]);
+                $test->rendre($ticket, 'Foulard');
+
+                return $ticket;
+            }, '150.00', self::AVERTISSEMENT],
+            'sac de 80,00 € et gravure de 30,00 €' => [static fn (self $test): Facture => $test->emettre([$test->article('Sac à main', '80.00'), $test->service('Gravure', '30.00')]), '110.00', self::AVERTISSEMENT],
+            'sac de 100,01 € et gravure de 30,00 €' => [static fn (self $test): Facture => $test->emettre([$test->article('Sac à main', '100.01'), $test->service('Gravure', '30.00')]), '130.01', null],
+        ];
+    }
+
+    /**
+     * @param  Closure(self): Facture  $vente
+     */
+    #[DataProvider('ticketsAvecServiceOuArticleRendu')]
+    public function test_le_seuil_ne_compte_que_les_biens_taxes_que_le_voyageur_emporte(Closure $vente, string $totalTtc, ?string $avertissement): void
+    {
+        $this->magasin();
+        $ticket = $vente($this);
+
+        $bordereau = $this->noter($ticket, '2026FR000123456');
+
+        $this->assertSame($totalTtc, $ticket->total_ttc);
+        $this->assertSame($avertissement, $bordereau->avertissement());
     }
 
     /**
@@ -163,6 +240,45 @@ class BordereauDetaxeTest extends TestCase
             'Ce ticket a été vendu en franchise en base de TVA : sans TVA facturée, la détaxe n\'a rien à rembourser.',
         );
 
+        $this->assertSame(0, BordereauDetaxe::query()->count());
+    }
+
+    /**
+     * La détaxe ne rembourse que la TVA française de biens emportés : un
+     * ticket qui n'en garde aucun ne se détaxe pas.
+     *
+     * @return array<string, array{Closure(self): Facture}>
+     */
+    public static function ticketsSansBienTaxe(): array
+    {
+        return [
+            'une retouche de 250,00 €, un service' => [static fn (self $test): Facture => $test->emettre([$test->service('Retouche', '250.00')])],
+            'un sac de 250,00 € rendu, repris par un avoir émis' => [static function (self $test): Facture {
+                $ticket = $test->venteEmise('250.00');
+                $test->rendre($ticket, 'Sac à main');
+
+                return $ticket;
+            }],
+            'un sac de 250,00 € à 0 %' => [static fn (self $test): Facture => $test->emettre([$test->article('Sac à main', '250.00', tauxTva: 0)])],
+        ];
+    }
+
+    /**
+     * @param  Closure(self): Facture  $vente
+     */
+    #[DataProvider('ticketsSansBienTaxe')]
+    public function test_un_ticket_sans_bien_taxe_a_emporter_ne_se_detaxe_pas(Closure $vente): void
+    {
+        $this->magasin();
+        $ticket = $vente($this);
+
+        $this->assertThrows(
+            fn () => $this->noter($ticket, '2026FR000123456'),
+            LogicException::class,
+            'Ce ticket ne garde aucun bien taxé à la TVA française, ni les services ni les articles rendus ne comptant : la détaxe ne s\'y applique pas.',
+        );
+
+        $this->assertSame('250.00', $ticket->total_ttc);
         $this->assertSame(0, BordereauDetaxe::query()->count());
     }
 

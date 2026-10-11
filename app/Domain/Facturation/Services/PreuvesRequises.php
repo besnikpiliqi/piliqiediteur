@@ -7,7 +7,6 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Facture;
-use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -97,25 +96,6 @@ class PreuvesRequises
     }
 
     /**
-     * Le jour où l'attestation de réception de l'acquéreur doit être
-     * remise : le 10 du mois qui suit la livraison (art. 45 bis du
-     * règlement 282/2011) ; null quand elle n'est pas due, la livraison
-     * n'étant pas enlevée par le client. Une livraison intracommunautaire
-     * s'émet avec sa date (voir ControleNatureOperation) ; à défaut, le
-     * jour de l'émission en tient lieu.
-     */
-    public function echeanceDeLAttestation(Facture $facture): ?CarbonImmutable
-    {
-        if ($facture->nature_operation !== NatureOperation::LivraisonIntracommunautaire || $facture->transport_par !== TransportPar::Acquereur) {
-            return null;
-        }
-
-        $livraison = CarbonImmutable::parse(($facture->livraison_date ?? $facture->date_emission)->toDateString(), config('app.timezone'));
-
-        return $livraison->startOfMonth()->addMonth()->setDay(10);
-    }
-
-    /**
      * Restreint les factures à celles qui demandent encore une preuve,
      * comme manquantes() les compte : en une seule requête, chaque preuve
      * comptée par une sous-requête, que filtre MagasinScope comme la
@@ -154,11 +134,14 @@ class PreuvesRequises
 
     /**
      * L'attestation de réception qui manque, avec le jour où elle est
-     * attendue, et le rappel que ce jour est passé.
+     * attendue, et le rappel que ce jour est passé. Elle est attendue au
+     * plus tard le 10 du mois qui suit la livraison (art. 45 bis du
+     * règlement 282/2011), dont toute livraison intracommunautaire émise
+     * porte la date (voir ControleNatureOperation).
      */
     private function attestationAttendue(Facture $facture): string
     {
-        $echeance = $this->echeanceDeLAttestation($facture);
+        $echeance = $facture->livraison_date->toImmutable()->startOfMonth()->addMonth()->setDay(10);
 
         return TypePreuve::AttestationAcquereur->getLabel().', attendue au plus tard le '.$echeance->format('d/m/Y')
             .($echeance->lt(today()) ? ' : délai dépassé' : '');

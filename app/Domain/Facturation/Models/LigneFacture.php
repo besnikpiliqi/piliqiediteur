@@ -142,6 +142,20 @@ class LigneFacture extends Model
     }
 
     /**
+     * Les lignes de biens qui portent de la TVA : celles dont une détaxe
+     * rembourse la TVA au voyageur (voir NoterBordereauDetaxeAction et
+     * BordereauDetaxe::avertissement()), jamais un service ni un bien
+     * vendu sans TVA.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeBiensTaxes(Builder $query): Builder
+    {
+        return $query->where($this->qualifyColumn('nature'), NatureLigne::Bien)->where($this->qualifyColumn('montant_tva'), '>', 0);
+    }
+
+    /**
      * Montants d'un retour de $quantite articles de cette ligne : la ligne
      * calculée pour tout ce qui en a été rendu jusqu'ici, moins ce que les
      * avoirs déjà émis ont crédité (voir CalculateurLigne::retourCumule()).

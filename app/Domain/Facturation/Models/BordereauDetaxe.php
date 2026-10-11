@@ -3,11 +3,14 @@
 namespace App\Domain\Facturation\Models;
 
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
+use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Le n° du bordereau de vente à l'exportation (BVE) noté sur le ticket
@@ -26,8 +29,8 @@ class BordereauDetaxe extends Model
     use BelongsToMagasin, ProtegeLesDonneesValidees;
 
     /**
-     * La détaxe exige des achats de plus de 100,00 € TTC (art. 24 bis de
-     * l'annexe IV au CGI), en centimes.
+     * La détaxe exige plus de 100,00 € TTC de biens achetés (art. 24 bis
+     * de l'annexe IV au CGI), en centimes.
      */
     public const SEUIL_TTC_EN_CENTIMES = 10000;
 
@@ -58,14 +61,32 @@ class BordereauDetaxe extends Model
     }
 
     /**
-     * Le ticket ne dépasse pas 100,00 € TTC : la détaxe n'est pas refusée
-     * pour autant, les achats d'un voyageur pouvant se regrouper sur trois
-     * jours consécutifs, mais le magasin en est averti.
+     * Les biens taxés que le voyageur emporte ne dépassent pas 100,00 €
+     * TTC : la détaxe n'est pas refusée pour autant, les achats d'un
+     * voyageur pouvant se regrouper sur trois jours consécutifs, mais le
+     * magasin en est averti.
      */
     public function avertissement(): ?string
     {
-        return app(CalculateurLigne::class)->enCentiemes($this->facture->total_ttc) <= self::SEUIL_TTC_EN_CENTIMES
+        return $this->ttcDesBiensEmportesEnCentimes() <= self::SEUIL_TTC_EN_CENTIMES
             ? 'La détaxe exige plus de 100 € d\'achats TTC, éventuellement regroupés sur trois jours consécutifs.'
             : null;
+    }
+
+    /**
+     * Le TTC, en centimes, des biens taxés que le voyageur emporte : les
+     * lignes de biens du ticket qui portent de la TVA (voir
+     * LigneFacture::scopeBiensTaxes()), moins ce que des avoirs émis en ont
+     * repris. Ni un service ni un article rendu ne compte dans le seuil.
+     */
+    private function ttcDesBiensEmportesEnCentimes(): int
+    {
+        $calculateur = app(CalculateurLigne::class);
+        $biens = $this->facture->lignes()->biensTaxes()
+            ->with(['lignesAvoir' => fn (HasMany $reprises): HasMany => $reprises->whereHas('avoir', fn (Builder $avoirs): Builder => $avoirs->where('statut', StatutAvoir::Emise))])
+            ->get();
+
+        return $biens->sum(fn (LigneFacture $bien): int => $calculateur->enCentiemes($bien->montant_ttc)
+            - $bien->lignesAvoir->sum(fn (LigneAvoir $reprise): int => $calculateur->enCentiemes($reprise->montant_ttc)));
     }
 }

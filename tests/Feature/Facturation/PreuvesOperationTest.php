@@ -189,7 +189,6 @@ class PreuvesOperationTest extends TestCase
         $this->ajouter($livraison, TypePreuve::TransportB, 'POLICE-778');
 
         $this->assertSame(['Attestation de réception de l\'acquéreur, attendue au plus tard le 10/11/2026'], $this->manquantes($livraison));
-        $this->assertSame('2026-11-10', app(PreuvesRequises::class)->echeanceDeLAttestation($livraison)->toDateString());
     }
 
     public function test_une_attestation_attendue_depuis_un_jour_passe_est_signalee_en_retard(): void
@@ -342,6 +341,42 @@ class PreuvesOperationTest extends TestCase
         $this->assertSame([self::SECOND_DOCUMENT], $this->manquantes($livraison));
     }
 
+    /**
+     * Un document ne compte qu'une fois, même noté sous un autre type ou
+     * dans une autre casse : une seule lettre de voiture ne vaut pas les
+     * deux preuves d'une livraison intracommunautaire, ni une seule
+     * déclaration d'export la déclaration et le transport d'une livraison
+     * vers un DOM.
+     *
+     * @return array<string, array{0: string, 1: TypePreuve, 2: string, 3: TypePreuve, 4: string, 5: string}>
+     */
+    public static function memeDocumentNoteDeuxFois(): array
+    {
+        return [
+            'lettre de voiture notée aussi en autre preuve d\'expédition' => ['intracommunautaire', TypePreuve::TransportA, 'CMR-2026-0042', TypePreuve::TransportB, 'CMR-2026-0042', self::SECOND_DOCUMENT],
+            'lettre de voiture notée de nouveau en minuscules' => ['intracommunautaire', TypePreuve::TransportA, 'CMR-2026-0042', TypePreuve::TransportA, 'cmr-2026-0042', self::SECOND_DOCUMENT],
+            'déclaration d\'export notée aussi en document de transport' => ['dom', TypePreuve::Mrn, '26FR000000123456E1', TypePreuve::TransportA, '26fr000000123456e1', self::DOCUMENT_DE_TRANSPORT],
+        ];
+    }
+
+    #[DataProvider('memeDocumentNoteDeuxFois')]
+    public function test_un_meme_document_ne_compte_qu_une_fois_quels_que_soient_son_type_et_sa_casse(string $vente, TypePreuve $premierType, string $reference, TypePreuve $secondType, string $memeReference, string $manquante): void
+    {
+        $this->magasin();
+        $facture = $this->venteEmise($vente);
+        $this->ajouter($facture, $premierType, $reference);
+
+        $this->assertThrows(
+            fn () => $this->ajouter($facture, $secondType, $memeReference),
+            LogicException::class,
+            "La preuve « {$reference} » est déjà enregistrée sur cette facture.",
+        );
+
+        $this->assertSame(1, PreuveOperation::query()->count());
+        $this->assertSame([$manquante], $this->manquantes($facture));
+        $this->assertSame([$facture->id], Facture::query()->preuvesAFournir()->pluck('id')->all());
+    }
+
     public function test_une_preuve_ne_s_enregistre_pas_sur_un_brouillon(): void
     {
         $this->magasin();
@@ -464,6 +499,35 @@ class PreuvesOperationTest extends TestCase
             ->assertDontSeeText('À fournir : '.self::DECLARATION);
 
         $this->assertSame(TypePreuve::Cn23, PreuveOperation::query()->sole()->type);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function typesHorsDeLaListe(): array
+    {
+        return [
+            'type inconnu' => ['inconnu'],
+            'type que la nature n\'admet pas' => [TypePreuve::Mrn->value],
+        ];
+    }
+
+    /**
+     * Le formulaire n'accepte que les types qu'il propose, ceux que la
+     * nature admet : un autre type, envoyé sans passer par la liste, est
+     * une erreur de saisie, jamais une page d'erreur.
+     */
+    #[DataProvider('typesHorsDeLaListe')]
+    public function test_un_type_de_preuve_hors_de_la_liste_est_une_erreur_du_formulaire(string $type): void
+    {
+        $this->magasin();
+        $livraison = $this->venteEmise('intracommunautaire');
+
+        Livewire::test(ViewFacture::class, ['record' => $livraison->getRouteKey()])
+            ->callAction('ajouter_preuve', ['type' => $type, 'reference' => 'CMR-2026-0042'])
+            ->assertHasActionErrors(['type' => 'in']);
+
+        $this->assertSame(0, PreuveOperation::query()->count());
     }
 
     /**

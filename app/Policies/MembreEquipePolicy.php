@@ -3,15 +3,15 @@
 namespace App\Policies;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\MagasinUser;
 use App\Models\User;
 
 /**
- * Le propriétaire n'est JAMAIS modifiable ni supprimable via cette
- * gestion d'équipe : il n'existe qu'un seul chemin pour le devenir (la
- * création du magasin), jamais via ce formulaire -- sinon n'importe quel
- * administrateur pourrait évincer le propriétaire.
+ * Le propriétaire de la société n'est JAMAIS modifiable ni supprimable via
+ * cette gestion d'équipe : il n'existe qu'un seul chemin pour le devenir
+ * (l'inscription de la société), jamais via ce formulaire -- sinon
+ * n'importe quel administrateur pourrait évincer le propriétaire. Il n'est
+ * d'ailleurs rattaché à aucun magasin (voir User::magasins()).
  *
  * Personne ne modifie ni ne retire non plus sa propre ligne : on ne change
  * pas ses propres droits, on ne se donne pas de mot de passe sans le mot
@@ -47,12 +47,13 @@ class MembreEquipePolicy extends MagasinPolicy
     }
 
     /**
-     * Un membre du magasin actif, ni le propriétaire ni celui qui agit.
+     * Un membre du magasin actif, ni le propriétaire de la société ni celui
+     * qui agit.
      */
     private function estUnAutreMembreDuMagasinActif(User $user, MagasinUser $membre): bool
     {
         return $this->appartientAuMagasinActif($membre)
-            && $membre->role !== RoleMagasin::Proprietaire
+            && ! $membre->utilisateur->estProprietaire()
             && ! $membre->utilisateur()->is($user);
     }
 }

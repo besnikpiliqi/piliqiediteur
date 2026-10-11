@@ -1,9 +1,9 @@
 {{--
-    L'émetteur à gauche : le nom du magasin, puis son identité, sans ce
-    qu'il n'a pas renseigné (voir Emetteur::lignesDIdentite()) ; nature et
-    références du document à droite. L'émetteur d'un document émis est
-    celui qu'il a signé (voir FigeSonEmetteur), jamais le magasin
-    d'aujourd'hui.
+    L'émetteur à gauche : le nom du magasin, puis l'identité de la société
+    et de l'établissement, sans ce qui n'est pas renseigné (voir
+    Emetteur::lignesDIdentite()) ; nature et références du document à
+    droite. L'émetteur d'un document émis est celui qu'il a signé (voir
+    FigeSonEmetteur), jamais la société ni le magasin d'aujourd'hui.
 
     @param \App\Domain\Facturation\Services\Emetteur $emetteur
     @param string $titre

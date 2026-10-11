@@ -10,7 +10,6 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -37,7 +36,7 @@ class FacturesApercuWidgetTest extends TestCase
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-14 10:00:00'));
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -61,7 +60,7 @@ class FacturesApercuWidgetTest extends TestCase
     public function test_un_brouillon_ne_compte_pas_dans_le_chiffre_daffaires(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20]);
@@ -83,7 +82,7 @@ class FacturesApercuWidgetTest extends TestCase
     public function test_une_vente_du_lundi_apres_minuit_a_paris_compte_dans_la_semaine(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -166,7 +165,7 @@ class FacturesApercuWidgetTest extends TestCase
     public function test_un_avoir_compte_dans_la_periode_de_son_emission(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00'));
         $vente = $this->emettreUnTicket($proprietaire, Client::factory()->create(), 120.0, 1);
         $this->travelTo(CarbonImmutable::parse('2026-11-02 10:00:00'));
@@ -186,10 +185,10 @@ class FacturesApercuWidgetTest extends TestCase
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-14 10:00:00'));
         $proprietaireB = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], $proprietaireB);
+        $this->ouvrirUneSociete(['nom' => 'Autre boutique'], $proprietaireB);
         $this->emettreUnTicket($proprietaireB, Client::factory()->create(), 120.0, 1);
         $proprietaireA = User::factory()->create();
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaireA);
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaireA);
         $this->actingAs($proprietaireA);
         Filament::setTenant($magasinA);
 
@@ -201,7 +200,7 @@ class FacturesApercuWidgetTest extends TestCase
 
     public function test_un_membre_sans_acces_aux_factures_ne_voit_pas_le_widget(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLIENT_VIEW]);
         $this->actingAs($membre);
         Filament::setTenant($magasin);
@@ -219,7 +218,7 @@ class FacturesApercuWidgetTest extends TestCase
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-14 10:00:00'));
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $client = Client::factory()->create();
         $f1 = $this->emettreUnTicket($vendeur, $client, 120.0, 1);

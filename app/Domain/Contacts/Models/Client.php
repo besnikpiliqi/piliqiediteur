@@ -29,7 +29,7 @@ class Client extends Model
 
     /**
      * Nom du client comptoir créé pour chaque magasin (voir
-     * CreerMagasinAction) : une seule fiche partagée par toutes les ventes
+     * CreerEtablissementAction) : une seule fiche partagée par toutes les ventes
      * au comptoir anonymes, jamais une personne identifiée. Le comptoir se
      * reconnaît à est_comptoir, jamais à ce nom.
      */
@@ -37,7 +37,7 @@ class Client extends Model
 
     // magasin_id est volontairement absent : il est toujours dérivé du
     // TenantContext par le trait BelongsToMagasin, jamais du payload client.
-    // est_comptoir aussi : seul CreerMagasinAction le pose.
+    // est_comptoir aussi : seul CreerEtablissementAction le pose.
     protected $fillable = [
         'nom',
         'type_client',
@@ -148,7 +148,7 @@ class Client extends Model
 
     /**
      * La fiche partagée par les ventes au comptoir anonymes du magasin
-     * (voir CreerMagasinAction) : la seule où est_comptoir est vrai, quel
+     * (voir CreerEtablissementAction) : la seule où est_comptoir est vrai, quel
      * que soit le nom d'une autre fiche.
      */
     public function estComptoir(): bool

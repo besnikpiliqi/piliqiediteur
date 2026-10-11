@@ -3,10 +3,14 @@
 use App\Console\Commands\ClotureAutomatiqueCaisse;
 use App\Console\Commands\ExpirerDevis;
 use App\Console\Commands\MarquerFacturesEnRetard;
+use App\Console\Commands\PurgerDemandesInscription;
+use App\Console\Commands\PurgerJournalAudit;
 use App\Console\Commands\PurgerTraces;
 use App\Console\Commands\RelancerFacturesImpayees;
+use App\Console\Commands\ReverifierSirene;
 use App\Console\Commands\SoumettreEReportingPeriodique;
 use App\Console\Commands\VerifierIntegriteFiscale;
+use App\Console\Commands\VerifierJournalAudit;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -43,9 +47,23 @@ return Application::configure(basePath: dirname(__DIR__))
         // magasin, incrémentale, complète une fois par mois à un jour
         // propre à chaque magasin (voir VerifierIntegriteFiscale).
         $schedule->command(VerifierIntegriteFiscale::class)->dailyAt('03:00');
+        // À 3 h 30 : la vérification des chaînes du journal d'audit de
+        // chaque société (voir VerifierJournalAudit).
+        $schedule->command(VerifierJournalAudit::class)->dailyAt('03:30');
         // À 4 h : les traces techniques (adresse IP et navigateur) dont la
-        // durée de conservation est passée s'effacent (voir PurgerTraces).
+        // durée de conservation est passée s'effacent (voir PurgerTraces),
+        // puis les entrées expirées du journal d'audit, par le début de
+        // chaque chaîne (voir PurgerJournalAudit).
         $schedule->command(PurgerTraces::class)->dailyAt('04:00');
+        $schedule->command(PurgerJournalAudit::class)->dailyAt('04:15');
+        // Chaque heure : les demandes d'inscription expirées depuis 48
+        // heures s'effacent (voir PurgerDemandesInscription), et les
+        // contrôles Sirene restés impossibles reprennent (voir
+        // ReverifierSirene) ; le premier du mois, à 5 h, les sociétés
+        // validées et leurs magasins sont revérifiés.
+        $schedule->command(PurgerDemandesInscription::class)->hourly();
+        $schedule->command(ReverifierSirene::class)->hourly();
+        $schedule->command(ReverifierSirene::class, ['--toutes'])->monthlyOn(1, '05:00');
         // Les relances écrivent aux clients : en matinée plutôt qu'en pleine
         // nuit, et bien après le passage en retard des factures de la veille.
         $schedule->command(RelancerFacturesImpayees::class)->dailyAt('09:00');

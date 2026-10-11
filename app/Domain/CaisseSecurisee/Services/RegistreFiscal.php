@@ -34,7 +34,8 @@ use LogicException;
  * - Le contenu signé (format 1) est un JSON encodé une seule fois et gardé
  *   tel quel (EnregistrementFiscal::contenu) : la signature se vérifie sur
  *   ces octets, jamais re-sérialisés. Il reprend l'en-tête de
- *   l'enregistrement (magasin, caisse, chaîne, séquence, type, horodatage,
+ *   l'enregistrement (magasin -- son uuid, le SIREN de sa société et son
+ *   SIRET --, caisse, chaîne, séquence, type, horodatage,
  *   opérateur, version du module, clé, signature précédente, document) et
  *   ses données, où rien ne s'écrit en nombre à virgule flottante : un
  *   montant s'écrit en centimes entiers.
@@ -67,14 +68,18 @@ use LogicException;
  * existe toujours, se relit au contraire à jour une fois le verrou
  * obtenu, comme tout ce que lisent les requêtes suivantes.
  *
- * Les verrous se prennent toujours dans cet ordre : le registre, puis la
- * ligne du document, puis sequences_documents (voir
- * DocumentNumberingService, qui relit aussi la ligne du magasin sous un
- * verrou partagé quand il crée une série) ; un autre ordre exposerait deux
- * ventes simultanées à un interblocage. Le registre se verrouille donc en
- * tête de toute transaction qui écrit au registre, y compris celle d'une
- * action qui modifie un paramètre ayant un impact sur la conformité (voir
- * sousVerrou()).
+ * Les verrous se prennent toujours dans cet ordre : les registres des
+ * magasins concernés, par identifiant croissant, puis la ligne de la
+ * société (ses réglages), puis celle du compte modifié, puis la ligne du
+ * document, puis sequences_documents (voir DocumentNumberingService, qui
+ * relit aussi la ligne du magasin sous un verrou partagé quand il crée une
+ * série), et enfin la tête de la chaîne du journal d'audit (voir
+ * JournalAudit) ; un autre ordre exposerait deux ventes, ou une vente et
+ * un changement de réglage de la société, à un interblocage. Une vente ne
+ * verrouille jamais la ligne de sa société. Les registres se verrouillent
+ * donc en tête de toute transaction qui écrit au registre, y compris celle
+ * d'une action qui modifie un paramètre ayant un impact sur la conformité
+ * (voir sousVerrouDesMagasins()).
  *
  * Lié en scoped() (voir AppServiceProvider) : l'instant que donne le verrou
  * vaut pour toutes les écritures fiscales de la transaction, transactions
@@ -145,14 +150,66 @@ class RegistreFiscal
      */
     public function sousVerrou(Magasin $magasin, Closure $operation): mixed
     {
-        $transaction = $this->transactionsEnCours()->first();
+        return $this->enTeteDeTransaction(new Collection([$magasin]), fn () => $this->verrouiller($magasin), $operation);
+    }
 
-        if ($transaction !== null && ($this->verrous[$magasin->getKey()]['transaction'] ?? null) !== $transaction) {
-            throw new LogicException('Le registre fiscal se verrouille en tête de transaction, avant tout autre verrou : la transaction en cours doit le verrouiller dès son début.');
+    /**
+     * Exécute $operation sous le verrou des registres de ces magasins, pris
+     * par identifiant croissant, chacun sous son magasin (voir
+     * TenantContext::runAs()), comme sousVerrou() pour un seul : un réglage
+     * de la société qui s'inscrit au journal des événements de chacun de
+     * ses magasins (voir JournaliseSesParametresDeConformite). Seulement
+     * des magasins de la société active : jamais le registre d'une autre
+     * société. Dans la transaction déjà ouverte d'un appelant, celui-ci
+     * doit les avoir tous verrouillés en tête. Fermé par défaut : un
+     * registre qui ne peut pas se verrouiller refuse toute l'opération.
+     *
+     * @template TResultat
+     *
+     * @param  Collection<int, Magasin>  $magasins
+     * @param  Closure(): TResultat  $operation
+     * @return TResultat
+     *
+     * @throws LogicException quand l'un des magasins n'est pas de la société active
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function sousVerrouDesMagasins(Collection $magasins, Closure $operation): mixed
+    {
+        $contexte = app(TenantContext::class);
+        $societeId = $contexte->societe()->getKey();
+        $magasins = $magasins->sortBy(fn (Magasin $magasin): int => $magasin->getKey())->values();
+
+        if ($magasins->contains(fn (Magasin $magasin): bool => (int) $magasin->societe_id !== $societeId)) {
+            throw new LogicException('Le registre fiscal d\'un magasin ne se verrouille que dans le contexte de sa société.');
         }
 
-        return DB::transaction(function () use ($magasin, $operation): mixed {
-            $this->verrouiller($magasin);
+        return $this->enTeteDeTransaction($magasins, function () use ($contexte, $magasins): void {
+            foreach ($magasins as $magasin) {
+                $contexte->runAs($magasin, fn () => $this->verrouiller($magasin));
+            }
+        }, $operation);
+    }
+
+    /**
+     * Exécute $operation dans une transaction qui verrouille d'abord les
+     * registres de ces magasins ; une transaction déjà ouverte doit les
+     * tenir tous.
+     *
+     * @param  Collection<int, Magasin>  $magasins
+     */
+    private function enTeteDeTransaction(Collection $magasins, Closure $verrouiller, Closure $operation): mixed
+    {
+        $transaction = $this->transactionsEnCours()->first();
+
+        foreach ($magasins as $magasin) {
+            if ($transaction !== null && ($this->verrous[$magasin->getKey()]['transaction'] ?? null) !== $transaction) {
+                throw new LogicException('Le registre fiscal se verrouille en tête de transaction, avant tout autre verrou : la transaction en cours doit le verrouiller dès son début.');
+            }
+        }
+
+        return DB::transaction(function () use ($verrouiller, $operation): mixed {
+            $verrouiller();
 
             return $operation();
         });
@@ -247,8 +304,12 @@ class RegistreFiscal
     }
 
     /**
-     * Un magasin suspendu ou fermé n'inscrit plus ni vente ni encaissement
-     * (voir Magasin::verifierQuIlEstOuvert()) : la transaction de l'écriture
+     * Un magasin qui ne peut pas vendre n'inscrit ni vente ni encaissement
+     * (voir Magasin::verifierQuIlPeutVendre()) : en lecture seule, sa
+     * société en cours de vérification, ou son établissement pas encore
+     * confirmé. Le magasin se relit en base, sous le verrou de son
+     * registre, avec sa société : un changement validé pendant que la
+     * vente attendait le verrou est vu. La transaction de l'écriture
      * refusée annule ce qui la précède. Ses événements techniques, eux,
      * continuent.
      *
@@ -263,15 +324,15 @@ class RegistreFiscal
 
         $magasin = app(TenantContext::class)->magasin();
 
-        if ($chaine !== ChaineFiscale::Evenement) {
-            $magasin->verifierQuIlEstOuvert();
-        }
-
         if ($document !== null && (! $document->exists || (int) $document->getAttribute('magasin_id') !== $magasin->getKey())) {
             throw new LogicException('Le registre fiscal n\'enregistre qu\'un document déjà enregistré du magasin actif.');
         }
 
         [$tete, $instant] = $this->verrou($magasin);
+
+        if ($chaine !== ChaineFiscale::Evenement) {
+            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+        }
 
         foreach ($this->evenementsAutomatiques($tete) as [$code, $details]) {
             $this->inscrire($magasin, $tete, $instant, ChaineFiscale::Evenement, (string) $code->value, $this->evenement($code, $details), null, null);
@@ -410,7 +471,7 @@ class RegistreFiscal
 
         $contenu = json_encode([
             'format' => self::FORMAT,
-            'magasin' => ['uuid' => $magasin->uuid, 'siren' => $magasin->siren, 'siret' => $magasin->siret],
+            'magasin' => ['uuid' => $magasin->uuid, 'siren' => $magasin->societe->siren, 'siret' => $magasin->siret],
             'caisse' => $magasin->uuid,
             'chaine' => $chaine->value,
             'sequence' => $sequence,

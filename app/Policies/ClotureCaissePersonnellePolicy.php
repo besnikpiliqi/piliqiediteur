@@ -88,21 +88,24 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
     }
 
     /**
-     * Le droit de vendre ou d'encaisser du membre, lu sur ses permissions
-     * plutôt que demandé à la Gate : dans un magasin suspendu ou fermé,
-     * celle-ci refuse facture.create et paiement.creer (voir
-     * ControleDesDroits), mais le membre ferme toujours sa caisse et
-     * consulte toujours ses relevés.
+     * Le droit de vendre ou d'encaisser, celui du propriétaire de la
+     * société, ou d'un membre lu sur ses permissions plutôt que demandé à
+     * la Gate : dans un magasin en lecture seule, celle-ci refuse
+     * facture.create et paiement.creer (voir ControleDesDroits), mais
+     * chacun ferme toujours sa caisse et consulte toujours ses relevés.
+     * Le propriétaire n'ouvre que les magasins de sa société.
      */
     private function tientUneCaisse(User $user): bool
     {
-        return $user->checkPermissionTo(PermissionRegistry::FACTURE_CREATE)
+        return $user->estProprietaire()
+            || $user->checkPermissionTo(PermissionRegistry::FACTURE_CREATE)
             || $user->checkPermissionTo(PermissionRegistry::PAIEMENT_CREER);
     }
 
     /**
-     * Le vendeur a sa caisse dans le magasin actif : il est de son équipe,
-     * quel que soit l'état de son accès, ou il y a créé une facture ou
+     * Le vendeur a sa caisse dans le magasin actif : il est le propriétaire
+     * de sa société, ou de son équipe, quel que soit l'état de son accès,
+     * ou il y a créé une facture ou
      * enregistré un paiement (un membre retiré de l'équipe y garde sa
      * caisse ouverte jusqu'à ce qu'elle soit fermée). Les factures et les
      * paiements se lisent sous MagasinScope, dans ce seul magasin.
@@ -115,7 +118,8 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
             return false;
         }
 
-        return $vendeur->magasins()->whereKey($contexte->id())->exists()
+        return $vendeur->estProprietaireDuMagasin($contexte->magasin())
+            || $vendeur->magasins()->whereKey($contexte->id())->exists()
             || Facture::query()->where('cree_par', $vendeur->getKey())->exists()
             || Paiement::query()->where('cree_par', $vendeur->getKey())->exists();
     }

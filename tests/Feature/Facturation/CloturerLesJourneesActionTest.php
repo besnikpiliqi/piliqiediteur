@@ -13,8 +13,11 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Facturation\Services\JourneesDeCaisse;
 use App\Domain\Facturation\Services\PanierDeCaisse;
+use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -98,6 +101,26 @@ class CloturerLesJourneesActionTest extends TestCase
     }
 
     /**
+     * Fermé le 06/10 au soir et rouvert le 08/10 : le magasin n'a aucun
+     * ticket Z pour le 07/10, ni pour aucun jour hors de ses périodes
+     * d'activité ; les jours de fermeture et de réouverture en ont un.
+     */
+    public function test_les_journees_a_cloturer_ne_sont_que_celles_des_periodes_d_activite(): void
+    {
+        $magasin = $this->magasin();
+        $this->travelTo('2026-10-05 10:00:00');
+        $this->vendreUnTicket();
+        PeriodeActivite::query()->where('magasin_id', $magasin->id)->sole()->forceFill(['fin' => CarbonImmutable::parse('2026-10-06 18:00:00', config('app.timezone')), 'motif_fin' => MotifFermeture::Temporaire])->save();
+        (new PeriodeActivite)->forceFill(['magasin_id' => $magasin->id, 'debut' => CarbonImmutable::parse('2026-10-08 09:00:00', config('app.timezone'))])->save();
+        $this->travelTo('2026-10-09 19:00:00');
+
+        $clotures = app(CloturerLesJourneesAction::class)->jusquAu($magasin, now());
+
+        $this->assertSame(['2026-10-05', '2026-10-06', '2026-10-08', '2026-10-09'], $clotures->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->toDateString())->all());
+        $this->assertTrue(app(CloturerLesJourneesAction::class)->journeesEnAttente(now())->isEmpty());
+    }
+
+    /**
      * La première erreur arrête le magasin à la journée en échec : les
      * journées d'avant restent clôturées, et la suivante clôture reprend à
      * cette journée.
@@ -108,7 +131,7 @@ class CloturerLesJourneesActionTest extends TestCase
         $this->travelTo('2026-10-05 10:00:00');
         $this->vendreUnTicket();
         $this->travelTo('2026-10-08 19:00:00');
-        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class)) extends CloturerCaisseAction
+        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class)) extends CloturerCaisseAction
         {
             public function handle(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
             {

@@ -109,15 +109,15 @@ class TypeClientFigeTest extends TestCase
     public function test_une_facture_garde_le_siren_fige_de_son_client_redevenu_particulier(): void
     {
         $this->magasin();
-        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074']);
+        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '100000009', 'siret' => '10000000900017']);
         $facture = $this->emettre($client);
 
         $client->update(['type_client' => TypeClient::Particulier]);
 
         $facture = $facture->fresh();
         $this->assertSame(['FAC-MABOUT-2026-000001', 'Facture', 'facture-FAC-MABOUT-2026-000001.pdf', true], [$facture->numero, $facture->libelleDocument(), app(FacturePdfGenerator::class)->nomFichier($facture), $facture->relevantDeLeInvoicing()]);
-        $this->assertSame([TypeClient::Professionnel, 'Atelier Durand', '732829320', '73282932000074'], [$facture->type_client, $facture->client_nom, $facture->client_siren, $facture->client_siret]);
-        $this->assertStringContainsString('SIREN : 732829320', $this->rendu($facture));
+        $this->assertSame([TypeClient::Professionnel, 'Atelier Durand', '100000009', '10000000900017'], [$facture->type_client, $facture->client_nom, $facture->client_siren, $facture->client_siret]);
+        $this->assertStringContainsString('SIREN : 100000009', $this->rendu($facture));
     }
 
     /**
@@ -194,7 +194,7 @@ class TypeClientFigeTest extends TestCase
     public function test_l_avoir_d_une_facture_garde_les_identifiants_du_professionnel_redevenu_particulier(): void
     {
         $this->magasin();
-        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320']);
+        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '100000009', 'siret' => '10000000900017', 'numero_tva' => 'FR88100000009']);
         $facture = $this->emettre($client);
         $client->update(['type_client' => TypeClient::Particulier]);
 
@@ -202,17 +202,17 @@ class TypeClientFigeTest extends TestCase
 
         $this->assertSame([null, null, null], [$client->fresh()->siren, $client->fresh()->siret, $client->fresh()->numero_tva]);
         $this->assertSame(
-            ['AV-MABOUT-2026-000001', TypeClient::Professionnel, 'Atelier Durand', '732829320', '73282932000074', 'FR44732829320', '120.00'],
+            ['AV-MABOUT-2026-000001', TypeClient::Professionnel, 'Atelier Durand', '100000009', '10000000900017', 'FR88100000009', '120.00'],
             [$avoir->numero, $avoir->type_client, $avoir->client_nom, $avoir->client_siren, $avoir->client_siret, $avoir->client_numero_tva, $avoir->total_ttc],
         );
         $this->assertSame(
-            ['type_client' => 'professionnel', 'nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320'],
+            ['type_client' => 'professionnel', 'nom' => 'Atelier Durand', 'siren' => '100000009', 'siret' => '10000000900017', 'numero_tva' => 'FR88100000009'],
             Arr::only($this->clientSigne($avoir), ['type_client', 'nom', 'siren', 'siret', 'numero_tva']),
         );
         $pdf = app(AvoirPdfGenerator::class)->html($avoir->load('client', 'lignes.ligneFacture.facture', 'magasin'));
-        $this->assertStringContainsString('SIREN : 732829320', $pdf);
-        $this->assertStringContainsString('SIRET : 73282932000074', $pdf);
-        $this->assertStringContainsString('N° TVA : FR44732829320', $pdf);
+        $this->assertStringContainsString('SIREN : 100000009', $pdf);
+        $this->assertStringContainsString('SIRET : 10000000900017', $pdf);
+        $this->assertStringContainsString('N° TVA : FR88100000009', $pdf);
     }
 
     /**
@@ -224,7 +224,7 @@ class TypeClientFigeTest extends TestCase
     public function test_l_avoir_de_plusieurs_factures_prend_le_client_de_la_derniere_emise(): void
     {
         $this->magasin();
-        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '732829320', 'adresse' => '3 rue des Forges', 'code_postal' => '69002', 'ville' => 'Lyon']);
+        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '100000009', 'adresse' => '3 rue des Forges', 'code_postal' => '69002', 'ville' => 'Lyon']);
         $this->travelTo('2026-10-08 09:00:00');
         $emiseEnDernier = app(CreerFactureAction::class)->handle($client, $this->uneLigneA120Euros());
         $emiseEnPremier = app(CreerFactureAction::class)->handle($client, $this->uneLigneA120Euros());
@@ -243,7 +243,7 @@ class TypeClientFigeTest extends TestCase
 
         $this->assertSame(['FAC-MABOUT-2026-000001', 'FAC-MABOUT-2026-000002'], [$emiseEnPremier->numero, $emiseEnDernier->numero]);
         $this->assertSame(
-            ['Atelier Durand et Fils', '18 avenue Jean Jaurès', '69007', 'Lyon', '732829320', '240.00'],
+            ['Atelier Durand et Fils', '18 avenue Jean Jaurès', '69007', 'Lyon', '100000009', '240.00'],
             [$avoir->client_nom, $avoir->client_adresse, $avoir->client_code_postal, $avoir->client_ville, $avoir->client_siren, $avoir->total_ttc],
         );
     }

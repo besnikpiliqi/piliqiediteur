@@ -5,8 +5,6 @@ namespace Tests\Feature\Contacts;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -15,7 +13,7 @@ use Tests\TestCase;
 
 /**
  * Le client comptoir est la fiche des ventes anonymes du magasin (voir
- * CreerMagasinAction) : il se reconnaît à son marqueur, jamais à son nom,
+ * CreerEtablissementAction) : il se reconnaît à son marqueur, jamais à son nom,
  * et ne se renomme, ne change de type ni ne s'archive. Une fiche ne garde
  * que les identifiants d'entreprise qui correspondent à son type.
  */
@@ -25,7 +23,7 @@ class ClientTest extends TestCase
 
     private function creerMagasin(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
     }
 
     private function clientComptoir(): Client
@@ -112,7 +110,7 @@ class ClientTest extends TestCase
         $this->creerMagasin();
         $client = Client::factory()->etranger('BE', 'BE0123456789')->create([
             'siren' => '123456789',
-            'siret' => '12345678900011',
+            'siret' => '12121212000020',
             'identifiant_etranger' => 'BCE 0123.456.789',
         ]);
 
@@ -157,10 +155,10 @@ class ClientTest extends TestCase
     {
         $this->creerMagasin();
 
-        $client = Client::factory()->professionnel()->create(['siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320']);
+        $client = Client::factory()->professionnel()->create(['siren' => '100000009', 'siret' => '10000000900017', 'numero_tva' => 'FR88100000009']);
 
         $client->refresh();
-        $this->assertSame(['732829320', '73282932000074', 'FR44732829320', true], [$client->siren, $client->siret, $client->numero_tva, $client->etabli_en_france]);
+        $this->assertSame(['100000009', '10000000900017', 'FR88100000009', true], [$client->siren, $client->siret, $client->numero_tva, $client->etabli_en_france]);
     }
 
     /**

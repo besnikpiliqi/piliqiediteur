@@ -12,10 +12,11 @@ use Filament\Support\Contracts\HasLabel;
  * propriétaire coche ou décoche ensuite ce qu'il veut pour chacun (voir
  * CreerMembreMagasinAction et MettreAJourMembreMagasinAction).
  *
- * Seul le propriétaire a un rôle Spatie, 'owner', qui porte toutes les
- * autorisations du magasin (voir SeedMagasinRolesAction) ; un autre membre
- * a les autorisations cochées pour lui, données directement dans le
- * magasin. Le rôle propriétaire ne s'obtient qu'en créant le magasin.
+ * Un membre a les autorisations cochées pour lui, données directement
+ * dans le magasin. Le propriétaire de la société n'est membre d'aucun
+ * magasin : il a toutes les autorisations sans case (voir
+ * ControleDesDroits) ; le rôle propriétaire ne s'attribue donc jamais par
+ * la gestion d'équipe (voir assignables()).
  */
 enum RoleMagasin: string implements HasLabel
 {
@@ -38,8 +39,8 @@ enum RoleMagasin: string implements HasLabel
 
     /**
      * Rôles qu'un propriétaire peut attribuer à un membre de son équipe.
-     * "owner" est exclu : il n'existe qu'un seul chemin pour le devenir
-     * (la création du magasin elle-même), jamais via la gestion d'équipe.
+     * « owner » est exclu : on ne devient propriétaire qu'en inscrivant sa
+     * société, jamais via la gestion d'équipe.
      *
      * @return list<self>
      */
@@ -51,7 +52,7 @@ enum RoleMagasin: string implements HasLabel
     /**
      * Les autorisations cochées d'office pour ce rôle. Le propriétaire les
      * a toutes ; l'administrateur aussi, sauf les paramètres du magasin
-     * (identité, TVA, échéance et mentions des factures).
+     * (échéance et mentions des factures).
      *
      * @return list<string>
      */

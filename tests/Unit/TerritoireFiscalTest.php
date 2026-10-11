@@ -15,7 +15,7 @@ class TerritoireFiscalTest extends TestCase
     {
         return [
             'Allemagne' => ['DE123456789', 'DE'],
-            'France' => ['FR44732829320', 'FR'],
+            'France' => ['FR88100000009', 'FR'],
             'Grèce, préfixe EL' => ['EL123456789', 'EL'],
             'Grèce écrite avec son code de pays' => ['GR123456789', null],
             'Irlande du Nord' => ['XI123456789', 'XI'],

@@ -10,7 +10,6 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -31,7 +30,7 @@ class FacturePolicyTest extends TestCase
 
     public function test_un_vendeur_sans_vue_totale_ne_voit_que_ses_propres_factures(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $contexte = app(TenantContext::class);
         $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
@@ -62,7 +61,7 @@ class FacturePolicyTest extends TestCase
 
     public function test_avec_la_permission_vue_totale_un_role_voit_toutes_les_factures(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $contexte = app(TenantContext::class);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
         $comptable = $this->membre($magasin, RoleMagasin::Comptable, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES]);
@@ -102,7 +101,7 @@ class FacturePolicyTest extends TestCase
     public function test_envoyer_une_facture_du_proprietaire_selon_le_role(RoleMagasin $role, bool $peutEnvoyer): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $membre = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
         $facture = $this->emettreUneFactureEnTantQue($proprietaire, $magasin);
 
@@ -111,7 +110,7 @@ class FacturePolicyTest extends TestCase
 
     public function test_un_vendeur_envoie_ses_propres_factures(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Vendeur', 'email' => 'vendeur@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
 
         $this->assertTrue($vendeur->can('envoyer', $this->emettreUneFactureEnTantQue($vendeur, $magasin)));
@@ -120,10 +119,10 @@ class FacturePolicyTest extends TestCase
     public function test_personne_n_envoie_la_facture_d_un_autre_magasin(): void
     {
         $proprietaireA = User::factory()->create();
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $proprietaireA);
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A'], $proprietaireA);
         $factureDeA = $this->emettreUneFactureEnTantQue($proprietaireA, $magasinA);
         $proprietaireB = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+        $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
 
         $this->assertFalse($proprietaireB->can('envoyer', $factureDeA));
     }
@@ -134,7 +133,7 @@ class FacturePolicyTest extends TestCase
      */
     public function test_un_vendeur_encaisse_sa_propre_facture(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $facture = $this->emettreUneFactureEnTantQue($vendeur, $magasin);
 
@@ -158,7 +157,7 @@ class FacturePolicyTest extends TestCase
     #[DataProvider('autorisationsDevantLaFactureDUnCollegue')]
     public function test_encaisser_la_facture_d_un_collegue_exige_la_vue_de_toute_l_equipe(array $autorisations, bool $peutEncaisser): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $collegue = $this->membre($magasin, RoleMagasin::Vendeur);
         $membre = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
         $facture = $this->emettreUneFactureEnTantQue($collegue, $magasin);
@@ -168,7 +167,7 @@ class FacturePolicyTest extends TestCase
 
     public function test_une_facture_payee_ne_s_encaisse_plus(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $facture = $this->emettreUneFactureEnTantQue($vendeur, $magasin);
         app(EnregistrerPaiementAction::class)->handle($facture->client, [
@@ -182,7 +181,7 @@ class FacturePolicyTest extends TestCase
 
     public function test_sans_l_autorisation_d_enregistrer_un_paiement_on_n_encaisse_pas(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE]);
         $facture = $this->emettreUneFactureEnTantQue($vendeur, $magasin);
 
@@ -212,7 +211,7 @@ class FacturePolicyTest extends TestCase
     #[DataProvider('facturesVisiblesSelonLesAutorisations')]
     public function test_les_listes_de_factures_suivent_la_policy(array $autorisations, array $attendues): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $collegue = $this->membre($magasin, RoleMagasin::Vendeur);
         $membre = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
         $factures = [
@@ -250,7 +249,7 @@ class FacturePolicyTest extends TestCase
     public function test_justifier_une_vente_du_proprietaire_selon_le_role(RoleMagasin $role, bool $peutJustifier): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $membre = $this->membre($magasin, $role);
         $facture = $this->emettreUneFactureEnTantQue($proprietaire, $magasin);
 
@@ -259,7 +258,7 @@ class FacturePolicyTest extends TestCase
 
     public function test_un_vendeur_justifie_ses_propres_ventes(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
 
         $this->assertTrue($vendeur->can('justifier', $this->emettreUneFactureEnTantQue($vendeur, $magasin)));

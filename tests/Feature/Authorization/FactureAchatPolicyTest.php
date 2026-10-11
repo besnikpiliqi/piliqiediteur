@@ -8,9 +8,7 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -26,7 +24,7 @@ class FactureAchatPolicyTest extends TestCase
 
     public function test_sans_droit_de_valider_seul_un_brouillon_se_modifie(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER]);
         $brouillon = $this->brouillon();
         $validee = app(ValiderFactureAchatAction::class)->handle($this->brouillon());
@@ -37,7 +35,7 @@ class FactureAchatPolicyTest extends TestCase
 
     public function test_avec_le_droit_de_valider_une_facture_validee_se_corrige(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER]);
         $validee = app(ValiderFactureAchatAction::class)->handle($this->brouillon());
 

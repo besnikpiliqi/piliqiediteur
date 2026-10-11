@@ -4,6 +4,7 @@ namespace App\Domain\Authorization;
 
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\MagasinUser;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -11,28 +12,45 @@ use App\Models\User;
 /**
  * L'unique Gate::before de l'application (voir TenancyServiceProvider).
  *
- * Il fait d'abord ce que faisait celui de Spatie Permission : une
- * autorisation de PermissionRegistry se vérifie sur les permissions du
- * membre dans le magasin actif (voir MagasinTeamResolver), et toute autre
- * question passe aux policies. Il le remplace au lieu de s'y ajouter
- * (permission.register_permission_check_method à false) : celui de Spatie
- * répond « oui » à une autorisation détenue avant tout autre rappel, et le
- * refus d'un magasin en lecture seule n'aurait jamais lieu.
+ * Un compte qui n'est pas actif n'a aucun droit, où que ce soit.
  *
- * Quand le magasin actif est suspendu ou fermé (voir
- * StatutMagasin::estEnLectureSeule()), il refuse tout ce qui n'y reste pas
- * permis, quels que soient les droits du membre :
- * - viewAny et view, sur tout modèle : consulter et télécharger ;
- * - clôturer la journée (ClotureCaissePolicy::cloturer()), fermer sa
- *   caisse et celle d'un vendeur (ClotureCaissePersonnellePolicy::fermer()
- *   et fermerLaCaisseDe()) : les clôtures continuent jusqu'au bout ;
- * - tout geste sur l'équipe (MembreEquipePolicy) : couper un accès reste
- *   possible ;
- * - les autorisations de PermissionRegistry::permisesEnLectureSeule().
+ * Dans un magasin actif, il répond pour toute autorisation de
+ * PermissionRegistry : seulement dans un magasin de la société du compte
+ * (jamais ailleurs, propriétaire compris) ; oui pour le propriétaire de la
+ * société, qui a tous les droits sans case ni rattachement ; pour un
+ * membre, oui s'il a la permission dans ce magasin (Spatie en mode teams,
+ * voir MagasinTeamResolver), sinon la question passe aux policies. Il
+ * remplace le rappel de Spatie au lieu de s'y ajouter
+ * (permission.register_permission_check_method à false) : celui de Spatie
+ * répondrait « oui » avant tout autre rappel, et les refus ci-dessous
+ * n'auraient jamais lieu.
+ *
+ * Quel que soit le compte, il refuse dans ce magasin :
+ * - en lecture seule (voir Magasin::estEnLectureSeule()), tout ce qui n'y
+ *   reste pas permis : viewAny et view, sur tout modèle (consulter et
+ *   télécharger) ; clôturer la journée (ClotureCaissePolicy::cloturer()),
+ *   fermer sa caisse et celle d'un vendeur
+ *   (ClotureCaissePersonnellePolicy::fermer() et fermerLaCaisseDe()) : les
+ *   clôtures continuent jusqu'au bout ; tout geste sur l'équipe
+ *   (MembreEquipePolicy) : couper un accès reste possible, sauf dans une
+ *   société révoquée, en lecture seule totale ; les autorisations de
+ *   PermissionRegistry::permisesEnLectureSeule(), celles de l'équipe
+ *   exceptées dans une société révoquée ;
+ * - tant que le magasin ne peut pas vendre (société en cours de
+ *   vérification, établissement pas encore confirmé, voir
+ *   Magasin::peutVendre()), les autorisations des opérations commerciales
+ *   (PermissionRegistry::reserveesAuxOperationsCommerciales()).
  * Une policy qui, pour une consultation, demande une autre autorisation la
  * voit donc refusée : une consultation refusée reste sûre.
  *
- * Il n'a aucun état : le magasin actif se relit à chaque question, dans le
+ * Dans l'espace d'administration d'une société (une société posée sans
+ * magasin), il refuse tout au compte d'une autre société, et tout ce qui
+ * n'est pas une consultation quand la société est en lecture seule
+ * (suspendue, résiliée, révoquée ou refusée, voir
+ * Societe::estEnLectureSeule()) ; sinon les policies répondent, en mode
+ * strict (voir SocietePolicy et RessourceDuPanneauSociete).
+ *
+ * Il n'a aucun état : le contexte se relit à chaque question, dans le
  * TenantContext de la requête ou du job en cours (lié en scoped()).
  */
 final class ControleDesDroits
@@ -53,25 +71,59 @@ final class ControleDesDroits
      */
     public function __invoke(User $user, string $ability, array $arguments = []): ?bool
     {
-        if ($this->magasinActifEnLectureSeule() && ! $this->estPermisEnLectureSeule($ability, $arguments[0] ?? null)) {
+        if (! $user->estActif()) {
             return false;
         }
 
-        return $user->checkPermissionTo($ability) ?: null;
-    }
-
-    private function magasinActifEnLectureSeule(): bool
-    {
         $contexte = app(TenantContext::class);
 
-        return $contexte->has() && $contexte->magasin()->statut->estEnLectureSeule();
+        if (! $contexte->has()) {
+            if (! $contexte->aUneSociete()) {
+                return null;
+            }
+
+            $societe = $contexte->societe();
+
+            if ($societe->getKey() !== (int) $user->societe_id) {
+                return false;
+            }
+
+            return $societe->estEnLectureSeule() && ! in_array($ability, self::CONSULTATIONS, true) ? false : null;
+        }
+
+        $magasin = $contexte->magasin();
+
+        if ((int) $magasin->societe_id !== (int) $user->societe_id) {
+            return false;
+        }
+
+        if ($magasin->estEnLectureSeule() && ! $this->estPermisEnLectureSeule($ability, $arguments[0] ?? null, $magasin->societe->statut === StatutSociete::Revoquee)) {
+            return false;
+        }
+
+        if (! $magasin->peutVendre() && in_array($ability, PermissionRegistry::reserveesAuxOperationsCommerciales(), true)) {
+            return false;
+        }
+
+        if (! in_array($ability, PermissionRegistry::toutes(), true)) {
+            return null;
+        }
+
+        return $user->estProprietaire() || $user->checkPermissionTo($ability) ?: null;
     }
 
-    private function estPermisEnLectureSeule(string $ability, mixed $cible): bool
+    private function estPermisEnLectureSeule(string $ability, mixed $cible, bool $societeRevoquee): bool
     {
+        $gesteSurLEquipe = self::porteSur($cible, MagasinUser::class)
+            || in_array($ability, [PermissionRegistry::EQUIPE_CREER, PermissionRegistry::EQUIPE_MODIFIER], true);
+
+        if ($societeRevoquee && $gesteSurLEquipe && ! in_array($ability, self::CONSULTATIONS, true)) {
+            return false;
+        }
+
         return in_array($ability, self::CONSULTATIONS, true)
             || (isset(self::CLOTURES[$ability]) && self::porteSur($cible, self::CLOTURES[$ability]))
-            || self::porteSur($cible, MagasinUser::class)
+            || $gesteSurLEquipe
             || in_array($ability, PermissionRegistry::permisesEnLectureSeule(), true);
     }
 

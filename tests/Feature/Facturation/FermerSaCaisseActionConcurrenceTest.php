@@ -20,9 +20,10 @@ use Tests\TestCase;
 /**
  * Deux « Fermer ma caisse » du même vendeur au même instant (double clic,
  * deux onglets), chacune dans son processus, sur une vraie base
- * PostgreSQL : la seconde attend la première puis part d'elle, sans
- * compter une seconde fois ses ventes ni ses paiements, ni échouer sur la
- * clé primaire de clotures_caisse_personnelles_factures ou de
+ * PostgreSQL : la seconde attend la première puis part de sa borne (voir
+ * FermerSaCaisseAction::debutDuReleve()), sans compter une seconde fois
+ * ses ventes ni ses paiements, ni échouer sur la clé primaire de
+ * clotures_caisse_personnelles_factures ou de
  * clotures_caisse_personnelles_paiements (erreur 500).
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
@@ -61,7 +62,7 @@ class FermerSaCaisseActionConcurrenceTest extends TestCase
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $seconde = ClotureCaissePersonnelle::query()->whereKeyNot($premiere->id)->sole();
         $this->assertSame([1, 0], [$premiere->fresh()->nombre_ventes, $seconde->nombre_ventes]);
-        $this->assertSame($premiere->fresh()->cloturee_a->format('Y-m-d H:i:s'), $seconde->periode_debut->format('Y-m-d H:i:s'));
+        $this->assertSame($premiere->fresh()->jusqu_au->format('Y-m-d H:i:s'), $seconde->periode_debut->format('Y-m-d H:i:s'));
         $this->assertSame(1, DB::table('clotures_caisse_personnelles_factures')->count());
         $this->assertSame(1, DB::table('clotures_caisse_personnelles_paiements')->count());
     }

@@ -17,7 +17,6 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -286,7 +285,7 @@ class EnvoieLesDocumentsTest extends TestCase
     public function test_sans_la_permission_d_envoyer_les_actions_d_envoi_n_apparaissent_pas(): void
     {
         $this->travelTo('2026-10-01 10:00:00');
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = app(CreerMembreMagasinAction::class)->handle(
             $this->proprietaireDe($magasin),
             $magasin,
@@ -317,7 +316,7 @@ class EnvoieLesDocumentsTest extends TestCase
         $factureDeA = $this->emettreFacture(Client::factory()->create());
         EnvoiDocument::factory()->for($factureDeA, 'document')->envoye()->create(['destinataire' => 'secret@client-a.fr']);
         $proprietaireB = User::factory()->create();
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
 
         $this->actingAs($proprietaireB)
             ->get(FactureResource::getUrl('view', ['record' => $factureDeA], tenant: $magasinB))
@@ -328,7 +327,7 @@ class EnvoieLesDocumentsTest extends TestCase
     private function connecterLeProprietaire(): Magasin
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 

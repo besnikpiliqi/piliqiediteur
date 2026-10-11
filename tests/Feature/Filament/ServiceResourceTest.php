@@ -3,7 +3,6 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Catalogue\Models\Service;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -21,7 +20,7 @@ class ServiceResourceTest extends TestCase
     public function test_la_liste_montre_les_services_du_magasin_et_jamais_ceux_d_un_autre(): void
     {
         $autreProprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre Boutique'], $autreProprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Autre Boutique'], $autreProprietaire);
         $serviceAutreMagasin = Service::factory()->create(['nom' => 'Service de la concurrence']);
         $this->connecterProprietaire();
         $service = Service::factory()->create(['nom' => 'Diagnostic']);
@@ -131,7 +130,7 @@ class ServiceResourceTest extends TestCase
     public function test_un_vendeur_voit_les_services_sans_pouvoir_les_creer_ni_les_modifier(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
@@ -152,7 +151,7 @@ class ServiceResourceTest extends TestCase
      */
     public function test_le_service_d_un_autre_magasin_ne_se_modifie_pas_depuis_la_liste(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre Boutique'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Autre Boutique']);
         $serviceAutreMagasin = Service::factory()->create(['nom' => 'Service de la concurrence']);
         $this->connecterProprietaire();
 
@@ -183,7 +182,7 @@ class ServiceResourceTest extends TestCase
     private function connecterProprietaire(): Magasin
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 

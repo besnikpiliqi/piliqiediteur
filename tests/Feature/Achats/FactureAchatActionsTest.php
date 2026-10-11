@@ -22,12 +22,10 @@ use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Closure;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
@@ -1621,7 +1619,7 @@ class FactureAchatActionsTest extends TestCase
      */
     private function brouillonDuProprietaireAvecUnNouveauProduitPuisUnMembreSansDroitDeCreer(): array
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->actingAs($this->proprietaireDe($magasin));
         $fournisseur = Fournisseur::factory()->create();
         $existant = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
@@ -1648,7 +1646,7 @@ class FactureAchatActionsTest extends TestCase
      */
     private function connecterUnMembreQuiSaisitLesAchats(array $droitsProduit): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Observateur);

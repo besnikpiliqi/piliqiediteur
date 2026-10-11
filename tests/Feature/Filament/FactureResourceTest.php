@@ -23,7 +23,6 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -59,7 +58,7 @@ class FactureResourceTest extends TestCase
     public function test_la_facture_affiche_le_detail_des_produits_credites_par_un_avoir(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -101,7 +100,7 @@ class FactureResourceTest extends TestCase
     public function test_laction_avoir_sans_aucune_ligne_affiche_une_notification(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -130,7 +129,7 @@ class FactureResourceTest extends TestCase
     public function test_la_facture_affiche_le_credit_applique_automatiquement_par_un_avoir(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -182,7 +181,7 @@ class FactureResourceTest extends TestCase
     public function test_une_ligne_sans_produit_est_refusee(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -205,7 +204,7 @@ class FactureResourceTest extends TestCase
     public function test_la_description_et_le_pu_ht_dune_ligne_ne_se_modifient_pas(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -231,7 +230,7 @@ class FactureResourceTest extends TestCase
     public function test_la_colonne_paye_de_la_liste_inclut_le_credit_applique_par_avoir(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -284,7 +283,7 @@ class FactureResourceTest extends TestCase
     public function test_la_fiche_facture_affiche_le_paye_incluant_le_credit_applique_par_avoir(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -342,7 +341,7 @@ class FactureResourceTest extends TestCase
     public function test_creer_une_facture_avec_une_ligne_de_service(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -375,7 +374,7 @@ class FactureResourceTest extends TestCase
     public function test_saisir_le_prix_ttc_dune_ligne_totalise_exactement_a_quantite_2(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -408,7 +407,7 @@ class FactureResourceTest extends TestCase
     public function test_les_champs_calcules_en_direct_ne_sont_jamais_reecrits_pendant_la_frappe(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -439,7 +438,7 @@ class FactureResourceTest extends TestCase
     public function test_un_taux_de_tva_en_cours_de_frappe_ne_fait_pas_tomber_la_ligne_a_zero(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $service = Service::factory()->create(['nom' => 'Pose écran']);
@@ -470,12 +469,12 @@ class FactureResourceTest extends TestCase
     public function test_un_brouillon_rouvert_apres_le_passage_en_franchise_se_recalcule_a_zero_pour_cent(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3]]);
-        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
 
         $component = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()]);
         $cle = array_key_first($component->get('data.lignes'));
@@ -500,14 +499,14 @@ class FactureResourceTest extends TestCase
     public function test_un_service_enregistre_en_franchise_reprend_le_taux_du_territoire_apres_la_sortie_de_la_franchise(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
         $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
             ['service_id' => Service::factory()->create(['nom' => 'Pose écran'])->id, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'quantite' => 1],
         ]);
-        $magasin->update(['regime_tva' => RegimeTva::ReelNormalMensuel]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::ReelNormalMensuel]);
 
         $component = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()]);
         $component
@@ -542,7 +541,7 @@ class FactureResourceTest extends TestCase
     public function test_une_frappe_lit_le_client_et_le_catalogue_autant_de_fois_pour_vingt_lignes_que_pour_une(bool $professionnel): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -590,7 +589,7 @@ class FactureResourceTest extends TestCase
     public function test_un_taux_de_service_inhabituel_est_signale_sans_etre_refuse(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $service = Service::factory()->create(['nom' => 'Pose écran']);
@@ -620,7 +619,7 @@ class FactureResourceTest extends TestCase
     public function test_la_facture_du_magasin_totalise_84_99_ht_et_le_montre_ligne_par_ligne(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -668,7 +667,7 @@ class FactureResourceTest extends TestCase
     public function test_la_meme_facture_a_un_professionnel_totalise_85_ht_et_explique_son_calcul(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $ecran = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -699,7 +698,7 @@ class FactureResourceTest extends TestCase
     public function test_quantites_et_taux_saffichent_sans_zeros_inutiles_partout(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -740,7 +739,7 @@ class FactureResourceTest extends TestCase
     public function test_une_quantite_non_entiere_est_refusee_par_le_formulaire(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -766,7 +765,7 @@ class FactureResourceTest extends TestCase
     public function test_le_pu_ttc_saisi_est_garde_tel_quel(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -797,7 +796,7 @@ class FactureResourceTest extends TestCase
     public function test_un_produit_vise_a_un_prix_ttc_rond_totalise_exactement_a_quantite_2(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -828,7 +827,7 @@ class FactureResourceTest extends TestCase
     public function test_un_client_archive_n_est_plus_propose_pour_une_nouvelle_facture(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $proposable = Client::factory()->create(['nom' => 'Client proposé']);
@@ -847,7 +846,7 @@ class FactureResourceTest extends TestCase
     public function test_le_client_archive_d_un_brouillon_reste_affiche_a_sa_modification(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create(['nom' => 'Client archivé']);
@@ -867,7 +866,7 @@ class FactureResourceTest extends TestCase
     public function test_le_credit_du_client_archive_d_un_brouillon_reste_annonce_a_sa_modification(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -891,7 +890,7 @@ class FactureResourceTest extends TestCase
     public function test_l_echeance_s_annonce_fixee_a_l_emission_avec_le_delai_du_client(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->professionnel()->create(['delai_paiement_jours' => 45]);
@@ -911,7 +910,7 @@ class FactureResourceTest extends TestCase
     {
         $this->travelTo('2026-10-01 10:00:00');
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -937,7 +936,7 @@ class FactureResourceTest extends TestCase
     public function test_creer_et_emettre_une_facture_depuis_le_panneau(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -975,7 +974,7 @@ class FactureResourceTest extends TestCase
     public function test_sans_cle_de_signature_l_emission_est_refusee_avec_un_message(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -999,7 +998,7 @@ class FactureResourceTest extends TestCase
     public function test_une_facture_emise_ne_s_annule_pas_depuis_le_panneau_elle_se_corrige_par_un_avoir(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1033,7 +1032,7 @@ class FactureResourceTest extends TestCase
     public function test_telecharger_le_pdf_dune_facture_emise(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1058,7 +1057,7 @@ class FactureResourceTest extends TestCase
     public function test_un_brouillon_est_supprimable_mais_plus_une_fois_emis(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1086,7 +1085,7 @@ class FactureResourceTest extends TestCase
     public function test_sans_cle_de_signature_la_suppression_d_un_brouillon_est_refusee_avec_un_message(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
@@ -1105,7 +1104,7 @@ class FactureResourceTest extends TestCase
     public function test_sans_cle_de_signature_la_suppression_groupee_garde_le_brouillon_et_le_signale(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
@@ -1129,7 +1128,7 @@ class FactureResourceTest extends TestCase
     public function test_modifier_un_brouillon_depuis_le_panneau_remplace_les_lignes_et_recalcule_les_totaux(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1173,7 +1172,7 @@ class FactureResourceTest extends TestCase
     public function test_reenregistrer_un_brouillon_sans_modification_garde_exactement_son_total(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1200,7 +1199,7 @@ class FactureResourceTest extends TestCase
     public function test_laction_modifier_disparait_des_quune_facture_est_emise(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1223,7 +1222,7 @@ class FactureResourceTest extends TestCase
     public function test_la_suppression_en_masse_ignore_les_factures_deja_emises(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1253,7 +1252,7 @@ class FactureResourceTest extends TestCase
     public function test_la_page_de_detail_affiche_leg_reporting_pour_un_client_particulier(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1269,7 +1268,7 @@ class FactureResourceTest extends TestCase
     public function test_la_page_de_detail_affiche_le_statut_pdp_pour_un_client_professionnel(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = $this->completerIdentiteLegale(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire));
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire));
         MandatPdp::factory()->create(['magasin_id' => $magasin->id]);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
@@ -1288,7 +1287,7 @@ class FactureResourceTest extends TestCase
     public function test_enregistrer_un_brouillon_garde_le_service_de_ses_lignes_de_service(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $service = Service::factory()->create(['nom' => 'Remplacement écran']);
@@ -1312,7 +1311,7 @@ class FactureResourceTest extends TestCase
     public function test_encaisser_preselectionne_le_mode_de_paiement_prefere_du_client(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $facture = $this->emettreFactureDepuisLePanneau(Client::factory()->create(['mode_paiement_prefere' => ModePaiement::CarteBancaire]));
@@ -1345,7 +1344,7 @@ class FactureResourceTest extends TestCase
     public function test_la_liste_montre_le_client_fige_et_la_recherche_trouve_aussi_la_fiche_actuelle(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create(['nom' => 'Jean Ancien']);
@@ -1376,7 +1375,7 @@ class FactureResourceTest extends TestCase
     public function test_un_document_numerote_en_base_sans_copie_du_client_n_empeche_pas_l_affichage(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['suivi_stock' => false]);
@@ -1397,7 +1396,7 @@ class FactureResourceTest extends TestCase
 
     public function test_la_liste_ne_montre_que_les_factures_du_vendeur_sans_vue_totale(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
 
@@ -1426,7 +1425,7 @@ class FactureResourceTest extends TestCase
     public function test_creer_un_nouveau_client_a_la_volee_depuis_le_formulaire_facture(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1448,7 +1447,7 @@ class FactureResourceTest extends TestCase
     public function test_la_creation_rapide_refuse_un_professionnel_etabli_en_france_sans_siren(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1470,7 +1469,7 @@ class FactureResourceTest extends TestCase
     public function test_un_avoir_sur_plusieurs_factures_ne_montre_que_ce_qui_credite_cette_facture(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1501,7 +1500,7 @@ class FactureResourceTest extends TestCase
     public function test_un_taux_de_tva_hors_bornes_ne_fait_rien_planter_et_est_refuse(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1535,7 +1534,7 @@ class FactureResourceTest extends TestCase
     public function test_la_remise_apparait_sur_le_pdf_seulement_si_une_ligne_en_a_une(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1561,10 +1560,10 @@ class FactureResourceTest extends TestCase
      */
     public function test_le_client_d_un_autre_magasin_est_refuse_a_la_modification_d_un_brouillon(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $clientDUnAutreMagasin = Client::factory()->create();
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -1582,7 +1581,7 @@ class FactureResourceTest extends TestCase
     public function test_un_client_archive_ne_peut_pas_etre_choisi_pour_un_brouillon(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -1606,7 +1605,7 @@ class FactureResourceTest extends TestCase
     public function test_le_client_archive_deja_rattache_reste_celui_du_brouillon_modifie(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -1631,7 +1630,7 @@ class FactureResourceTest extends TestCase
     public function test_un_client_archive_est_refuse_a_la_creation_d_une_facture(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $archive = Client::factory()->trashed()->create();
@@ -1650,14 +1649,14 @@ class FactureResourceTest extends TestCase
 
     /**
      * Le magasin de Lyon à l'identité légale complète, n° de TVA
-     * FR44732829320, et son propriétaire connecté, le 9 octobre 2026 à
+     * FR88100000009, et son propriétaire connecté, le 9 octobre 2026 à
      * 10 h 15 à Paris.
      */
     private function magasinQuiVendHorsDeFrance(): Magasin
     {
         $this->travelTo('2026-10-09 10:15:00');
         $proprietaire = User::factory()->create();
-        $magasin = $this->completerIdentiteLegale(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire));
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire));
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -1790,7 +1789,7 @@ class FactureResourceTest extends TestCase
     #[DataProvider('naturesProposees')]
     public function test_les_natures_proposees_dependent_du_client_et_du_regime_du_magasin(bool $professionnel, RegimeTva $regime, array $natures): void
     {
-        $this->magasinQuiVendHorsDeFrance()->update(['regime_tva' => $regime]);
+        $this->reglerLaSociete($this->magasinQuiVendHorsDeFrance(), ['regime_tva' => $regime]);
         $client = $professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create();
 
         Livewire::test(CreateFacture::class)

@@ -15,7 +15,6 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\RetirerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -54,7 +53,7 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
     private function ouvrirLeMagasin(): Magasin
     {
         $proprietaire = User::factory()->create(['name' => 'Alice Martin']);
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -282,7 +281,7 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasin();
         $alice = $this->proprietaireDe($magasin);
-        $autreMagasin = app(CreerMagasinAction::class)->handle(['nom' => 'Autre Boutique'], User::factory()->create());
+        $autreMagasin = $this->ouvrirUneSociete(['nom' => 'Autre Boutique']);
         $bob = $this->vendeur($autreMagasin, 'Bob Durand');
         $this->vendreUnTicket($bob);
         app(TenantContext::class)->set($magasin);

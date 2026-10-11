@@ -3,7 +3,6 @@
 namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MagasinUser;
@@ -21,7 +20,7 @@ class MembreEquipePolicyTest extends TestCase
 
     public function test_avec_equipe_modifier_un_membre_modifie_et_retire_un_autre_membre(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $gestionnaire = $this->gestionnaireDeLEquipe($magasin);
         $ligneDUnCollegue = $this->ligneDe($magasin, $this->membre($magasin, RoleMagasin::Vendeur));
 
@@ -36,7 +35,7 @@ class MembreEquipePolicyTest extends TestCase
      */
     public function test_personne_ne_modifie_ni_ne_retire_sa_propre_ligne(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $gestionnaire = $this->gestionnaireDeLEquipe($magasin);
         $saLigne = $this->ligneDe($magasin, $gestionnaire);
 

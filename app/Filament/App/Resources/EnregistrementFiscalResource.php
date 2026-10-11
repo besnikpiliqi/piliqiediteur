@@ -76,7 +76,7 @@ class EnregistrementFiscalResource extends Resource
             InfolistSection::make('Trace technique')
                 ->description(fn (): string => 'Hors du contenu signé, effacée '.config('conservation.traces_en_mois').' mois après l\'événement.')
                 ->visible(fn (EnregistrementFiscal $record): bool => $record->chaine === ChaineFiscale::Evenement
-                    && auth()->user()->estProprietaireDe(Filament::getTenant()))
+                    && auth()->user()->estProprietaireDuMagasin(Filament::getTenant()))
                 ->schema([
                     TextEntry::make('trace.ip')->label('Adresse IP')
                         ->placeholder('Aucune (traitement automatique, ou trace effacée)'),

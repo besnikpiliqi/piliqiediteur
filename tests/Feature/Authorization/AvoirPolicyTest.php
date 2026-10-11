@@ -10,7 +10,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Avoir;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -45,7 +44,7 @@ class AvoirPolicyTest extends TestCase
     public function test_envoyer_un_avoir_selon_le_role(RoleMagasin $role, bool $peutEnvoyer): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $membre = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
         $avoir = $this->emettreUnAvoirEnTantQue($proprietaire);
 
@@ -55,10 +54,10 @@ class AvoirPolicyTest extends TestCase
     public function test_personne_n_envoie_l_avoir_d_un_autre_magasin(): void
     {
         $proprietaireA = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $proprietaireA);
+        $this->ouvrirUneSociete(['nom' => 'Boutique A'], $proprietaireA);
         $avoirDeA = $this->emettreUnAvoirEnTantQue($proprietaireA);
         $proprietaireB = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+        $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
 
         $this->assertFalse($proprietaireB->can('envoyer', $avoirDeA));
     }
@@ -69,7 +68,7 @@ class AvoirPolicyTest extends TestCase
      */
     public function test_sans_vue_totale_un_membre_ne_voit_que_ses_propres_avoirs(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeurA = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
         $vendeurB = $this->vendeurQuiVoitLesAvoirs($magasin, 'jean@example.test');
         $avoirDeA = $this->emettreUnAvoirEnTantQue($vendeurA);
@@ -81,7 +80,7 @@ class AvoirPolicyTest extends TestCase
 
     public function test_avec_la_vue_totale_un_membre_voit_les_avoirs_de_toute_l_equipe(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
         $comptable = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Comptable', 'email' => 'comptable@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Comptable);
         $avoirDuVendeur = $this->emettreUnAvoirEnTantQue($vendeur);

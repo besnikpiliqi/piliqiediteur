@@ -6,7 +6,6 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -23,7 +22,7 @@ class FactureBrouillonSuppressionTest extends TestCase
     public function test_le_createur_peut_supprimer_son_propre_brouillon(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create();
@@ -44,7 +43,7 @@ class FactureBrouillonSuppressionTest extends TestCase
     public function test_supprimer_un_brouillon_supprime_aussi_ses_lignes(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create();

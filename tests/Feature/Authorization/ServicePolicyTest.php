@@ -3,7 +3,6 @@
 namespace Tests\Feature\Authorization;
 
 use App\Domain\Catalogue\Models\Service;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -54,7 +53,7 @@ class ServicePolicyTest extends TestCase
     public function test_le_proprietaire_cree_et_modifie_mais_ne_supprime_jamais_un_service(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $service = Service::factory()->create();
 
         $this->assertTrue($proprietaire->can('create', Service::class));
@@ -65,7 +64,7 @@ class ServicePolicyTest extends TestCase
     public function test_un_service_d_un_autre_magasin_reste_refuse_meme_avec_la_permission(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->creerMagasin();
         $serviceAutreMagasin = Service::factory()->create();
         app(TenantContext::class)->set($magasin);
@@ -76,6 +75,6 @@ class ServicePolicyTest extends TestCase
 
     private function creerMagasin(): Magasin
     {
-        return app(CreerMagasinAction::class)->handle(['nom' => 'Boutique'], User::factory()->create());
+        return $this->ouvrirUneSociete(['nom' => 'Boutique']);
     }
 }

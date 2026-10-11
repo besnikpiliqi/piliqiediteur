@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Filament;
 
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -167,7 +166,7 @@ class ParametresRelancesTest extends TestCase
      */
     public function test_un_vendeur_n_accede_pas_aux_relances(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
 
         $this->actingAs($vendeur)
@@ -180,7 +179,7 @@ class ParametresRelancesTest extends TestCase
      */
     public function test_les_reglages_restent_ceux_du_magasin_actif(): void
     {
-        $autreMagasin = app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $autreMagasin = $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $magasin = $this->connecterLeProprietaire();
 
         Livewire::test(ParametresRelances::class)->fillForm(['actif' => true])->set('data.delais', $this->delais('3'))->call('save');
@@ -204,7 +203,7 @@ class ParametresRelancesTest extends TestCase
     private function connecterLeProprietaire(): Magasin
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 

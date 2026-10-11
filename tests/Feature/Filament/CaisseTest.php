@@ -23,10 +23,10 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
@@ -52,7 +52,7 @@ class CaisseTest extends TestCase
     public function test_le_formulaire_propose_le_client_comptoir_par_defaut(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -65,7 +65,7 @@ class CaisseTest extends TestCase
     public function test_un_vendeur_encaisse_une_vente_comptoir_depuis_la_caisse(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -104,7 +104,7 @@ class CaisseTest extends TestCase
     public function test_un_vendeur_avec_les_permissions_par_defaut_peut_encaisser_une_vente(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
@@ -150,7 +150,7 @@ class CaisseTest extends TestCase
     #[DataProvider('permissionsDeLaCaisse')]
     public function test_la_caisse_est_refusee_sans_l_une_de_ses_trois_permissions(string $permissionManquante): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Observateur);
@@ -172,7 +172,7 @@ class CaisseTest extends TestCase
      */
     public function test_encaisser_est_refuse_des_que_le_vendeur_perd_une_permission_de_la_caisse(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
@@ -198,7 +198,7 @@ class CaisseTest extends TestCase
      */
     public function test_encaisser_reverifie_les_permissions_de_la_caisse_sans_dependre_de_filament(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
@@ -229,7 +229,7 @@ class CaisseTest extends TestCase
     public function test_une_horloge_qui_recule_refuse_la_vente_avec_un_message_sans_rien_enregistrer(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
@@ -257,7 +257,7 @@ class CaisseTest extends TestCase
     public function test_encaisser_sans_aucune_ligne_est_refuse(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -286,7 +286,7 @@ class CaisseTest extends TestCase
     public function test_le_total_a_payer_correspond_exactement_a_la_somme_des_lignes_affichees(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -318,7 +318,7 @@ class CaisseTest extends TestCase
     public function test_un_article_a_40_euros_ttc_vendu_par_2_encaisse_exactement_80_euros(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -352,7 +352,7 @@ class CaisseTest extends TestCase
     public function test_la_caisse_deduit_le_credit_davoir_du_client_du_total_et_de_la_monnaie_a_rendre(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -393,7 +393,7 @@ class CaisseTest extends TestCase
     public function test_saisir_le_prix_ttc_dune_ligne_calcule_automatiquement_le_prix_ht(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -418,7 +418,7 @@ class CaisseTest extends TestCase
     public function test_creer_un_nouveau_client_a_la_volee_depuis_la_caisse(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -439,7 +439,7 @@ class CaisseTest extends TestCase
     public function test_la_caisse_refuse_de_creer_un_professionnel_etabli_en_france_sans_siren(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -461,7 +461,7 @@ class CaisseTest extends TestCase
     public function test_un_montant_recu_insuffisant_est_refuse(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -486,7 +486,7 @@ class CaisseTest extends TestCase
     public function test_la_caisse_montre_le_ht_et_la_tva_de_chaque_ligne_et_les_totaux(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -546,7 +546,7 @@ class CaisseTest extends TestCase
     public function test_un_montant_recu_absurde_ne_fait_pas_planter_la_caisse(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -610,7 +610,7 @@ class CaisseTest extends TestCase
     public function test_en_franchise_le_taux_d_un_produit_est_desactive_et_vaut_zero(): void
     {
         $magasin = $this->ouvrirLaCaisseDUnMagasin();
-        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $component = Livewire::test(Caisse::class)
             ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit');
@@ -785,7 +785,7 @@ class CaisseTest extends TestCase
     public function test_les_services_d_un_autre_magasin_ne_sont_jamais_proposes(): void
     {
         $autreProprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre Boutique'], $autreProprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Autre Boutique'], $autreProprietaire);
         Service::factory()->create(['nom' => 'Service de la concurrence']);
         $this->ouvrirLaCaisseDUnMagasin();
 
@@ -803,7 +803,7 @@ class CaisseTest extends TestCase
     public function test_la_recherche_d_un_service_ignore_la_casse_et_les_accents(): void
     {
         $autreProprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre Boutique'], $autreProprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Autre Boutique'], $autreProprietaire);
         Service::factory()->create(['nom' => 'Écran de la concurrence']);
         $this->ouvrirLaCaisseDUnMagasin();
         Service::factory()->create(['nom' => 'Remplacement écran']);
@@ -853,7 +853,7 @@ class CaisseTest extends TestCase
     public function test_un_vendeur_avec_les_permissions_par_defaut_cree_un_service_depuis_la_caisse(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
@@ -920,7 +920,7 @@ class CaisseTest extends TestCase
     public function test_un_service_d_un_autre_magasin_envoye_par_la_fenetre_n_ajoute_aucune_ligne(): void
     {
         $autreProprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre Boutique'], $autreProprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Autre Boutique'], $autreProprietaire);
         $serviceAutreMagasin = Service::factory()->create(['nom' => 'Service de la concurrence']);
         $this->ouvrirLaCaisseDUnMagasin();
         Service::factory()->create(['nom' => 'Diagnostic']);
@@ -948,10 +948,10 @@ class CaisseTest extends TestCase
 
     public function test_le_client_d_un_autre_magasin_est_refuse_a_l_encaissement(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $clientDUnAutreMagasin = Client::factory()->create();
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -1079,28 +1079,25 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * Tant que ses réglages communs ne sont pas ceux du magasin principal
-     * de sa société (K5), la caisse dit quel réglage diffère et quelle
-     * valeur prendre, désactive « Encaisser », et le domaine refuse le
-     * ticket.
+     * Tant que le magasin ne peut pas vendre, sa société étant encore en
+     * cours de vérification, la caisse ne s'ouvre pas, et le domaine refuse
+     * le ticket, sans rien enregistrer.
      */
-    public function test_la_caisse_d_un_magasin_non_aligne_sur_le_principal_de_sa_societe_n_encaisse_pas(): void
+    public function test_la_caisse_d_un_magasin_qui_ne_peut_pas_vendre_ne_s_ouvre_pas_et_n_encaisse_pas(): void
     {
-        $principal = Magasin::factory()->create(['siren' => '732829320', 'siret' => '73282932000074', 'raison_sociale' => 'Dupont SARL', 'numero_tva' => 'FR44732829320', 'regime_tva' => RegimeTva::ReelNormalMensuel]);
-        $magasin = $this->ouvrirLaCaisseDUnMagasin();
-        $magasin->update(['siren' => '732829320', 'siret' => '73282932000082', ...$principal->only(['regime_tva', 'option_debits_tva', 'numero_tva', 'raison_sociale', 'forme_juridique', 'capital_social', 'immatriculation'])]);
-        $principal->update(['raison_sociale' => 'Dupont Frères']);
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true], $proprietaire);
+        $this->actingAs($proprietaire);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $refus = 'Ce magasin n\'émet ni facture ni ticket tant que ses réglages communs ne sont pas ceux du magasin principal de votre société (SIREN 732829320) ; à prendre : raison sociale « Dupont Frères » (Identité du magasin).';
 
-        Livewire::test(Caisse::class)
-            ->assertSee($refus)
-            ->assertSeeHtml('disabled="disabled" type="submit"')
-            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes'])
-            ->call('encaisser')
-            ->assertNotified($refus);
+        $this->get(Caisse::getUrl(tenant: $magasin))->assertForbidden();
+        $this->assertThrows(
+            fn () => app(EnregistrerVenteCaisseAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes),
+            VenteNonAutoriseeException::class,
+            'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation.',
+        );
 
-        $this->assertSame(0, Facture::query()->count());
+        $this->assertSame([0, 0], [Facture::query()->count(), Paiement::query()->count()]);
     }
 
     /**
@@ -1217,7 +1214,7 @@ class CaisseTest extends TestCase
      */
     public function test_l_abandon_d_une_vente_ne_s_inscrit_que_dans_le_journal_du_magasin(): void
     {
-        $autreMagasin = app(CreerMagasinAction::class)->handle(['nom' => 'Autre Boutique'], User::factory()->create());
+        $autreMagasin = $this->ouvrirUneSociete(['nom' => 'Autre Boutique']);
         $magasin = $this->ouvrirLaCaisseDUnMagasin();
         $ecran = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
@@ -1349,17 +1346,18 @@ class CaisseTest extends TestCase
 
     /**
      * Une vente à un professionnel est une facture : tant que l'identité
-     * légale du magasin est incomplète, la caisse le dit dès le choix du
-     * client, et refuse l'encaissement sans rien enregistrer, ni facture ni
-     * paiement (B11). Un particulier n'est pas concerné.
+     * légale de la société est incomplète (sans capital ni immatriculation
+     * après son inscription), la caisse le dit dès le choix du client, et
+     * refuse l'encaissement sans rien enregistrer, ni facture ni paiement
+     * (B11). Un particulier n'est pas concerné.
      */
-    public function test_une_vente_a_un_professionnel_est_refusee_tant_que_l_identite_du_magasin_est_incomplete(): void
+    public function test_une_vente_a_un_professionnel_est_refusee_tant_que_l_identite_de_la_societe_est_incomplete(): void
     {
         $this->ouvrirLaCaisseDUnMagasin();
         $professionnel = Client::factory()->professionnel()->create();
         $particulier = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $refus = 'Facture impossible : identité du magasin incomplète (raison sociale, forme juridique, SIREN, SIRET, immatriculation, adresse, code postal, ville, n° de TVA intracommunautaire).';
+        $refus = 'Facture impossible : identité de la société incomplète (capital social, immatriculation).';
 
         Livewire::test(Caisse::class)
             ->fillForm(['client_id' => $particulier->id])
@@ -1371,7 +1369,7 @@ class CaisseTest extends TestCase
             ])
             ->assertSee($refus, escape: true)
             ->call('encaisser')
-            ->assertNotified('Pour émettre une facture à un professionnel, complétez d\'abord l\'identité du magasin (Paramètres > Identité du magasin) : raison sociale, forme juridique, SIREN, SIRET, immatriculation, adresse, code postal, ville, n° de TVA intracommunautaire.');
+            ->assertNotified('Pour émettre une facture à un professionnel, complétez d\'abord l\'identité de la société (Administration de la société > Identité) : capital social, immatriculation.');
 
         $this->assertSame([0, 0], [Facture::query()->count(), Paiement::query()->count()]);
     }
@@ -1471,7 +1469,7 @@ class CaisseTest extends TestCase
 
     public function test_le_bon_d_avoir_d_un_autre_magasin_est_introuvable(): void
     {
-        $autreMagasin = app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $autreMagasin = $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $bonDeLAutreMagasin = app(TenantContext::class)->runAs($autreMagasin, fn (): string => $this->bonDAvoirDeDouzeEuros()->numero);
         $this->ouvrirLaCaisseDUnMagasin();
 
@@ -1581,7 +1579,7 @@ class CaisseTest extends TestCase
     private function ouvrirLaCaisseDUnMagasin(): Magasin
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 

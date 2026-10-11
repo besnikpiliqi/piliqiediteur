@@ -17,7 +17,9 @@ use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -247,6 +249,25 @@ class CloturerCaisseActionTest extends TestCase
 
         $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-09'), LogicException::class, "Clôturez d'abord la journée du 08/10/2026.");
         $this->assertSame(0, ClotureCaisse::query()->count());
+    }
+
+    /**
+     * Fermé du 06/10 au soir au 08/10 au matin, le magasin n'a pas de
+     * journée de caisse le 07/10 : elle ne se clôture pas, et la journée
+     * du 08/10 suit directement celle du 06/10.
+     */
+    public function test_une_journee_hors_des_periodes_d_activite_est_refusee_et_ne_retient_pas_la_suivante(): void
+    {
+        $this->travelTo('2026-10-06 10:00:00');
+        $this->emettreFacturePour(Client::factory()->create());
+        app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-06');
+        PeriodeActivite::query()->where('magasin_id', $this->magasin->id)->sole()->forceFill(['fin' => CarbonImmutable::parse('2026-10-06 19:00:00', config('app.timezone')), 'motif_fin' => MotifFermeture::Temporaire])->save();
+        (new PeriodeActivite)->forceFill(['magasin_id' => $this->magasin->id, 'debut' => CarbonImmutable::parse('2026-10-08 09:00:00', config('app.timezone'))])->save();
+        $this->travelTo('2026-10-08 19:00:00');
+
+        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-07'), LogicException::class, "Le magasin était fermé le 07/10/2026 : cette journée n'a pas de clôture.");
+        $this->assertSame('2026-10-08', app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-08')->date_cloture->toDateString());
+        $this->assertSame(2, ClotureCaisse::query()->count());
     }
 
     public function test_une_journee_pas_encore_commencee_est_refusee(): void

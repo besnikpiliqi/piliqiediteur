@@ -3,7 +3,6 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Contacts\Models\Fournisseur;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\FournisseurResource;
@@ -42,7 +41,7 @@ class FournisseurResourceTest extends TestCase
     private function connecterLeProprietaire(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
     }
@@ -50,10 +49,10 @@ class FournisseurResourceTest extends TestCase
     public function test_le_siret_d_un_autre_fournisseur_du_magasin_est_refuse(): void
     {
         $this->connecterLeProprietaire();
-        Fournisseur::factory()->create(['siret' => '12345678900012']);
+        Fournisseur::factory()->create(['siret' => '12121212000012']);
 
         Livewire::test(CreateFournisseur::class)
-            ->fillForm(['nom' => 'Grossiste B', 'siret' => '12345678900012'])
+            ->fillForm(['nom' => 'Grossiste B', 'siret' => '12121212000012'])
             ->call('create')
             ->assertHasFormErrors(['siret' => self::siretPris()]);
 
@@ -63,10 +62,10 @@ class FournisseurResourceTest extends TestCase
     public function test_le_siret_d_un_fournisseur_archive_est_refuse(): void
     {
         $this->connecterLeProprietaire();
-        Fournisseur::factory()->trashed()->create(['siret' => '12345678900012']);
+        Fournisseur::factory()->trashed()->create(['siret' => '12121212000012']);
 
         Livewire::test(CreateFournisseur::class)
-            ->fillForm(['nom' => 'Grossiste B', 'siret' => '12345678900012'])
+            ->fillForm(['nom' => 'Grossiste B', 'siret' => '12121212000012'])
             ->call('create')
             ->assertHasFormErrors(['siret' => self::siretPris()]);
 
@@ -76,11 +75,11 @@ class FournisseurResourceTest extends TestCase
     public function test_la_modification_refuse_le_siret_d_un_autre_fournisseur_et_garde_le_sien(): void
     {
         $this->connecterLeProprietaire();
-        Fournisseur::factory()->create(['siret' => '12345678900012']);
+        Fournisseur::factory()->create(['siret' => '12121212000012']);
         $fournisseur = Fournisseur::factory()->create(['siret' => '98765432100019', 'telephone' => '0102030405']);
 
         Livewire::test(EditFournisseur::class, ['record' => $fournisseur->getRouteKey()])
-            ->fillForm(['siret' => '12345678900012'])
+            ->fillForm(['siret' => '12121212000012'])
             ->call('save')
             ->assertHasFormErrors(['siret' => self::siretPris()]);
         Livewire::test(EditFournisseur::class, ['record' => $fournisseur->getRouteKey()])
@@ -97,16 +96,16 @@ class FournisseurResourceTest extends TestCase
      */
     public function test_le_siret_d_un_fournisseur_d_un_autre_magasin_est_accepte(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
-        Fournisseur::factory()->create(['siret' => '12345678900012']);
+        $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
+        Fournisseur::factory()->create(['siret' => '12121212000012']);
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateFournisseur::class)
-            ->fillForm(['nom' => 'Grossiste A', 'siret' => '12345678900012'])
+            ->fillForm(['nom' => 'Grossiste A', 'siret' => '12121212000012'])
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $this->assertSame(1, Fournisseur::query()->where('siret', '12345678900012')->count());
+        $this->assertSame(1, Fournisseur::query()->where('siret', '12121212000012')->count());
     }
 
     public function test_un_siret_qui_ne_compte_pas_14_chiffres_est_refuse(): void
@@ -114,7 +113,7 @@ class FournisseurResourceTest extends TestCase
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateFournisseur::class)
-            ->fillForm(['nom' => 'Grossiste A', 'siret' => '1234567890001'])
+            ->fillForm(['nom' => 'Grossiste A', 'siret' => '1212121200001'])
             ->call('create')
             ->assertHasFormErrors(['siret' => 'Le SIRET compte 14 chiffres, sans espace.']);
 
@@ -156,12 +155,12 @@ class FournisseurResourceTest extends TestCase
     public function test_le_numero_de_tva_de_l_entreprise_du_magasin_est_refuse(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'siren' => '732829320', 'numero_tva' => 'FR44732829320'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'siren' => '100000009', 'numero_tva' => 'FR88100000009'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
         Livewire::test(CreateFournisseur::class)
-            ->fillForm(['nom' => 'Ma Boutique Lyon', 'numero_tva' => 'FR44732829320'])
+            ->fillForm(['nom' => 'Ma Boutique Lyon', 'numero_tva' => 'FR88100000009'])
             ->call('create')
             ->assertHasFormErrors(['numero_tva' => fn (array $reglesEnEchec, array $messages): bool => $messages === ['Ce n° de TVA est celui de votre propre entreprise : un achat entre magasins d\'une même société n\'est pas un achat.']]);
 
@@ -173,11 +172,11 @@ class FournisseurResourceTest extends TestCase
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateFournisseur::class)
-            ->fillForm(['nom' => 'Grossiste A', 'numero_tva' => 'FR32123456789'])
+            ->fillForm(['nom' => 'Grossiste A', 'numero_tva' => 'FR56121212120'])
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $this->assertDatabaseHas('fournisseurs', ['nom' => 'Grossiste A', 'numero_tva' => 'FR32123456789']);
+        $this->assertDatabaseHas('fournisseurs', ['nom' => 'Grossiste A', 'numero_tva' => 'FR56121212120']);
     }
 
     /**
@@ -186,12 +185,12 @@ class FournisseurResourceTest extends TestCase
     public function test_le_siret_d_un_etablissement_de_l_entreprise_du_magasin_est_refuse(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'siren' => '732829320'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'siren' => '100000009'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
         Livewire::test(CreateFournisseur::class)
-            ->fillForm(['nom' => 'Ma Boutique Lyon', 'siret' => '73282932000082'])
+            ->fillForm(['nom' => 'Ma Boutique Lyon', 'siret' => '10000000900025'])
             ->call('create')
             ->assertHasFormErrors(['siret' => fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_PROPRE_ENTREPRISE]]);
 
@@ -254,7 +253,7 @@ class FournisseurResourceTest extends TestCase
      */
     public function test_un_observateur_ne_restaure_pas_un_fournisseur_archive(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Observateur);

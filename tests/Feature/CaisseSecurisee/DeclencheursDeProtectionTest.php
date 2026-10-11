@@ -20,7 +20,7 @@ use Tests\TestCase;
  * PostgreSQL et SQLite. La migration échoue partout ailleurs. Leur refus
  * des modifications et des suppressions est vérifié sur les tables de
  * l'application par RegistreFiscalTest et InalterabiliteTest (ajout seul),
- * par CreerMagasinActionTest (sans suppression) et par TraceEvenementTest
+ * par CreerEtablissementActionTest (sans suppression) et par TraceEvenementTest
  * (effacement après expiration) ; celui du vidage et du remplacement
  * (INSERT OR REPLACE, sous SQLite) l'est ici, sur une table créée pour le
  * test.

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
@@ -10,11 +11,14 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
 
 /**
- * Inscrit chaque modification des droits d'un membre de l'équipe (JET 130)
- * au journal des événements du magasin, avec ses droits avant et après :
- * son rôle, son statut et les autorisations cochées pour lui dans ce
- * magasin, ou null quand il n'en est pas membre (avant sa création, après
- * son retrait).
+ * Inscrit chaque modification des droits d'une personne dans un magasin
+ * (JET 130) au journal des événements du magasin, avec ses droits avant
+ * et après : son rôle, son statut et ses autorisations dans ce magasin,
+ * ou null quand elle n'y en a aucun (avant sa création, après son
+ * retrait). Le propriétaire de la société a dans chacun de ses magasins
+ * tous les droits sans case : son rôle de société, le statut de son
+ * compte et toutes les autorisations ; un nouveau magasin d'une société
+ * validée les inscrit, avant nul (voir CreerEtablissementAction).
  *
  * Une action qui modifie des droits, dans sa transaction et avec le
  * magasin pour magasin actif, appelle avant() avant de rien modifier, puis
@@ -68,12 +72,26 @@ class JournalDesDroits
     }
 
     /**
-     * Ses droits dans ce magasin, tels que la base les donne.
+     * Ses droits dans ce magasin, tels que la base les donne, les
+     * autorisations par ordre alphabétique.
      *
      * @return array{role: string, statut: string, permissions: list<string>}|null
      */
     private function droits(Magasin $magasin, User $utilisateur): ?array
     {
+        $compte = User::query()->findOrFail($utilisateur->getKey());
+
+        if ($compte->estProprietaireDuMagasin($magasin)) {
+            $toutes = PermissionRegistry::toutes();
+            sort($toutes);
+
+            return [
+                'role' => $compte->role_societe->value,
+                'statut' => $compte->statut->value,
+                'permissions' => $toutes,
+            ];
+        }
+
         $membre = $magasin->membres()->where('user_id', $utilisateur->getKey())->first();
 
         if ($membre === null) {

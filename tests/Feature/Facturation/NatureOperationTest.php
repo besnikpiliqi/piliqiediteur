@@ -54,10 +54,19 @@ class NatureOperationTest extends TestCase
 
     private const LIVRAISON_BERLIN = ['livraison_adresse' => 'Musterstraße 1', 'livraison_code_postal' => '10115', 'livraison_ville' => 'Berlin', 'livraison_pays' => 'DE', 'livraison_date' => '2026-10-12', 'transport_par' => 'magasin'];
 
+    /**
+     * Le magasin LYON1, magasin actif : le n° de TVA et le régime se
+     * règlent sur sa société, le reste sur le magasin.
+     *
+     * @param  array<string, mixed>  $attributs
+     */
     private function magasin(array $attributs = []): Magasin
     {
         $this->travelTo('2026-10-09 10:15:00');
-        $magasin = Magasin::factory()->create(['code' => 'LYON1', 'code_postal' => '69001', ...$attributs]);
+        $deLaSociete = ['numero_tva', 'regime_tva'];
+        $magasin = Magasin::factory()
+            ->avecLaSociete(array_intersect_key($attributs, array_flip($deLaSociete)))
+            ->create(['code' => 'LYON1', 'code_postal' => '69001', ...array_diff_key($attributs, array_flip($deLaSociete))]);
         app(TenantContext::class)->set($magasin);
 
         return $magasin;
@@ -252,7 +261,7 @@ class NatureOperationTest extends TestCase
             ['service_id' => $reparation->id, 'prix_unitaire_ttc' => '30.00', 'quantite' => 1],
         ], NatureOperation::ExportHorsUe, ['livraison_pays' => 'US']);
 
-        $this->assertEmissionRefusee($brouillon, 'Impossible d\'émettre en « Export hors UE expédié par le magasin » : indiquez l\'adresse de livraison complète (adresse, code postal, ville et pays) ; « Réparation » : seuls des biens et leurs frais de livraison ou accessoires (port, emballage, assurance) se vendent ainsi ; renseignez le n° de TVA intracommunautaire du magasin (Paramètres > Identité du magasin). Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
+        $this->assertEmissionRefusee($brouillon, 'Impossible d\'émettre en « Export hors UE expédié par le magasin » : indiquez l\'adresse de livraison complète (adresse, code postal, ville et pays) ; « Réparation » : seuls des biens et leurs frais de livraison ou accessoires (port, emballage, assurance) se vendent ainsi ; renseignez le n° de TVA intracommunautaire de la société (Administration de la société > Identité). Choisissez « Vente en France » (TVA française) si ces conditions ne sont pas remplies.');
     }
 
     public function test_une_livraison_vers_un_dom_se_paie_au_prix_hors_taxe_avec_sa_mention(): void
@@ -316,7 +325,7 @@ class NatureOperationTest extends TestCase
         return [
             'n° vérifié la veille' => [[], 'DE123456789', '2026-10-08 18:00', true, 'le n° de TVA DE123456789 n\'a pas été trouvé valide sur VIES le 09/10/2026'],
             'n° inconnu de VIES aujourd\'hui' => [[], 'DE123456789', '2026-10-09 09:00', false, 'le n° de TVA DE123456789 n\'a pas été trouvé valide sur VIES le 09/10/2026'],
-            'n° de TVA français' => [[], 'FR32123456789', '2026-10-09 09:00', true, 'le client doit avoir un n° de TVA d\'un autre État membre de l\'Union (ou XI pour l\'Irlande du Nord)'],
+            'n° de TVA français' => [[], 'FR56121212120', '2026-10-09 09:00', true, 'le client doit avoir un n° de TVA d\'un autre État membre de l\'Union (ou XI pour l\'Irlande du Nord)'],
             'livraison en France' => [['livraison_code_postal' => '69001', 'livraison_ville' => 'Lyon', 'livraison_pays' => 'FR'], 'DE123456789', '2026-10-09 09:00', true, 'la livraison doit arriver dans un autre État membre de l\'Union européenne'],
             'sans date de livraison' => [['livraison_date' => null], 'DE123456789', '2026-10-09 09:00', true, 'indiquez la date de livraison'],
             'sans transport' => [['transport_par' => null], 'DE123456789', '2026-10-09 09:00', true, 'indiquez qui transporte les biens'],
@@ -522,7 +531,7 @@ class NatureOperationTest extends TestCase
         $this->assertThrows(
             fn () => $this->brouillon($client, [['produit_id' => $produit->id, 'quantite' => 1]], $nature, self::LIVRAISON_BERLIN),
             LogicException::class,
-            "Impossible d'enregistrer en « {$nature->getLabel()} » : votre magasin est en franchise en base de TVA, qui couvre aussi ses ventes hors de France. Choisissez « Vente en France ».",
+            "Impossible d'enregistrer en « {$nature->getLabel()} » : votre société est en franchise en base de TVA, qui couvre aussi ses ventes hors de France. Choisissez « Vente en France ».",
         );
 
         $this->assertSame(0, Facture::query()->count());

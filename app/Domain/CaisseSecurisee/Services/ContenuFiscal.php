@@ -29,7 +29,7 @@ use Illuminate\Support\Collection;
  * - « document », qui se recalcule depuis ses colonnes figées et celles
  *   de ses lignes : numéro, date d'émission, client (son type et la copie
  *   prise à l'émission, voir FigeLeClient, ainsi que le drapeau du client
- *   comptoir, lu sur sa fiche où seul CreerMagasinAction le pose),
+ *   comptoir, lu sur sa fiche où seul CreerEtablissementAction le pose),
  *   franchise de TVA (voir ContexteDeVente), nature d'opération (voir
  *   NatureOperation) et, pour une facture, livraison et vérification VIES
  *   retenue, auteur, devise, échéance, conditions, notes ou motif, lignes,
@@ -41,7 +41,8 @@ use Illuminate\Support\Collection;
  *   introuvable dans le magasin s'y recalcule vide, pour que la
  *   vérification de l'intégrité le signale au lieu de s'interrompre ;
  * - « contexte », figé à l'émission parce qu'il change ensuite ailleurs :
- *   l'émetteur, tel que le magasin est ce jour-là (voir Emetteur), que le
+ *   l'émetteur, tels que la société et le magasin sont ce jour-là (voir
+ *   Emetteur : identité légale, siège, forme et capital compris), que le
  *   document imprime ensuite pour toujours (voir FigeSonEmetteur), la
  *   catégorie de l'opération, les mentions fiscales imprimées (voir
  *   MentionsFiscales), pour une facture la vérification VIES qu'elle

@@ -15,7 +15,6 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\ReglagesCommunsDeLaSociete;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -72,11 +71,11 @@ use LogicException;
  * le domaine refuse en plus tout ticket et tout avoir sur ticket (voir
  * ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()).
  *
- * Tant que les réglages communs du magasin ne sont pas ceux du magasin
- * principal de sa société, elle n'encaisse rien non plus : elle dit quel
- * réglage diffère et quelle valeur prendre (voir reglagesNonAlignes()),
- * et le domaine refuse tout ticket et toute facture (voir
- * EmettreFactureAction).
+ * Tant que le magasin ne peut pas vendre (société en cours de
+ * vérification, établissement pas encore confirmé, lecture seule), elle ne
+ * s'ouvre pas : les autorisations d'émettre et d'encaisser y sont refusées
+ * (voir ControleDesDroits), et le domaine refuse tout ticket et toute
+ * facture (voir Magasin::verifierQuIlPeutVendre()).
  *
  * Pour toute vente, quel qu'en soit le client, « Utiliser un bon
  * d'avoir » demande le numéro d'un avoir fait au client comptoir (K6) :
@@ -389,24 +388,11 @@ class Caisse extends Page implements HasForms
     }
 
     /**
-     * Le refus qu'oppose le magasin à tout ticket et à toute facture, ses
-     * réglages communs n'étant pas ceux du magasin principal de sa société
-     * (voir ReglagesCommunsDeLaSociete::refusDEmission()) : affiché en tête
-     * de la caisse, « Encaisser » désactivé. Null quand il est aligné.
-     */
-    public function reglagesNonAlignes(): ?string
-    {
-        /** @var Magasin $magasin */
-        $magasin = Filament::getTenant();
-
-        return app(ReglagesCommunsDeLaSociete::class)->refusDEmission($magasin);
-    }
-
-    /**
      * Une vente à un professionnel est une facture : tant que l'identité
-     * légale du magasin est incomplète, son émission sera refusée (voir
-     * Magasin::verifierSonIdentiteLegale()), et la caisse le dit dès le
-     * choix du client. Null pour un particulier, ou une identité complète.
+     * légale de la société ou du magasin est incomplète, son émission sera
+     * refusée (voir Magasin::verifierSonIdentiteLegale()), et la caisse le
+     * dit dès le choix du client. Null pour un particulier, ou une identité
+     * complète.
      */
     private function factureImpossible(mixed $clientId): ?Htmlable
     {
@@ -426,7 +412,7 @@ class Caisse extends Page implements HasForms
 
         // En couleur, comme le crédit du client : ce message doit arrêter
         // le vendeur avant qu'il ne saisisse la vente.
-        return new HtmlString('<span style="color: #b91c1c; font-weight: 600;">'.e('Facture impossible : identité du magasin incomplète ('.implode(', ', $manquantes).').').'</span>');
+        return new HtmlString('<span style="color: #b91c1c; font-weight: 600;">'.e('Facture impossible : identité de la société incomplète ('.implode(', ', $manquantes).').').'</span>');
     }
 
     /**

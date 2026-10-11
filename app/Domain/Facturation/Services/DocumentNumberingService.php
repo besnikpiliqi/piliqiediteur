@@ -18,12 +18,13 @@ use Illuminate\Support\Facades\DB;
  * La plateforme contrôle l'unicité d'un numéro sur le SIREN du vendeur,
  * le numéro et l'année : deux magasins d'une même société, qui ont chacun
  * leurs séries, ne produisent donc jamais le même numéro, leurs codes
- * étant différents. Les références de produits (PRD-000001), qui ne sont
+ * étant différents dans la société, et jamais repris d'une société
+ * révoquée du même SIREN (voir CodeMagasin::estPris()). Les références de produits (PRD-000001), qui ne sont
  * pas des numéros de document, ne portent ni code de magasin ni année.
  *
  * Le préfixe d'une série s'écrit à sa création, avec le code du magasin
  * relu en base sous un verrou partagé : un changement de code en cours
- * (voir Magasin::codeEstDefinitif()) est attendu et pris en compte, et le
+ * (voir Magasin::aNumeroteUnDocument()) est attendu et pris en compte, et le
  * code ne change plus une fois la première série créée.
  *
  * Deux races gérées explicitement :
@@ -99,7 +100,7 @@ class DocumentNumberingService
             return "{$type->code()}-";
         }
 
-        $codeDuMagasin = Magasin::withTrashed()->whereKey($magasin->getKey())->sharedLock()->value('code');
+        $codeDuMagasin = Magasin::query()->whereKey($magasin->getKey())->sharedLock()->value('code');
 
         return "{$type->code()}-{$codeDuMagasin}-{$periodKey}-";
     }

@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\DB;
  * l'émission (voir ContexteDeVente et EmettreFactureAction). Il note aussi
  * la nature de l'opération et la livraison reçues avec ses attributs (voir
  * NoteSaNatureDOperation), avec laquelle ses lignes se calculent : une
- * nature que ce client et le régime du magasin permettent (voir
+ * nature que ce client et le régime de la société permettent (voir
  * ContexteDeVente::pourEnregistrer()), dont les autres conditions se
  * contrôlent à l'émission (voir ControleNatureOperation).
  */

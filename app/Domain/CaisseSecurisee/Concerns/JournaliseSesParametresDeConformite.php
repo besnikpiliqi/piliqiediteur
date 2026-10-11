@@ -4,33 +4,36 @@ namespace App\Domain\CaisseSecurisee\Concerns;
 
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use BackedEnum;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use LogicException;
 
 /**
  * Une fiche dont certaines colonnes sont des paramètres ayant un impact
- * sur la conformité (art. 286 I-3° bis du CGI) : le régime de TVA du
- * magasin, son option pour les débits, le taux de TVA d'un produit. Chaque
- * modification de l'un d'eux s'inscrit au journal des événements du
- * magasin (JET 270), avec son ancienne et sa nouvelle valeur, dans la même
- * transaction que la modification : l'une ne s'enregistre jamais sans
- * l'autre.
+ * sur la conformité (art. 286 I-3° bis du CGI) : les réglages fiscaux et
+ * les identifiants d'une société (régime de TVA, option pour les débits,
+ * mois de fin d'exercice, SIREN, n° de TVA), le taux de TVA d'un produit.
+ * Chaque modification de l'un d'eux s'inscrit au journal des événements
+ * de chaque magasin qu'il concerne (JET 270, voir magasinsDuJournal()),
+ * avec son ancienne et sa nouvelle valeur, dans la même transaction que la
+ * modification : l'une ne s'enregistre jamais sans l'autre.
  *
- * Quand un paramètre change, save() s'exécute sous le verrou du registre
- * du magasin, premier verrou de sa transaction (voir
- * RegistreFiscal::sousVerrou()) : appelé hors transaction, il ouvre la
- * sienne et verrouille le registre avant toute écriture ; appelé dans la
- * transaction d'une action, celle-ci doit avoir verrouillé le registre dès
- * son début (voir ConstructeurLigneAchat), sans quoi la modification est
- * refusée. L'ancienne valeur inscrite est celle de la fiche en base, relue
- * sous ce verrou : celle que la modification remplace réellement, même si
- * la fiche en mémoire a été chargée avant qu'une autre modification ne
- * l'emporte ; une valeur déjà en base n'est pas un changement. Fermé par
- * défaut : si le registre ne peut pas inscrire l'événement, la
- * modification est refusée avec lui.
+ * Quand un paramètre change, save() s'exécute sous le verrou des registres
+ * de tous ces magasins, premiers verrous de sa transaction, pris par
+ * identifiant croissant (voir RegistreFiscal::sousVerrouDesMagasins()) :
+ * appelé hors transaction, il ouvre la sienne et verrouille les registres
+ * avant toute écriture ; appelé dans la transaction d'une action, celle-ci
+ * doit les avoir verrouillés dès son début (voir ConstructeurLigneAchat),
+ * sans quoi la modification est refusée. La ligne de la fiche se relit
+ * ensuite, verrouillée : l'ancienne valeur inscrite est celle que la
+ * modification remplace réellement, même si la fiche en mémoire a été
+ * chargée avant qu'une autre modification ne l'emporte ; une valeur déjà
+ * en base n'est pas un changement. Fermé par défaut : si l'un des
+ * registres ne peut pas inscrire l'événement, la modification est
+ * refusée avec lui, dans aucun magasin.
  *
  * Seules les écritures qui passent par save() sont journalisées : un
  * update() en masse, DB::table() ou une requête brute n'y passent pas, et
@@ -49,13 +52,9 @@ trait JournaliseSesParametresDeConformite
             return parent::save($options);
         }
 
-        $magasinActif = app(TenantContext::class)->magasin();
+        $magasins = $this->magasinsDuJournal();
 
-        if ($this->magasinIdDesParametres() !== $magasinActif->getKey()) {
-            throw new LogicException('Un paramètre ayant un impact sur la conformité ne se modifie que dans son propre magasin, dont le journal des événements note la modification.');
-        }
-
-        return app(RegistreFiscal::class)->sousVerrou($magasinActif, function () use ($options, $parametresModifies): bool {
+        return app(RegistreFiscal::class)->sousVerrouDesMagasins($magasins, function () use ($options, $parametresModifies, $magasins): bool {
             $enBase = $this->newQueryWithoutScope(SoftDeletingScope::class)
                 ->whereKey($this->getKey())
                 ->lockForUpdate()
@@ -73,12 +72,14 @@ trait JournaliseSesParametresDeConformite
                     continue;
                 }
 
-                app(RegistreFiscal::class)->journaliser(CodeEvenement::ParametreDeConformite, [
-                    'parametre' => $parametre,
-                    ...$this->identiteDansLeJournal(),
-                    'ancienne_valeur' => $ancienneValeur,
-                    'nouvelle_valeur' => $nouvelleValeur,
-                ], $this->documentDuJournal());
+                foreach ($magasins as $magasin) {
+                    app(TenantContext::class)->runAs($magasin, fn () => app(RegistreFiscal::class)->journaliser(CodeEvenement::ParametreDeConformite, [
+                        'parametre' => $parametre,
+                        ...$this->identiteDansLeJournal(),
+                        'ancienne_valeur' => $ancienneValeur,
+                        'nouvelle_valeur' => $nouvelleValeur,
+                    ], $this->documentDuJournal()));
+                }
             }
 
             return true;
@@ -94,15 +95,17 @@ trait JournaliseSesParametresDeConformite
     abstract public static function parametresDeConformite(): array;
 
     /**
-     * Le magasin dont ces paramètres règlent la conformité : il doit être
-     * le magasin actif, dont le journal reçoit l'événement.
+     * Les magasins dont ces paramètres règlent la conformité, et dont le
+     * journal des événements reçoit chaque modification.
+     *
+     * @return Collection<int, Magasin>
      */
-    abstract protected function magasinIdDesParametres(): int;
+    abstract protected function magasinsDuJournal(): Collection;
 
     /**
      * Ce que l'événement retient de la fiche en plus du paramètre, figé
-     * au moment de la modification : son identité, quand ce n'est pas le
-     * magasin lui-même.
+     * au moment de la modification : son identité, quand ce n'est pas la
+     * société elle-même.
      *
      * @return array<string, mixed>
      */

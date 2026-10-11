@@ -5,33 +5,24 @@ namespace App\Domain\Tenancy\Enums;
 use Filament\Support\Contracts\HasLabel;
 
 /**
- * Un magasin est actif dès sa création (voir Magasin::booted()). Suspendu
- * ou fermé, il passe en lecture seule (voir estEnLectureSeule()) : la
- * consultation et les téléchargements restent possibles, plus aucune vente
- * ni aucun e-mail aux clients, tandis que ses clôtures, les statuts de ses
- * factures et ses déclarations continuent jusqu'au bout.
+ * Un magasin est actif dès sa création, et la société le ferme et le
+ * rouvre elle-même. Fermé, il passe en lecture seule, comme un magasin
+ * suspendu par l'éditeur ou dont la société n'est plus active (voir
+ * Magasin::estEnLectureSeule()) : la consultation et les téléchargements
+ * restent possibles, plus aucune vente ni aucun e-mail aux clients, tandis
+ * que ses clôtures, les statuts de ses factures et ses déclarations
+ * continuent jusqu'au bout.
  */
 enum StatutMagasin: string implements HasLabel
 {
-    case Active = 'active';
-    case Suspendu = 'suspended';
-    case Ferme = 'closed';
+    case Actif = 'actif';
+    case Ferme = 'ferme';
 
     public function getLabel(): string
     {
         return match ($this) {
-            self::Active => 'Actif',
-            self::Suspendu => 'Suspendu',
+            self::Actif => 'Actif',
             self::Ferme => 'Fermé',
         };
-    }
-
-    /**
-     * Ce que le magasin peut encore faire, voir ControleDesDroits et
-     * Magasin::verifierQuIlEstOuvert().
-     */
-    public function estEnLectureSeule(): bool
-    {
-        return $this !== self::Active;
     }
 }

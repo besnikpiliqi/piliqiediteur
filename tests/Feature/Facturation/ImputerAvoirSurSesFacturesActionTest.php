@@ -17,10 +17,8 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -281,7 +279,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
      */
     public function test_l_avoir_d_un_ticket_du_client_comptoir_ne_regle_aucun_autre_ticket_comptoir(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         app(TenantContext::class)->set($magasin);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $this->travelTo('2026-10-09 10:00:00');

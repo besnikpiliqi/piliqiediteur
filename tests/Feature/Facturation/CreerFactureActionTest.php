@@ -319,7 +319,7 @@ class CreerFactureActionTest extends TestCase
      */
     public function test_une_vente_a_un_professionnel_en_franchise_est_sans_tva_au_meme_prix(): void
     {
-        app(TenantContext::class)->set(Magasin::factory()->create(['regime_tva' => RegimeTva::FranchiseEnBase]));
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['regime_tva' => RegimeTva::FranchiseEnBase])->create());
 
         $facture = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->lignesDesArticles([['1.00', 20, 1000, 0]]));
 

@@ -52,7 +52,7 @@ enum TerritoireTva: string
     /**
      * Le logiciel gère-t-il un magasin de ce territoire ? Pas encore en
      * Guyane ni à Mayotte, où la TVA n'est pas applicable et où les
-     * documents suivent d'autres règles (voir IdentiteMagasin).
+     * documents suivent d'autres règles (voir CreerEtablissementAction).
      */
     public function estPrisEnCharge(): bool
     {

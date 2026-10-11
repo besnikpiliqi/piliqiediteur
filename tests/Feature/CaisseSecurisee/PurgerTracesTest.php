@@ -6,6 +6,7 @@ use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Models\TraceEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -57,7 +58,7 @@ class PurgerTracesTest extends TestCase
      * Le premier événement de chaque magasin est précédé de l'initialisation
      * de son registre (JET 260), inscrite par la même requête et tracée
      * elle aussi : quatre traces ont plus d'un an, deux dans chaque magasin,
-     * y compris dans un magasin supprimé depuis.
+     * y compris dans un magasin fermé depuis.
      */
     public function test_les_traces_de_plus_d_un_an_sont_effacees(): void
     {
@@ -67,7 +68,7 @@ class PurgerTracesTest extends TestCase
         $ancienneDeLyon = $this->evenementTraceLe($lyon, '2024-03-01 10:00:00');
         $ancienneDeNantes = $this->evenementTraceLe($nantes, '2024-03-01 11:00:00');
         $recente = $this->evenementTraceLe($lyon, '2024-06-01 10:00:00');
-        $nantes->delete();
+        $nantes->forceFill(['statut' => StatutMagasin::Ferme])->save();
         $this->travelTo(CarbonImmutable::parse('2025-03-02 04:00:00', 'Europe/Paris'));
 
         $this->artisan('app:purger-traces')

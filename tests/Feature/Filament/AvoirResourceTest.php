@@ -15,7 +15,6 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -56,7 +55,7 @@ class AvoirResourceTest extends TestCase
     public function test_laction_avoir_depuis_la_liste_des_factures_cree_et_emet_un_avoir_total(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -77,7 +76,7 @@ class AvoirResourceTest extends TestCase
     public function test_laction_avoir_nest_plus_visible_une_fois_toutes_les_lignes_integralement_creditees(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -98,7 +97,7 @@ class AvoirResourceTest extends TestCase
     public function test_laction_avoir_reste_visible_apres_un_avoir_partiel(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -137,7 +136,7 @@ class AvoirResourceTest extends TestCase
     public function test_creer_un_avoir_sur_une_ligne_dune_facture_brouillon_affiche_une_notification(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -174,7 +173,7 @@ class AvoirResourceTest extends TestCase
     public function test_telecharger_le_pdf_dun_avoir_emis(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -200,7 +199,7 @@ class AvoirResourceTest extends TestCase
     public function test_un_refus_a_l_emission_depuis_le_formulaire_ne_laisse_aucun_brouillon_d_avoir(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -222,7 +221,7 @@ class AvoirResourceTest extends TestCase
     public function test_un_refus_a_l_emission_depuis_la_liste_des_factures_ne_laisse_aucun_brouillon_d_avoir(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $facture = $this->emettreFactureDepuisLePanneau(Client::factory()->create());
@@ -244,7 +243,7 @@ class AvoirResourceTest extends TestCase
     public function test_creer_un_avoir_couvrant_deux_factures_differentes_du_meme_client(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -282,7 +281,7 @@ class AvoirResourceTest extends TestCase
     public function test_un_client_archive_recoit_un_avoir_couvrant_deux_de_ses_factures(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create(['nom' => 'Société Archivée']);
@@ -316,7 +315,7 @@ class AvoirResourceTest extends TestCase
     public function test_un_client_archive_sans_rien_a_crediter_n_est_ni_propose_ni_accepte(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -346,7 +345,7 @@ class AvoirResourceTest extends TestCase
     public function test_le_formulaire_ne_propose_que_les_lignes_du_client_selectionne(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -372,12 +371,12 @@ class AvoirResourceTest extends TestCase
     public function test_le_formulaire_fait_choisir_tickets_ou_factures_avant_de_proposer_les_lignes(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = $this->completerIdentiteLegale(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire));
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire));
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
         $ticket = $this->emettreFactureDepuisLePanneau($client);
-        $client->update(['type_client' => TypeClient::Professionnel, 'siret' => '55210055400013']);
+        $client->update(['type_client' => TypeClient::Professionnel, 'siret' => '10000000900025']);
         $this->emettreFactureDepuisLePanneau($client);
 
         $formulaire = Livewire::test(CreateAvoir::class)
@@ -396,10 +395,10 @@ class AvoirResourceTest extends TestCase
 
     public function test_le_client_d_un_autre_magasin_est_refuse(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $clientDUnAutreMagasin = Client::factory()->create();
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -418,7 +417,7 @@ class AvoirResourceTest extends TestCase
     public function test_un_vendeur_sans_vue_totale_ne_voit_que_ses_propres_avoirs(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeurA = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
         $vendeurB = $this->vendeurQuiVoitLesAvoirs($magasin, 'jean@example.test');
         $avoirDeA = $this->emettreUnAvoirEnTantQue($vendeurA);
@@ -495,7 +494,7 @@ class AvoirResourceTest extends TestCase
      */
     private function clientDesDeuxVendeurs(): array
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $autorisations = [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER];
         $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
@@ -542,7 +541,7 @@ class AvoirResourceTest extends TestCase
     public function test_le_formulaire_annonce_ce_que_devient_le_credit_de_l_avoir(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();

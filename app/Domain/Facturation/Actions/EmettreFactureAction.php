@@ -17,7 +17,7 @@ use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\ReglementComptant;
-use App\Domain\Tenancy\Services\ReglagesCommunsDeLaSociete;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -37,19 +37,22 @@ use LogicException;
  * changé de type depuis l'enregistrement du brouillon, l'émission est
  * refusée : le brouillon doit être réenregistré pour son nouveau type, qui
  * décide aussi de son calcul (voir
- * ContexteDeVente::refuserSiLeTypeDeClientAChange()). De même si le
- * magasin est entré en franchise en base de TVA, ou en est sorti, depuis :
- * ses lignes doivent être recalculées, à 0 % ou à leurs taux (voir
- * ContexteDeVente::refuserSiLeRegimeAChange()).
+ * ContexteDeVente::refuserSiLeTypeDeClientAChange()). De même si la
+ * société est entrée en franchise en base de TVA, ou en est sortie,
+ * depuis : ses lignes doivent être recalculées, à 0 % ou à leurs taux
+ * (voir ContexteDeVente::refuserSiLeRegimeAChange()), le régime étant
+ * relu sur la société après le verrou du registre, sous lequel il change
+ * (voir JournaliseSesParametresDeConformite).
  *
- * Un magasin dont les réglages communs à sa société (régime de TVA, n° de
- * TVA, raison sociale...) ne sont pas ceux du magasin principal de son
- * SIREN n'émet ni facture ni ticket (K5, voir
- * ReglagesCommunsDeLaSociete::verifierQuIlEstAligne()) : le refus dit
- * quel réglage diffère et quelle valeur prendre.
+ * Un magasin n'émet ni facture ni ticket tant qu'il ne peut pas vendre
+ * (voir Magasin::verifierQuIlPeutVendre()) : société en cours de
+ * vérification ou refusée, établissement pas encore confirmé par Sirene,
+ * lecture seule. Le contrôle se fait après le verrou du registre, sur le
+ * magasin et la société relus en base.
  *
  * Une facture à un professionnel exige en plus l'identité légale complète
- * du magasin (B11, voir Magasin::verifierSonIdentiteLegale()) et, pour un
+ * de la société et du magasin (B11, voir
+ * Magasin::verifierSonIdentiteLegale()) et, pour un
  * client établi en France, son SIREN : sinon elle reste un brouillon,
  * sans numéro consommé ni signature. Les tickets restent possibles.
  *
@@ -64,7 +67,8 @@ use LogicException;
  * bis du CGI) :
  *  1. le registre fiscal du magasin actif est verrouillé, avant toute
  *     lecture, la facture et la numérotation (voir RegistreFiscal) ; il
- *     donne l'instant de l'émission ;
+ *     donne l'instant de l'émission ; le magasin, relu, doit pouvoir
+ *     vendre ;
  *  2. la facture, relue verrouillée, prend la copie de son client (nom,
  *     adresse, identifiants), la vérification VIES que retient sa nature,
  *     son numéro, dans la série et l'année de cet
@@ -99,7 +103,6 @@ class EmettreFactureAction
         private readonly RegistreFiscal $registre,
         private readonly ContenuFiscal $contenuFiscal,
         private readonly EnregistrerPaiementAction $enregistrerPaiement,
-        private readonly ReglagesCommunsDeLaSociete $reglagesCommuns,
         private readonly ControleNatureOperation $controleNatureOperation,
     ) {}
 
@@ -114,6 +117,7 @@ class EmettreFactureAction
     {
         return DB::transaction(function () use ($facture, $reglement) {
             $instant = $this->registre->verrouiller(app(TenantContext::class)->magasin());
+            Magasin::query()->findOrFail(app(TenantContext::class)->id())->verifierQuIlPeutVendre();
             $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
 
             if (! $facture->statut->peutTransitionnerVers(StatutFacture::Emise)) {
@@ -126,7 +130,6 @@ class EmettreFactureAction
 
             ContexteDeVente::refuserSiLeTypeDeClientAChange($facture);
             ContexteDeVente::refuserSiLeRegimeAChange($facture);
-            $this->reglagesCommuns->verifierQuIlEstAligne($facture->magasin);
 
             if ($facture->estPourUnProfessionnel()) {
                 $this->refuserUneFactureProfessionnelleIncomplete($facture);
@@ -180,8 +183,8 @@ class EmettreFactureAction
     }
 
     /**
-     * Une facture à un professionnel imprime l'identité légale complète du
-     * magasin et, pour un client établi en France, son SIREN (B12) : la
+     * Une facture à un professionnel imprime l'identité légale complète de
+     * la société et du magasin et, pour un client établi en France, son SIREN (B12) : la
      * fiche du client, dont le type vient d'être contrôlé, est celle que
      * la facture copie à son émission.
      *

@@ -33,8 +33,11 @@ use Throwable;
  * journée lui-même : une vente faite après minuit reste pour la fermeture
  * suivante. Une caisse qu'un passage n'a pas pu fermer l'est au suivant.
  *
- * Un magasin suspendu ou fermé est clôturé comme les autres : ses clôtures
- * continuent jusqu'au bout. Seul un magasin supprimé n'est plus traité. La
+ * Elle traite tous les magasins, ceux des sociétés suspendues ou
+ * résiliées et les magasins suspendus compris : leurs clôtures continuent
+ * jusqu'au bout. Un magasin fermé n'a plus de journée à clôturer après le
+ * jour de sa fermeture, ni pendant ses jours de fermeture (voir
+ * CloturerLesJourneesAction et ses périodes d'activité). La
  * panne d'un magasin n'arrête pas les suivants : elle est signalée au
  * journal de l'application (report()), et ce magasin reprend à sa journée
  * en échec au passage suivant ; elle n'empêche pas non plus la fermeture
@@ -52,7 +55,7 @@ class ClotureAutomatiqueCaisse extends Command
         $caissesFermees = 0;
         $magasinsEnEchec = 0;
 
-        Magasin::query()->each(function (Magasin $magasin) use ($tenantContext, $cloturerLesJournees, $fermerLesCaisses, $hier, $finDHier, &$clotures, &$caissesFermees, &$magasinsEnEchec): void {
+        Magasin::query()->orderBy('id')->each(function (Magasin $magasin) use ($tenantContext, $cloturerLesJournees, $fermerLesCaisses, $hier, $finDHier, &$clotures, &$caissesFermees, &$magasinsEnEchec): void {
             $tenantContext->runAs($magasin, function () use ($magasin, $cloturerLesJournees, $fermerLesCaisses, $hier, $finDHier, &$clotures, &$caissesFermees, &$magasinsEnEchec): void {
                 $avant = ClotureCaisse::query()->count();
                 $enEchec = false;

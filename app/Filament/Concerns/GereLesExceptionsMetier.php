@@ -3,6 +3,7 @@
 namespace App\Filament\Concerns;
 
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
+use App\Domain\Tenancy\Exceptions\JournalAuditNonConfigureException;
 use Closure;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
@@ -16,9 +17,11 @@ use LogicException;
  * - une LogicException (InvalidArgumentException y compris, puisqu'elle
  *   en hérite en PHP) pour un geste invalide ;
  * - une RefusFiscalException quand le module fiscal ne peut pas enregistrer
- *   l'opération (clé de signature absente, horloge du serveur qui recule) :
- *   un incident du serveur, signalé en plus au journal de l'application
- *   (report()) pour qu'il soit corrigé.
+ *   l'opération (clé de signature absente, horloge du serveur qui recule),
+ *   ou une JournalAuditNonConfigureException quand le journal d'audit ne
+ *   peut pas l'inscrire (sa clé absente) : un incident du serveur, signalé
+ *   en plus au journal de l'application (report()) pour qu'il soit
+ *   corrigé.
  *
  * Sans ce trait, l'exception remonterait telle quelle jusqu'à la page
  * d'erreur Laravel par défaut : inacceptable pour un magasin en
@@ -40,7 +43,7 @@ trait GereLesExceptionsMetier
     {
         try {
             $callback();
-        } catch (LogicException|RefusFiscalException $exception) {
+        } catch (LogicException|RefusFiscalException|JournalAuditNonConfigureException $exception) {
             static::notifierLeRefus($exception);
         }
     }
@@ -55,7 +58,7 @@ trait GereLesExceptionsMetier
     {
         try {
             return $callback();
-        } catch (LogicException|RefusFiscalException $exception) {
+        } catch (LogicException|RefusFiscalException|JournalAuditNonConfigureException $exception) {
             static::notifierLeRefus($exception);
 
             throw new Halt;
@@ -66,9 +69,9 @@ trait GereLesExceptionsMetier
      * Affiche pourquoi l'opération a été refusée ; un refus fiscal est en
      * plus signalé au journal de l'application.
      */
-    protected static function notifierLeRefus(LogicException|RefusFiscalException $exception): void
+    protected static function notifierLeRefus(LogicException|RefusFiscalException|JournalAuditNonConfigureException $exception): void
     {
-        if ($exception instanceof RefusFiscalException) {
+        if (! $exception instanceof LogicException) {
             report($exception);
         }
 

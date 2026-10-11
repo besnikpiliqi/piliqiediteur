@@ -37,11 +37,11 @@ use LogicException;
  *
  * Comme CreerFactureAction, elle reçoit le client déjà résolu par une
  * requête limitée au magasin, jamais un client_id brut venu du formulaire,
- * et note de nouveau son type, le régime de TVA du magasin et la nature de
+ * et note de nouveau son type, le régime de TVA de la société et la nature de
  * l'opération, avec lesquels les lignes se recalculent : un brouillon
  * réenregistré après que
  * son client a changé de type s'émet dans l'autre série, et celui
- * réenregistré après un changement de régime du magasin s'émet de nouveau
+ * réenregistré après un changement de régime de la société s'émet de nouveau
  * (voir EmettreFactureAction).
  */
 class ModifierFactureAction

@@ -18,9 +18,9 @@ use Illuminate\Support\Facades\Notification;
  * factures impayées dont l'échéance est dépassée, magasin par magasin --
  * le global scope MagasinScope exige un TenantContext positionné, une
  * commande n'en a par nature aucun au démarrage -- puis prévient le
- * propriétaire de chaque magasin concerné. Un magasin suspendu ou fermé
- * est traité comme les autres : les statuts de ses factures continuent
- * de suivre leurs échéances. Seul un magasin supprimé n'est plus traité.
+ * propriétaire de la société de chaque magasin concerné. Un magasin en
+ * lecture seule est traité comme les autres : les statuts de ses factures
+ * continuent de suivre leurs échéances.
  */
 #[Signature('app:marquer-factures-en-retard')]
 #[Description("Passe au statut 'en_retard' les factures impayées dont l'échéance est dépassée")]
@@ -59,7 +59,7 @@ class MarquerFacturesEnRetard extends Command
         // n'est pas touchée.
         $marquees = $echues()->whereKey($numeros->keys())->update(['statut' => StatutFacture::EnRetard->value]);
 
-        Notification::send($magasin->proprietaires()->get(), new FacturesPasseesEnRetard($magasin, $numeros->values()->all()));
+        Notification::send($magasin->societe->proprietaire, new FacturesPasseesEnRetard($magasin, $numeros->values()->all()));
 
         return $marquees;
     }

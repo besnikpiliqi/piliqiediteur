@@ -49,9 +49,10 @@ use Throwable;
  * Un devis, lui, se modifie après son envoi (voir ModifierDevisAction) :
  * modifié depuis la demande d'envoi, qu'il soit encore en brouillon ou
  * déjà reparti dans sa nouvelle version, il ne part pas avec cet e-mail,
- * écrit pour une version que le client ne recevrait pas. Un magasin
- * suspendu ou fermé entre-temps n'écrit plus à ses clients (voir
- * Magasin::verifierQuIlEstOuvert()). Dans ces cas, l'envoi échoue sans
+ * écrit pour une version que le client ne recevrait pas. Un magasin qui
+ * ne peut plus vendre au moment de l'envoi n'écrit pas à ses clients (voir
+ * Magasin::peutVendre()) : suspendu ou fermé entre-temps, ou sa société
+ * suspendue, résiliée ou refusée. Dans ces cas, l'envoi échoue sans
  * partir, et le magasin sait pourquoi.
  *
  * Idempotent : un envoi déjà envoyé ne repart jamais, même si le job est
@@ -99,9 +100,11 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        if ($envoi->magasin->statut->estEnLectureSeule()) {
-            $statut = mb_strtolower($envoi->magasin->statut->getLabel());
-            $this->echouer($envoi, "Le magasin est {$statut} : il n'écrit plus à ses clients, l'e-mail n'est pas parti.");
+        if (! $envoi->magasin->peutVendre()) {
+            $motif = $envoi->magasin->motifDeLectureSeule('Le magasin');
+            $this->echouer($envoi, $motif === null
+                ? "{$envoi->magasin->refusDeVente()} L'e-mail n'est pas parti."
+                : "{$motif} : il n'écrit plus à ses clients, l'e-mail n'est pas parti.");
 
             return;
         }
@@ -214,9 +217,9 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
     }
 
     /**
-     * Celui qui a demandé l'envoi, s'il travaille toujours pour le
-     * magasin ; sinon -- relance automatique, membre parti entre-temps --
-     * le propriétaire du magasin.
+     * Celui qui a demandé l'envoi, s'il peut encore ouvrir le magasin ;
+     * sinon -- relance automatique, membre parti entre-temps -- le
+     * propriétaire de la société.
      *
      * @return Collection<int, User>
      */
@@ -224,10 +227,10 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
     {
         $expediteur = $envoi->envoyePar;
 
-        if ($expediteur !== null && $expediteur->appartientA($envoi->magasin)) {
+        if ($expediteur !== null && $expediteur->peutOuvrir($envoi->magasin)) {
             return collect([$expediteur]);
         }
 
-        return $envoi->magasin->proprietaires()->get();
+        return collect([$envoi->magasin->societe->proprietaire]);
     }
 }

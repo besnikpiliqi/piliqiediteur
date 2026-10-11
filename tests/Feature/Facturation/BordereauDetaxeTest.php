@@ -14,10 +14,8 @@ use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\BordereauDetaxe;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
@@ -55,7 +53,7 @@ class BordereauDetaxeTest extends TestCase
     {
         $this->travelTo('2026-10-09 10:15:00');
         $proprietaire = User::factory()->create();
-        $magasin = $this->completerIdentiteLegale(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire));
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire));
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -231,7 +229,7 @@ class BordereauDetaxeTest extends TestCase
     public function test_un_ticket_vendu_en_franchise_en_base_ne_se_detaxe_pas(): void
     {
         $magasin = $this->magasin();
-        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
         $ticket = $this->venteEmise('250.00');
 
         $this->assertThrows(
@@ -318,7 +316,7 @@ class BordereauDetaxeTest extends TestCase
     {
         $magasin = $this->magasin();
         $ticket = $this->venteEmise('250.00');
-        $magasin->forceFill(['statut' => StatutMagasin::Suspendu])->save();
+        $magasin->forceFill(['suspendu_le' => now()])->save();
 
         $this->assertThrows(
             fn () => $this->noter($ticket, '2026FR000123456'),

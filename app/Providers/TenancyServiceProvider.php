@@ -22,10 +22,11 @@ class TenancyServiceProvider extends ServiceProvider
     }
 
     /**
-     * Le seul rappel exécuté avant les policies : les permissions du
-     * membre dans le magasin actif, et la lecture seule d'un magasin
-     * suspendu ou fermé (voir ControleDesDroits). Il passe en closure pour
-     * que la Gate lise ses paramètres : sans utilisateur connecté, elle ne
+     * Le seul rappel exécuté avant les policies : les droits implicites du
+     * propriétaire de la société, les permissions d'un membre dans le
+     * magasin actif, la lecture seule d'un magasin et la porte de
+     * validation (voir ControleDesDroits). Il passe en closure pour que la
+     * Gate lise ses paramètres : sans utilisateur connecté, elle ne
      * l'appelle pas.
      */
     public function boot(): void

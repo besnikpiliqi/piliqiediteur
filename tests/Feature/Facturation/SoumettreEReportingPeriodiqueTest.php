@@ -9,7 +9,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Tenancy\Enums\RegimeTva;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -46,7 +45,7 @@ class SoumettreEReportingPeriodiqueTest extends TestCase
     public function test_un_magasin_suspendu_est_declare(): void
     {
         $magasin = $this->magasinAyantVenduLe5Octobre(RegimeTva::ReelNormalMensuel);
-        $magasin->forceFill(['statut' => StatutMagasin::Suspendu])->save();
+        $magasin->forceFill(['suspendu_le' => now()])->save();
         $this->travelTo('2026-10-11 01:00:00');
 
         $this->artisan('app:soumettre-ereporting-periodique')->assertSuccessful();
@@ -77,7 +76,7 @@ class SoumettreEReportingPeriodiqueTest extends TestCase
     private function magasinAyantVenduLe5Octobre(?RegimeTva $regimeTva): Magasin
     {
         $this->travelTo('2026-10-05 09:00:00');
-        $magasin = Magasin::factory()->create(['regime_tva' => $regimeTva]);
+        $magasin = Magasin::factory()->avecLaSociete(['regime_tva' => $regimeTva])->create();
         $this->travelTo('2026-10-05 10:00:00');
         app(TenantContext::class)->runAs($magasin, function () {
             $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);

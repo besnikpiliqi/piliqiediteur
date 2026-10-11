@@ -3,7 +3,6 @@
 namespace Tests\Feature\Authorization;
 
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Models\User;
@@ -35,7 +34,7 @@ class ProduitPolicyTest extends TestCase
     #[DataProvider('roles')]
     public function test_archiver_des_produits_selon_le_role(RoleMagasin $role, bool $peutArchiver): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
         $produit = Produit::factory()->create();
 
@@ -49,7 +48,7 @@ class ProduitPolicyTest extends TestCase
     #[DataProvider('roles')]
     public function test_restaurer_des_produits_selon_le_role(RoleMagasin $role, bool $peutRestaurer): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
         $produit = Produit::factory()->trashed()->create();
 
@@ -64,7 +63,7 @@ class ProduitPolicyTest extends TestCase
     public function test_un_produit_archive_ne_se_modifie_pas_avant_sa_restauration_et_ne_s_efface_jamais(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $produit = Produit::factory()->create();
         $archive = Produit::factory()->trashed()->create();
 

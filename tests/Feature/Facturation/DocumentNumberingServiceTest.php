@@ -82,8 +82,8 @@ class DocumentNumberingServiceTest extends TestCase
      */
     public function test_deux_magasins_du_meme_siren_ont_chacun_leur_serie_et_des_numeros_distincts(): void
     {
-        $lyon1 = Magasin::factory()->create(['code' => 'LYON1', 'siren' => '732829320', 'siret' => '73282932000074']);
-        $lyon2 = Magasin::factory()->deLaSocieteDe($lyon1)->create(['code' => 'LYON2', 'siret' => '73282932000082']);
+        $lyon1 = Magasin::factory()->avecLaSociete(['siren' => '100000009'])->create(['code' => 'LYON1', 'siret' => '10000000900017']);
+        $lyon2 = Magasin::factory()->for($lyon1->societe)->create(['code' => 'LYON2', 'siret' => '10000000900025']);
         $service = app(DocumentNumberingService::class);
 
         $numeroLyon1 = $service->suivant($lyon1, TypeDocument::Facture, '2026');

@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Services;
 
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Barryvdh\DomPDF\PDF as PdfDocument;
 
@@ -20,6 +21,7 @@ class FacturePdfGenerator
 {
     /**
      * @throws DocumentSansEnregistrementSigneException
+     * @throws VenteNonAutoriseeException
      */
     public function generer(Facture $facture): PdfDocument
     {
@@ -29,12 +31,15 @@ class FacturePdfGenerator
     /**
      * La page que le PDF imprime : l'émetteur est lu avant elle, pour qu'un
      * document émis sans enregistrement signé soit refusé avant toute
-     * impression.
+     * impression. Rien ne s'imprime avant la validation de la société
+     * (voir Magasin::verifierQuIlPeutImprimer()).
      *
      * @throws DocumentSansEnregistrementSigneException
+     * @throws VenteNonAutoriseeException
      */
     public function html(Facture $facture): string
     {
+        $facture->magasin->verifierQuIlPeutImprimer();
         $facture->loadMissing(['client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir']);
 
         return view('factures.pdf', ['facture' => $facture, 'emetteur' => $facture->emetteur()])->render();

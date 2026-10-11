@@ -16,9 +16,7 @@ use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Services\PreuvesRequises;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
@@ -60,7 +58,7 @@ class PreuvesOperationTest extends TestCase
     {
         $this->travelTo('2026-10-09 10:15:00');
         $proprietaire = User::factory()->create();
-        $magasin = $this->completerIdentiteLegale(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire));
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire));
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -411,7 +409,7 @@ class PreuvesOperationTest extends TestCase
     {
         $magasin = $this->magasin();
         $export = $this->venteEmise('export');
-        $magasin->forceFill(['statut' => StatutMagasin::Suspendu])->save();
+        $magasin->forceFill(['suspendu_le' => now()])->save();
 
         $this->assertThrows(
             fn () => $this->ajouter($export, TypePreuve::Mrn, '26FR000000123456E1'),

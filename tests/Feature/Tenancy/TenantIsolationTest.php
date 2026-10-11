@@ -43,7 +43,6 @@ use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Stock\Models\MouvementStock;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -98,10 +97,10 @@ use Tests\TestCase;
  * répond 404 à un membre d'un autre magasin, sans révéler que
  * l'enregistrement existe.
  *
- * Deux magasins d'une même société (même SIREN) restent isolés de la même
- * façon : un retour ou un paiement se fait dans le magasin qui a vendu
- * (J6). Seuls leurs réglages communs se lisent de l'un à l'autre (voir
- * ReglagesCommunsDeLaSocieteTest).
+ * Deux magasins d'une même société restent isolés de la même façon : un
+ * retour ou un paiement se fait dans le magasin qui a vendu (J6). Seuls
+ * l'identité légale et les réglages fiscaux leur sont communs, portés par
+ * leur société (voir IsolationDesSocietesTest).
  */
 class TenantIsolationTest extends TestCase
 {
@@ -366,7 +365,7 @@ class TenantIsolationTest extends TestCase
      */
     public function test_un_magasin_de_la_meme_societe_ne_fait_pas_d_avoir_sur_une_vente_d_un_autre(): void
     {
-        $memeSociete = Magasin::factory()->deLaSocieteDe($this->magasinA)->create();
+        $memeSociete = $this->ouvrirUnAutreMagasin($this->magasinA);
         $contexte = app(TenantContext::class);
         $contexte->set($this->magasinA);
         $ligneVendue = $this->venteEmise()->lignes()->sole();
@@ -388,7 +387,7 @@ class TenantIsolationTest extends TestCase
      */
     public function test_un_magasin_de_la_meme_societe_n_encaisse_pas_une_vente_d_un_autre(): void
     {
-        $memeSociete = Magasin::factory()->deLaSocieteDe($this->magasinA)->create();
+        $memeSociete = $this->ouvrirUnAutreMagasin($this->magasinA);
         $contexte = app(TenantContext::class);
         $contexte->set($this->magasinA);
         $vente = $this->venteEmise();
@@ -411,7 +410,7 @@ class TenantIsolationTest extends TestCase
      */
     public function test_un_magasin_de_la_meme_societe_ne_justifie_pas_une_vente_d_un_autre(): void
     {
-        $memeSociete = Magasin::factory()->deLaSocieteDe($this->magasinA)->create();
+        $memeSociete = $this->ouvrirUnAutreMagasin($this->magasinA);
         $contexte = app(TenantContext::class);
         $contexte->set($this->magasinA);
         $ticket = $this->venteEmise();
@@ -447,7 +446,7 @@ class TenantIsolationTest extends TestCase
             'facture, modification' => [FactureResource::class, 'edit', static fn (): Model => Facture::factory()->create()],
             'fournisseur, modification' => [FournisseurResource::class, 'edit', static fn (): Model => Fournisseur::factory()->create()],
             'membre de l\'équipe, modification' => [MembreEquipeResource::class, 'edit', static fn (Magasin $magasin): Model => $magasin->membres()
-                ->where('user_id', app(CreerMembreMagasinAction::class)->handle($magasin->proprietaires()->get()->sole(), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur)->getKey())
+                ->where('user_id', app(CreerMembreMagasinAction::class)->handle($magasin->societe->proprietaire, $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur)->getKey())
                 ->firstOrFail()],
             'produit, modification' => [ProduitResource::class, 'edit', static fn (): Model => Produit::factory()->create()],
             'soumission e-reporting, détail' => [SoumissionEReportingResource::class, 'view', static fn (): Model => self::creerEnregistrement(SoumissionEReporting::class)],
@@ -468,10 +467,10 @@ class TenantIsolationTest extends TestCase
     public function test_l_url_d_un_enregistrement_d_un_autre_magasin_repond_404(string $ressource, string $page, Closure $creerEnregistrement): void
     {
         $proprietaireA = User::factory()->create();
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $proprietaireA);
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A'], $proprietaireA);
         $enregistrementDeA = $creerEnregistrement($magasinA);
         $proprietaireB = User::factory()->create();
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
         $this->actingAs($proprietaireA)
             ->get($ressource::getUrl($page, ['record' => $enregistrementDeA, 'tenant' => $magasinA]))
             ->assertSuccessful();

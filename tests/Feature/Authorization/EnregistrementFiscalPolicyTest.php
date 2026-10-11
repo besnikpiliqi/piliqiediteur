@@ -6,7 +6,6 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Actions\MettreAJourMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -40,7 +39,7 @@ class EnregistrementFiscalPolicyTest extends TestCase
 
     public function test_la_permission_ouvre_la_consultation_quel_que_soit_le_role(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->vendeur($magasin);
         $evenement = $this->evenement();
         $this->assertFalse($vendeur->can('viewAny', EnregistrementFiscal::class));
@@ -61,8 +60,8 @@ class EnregistrementFiscalPolicyTest extends TestCase
     public function test_un_enregistrement_d_un_autre_magasin_ne_se_consulte_pas(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $evenementDeLAutre = $this->evenement();
 
         app(TenantContext::class)->set($magasin);
@@ -74,7 +73,7 @@ class EnregistrementFiscalPolicyTest extends TestCase
     public function test_sans_magasin_actif_rien_ne_se_consulte(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $evenement = $this->evenement();
 
         app(TenantContext::class)->clear();
@@ -106,7 +105,7 @@ class EnregistrementFiscalPolicyTest extends TestCase
     public function test_meme_le_proprietaire_n_ecrit_rien_dans_le_registre(string $capacite): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $evenement = $this->evenement();
         $avecUnEnregistrement = in_array($capacite, ['update', 'delete', 'forceDelete', 'restore', 'replicate'], true);
 

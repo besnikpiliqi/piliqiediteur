@@ -24,7 +24,7 @@ use InvalidArgumentException;
  * La nature de l'opération d'une facture ou d'un devis (I1, voir
  * NatureOperation) et la livraison qu'elle demande. Un particulier
  * choisit la vente en France, l'export ou la livraison vers un DOM ; un
- * professionnel, les six natures ; un magasin en franchise en base, la
+ * professionnel, les six natures ; une société en franchise en base, la
  * vente en France seule. Le choix se valide aussi côté serveur, comme à
  * l'enregistrement (voir ContexteDeVente::pourEnregistrer()) : une liste
  * déroulante ne restreint ses choix qu'à l'affichage. L'aide dit la
@@ -34,7 +34,7 @@ use InvalidArgumentException;
  * Changer de nature peut faire entrer la vente dans la TVA française ou
  * l'en faire sortir : le prix saisi d'un service change alors de sens, et
  * se convertit (voir lignesAuxPrixDeLaNature()). Un document rouvert dans
- * une nature que son client ou le régime du magasin ne permettent plus
+ * une nature que son client ou le régime de la société ne permettent plus
  * revient à la vente en France (voir natureARouvrir()).
  *
  * La section « Livraison » n'apparaît que pour des biens qui partent hors
@@ -127,8 +127,8 @@ trait ChoisitLaNatureDeLOperation
      * Les données d'un brouillon de facture ou d'un devis telles que son
      * formulaire les rouvre, ses lignes comprises (voir
      * AjouteDesLignesDeVente::lignesARouvrir()) : sa nature, tant que son
-     * client et le régime du magasin la permettent encore. Sinon -- le
-     * client est devenu particulier, le magasin est entré en franchise en
+     * client et le régime de la société la permettent encore. Sinon -- le
+     * client est devenu particulier, la société est entrée en franchise en
      * base --, le document revient à la vente en France, le prix de ses
      * services converti comme pour un changement de nature (voir
      * lignesAuxPrixDeLaNature()), et une notification le dit avant qu'il ne
@@ -148,8 +148,8 @@ trait ChoisitLaNatureDeLOperation
         }
 
         $lignes = self::lignesAuxPrixDeLaNature($donnees['lignes'] ?? [], ContexteDeVente::documentRetireLaTvaDuPrix($document), false);
-        $raison = app(TenantContext::class)->magasin()->estEnFranchiseDeTva()
-            ? 'Votre magasin est en franchise en base de TVA, qui couvre aussi ses ventes hors de France'
+        $raison = app(TenantContext::class)->magasin()->societe->estEnFranchiseDeTva()
+            ? 'Votre société est en franchise en base de TVA, qui couvre aussi ses ventes hors de France'
             : 'Ce client n\'est plus un professionnel';
 
         Notification::make()
@@ -179,7 +179,7 @@ trait ChoisitLaNatureDeLOperation
     /**
      * Les natures que le client choisi (du magasin actif, archivé compris
      * pour un brouillon qui le garde) peut choisir, dans le régime de TVA
-     * du magasin ; celles d'un particulier tant qu'aucun client n'est
+     * de la société ; celles d'un particulier tant qu'aucun client n'est
      * choisi.
      *
      * @return array<string, string>
@@ -189,7 +189,7 @@ trait ChoisitLaNatureDeLOperation
         $identifiant = is_bool($clientId) ? false : filter_var($clientId, FILTER_VALIDATE_INT);
         $client = $identifiant === false ? null : Client::withTrashed()->find($identifiant);
 
-        return collect(NatureOperation::proposees($client?->estProfessionnel() ?? false, app(TenantContext::class)->magasin()->estEnFranchiseDeTva()))
+        return collect(NatureOperation::proposees($client?->estProfessionnel() ?? false, app(TenantContext::class)->magasin()->societe->estEnFranchiseDeTva()))
             ->mapWithKeys(fn (NatureOperation $nature): array => [$nature->value => $nature->getLabel()])
             ->all();
     }
@@ -232,7 +232,7 @@ trait ChoisitLaNatureDeLOperation
      * quelle, sa validation le signalera. Rien ne change entre deux natures
      * sans TVA française, ni d'une nature à l'autre en franchise en base, où
      * tout se vend au même prix TTC ; un document d'export rouvert après
-     * l'entrée du magasin en franchise revient en France à ce prix TTC, que
+     * l'entrée de la société en franchise revient en France à ce prix TTC, que
      * le client paie sans TVA (voir natureARouvrir()).
      *
      * Le taux d'un service vendu sans TVA française est caché : c'est celui
@@ -274,7 +274,7 @@ trait ChoisitLaNatureDeLOperation
     }
 
     /**
-     * La vente de cette nature, dans le régime d'aujourd'hui du magasin,
+     * La vente de cette nature, dans le régime d'aujourd'hui de la société,
      * se paie-t-elle sans la TVA française (voir
      * ContexteDeVente::retireLaTvaDuPrix()) ?
      */

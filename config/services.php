@@ -38,6 +38,21 @@ return [
         'delai' => 10,
     ],
 
+    /*
+     | Le répertoire Sirene de l'INSEE, qui contrôle l'existence d'une
+     | société et de ses établissements (voir InseeSirene et
+     | VerificationServiceProvider) : son pilote (insee, ou faux pour le
+     | développement et les tests, jamais en production), l'adresse de son
+     | API, la clé d'intégration de l'éditeur (portail-api.insee.fr), et le
+     | délai en secondes au-delà duquel il est tenu pour indisponible.
+     */
+    'sirene' => [
+        'pilote' => env('SIRENE_PILOTE', 'insee'),
+        'url' => env('INSEE_SIRENE_URL', 'https://api.insee.fr/api-sirene/3.11'),
+        'cle' => env('INSEE_SIRENE_CLE'),
+        'delai' => 10,
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

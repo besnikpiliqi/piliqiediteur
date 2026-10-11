@@ -11,10 +11,8 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
 use Tests\TestCase;
@@ -47,7 +45,7 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
     public function test_deux_caisses_qui_presentent_le_meme_bon_d_avoir_au_meme_instant_ne_l_imputent_qu_une_fois(): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         app(TenantContext::class)->set($magasin);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $ticket = app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
@@ -82,7 +80,7 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
     public function test_deux_ventes_simultanees_au_meme_client_n_imputent_son_credit_qu_une_fois(): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         app(TenantContext::class)->set($magasin);
         $martin = Client::factory()->create(['nom' => 'Mme Martin']);
         $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle($martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);

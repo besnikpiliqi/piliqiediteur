@@ -9,7 +9,6 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\VentesEnAttenteApercu;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -49,7 +48,7 @@ class VentesEnAttenteApercuTest extends TestCase
     public function test_affiche_le_nombre_et_le_total_des_ventes_de_la_journee_en_attente_de_cloture(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $this->travelTo('2026-10-09 10:00:00');
@@ -63,7 +62,7 @@ class VentesEnAttenteApercuTest extends TestCase
     public function test_deduit_du_total_les_avoirs_du_jour_en_attente(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -82,7 +81,7 @@ class VentesEnAttenteApercuTest extends TestCase
     public function test_affiche_une_journee_oubliee_avec_celle_du_jour(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $this->travelTo('2026-10-08 10:00:00');
@@ -96,7 +95,7 @@ class VentesEnAttenteApercuTest extends TestCase
     public function test_n_affiche_aucune_journee_tant_que_le_magasin_n_a_rien_vendu(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -106,7 +105,7 @@ class VentesEnAttenteApercuTest extends TestCase
 
     public function test_un_vendeur_sans_la_permission_de_gerer_ne_voit_pas_le_widget(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW]);
 
         $this->actingAs($vendeur);

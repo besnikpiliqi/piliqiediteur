@@ -15,7 +15,7 @@ use LogicException;
  * Ce qui, hors des lignes elles-mêmes, décide du calcul d'une vente (voir
  * ConstructeurLigneDocument) : le type du client -- article par article
  * pour un particulier, depuis le HT de chaque ligne pour un professionnel
- * (E1, voir calculeDepuisLeHtDeLigne()) --, le régime de TVA du magasin --
+ * (E1, voir calculeDepuisLeHtDeLigne()) --, le régime de TVA de la société --
  * en franchise en base, tout se vend à 0 % au même prix TTC, article par
  * article quel que soit le client (B10) --, la nature de l'opération --
  * hors de la vente en France, tout se vend à 0 %, au prix sans la TVA
@@ -28,7 +28,7 @@ use LogicException;
  * et ce régime permettent (voir pourEnregistrer()) : l'émission d'une
  * facture comme l'envoi d'un devis refuse un document dont le client a
  * changé de type depuis (voir refuserSiLeTypeDeClientAChange()), ou dont
- * le magasin a changé de régime depuis (voir refuserSiLeRegimeAChange()).
+ * la société a changé de régime depuis (voir refuserSiLeRegimeAChange()).
  */
 final readonly class ContexteDeVente
 {
@@ -41,15 +41,15 @@ final readonly class ContexteDeVente
 
     /**
      * La vente qui s'enregistre maintenant pour ce client, dans ce magasin,
-     * avec son régime de TVA d'aujourd'hui, de cette nature. Un client pas
-     * encore choisi (formulaire en cours de saisie) compte comme un
-     * particulier.
+     * avec le régime de TVA de sa société d'aujourd'hui, de cette nature. Un
+     * client pas encore choisi (formulaire en cours de saisie) compte comme
+     * un particulier.
      */
     public static function pour(?Client $client, Magasin $magasin, NatureOperation $natureOperation = NatureOperation::VenteEnFrance): self
     {
         return new self(
             typeClient: $client->type_client ?? TypeClient::Particulier,
-            franchiseEnBase: $magasin->estEnFranchiseDeTva(),
+            franchiseEnBase: $magasin->societe->estEnFranchiseDeTva(),
             tauxTvaParDefaut: $magasin->tauxTvaParDefaut(),
             natureOperation: $natureOperation,
         );
@@ -57,8 +57,8 @@ final readonly class ContexteDeVente
 
     /**
      * La vente qu'enregistre un brouillon de facture ou un devis (voir
-     * pour()), dans une nature que son client et le régime du magasin
-     * permettent (voir NatureOperation::proposees()) : un magasin en
+     * pour()), dans une nature que son client et le régime de la société
+     * permettent (voir NatureOperation::proposees()) : une société en
      * franchise en base ne vend qu'en France, sa franchise couvrant aussi
      * ses ventes hors de France, et un particulier n'achète qu'en France, à
      * l'export ou livré dans un DOM. Le formulaire ne propose que ces
@@ -68,7 +68,7 @@ final readonly class ContexteDeVente
      * s'enregistre. Un client ou un régime qui change ensuite est refusé à
      * l'émission comme à l'envoi (voir refuserSiLeTypeDeClientAChange() et
      * refuserSiLeRegimeAChange()) : un document ne part donc jamais dans
-     * une nature interdite à son client ou à son magasin.
+     * une nature interdite à son client ou à sa société.
      *
      * @throws LogicException
      */
@@ -78,7 +78,7 @@ final readonly class ContexteDeVente
 
         if (! in_array($natureOperation, NatureOperation::proposees($contexte->typeClient === TypeClient::Professionnel, $contexte->franchiseEnBase), true)) {
             throw new LogicException("Impossible d'enregistrer en « {$natureOperation->getLabel()} » : ".($contexte->franchiseEnBase
-                ? 'votre magasin est en franchise en base de TVA, qui couvre aussi ses ventes hors de France. Choisissez « '.NatureOperation::VenteEnFrance->getLabel().' ».'
+                ? 'votre société est en franchise en base de TVA, qui couvre aussi ses ventes hors de France. Choisissez « '.NatureOperation::VenteEnFrance->getLabel().' ».'
                 : 'cette nature est réservée aux clients professionnels. Choisissez une autre nature.'));
         }
 
@@ -150,18 +150,18 @@ final readonly class ContexteDeVente
 
     /**
      * Un brouillon de facture ou un devis part avec la franchise notée à
-     * son enregistrement : si le magasin est entré en franchise en base, ou
+     * son enregistrement : si la société est entrée en franchise en base, ou
      * en est sorti, depuis, ses lignes sont à recalculer, à 0 % ou à leurs
-     * taux, en l'enregistrant de nouveau. Sinon, un magasin en franchise
+     * taux, en l'enregistrant de nouveau. Sinon, une société en franchise
      * enverrait un document avec de la TVA et sans la mention, ou un
-     * magasin redevable un document à 0 % avec la mention (B10).
+     * société redevable un document à 0 % avec la mention (B10).
      *
      * @throws LogicException
      */
     public static function refuserSiLeRegimeAChange(Facture|Devis $document): void
     {
-        if ($document->franchise_en_base !== $document->magasin->estEnFranchiseDeTva()) {
-            throw new LogicException('Le régime de TVA du magasin a changé depuis l\'enregistrement de ce brouillon : ouvrez-le et enregistrez-le de nouveau pour recalculer ses lignes.');
+        if ($document->franchise_en_base !== $document->magasin->societe->estEnFranchiseDeTva()) {
+            throw new LogicException('Le régime de TVA de la société a changé depuis l\'enregistrement de ce brouillon : ouvrez-le et enregistrez-le de nouveau pour recalculer ses lignes.');
         }
     }
 

@@ -19,20 +19,16 @@ use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
-use App\Domain\Facturation\Exceptions\IdentiteDuMagasinIncompleteException;
+use App\Domain\Facturation\Exceptions\IdentiteDeLaSocieteIncompleteException;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Services\ReglementComptant;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
-use App\Domain\Tenancy\Exceptions\ReglagesCommunsDifferentsException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
-use Closure;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use LogicException;
@@ -261,14 +257,14 @@ class EmettreFactureActionTest extends TestCase
     public function test_le_bon_d_avoir_d_un_autre_magasin_ne_regle_jamais_une_vente(): void
     {
         $magasin = app(TenantContext::class)->magasin();
-        $autreMagasin = app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $autreMagasin = $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $bonDeLAutreMagasin = app(TenantContext::class)->runAs($autreMagasin, function (): Avoir {
             $comptoir = Client::query()->where('est_comptoir', true)->sole();
             $ticket = app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
 
             return app(EnregistrerAvoirAction::class)->handle($comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         });
-        // CreerMagasinAction a rendu actif le magasin qu'elle a créé.
+        // ouvrirUneSociete() a rendu actif le magasin qu'elle a ouvert.
         app(TenantContext::class)->set($magasin);
         $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
 
@@ -420,10 +416,10 @@ class EmettreFactureActionTest extends TestCase
     }
 
     /**
-     * Sans identité légale complète, le magasin ne facture pas un
-     * professionnel (B11, K7) : le brouillon reste, aucun numéro de
-     * facture n'est consommé et rien n'est signé. Une fois l'identité
-     * complétée, la facture prend le premier numéro.
+     * Sans identité légale complète de la société et de l'établissement,
+     * le magasin ne facture pas un professionnel (B11, K7) : le brouillon
+     * reste, aucun numéro de facture n'est consommé et rien n'est signé.
+     * Une fois l'identité complétée, la facture prend le premier numéro.
      */
     public function test_une_facture_a_un_professionnel_attend_l_identite_complete_du_magasin(): void
     {
@@ -433,8 +429,8 @@ class EmettreFactureActionTest extends TestCase
 
         $this->assertThrows(
             fn () => app(EmettreFactureAction::class)->handle($brouillon),
-            IdentiteDuMagasinIncompleteException::class,
-            'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité du magasin (Paramètres > Identité du magasin) : raison sociale, forme juridique, SIREN, SIRET, immatriculation, adresse, code postal, ville, n° de TVA intracommunautaire.',
+            IdentiteDeLaSocieteIncompleteException::class,
+            'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité de la société (Administration de la société > Identité) : raison sociale, forme juridique, immatriculation, adresse du siège, n° de TVA intracommunautaire, adresse du magasin, code postal du magasin, ville du magasin.',
         );
 
         $this->assertSame([StatutFacture::Brouillon, null, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero, $brouillon->fresh()->date_echeance]);
@@ -442,6 +438,8 @@ class EmettreFactureActionTest extends TestCase
         $this->assertSame(0, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Vente->value)->count());
 
         $this->completerIdentiteLegale($magasin);
+        $this->reglerLaSociete($magasin, ['numero_tva' => 'FR88100000009']);
+        $magasin->forceFill(['adresse' => '1 rue de la République', 'code_postal' => '69001', 'ville' => 'Lyon'])->save();
         $facture = app(EmettreFactureAction::class)->handle($brouillon);
 
         $this->assertSame('FAC-MABOUT-2026-000001', $facture->numero);
@@ -467,7 +465,7 @@ class EmettreFactureActionTest extends TestCase
     public function test_un_magasin_en_franchise_sans_numero_de_tva_facture_un_professionnel(): void
     {
         $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
-        app(TenantContext::class)->magasin()->update(['regime_tva' => RegimeTva::FranchiseEnBase, 'numero_tva' => null]);
+        $this->reglerLaSociete(app(TenantContext::class)->magasin(), ['regime_tva' => RegimeTva::FranchiseEnBase, 'numero_tva' => null]);
 
         $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->uneLigne()));
 
@@ -477,13 +475,13 @@ class EmettreFactureActionTest extends TestCase
     public function test_un_magasin_redevable_de_la_tva_sans_numero_de_tva_ne_facture_pas_un_professionnel(): void
     {
         $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
-        app(TenantContext::class)->magasin()->update(['regime_tva' => RegimeTva::ReelNormalMensuel, 'numero_tva' => null]);
+        $this->reglerLaSociete(app(TenantContext::class)->magasin(), ['regime_tva' => RegimeTva::ReelNormalMensuel, 'numero_tva' => null]);
         $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->uneLigne());
 
         $this->assertThrows(
             fn () => app(EmettreFactureAction::class)->handle($brouillon),
-            IdentiteDuMagasinIncompleteException::class,
-            'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité du magasin (Paramètres > Identité du magasin) : n° de TVA intracommunautaire.',
+            IdentiteDeLaSocieteIncompleteException::class,
+            'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité de la société (Administration de la société > Identité) : n° de TVA intracommunautaire.',
         );
 
         $this->assertSame(StatutFacture::Brouillon, $brouillon->fresh()->statut);
@@ -508,81 +506,22 @@ class EmettreFactureActionTest extends TestCase
     }
 
     /**
-     * @return array<string, array{Closure(): Client, TypeDocument}>
+     * Le magasin MABOUT d'une société qui n'a encore que son SIREN, sans
+     * adresse d'établissement (l'INSEE n'ayant pas répondu à sa création),
+     * magasin actif.
      */
-    public static function clientsDUnTicketEtDUneFacture(): array
-    {
-        return [
-            'ticket' => [static fn (): Client => Client::factory()->create(), TypeDocument::TicketCaisse],
-            'facture' => [static fn (): Client => Client::factory()->professionnel()->create(), TypeDocument::Facture],
-        ];
-    }
-
-    /**
-     * Un magasin dont les réglages communs ne sont plus ceux du magasin
-     * principal de sa société, qui vient de les changer, n'émet ni ticket
-     * ni facture (K5) : le refus dit chaque réglage qui diffère, la valeur
-     * à prendre et où la prendre ; le brouillon reste, sans numéro
-     * consommé ni signature.
-     *
-     * @param  Closure(): Client  $client
-     */
-    #[DataProvider('clientsDUnTicketEtDUneFacture')]
-    public function test_un_magasin_non_aligne_sur_le_principal_de_sa_societe_n_emet_rien(Closure $client, TypeDocument $serie): void
-    {
-        $magasin = $this->magasinLaisseDerriereParSonPrincipal();
-        $brouillon = app(CreerFactureAction::class)->handle($client(), $this->uneLigne());
-
-        $this->assertThrows(
-            fn () => app(EmettreFactureAction::class)->handle($brouillon),
-            ReglagesCommunsDifferentsException::class,
-            'Ce magasin n\'émet ni facture ni ticket tant que ses réglages communs ne sont pas ceux du magasin principal de votre société (SIREN 732829320) ; à prendre : régime de TVA « Réel normal (déclaration trimestrielle) » (Paramètres fiscaux), raison sociale « Dupont Frères » (Identité du magasin).',
-        );
-
-        $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
-        $this->assertFalse(SequenceDocument::query()->where('magasin_id', $magasin->id)->where('type_document', $serie->value)->exists());
-        $this->assertSame(0, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Vente->value)->count());
-    }
-
-    /**
-     * Aligné de nouveau sur son principal, le magasin émet.
-     */
-    public function test_un_magasin_aligne_de_nouveau_sur_le_principal_emet(): void
-    {
-        $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
-        $magasin = $this->magasinLaisseDerriereParSonPrincipal();
-        $magasin->update(['regime_tva' => RegimeTva::ReelNormalTrimestriel, 'raison_sociale' => 'Dupont Frères']);
-
-        $ticket = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), $this->uneLigne()));
-
-        $this->assertSame('TK-LYON2-2026-000001', $ticket->numero);
-    }
-
-    /**
-     * Le magasin LYON2, magasin actif, de la société SIREN 732829320, dont
-     * le principal SIEGE vient de passer au réel normal trimestriel et de
-     * changer de raison sociale.
-     */
-    private function magasinLaisseDerriereParSonPrincipal(): Magasin
-    {
-        $principal = Magasin::factory()->create([
-            'code' => 'SIEGE',
-            'siren' => '732829320',
-            'siret' => '73282932000074',
-            'raison_sociale' => 'Dupont SARL',
-            'numero_tva' => 'FR44732829320',
-            'regime_tva' => RegimeTva::ReelNormalMensuel,
-        ]);
-        $magasin = Magasin::factory()->deLaSocieteDe($principal)->create(['code' => 'LYON2']);
-        app(TenantContext::class)->runAs($principal, fn () => $principal->update(['regime_tva' => RegimeTva::ReelNormalTrimestriel, 'raison_sociale' => 'Dupont Frères']));
-        app(TenantContext::class)->set($magasin);
-
-        return $magasin;
-    }
-
     private function magasinSansIdentiteLegale(): Magasin
     {
-        $magasin = Magasin::factory()->sansIdentiteLegale()->create(['code' => 'MABOUT']);
+        $magasin = Magasin::factory()->avecLaSociete([
+            'raison_sociale' => null,
+            'forme_juridique' => null,
+            'capital_social' => null,
+            'immatriculation' => null,
+            'numero_tva' => null,
+            'siege_adresse' => null,
+            'siege_code_postal' => null,
+            'siege_ville' => null,
+        ])->create(['code' => 'MABOUT', 'adresse' => null, 'code_postal' => null, 'ville' => null]);
         app(TenantContext::class)->set($magasin);
 
         return $magasin;

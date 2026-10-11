@@ -11,7 +11,6 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -47,7 +46,7 @@ class ProduitResourceTest extends TestCase
     private function connecterProprietaire(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
     }
@@ -333,7 +332,7 @@ class ProduitResourceTest extends TestCase
      */
     public function test_une_reference_prise_dans_un_autre_magasin_est_acceptee(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         Produit::factory()->create(['reference' => 'ABC']);
         $this->connecterProprietaire();
 
@@ -372,7 +371,7 @@ class ProduitResourceTest extends TestCase
      */
     public function test_un_fournisseur_force_sur_la_fiche_est_ignore(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $fournisseurDUnAutreMagasin = Fournisseur::factory()->create();
         $this->connecterProprietaire();
         $produit = Produit::factory()->create();
@@ -409,7 +408,7 @@ class ProduitResourceTest extends TestCase
      */
     public function test_un_vendeur_n_archive_pas_de_produits_en_masse(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
@@ -450,11 +449,11 @@ class ProduitResourceTest extends TestCase
     public function test_la_fiche_d_un_magasin_en_franchise_rappelle_qu_il_vend_sans_tva(): void
     {
         $this->connecterProprietaire();
-        Filament::getTenant()->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $this->reglerLaSociete(Filament::getTenant(), ['regime_tva' => RegimeTva::FranchiseEnBase]);
 
         Livewire::test(CreateProduit::class)
             ->assertFormSet(['taux_tva' => '20'])
-            ->assertSee('Votre magasin est en franchise en base : vos ventes sont facturées sans TVA (art. 293 B du CGI), au prix TTC indiqué.');
+            ->assertSee('Votre société est en franchise en base : vos ventes sont facturées sans TVA (art. 293 B du CGI), au prix TTC indiqué.');
     }
 
     /**
@@ -590,7 +589,7 @@ class ProduitResourceTest extends TestCase
      */
     public function test_un_vendeur_ne_restaure_pas_un_produit_archive(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur));
         Filament::setTenant($magasin);
         $produit = Produit::factory()->trashed()->create();

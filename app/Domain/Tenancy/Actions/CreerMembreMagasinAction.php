@@ -4,6 +4,8 @@ namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Rules\EmailLibrePourUnNouveauMembre;
@@ -23,9 +25,9 @@ use LogicException;
  * email n'a besoin d'être confirmée par personne -- c'est le magasin qui
  * se porte garant de la personne, pas une boîte mail.
  *
- * C'est toujours un NOUVEAU compte, qui n'appartiendra qu'à ce magasin :
- * une adresse déjà utilisée par un compte est refusée (voir
- * EmailLibrePourUnNouveauMembre).
+ * C'est toujours un NOUVEAU compte, membre de la société de ce magasin
+ * (role_societe membre) et rattaché à ce seul magasin : une adresse déjà
+ * utilisée par un compte est refusée (voir EmailLibrePourUnNouveauMembre).
  *
  * Le rôle n'est qu'un libellé et un modèle (voir
  * RoleMagasin::permissionsParDefaut()) : le propriétaire coche les
@@ -57,7 +59,7 @@ class CreerMembreMagasinAction
         }
 
         if ($permissions !== null) {
-            if (! $auteur->estProprietaireDe($magasin)) {
+            if (! $auteur->estProprietaireDuMagasin($magasin)) {
                 throw new LogicException('Seul le propriétaire coche les autorisations d\'un membre.');
             }
 
@@ -81,18 +83,23 @@ class CreerMembreMagasinAction
             $avant = $this->journalDesDroits->avant($magasin, null);
             $permissions ??= $this->autorisationsDuModele($auteur, $magasin, $role);
 
-            $utilisateur = User::create([
+            // La société, le rôle de société et email_verified_at ne sont
+            // pas mass-assignables (hors de $fillable, volontairement, pour
+            // qu'une requête utilisateur ne puisse jamais changer de société
+            // ni s'auto-vérifier). L'adresse est vérifiée immédiatement ici :
+            // c'est le magasin qui crée ce compte et transmet les
+            // identifiants lui-même, il n'y a rien à confirmer par email.
+            $utilisateur = (new User([
                 'name' => $donnees['name'],
                 'email' => $donnees['email'],
                 'password' => $donnees['password'],
+            ]))->forceFill([
+                'societe_id' => $magasin->societe_id,
+                'role_societe' => RoleSociete::Membre,
+                'statut' => StatutCompte::Actif,
+                'email_verified_at' => now(),
             ]);
-
-            // email_verified_at n'est pas mass-assignable (hors de
-            // $fillable, volontairement, pour qu'une requête utilisateur ne
-            // puisse jamais s'auto-vérifier). Vérifié immédiatement ici :
-            // c'est le magasin qui crée ce compte et transmet les
-            // identifiants lui-même, il n'y a rien à confirmer par email.
-            $utilisateur->forceFill(['email_verified_at' => now()])->save();
+            $utilisateur->save();
 
             $magasin->utilisateurs()->attach($utilisateur->getKey(), [
                 'role' => $role->value,
@@ -120,7 +127,7 @@ class CreerMembreMagasinAction
     {
         $modele = $role->permissionsParDefaut();
 
-        if ($auteur->estProprietaireDe($magasin)) {
+        if ($auteur->estProprietaireDuMagasin($magasin)) {
             return $modele;
         }
 

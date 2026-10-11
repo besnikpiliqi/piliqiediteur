@@ -24,10 +24,8 @@ use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
 use App\Domain\Facturation\Services\ReglementComptant;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -238,7 +236,7 @@ class EnvoyerDocumentJobTest extends TestCase
         Mail::assertNothingSent();
         $relance->refresh();
         $this->assertSame([StatutEnvoi::Echec, 'La facture a été réglée ou soldée par un avoir entre-temps : la relance n\'est pas partie.'], [$relance->statut, $relance->erreur]);
-        $this->assertSame(1, $magasin->proprietaires()->sole()->notifications()->count());
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
     }
 
     /**
@@ -253,14 +251,14 @@ class EnvoyerDocumentJobTest extends TestCase
         $facture = $this->emettreFacture(Client::factory()->create());
         Queue::fake([EnvoyerDocumentJob::class]);
         $envoi = app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, null);
-        $magasin->forceFill(['statut' => StatutMagasin::Suspendu])->save();
+        $magasin->forceFill(['suspendu_le' => now()])->save();
 
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
 
         Mail::assertNothingSent();
         $envoi->refresh();
         $this->assertSame([StatutEnvoi::Echec, 'Le magasin est suspendu : il n\'écrit plus à ses clients, l\'e-mail n\'est pas parti.'], [$envoi->statut, $envoi->erreur]);
-        $this->assertSame(1, $magasin->proprietaires()->sole()->notifications()->count());
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
     }
 
     /**
@@ -322,7 +320,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $envoi->refresh();
         $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
         $this->assertSame('Une adresse e-mail n\'est pas valide (celle du destinataire, ou celle du magasin, à laquelle le client répond) : corrigez-la, puis renvoyez-le.', $envoi->erreur);
-        $this->assertSame(1, $magasin->proprietaires()->sole()->notifications()->count());
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
     }
 
     /**
@@ -347,7 +345,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $envoi->refresh();
         $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
         $this->assertSame('Le ticket TK-MABOUT-2026-000009 n\'a aucun enregistrement signé au registre fiscal : son PDF n\'est pas produit. Lancez la vérification de l\'intégrité (Ventes > Caisse sécurisée) et contactez le support. L\'e-mail n\'est pas parti.', $envoi->erreur);
-        $this->assertSame(1, $magasin->proprietaires()->sole()->notifications()->count());
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
         Exceptions::assertReported(DocumentSansEnregistrementSigneException::class);
     }
 
@@ -376,7 +374,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->assertStringContainsString('L\'e-mail à compta@client.fr n\'est pas parti.', $notification->data['body']);
         $this->assertStringNotContainsString('smtp-user', $notification->data['body']);
         $this->assertSame($magasin->id, $notification->data['magasin_id']);
-        $this->assertSame(0, $magasin->proprietaires()->sole()->notifications()->count());
+        $this->assertSame(0, $this->proprietaireDe($magasin)->notifications()->count());
     }
 
     /**
@@ -391,7 +389,7 @@ class EnvoyerDocumentJobTest extends TestCase
 
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->failed(new TransportException('Connexion refusée'));
 
-        $notification = $magasin->proprietaires()->sole()->notifications()->sole();
+        $notification = $this->proprietaireDe($magasin)->notifications()->sole();
         $this->assertStringContainsString('La relance n°2 à client@exemple.fr n\'est pas partie.', $notification->data['body']);
         $envoi->refresh();
         $this->assertSame(StatutEnvoi::Echec, $envoi->statut);
@@ -411,7 +409,7 @@ class EnvoyerDocumentJobTest extends TestCase
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->failed(new TransportException('Connexion refusée'));
 
         $this->assertSame(0, $ancienMembre->notifications()->count());
-        $this->assertSame(1, $magasin->proprietaires()->sole()->notifications()->count());
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
     }
 
     /**
@@ -456,7 +454,7 @@ class EnvoyerDocumentJobTest extends TestCase
         Mail::assertNothingSent();
         $envoi->refresh();
         $this->assertSame([StatutEnvoi::Echec, 'Le devis a été modifié depuis cette demande d\'envoi : l\'e-mail n\'est pas parti, envoyez sa nouvelle version à votre client si ce n\'est pas déjà fait.'], [$envoi->statut, $envoi->erreur]);
-        $this->assertSame(1, $magasin->proprietaires()->sole()->notifications()->count());
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
         $devis->refresh();
         $this->assertSame([StatutDevis::Brouillon, '600.00'], [$devis->statut, $devis->total_ttc]);
     }
@@ -531,7 +529,7 @@ class EnvoyerDocumentJobTest extends TestCase
 
     private function magasinAvecProprietaire(string $nom): Magasin
     {
-        return app(CreerMagasinAction::class)->handle(['nom' => $nom], User::factory()->create());
+        return $this->ouvrirUneSociete(['nom' => $nom]);
     }
 
     private function produit(): Produit

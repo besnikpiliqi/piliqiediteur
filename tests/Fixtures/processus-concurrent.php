@@ -5,9 +5,9 @@
  * test, comme une seconde caisse qui agit au même instant (voir
  * TestCase::demarrerUnProcessusConcurrent()). La demande arrive sérialisée
  * sur l'entrée standard : la base du test (celle de son processus de test
- * parallèle), la configuration de la caisse sécurisée des tests et
- * l'opération. Le processus réussit si l'opération réussit ; sinon il
- * écrit l'erreur et échoue.
+ * parallèle), la configuration de la caisse sécurisée et du journal
+ * d'audit des tests et l'opération. Le processus réussit si l'opération
+ * réussit ; sinon il écrit l'erreur et échoue.
  */
 
 use Illuminate\Contracts\Console\Kernel;
@@ -23,6 +23,7 @@ $demande = unserialize(base64_decode((string) stream_get_contents(STDIN)));
 config([
     'database.connections.'.config('database.default').'.database' => $demande['base'],
     'caisse_securisee' => $demande['caisse_securisee'],
+    'journal_audit' => $demande['journal_audit'],
 ]);
 DB::purge();
 

@@ -4,9 +4,7 @@ namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -23,7 +21,7 @@ class ClotureCaissePersonnellePolicyTest extends TestCase
 
     public function test_un_vendeur_ne_voit_que_ses_propres_releves(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur);
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur);
         $releveDeA = ClotureCaissePersonnelle::factory()->create(['vendeur_id' => $vendeurA->id]);
@@ -35,7 +33,7 @@ class ClotureCaissePersonnellePolicyTest extends TestCase
 
     public function test_avec_la_vue_totale_un_membre_voit_les_releves_de_toute_l_equipe(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $comptable = $this->membre($magasin, RoleMagasin::Comptable);
         $releveDuVendeur = ClotureCaissePersonnelle::factory()->create(['vendeur_id' => $vendeur->id]);
@@ -50,7 +48,7 @@ class ClotureCaissePersonnellePolicyTest extends TestCase
      */
     public function test_seul_qui_peut_cloturer_la_journee_ferme_la_caisse_d_un_autre_vendeur(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $autreVendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $gerant = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE, PermissionRegistry::CLOTURE_CAISSE_GERER]);
@@ -81,7 +79,7 @@ class ClotureCaissePersonnellePolicyTest extends TestCase
     #[DataProvider('autorisationsDevantSaCaisse')]
     public function test_quiconque_vend_ou_encaisse_ferme_sa_caisse(array $autorisations, bool $tientUneCaisse): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
 
         $this->assertSame(

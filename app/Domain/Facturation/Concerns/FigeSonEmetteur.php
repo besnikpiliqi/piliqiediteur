@@ -10,10 +10,11 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 /**
  * Un ticket, une facture ou un avoir émis ne change plus jamais : il
- * garde l'émetteur qu'il a imprimé à son émission (identité légale du
- * magasin, adresse, identifiants, régime de TVA, option pour les débits,
- * mentions entre professionnels), même si le magasin change ensuite les
- * siens.
+ * garde l'émetteur qu'il a imprimé à son émission (identité légale de la
+ * société, siège, forme et capital compris, adresse et SIRET du magasin,
+ * identifiants, régime de TVA, option pour les débits, mentions entre
+ * professionnels), même si la société ou le magasin changent ensuite les
+ * leurs.
  *
  * Aucune colonne du document ne copie cet émetteur : il est signé au
  * registre fiscal avec le document (voir ContenuFiscal), dans son
@@ -44,8 +45,8 @@ trait FigeSonEmetteur
 
     /**
      * L'émetteur que le document imprime : celui que son contenu signé a
-     * retenu une fois le document numéroté, le magasin tel qu'il est
-     * aujourd'hui tant qu'il est un brouillon. Un document numéroté sans
+     * retenu une fois le document numéroté, la société et le magasin tels
+     * qu'ils sont aujourd'hui tant qu'il est un brouillon. Un document numéroté sans
      * enregistrement signé n'en a aucun : il est refusé, plutôt que de
      * prendre celui du magasin d'aujourd'hui.
      *

@@ -12,9 +12,9 @@ use App\Models\User;
 use Illuminate\Support\Facades\Notification;
 
 /**
- * Prévient les membres du magasin qui gèrent son stock (voir
- * PermissionRegistry::PRODUIT_AJUSTER_STOCK) -- jamais un membre d'un
- * autre magasin, ni un membre suspendu.
+ * Prévient le propriétaire de la société et les membres du magasin qui
+ * gèrent son stock (voir PermissionRegistry::PRODUIT_AJUSTER_STOCK) --
+ * jamais un membre d'un autre magasin, ni un membre suspendu.
  *
  * Les permissions d'un membre dépendent du magasin (voir
  * MagasinTeamResolver) : elles sont lues dans le contexte du magasin du
@@ -40,7 +40,8 @@ class NotifierLeStockSousLeSeuilDAlerte
             }
 
             $destinataires = $magasin->membresActifs()->get()
-                ->filter(fn (User $membre): bool => $membre->can(PermissionRegistry::PRODUIT_AJUSTER_STOCK));
+                ->prepend($magasin->societe->proprietaire)
+                ->filter(fn (User $destinataire): bool => $destinataire->can(PermissionRegistry::PRODUIT_AJUSTER_STOCK));
 
             Notification::send($destinataires, new StockSousLeSeuilDAlerte($produit));
         });

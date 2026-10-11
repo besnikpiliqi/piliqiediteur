@@ -141,7 +141,7 @@ class MembreEquipeResource extends Resource
         /** @var Magasin $magasin */
         $magasin = Filament::getTenant();
 
-        return auth()->user()?->estProprietaireDe($magasin) ?? false;
+        return auth()->user()?->estProprietaireDuMagasin($magasin) ?? false;
     }
 
     public static function table(Table $table): Table

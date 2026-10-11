@@ -14,7 +14,6 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -214,7 +213,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
     public function test_le_client_comptoir_naccumule_et_napplique_jamais_de_credit(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         app(TenantContext::class)->set($magasin);
 
         $clientComptoir = Client::query()->where('nom', Client::NOM_COMPTOIR)->firstOrFail();

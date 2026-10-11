@@ -14,9 +14,9 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Facturation\Services\JourneesDeCaisse;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -227,7 +227,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
     {
         $magasin = Magasin::factory()->create();
         $facture = $this->emettreFactureHier($magasin);
-        $magasin->forceFill(['statut' => StatutMagasin::Suspendu])->save();
+        $magasin->forceFill(['suspendu_le' => now()])->save();
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
@@ -344,11 +344,11 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $this->vendreUnTicketDe12Euros($autreMagasin);
         $this->travelTo('2026-10-09 00:00:00');
         Exceptions::fake([RuntimeException::class]);
-        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), $magasinEnPanne->id) extends CloturerCaisseAction
+        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), $magasinEnPanne->id) extends CloturerCaisseAction
         {
-            public function __construct(DocumentNumberingService $numerotation, CalculateurLigne $calculateur, RegistreFiscal $registre, PanierDeCaisse $panierDeCaisse, private readonly int $magasinEnPanne)
+            public function __construct(DocumentNumberingService $numerotation, CalculateurLigne $calculateur, RegistreFiscal $registre, PanierDeCaisse $panierDeCaisse, JourneesDeCaisse $journeesDeCaisse, private readonly int $magasinEnPanne)
             {
-                parent::__construct($numerotation, $calculateur, $registre, $panierDeCaisse);
+                parent::__construct($numerotation, $calculateur, $registre, $panierDeCaisse, $journeesDeCaisse);
             }
 
             public function handle(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse

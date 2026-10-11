@@ -15,6 +15,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -24,12 +25,13 @@ use LogicException;
  * légal qu'à l'émission, moment où le stock est restauré (voir
  * AvoirEmis/RestaurerStockApresEmissionAvoir). Comme la facture qu'il
  * rectifie, l'avoir d'une facture à un professionnel exige l'identité
- * légale complète du magasin (B11, voir
+ * légale complète de la société et du magasin (B11, voir
  * Magasin::verifierSonIdentiteLegale()) ; celui d'un ticket reste
  * possible. Tout se fait dans la même transaction, dans cet ordre :
  *  1. le registre fiscal du magasin actif est verrouillé, avant toute
  *     lecture, l'avoir et la numérotation (voir RegistreFiscal) ; il donne
- *     l'instant de l'émission ;
+ *     l'instant de l'émission ; le magasin, relu, doit pouvoir vendre (voir
+ *     Magasin::verifierQuIlPeutVendre()) ;
  *  2. l'avoir, relu verrouillé dans le magasin actif, arrête ses
  *     montants, prend la copie du client figée sur le document qu'il
  *     corrige, le plus récent s'il en corrige plusieurs (voir
@@ -70,6 +72,7 @@ class EmettreAvoirAction
     {
         return DB::transaction(function () use ($avoir) {
             $instant = $this->registre->verrouiller(app(TenantContext::class)->magasin());
+            Magasin::query()->findOrFail(app(TenantContext::class)->id())->verifierQuIlPeutVendre();
             $avoir = Avoir::query()->whereKey($avoir->getKey())->lockForUpdate()->firstOrFail();
 
             if (! $avoir->statut->peutTransitionnerVers(StatutAvoir::Emise)) {

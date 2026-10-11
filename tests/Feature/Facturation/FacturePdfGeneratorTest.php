@@ -17,6 +17,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -79,7 +80,7 @@ class FacturePdfGeneratorTest extends TestCase
     public function test_le_siret_du_client_ne_s_imprime_que_pour_un_professionnel(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
-        $professionnel = Client::factory()->professionnel()->create(['siret' => '12345678900012']);
+        $professionnel = Client::factory()->professionnel()->create(['siret' => '12121212000012']);
         $particulier = Client::factory()->create(['nom' => 'Jean Dupont', 'adresse' => '3 place du Marché', 'code_postal' => '75011', 'ville' => 'Paris']);
         Client::query()->whereKey($particulier->id)->update(['siret' => '98765432100013']);
         $produit = Produit::factory()->create(['suivi_stock' => false]);
@@ -89,7 +90,7 @@ class FacturePdfGeneratorTest extends TestCase
 
         [$facture, $ticket] = [$emettre($professionnel), $emettre($particulier)];
 
-        $this->assertStringContainsString('SIRET : 12345678900012<br>', $this->rendu($facture));
+        $this->assertStringContainsString('SIRET : 12121212000012<br>', $this->rendu($facture));
         $this->assertSame('98765432100013', $ticket->client_siret);
         $this->assertStringContainsString(
             '<div class="bloc-client"><div class="titre">Client</div><strong>Jean Dupont</strong><br>3 place du Marché<br>75011 Paris<br></div>',
@@ -137,7 +138,7 @@ class FacturePdfGeneratorTest extends TestCase
     #[DataProvider('choixDeLoptionPourLesDebits')]
     public function test_la_mention_de_loption_pour_les_debits_suit_le_choix_du_magasin(bool $optionDebits): void
     {
-        app(TenantContext::class)->set(Magasin::factory()->create(['option_debits_tva' => $optionDebits]));
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['option_debits_tva' => $optionDebits])->create());
         $client = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create();
         $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
@@ -185,21 +186,26 @@ class FacturePdfGeneratorTest extends TestCase
     }
 
     /**
-     * Les mentions du vendeur (voir IdentiteMagasin) : raison sociale,
-     * forme juridique et capital social (H2), adresse complète, SIREN,
-     * SIRET, immatriculation (K7), n° de TVA et coordonnées.
+     * Les mentions du vendeur (voir IdentiteSociete) : raison sociale,
+     * forme juridique et capital social de la société (H2), adresse
+     * complète et SIRET du magasin, siège, SIREN, immatriculation (K7),
+     * n° de TVA, et coordonnées du magasin.
      */
     public function test_la_facture_imprime_l_identite_legale_du_magasin(): void
     {
-        app(TenantContext::class)->set(Magasin::factory()->create([
-            'nom' => 'Boutique du Port',
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete([
             'raison_sociale' => 'Martin et Fils',
-            'forme_juridique' => 'SARL',
+            'forme_juridique' => FormeJuridique::Sarl,
             'capital_social' => '10000.00',
-            'siren' => '123456789',
-            'siret' => '12345678900012',
+            'siren' => '121212120',
             'immatriculation' => 'RCS Marseille',
-            'numero_tva' => 'FR32123456789',
+            'numero_tva' => 'FR56121212120',
+            'siege_adresse' => '1 rue de la République',
+            'siege_code_postal' => '13001',
+            'siege_ville' => 'Marseille',
+        ])->create([
+            'nom' => 'Boutique du Port',
+            'siret' => '12121212000012',
             'adresse' => '12 quai des Pêcheurs',
             'complement_adresse' => 'Bâtiment B',
             'code_postal' => '13002',
@@ -215,27 +221,34 @@ class FacturePdfGeneratorTest extends TestCase
         $this->assertStringContainsString(
             '<div class="magasin-nom">Boutique du Port</div>'
             .'Martin et Fils SARL au capital de 10 000,00 €<br>12 quai des Pêcheurs<br>Bâtiment B<br>13002 Marseille<br>FR<br>'
-            .'SIREN : 123456789<br>SIRET : 12345678900012<br>RCS Marseille<br>TVA intracommunautaire : FR32123456789<br>'
+            .'SIRET : 12121212000012<br>Siège social : 1 rue de la République, 13001 Marseille<br>'
+            .'SIREN : 121212120<br>RCS Marseille<br>TVA intracommunautaire : FR56121212120<br>'
             .'Tél. 04 91 00 00 00 · contact@boutique-du-port.fr',
             preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], $html),
         );
     }
 
     /**
-     * Un magasin qui n'a pas encore rempli son identité, et ne vend donc
-     * qu'à des particuliers, n'imprime ni ligne vide ni libellé sans
-     * valeur.
+     * Une société qui n'a encore que son SIREN, et ne vend donc qu'à des
+     * particuliers, avec un magasin dont l'INSEE n'a pas encore donné
+     * l'adresse : ni ligne vide ni libellé sans valeur, seuls le SIRET et
+     * le SIREN, qui ne manquent jamais, s'impriment.
      */
     public function test_l_identite_non_renseignee_ne_s_imprime_pas(): void
     {
-        app(TenantContext::class)->set(Magasin::factory()->create([
-            'nom' => 'Boutique du Port',
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete([
+            'siren' => '121212120',
             'raison_sociale' => null,
             'forme_juridique' => null,
-            'siren' => null,
-            'siret' => null,
+            'capital_social' => null,
             'immatriculation' => null,
             'numero_tva' => null,
+            'siege_adresse' => null,
+            'siege_code_postal' => null,
+            'siege_ville' => null,
+        ])->create([
+            'nom' => 'Boutique du Port',
+            'siret' => '12121212000012',
             'adresse' => null,
             'complement_adresse' => null,
             'code_postal' => null,
@@ -249,24 +262,31 @@ class FacturePdfGeneratorTest extends TestCase
         $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $enTete = Str::betweenFirst($html, '<table class="en-tete">', '</table>');
-        $this->assertStringContainsString('<div class="magasin-nom">Boutique du Port</div></td>', $this->compacte($enTete));
-        $this->assertStringNotContainsString('SIREN', $enTete);
+        $this->assertStringContainsString('<div class="magasin-nom">Boutique du Port</div>SIRET : 12121212000012<br>SIREN : 121212120</td>', $this->compacte($enTete));
+        $this->assertStringNotContainsString('Siège', $enTete);
         $this->assertStringNotContainsString('TVA intracommunautaire', $enTete);
         $this->assertStringNotContainsString('Tél.', $enTete);
     }
 
     /**
-     * Un capital social non renseigné ne s'imprime pas : la raison sociale
-     * et la forme juridique restent seules sur leur ligne.
+     * Un capital social non renseigné ne s'imprime pas : pour une forme
+     * qui n'est pas une société commerciale, dont il n'est pas exigé, la
+     * raison sociale et la forme juridique restent seules sur leur ligne.
      */
     public function test_un_capital_social_non_renseigne_ne_s_imprime_pas(): void
     {
-        app(TenantContext::class)->set(Magasin::factory()->create(['raison_sociale' => 'Martin et Fils', 'forme_juridique' => 'SARL', 'capital_social' => null]));
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete([
+            'raison_sociale' => 'Martin et Fils',
+            'forme_juridique' => FormeJuridique::Autre,
+            'forme_juridique_autre' => 'Société civile',
+            'societe_commerciale' => false,
+            'capital_social' => null,
+        ])->create());
         $facture = $this->factureEmise();
 
         $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
-        $this->assertStringContainsString('</div>Martin et Fils SARL<br>', $this->compacte($html));
+        $this->assertStringContainsString('</div>Martin et Fils Société civile<br>', $this->compacte($html));
         $this->assertStringNotContainsString('au capital', $html);
     }
 
@@ -509,7 +529,7 @@ class FacturePdfGeneratorTest extends TestCase
     #[DataProvider('ventesSansNoteDeCalcul')]
     public function test_une_vente_calculee_sans_tva_sur_le_total_n_a_pas_de_note_de_calcul(RegimeTva $regime, bool $professionnel): void
     {
-        app(TenantContext::class)->set(Magasin::factory()->create(['regime_tva' => $regime]));
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['regime_tva' => $regime])->create());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 1, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1000],

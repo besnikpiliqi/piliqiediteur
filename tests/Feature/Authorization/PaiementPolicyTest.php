@@ -11,7 +11,6 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Paiement;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -30,7 +29,7 @@ class PaiementPolicyTest extends TestCase
 
     public function test_sans_vue_totale_un_vendeur_ne_voit_que_ses_propres_paiements(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur);
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur);
         $paiementDeA = $this->encaisserUnPaiementEnTantQue($vendeurA);
@@ -42,7 +41,7 @@ class PaiementPolicyTest extends TestCase
 
     public function test_avec_la_vue_totale_un_membre_voit_les_paiements_de_toute_l_equipe(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $comptable = $this->membre($magasin, RoleMagasin::Comptable);
         $paiementDuVendeur = $this->encaisserUnPaiementEnTantQue($vendeur);
@@ -64,7 +63,7 @@ class PaiementPolicyTest extends TestCase
     public function test_le_proprietaire_contre_passe_un_paiement(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $this->assertTrue($proprietaire->can('contrePasser', $this->encaisserUnPaiementEnTantQue($proprietaire)));
     }
@@ -72,7 +71,7 @@ class PaiementPolicyTest extends TestCase
     #[DataProvider('rolesQuiContrePassentDOffice')]
     public function test_l_administrateur_et_le_comptable_contre_passent_un_paiement_d_office(RoleMagasin $role): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $membre = $this->membre($magasin, $role);
         $paiement = $this->encaisserUnPaiementEnTantQue($vendeur);
@@ -82,7 +81,7 @@ class PaiementPolicyTest extends TestCase
 
     public function test_un_vendeur_ne_contre_passe_pas_par_defaut(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
 
         $this->assertFalse($vendeur->can('contrePasser', $this->encaisserUnPaiementEnTantQue($vendeur)));
@@ -94,7 +93,7 @@ class PaiementPolicyTest extends TestCase
      */
     public function test_un_vendeur_autorise_ne_contre_passe_que_les_paiements_qu_il_voit(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $autorise = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PAIEMENT_CONTRE_PASSER]);
         $autreVendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $sonPaiement = $this->encaisserUnPaiementEnTantQue($autorise);
@@ -107,7 +106,7 @@ class PaiementPolicyTest extends TestCase
     public function test_ni_une_contre_passation_ni_un_paiement_deja_contre_passe_ne_se_contre_passent(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $paiement = $this->encaisserUnPaiementEnTantQue($proprietaire);
 
         $contrePassation = app(ContrePasserPaiementAction::class)->handle($paiement, 'Saisi deux fois');

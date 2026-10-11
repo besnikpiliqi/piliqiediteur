@@ -15,10 +15,9 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\AvoirPdfGenerator;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
+use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -32,7 +31,7 @@ class AvoirPdfGeneratorTest extends TestCase
      */
     public function test_lavoir_porte_la_mention_de_loption_pour_les_debits_du_magasin(): void
     {
-        app(TenantContext::class)->set(Magasin::factory()->create(['option_debits_tva' => true]));
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['option_debits_tva' => true])->create());
         $client = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create();
         $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
@@ -52,11 +51,12 @@ class AvoirPdfGeneratorTest extends TestCase
      */
     public function test_lavoir_imprime_l_identite_legale_du_magasin(): void
     {
-        app(TenantContext::class)->set(Magasin::factory()->create([
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete([
             'raison_sociale' => 'Martin et Fils',
-            'forme_juridique' => 'SARL',
-            'siren' => '123456789',
-            'numero_tva' => 'FR32123456789',
+            'forme_juridique' => FormeJuridique::Sarl,
+            'siren' => '121212120',
+            'numero_tva' => 'FR56121212120',
+        ])->create([
             'adresse' => '12 quai des Pêcheurs',
             'code_postal' => '13002',
             'ville' => 'Marseille',
@@ -72,7 +72,7 @@ class AvoirPdfGeneratorTest extends TestCase
 
         $html = app(AvoirPdfGenerator::class)->html($avoir->load('client', 'lignes.ligneFacture.facture', 'magasin'));
 
-        foreach (['Martin et Fils SARL', '12 quai des Pêcheurs', '13002 Marseille', 'SIREN : 123456789', 'TVA intracommunautaire : FR32123456789'] as $mention) {
+        foreach (['Martin et Fils SARL', '12 quai des Pêcheurs', '13002 Marseille', 'SIREN : 121212120', 'TVA intracommunautaire : FR56121212120'] as $mention) {
             $this->assertStringContainsString($mention, $html);
         }
     }
@@ -198,7 +198,7 @@ class AvoirPdfGeneratorTest extends TestCase
      */
     public function test_l_avoir_d_un_client_comptoir_vaut_bon_d_avoir_du_montant_de_son_emission(): void
     {
-        app(TenantContext::class)->set(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create()));
+        app(TenantContext::class)->set($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $ticket = app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
         $avoir = $this->crediter($comptoir, $ticket);

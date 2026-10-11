@@ -13,10 +13,12 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
 use Database\Factories\ProduitFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,6 +26,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\UniqueConstraintViolationException;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Son taux de TVA est un paramètre ayant un impact sur la conformité :
@@ -124,9 +127,24 @@ class Produit extends Model
         return ['taux_tva'];
     }
 
-    protected function magasinIdDesParametres(): int
+    /**
+     * Son seul magasin, qui doit être le magasin actif : le taux d'un
+     * produit ne se modifie que dans son propre magasin, dont le journal
+     * des événements note la modification.
+     *
+     * @return Collection<int, Magasin>
+     *
+     * @throws LogicException
+     */
+    protected function magasinsDuJournal(): Collection
     {
-        return (int) $this->magasin_id;
+        $magasinActif = app(TenantContext::class)->magasin();
+
+        if ((int) $this->magasin_id !== $magasinActif->getKey()) {
+            throw new LogicException('Un paramètre ayant un impact sur la conformité ne se modifie que dans son propre magasin, dont le journal des événements note la modification.');
+        }
+
+        return new Collection([$magasinActif]);
     }
 
     /**

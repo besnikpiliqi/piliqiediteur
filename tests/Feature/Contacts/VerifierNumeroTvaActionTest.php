@@ -5,8 +5,8 @@ namespace Tests\Feature\Contacts;
 use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Integrations\Vies\ViesIndisponibleException;
@@ -38,13 +38,13 @@ class VerifierNumeroTvaActionTest extends TestCase
     private const MESSAGE_INDISPONIBLE = 'Le service européen VIES ne répond pas pour ce pays : réessayez dans quelques minutes. Sans n° de TVA vérifié, la vente reste à la TVA française.';
 
     /**
-     * Le magasin de Lyon, n° de TVA FR44732829320, et son propriétaire
-     * connecté.
+     * Le magasin d'une société au n° de TVA FR88100000009 (SIREN
+     * 100000009), et son propriétaire connecté.
      */
     private function magasinIdentifie(): User
     {
-        $proprietaire = User::factory()->create();
-        $this->completerIdentiteLegale(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire));
+        $proprietaire = User::factory()->for(Societe::factory()->commeApresLInscription()->state(['siren' => '100000009', 'numero_tva' => 'FR88100000009']))->create();
+        $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire));
         $this->actingAs($proprietaire);
 
         return $proprietaire;
@@ -96,7 +96,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         $this->assertSame('2026-10-09 12:32:10', DB::table('consultations_vies')->value('consultee_le'));
         Http::assertSent(fn (Request $requete): bool => $requete->url() === self::URL_VIES
             && $requete->method() === 'POST'
-            && $requete->data() === ['countryCode' => 'DE', 'vatNumber' => '123456789', 'requesterMemberStateCode' => 'FR', 'requesterNumber' => '44732829320']);
+            && $requete->data() === ['countryCode' => 'DE', 'vatNumber' => '123456789', 'requesterMemberStateCode' => 'FR', 'requesterNumber' => '88100000009']);
     }
 
     public function test_un_numero_inconnu_conserve_une_consultation_invalide(): void
@@ -149,7 +149,7 @@ class VerifierNumeroTvaActionTest extends TestCase
     public function test_un_magasin_sans_numero_de_tva_verifie_sans_s_identifier(): void
     {
         $this->actingAs($proprietaire = User::factory()->create());
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->reglerLaSociete($this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire), ['numero_tva' => null]);
         $client = Client::factory()->etranger('DE', 'DE123456789')->create();
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(self::reponseVies(['requestIdentifier' => '']))]);
@@ -234,7 +234,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         $this->assertThrows(
             fn () => app(VerifierNumeroTvaAction::class)->handle($client),
             LogicException::class,
-            'VIES refuse le n° de TVA du magasin, qui identifie chaque vérification : contrôlez-le dans Paramètres > Identité du magasin. Sans n° de TVA vérifié, la vente reste à la TVA française.',
+            'VIES refuse le n° de TVA de la société, qui identifie chaque vérification : contrôlez-le dans Administration de la société > Identité. Sans n° de TVA vérifié, la vente reste à la TVA française.',
         );
 
         $this->assertSame(0, ConsultationVies::query()->count());

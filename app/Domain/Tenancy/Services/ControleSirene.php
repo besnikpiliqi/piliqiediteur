@@ -1,0 +1,215 @@
+<?php
+
+namespace App\Domain\Tenancy\Services;
+
+use App\Domain\Facturation\Enums\TerritoireTva;
+use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\FormeJuridique;
+use App\Domain\Tenancy\Enums\ResultatVerification;
+use App\Domain\Tenancy\Enums\TypeVerification;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Models\VerificationSociete;
+use App\Integrations\Sirene\Contracts\RepertoireSirene;
+use App\Integrations\Sirene\EtablissementSirene;
+use App\Integrations\Sirene\SireneIndisponibleException;
+use App\Integrations\Sirene\UniteSirene;
+use App\Models\User;
+
+/**
+ * Les contrôles d'une société et de ses magasins au répertoire public
+ * Sirene de l'INSEE (voir RepertoireSirene) : l'entreprise existe et n'est
+ * pas cessée ; l'établissement d'un magasin existe, est actif et est
+ * rattaché au SIREN de la société. Chaque consultation rend son résultat
+ * (concluant, négatif avec son motif, ou impossible quand l'INSEE ne
+ * répond pas) sans rien écrire ; noterUnite() et noterEtablissement()
+ * l'inscrivent ensuite au registre des vérifications de la société (voir
+ * VerificationSociete), avec les seuls détails que retient son type, et
+ * au journal d'audit, catégorie des vérifications.
+ *
+ * Les motifs de refus ne disent que ce que le répertoire public dit
+ * lui-même : jamais rien d'une autre société inscrite dans le logiciel.
+ */
+class ControleSirene
+{
+    public const FOURNISSEUR = 'insee';
+
+    public const MOTIF_ENTREPRISE_INCONNUE = 'Ce SIREN est inconnu du répertoire Sirene de l\'INSEE : vérifiez-le.';
+
+    public const MOTIF_ENTREPRISE_CESSEE = 'Cette entreprise est cessée au répertoire Sirene de l\'INSEE.';
+
+    public const MOTIF_ETABLISSEMENT_INCONNU = 'Ce SIRET est inconnu du répertoire Sirene de l\'INSEE : vérifiez le NIC.';
+
+    public const MOTIF_ETABLISSEMENT_FERME = 'Cet établissement est fermé au répertoire Sirene de l\'INSEE.';
+
+    public const MOTIF_AUTRE_ENTREPRISE = 'Cet établissement n\'est pas rattaché à cette entreprise au répertoire Sirene de l\'INSEE.';
+
+    public const MOTIF_TERRITOIRE_NON_GERE = 'Le logiciel ne gère pas encore les magasins situés en Guyane, à Mayotte ou dans une collectivité d\'outre-mer.';
+
+    public function __construct(
+        private readonly RepertoireSirene $repertoire,
+        private readonly JournalAudit $journalAudit,
+    ) {}
+
+    /**
+     * L'entreprise de ce SIREN, active au répertoire.
+     *
+     * @return array{resultat: ResultatVerification, unite: UniteSirene|null, motif: string|null}
+     */
+    public function unite(string $siren): array
+    {
+        try {
+            $unite = $this->repertoire->unite($siren);
+        } catch (SireneIndisponibleException) {
+            return ['resultat' => ResultatVerification::Indisponible, 'unite' => null, 'motif' => null];
+        }
+
+        return match (true) {
+            $unite === null => ['resultat' => ResultatVerification::Negative, 'unite' => null, 'motif' => self::MOTIF_ENTREPRISE_INCONNUE],
+            ! $unite->active => ['resultat' => ResultatVerification::Negative, 'unite' => $unite, 'motif' => self::MOTIF_ENTREPRISE_CESSEE],
+            default => ['resultat' => ResultatVerification::Concluante, 'unite' => $unite, 'motif' => null],
+        };
+    }
+
+    /**
+     * L'établissement de ce SIRET, actif au répertoire et rattaché à ce
+     * SIREN.
+     *
+     * @return array{resultat: ResultatVerification, etablissement: EtablissementSirene|null, motif: string|null}
+     */
+    public function etablissement(string $siret, string $siren): array
+    {
+        try {
+            $etablissement = $this->repertoire->etablissement($siret);
+        } catch (SireneIndisponibleException) {
+            return ['resultat' => ResultatVerification::Indisponible, 'etablissement' => null, 'motif' => null];
+        }
+
+        return match (true) {
+            $etablissement === null => ['resultat' => ResultatVerification::Negative, 'etablissement' => null, 'motif' => self::MOTIF_ETABLISSEMENT_INCONNU],
+            ! $etablissement->estRattacheA($siren) => ['resultat' => ResultatVerification::Negative, 'etablissement' => $etablissement, 'motif' => self::MOTIF_AUTRE_ENTREPRISE],
+            ! $etablissement->actif => ['resultat' => ResultatVerification::Negative, 'etablissement' => $etablissement, 'motif' => self::MOTIF_ETABLISSEMENT_FERME],
+            default => ['resultat' => ResultatVerification::Concluante, 'etablissement' => $etablissement, 'motif' => null],
+        };
+    }
+
+    /**
+     * L'identité que le répertoire donne de l'entreprise, telle qu'elle
+     * préremplit la société : sa dénomination, sa catégorie juridique et la
+     * forme qu'elle donne (voir FormeJuridique::depuisCategorieInsee()),
+     * l'adresse de son siège quand le répertoire la diffuse, et le n° de
+     * TVA que forme son SIREN, que le propriétaire corrige si sa société en
+     * a un autre (groupe TVA). Une consultation impossible du siège laisse
+     * son adresse vide.
+     *
+     * @return array<string, mixed>
+     */
+    public function identiteDepuisSirene(UniteSirene $unite): array
+    {
+        $siretDuSiege = $unite->siretDuSiege();
+        $siege = $siretDuSiege === null ? null : $this->etablissement($siretDuSiege, $unite->siren)['etablissement'];
+
+        return [
+            'raison_sociale' => $unite->denomination,
+            'categorie_juridique_insee' => $unite->categorieJuridique,
+            'forme_juridique' => $unite->categorieJuridique === null ? null : FormeJuridique::depuisCategorieInsee($unite->categorieJuridique),
+            'numero_tva' => IdentifiantsInsee::numeroTvaPropose($unite->siren),
+            ...($siege === null || $siege->diffusionPartielle ? [] : [
+                'siege_adresse' => $siege->adresse,
+                'siege_complement_adresse' => $siege->complementAdresse,
+                'siege_code_postal' => $siege->codePostal,
+                'siege_ville' => $siege->ville,
+            ]),
+        ];
+    }
+
+    /**
+     * Inscrit le contrôle de l'entreprise au registre des vérifications de
+     * la société, qui doit être la société active.
+     *
+     * @param  array{resultat: ResultatVerification, unite: UniteSirene|null, motif: string|null}  $consultation  ce qu'a rendu unite()
+     */
+    public function noterUnite(Societe $societe, array $consultation, ?User $auteur = null): VerificationSociete
+    {
+        $unite = $consultation['unite'];
+
+        return $this->noter($societe, null, TypeVerification::SireneUnite, $consultation['resultat'], $unite === null ? null : [
+            'etat_administratif' => $unite->active ? 'active' : 'cessee',
+            'categorie_juridique' => $unite->categorieJuridique,
+            'denomination' => $unite->denomination,
+            'diffusion_partielle' => $unite->diffusionPartielle,
+        ], $auteur);
+    }
+
+    /**
+     * Inscrit le contrôle de l'établissement du magasin au registre des
+     * vérifications de sa société, qui doit être la société active.
+     *
+     * @param  array{resultat: ResultatVerification, etablissement: EtablissementSirene|null, motif: string|null}  $consultation  ce qu'a rendu etablissement()
+     */
+    public function noterEtablissement(Magasin $magasin, array $consultation, ?User $auteur = null): VerificationSociete
+    {
+        $etablissement = $consultation['etablissement'];
+
+        return $this->noter($magasin->societe, $magasin, TypeVerification::SireneEtablissement, $consultation['resultat'], [
+            'siret' => $magasin->siret,
+            ...($etablissement === null ? [] : [
+                'etat_administratif' => $etablissement->actif ? 'actif' : 'ferme',
+                'rattache' => $etablissement->estRattacheA($magasin->societe->siren),
+                'adresse' => implode(', ', array_filter([$etablissement->adresse, $etablissement->complementAdresse, trim("{$etablissement->codePostal} {$etablissement->ville}")], filled(...))),
+            ]),
+        ], $auteur);
+    }
+
+    /**
+     * L'adresse de l'établissement telle que le magasin la reprend, sans ce
+     * que le répertoire ne diffuse pas.
+     *
+     * @return array{adresse: string|null, complement_adresse: string|null, code_postal: string|null, ville: string|null}
+     */
+    public static function adresseDe(EtablissementSirene $etablissement): array
+    {
+        return [
+            'adresse' => $etablissement->adresse,
+            'complement_adresse' => $etablissement->complementAdresse,
+            'code_postal' => $etablissement->codePostal,
+            'ville' => $etablissement->ville,
+        ];
+    }
+
+    /**
+     * Le magasin de ce SIRET est-il dans un territoire que le logiciel gère
+     * (voir TerritoireTva::estPrisEnCharge()) ? Un établissement dont le
+     * répertoire ne diffuse pas le code postal compte en métropole.
+     */
+    public static function estDansUnTerritoireGere(EtablissementSirene $etablissement): bool
+    {
+        return TerritoireTva::depuisAdresse('FR', $etablissement->codePostal)?->estPrisEnCharge() ?? false;
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $details
+     */
+    private function noter(Societe $societe, ?Magasin $magasin, TypeVerification $type, ResultatVerification $resultat, ?array $details, ?User $auteur): VerificationSociete
+    {
+        return app(TenantContext::class)->runAsSociete($societe, function () use ($magasin, $type, $resultat, $details, $auteur): VerificationSociete {
+            $verification = tap((new VerificationSociete)->forceFill([
+                'magasin_id' => $magasin?->getKey(),
+                'type' => $type,
+                'resultat' => $resultat,
+                'fournisseur' => self::FOURNISSEUR,
+                'details' => $details,
+                'auteur_id' => $auteur?->getKey(),
+            ]))->save();
+
+            $this->journalAudit->inscrire(ActionAuditee::VerificationEnregistree, $magasin, null, [
+                'type' => $type->value,
+                'resultat' => $resultat->value,
+                'fournisseur' => self::FOURNISSEUR,
+                'siret' => $magasin?->siret,
+            ]);
+
+            return $verification;
+        });
+    }
+}

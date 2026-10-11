@@ -50,11 +50,11 @@ class MettreAJourMembreMagasinAction
      */
     public function handle(User $auteur, MagasinUser $membre, RoleMagasin $nouveauRole, StatutMembreMagasin $nouveauStatut, ?array $permissions = null): MagasinUser
     {
-        if ($membre->role === RoleMagasin::Proprietaire || $nouveauRole === RoleMagasin::Proprietaire) {
+        if ($membre->utilisateur->estProprietaire() || $nouveauRole === RoleMagasin::Proprietaire) {
             throw new LogicException('Le rôle propriétaire ne se modifie pas via la gestion d\'équipe.');
         }
 
-        $parLeProprietaire = $auteur->estProprietaireDe($membre->magasin);
+        $parLeProprietaire = $auteur->estProprietaireDuMagasin($membre->magasin);
 
         if ($permissions !== null) {
             if (! $parLeProprietaire) {

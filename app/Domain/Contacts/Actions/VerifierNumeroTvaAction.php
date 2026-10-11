@@ -4,7 +4,6 @@ namespace App\Domain\Contacts\Actions;
 
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
-use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Integrations\Vies\ClientVies;
@@ -21,10 +20,8 @@ use LogicException;
  * Le client se relit dans le magasin actif (MagasinScope) : c'est le n°
  * enregistré sur sa fiche qui se vérifie, jamais une copie en mémoire, et
  * jamais la fiche d'un autre magasin. Le magasin s'identifie auprès de
- * VIES par son propre n° de TVA, pour que la consultation reçoive un n° de
- * preuve. Ce n° se lit, comme ses autres réglages fiscaux, par
- * Emetteur::duMagasin() et jamais dans sa colonne : ces réglages passeront
- * du magasin à sa société en ce seul endroit.
+ * VIES par le n° de TVA de sa société, pour que la consultation reçoive un
+ * n° de preuve.
  *
  * L'appel à VIES, qui peut durer plusieurs secondes, a lieu hors de toute
  * transaction : il ne retient aucun verrou, et la vérification
@@ -54,7 +51,7 @@ class VerifierNumeroTvaAction
             throw new InvalidArgumentException('VIES ne vérifie que les n° de TVA de l\'Union européenne (et XI pour l\'Irlande du Nord).');
         }
 
-        $resultat = $this->vies->verifier($client->numero_tva, Emetteur::duMagasin(app(TenantContext::class)->magasin())->numeroTva);
+        $resultat = $this->vies->verifier($client->numero_tva, app(TenantContext::class)->magasin()->societe->numero_tva);
 
         return ConsultationVies::forceCreate([
             'client_id' => $client->getKey(),

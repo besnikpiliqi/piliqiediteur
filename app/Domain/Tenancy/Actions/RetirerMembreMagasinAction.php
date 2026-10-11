@@ -2,7 +2,6 @@
 
 namespace App\Domain\Tenancy\Actions;
 
-use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\MagasinUser;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -28,7 +27,7 @@ class RetirerMembreMagasinAction
 
     public function handle(MagasinUser $membre): void
     {
-        if ($membre->role === RoleMagasin::Proprietaire) {
+        if ($membre->utilisateur->estProprietaire()) {
             throw new LogicException("Le propriétaire ne peut pas être retiré de l'équipe.");
         }
 

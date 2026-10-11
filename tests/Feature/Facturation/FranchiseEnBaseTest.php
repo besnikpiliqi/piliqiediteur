@@ -47,7 +47,7 @@ class FranchiseEnBaseTest extends TestCase
 
     private const MENTION = 'TVA non applicable, art. 293 B du CGI';
 
-    private const REFUS_REGIME_CHANGE = 'Le régime de TVA du magasin a changé depuis l\'enregistrement de ce brouillon : ouvrez-le et enregistrez-le de nouveau pour recalculer ses lignes.';
+    private const REFUS_REGIME_CHANGE = 'Le régime de TVA de la société a changé depuis l\'enregistrement de ce brouillon : ouvrez-le et enregistrez-le de nouveau pour recalculer ses lignes.';
 
     public function test_un_ticket_en_franchise_est_a_zero_pour_cent_au_meme_prix_ttc_avec_la_mention(): void
     {
@@ -141,7 +141,7 @@ class FranchiseEnBaseTest extends TestCase
     {
         $magasin = $this->magasin(RegimeTva::ReelNormalMensuel);
         $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
-        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
 
         $this->assertEmissionRefusee($brouillon);
 
@@ -156,7 +156,7 @@ class FranchiseEnBaseTest extends TestCase
     {
         $magasin = $this->magasin(RegimeTva::FranchiseEnBase);
         $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
-        $magasin->update(['regime_tva' => RegimeTva::ReelNormalMensuel]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::ReelNormalMensuel]);
 
         $this->assertEmissionRefusee($brouillon);
 
@@ -177,7 +177,7 @@ class FranchiseEnBaseTest extends TestCase
         $client = Client::factory()->create();
         $produit = $this->produitA12Euros();
         $brouillon = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 3]]);
-        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
         $this->assertEmissionRefusee($brouillon);
 
         $ticket = app(EmettreFactureAction::class)->handle(app(ModifierFactureAction::class)->handle($brouillon, $client, [['produit_id' => $produit->id, 'quantite' => 3]]));
@@ -192,7 +192,7 @@ class FranchiseEnBaseTest extends TestCase
         $magasin = $this->magasin(RegimeTva::FranchiseEnBase);
         $ticket = $this->encaisser($this->produitA12Euros(), 1);
 
-        $magasin->update(['regime_tva' => RegimeTva::ReelNormalMensuel]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::ReelNormalMensuel]);
 
         $this->assertStringContainsString(self::MENTION, $this->pdfDeLaFacture($ticket->fresh()));
     }
@@ -232,7 +232,7 @@ class FranchiseEnBaseTest extends TestCase
     {
         $magasin = $this->magasin($regimeALEnregistrement);
         $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
-        $magasin->update(['regime_tva' => $regimeALEnvoi]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => $regimeALEnvoi]);
 
         try {
             app(EmettreDevisAction::class)->handle($devis);
@@ -279,7 +279,7 @@ class FranchiseEnBaseTest extends TestCase
         $client = Client::factory()->create();
         $produit = $this->produitA12Euros();
         $ticketAuReel = $this->encaisser($produit, 1, $client);
-        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
         $ticketEnFranchise = $this->encaisser($produit, 1, $client);
 
         try {
@@ -297,7 +297,7 @@ class FranchiseEnBaseTest extends TestCase
 
     private function magasin(RegimeTva $regime): Magasin
     {
-        $magasin = Magasin::factory()->create(['code' => 'LYON1', 'regime_tva' => $regime]);
+        $magasin = Magasin::factory()->avecLaSociete(['regime_tva' => $regime])->create(['code' => 'LYON1']);
         app(TenantContext::class)->set($magasin);
 
         return $magasin;

@@ -2,7 +2,9 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
@@ -11,9 +13,12 @@ use Illuminate\Support\Str;
  * documents (FAC-LYON1-2026-000001, voir DocumentNumberingService) : 2 à
  * 10 lettres majuscules ou chiffres, sans espace ni tiret, puisque le
  * tiret sépare les segments du numéro. Il n'appartient qu'à un seul
- * magasin du logiciel, magasins supprimés compris (voir l'index unique de
- * magasins.code), donc à un seul magasin de la société, et ne change plus
- * dès le premier document du magasin (voir Magasin::codeEstDefinitif()).
+ * magasin de la société (voir l'index unique (societe_id, code) de
+ * magasins), n'est jamais repris d'un magasin d'une société révoquée du
+ * même SIREN, dont les numéros ont pu être émis sous ce SIREN (voir
+ * estPris()), et ne change plus dès le premier document du magasin (voir
+ * Magasin::aNumeroteUnDocument()). Deux sociétés ont chacune leurs codes :
+ * LYON1 peut exister dans l'une et dans l'autre.
  */
 class CodeMagasin
 {
@@ -37,7 +42,7 @@ class CodeMagasin
      * accent, en majuscules (« Ma Boutique » donne MABOUT, « Été 2026 »
      * ETE202), ou MAG quand le nom en compte moins de deux. Il ne lit pas
      * la base : la page d'inscription, ouverte à tous, le propose sans rien
-     * révéler des codes des autres magasins (voir RegisterMagasin).
+     * révéler des codes d'une autre société (voir InscriptionSociete).
      */
     public static function depuisLeNom(string $nom): string
     {
@@ -48,16 +53,26 @@ class CodeMagasin
 
     /**
      * Le code d'un magasin créé sans code choisi (voir Magasin::booted()) :
-     * celui que tire son nom, ou, déjà pris, le même avec le premier
-     * suffixe libre, 2, 3... (un second « Piliqi Store » reçoit PILIQI2),
-     * raccourci au besoin pour tenir en dix caractères.
+     * celui que tire son nom, rendu libre dans la société (voir
+     * premierLibre()) : un second « Piliqi Store » reçoit PILIQI2.
      */
-    public static function proposer(string $nom): string
+    public static function proposer(Societe $societe, string $nom): string
     {
-        $base = self::depuisLeNom($nom);
+        return self::premierLibre($societe, self::depuisLeNom($nom));
+    }
+
+    /**
+     * Ce code s'il est libre dans la société, sinon le même avec le
+     * premier suffixe libre, 2, 3..., raccourci au besoin pour tenir en
+     * dix caractères. Le premier magasin d'une société qui s'inscrit le
+     * reçoit pour le code saisi à la demande, que seul un magasin d'une
+     * société révoquée du même SIREN peut porter (voir CreerSocieteAction).
+     */
+    public static function premierLibre(Societe $societe, string $base): string
+    {
         $code = $base;
 
-        for ($suffixe = 2; self::estPris($code); $suffixe++) {
+        for ($suffixe = 2; self::estPris($societe, $code); $suffixe++) {
             $code = substr($base, 0, self::LONGUEUR_MAXIMALE - strlen((string) $suffixe)).$suffixe;
         }
 
@@ -81,19 +96,23 @@ class CodeMagasin
     }
 
     /**
-     * Ce code est-il déjà celui d'un magasin, autre que $saufPour ? Seule
-     * lecture de toute la table magasins avec celle du SIRET, limitée à
-     * l'existence de ce code : la réponse ne dit rien du magasin qui le
-     * porte. Elle ne se fait que dans l'identité d'un magasin (voir
-     * CodeMagasinLibre) et à la création d'un magasin sans code choisi ;
-     * jamais à l'inscription, ouverte à tous (voir CodeMagasinAuFormat).
-     * Les magasins supprimés, qui restent en base, comptent : leur code
-     * n'est jamais repris.
+     * Ce code est-il déjà celui d'un magasin de la société, autre que
+     * $saufPour, ou d'un magasin d'une société révoquée du même SIREN ?
+     * Seule lecture hors de la société (liste fermée des lectures hors du
+     * périmètre courant), limitée à l'existence de ce code : la réponse ne
+     * dit rien du magasin qui le porte. Elle ne se fait jamais à
+     * l'inscription, ouverte à tous (voir CodeMagasinAuFormat).
      */
-    public static function estPris(string $code, ?Magasin $saufPour = null): bool
+    public static function estPris(Societe $societe, string $code, ?Magasin $saufPour = null): bool
     {
-        return Magasin::withTrashed()
+        return Magasin::query()
             ->where('code', $code)
+            ->where(fn (Builder $proprietaires): Builder => $proprietaires
+                ->where('societe_id', $societe->getKey())
+                ->orWhereIn('societe_id', Societe::query()
+                    ->select('id')
+                    ->where('siren', $societe->siren)
+                    ->where('statut', StatutSociete::Revoquee->value)))
             ->when($saufPour, fn (Builder $requete): Builder => $requete->whereKeyNot($saufPour->getKey()))
             ->exists();
     }

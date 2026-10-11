@@ -9,8 +9,8 @@
     {{-- Un devis modifié depuis son envoi est un brouillon qui garde son
          numéro et la date de son dernier envoi (voir ModifierDevisAction) :
          cette version n'a pas encore été émise, elle ne porte aucune date
-         d'émission. $emetteur : le magasin d'aujourd'hui, un devis n'étant
-         pas signé au registre fiscal (voir DevisPdfGenerator). --}}
+         d'émission. $emetteur : la société et le magasin d'aujourd'hui, un
+         devis n'étant pas signé au registre fiscal (voir DevisPdfGenerator). --}}
     @php($brouillon = $devis->statut === \App\Domain\Facturation\Enums\StatutDevis::Brouillon)
     @include('documents.pdf.en-tete', [
         'emetteur' => $emetteur,

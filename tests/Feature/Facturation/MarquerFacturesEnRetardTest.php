@@ -11,10 +11,8 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource;
@@ -158,7 +156,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         $magasin = Magasin::factory()->create();
         $facture = $this->emettreFacture($magasin, 0);
 
-        $magasin->forceFill(['statut' => StatutMagasin::Suspendu])->save();
+        $magasin->forceFill(['suspendu_le' => now()])->save();
         $this->travelTo('2026-10-03 10:00:00');
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
@@ -175,10 +173,10 @@ class MarquerFacturesEnRetardTest extends TestCase
     {
         $this->travelTo('2026-10-01 10:00:00');
         $proprietaireA = User::factory()->create();
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $proprietaireA);
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A'], $proprietaireA);
         $vendeurA = app(CreerMembreMagasinAction::class)->handle($proprietaireA, $magasinA, ['name' => 'Vendeur', 'email' => 'vendeur@boutique-a.fr', 'password' => 'secret123'], RoleMagasin::Vendeur);
         $proprietaireB = User::factory()->create();
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
         $factureA1 = $this->emettreFacture($magasinA, 0);
         $factureA2 = $this->emettreFacture($magasinA, 4);
         $this->emettreFacture($magasinA, 6);
@@ -205,7 +203,7 @@ class MarquerFacturesEnRetardTest extends TestCase
     public function test_aucune_notification_quand_aucune_facture_ne_passe_en_retard(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->emettreFacture($magasin, 3);
 
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
@@ -223,7 +221,7 @@ class MarquerFacturesEnRetardTest extends TestCase
     {
         $this->travelTo('2026-10-01 10:00:00');
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $facture = $this->emettreFacture($magasin, 0);
         $this->travelTo('2026-10-02 00:15:00');
         $this->artisan('app:marquer-factures-en-retard')->assertSuccessful();
@@ -252,7 +250,7 @@ class MarquerFacturesEnRetardTest extends TestCase
     {
         $this->travelTo('2026-10-01 10:00:00');
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $numeros = collect(range(1, 11))->map(fn (): string => $this->emettreFacture($magasin, 0)->numero);
         $this->travelTo('2026-10-04 10:00:00');
 

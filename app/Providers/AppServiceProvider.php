@@ -21,7 +21,9 @@ use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Recherche\ConnecteurSqlite;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MagasinUser;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Models\User;
 use App\Policies\AvoirFournisseurPolicy;
@@ -38,7 +40,10 @@ use App\Policies\MembreEquipePolicy;
 use App\Policies\PaiementPolicy;
 use App\Policies\ProduitPolicy;
 use App\Policies\ServicePolicy;
+use App\Policies\SocietePolicy;
 use App\Policies\SoumissionEReportingPolicy;
+use Filament\Facades\Filament;
+use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -57,6 +62,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\Validator as ValidatorDeLaravel;
+use LogicException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -109,6 +115,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(AvoirFournisseur::class, AvoirFournisseurPolicy::class);
         Gate::policy(SoumissionEReporting::class, SoumissionEReportingPolicy::class);
         Gate::policy(EnregistrementFiscal::class, EnregistrementFiscalPolicy::class);
+        Gate::policy(Societe::class, SocietePolicy::class);
 
         Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app['hash'], $config['model']));
 
@@ -117,6 +124,7 @@ class AppServiceProvider extends ServiceProvider
         $this->declarerLaRechercheSansAccents();
         $this->declarerLAdresseDeConnexion();
         $this->limiterLesChoixAuMagasin();
+        $this->garderLesChoixDuPanneauSociete();
         $this->nommerLesChampsDansLesMessages();
         $this->ecrireLesDatesEnFrancaisDansLesMessages();
     }
@@ -125,7 +133,7 @@ class AppServiceProvider extends ServiceProvider
      * Le nom sous lequel un modèle s'écrit dans une colonne polymorphique
      * (document_type du registre fiscal et des envois, source_type du
      * grand livre du stock, transmissible_type, notifiable_type,
-     * model_type des rôles) : un alias stable plutôt que le nom de sa
+     * model_type des rôles, cible_type du journal d'audit) : un alias stable plutôt que le nom de sa
      * classe, qu'un déplacement de fichier changerait, alors que le
      * registre fiscal le signe (voir RegistreFiscal). Sans
      * enforceMorphMap() : un modèle absent de la liste garde le nom de sa
@@ -141,8 +149,10 @@ class AppServiceProvider extends ServiceProvider
             'facture' => Facture::class,
             'facture_achat' => FactureAchat::class,
             'ligne_avoir' => LigneAvoir::class,
+            'magasin' => Magasin::class,
             'paiement' => Paiement::class,
             'produit' => Produit::class,
+            'societe' => Societe::class,
             'soumission_ereporting' => SoumissionEReporting::class,
             'utilisateur' => User::class,
         ]);
@@ -249,6 +259,58 @@ class AppServiceProvider extends ServiceProvider
                     ->all();
             });
         });
+    }
+
+    /**
+     * Filament ne cloisonne pas les options d'un Select (filtres de table
+     * compris) ni d'une CheckboxList : dans l'espace d'administration d'une
+     * société, où Magasin et User n'ont pas de scope global, des options
+     * tirées de ces modèles proposeraient les magasins ou les comptes de
+     * toutes les sociétés. Chaque champ de ce panneau se contrôle donc à son
+     * rendu (voir verifierLesChoixDuPanneauSociete()). Les rappels
+     * configureUsing sont statiques et globaux : ils ne touchent à rien
+     * hors de ce panneau. Un champ de ce panneau qui redéfinit ses
+     * attributs HTML le fait avec extraAttributes(..., merge: true), pour
+     * garder ce contrôle.
+     */
+    private function garderLesChoixDuPanneauSociete(): void
+    {
+        foreach ([Select::class, CheckboxList::class] as $champ) {
+            $champ::configureUsing(static function (Select|CheckboxList $champ): void {
+                if (Filament::getCurrentPanel()?->getId() !== 'societe') {
+                    return;
+                }
+
+                $champ->extraAttributes(static function (Select|CheckboxList $component): array {
+                    self::verifierLesChoixDuPanneauSociete($component);
+
+                    return [];
+                }, merge: true);
+            });
+        }
+    }
+
+    /**
+     * Les options d'un champ du panneau société ne portent sur des magasins
+     * ou des comptes que par une relation de la société affichée (ses
+     * magasins, ses membres) ; un modèle propre à une société l'est déjà
+     * par SocieteScope.
+     *
+     * @throws LogicException
+     */
+    public static function verifierLesChoixDuPanneauSociete(Select|CheckboxList $component): void
+    {
+        $relation = $component->getRelationship();
+
+        if ($relation === null || ! in_array($relation->getRelated()::class, [Magasin::class, User::class], true)) {
+            return;
+        }
+
+        $tenant = Filament::getTenant();
+
+        if (! $relation->getParent() instanceof Societe || ! $tenant instanceof Societe || ! $relation->getParent()->is($tenant)) {
+            throw new LogicException("Le champ « {$component->getName()} » de l'espace société propose des magasins ou des comptes sans passer par une relation de la société.");
+        }
     }
 
     /**

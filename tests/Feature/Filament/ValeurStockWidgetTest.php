@@ -4,7 +4,6 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
 use App\Filament\App\Resources\ProduitResource\Widgets\ValeurStockApercu;
@@ -22,7 +21,7 @@ class ValeurStockWidgetTest extends TestCase
     public function test_le_proprietaire_voit_la_valeur_du_stock_et_le_nombre_de_references_epuisees(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -50,7 +49,7 @@ class ValeurStockWidgetTest extends TestCase
     public function test_la_valeur_du_stock_est_sa_quantite_fois_son_cmup(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -69,7 +68,7 @@ class ValeurStockWidgetTest extends TestCase
     public function test_le_stock_d_un_produit_archive_compte_dans_la_valeur_mais_pas_dans_les_references_epuisees(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         Produit::factory()->create(['nom' => 'A', 'cmup_ht' => 7, 'taux_tva' => 20, 'stock_quantite' => 0, 'suivi_stock' => true]);
@@ -88,7 +87,7 @@ class ValeurStockWidgetTest extends TestCase
 
     public function test_un_vendeur_sans_la_permission_ne_voit_pas_le_widget(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::PRODUIT_VIEW]);
 
         $this->actingAs($vendeur);
@@ -100,7 +99,7 @@ class ValeurStockWidgetTest extends TestCase
     public function test_le_proprietaire_a_bien_la_permission_de_voir_la_valeur_du_stock(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -110,7 +109,7 @@ class ValeurStockWidgetTest extends TestCase
     public function test_le_filtre_statut_du_stock_separe_en_stock_et_epuise(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 

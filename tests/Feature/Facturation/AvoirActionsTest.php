@@ -13,7 +13,7 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Events\AvoirEmis;
-use App\Domain\Facturation\Exceptions\IdentiteDuMagasinIncompleteException;
+use App\Domain\Facturation\Exceptions\IdentiteDeLaSocieteIncompleteException;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
@@ -296,7 +296,7 @@ class AvoirActionsTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
         $ticket = $this->emettreFacture($client, $produit);
-        $client->update(['type_client' => TypeClient::Professionnel, 'siret' => '73282932000074']);
+        $client->update(['type_client' => TypeClient::Professionnel, 'siret' => '10000000900017']);
         $facture = $this->emettreFacture($client->fresh(), $produit);
 
         $this->expectExceptionObject(new InvalidArgumentException('Un avoir ne mélange jamais des tickets de caisse et des factures : faites un avoir pour les tickets, et un autre pour les factures.'));
@@ -825,7 +825,7 @@ class AvoirActionsTest extends TestCase
 
     /**
      * L'avoir d'une facture à un professionnel la rectifie et porte la
-     * même identité légale du magasin (B11) : si elle est devenue
+     * même identité légale de la société et du magasin (B11) : si elle est devenue
      * incomplète, il ne s'émet pas, et rien n'en reste. L'avoir d'un
      * ticket, lui, reste possible.
      */
@@ -837,12 +837,12 @@ class AvoirActionsTest extends TestCase
         $particulier = Client::factory()->create();
         $facture = $this->emettreFacture($professionnel, $produit);
         $ticket = $this->emettreFacture($particulier, $produit);
-        app(TenantContext::class)->magasin()->update(['raison_sociale' => null, 'siren' => null]);
+        $this->reglerLaSociete(app(TenantContext::class)->magasin(), ['raison_sociale' => null, 'immatriculation' => null]);
 
         $this->assertThrows(
             fn () => app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]),
-            IdentiteDuMagasinIncompleteException::class,
-            'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité du magasin (Paramètres > Identité du magasin) : raison sociale, SIREN.',
+            IdentiteDeLaSocieteIncompleteException::class,
+            'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité de la société (Administration de la société > Identité) : raison sociale, immatriculation.',
         );
         $this->assertSame(0, Avoir::query()->count());
 

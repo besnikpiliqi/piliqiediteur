@@ -18,7 +18,7 @@ use Filament\Tables\Table;
  * GenererSoumissionEReportingAction), jamais via un formulaire
  * create/edit. Contrairement à ClotureCaisse (quotidienne), une soumission
  * couvre toute une période (décade/mois/bimestre selon le régime de TVA
- * du magasin, voir ParametresFiscaux) : c'est elle, et non chaque clôture
+ * de la société, voir ParametresFiscauxSociete) : c'est elle, et non chaque clôture
  * individuelle, qui est effectivement transmise au PDP.
  */
 class SoumissionEReportingResource extends Resource

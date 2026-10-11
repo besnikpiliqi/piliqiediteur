@@ -9,7 +9,6 @@ use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\ExpirerLesDevisAction;
 use App\Domain\Facturation\Models\Devis;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Console\Scheduling\Event;
@@ -114,7 +113,7 @@ class ExpirerDevisTest extends TestCase
         $this->travelTo('2026-10-01 10:00:00');
         $magasin = Magasin::factory()->create();
         $devis = $this->devisEnvoye($magasin, '2026-10-08');
-        $magasin->forceFill(['statut' => StatutMagasin::Suspendu])->save();
+        $magasin->forceFill(['suspendu_le' => now()])->save();
         $this->travelTo('2026-10-09 00:30:00');
 
         $this->artisan('app:expirer-devis')->assertSuccessful();

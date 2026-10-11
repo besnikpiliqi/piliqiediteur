@@ -2,9 +2,9 @@
 
 namespace Tests\Feature\Filament;
 
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Models\User;
 use Closure;
@@ -87,8 +87,8 @@ class ModifierProfilTest extends TestCase
     }
 
     /**
-     * L'adresse d'un autre compte, même supprimé, est refusée sans dire à
-     * qui elle appartient.
+     * L'adresse d'un autre compte, même suspendu (un compte ne s'efface
+     * jamais), est refusée sans dire à qui elle appartient.
      *
      * @return array<string, array{Closure(): User}>
      */
@@ -96,7 +96,7 @@ class ModifierProfilTest extends TestCase
     {
         return [
             'compte actif' => [static fn (): User => User::factory()->create(['email' => 'prise@example.test'])],
-            'compte supprimé' => [static fn (): User => User::factory()->trashed()->create(['email' => 'prise@example.test'])],
+            'compte suspendu' => [static fn (): User => User::factory()->create(['email' => 'prise@example.test', 'statut' => StatutCompte::Suspendu])],
         ];
     }
 
@@ -227,7 +227,7 @@ class ModifierProfilTest extends TestCase
 
     private function creerVendeur(): User
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 
         return app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Paul',

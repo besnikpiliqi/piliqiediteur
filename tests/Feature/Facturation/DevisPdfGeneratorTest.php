@@ -11,6 +11,7 @@ use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
+use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,7 +42,7 @@ class DevisPdfGeneratorTest extends TestCase
         $html = app(DevisPdfGenerator::class)->html($devis->load('client', 'lignes', 'magasin'));
 
         foreach ([
-            'Boutique du Port', 'Martin et Fils SARL', '12 quai des Pêcheurs', '13002 Marseille', 'SIREN : 123456789', 'SIRET : 12345678900011', 'TVA intracommunautaire : FR12123456789',
+            'Boutique du Port', 'Martin et Fils SARL', '12 quai des Pêcheurs', '13002 Marseille', 'SIREN : 121212120', 'SIRET : 12121212000020', 'TVA intracommunautaire : FR56121212120',
             'Établi pour', 'Atelier Martin',
             $devis->numero, 'Émis le 09/10/2026', 'Valable jusqu&#039;au 31/12/2026',
             'Écran 15 pouces', '<td class="montant">2</td>', '<td class="montant">100,00 €</td>', '<td class="montant">120,00 €</td>', '<td class="montant">20 %</td>',
@@ -119,16 +120,17 @@ class DevisPdfGeneratorTest extends TestCase
     private function devisEnvoye(): Devis
     {
         $this->travelTo('2026-10-09 10:00:00');
-        app(TenantContext::class)->set(Magasin::factory()->create([
-            'nom' => 'Boutique du Port',
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete([
             'raison_sociale' => 'Martin et Fils',
-            'forme_juridique' => 'SARL',
+            'forme_juridique' => FormeJuridique::Sarl,
+            'siren' => '121212120',
+            'numero_tva' => 'FR56121212120',
+        ])->create([
+            'nom' => 'Boutique du Port',
             'adresse' => '12 quai des Pêcheurs',
             'code_postal' => '13002',
             'ville' => 'Marseille',
-            'siren' => '123456789',
-            'siret' => '12345678900011',
-            'numero_tva' => 'FR12123456789',
+            'siret' => '12121212000020',
         ]));
         $ecran = Produit::factory()->create(['nom' => 'Écran 15 pouces', 'prix_vente_ttc' => 120, 'taux_tva' => 20]);
         $cable = Produit::factory()->create(['nom' => 'Câble secteur', 'prix_vente_ttc' => 10.55, 'taux_tva' => 5.5]);

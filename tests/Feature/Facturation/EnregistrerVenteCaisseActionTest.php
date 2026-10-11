@@ -16,10 +16,8 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use LogicException;
@@ -199,12 +197,12 @@ class EnregistrerVenteCaisseActionTest extends TestCase
     }
 
     /**
-     * Le client comptoir d'un magasin créé par son propriétaire (voir
-     * CreerMagasinAction), qui devient le magasin actif.
+     * Le client comptoir d'un nouveau magasin, créé avec lui (voir
+     * CreerEtablissementAction) ; ce magasin devient le magasin actif.
      */
     private function clientComptoir(): Client
     {
-        app(TenantContext::class)->set(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create()));
+        app(TenantContext::class)->set($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
 
         return Client::query()->where('est_comptoir', true)->sole();
     }

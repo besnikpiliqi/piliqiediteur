@@ -1,11 +1,13 @@
 {{--
-    Bandeau d'un magasin suspendu ou fermé (voir StatutMagasin et
-    ControleDesDroits), en tête de chaque page du panneau.
+    Bandeau d'un magasin en lecture seule (voir Magasin::estEnLectureSeule()
+    et ControleDesDroits), en tête de chaque page du panneau : il dit ce
+    qui l'y met, le magasin fermé ou suspendu, ou sa société.
 --}}
-@if ($magasin?->statut->estEnLectureSeule())
+@php($motif = $magasin?->motifDeLectureSeule())
+@if ($motif !== null)
     <x-filament::section icon="heroicon-o-lock-closed" icon-color="warning" compact>
         <x-slot name="heading">
-            Magasin {{ mb_strtolower($magasin->statut->getLabel()) }} : consultation et téléchargements seulement.
+            {{ $motif }} : consultation et téléchargements seulement.
         </x-slot>
 
         <x-slot name="description">

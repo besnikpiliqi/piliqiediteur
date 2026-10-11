@@ -13,7 +13,6 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Filament\App\Resources\AvoirFournisseurResource\Pages\ListAvoirsFournisseur;
 use App\Filament\App\Resources\AvoirFournisseurResource\Pages\ViewAvoirFournisseur;
 use App\Filament\App\Resources\FactureAchatResource\Pages\CreateFactureAchat;
@@ -48,7 +47,7 @@ class AvoirFournisseurResourceTest extends TestCase
     public function test_laction_avoir_fournisseur_cree_et_emet_un_retour_total(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -77,7 +76,7 @@ class AvoirFournisseurResourceTest extends TestCase
     public function test_laction_avoir_fournisseur_ne_propose_que_la_quantite_encore_en_stock(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -123,7 +122,7 @@ class AvoirFournisseurResourceTest extends TestCase
     public function test_la_fiche_de_lavoir_fournisseur_montre_chaque_ligne_et_la_tva_par_taux(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 

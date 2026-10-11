@@ -23,12 +23,12 @@ use App\Domain\Tenancy\Enums\RegimeTva;
  *   qu'il propose ;
  * - « TVA non applicable, art. 293 B du CGI » quand le document a été
  *   enregistré en franchise en base de TVA (B10) : lue sur le document,
- *   jamais sur le régime actuel du magasin, pour qu'un document réimprimé
+ *   jamais sur le régime actuel de la société, pour qu'un document réimprimé
  *   après la sortie de la franchise la porte toujours ; un devis la porte
  *   aussi, ses prix s'entendant sans TVA ;
  * - hors franchise, sur un ticket, une facture ou un avoir, l'option de
  *   son émetteur pour le paiement de la taxe d'après les débits (voir
- *   ParametresFiscaux) : sans TVA due, elle n'a pas d'objet. Un avoir
+ *   ParametresFiscauxSociete) : sans TVA due, elle n'a pas d'objet. Un avoir
  *   rectifie une facture : il en reprend les mentions. L'émetteur d'un
  *   document émis est celui qu'il a signé (voir FigeSonEmetteur) :
  *   réimprimé après un changement de l'option, il garde la mention de
@@ -55,7 +55,7 @@ class MentionsFiscales
     private const CALCUL_RETOUR_PROFESSIONNEL_SANS_TVA = 'Client professionnel, vente sans TVA française : chaque retour se calcule comme sa facture, pour tous les articles rendus jusqu\'ici (HT d\'un produit = quantité × prix catalogue TTC ÷ (1 + TVA retirée), arrondi une fois ; d\'un service, quantité × son prix sans TVA), déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.';
 
     /**
-     * @param  Emetteur  $emetteur  celui qu'imprime le document : signé une fois émis (voir FigeSonEmetteur::emetteur()), le magasin d'aujourd'hui pour un brouillon ou un devis, et pour le document qu'on émet (voir ContenuFiscal)
+     * @param  Emetteur  $emetteur  celui qu'imprime le document : signé une fois émis (voir FigeSonEmetteur::emetteur()), la société et le magasin d'aujourd'hui pour un brouillon ou un devis, et pour le document qu'on émet (voir ContenuFiscal)
      * @return list<string>
      */
     public function pour(Facture|Avoir|Devis $document, Emetteur $emetteur): array

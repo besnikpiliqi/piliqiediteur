@@ -16,13 +16,14 @@ use LogicException;
  * consommer un autre, quand il repart après avoir été modifié (voir
  * ModifierDevisAction). Sa date d'émission est celle de cet envoi : elle
  * remplace celle de l'envoi précédent, qu'il gardait depuis sa
- * modification. Un magasin suspendu ou fermé n'en envoie plus (voir
- * Magasin::verifierQuIlEstOuvert()). Un devis dont la date de validité est
+ * modification. Un magasin qui ne peut pas vendre (lecture seule, société
+ * en cours de vérification, établissement pas encore confirmé) n'en envoie
+ * pas (voir Magasin::verifierQuIlPeutVendre()). Un devis dont la date de validité est
  * déjà dépassée ne part pas : son client ne pourrait plus l'accepter (voir
  * AccepterDevisAction).
  *
  * Comme une facture à son émission (voir EmettreFactureAction), un devis
- * enregistré avant que son client change de type, ou que le magasin entre
+ * enregistré avant que son client change de type, ou que la société entre
  * en franchise en base ou en sorte, ne part pas tant qu'il n'est pas
  * recalculé : le client accepterait un prix que la facture tirée du devis
  * ne reprendrait pas (voir ContexteDeVente::refuserSiLeTypeDeClientAChange()
@@ -39,7 +40,7 @@ class EmettreDevisAction
     {
         return DB::transaction(function () use ($devis) {
             $devis = Devis::query()->whereKey($devis->getKey())->lockForUpdate()->firstOrFail();
-            $devis->magasin->verifierQuIlEstOuvert();
+            $devis->magasin->verifierQuIlPeutVendre();
 
             if (! $devis->statut->peutTransitionnerVers(StatutDevis::Envoye)) {
                 throw new LogicException("Impossible d'envoyer un devis au statut [{$devis->statut->value}].");

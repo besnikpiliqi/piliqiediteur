@@ -6,7 +6,6 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Actions\MettreAJourMembreMagasinAction;
 use App\Domain\Tenancy\Actions\ReinitialiserMotDePasseMembreAction;
@@ -14,6 +13,7 @@ use App\Domain\Tenancy\Actions\RetirerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\MagasinUser;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -40,7 +40,7 @@ class CreerMembreMagasinActionTest extends TestCase
     public function test_le_proprietaire_cree_un_vendeur_avec_lemail_deja_verifie(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul Vendeur',
@@ -49,7 +49,7 @@ class CreerMembreMagasinActionTest extends TestCase
         ], RoleMagasin::Vendeur);
 
         $this->assertNotNull($vendeur->email_verified_at, 'Aucune vérification email requise : le propriétaire se porte garant.');
-        $this->assertTrue($vendeur->appartientA($magasin));
+        $this->assertTrue($vendeur->peutOuvrir($magasin));
         $this->assertTrue(Hash::check('mot-de-passe-sur', $vendeur->password));
 
         $this->actingAs($vendeur);
@@ -60,7 +60,7 @@ class CreerMembreMagasinActionTest extends TestCase
     public function test_impossible_dattribuer_le_role_proprietaire_via_la_gestion_dequipe(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $this->expectException(LogicException::class);
         app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
@@ -76,7 +76,7 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_sans_liste_un_vendeur_recoit_exactement_le_modele_de_son_role(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 
         $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
@@ -99,7 +99,7 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_avec_une_liste_le_membre_n_a_que_les_autorisations_cochees(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 
         $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
@@ -112,7 +112,7 @@ class CreerMembreMagasinActionTest extends TestCase
 
     public function test_une_autorisation_inconnue_est_refusee(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 
         $this->assertThrows(
             fn () => app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
@@ -123,7 +123,8 @@ class CreerMembreMagasinActionTest extends TestCase
         );
 
         $this->assertDatabaseMissing('users', ['email' => 'paul@example.test']);
-        $this->assertSame(1, $magasin->membres()->count());
+        // Le propriétaire de la société n'est rattaché à aucun magasin.
+        $this->assertSame(0, $magasin->membres()->count());
     }
 
     /**
@@ -135,7 +136,7 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_un_membre_qui_gere_l_equipe_cree_un_compte_sans_les_autorisations_qu_il_n_a_pas(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->membre($magasin, RoleMagasin::Administrateur, [
             PermissionRegistry::EQUIPE_VIEW, PermissionRegistry::EQUIPE_CREER, PermissionRegistry::FACTURE_VIEW,
         ]);
@@ -155,7 +156,7 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_seul_le_proprietaire_coche_les_autorisations_d_un_nouveau_membre(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->membre($magasin, RoleMagasin::Administrateur);
 
         $this->assertThrows(
@@ -167,7 +168,9 @@ class CreerMembreMagasinActionTest extends TestCase
         );
 
         $this->assertDatabaseMissing('users', ['email' => 'paul@example.test']);
-        $this->assertSame(2, $magasin->membres()->count());
+        // L'administrateur seul : le propriétaire de la société n'est
+        // rattaché à aucun magasin.
+        $this->assertSame(1, $magasin->membres()->count());
     }
 
     /**
@@ -176,8 +179,8 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_les_autorisations_donnees_dans_un_magasin_n_existent_pas_dans_un_autre(): void
     {
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A']);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'Boutique B']);
         $membreDeA = $this->membre($magasinA, RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_VIEW]);
         $membreDeB = $this->membre($magasinB, RoleMagasin::Comptable);
 
@@ -195,8 +198,8 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_un_compte_ne_se_rattache_jamais_a_un_second_magasin(): void
     {
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A']);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'Boutique B']);
         $comptable = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasinA), $magasinA, [
             'name' => 'Claire', 'email' => 'claire@cabinet.test', 'password' => 'mot-de-passe-de-claire',
         ], RoleMagasin::Comptable);
@@ -235,8 +238,8 @@ class CreerMembreMagasinActionTest extends TestCase
             'email' => 'alice@boutique-a.test',
             'password' => 'mot-de-passe-dalice',
         ]);
-        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $alice);
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Boutique A'], $alice);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'Boutique B']);
 
         $this->assertThrows(
             fn () => app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasinB), $magasinB, [
@@ -263,8 +266,8 @@ class CreerMembreMagasinActionTest extends TestCase
     public function test_une_adresse_deja_utilisee_sous_une_autre_casse_est_refusee(): void
     {
         $alice = User::factory()->create(['email' => 'alice@boutique-a.test']);
-        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $alice);
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Boutique A'], $alice);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'Boutique B']);
 
         $this->assertThrows(
             fn () => app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasinB), $magasinB, [
@@ -282,7 +285,7 @@ class CreerMembreMagasinActionTest extends TestCase
 
     public function test_l_adresse_d_un_nouveau_membre_s_enregistre_en_minuscules_sans_espaces(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 
         $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Paul',
@@ -299,7 +302,7 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_recreer_un_membre_suspendu_demande_de_modifier_son_statut(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $donnees = ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'];
         $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, $donnees, RoleMagasin::Vendeur);
         $membre = $magasin->membres()->where('user_id', $vendeur->id)->firstOrFail();
@@ -319,7 +322,7 @@ class CreerMembreMagasinActionTest extends TestCase
     public function test_changer_le_role_dun_membre_resynchronise_ses_permissions_spatie(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul2@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
@@ -338,7 +341,7 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_modifier_un_membre_avec_une_autorisation_inconnue_est_refuse_sans_rien_changer(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
         $membre = $magasin->membres()->where('user_id', $vendeur->id)->firstOrFail();
         $evenementsAvant = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->count();
@@ -378,7 +381,7 @@ class CreerMembreMagasinActionTest extends TestCase
     #[DataProvider('modificationsDuProprietaire')]
     public function test_un_autre_membre_que_le_proprietaire_ne_change_ni_le_role_ni_les_autorisations(RoleMagasin $role, ?array $permissions, string $refus): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->membre($magasin, RoleMagasin::Administrateur);
         $choixDuProprietaire = [
             ...array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [PermissionRegistry::FACTURE_ENVOYER]),
@@ -409,7 +412,7 @@ class CreerMembreMagasinActionTest extends TestCase
     public function test_reinitialiser_le_mot_de_passe_dun_membre(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul3@example.test', 'password' => 'ancien-mot-de-passe',
         ], RoleMagasin::Vendeur);
@@ -426,7 +429,7 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_reinitialiser_son_propre_mot_de_passe_depuis_lequipe_est_refuse(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Admin', 'email' => 'admin@example.test', 'password' => 'mot-de-passe-admin',
         ], RoleMagasin::Administrateur);
@@ -449,7 +452,7 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_un_autre_membre_que_le_proprietaire_ne_donne_pas_de_mot_de_passe_a_un_membre_plus_autorise_que_lui(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->membre($magasin, RoleMagasin::Administrateur);
         $comptable = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Claire', 'email' => 'claire@cabinet.test', 'password' => 'mot-de-passe-de-claire',
@@ -472,7 +475,7 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_un_administrateur_donne_un_nouveau_mot_de_passe_a_un_membre_dont_il_a_toutes_les_autorisations(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->membre($magasin, RoleMagasin::Administrateur);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
 
@@ -484,11 +487,11 @@ class CreerMembreMagasinActionTest extends TestCase
     public function test_reinitialiser_le_mot_de_passe_du_proprietaire_est_refuse(): void
     {
         $proprietaire = User::factory()->create(['password' => 'mot-de-passe-du-patron']);
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $administrateur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Admin', 'email' => 'admin@example.test', 'password' => 'mot-de-passe-admin',
         ], RoleMagasin::Administrateur);
-        $membre = $magasin->membres()->where('user_id', $proprietaire->id)->firstOrFail();
+        $membre = $this->ligneForgeePourLeProprietaire($magasin, $proprietaire);
 
         $this->assertThrows(
             fn () => app(ReinitialiserMotDePasseMembreAction::class)->handle($administrateur, $membre, 'nouveau-mot-de-passe'),
@@ -502,7 +505,7 @@ class CreerMembreMagasinActionTest extends TestCase
     public function test_retirer_un_membre_ne_supprime_pas_son_compte_mais_retire_lacces(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul4@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
@@ -511,7 +514,7 @@ class CreerMembreMagasinActionTest extends TestCase
         app(RetirerMembreMagasinAction::class)->handle($membre);
 
         $this->assertNotNull(User::find($vendeur->id), 'Le compte utilisateur doit survivre.');
-        $this->assertFalse($vendeur->fresh()->appartientA($magasin));
+        $this->assertFalse($vendeur->fresh()->peutOuvrir($magasin));
     }
 
     /**
@@ -522,7 +525,7 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_retirer_un_membre_retire_ses_autorisations(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Paul', 'email' => 'paul5@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::EQUIPE_VIEW]);
@@ -538,7 +541,7 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_retirer_un_membre_efface_ses_notifications(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique A']);
         $comptable = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Claire', 'email' => 'claire@cabinet.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Comptable);
@@ -556,7 +559,7 @@ class CreerMembreMagasinActionTest extends TestCase
      */
     public function test_suspendre_un_membre_efface_ses_notifications(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Boutique A']);
         $comptable = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Claire', 'email' => 'claire@cabinet.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Comptable);
@@ -575,11 +578,24 @@ class CreerMembreMagasinActionTest extends TestCase
     public function test_impossible_de_retirer_le_proprietaire(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
-        $membre = $magasin->membres()->where('user_id', $proprietaire->id)->firstOrFail();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $membre = $this->ligneForgeePourLeProprietaire($magasin, $proprietaire);
 
         $this->expectException(LogicException::class);
         app(RetirerMembreMagasinAction::class)->handle($membre);
+    }
+
+    /**
+     * Le propriétaire de la société n'est rattaché à aucun magasin : une
+     * ligne d'équipe à son nom n'existe que forgée en base, et les gestes
+     * de l'équipe la refusent quand même.
+     */
+    private function ligneForgeePourLeProprietaire(Magasin $magasin, User $proprietaire): MagasinUser
+    {
+        $this->assertSame(0, MagasinUser::query()->where('user_id', $proprietaire->id)->count());
+        $magasin->utilisateurs()->attach($proprietaire->id, ['role' => RoleMagasin::Administrateur->value, 'statut' => StatutMembreMagasin::Actif->value, 'joined_at' => now()]);
+
+        return $magasin->membres()->where('user_id', $proprietaire->id)->firstOrFail();
     }
 
     /**

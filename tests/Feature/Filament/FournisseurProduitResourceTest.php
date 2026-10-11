@@ -3,7 +3,6 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Contacts\Models\Fournisseur;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\FournisseurResource\Pages\CreateFournisseur;
@@ -27,7 +26,7 @@ class FournisseurProduitResourceTest extends TestCase
     public function test_un_proprietaire_peut_afficher_fournisseurs_et_produits(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $this->actingAs($proprietaire);
         $this->get("/app/{$magasin->uuid}/fournisseurs")->assertSuccessful();
@@ -37,12 +36,12 @@ class FournisseurProduitResourceTest extends TestCase
     public function test_un_proprietaire_peut_creer_un_fournisseur(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
         Livewire::test(CreateFournisseur::class)
-            ->fillForm(['nom' => 'Grossiste Textile', 'siret' => '12345678900012'])
+            ->fillForm(['nom' => 'Grossiste Textile', 'siret' => '12121212000012'])
             ->call('create')
             ->assertHasNoFormErrors();
 
@@ -52,7 +51,7 @@ class FournisseurProduitResourceTest extends TestCase
     public function test_un_proprietaire_peut_creer_un_produit(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -76,7 +75,7 @@ class FournisseurProduitResourceTest extends TestCase
      */
     public function test_un_observateur_n_archive_pas_de_fournisseurs_en_masse(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Observateur);

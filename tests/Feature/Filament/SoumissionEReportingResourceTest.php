@@ -10,7 +10,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\GenererSoumissionEReportingAction;
 use App\Domain\Facturation\Models\SoumissionEReporting;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\SoumissionEReportingResource\Pages\ListSoumissionsEReporting;
@@ -53,7 +52,7 @@ class SoumissionEReportingResourceTest extends TestCase
     public function test_le_proprietaire_voit_la_liste_et_le_detail_dune_soumission(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -69,7 +68,7 @@ class SoumissionEReportingResourceTest extends TestCase
 
     public function test_un_vendeur_sans_vue_totale_ne_voit_pas_la_resource(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW]);
 
         $this->actingAs($vendeur);
@@ -81,7 +80,7 @@ class SoumissionEReportingResourceTest extends TestCase
     public function test_la_soumission_ventile_les_ventes_de_ses_clotures_par_taux_de_tva(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 

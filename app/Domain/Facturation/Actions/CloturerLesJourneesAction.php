@@ -5,7 +5,7 @@ namespace App\Domain\Facturation\Actions;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\Facturation\Models\ClotureCaisse;
-use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\JourneesDeCaisse;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
@@ -25,9 +25,10 @@ use LogicException;
  *
  * Un ticket Z se produit chaque jour du calendrier à partir de la
  * première vente du magasin (facture ou ticket émis), dimanches et jours
- * de fermeture compris, même à zéro ; jamais avant : un magasin qui n'a
+ * de fermeture habituelle compris, même à zéro, tant que le magasin n'est
+ * pas fermé (voir JourneesDeCaisse) ; jamais avant : un magasin qui n'a
  * encore rien vendu n'a aucune journée à clôturer, ne numérote rien, et
- * son code reste modifiable (voir Magasin::codeEstDefinitif()).
+ * son code reste modifiable (voir Magasin::aNumeroteUnDocument()).
  *
  * Chaque journée se clôture dans sa propre transaction (voir
  * CloturerCaisseAction) : celles qui précèdent une erreur restent
@@ -36,39 +37,28 @@ use LogicException;
  */
 class CloturerLesJourneesAction
 {
-    public function __construct(private readonly CloturerCaisseAction $cloturerCaisse) {}
+    public function __construct(
+        private readonly CloturerCaisseAction $cloturerCaisse,
+        private readonly JourneesDeCaisse $journeesDeCaisse,
+    ) {}
 
     /**
      * Les journées du magasin actif encore à clôturer jusqu'à $jour compris
      * (à l'heure de Paris), dans l'ordre : du lendemain de la dernière
-     * journée clôturée, ou du jour de la première vente, jusqu'à $jour.
+     * journée clôturée, ou du jour de la première vente, jusqu'à $jour,
+     * sans les jours qui ne tombent dans aucune de ses périodes d'activité
+     * (voir JourneesDeCaisse) : un magasin fermé ne produit plus de ticket
+     * Z, et aucun n'est produit pour ses jours de fermeture.
      *
      * @return Collection<int, string> les journées, AAAA-MM-JJ
      */
     public function journeesEnAttente(CarbonInterface $jour): Collection
     {
-        $premiereVente = Facture::jourDeLaPremiereVente();
-
-        if ($premiereVente === null) {
-            return collect();
-        }
-
-        $derniereCloturee = ClotureCaisse::derniereJourneeCloturee();
-        $journee = CarbonImmutable::parse($premiereVente);
-
-        if ($derniereCloturee !== null && $derniereCloturee >= $premiereVente) {
-            $journee = CarbonImmutable::parse($derniereCloturee)->addDay();
-        }
-
-        $fin = CarbonImmutable::instance($jour)->setTimezone(config('app.timezone'))->toDateString();
-        $journees = collect();
-
-        while ($journee->toDateString() <= $fin) {
-            $journees->push($journee->toDateString());
-            $journee = $journee->addDay();
-        }
-
-        return $journees;
+        return $this->journeesDeCaisse->aCloturer(
+            app(TenantContext::class)->magasin(),
+            CarbonImmutable::instance($jour)->setTimezone(config('app.timezone'))->toDateString(),
+            ClotureCaisse::derniereJourneeCloturee(),
+        );
     }
 
     /**

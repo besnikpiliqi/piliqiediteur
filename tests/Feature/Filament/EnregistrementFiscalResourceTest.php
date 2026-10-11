@@ -13,7 +13,6 @@ use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Paiement;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -43,7 +42,7 @@ class EnregistrementFiscalResourceTest extends TestCase
 
     private function magasinDe(User $proprietaire, string $nom = 'Ma Boutique'): Magasin
     {
-        return app(CreerMagasinAction::class)->handle(['nom' => $nom], $proprietaire);
+        return $this->ouvrirUneSociete(['nom' => $nom], $proprietaire);
     }
 
     private function connecterProprietaire(): Magasin

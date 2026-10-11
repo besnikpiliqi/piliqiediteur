@@ -293,9 +293,9 @@ trait AjouteDesLignesDeVente
                 ->required(fn (Get $get): bool => self::estUneLigneDeService($get))
                 ->default(fn (): string => self::pourcentageEnTexte(self::magasin()->tauxTvaParDefaut()))
                 ->disabled(fn (Get $get): bool => ! self::estUneLigneDeService($get))
-                ->hidden(fn (Get $get): bool => self::estUneLigneDeService($get) && (self::magasin()->estEnFranchiseDeTva() || self::venteSansTvaFrancaise($get)))
+                ->hidden(fn (Get $get): bool => self::estUneLigneDeService($get) && (self::magasin()->societe->estEnFranchiseDeTva() || self::venteSansTvaFrancaise($get)))
                 ->helperText(fn (Get $get): ?string => match (true) {
-                    self::magasin()->estEnFranchiseDeTva() => 'TVA non applicable',
+                    self::magasin()->societe->estEnFranchiseDeTva() => 'TVA non applicable',
                     self::venteSansTvaFrancaise($get) => 'Retirée du prix : aucune TVA facturée',
                     default => null,
                 })
@@ -323,7 +323,7 @@ trait AjouteDesLignesDeVente
      */
     private static function appliquerLeTauxDuProduit(Produit $produit, Get $get, Set $set): void
     {
-        $tauxTva = self::magasin()->estEnFranchiseDeTva() ? 0.0 : (float) $produit->taux_tva;
+        $tauxTva = self::magasin()->societe->estEnFranchiseDeTva() ? 0.0 : (float) $produit->taux_tva;
 
         $set('taux_tva', self::pourcentageEnTexte($tauxTva));
 
@@ -363,7 +363,7 @@ trait AjouteDesLignesDeVente
                 $detail = self::calculeDepuisLeHtDeLigne($get)
                     ? 'TVA calculée sur le total'
                     : self::montantEnTexte((float) ($montants['montant_ht'] ?? 0)).' HT + '.self::montantEnTexte((float) ($montants['montant_tva'] ?? 0)).' de TVA';
-                $aide = self::estUneLigneDeService($get) && ! self::magasin()->estEnFranchiseDeTva()
+                $aide = self::estUneLigneDeService($get) && ! self::magasin()->societe->estEnFranchiseDeTva()
                     ? self::magasin()->territoireTva()?->aideSiTauxInhabituel($get('taux_tva'))
                     : null;
 

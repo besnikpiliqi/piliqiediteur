@@ -13,9 +13,9 @@ use InvalidArgumentException;
  * Ces permissions sont scopées par magasin (Spatie Permission en mode
  * teams, voir config/permission.php) : accorder "client.create" à un
  * membre dans le magasin A n'accorde rien dans le magasin B. Le
- * propriétaire les a toutes, par son rôle 'owner' (voir
- * SeedMagasinRolesAction) ; un membre de l'équipe a celles que le
- * propriétaire coche pour lui, à partir du modèle de son rôle (voir
+ * propriétaire de la société les a toutes, dans chacun de ses magasins,
+ * sans case (voir ControleDesDroits) ; un membre de l'équipe a celles que
+ * le propriétaire coche pour lui, à partir du modèle de son rôle (voir
  * RoleMagasin::permissionsParDefaut() et MettreAJourMembreMagasinAction).
  */
 final class PermissionRegistry
@@ -112,10 +112,10 @@ final class PermissionRegistry
     public const RELANCES_REGLER = 'relances.regler';
 
     /**
-     * Régler les paramètres du magasin : son identité légale
-     * (IdentiteMagasin), sa TVA (ParametresFiscaux), et le délai de
-     * paiement et les mentions entre professionnels de ses factures
-     * (ParametresFactures). Aucun modèle de rôle ne la coche d'office : le
+     * Régler les paramètres du magasin : le délai de paiement et les
+     * mentions entre professionnels de ses factures (ParametresFactures).
+     * L'identité légale et la TVA sont celles de la société, réglées dans
+     * son administration. Aucun modèle de rôle ne la coche d'office : le
      * propriétaire la détient, et la coche pour le membre de son choix.
      */
     public const PARAMETRES_GERER = 'parametres.gerer';
@@ -237,6 +237,28 @@ final class PermissionRegistry
     }
 
     /**
+     * Les autorisations des opérations commerciales, refusées tant que le
+     * magasin ne peut pas vendre (voir ControleDesDroits et
+     * Magasin::peutVendre()) : émettre une facture ou un ticket, envoyer
+     * une facture, un devis ou un avoir, créer un avoir, enregistrer ou
+     * contre-passer un paiement.
+     *
+     * @return list<string>
+     */
+    public static function reserveesAuxOperationsCommerciales(): array
+    {
+        return [
+            self::FACTURE_EMETTRE,
+            self::FACTURE_ENVOYER,
+            self::DEVIS_ENVOYER,
+            self::AVOIR_CREER,
+            self::AVOIR_ENVOYER,
+            self::PAIEMENT_CREER,
+            self::PAIEMENT_CONTRE_PASSER,
+        ];
+    }
+
+    /**
      * Les autorisations cochées pour un membre, refusées dès que l'une
      * d'elles est inconnue.
      *
@@ -291,7 +313,7 @@ final class PermissionRegistry
             self::FACTURE_EMETTRE => 'Factures : émettre',
             self::FACTURE_ENVOYER => 'Factures : envoyer par e-mail et relancer',
             self::RELANCES_REGLER => 'Relances : régler les relances automatiques',
-            self::PARAMETRES_GERER => 'Paramètres du magasin : identité, TVA, échéance et mentions des factures',
+            self::PARAMETRES_GERER => 'Paramètres du magasin : échéance et mentions des factures',
             self::EQUIPE_VIEW => 'Équipe : voir',
             self::EQUIPE_CREER => 'Équipe : créer des comptes',
             self::EQUIPE_MODIFIER => 'Équipe : modifier',

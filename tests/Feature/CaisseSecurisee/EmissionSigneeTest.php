@@ -24,6 +24,7 @@ use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
@@ -50,9 +51,24 @@ class EmissionSigneeTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Les attributs que magasinActif() règle sur la société du magasin, et
+     * non sur le magasin.
+     */
+    private const ATTRIBUTS_DE_LA_SOCIETE = ['raison_sociale', 'forme_juridique', 'capital_social', 'siren', 'immatriculation', 'numero_tva', 'siege_adresse', 'siege_code_postal', 'siege_ville', 'regime_tva', 'option_debits_tva'];
+
+    /**
+     * Le magasin LYON1 d'une nouvelle société validée, magasin actif : ces
+     * attributs règlent la société (ATTRIBUTS_DE_LA_SOCIETE) ou le
+     * magasin.
+     *
+     * @param  array<string, mixed>  $attributs
+     */
     private function magasinActif(array $attributs = []): Magasin
     {
-        $magasin = Magasin::factory()->create(['code' => 'LYON1', ...$attributs]);
+        $magasin = Magasin::factory()
+            ->avecLaSociete(Arr::only($attributs, self::ATTRIBUTS_DE_LA_SOCIETE))
+            ->create(['code' => 'LYON1', ...Arr::except($attributs, self::ATTRIBUTS_DE_LA_SOCIETE)]);
         app(TenantContext::class)->set($magasin);
 
         return $magasin;
@@ -177,11 +193,15 @@ class EmissionSigneeTest extends TestCase
         $this->magasinActif([
             'nom' => 'Boutique Lefèvre',
             'raison_sociale' => 'Lefèvre et Fils',
-            'forme_juridique' => 'SARL',
-            'siren' => '552100554',
-            'siret' => '55210055400013',
+            'forme_juridique' => FormeJuridique::Sarl,
+            'capital_social' => null,
+            'siren' => '100000009',
+            'siret' => '10000000900017',
             'immatriculation' => 'RCS Paris',
-            'numero_tva' => 'FR40552100554',
+            'numero_tva' => 'FR88100000009',
+            'siege_adresse' => '4 avenue Foch',
+            'siege_code_postal' => '75016',
+            'siege_ville' => 'Paris',
             'adresse' => '12 rue des Lilas',
             'code_postal' => '75011',
             'ville' => 'Paris',
@@ -261,16 +281,24 @@ class EmissionSigneeTest extends TestCase
                     'nom' => 'Boutique Lefèvre',
                     'raison_sociale' => 'Lefèvre et Fils',
                     'forme_juridique' => 'SARL',
+                    'entrepreneur_individuel' => false,
                     'capital_social' => null,
-                    'siren' => '552100554',
-                    'siret' => '55210055400013',
+                    'capital_variable' => false,
+                    'siren' => '100000009',
+                    'siret' => '10000000900017',
                     'immatriculation' => 'RCS Paris',
-                    'numero_tva' => 'FR40552100554',
+                    'numero_tva' => 'FR88100000009',
                     'adresse' => '12 rue des Lilas',
                     'complement_adresse' => null,
                     'code_postal' => '75011',
                     'ville' => 'Paris',
                     'pays' => 'FR',
+                    'siege' => [
+                        'adresse' => '4 avenue Foch',
+                        'complement_adresse' => null,
+                        'code_postal' => '75016',
+                        'ville' => 'Paris',
+                    ],
                     'email' => 'contact@lefevre.test',
                     'telephone' => '01 23 45 67 89',
                     'regime_tva' => 'reel_normal_mensuel',
@@ -435,7 +463,7 @@ class EmissionSigneeTest extends TestCase
     {
         $this->travelTo('2026-10-09 10:15:30');
         $this->magasinActif();
-        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320']);
+        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '100000009', 'siret' => '10000000900017', 'numero_tva' => 'FR88100000009']);
         $produit = $this->produit('CAF-250', 'Café moulu 250 g', 12);
 
         $facture = $this->emettre($client, [[$produit, 10]], ['conditions_paiement' => 'Paiement à 30 jours', 'notes' => 'Livraison au dépôt']);
@@ -446,7 +474,7 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame(['2026-11-08', 'Paiement à 30 jours', 'Livraison au dépôt'], [$donnees['document']['date_echeance'], $donnees['document']['conditions_paiement'], $donnees['document']['notes']]);
         $this->assertSame(['ht' => 10000, 'tva' => 2000, 'ttc' => 12000], $donnees['document']['totaux']);
         $this->assertSame(
-            ['type_client' => 'professionnel', 'nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320', 'etabli_en_france' => true],
+            ['type_client' => 'professionnel', 'nom' => 'Atelier Durand', 'siren' => '100000009', 'siret' => '10000000900017', 'numero_tva' => 'FR88100000009', 'etabli_en_france' => true],
             Arr::only($donnees['document']['client'], ['type_client', 'nom', 'siren', 'siret', 'numero_tva', 'etabli_en_france']),
         );
         $this->assertSame([], $donnees['contexte']['reglements']);
@@ -455,10 +483,11 @@ class EmissionSigneeTest extends TestCase
     }
 
     /**
-     * Le capital social, l'immatriculation et les mentions entre
-     * professionnels réglés par le magasin le jour de l'émission (H2, B9,
-     * K7) se signent avec l'émetteur : le contenu signé garde ces valeurs
-     * même si le magasin les change ensuite.
+     * Le capital social et l'immatriculation de la société, et les
+     * mentions entre professionnels réglées par le magasin, le jour de
+     * l'émission (H2, B9, K7), se signent avec l'émetteur : le contenu
+     * signé garde ces valeurs même si la société et le magasin les
+     * changent ensuite.
      */
     public function test_l_emetteur_signe_son_capital_son_immatriculation_et_ses_mentions_entre_professionnels(): void
     {
@@ -470,7 +499,8 @@ class EmissionSigneeTest extends TestCase
             'mention_escompte' => 'Escompte de 1 % sous 8 jours.',
         ]);
         $facture = $this->emettre(Client::factory()->professionnel()->create(), [[$this->produit('A-020', 'Article à 20 €', 20), 1]]);
-        app(TenantContext::class)->magasin()->update(['capital_social' => '20000.00', 'mention_escompte' => 'Pas d\'escompte.']);
+        $this->reglerLaSociete(app(TenantContext::class)->magasin(), ['capital_social' => '20000.00']);
+        app(TenantContext::class)->magasin()->update(['mention_escompte' => 'Pas d\'escompte.']);
 
         $emetteur = $this->contenu($this->enregistrementDe($facture, ChaineFiscale::Vente))['donnees']['contexte']['emetteur'];
 
@@ -491,7 +521,7 @@ class EmissionSigneeTest extends TestCase
     {
         $this->freezeTime();
         $this->magasinActif();
-        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '732829320', 'siret' => '73282932000074', 'numero_tva' => 'FR44732829320']);
+        $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '100000009', 'siret' => '10000000900017', 'numero_tva' => 'FR88100000009']);
         $facture = $this->emettre($client, [[$this->produit('A-020', 'Article à 20 €', 20), 1]]);
         $signe = $this->contenu($this->enregistrementDe($facture, ChaineFiscale::Vente))['donnees']['document'];
 
@@ -499,7 +529,7 @@ class EmissionSigneeTest extends TestCase
 
         $this->assertSame($signe, app(ContenuFiscal::class)->blocDocument($facture->fresh()));
         $this->assertSame(
-            ['type_client' => 'professionnel', 'nom' => 'Atelier Durand', 'siren' => '732829320', 'etabli_en_france' => true],
+            ['type_client' => 'professionnel', 'nom' => 'Atelier Durand', 'siren' => '100000009', 'etabli_en_france' => true],
             Arr::only($signe['client'], ['type_client', 'nom', 'siren', 'etabli_en_france']),
         );
     }

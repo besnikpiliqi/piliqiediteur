@@ -20,7 +20,6 @@ use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -51,7 +50,7 @@ class DevisResourceTest extends TestCase
     public function test_creer_un_devis_de_livraison_vers_un_dom_via_le_formulaire(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => '49.90', 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -77,7 +76,7 @@ class DevisResourceTest extends TestCase
     public function test_creer_un_devis_avec_des_lignes_via_le_formulaire(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -109,7 +108,7 @@ class DevisResourceTest extends TestCase
     public function test_le_credit_disponible_du_client_est_affiche_sous_le_select(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -142,7 +141,7 @@ class DevisResourceTest extends TestCase
     public function test_creer_un_devis_avec_une_ligne_de_service(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -169,7 +168,7 @@ class DevisResourceTest extends TestCase
     public function test_envoyer_un_devis_brouillon_depuis_la_liste_lui_attribue_un_numero(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -200,7 +199,7 @@ class DevisResourceTest extends TestCase
     public function test_un_client_archive_n_est_plus_propose_pour_un_nouveau_devis(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $proposable = Client::factory()->create(['nom' => 'Client proposé']);
@@ -218,7 +217,7 @@ class DevisResourceTest extends TestCase
     public function test_un_client_archive_est_refuse_a_la_creation_d_un_devis(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $archive = Client::factory()->trashed()->create();
@@ -253,7 +252,7 @@ class DevisResourceTest extends TestCase
     public function test_accepter_un_devis_envoye_depuis_la_liste(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -269,7 +268,7 @@ class DevisResourceTest extends TestCase
     public function test_refuser_un_devis_envoye_depuis_la_liste(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -285,7 +284,7 @@ class DevisResourceTest extends TestCase
     public function test_convertir_un_devis_accepte_en_facture_brouillon(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -305,7 +304,7 @@ class DevisResourceTest extends TestCase
     public function test_la_conversion_nest_plus_proposee_une_fois_le_devis_deja_converti(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -321,7 +320,7 @@ class DevisResourceTest extends TestCase
     public function test_impossible_de_convertir_un_devis_pas_encore_accepte(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -340,7 +339,7 @@ class DevisResourceTest extends TestCase
     public function test_modifier_un_devis_accepte_remplace_les_lignes_recalcule_les_totaux_et_le_repasse_en_brouillon(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -379,7 +378,7 @@ class DevisResourceTest extends TestCase
     public function test_la_page_de_modification_annonce_le_retour_en_brouillon_d_un_devis_envoye_ou_accepte(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
@@ -403,7 +402,7 @@ class DevisResourceTest extends TestCase
     public function test_un_devis_refuse_ne_se_modifie_plus(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $devis = $this->envoyerDevis(Client::factory()->create(), Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]));
@@ -422,7 +421,7 @@ class DevisResourceTest extends TestCase
     {
         $this->travelTo('2026-10-05 10:00:00');
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
@@ -437,7 +436,7 @@ class DevisResourceTest extends TestCase
     public function test_enregistrer_un_devis_garde_le_service_de_ses_lignes_de_service(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $service = Service::factory()->create(['nom' => 'Remplacement écran']);
@@ -463,14 +462,14 @@ class DevisResourceTest extends TestCase
     public function test_un_service_enregistre_en_franchise_reprend_le_taux_du_territoire_apres_la_sortie_de_la_franchise(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
         $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [
             ['service_id' => Service::factory()->create(['nom' => 'Pose écran'])->id, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'quantite' => 1],
         ]);
-        $magasin->update(['regime_tva' => RegimeTva::ReelNormalMensuel]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::ReelNormalMensuel]);
 
         $component = Livewire::test(EditDevis::class, ['record' => $devis->getRouteKey()]);
         $component
@@ -487,7 +486,7 @@ class DevisResourceTest extends TestCase
     public function test_laction_modifier_disparait_des_quun_devis_est_converti_en_facture(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -506,7 +505,7 @@ class DevisResourceTest extends TestCase
     public function test_creer_un_nouveau_client_a_la_volee_depuis_le_formulaire_devis(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -529,7 +528,7 @@ class DevisResourceTest extends TestCase
     public function test_creer_un_nouveau_client_professionnel_a_la_volee_avec_ses_informations_legales(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -537,7 +536,7 @@ class DevisResourceTest extends TestCase
             ->callFormComponentAction('client_id', 'createOption', data: [
                 'nom' => 'Acme Corp',
                 'type_client' => 'professionnel',
-                'siret' => '12345678900012',
+                'siret' => '12121212000012',
                 'numero_tva' => 'FR12345678900',
                 'adresse' => '10 rue de la Paix',
                 'code_postal' => '75002',
@@ -547,7 +546,7 @@ class DevisResourceTest extends TestCase
 
         $this->assertDatabaseHas('clients', [
             'nom' => 'Acme Corp',
-            'siret' => '12345678900012',
+            'siret' => '12121212000012',
             'numero_tva' => 'FR12345678900',
             'adresse' => '10 rue de la Paix',
             'code_postal' => '75002',
@@ -577,7 +576,7 @@ class DevisResourceTest extends TestCase
     public function test_saisir_le_prix_ttc_dune_ligne_calcule_le_prix_ht(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -605,7 +604,7 @@ class DevisResourceTest extends TestCase
     public function test_changer_le_taux_de_tva_d_un_service_recalcule_le_ht_sans_changer_le_ttc_affiche(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -658,7 +657,7 @@ class DevisResourceTest extends TestCase
     public function test_la_fiche_du_devis_montre_chaque_ligne_et_la_tva_par_taux(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -684,10 +683,10 @@ class DevisResourceTest extends TestCase
 
     public function test_le_client_d_un_autre_magasin_est_refuse_a_la_modification_d_un_devis(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $clientDUnAutreMagasin = Client::factory()->create();
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -708,7 +707,7 @@ class DevisResourceTest extends TestCase
      */
     public function test_un_observateur_ne_supprime_pas_de_devis_en_masse(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Observateur);
@@ -732,7 +731,7 @@ class DevisResourceTest extends TestCase
     public function test_la_suppression_en_masse_garde_le_devis_deja_converti_en_facture(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
@@ -753,12 +752,12 @@ class DevisResourceTest extends TestCase
 
     /**
      * Le propriétaire connecté d'un magasin de Lyon au n° de TVA
-     * FR44732829320, qui vend hors de France.
+     * FR88100000009, qui vend hors de France.
      */
     private function magasinQuiVendHorsDeFrance(): Magasin
     {
         $proprietaire = User::factory()->create();
-        $magasin = $this->completerIdentiteLegale(app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire));
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire));
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -809,7 +808,7 @@ class DevisResourceTest extends TestCase
             'livraison_ville' => 'New York',
             'livraison_pays' => 'US',
         ]);
-        $magasin->update(['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
 
         Livewire::test(EditDevis::class, ['record' => $devis->getRouteKey()])
             ->assertSet('data.nature_operation', NatureOperation::VenteEnFrance->value)

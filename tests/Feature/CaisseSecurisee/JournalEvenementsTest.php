@@ -14,7 +14,6 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Actions\MettreAJourMembreMagasinAction;
 use App\Domain\Tenancy\Actions\RetirerMembreMagasinAction;
@@ -46,7 +45,7 @@ class JournalEvenementsTest extends TestCase
 
     private function magasinDe(User $proprietaire, string $nom = 'Ma Boutique'): Magasin
     {
-        return app(CreerMagasinAction::class)->handle(['nom' => $nom], $proprietaire);
+        return $this->ouvrirUneSociete(['nom' => $nom], $proprietaire);
     }
 
     /**
@@ -441,22 +440,23 @@ class JournalEvenementsTest extends TestCase
     }
 
     /**
-     * Le journal qui reçoit l'événement est celui du magasin actif : le
-     * régime de TVA d'un magasin ne se modifie pas pendant qu'un autre est
-     * actif, sans quoi son changement s'inscrirait chez l'autre.
+     * Les journaux qui reçoivent l'événement sont ceux des magasins de la
+     * société active : le régime de TVA d'une société ne se modifie pas
+     * pendant que le magasin d'une autre société est actif, sans quoi son
+     * changement s'inscrirait hors de ses magasins.
      */
-    public function test_un_parametre_d_un_magasin_ne_se_modifie_pas_depuis_un_autre_magasin_actif(): void
+    public function test_un_reglage_d_une_societe_ne_se_modifie_pas_depuis_le_magasin_d_une_autre_societe(): void
     {
         $magasin = $this->magasinDe(User::factory()->create(), 'Boutique A');
         $autreMagasin = $this->magasinDe(User::factory()->create(), 'Boutique B');
 
         $this->assertThrows(
-            fn () => $magasin->update(['regime_tva' => RegimeTva::ReelNormalMensuel]),
+            fn () => $magasin->societe->update(['regime_tva' => RegimeTva::ReelNormalMensuel]),
             LogicException::class,
-            'Un paramètre ayant un impact sur la conformité ne se modifie que dans son propre magasin',
+            'Les réglages d\'une société ne se modifient que dans son propre contexte.',
         );
 
-        $this->assertNull($magasin->fresh()->regime_tva);
+        $this->assertNull($magasin->societe->fresh()->regime_tva);
         $this->assertSame([], $this->codes($magasin));
         $this->assertSame([], $this->codes($autreMagasin));
     }

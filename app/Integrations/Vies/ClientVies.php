@@ -17,15 +17,15 @@ use Throwable;
  * l'Union est valide (art. 18 du règlement d'exécution 282/2011), par son
  * API REST (POST {url}/check-vat-number, voir config/services.php).
  *
- * Le demandeur s'identifie par le n° de TVA du magasin : VIES donne alors
- * à la consultation un n° (requestIdentifier), la preuve qu'elle a eu
- * lieu. Sans n° de TVA du magasin, la consultation n'en a pas.
+ * Le demandeur s'identifie par le n° de TVA de la société du magasin :
+ * VIES donne alors à la consultation un n° (requestIdentifier), la preuve
+ * qu'elle a eu lieu. Sans ce n°, la consultation n'en a pas.
  *
  * La réponse se lit avec tolérance : un champ absent ou d'un autre type ne
  * fait jamais croire à un n° valide.
  * - « valid » vrai ou faux : le n° est valide ou inconnu ;
  * - l'erreur INVALID_INPUT (n° mal formé pour son pays) : il est inconnu ;
- * - l'erreur INVALID_REQUESTER_INFO : VIES refuse le n° du magasin ;
+ * - l'erreur INVALID_REQUESTER_INFO : VIES refuse le n° de la société ;
  * - toute autre erreur (MS_UNAVAILABLE, TIMEOUT, SERVICE_UNAVAILABLE,
  *   MS_MAX_CONCURRENT_REQ, GLOBAL_MAX_CONCURRENT_REQ...), une réponse en
  *   erreur HTTP ou illisible, ou un service injoignable après une nouvelle
@@ -91,7 +91,7 @@ class ClientVies
         }
 
         if (in_array('INVALID_REQUESTER_INFO', $erreurs, true)) {
-            throw new LogicException('VIES refuse le n° de TVA du magasin, qui identifie chaque vérification : contrôlez-le dans Paramètres > Identité du magasin. Sans n° de TVA vérifié, la vente reste à la TVA française.');
+            throw new LogicException('VIES refuse le n° de TVA de la société, qui identifie chaque vérification : contrôlez-le dans Administration de la société > Identité. Sans n° de TVA vérifié, la vente reste à la TVA française.');
         }
 
         if (! $reponse->successful() || $erreurs !== [] || ! is_bool($corps['valid'] ?? null)) {

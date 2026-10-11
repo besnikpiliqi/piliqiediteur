@@ -10,7 +10,6 @@ use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Notifications\StockSousLeSeuilDAlerte;
 use App\Domain\Stock\Services\StockLedgerService;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -212,9 +211,9 @@ class StockLedgerServiceTest extends TestCase
     public function test_le_passage_au_seuil_d_alerte_previent_ceux_qui_gerent_le_stock(): void
     {
         $proprietaireAutreMagasin = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], $proprietaireAutreMagasin);
+        $this->ouvrirUneSociete(['nom' => 'Autre boutique'], $proprietaireAutreMagasin);
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'secret123'], RoleMagasin::Vendeur);
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'reference' => 'CAB-USBC', 'stock_quantite' => 7, 'seuil_alerte' => 5]);
 
@@ -237,7 +236,7 @@ class StockLedgerServiceTest extends TestCase
      */
     public function test_l_alerte_previent_les_membres_a_qui_la_gestion_du_stock_est_cochee(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->membre($magasin, RoleMagasin::Administrateur);
         $vendeurQuiGereLeStock = $this->membre($magasin, RoleMagasin::Vendeur, [
             ...RoleMagasin::Vendeur->permissionsParDefaut(),
@@ -260,7 +259,7 @@ class StockLedgerServiceTest extends TestCase
     public function test_un_stock_deja_bas_ne_previent_pas_a_chaque_mouvement(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $produit = Produit::factory()->create(['stock_quantite' => 5, 'seuil_alerte' => 5]);
         $stock = app(StockLedgerService::class);
 
@@ -282,7 +281,7 @@ class StockLedgerServiceTest extends TestCase
     public function test_l_alerte_donne_le_stock_restant_apres_toute_la_transaction(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $produit = Produit::factory()->create(['reference' => 'CAB-USBC', 'stock_quantite' => 7, 'seuil_alerte' => 5]);
 
         DB::transaction(function () use ($produit) {
@@ -300,7 +299,7 @@ class StockLedgerServiceTest extends TestCase
     public function test_un_stock_remonte_au_dessus_du_seuil_dans_la_transaction_ne_previent_personne(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $produit = Produit::factory()->create(['stock_quantite' => 6, 'seuil_alerte' => 5]);
 
         DB::transaction(function () use ($produit) {
@@ -315,7 +314,7 @@ class StockLedgerServiceTest extends TestCase
     public function test_un_mouvement_annule_par_sa_transaction_ne_previent_personne(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $produit = Produit::factory()->create(['stock_quantite' => 6, 'seuil_alerte' => 5]);
 
         $this->assertThrows(fn () => DB::transaction(function () use ($produit) {

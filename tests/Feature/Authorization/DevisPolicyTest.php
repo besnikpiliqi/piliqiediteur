@@ -13,7 +13,6 @@ use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\DevisResource;
@@ -48,7 +47,7 @@ class DevisPolicyTest extends TestCase
     #[DataProvider('roles')]
     public function test_envoyer_un_devis_selon_le_role(RoleMagasin $role, bool $peutEnvoyer): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
         $devis = $this->creerUnDevis();
 
@@ -75,7 +74,7 @@ class DevisPolicyTest extends TestCase
     #[DataProvider('rolesQuiModifientLesDevis')]
     public function test_supprimer_un_brouillon_jamais_envoye_selon_le_role(RoleMagasin $role, bool $peutSupprimer): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
         $devis = $this->creerUnDevis();
 
@@ -107,7 +106,7 @@ class DevisPolicyTest extends TestCase
     {
         $this->travelTo('2026-10-05 10:00:00');
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $envoye = app(EmettreDevisAction::class)->handle($this->creerUnDevis(['date_validite' => '2026-10-08']));
 
         $devis = match ($statut) {
@@ -132,7 +131,7 @@ class DevisPolicyTest extends TestCase
      */
     public function test_un_devis_numerote_apres_son_chargement_ne_se_supprime_pas(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $chargeBrouillon = $this->creerUnDevis();
         app(EmettreDevisAction::class)->handle($chargeBrouillon);
 
@@ -151,7 +150,7 @@ class DevisPolicyTest extends TestCase
     {
         $this->travelTo('2026-10-05 10:00:00');
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $devis = app(EmettreDevisAction::class)->handle($this->creerUnDevis(['date_validite' => '2026-10-08']));
 
         $this->travelTo('2026-10-08 23:59:00');
@@ -169,7 +168,7 @@ class DevisPolicyTest extends TestCase
     public function test_un_devis_converti_en_facture_ne_se_supprime_plus(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $devis = $this->creerUnDevis();
         app(AccepterDevisAction::class)->handle(app(EmettreDevisAction::class)->handle($devis));
         app(CreerFactureDepuisDevisAction::class)->handle($devis->fresh());
@@ -186,7 +185,7 @@ class DevisPolicyTest extends TestCase
     public function test_personne_ne_restaure_ni_n_efface_definitivement_un_devis(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $devis = $this->creerUnDevis();
@@ -197,20 +196,20 @@ class DevisPolicyTest extends TestCase
 
     public function test_personne_ne_supprime_le_devis_d_un_autre_magasin(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Boutique A']);
         $devisDeA = $this->creerUnDevis();
         $proprietaireB = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+        $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
 
         $this->assertFalse($proprietaireB->can('delete', $devisDeA));
     }
 
     public function test_personne_n_envoie_le_devis_d_un_autre_magasin(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Boutique A']);
         $devisDeA = $this->creerUnDevis();
         $proprietaireB = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+        $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
 
         $this->assertFalse($proprietaireB->can('envoyer', $devisDeA));
     }

@@ -20,16 +20,16 @@ use Illuminate\Support\Collection;
  *
  * La nature elle-même est permise au client et au magasin : un brouillon
  * ne s'enregistre que dans une nature que le type de son client et le
- * régime du magasin permettent -- aucune nature réservée aux
+ * régime de la société permettent -- aucune nature réservée aux
  * professionnels pour un particulier, la seule vente en France en
  * franchise en base (voir ContexteDeVente::pourEnregistrer()) --, et son
  * émission est refusée avant ce contrôle si le client a changé de type ou
- * le magasin de régime depuis (voir EmettreFactureAction).
+ * la société de régime depuis (voir EmettreFactureAction).
  *
- * - Toute autre nature que la vente en France exige le n° de TVA du
- *   magasin, que la facture porte (règles BR-G-02, BR-IC-02 et BR-AE-02
+ * - Toute autre nature que la vente en France exige le n° de TVA de la
+ *   société, que la facture porte (règles BR-G-02, BR-IC-02 et BR-AE-02
  *   de la facture électronique). Il se lit par l'émetteur (voir
- *   Emetteur::duMagasin()), comme les autres réglages fiscaux du magasin.
+ *   Emetteur::duMagasin()), comme les autres réglages fiscaux.
  * - Export hors UE (art. 262 I du CGI) : des biens, et leurs frais
  *   accessoires, expédiés par le magasin à une adresse complète hors du
  *   territoire de TVA de l'Union, ni à Monaco ni dans un département
@@ -104,7 +104,7 @@ class ControleNatureOperation
                 $nature->porteSurDesServices() => $this->manquementsDeLaPrestation($facture, $client, $lignes),
             },
             ...($nature->exigeVies() ? $this->manquementsDuNumeroTva($nature, $client, $jour) : []),
-            blank($emetteur->numeroTva) ? 'renseignez le n° de TVA intracommunautaire du magasin (Paramètres > Identité du magasin)' : null,
+            blank($emetteur->numeroTva) ? 'renseignez le n° de TVA intracommunautaire de la société (Administration de la société > Identité)' : null,
         ]));
     }
 

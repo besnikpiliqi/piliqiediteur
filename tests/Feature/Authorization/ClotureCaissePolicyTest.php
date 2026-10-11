@@ -4,7 +4,6 @@ namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Models\ClotureCaisse;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -23,7 +22,7 @@ class ClotureCaissePolicyTest extends TestCase
 
     public function test_sans_vue_totale_un_membre_ne_voit_que_ses_propres_clotures(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeurA = $this->vendeurQuiVoitLesClotures($magasin, 'paul@example.test');
         $vendeurB = $this->vendeurQuiVoitLesClotures($magasin, 'jean@example.test');
         $this->actingAs($vendeurA);
@@ -37,7 +36,7 @@ class ClotureCaissePolicyTest extends TestCase
 
     public function test_avec_la_vue_totale_un_membre_voit_les_clotures_de_toute_l_equipe(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->vendeurQuiVoitLesClotures($magasin, 'paul@example.test');
         $comptable = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Comptable', 'email' => 'comptable@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Comptable);
         $this->actingAs($vendeur);

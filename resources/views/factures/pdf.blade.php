@@ -5,8 +5,8 @@
         Une vente à un particulier porte le libellé usuel "Ticket de caisse"
         plutôt que "Facture" (voir Facture::libelleDocument()), d'après le
         type du client figé sur le document. $emetteur : celui que la
-        facture a signé une fois émise, le magasin d'aujourd'hui pour un
-        brouillon (voir FacturePdfGenerator et FigeSonEmetteur).
+        facture a signé une fois émise, la société et le magasin
+        d'aujourd'hui pour un brouillon (voir FacturePdfGenerator et FigeSonEmetteur).
     --}}
     @php
         $libelleDocument = $facture->libelleDocument();

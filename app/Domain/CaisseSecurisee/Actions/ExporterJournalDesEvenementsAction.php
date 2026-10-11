@@ -97,7 +97,7 @@ class ExporterJournalDesEvenementsAction
         $magasin = app(TenantContext::class)->magasin();
         $magasinId = $magasin->getKey();
         $exportateur = auth()->user();
-        $avecLesTraces = $exportateur instanceof User && $exportateur->estProprietaireDe($magasin);
+        $avecLesTraces = $exportateur instanceof User && $exportateur->estProprietaireDuMagasin($magasin);
 
         return static function ($flux) use ($magasinId, $du, $au, $avecLesTraces): void {
             fwrite($flux, "\u{FEFF}");

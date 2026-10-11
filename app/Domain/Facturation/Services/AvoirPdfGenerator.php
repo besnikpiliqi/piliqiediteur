@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Services;
 
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Barryvdh\DomPDF\PDF as PdfDocument;
 
@@ -19,6 +20,7 @@ class AvoirPdfGenerator
 {
     /**
      * @throws DocumentSansEnregistrementSigneException
+     * @throws VenteNonAutoriseeException
      */
     public function generer(Avoir $avoir): PdfDocument
     {
@@ -29,9 +31,11 @@ class AvoirPdfGenerator
      * La page que le PDF imprime, comme FacturePdfGenerator::html().
      *
      * @throws DocumentSansEnregistrementSigneException
+     * @throws VenteNonAutoriseeException
      */
     public function html(Avoir $avoir): string
     {
+        $avoir->magasin->verifierQuIlPeutImprimer();
         $avoir->loadMissing(['client', 'lignes.ligneFacture.facture', 'magasin']);
 
         return view('avoirs.pdf', ['avoir' => $avoir, 'emetteur' => $avoir->emetteur(), 'bonDAvoir' => $avoir->mentionDuBonDAvoir()])->render();

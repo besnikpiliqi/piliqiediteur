@@ -3,7 +3,6 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -21,9 +20,9 @@ class BindTenantContextFromFilamentTenantTest extends TestCase
     public function test_la_requete_lit_les_donnees_du_magasin_de_son_url(): void
     {
         $proprietaireA = User::factory()->create();
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $proprietaireA);
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A'], $proprietaireA);
         Client::factory()->create(['nom' => 'Client de la boutique A']);
-        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Boutique B']);
         Client::factory()->create(['nom' => 'Client de la boutique B']);
 
         $reponse = $this->actingAs($proprietaireA)->get("/app/{$magasinA->uuid}/clients");

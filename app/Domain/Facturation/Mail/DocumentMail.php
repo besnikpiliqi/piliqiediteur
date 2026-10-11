@@ -23,11 +23,13 @@ use Illuminate\Mail\Mailables\Envelope;
  *
  * Il présente le vendeur que son PDF imprime (voir
  * DocumentEnvoyable::emetteur()) : celui qu'une facture ou un avoir a
- * signé à son émission, le magasin d'aujourd'hui pour un devis. Son nom
- * est celui de l'expéditeur, de l'objet (voir EnvoiDocument::objetPour()),
- * de l'en-tête et de la signature ; sa raison sociale, son adresse et son
- * SIRET sont ceux du pied. Seuls les moyens de joindre le magasin restent
- * ceux d'aujourd'hui, pour que le client joigne le magasin tel qu'il est
+ * signé à son émission, la société et le magasin d'aujourd'hui pour un
+ * devis. Son nom est celui de l'expéditeur, de l'objet (voir
+ * EnvoiDocument::objetPour()), de l'en-tête et de la signature ; sa
+ * dénomination (suivie de « EI » pour un entrepreneur individuel, voir
+ * Emetteur::denominationImprimee()), son adresse et son SIRET sont ceux du
+ * pied. Seuls les moyens de joindre le magasin restent ceux
+ * d'aujourd'hui, pour que le client joigne le magasin tel qu'il est
  * quand il lit l'e-mail : l'adresse à laquelle il répond, le téléphone et
  * l'adresse e-mail du pied.
  *
@@ -123,7 +125,7 @@ class DocumentMail extends Mailable
 
     /**
      * Le pied de l'e-mail, une ligne par sujet, sans ce qui n'est pas
-     * renseigné : le vendeur que le PDF imprime (raison sociale, adresse),
+     * renseigné : le vendeur que le PDF imprime (dénomination, adresse),
      * le moyen de joindre le magasin aujourd'hui (téléphone, adresse
      * e-mail), puis le SIRET du vendeur.
      *
@@ -136,7 +138,7 @@ class DocumentMail extends Mailable
         $joindre = fn (array $morceaux): string => implode(' · ', array_filter($morceaux, fn (?string $morceau): bool => filled($morceau)));
 
         return array_values(array_filter([
-            $joindre([$emetteur->raisonSociale ?: $emetteur->nom, $emetteur->adresse, trim("{$emetteur->codePostal} {$emetteur->ville}")]),
+            $joindre([$emetteur->denominationImprimee() ?: $emetteur->nom, $emetteur->adresse, trim("{$emetteur->codePostal} {$emetteur->ville}")]),
             $joindre([$magasin->telephone ? "Tél. {$magasin->telephone}" : null, $magasin->email]),
             $emetteur->siret ? "SIRET {$emetteur->siret}" : '',
         ], fn (string $ligne): bool => $ligne !== ''));

@@ -3,12 +3,10 @@
 namespace Tests\Feature\Tenancy;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Actions\SeedMagasinRolesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -18,36 +16,34 @@ use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 /**
- * Le seul rôle Spatie d'un magasin est celui du propriétaire, qui porte
- * toutes les autorisations ; un membre reçoit d'office le modèle de son
- * rôle (voir RoleMagasin::permissionsParDefaut()), que le propriétaire
- * coche ou décoche ensuite.
+ * Chaque autorisation de l'application existe une fois, et aucun rôle
+ * Spatie : le propriétaire de la société a toutes les autorisations sans
+ * case (voir ControleDesDroitsTest), et un membre reçoit d'office le
+ * modèle de son rôle (voir RoleMagasin::permissionsParDefaut()), que le
+ * propriétaire coche ou décoche ensuite.
  */
 class SeedMagasinRolesActionTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_seul_le_role_du_proprietaire_existe_et_il_porte_toutes_les_autorisations(): void
+    public function test_chaque_autorisation_existe_une_fois_et_aucun_role_n_est_cree(): void
     {
-        $magasin = Magasin::factory()->create();
-        app(TenantContext::class)->set($magasin);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 
-        app(SeedMagasinRolesAction::class)->handle($magasin);
+        app(SeedMagasinRolesAction::class)->handle();
 
-        $role = Role::query()->where('magasin_id', $magasin->id)->sole();
-        $autorisations = $role->permissions->pluck('name')->sort()->values()->all();
         $toutes = PermissionRegistry::toutes();
         sort($toutes);
-        $this->assertSame('owner', $role->name);
-        $this->assertSame($toutes, $autorisations);
+        $this->assertSame($toutes, DB::table('permissions')->orderBy('name')->pluck('name')->all());
+        $this->assertSame(0, Role::query()->count());
     }
 
     /**
-     * Deux magasins qui s'inscrivent au même instant : l'autre inscription
-     * a créé les autorisations après que celle-ci a lu le cache des
+     * Deux magasins qui se créent au même instant : l'autre création a
+     * créé les autorisations après que celle-ci a lu le cache des
      * autorisations, qui les croit encore absentes. Elles ne sont pas
-     * recréées (l'index unique (name, guard_name) les refuserait) et le
-     * rôle du propriétaire les porte toutes.
+     * recréées (l'index unique (name, guard_name) les refuserait), et un
+     * membre reçoit ensuite toutes celles de son rôle.
      */
     public function test_des_autorisations_creees_entre_temps_par_une_autre_inscription_sont_reprises(): void
     {
@@ -59,13 +55,13 @@ class SeedMagasinRolesActionTest extends TestCase
             'updated_at' => now(),
         ], PermissionRegistry::toutes()));
 
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $comptable = $this->membre($magasin, RoleMagasin::Comptable);
 
-        $role = Role::query()->where('magasin_id', $magasin->id)->sole();
-        $toutes = PermissionRegistry::toutes();
-        sort($toutes);
-        $this->assertSame(count($toutes), DB::table('permissions')->count());
-        $this->assertSame($toutes, $role->permissions->pluck('name')->sort()->values()->all());
+        $modele = RoleMagasin::Comptable->permissionsParDefaut();
+        sort($modele);
+        $this->assertSame(count(PermissionRegistry::toutes()), DB::table('permissions')->count());
+        $this->assertSame($modele, $comptable->autorisationsCocheesDans($magasin));
     }
 
     /**
@@ -78,7 +74,7 @@ class SeedMagasinRolesActionTest extends TestCase
     public function test_un_vendeur_na_pas_la_permission_de_cloturer_la_journee_par_defaut(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul Vendeur',
@@ -94,7 +90,7 @@ class SeedMagasinRolesActionTest extends TestCase
     public function test_le_proprietaire_a_toujours_la_permission_de_cloturer_la_journee(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $this->actingAs($proprietaire);
         $this->assertTrue($proprietaire->can(PermissionRegistry::CLOTURE_CAISSE_GERER));
@@ -122,7 +118,7 @@ class SeedMagasinRolesActionTest extends TestCase
     public function test_la_caisse_securisee_se_consulte_selon_le_role(RoleMagasin $role, bool $consulte): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $membre = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Camille',
             'email' => 'camille@example.test',
@@ -159,7 +155,7 @@ class SeedMagasinRolesActionTest extends TestCase
     #[DataProvider('autorisationsCocheesDOffice')]
     public function test_un_membre_recoit_d_office_le_modele_de_son_role(RoleMagasin $role, string $autorisation, bool $accordee): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 
         $membre = $this->membre($magasin, $role);
 
@@ -168,12 +164,11 @@ class SeedMagasinRolesActionTest extends TestCase
 
     /**
      * L'administrateur reçoit d'office toutes les autorisations, sauf les
-     * paramètres du magasin (identité, TVA, échéance et mentions des
-     * factures).
+     * paramètres du magasin (échéance et mentions des factures).
      */
     public function test_l_administrateur_recoit_d_office_tout_sauf_les_parametres_du_magasin(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 
         $administrateur = $this->membre($magasin, RoleMagasin::Administrateur);
 

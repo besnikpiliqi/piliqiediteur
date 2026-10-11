@@ -11,7 +11,6 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
@@ -63,7 +62,7 @@ class ClientResourceTest extends TestCase
     public function test_un_proprietaire_peut_afficher_la_liste_des_clients_de_son_magasin(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $this->actingAs($proprietaire)
             ->get("/app/{$magasin->uuid}/clients")
@@ -73,7 +72,7 @@ class ClientResourceTest extends TestCase
     public function test_un_proprietaire_peut_creer_un_client_via_le_formulaire(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $this->actingAs($proprietaire);
         // Livewire::test() ne passe pas par le pipeline HTTP/middleware :
@@ -106,7 +105,7 @@ class ClientResourceTest extends TestCase
     public function test_une_adresse_e_mail_que_le_serveur_d_envoi_refuserait_est_refusee(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -132,7 +131,7 @@ class ClientResourceTest extends TestCase
     public function test_un_proprietaire_peut_creer_un_client_professionnel_avec_ses_informations_legales(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
@@ -141,7 +140,7 @@ class ClientResourceTest extends TestCase
             ->fillForm([
                 'nom' => 'Acme Corp',
                 'type_client' => TypeClient::Professionnel->value,
-                'siret' => '12345678900012',
+                'siret' => '12121212000012',
                 'numero_tva' => 'FR12345678900',
             ])
             ->call('create')
@@ -149,7 +148,7 @@ class ClientResourceTest extends TestCase
 
         $this->assertDatabaseHas('clients', [
             'nom' => 'Acme Corp',
-            'siret' => '12345678900012',
+            'siret' => '12121212000012',
             'numero_tva' => 'FR12345678900',
         ]);
     }
@@ -163,7 +162,7 @@ class ClientResourceTest extends TestCase
     public function test_le_solde_crediteur_du_client_est_visible_dans_la_liste(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -186,10 +185,10 @@ class ClientResourceTest extends TestCase
     public function test_un_utilisateur_dun_autre_magasin_ne_peut_pas_acceder_a_la_liste(): void
     {
         $proprietaireA = User::factory()->create();
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], $proprietaireA);
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A'], $proprietaireA);
 
         $proprietaireB = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+        $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
 
         // 404, pas 403 : IdentifyTenant masque jusqu'à l'existence même du
         // magasin à un utilisateur qui n'y appartient pas (voir
@@ -205,7 +204,7 @@ class ClientResourceTest extends TestCase
      */
     public function test_un_observateur_n_archive_pas_de_clients_en_masse(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
             'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Observateur);
@@ -227,7 +226,7 @@ class ClientResourceTest extends TestCase
      */
     public function test_la_recherche_de_la_liste_des_clients_ignore_la_casse_et_les_accents(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $homonymeDUnAutreMagasin = Client::factory()->create(['nom' => 'Hélène Martin']);
         $this->connecterLeProprietaire();
         $helene = Client::factory()->create(['nom' => 'Hélène Martin']);
@@ -283,7 +282,7 @@ class ClientResourceTest extends TestCase
     private function connecterLeProprietaire(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
     }
@@ -390,7 +389,7 @@ class ClientResourceTest extends TestCase
      */
     public function test_un_vendeur_ne_restaure_pas_un_client_archive(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur));
         Filament::setTenant($magasin);
         $client = Client::factory()->trashed()->create();
@@ -468,7 +467,7 @@ class ClientResourceTest extends TestCase
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateClient::class)
-            ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value, 'siren' => '123456789', 'siret' => '98765432100011'])
+            ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value, 'siren' => '121212120', 'siret' => '98765432100011'])
             ->call('create')
             ->assertHasFormErrors(['siret' => 'Le SIRET commence par les 9 chiffres du SIREN.']);
 
@@ -480,11 +479,11 @@ class ClientResourceTest extends TestCase
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateClient::class)
-            ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value, 'siren' => '123456789', 'siret' => '12345678900011'])
+            ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value, 'siren' => '121212120', 'siret' => '12121212000020'])
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $this->assertDatabaseHas('clients', ['nom' => 'Acme Corp', 'siren' => '123456789', 'siret' => '12345678900011']);
+        $this->assertDatabaseHas('clients', ['nom' => 'Acme Corp', 'siren' => '121212120', 'siret' => '12121212000020']);
     }
 
     /**
@@ -496,11 +495,11 @@ class ClientResourceTest extends TestCase
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateClient::class)
-            ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value, 'siret' => '12345678900011'])
+            ->fillForm(['nom' => 'Acme Corp', 'type_client' => TypeClient::Professionnel->value, 'siret' => '12121212000020'])
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $this->assertDatabaseHas('clients', ['nom' => 'Acme Corp', 'siren' => '123456789', 'siret' => '12345678900011']);
+        $this->assertDatabaseHas('clients', ['nom' => 'Acme Corp', 'siren' => '121212120', 'siret' => '12121212000020']);
     }
 
     /**
@@ -625,11 +624,11 @@ class ClientResourceTest extends TestCase
         Livewire::test(CreateClient::class)
             ->fillForm(['nom' => 'Brasserie de Namur', 'type_client' => TypeClient::Professionnel->value, 'pays' => 'BE'])
             ->assertFormFieldIsEnabled('etabli_en_france')
-            ->fillForm(['etabli_en_france' => true, 'siren' => '123456789'])
+            ->fillForm(['etabli_en_france' => true, 'siren' => '121212120'])
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $this->assertDatabaseHas('clients', ['nom' => 'Brasserie de Namur', 'pays' => 'BE', 'etabli_en_france' => true, 'siren' => '123456789']);
+        $this->assertDatabaseHas('clients', ['nom' => 'Brasserie de Namur', 'pays' => 'BE', 'etabli_en_france' => true, 'siren' => '121212120']);
     }
 
     /**
@@ -712,8 +711,8 @@ class ClientResourceTest extends TestCase
     public static function identifiantsDeLEntrepriseDuMagasin(): array
     {
         return [
-            'son SIREN' => [['siren' => '732829320'], 'siren'],
-            'le SIRET d\'un de ses établissements' => [['siret' => '73282932000082'], 'siret'],
+            'son SIREN' => [['siren' => '100000009'], 'siren'],
+            'le SIRET d\'un de ses établissements' => [['siret' => '10000000900025'], 'siret'],
         ];
     }
 
@@ -726,7 +725,7 @@ class ClientResourceTest extends TestCase
     public function test_un_client_de_l_entreprise_du_magasin_est_refuse(array $identifiant, string $champ): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'siren' => '732829320'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'siren' => '100000009'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -744,8 +743,8 @@ class ClientResourceTest extends TestCase
     public static function numerosDeTvaDeLEntrepriseDuMagasin(): array
     {
         return [
-            'son n° de TVA, saisi avec des espaces' => ['FR44732829320', 'fr 44 732 829 320'],
-            'le n° de TVA français que forme son SIREN' => [null, 'FR44732829320'],
+            'son n° de TVA, saisi avec des espaces' => ['FR88100000009', 'fr 88 100 000 009'],
+            'le n° de TVA français que forme son SIREN' => [null, 'FR88100000009'],
         ];
     }
 
@@ -758,7 +757,7 @@ class ClientResourceTest extends TestCase
     public function test_un_client_qui_porte_le_numero_de_tva_de_l_entreprise_du_magasin_est_refuse(?string $numeroTvaDuMagasin, string $numeroTva): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique', 'siren' => '732829320', 'numero_tva' => $numeroTvaDuMagasin], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'siren' => '100000009', 'numero_tva' => $numeroTvaDuMagasin], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -776,15 +775,15 @@ class ClientResourceTest extends TestCase
      */
     public function test_l_entreprise_d_un_autre_magasin_du_logiciel_peut_etre_cliente(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Autre boutique', 'siren' => '732829320'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Autre boutique', 'siren' => '100000009']);
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateClient::class)
-            ->fillForm(['nom' => 'Autre boutique SAS', 'type_client' => TypeClient::Professionnel->value, 'siren' => '732829320'])
+            ->fillForm(['nom' => 'Autre boutique SAS', 'type_client' => TypeClient::Professionnel->value, 'siren' => '100000009'])
             ->call('create')
             ->assertHasNoFormErrors();
 
-        $this->assertDatabaseHas('clients', ['nom' => 'Autre boutique SAS', 'siren' => '732829320']);
+        $this->assertDatabaseHas('clients', ['nom' => 'Autre boutique SAS', 'siren' => '100000009']);
     }
 
     /**
@@ -814,7 +813,7 @@ class ClientResourceTest extends TestCase
         $this->connecterLeProprietaire();
 
         Livewire::test(CreateClient::class)
-            ->fillForm(['nom' => 'Jean Dupont', 'type_client' => TypeClient::Particulier->value, 'siren' => '123456789'])
+            ->fillForm(['nom' => 'Jean Dupont', 'type_client' => TypeClient::Particulier->value, 'siren' => '121212120'])
             ->call('create')
             ->assertHasNoFormErrors();
 
@@ -899,7 +898,7 @@ class ClientResourceTest extends TestCase
      */
     public function test_un_observateur_ne_verifie_pas_sur_vies(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->actingAs($this->membre($magasin, RoleMagasin::Observateur));
         Filament::setTenant($magasin);
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
@@ -921,7 +920,7 @@ class ClientResourceTest extends TestCase
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
         $this->travelTo('2026-10-09 14:32:10');
         Http::preventStrayRequests();
-        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '123456789', 'valid' => true, 'requestIdentifier' => 'WAPIAAAAW1234567', 'name' => 'ACME GMBH', 'address' => '---'])]);
+        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '121212120', 'valid' => true, 'requestIdentifier' => 'WAPIAAAAW1234567', 'name' => 'ACME GMBH', 'address' => '---'])]);
 
         Livewire::test(EditClient::class, ['record' => $allemand->getRouteKey()])
             ->callAction('verifier_sur_vies')
@@ -970,7 +969,7 @@ class ClientResourceTest extends TestCase
         $this->connecterLeProprietaire();
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
         Http::preventStrayRequests();
-        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '123456789', 'valid' => true])]);
+        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '121212120', 'valid' => true])]);
 
         Livewire::test(EditClient::class, ['record' => $allemand->getRouteKey()])
             ->fillForm(['numero_tva' => 'DE 999 999 999'])
@@ -992,7 +991,7 @@ class ClientResourceTest extends TestCase
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
         $this->travelTo('2026-10-09 14:32:10');
         Http::preventStrayRequests();
-        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '123456789', 'valid' => true, 'requestIdentifier' => 'WAPI1'])]);
+        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '121212120', 'valid' => true, 'requestIdentifier' => 'WAPI1'])]);
 
         Livewire::test(EditClient::class, ['record' => $allemand->getRouteKey()])
             ->fillForm(['numero_tva' => 'de 123.456.789'])
@@ -1010,7 +1009,7 @@ class ClientResourceTest extends TestCase
     #[DataProvider('rolesQuiVoientLesClientsSansLesModifier')]
     public function test_un_membre_qui_voit_les_clients_sans_les_modifier_consulte_leurs_verifications_vies(RoleMagasin $role): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = $this->membre($magasin, $role);
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
         $this->consultationValide($allemand);
@@ -1040,16 +1039,19 @@ class ClientResourceTest extends TestCase
      * Un magasin suspendu ou fermé reste consultable : ses vérifications
      * VIES aussi, mais il n'en fait plus, même par une requête forgée.
      */
-    #[DataProvider('statutsEnLectureSeule')]
-    public function test_les_verifications_vies_restent_consultables_dans_un_magasin_en_lecture_seule(StatutMagasin $statut): void
+    /**
+     * @param  array<string, mixed>  $situation
+     */
+    #[DataProvider('situationsEnLectureSeule')]
+    public function test_les_verifications_vies_restent_consultables_dans_un_magasin_en_lecture_seule(array $situation): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
         $this->consultationValide($allemand);
-        $magasin->forceFill(['statut' => $statut])->save();
+        $magasin->forceFill($situation)->save();
         Http::preventStrayRequests();
-        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '123456789', 'valid' => true])]);
+        Http::fake([self::URL_VIES => Http::response(['countryCode' => 'DE', 'vatNumber' => '121212120', 'valid' => true])]);
 
         $this->actingAs($proprietaire)
             ->get(ClientResource::getUrl('view', ['record' => $allemand, 'tenant' => $magasin]))
@@ -1066,13 +1068,13 @@ class ClientResourceTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: StatutMagasin}>
+     * @return array<string, array{0: array<string, mixed>}>
      */
-    public static function statutsEnLectureSeule(): array
+    public static function situationsEnLectureSeule(): array
     {
         return [
-            'suspendu' => [StatutMagasin::Suspendu],
-            'fermé' => [StatutMagasin::Ferme],
+            'suspendu' => [['suspendu_le' => '2026-10-01 00:00:00']],
+            'fermé' => [['statut' => StatutMagasin::Ferme]],
         ];
     }
 
@@ -1104,10 +1106,10 @@ class ClientResourceTest extends TestCase
      */
     public function test_la_fiche_du_client_archive_d_un_autre_magasin_est_introuvable(): void
     {
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A']);
         $clientA = Client::factory()->trashed()->create();
         $proprietaireB = User::factory()->create();
-        $magasinB = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique B'], $proprietaireB);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
 
         $this->assertSame($magasinA->id, $clientA->magasin_id);
         $this->actingAs($proprietaireB)
@@ -1122,7 +1124,7 @@ class ClientResourceTest extends TestCase
     public function test_le_nom_renvoye_par_vies_s_affiche_comme_du_texte(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
         ConsultationVies::forceCreate([
             'client_id' => $allemand->id,

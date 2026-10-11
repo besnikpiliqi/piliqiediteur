@@ -161,8 +161,8 @@ class ProduitResource extends Resource
     {
         $magasin = app(TenantContext::class)->magasin();
         $aides = array_filter([
-            $magasin->estEnFranchiseDeTva()
-                ? 'Votre magasin est en franchise en base : vos ventes sont facturées sans TVA ('.RegimeTva::ARTICLE_FRANCHISE.'), au prix TTC indiqué.'
+            $magasin->societe->estEnFranchiseDeTva()
+                ? 'Votre société est en franchise en base : vos ventes sont facturées sans TVA ('.RegimeTva::ARTICLE_FRANCHISE.'), au prix TTC indiqué.'
                 : null,
             $magasin->territoireTva()?->aideSiTauxInhabituel($taux),
         ]);

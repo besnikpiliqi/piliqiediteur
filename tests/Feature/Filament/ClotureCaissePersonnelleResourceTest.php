@@ -13,7 +13,6 @@ use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages\ListClotureCaissePersonnelles;
@@ -32,7 +31,7 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
     public function test_un_vendeur_sans_permission_de_cloture_peut_quand_meme_fermer_sa_caisse(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
@@ -63,7 +62,7 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
     public function test_un_vendeur_ne_voit_que_ses_propres_releves(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeurA = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
             'name' => 'Paul', 'email' => 'paul2@example.test', 'password' => 'mot-de-passe-sur',
         ], RoleMagasin::Vendeur);
@@ -103,7 +102,7 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
     public function test_le_releve_montre_le_vendu_l_encaisse_par_mode_le_credit_d_avoir_et_le_reste_du(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);

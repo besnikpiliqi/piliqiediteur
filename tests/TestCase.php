@@ -3,16 +3,22 @@
 namespace Tests;
 
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Closure;
+use Database\Factories\MagasinFactory;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Process\InvokedProcess;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Testing\TestResponse;
@@ -29,8 +35,15 @@ abstract class TestCase extends BaseTestCase
     private static ?array $paireFiscaleDesTests = null;
 
     /**
+     * La clé du journal d'audit des tests, tirée une seule fois par
+     * processus : aucune clé n'est jamais commitée.
+     */
+    private static ?string $cleDuJournalAuditDesTests = null;
+
+    /**
      * Chaque application de test signe avec la paire éphémère des tests,
-     * seule clé épinglée : ni la clé d'un .env local ni une clé épinglée
+     * seule clé épinglée, et chaîne son journal d'audit avec la clé
+     * éphémère des tests : ni la clé d'un .env local ni une clé épinglée
      * dans le dépôt n'entrent dans les tests.
      *
      * @return Application
@@ -40,14 +53,107 @@ abstract class TestCase extends BaseTestCase
         $app = parent::createApplication();
 
         self::$paireFiscaleDesTests ??= SignataireFiscal::genererUnePaire();
+        self::$cleDuJournalAuditDesTests ??= base64_encode(random_bytes(32));
 
         $app['config']->set([
             'caisse_securisee.cle_privee' => base64_encode(self::$paireFiscaleDesTests['cle_privee']),
             'caisse_securisee.phrase_secrete' => null,
             'caisse_securisee.cles_publiques' => ['tests.pem' => self::$paireFiscaleDesTests['cle_publique']],
+            'journal_audit.cle' => self::$cleDuJournalAuditDesTests,
+            'journal_audit.cle_id' => 'tests',
+            'journal_audit.cles_precedentes' => [],
         ]);
 
         return $app;
+    }
+
+    /**
+     * Une société et son premier magasin, comme après son inscription (voir
+     * CreerSocieteAction) : l'identité que le répertoire Sirene préremplit
+     * (voir SocieteFactory::commeApresLInscription()), sans capital ni
+     * immatriculation ; le magasin, créé par CreerEtablissementAction, son
+     * établissement vérifié. La société est ensuite validée, et son SIRET
+     * réservé, comme à sa validation ; le magasin est en activité depuis
+     * MagasinFactory::DEBUT_D_ACTIVITE, avant toute journée que visitent
+     * les tests. Avec ['a_verifier' => true], la société reste en cours de
+     * vérification. Le magasin devient le magasin actif.
+     *
+     * Les options nom, code, nic et email sont celles du magasin ; toute
+     * autre, sauf a_verifier, se règle sur la société avant la création du
+     * magasin (regime_tva...). Avec $proprietaire, le propriétaire d'une
+     * société sans magasin (voir UserFactory), le magasin s'ouvre dans la
+     * société de ce compte.
+     *
+     * @param  array<string, mixed>  $options
+     */
+    protected function ouvrirUneSociete(array $options = [], ?User $proprietaire = null): Magasin
+    {
+        app(TenantContext::class)->clear();
+        $proprietaire ??= User::factory()->create();
+        $societe = $proprietaire->societe;
+        $reglages = Arr::except($options, ['nom', 'code', 'nic', 'email', 'a_verifier']);
+
+        if ($reglages !== []) {
+            app(TenantContext::class)->runAsSociete($societe, fn (): bool => $societe->forceFill($reglages)->save());
+        }
+
+        $magasin = app(CreerEtablissementAction::class)->handle($proprietaire, $societe, [
+            'nom' => $options['nom'] ?? 'Ma Boutique',
+            'code' => $options['code'] ?? null,
+            'email' => $options['email'] ?? null,
+            'nic' => $options['nic'] ?? MagasinFactory::nicLibre($societe),
+        ]);
+
+        if (! ($options['a_verifier'] ?? false)) {
+            $societe->forceFill(['validee_le' => now()])->save();
+            app(SiretsDesMagasins::class)->reserver($magasin);
+            MagasinFactory::ouvrirSaPremierePeriode($magasin, $proprietaire);
+        }
+
+        $magasin = $magasin->fresh();
+        app(TenantContext::class)->set($magasin);
+
+        return $magasin;
+    }
+
+    /**
+     * Un autre magasin de la société de $magasin, créé par son propriétaire
+     * (voir CreerEtablissementAction) : dans une société validée, son SIRET
+     * se réserve, sa période d'activité s'ouvre et les droits implicites du
+     * propriétaire s'inscrivent à son journal des événements. Il devient le
+     * magasin actif.
+     *
+     * @param  array{nom?: string, code?: string, nic?: string, email?: string}  $donnees
+     */
+    protected function ouvrirUnAutreMagasin(Magasin $magasin, array $donnees = []): Magasin
+    {
+        $societe = $magasin->societe;
+        $autre = app(CreerEtablissementAction::class)->handle($this->proprietaireDe($magasin), $societe, [
+            'nom' => $donnees['nom'] ?? 'Autre boutique',
+            'code' => $donnees['code'] ?? null,
+            'email' => $donnees['email'] ?? null,
+            'nic' => $donnees['nic'] ?? MagasinFactory::nicLibre($societe),
+        ]);
+        app(TenantContext::class)->set($autre);
+
+        return $autre;
+    }
+
+    /**
+     * Règle la société du magasin, comme son propriétaire dans les
+     * paramètres de la société : un réglage de conformité (régime de TVA,
+     * option pour les débits...) s'inscrit au journal des événements de
+     * chacun de ses magasins (voir JournaliseSesParametresDeConformite).
+     *
+     * @param  array<string, mixed>  $reglages
+     */
+    protected function reglerLaSociete(Magasin $magasin, array $reglages): Societe
+    {
+        $societe = $magasin->societe()->firstOrFail();
+        $societe->forceFill($reglages)->save();
+        $magasin->setRelation('societe', $societe);
+
+        return $societe;
     }
 
     /**
@@ -68,33 +174,33 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
-     * Le propriétaire du magasin, seul à cocher les autorisations des
-     * membres de son équipe.
+     * Le propriétaire de la société du magasin, qui a tous les droits dans
+     * chacun de ses magasins.
      */
     protected function proprietaireDe(Magasin $magasin): User
     {
-        return $magasin->proprietaires()->get()->sole();
+        return $magasin->societe()->firstOrFail()->proprietaire()->firstOrFail();
     }
 
     /**
-     * Complète l'identité légale d'un magasin créé avec son seul nom (voir
-     * CreerMagasinAction), comme son propriétaire dans Paramètres >
-     * Identité du magasin : il peut alors émettre des factures à des
-     * professionnels (voir Magasin::mentionsLegalesManquantes()).
+     * Complète l'identité légale de la société du magasin, comme son
+     * propriétaire dans Administration de la société > Identité : il peut
+     * alors émettre des factures à des professionnels (voir
+     * Magasin::mentionsLegalesManquantes()).
      */
     protected function completerIdentiteLegale(Magasin $magasin): Magasin
     {
-        $magasin->update([
+        $societe = $magasin->societe()->firstOrFail();
+        $societe->forceFill([
             'raison_sociale' => 'Ma Boutique',
-            'forme_juridique' => 'SAS',
-            'siren' => '732829320',
-            'siret' => '73282932000074',
+            'forme_juridique' => FormeJuridique::Sas,
+            'capital_social' => '10000.00',
             'immatriculation' => 'RCS Lyon',
-            'adresse' => '1 place Bellecour',
-            'code_postal' => '69001',
-            'ville' => 'Lyon',
-            'numero_tva' => 'FR44732829320',
-        ]);
+            'siege_adresse' => '1 place Bellecour',
+            'siege_code_postal' => '69001',
+            'siege_ville' => 'Lyon',
+        ])->save();
+        $magasin->setRelation('societe', $societe);
 
         return $magasin;
     }
@@ -149,6 +255,7 @@ abstract class TestCase extends BaseTestCase
         $demande = serialize([
             'base' => DB::connection()->getDatabaseName(),
             'caisse_securisee' => config('caisse_securisee'),
+            'journal_audit' => config('journal_audit'),
             'operation' => new SerializableClosure($operation),
         ]);
 

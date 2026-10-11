@@ -12,6 +12,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\AvoirPdfGenerator;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use Filament\Actions\MountableAction;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -40,8 +41,10 @@ trait EnvoieLesDocuments
      * Dès que le document a son numéro : un brouillon n'a encore aucune
      * existence pour le client. Le PDF se produit avant le téléchargement :
      * un ticket, une facture ou un avoir qui ne peut pas être reproduit tel
-     * qu'il a été émis (voir DocumentSansEnregistrementSigneException) ne
-     * se télécharge pas, et l'écran dit pourquoi.
+     * qu'il a été émis (voir DocumentSansEnregistrementSigneException), ou
+     * tout document d'une société pas encore validée (voir
+     * Magasin::verifierQuIlPeutImprimer()), ne se télécharge pas, et
+     * l'écran dit pourquoi.
      *
      * @template TAction of MountableAction
      *
@@ -63,7 +66,7 @@ trait EnvoieLesDocuments
 
                 try {
                     $pdf = $generateur->generer($record)->output();
-                } catch (DocumentSansEnregistrementSigneException $refus) {
+                } catch (DocumentSansEnregistrementSigneException|VenteNonAutoriseeException $refus) {
                     static::notifierLeRefus($refus);
 
                     return null;

@@ -4,7 +4,6 @@ namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -45,7 +44,7 @@ class ClientPolicyTest extends TestCase
     #[DataProvider('roles')]
     public function test_archiver_des_clients_selon_le_role(RoleMagasin $role, bool $peutArchiver): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
         $client = Client::factory()->create();
 
@@ -59,7 +58,7 @@ class ClientPolicyTest extends TestCase
     #[DataProvider('roles')]
     public function test_restaurer_des_clients_selon_le_role(RoleMagasin $role, bool $peutRestaurer): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
         $client = Client::factory()->trashed()->create();
 
@@ -74,7 +73,7 @@ class ClientPolicyTest extends TestCase
     public function test_un_client_archive_ne_se_modifie_pas_avant_sa_restauration_et_ne_s_efface_jamais(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $client = Client::factory()->create();
         $archive = Client::factory()->trashed()->create();
 
@@ -90,7 +89,7 @@ class ClientPolicyTest extends TestCase
     public function test_personne_n_archive_le_client_comptoir(): void
     {
         $proprietaire = User::factory()->create();
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
 
         $this->assertFalse($proprietaire->can('delete', $comptoir));
@@ -101,7 +100,7 @@ class ClientPolicyTest extends TestCase
     {
         $contexte = app(TenantContext::class);
 
-        $magasinA = app(CreerMagasinAction::class)->handle(['nom' => 'Boutique A'], User::factory()->create());
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A']);
         $magasinB = Magasin::factory()->create();
 
         // La permission n'est accordée à l'utilisateur QUE dans le magasin A.

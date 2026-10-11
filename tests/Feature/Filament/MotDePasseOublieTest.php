@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Filament;
 
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Models\User;
 use Filament\Notifications\Auth\ResetPassword as LienDeReinitialisation;
 use Filament\Pages\Auth\PasswordReset\RequestPasswordReset;
@@ -32,7 +31,7 @@ class MotDePasseOublieTest extends TestCase
     {
         Notification::fake();
         $proprietaire = User::factory()->create(['email' => 'patron@boutique.test']);
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         Livewire::test(RequestPasswordReset::class)
             ->fillForm(['email' => 'patron@boutique.test'])
@@ -50,7 +49,7 @@ class MotDePasseOublieTest extends TestCase
     {
         Notification::fake();
         $proprietaire = User::factory()->create(['email' => 'patron@boutique.test']);
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         Livewire::test(RequestPasswordReset::class)
             ->fillForm(['email' => 'Patron@Boutique.TEST'])
@@ -64,7 +63,7 @@ class MotDePasseOublieTest extends TestCase
     {
         Notification::fake();
         $proprietaire = User::factory()->create(['email' => 'patron@boutique.test']);
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         Livewire::test(RequestPasswordReset::class)
             ->fillForm(['email' => 'patron@boutique.test'])
@@ -85,7 +84,7 @@ class MotDePasseOublieTest extends TestCase
     public function test_le_lien_recu_permet_de_choisir_un_nouveau_mot_de_passe(): void
     {
         $proprietaire = User::factory()->create(['email' => 'patron@boutique.test', 'password' => 'mot-de-passe-oublie']);
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $jeton = Password::broker()->createToken($proprietaire);
 
         Livewire::test(ResetPassword::class, ['email' => 'patron@boutique.test', 'token' => $jeton])
@@ -102,7 +101,7 @@ class MotDePasseOublieTest extends TestCase
     public function test_un_lien_invalide_est_refuse_avec_un_message_en_francais(): void
     {
         $proprietaire = User::factory()->create(['email' => 'patron@boutique.test', 'password' => 'mot-de-passe-actuel']);
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         Livewire::test(ResetPassword::class, ['email' => 'patron@boutique.test', 'token' => 'jeton-invente'])
             ->fillForm([

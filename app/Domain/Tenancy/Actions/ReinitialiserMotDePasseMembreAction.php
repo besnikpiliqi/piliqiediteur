@@ -2,7 +2,6 @@
 
 namespace App\Domain\Tenancy\Actions;
 
-use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\MagasinUser;
 use App\Models\User;
 use LogicException;
@@ -34,13 +33,13 @@ class ReinitialiserMotDePasseMembreAction
             throw new LogicException('Changez votre propre mot de passe depuis votre profil, avec votre mot de passe actuel.');
         }
 
-        if ($membre->role === RoleMagasin::Proprietaire) {
+        if ($membre->utilisateur->estProprietaire()) {
             throw new LogicException('Ce mot de passe ne se réinitialise pas depuis l\'équipe : la personne utilise « Mot de passe oublié » sur la page de connexion.');
         }
 
         $magasin = $membre->magasin;
 
-        if (! $auteur->estProprietaireDe($magasin)
+        if (! $auteur->estProprietaireDuMagasin($magasin)
             && array_diff($membre->utilisateur->autorisationsCocheesDans($magasin), $auteur->autorisationsCocheesDans($magasin)) !== []) {
             throw new LogicException('Seul le propriétaire peut donner un nouveau mot de passe à ce membre : il a des autorisations que vous n\'avez pas.');
         }

@@ -4,7 +4,6 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\ParametresPrixDeVente;
@@ -222,7 +221,7 @@ class ParametresPrixDeVenteTest extends TestCase
 
     public function test_un_vendeur_sans_la_permission_ne_peut_pas_acceder_a_la_page(): void
     {
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
 
         $this->actingAs($vendeur);
@@ -234,7 +233,7 @@ class ParametresPrixDeVenteTest extends TestCase
     private function connecterLeProprietaire(): Magasin
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 

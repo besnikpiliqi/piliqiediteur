@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\DB;
  * une période qui n'en a aucune ne produit ni soumission ni numéro. Un
  * magasin qui n'a encore rien vendu ne numérote donc aucun document
  * d'e-reporting, et son code reste modifiable (voir
- * Magasin::codeEstDefinitif()).
+ * Magasin::aNumeroteUnDocument()).
  *
  * Idempotent par construction : une contrainte unique (magasin_id,
  * periode_debut, periode_fin) empêche de régénérer deux fois la même

@@ -16,7 +16,6 @@ use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Console\Scheduling\Event;
@@ -227,7 +226,7 @@ class RelancerFacturesImpayeesTest extends TestCase
         $this->travelTo('2026-10-01 09:00:00');
         $magasin = $this->magasinQuiRelance();
         $facture = $this->factureImpayee($magasin, 'client@exemple.fr');
-        $magasin->forceFill(['statut' => StatutMagasin::Suspendu])->save();
+        $magasin->forceFill(['suspendu_le' => now()])->save();
 
         $this->relancerLe('2026-10-20');
 

@@ -14,10 +14,8 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use LogicException;
 use Tests\TestCase;
@@ -222,7 +220,7 @@ class EnregistrerPaiementActionTest extends TestCase
      */
     public function test_le_paiement_d_un_ticket_du_client_comptoir_n_impute_aucun_credit(): void
     {
-        app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], User::factory()->create());
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $ticketRetourne = $this->emettreFactureDe($comptoir, 100); // total TTC 120
         app(EnregistrerPaiementAction::class)->handle($comptoir, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '120.00', 'recu_le' => now()->toDateString()], [['facture_id' => $ticketRetourne->id, 'montant' => '120.00']]);

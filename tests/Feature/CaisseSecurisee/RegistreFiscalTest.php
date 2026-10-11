@@ -182,7 +182,8 @@ class RegistreFiscalTest extends TestCase
     public function test_le_contenu_signe_se_verifie_tel_quel_et_reprend_l_en_tete_de_l_enregistrement(): void
     {
         $this->travelTo('2026-10-09 10:15:30');
-        $magasin = $this->magasinActif(['siren' => '552100554', 'siret' => '55210055400013']);
+        $magasin = Magasin::factory()->avecLaSociete(['siren' => '100000009'])->create(['siret' => '10000000900017']);
+        app(TenantContext::class)->set($magasin);
         $vendeuse = User::factory()->create(['name' => 'Zoé Lefèvre']);
         $this->actingAs($vendeuse);
         $facture = Facture::factory()->create();
@@ -193,7 +194,7 @@ class RegistreFiscalTest extends TestCase
         $initialisation = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->sole();
         $this->assertSame([
             'format' => 1,
-            'magasin' => ['uuid' => $magasin->uuid, 'siren' => '552100554', 'siret' => '55210055400013'],
+            'magasin' => ['uuid' => $magasin->uuid, 'siren' => '100000009', 'siret' => '10000000900017'],
             'caisse' => $magasin->uuid,
             'chaine' => 'vente',
             'sequence' => 1,

@@ -8,7 +8,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMagasinAction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -30,7 +29,7 @@ class FactureNeSePasSupprimeTest extends TestCase
     public function test_meme_le_proprietaire_ne_peut_pas_supprimer_une_facture_emise(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create();
@@ -48,7 +47,7 @@ class FactureNeSePasSupprimeTest extends TestCase
     public function test_une_facture_corrigee_par_un_avoir_total_reste_definitivement_non_supprimable(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create();
@@ -83,7 +82,7 @@ class FactureNeSePasSupprimeTest extends TestCase
     public function test_seul_le_brouillon_est_modifiable_pas_une_facture_emise(): void
     {
         $proprietaire = User::factory()->create();
-        $magasin = app(CreerMagasinAction::class)->handle(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create();

@@ -24,6 +24,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
@@ -56,6 +57,12 @@ use Throwable;
  * démonstration, jamais. Dans ces cas, l'envoi échoue sans partir, et le
  * magasin sait pourquoi.
  *
+ * La personne qui a demandé l'envoi se relit aussi au moment de partir :
+ * sans plus accès au magasin, ou sans plus le droit d'envoyer ce
+ * document, l'e-mail ne part pas, sans nouvelle tentative, et le
+ * propriétaire de la société en est prévenu. Une relance automatique, que
+ * personne n'a demandée, n'en dépend pas.
+ *
  * Idempotent : un envoi déjà envoyé ne repart jamais, même si le job est
  * rejoué. ShouldBeUnique : jamais deux exécutions du même envoi en
  * parallèle. Le PDF est généré à chaque tentative depuis le document tel
@@ -71,6 +78,8 @@ use Throwable;
 class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, WithTenantContext;
+
+    public const MOTIF_EXPEDITEUR_SANS_DROIT = 'La personne qui a demandé cet envoi n\'a plus accès à ce magasin ou n\'a plus le droit d\'envoyer ce document : l\'e-mail n\'est pas parti.';
 
     public int $tries = 3;
 
@@ -111,6 +120,12 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
         }
 
         $document = $envoi->document;
+
+        if ($envoi->envoye_par !== null && ! $this->lExpediteurPeutEncoreLEnvoyer($envoi, $document)) {
+            $this->echouer($envoi, self::MOTIF_EXPEDITEUR_SANS_DROIT, collect([$envoi->magasin->societe->proprietaire]));
+
+            return;
+        }
 
         if ($document instanceof Devis && $this->devisModifieDepuisLaDemande($document, $envoi)) {
             $this->echouer($envoi, 'Le devis a été modifié depuis cette demande d\'envoi : l\'e-mail n\'est pas parti, envoyez sa nouvelle version à votre client si ce n\'est pas déjà fait.');
@@ -188,6 +203,24 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
     }
 
     /**
+     * La personne qui a demandé cet envoi, relue en base au moment de
+     * partir, est-elle toujours un compte de la société du magasin, qui
+     * l'ouvre et qui a le droit d'envoyer ce document-là, dans le contexte
+     * du magasin que le job a restauré ? Un compte retiré du magasin ou de
+     * la société, suspendu, refusé, privé de l'autorisation d'envoyer, ou
+     * qui ne voit plus ce document, ne fait rien partir.
+     */
+    private function lExpediteurPeutEncoreLEnvoyer(EnvoiDocument $envoi, Facture|Devis|Avoir $document): bool
+    {
+        $expediteur = User::query()->find($envoi->envoye_par);
+
+        return $expediteur !== null
+            && (int) $expediteur->societe_id === (int) $envoi->magasin->societe_id
+            && $expediteur->peutOuvrir($envoi->magasin)
+            && Gate::forUser($expediteur)->allows('envoyer', $document);
+    }
+
+    /**
      * Repassé en brouillon par une modification, ou reparti depuis dans sa
      * nouvelle version : un devis ne repart qu'après avoir été modifié
      * (voir StatutDevis::transitionsAutorisees()), et chaque départ
@@ -210,11 +243,14 @@ class EnvoyerDocumentJob implements ShouldBeUnique, ShouldQueue
             : 'renvoyez-le';
     }
 
-    private function echouer(EnvoiDocument $envoi, string $erreur): void
+    /**
+     * @param  Collection<int, User>|null  $aPrevenir  qui prévenir, à défaut de celui que désigne aPrevenir()
+     */
+    private function echouer(EnvoiDocument $envoi, string $erreur, ?Collection $aPrevenir = null): void
     {
         $envoi->forceFill(['statut' => StatutEnvoi::Echec, 'erreur' => $erreur])->save();
 
-        Notification::send($this->aPrevenir($envoi), new EnvoiDocumentEchoue($envoi));
+        Notification::send($aPrevenir ?? $this->aPrevenir($envoi), new EnvoiDocumentEchoue($envoi));
     }
 
     /**

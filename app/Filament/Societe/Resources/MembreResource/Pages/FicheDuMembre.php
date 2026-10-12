@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\NommerAdministrateurAction;
+use App\Domain\Tenancy\Actions\TransfererProprieteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
@@ -14,6 +15,7 @@ use App\Filament\Societe\Resources\MembreResource;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -39,6 +41,7 @@ class FicheDuMembre extends ViewRecord
             $this->nommerAdministrateurAction(),
             $this->modifierLAdministrateurAction(),
             $this->retrograderAction(),
+            $this->transmettreLaProprieteAction(),
             $this->reintegrerAction(),
             $this->reintegrerCommeExpertComptableAction(),
             MembreResource::actionSuspendre(Action::make('suspendre'), $compte)->after(fn () => $this->getRecord()->refresh()),
@@ -178,6 +181,40 @@ class FicheDuMembre extends ViewRecord
             ->modalDescription('Sa portée et ses autorisations de société disparaissent : choisissez ses magasins de membre.')
             ->action(function (array $data): void {
                 $this->agir(fn () => app(ModifierAdministrateurAction::class)->retrograder($this->auteur(), $this->compte(), MembreResource::affectationsSaisies($data['affectations'])));
+            });
+    }
+
+    /**
+     * Le propriétaire transmet la propriété de la société à cet
+     * administrateur actif, en redonnant son mot de passe ; l'action exige
+     * que la qualité de représentant de l'administrateur soit prouvée à son
+     * nom. L'ancien propriétaire, devenu administrateur de tous les
+     * magasins, revient à la liste des comptes, qui ne lui montre plus que
+     * ce que voit un administrateur.
+     */
+    public function transmettreLaProprieteAction(): Action
+    {
+        return Action::make('transmettreLaPropriete')
+            ->label('Transmettre la propriété')
+            ->icon('heroicon-o-key')
+            ->color('danger')
+            ->visible(fn (): bool => $this->auteur()->estProprietaire() && $this->compte()->estAdministrateur() && $this->compte()->peutAgir())
+            ->modalDescription(fn (): string => "{$this->compte()->name} deviendra le propriétaire de la société, avec tous les droits ; vous en deviendrez administrateur de tous les magasins, avec toutes les autorisations. Sa qualité de représentant légal ou de mandataire doit être prouvée à son nom.")
+            ->form([
+                TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->autocomplete('current-password')->required(),
+            ])
+            ->action(function (array $data): void {
+                $transmise = false;
+
+                MembreResource::executerLeGeste(function () use ($data, &$transmise): void {
+                    app(TransfererProprieteAction::class)->handle($this->auteur(), $this->compte(), $data['mot_de_passe']);
+                    $transmise = true;
+                });
+
+                if ($transmise) {
+                    Notification::make()->title("La propriété de la société est transmise à {$this->compte()->name}.")->success()->send();
+                    $this->redirect(MembreResource::getUrl('index'));
+                }
             });
     }
 

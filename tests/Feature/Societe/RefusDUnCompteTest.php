@@ -10,30 +10,42 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Actions\AccepterUnRattachementAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ChoisirSonMotDePasseParLeLienAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
+use App\Domain\Tenancy\Actions\CreerSaSocieteAvecUnCompteRetireAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\NommerAdministrateurAction;
+use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
 use App\Domain\Tenancy\Actions\RefuserSonCompteAction;
+use App\Domain\Tenancy\Actions\TransfererProprieteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Mail\PropositionDeRattachementMail;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Auth\ChangerMotDePasseProvisoire;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\PageDuLien;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
+use Database\Factories\SocieteFactory;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 use Tests\TestCase;
@@ -140,9 +152,11 @@ class RefusDUnCompteTest extends TestCase
 
     /**
      * Le compte du propriétaire ne se refuse jamais, pas même s'il n'a
-     * jamais confirmé son adresse.
+     * jamais confirmé son adresse : ni celui de l'inscription, ni
+     * l'administrateur, créé par la société, à qui la propriété vient
+     * d'être transmise.
      */
-    public function test_le_proprietaire_ne_refuse_jamais_son_compte(): void
+    public function test_le_proprietaire_ne_refuse_jamais_son_compte_meme_apres_un_transfert(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
@@ -151,6 +165,14 @@ class RefusDUnCompteTest extends TestCase
         $this->assertFalse($proprietaire->peutRefuserSonCompte());
         $this->assertThrows(fn () => app(RefuserSonCompteAction::class)->handle($proprietaire), AuthorizationException::class, RefuserSonCompteAction::MESSAGE_NON_REFUSABLE);
         $this->assertSame([StatutCompte::Actif, RoleSociete::Proprietaire], [$proprietaire->refresh()->statut, $proprietaire->role_societe]);
+
+        $administrateur = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $this->assertTrue($administrateur->peutRefuserSonCompte());
+        app(TransfererProprieteAction::class)->handle($proprietaire, $administrateur, 'password');
+
+        $this->assertFalse($administrateur->refresh()->peutRefuserSonCompte());
+        $this->assertThrows(fn () => app(RefuserSonCompteAction::class)->handle($administrateur), AuthorizationException::class, RefuserSonCompteAction::MESSAGE_NON_REFUSABLE);
+        $this->assertSame([StatutCompte::Actif, RoleSociete::Proprietaire], [$administrateur->refresh()->statut, $administrateur->role_societe]);
     }
 
     /**
@@ -285,6 +307,80 @@ class RefusDUnCompteTest extends TestCase
     }
 
     /**
+     * Refusé, le compte ne crée sa société qu'une fois son mot de passe
+     * choisi par un lien envoyé à son adresse : son ancien mot de passe ne
+     * sert plus.
+     */
+    public function test_un_compte_refuse_ne_cree_sa_societe_qu_apres_avoir_choisi_son_mot_de_passe_par_un_lien(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $compte = $this->membre($magasin, RoleMagasin::Vendeur, null, ['email' => 'paul@example.test']);
+        app(RefuserSonCompteAction::class)->handle($compte);
+        app(TenantContext::class)->clear();
+        [$societe, $premierMagasin] = $this->nouvelleSociete();
+
+        $this->assertThrows(fn () => app(CreerSaSocieteAvecUnCompteRetireAction::class)->handle('paul@example.test', self::MOT_DE_PASSE_CHOISI, $societe, $premierMagasin), ValidationException::class, CreerSaSocieteAvecUnCompteRetireAction::MESSAGE_IDENTIFIANTS);
+        $this->assertSame((int) $magasin->societe_id, (int) $compte->refresh()->societe_id);
+
+        app(ChoisirSonMotDePasseParLeLienAction::class)->handle($compte, Password::broker()->createToken($compte), 'mon-propre-mot-de-passe');
+        $nouvelle = app(CreerSaSocieteAvecUnCompteRetireAction::class)->handle('paul@example.test', 'mon-propre-mot-de-passe', $societe, $premierMagasin);
+
+        $compte->refresh();
+        $this->assertSame([(int) $nouvelle->id, RoleSociete::Proprietaire, StatutCompte::Actif], [(int) $compte->societe_id, $compte->role_societe, $compte->statut]);
+    }
+
+    /**
+     * Accepter un rattachement suit un lien envoyé à l'adresse : elle est
+     * confirmée, et le compte ne se refuse plus.
+     */
+    public function test_un_rattachement_accepte_confirme_l_adresse_et_ferme_le_droit_de_refus(): void
+    {
+        Mail::fake();
+        $ancien = $this->ouvrirUneSociete(['nom' => 'Ancienne Boutique']);
+        $compte = $this->membre($ancien, RoleMagasin::Vendeur, null, ['email' => 'paul@example.test']);
+        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($ancien), $compte);
+        $this->assertTrue($compte->refresh()->peutRefuserSonCompte());
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+
+        app(ProposerUnRattachementAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, 'paul@example.test', RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
+        $lien = Mail::sent(PropositionDeRattachementMail::class)->sole()->lien;
+        app(AccepterUnRattachementAction::class)->handle(Str::afterLast($lien, '/'), 'paul@example.test', self::MOT_DE_PASSE_CHOISI);
+
+        $compte->refresh();
+        $this->assertTrue($compte->aConfirmeSonAdresse());
+        $this->assertFalse($compte->peutRefuserSonCompte());
+        $this->assertThrows(fn () => app(RefuserSonCompteAction::class)->handle($compte), AuthorizationException::class, RefuserSonCompteAction::MESSAGE_NON_REFUSABLE);
+        $this->assertSame(StatutCompte::Actif, $compte->refresh()->statut);
+    }
+
+    /**
+     * L'auteur du compte refusé, qui connaît son ancien mot de passe ou
+     * garde une session ouverte avec lui, ne crée aucune société avec ce
+     * compte : seule la personne qui reçoit les liens à son adresse le
+     * peut.
+     */
+    public function test_seul_le_titulaire_du_lien_cree_sa_societe_avec_un_compte_refuse(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $compte = $this->membre($magasin, RoleMagasin::Vendeur, null, ['email' => 'paul@example.test']);
+        $this->ouvrirUneSessionAilleurs($compte);
+        app(RefuserSonCompteAction::class)->handle($compte);
+        app(TenantContext::class)->clear();
+        [$societe, $premierMagasin] = $this->nouvelleSociete();
+        $societes = Societe::query()->count();
+
+        $this->post(route('societe.creer.enregistrer'), ['email' => 'paul@example.test', 'password' => self::MOT_DE_PASSE_CHOISI, 'siren' => $societe['siren'], 'nom' => $premierMagasin['nom'], 'nic' => $premierMagasin['nic']])
+            ->assertStatus(422)
+            ->assertSeeText(CreerSaSocieteAvecUnCompteRetireAction::MESSAGE_IDENTIFIANTS);
+        $this->actingAs($compte)
+            ->post(route('societe.creer.enregistrer'), ['email' => 'paul@example.test', 'password' => self::MOT_DE_PASSE_PROVISOIRE, 'siren' => $societe['siren'], 'nom' => $premierMagasin['nom'], 'nic' => $premierMagasin['nic']])
+            ->assertStatus(422);
+
+        $this->assertSame($societes, Societe::query()->count());
+        $this->assertSame([(int) $magasin->societe_id, StatutCompte::Retire], [(int) $compte->refresh()->societe_id, $compte->statut]);
+    }
+
+    /**
      * Le compte refusé est celui de la session ou du jeton du lien, jamais
      * un identifiant de la requête : l'adresse de la page du lien ne se
      * change pas, et la page du mot de passe provisoire ne refuse que le
@@ -329,6 +425,19 @@ class RefusDUnCompteTest extends TestCase
             ->call('authenticate')
             ->assertHasErrors(['data.email']);
         $this->assertGuest();
+    }
+
+    /**
+     * Le SIREN et le premier magasin d'une nouvelle société, connus du
+     * répertoire Sirene factice.
+     *
+     * @return array{0: array{siren: string}, 1: array{nom: string, nic: string}}
+     */
+    private function nouvelleSociete(): array
+    {
+        $siren = SocieteFactory::sirenFictif();
+
+        return [['siren' => $siren], ['nom' => 'Ma Propre Boutique', 'nic' => substr(FauxRepertoireSirene::siretDuSiege($siren), 9)]];
     }
 
     /**

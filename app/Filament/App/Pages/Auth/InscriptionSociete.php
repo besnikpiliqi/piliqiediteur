@@ -25,6 +25,7 @@ use Filament\Http\Responses\Auth\Contracts\RegistrationResponse;
 use Filament\Pages\Auth\Register;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -44,8 +45,10 @@ use Illuminate\Validation\ValidationException;
  * Rien d'autre n'est vérifié dans le logiciel : que le SIREN soit déjà
  * celui d'une autre société, le SIRET réservé ou l'adresse déjà celle d'un
  * compte, l'écran répond toujours la même chose (MESSAGE_NEUTRE). Une
- * adresse déjà utilisée ne reçoit aucun lien, mais un e-mail qui lui dit
- * qu'elle a déjà un compte (voir CompteExistantMail).
+ * adresse déjà utilisée ne reçoit aucun lien d'inscription, mais un e-mail
+ * qui lui dit qu'elle a déjà un compte (voir CompteExistantMail) ; celle
+ * d'un compte retiré y reçoit le lien de la page du lien, pour choisir son
+ * mot de passe puis créer sa propre société avec ce compte.
  *
  * La page est ouverte à tous : deux demandes par minute et par adresse IP
  * (rateLimit() de Filament), vingt par heure et par adresse IP, trois par
@@ -121,11 +124,15 @@ class InscriptionSociete extends Register
 
         $this->refuserCeQueSireneRefuse($donnees['siren'], $donnees['siren'].$donnees['nic']);
 
-        if (User::query()->where('email', $email)->exists()) {
+        $compte = User::query()->where('email', $email)->first();
+
+        if ($compte !== null) {
             $panneau = Filament::getPanel('app');
             Mail::to($email)->send(new CompteExistantMail(
                 self::adresseDeLApplication($panneau->generateRouteName('auth.login')),
                 self::adresseDeLApplication($panneau->generateRouteName('auth.password-reset.request')),
+                $compte->estRetire() ? $panneau->getResetPasswordUrl(Password::broker(Filament::getAuthPasswordBroker())->createToken($compte), $compte) : null,
+                (int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire'),
             ));
             $this->terminer();
 

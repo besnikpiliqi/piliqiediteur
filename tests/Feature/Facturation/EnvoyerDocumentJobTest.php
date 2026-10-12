@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -24,6 +25,9 @@ use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
+use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Actions\RefuserSonCompteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -36,6 +40,7 @@ use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
 
@@ -358,6 +363,7 @@ class EnvoyerDocumentJobTest extends TestCase
     {
         $magasin = $this->completerIdentiteLegale($this->magasinAvecProprietaire('Ma Boutique'));
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr']);
+        $this->actingAs($vendeur);
         $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
         $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['destinataire' => 'compta@client.fr', 'envoye_par' => $vendeur->id]);
         Mail::shouldReceive('to')->andThrow(new TransportException('535 Authentication failed for smtp-user@editeur.example'));
@@ -409,6 +415,98 @@ class EnvoyerDocumentJobTest extends TestCase
 
         $this->assertSame(0, $ancienMembre->notifications()->count());
         $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->count());
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function droitsPerdusAvantLeDepart(): array
+    {
+        return array_combine($cas = [
+            'retiré du magasin',
+            'suspendu',
+            'retiré de la société',
+            'refusé',
+            'privé de l\'autorisation d\'envoyer',
+            'facture devenue invisible pour lui',
+        ], array_map(static fn (string $nom): array => [$nom], $cas));
+    }
+
+    /**
+     * Le vendeur a demandé l'envoi d'une facture qu'il voyait, puis perd
+     * son accès au magasin ou son droit d'envoyer cette facture avant que
+     * l'e-mail ne parte : relu au départ, il ne fait rien partir, sans
+     * nouvelle tentative, et le propriétaire est prévenu, pas lui.
+     */
+    #[DataProvider('droitsPerdusAvantLeDepart')]
+    public function test_un_envoi_demande_par_un_membre_retire_ou_suspendu_entre_temps_ne_part_pas_et_le_proprietaire_est_prevenu(string $cas): void
+    {
+        Mail::fake();
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre Boutique']);
+        app(TenantContext::class)->set($magasin);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $cases = [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES];
+        $vendeur = $this->membreDeCesMagasins([$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => $cases], $autre->id => ['role' => RoleMagasin::Vendeur]], $magasin);
+        $facture = $this->emettreFacture(Client::factory()->create());
+        $envoi = app(EnvoyerDocumentAction::class)->handle($vendeur, $facture, 'client@exemple.fr', null);
+
+        match ($cas) {
+            'retiré du magasin' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, [$magasin->id => null]),
+            'suspendu' => app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $vendeur),
+            'retiré de la société' => app(ChangerStatutCompteAction::class)->retirer($proprietaire, $vendeur),
+            'refusé' => app(RefuserSonCompteAction::class)->handle($vendeur),
+            'privé de l\'autorisation d\'envoyer' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => array_values(array_diff($cases, [PermissionRegistry::FACTURE_ENVOYER]))]]),
+            'facture devenue invisible pour lui' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => RoleMagasin::Vendeur->permissionsParDefaut()]]),
+        };
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        Mail::assertNothingSent();
+        $envoi->refresh();
+        $this->assertSame([StatutEnvoi::Echec, EnvoyerDocumentJob::MOTIF_EXPEDITEUR_SANS_DROIT], [$envoi->statut, $envoi->erreur]);
+        $this->assertSame(1, $proprietaire->notifications()->where('type', EnvoiDocumentEchoue::class)->count());
+        $this->assertSame(0, $vendeur->notifications()->where('type', EnvoiDocumentEchoue::class)->count());
+    }
+
+    /**
+     * Une relance automatique n'a pas d'auteur : elle part même quand la
+     * personne qui avait émis la facture a quitté la société depuis.
+     */
+    public function test_une_relance_automatique_ne_depend_d_aucun_auteur(): void
+    {
+        $this->travelTo('2026-10-15 10:00:00');
+        Mail::fake();
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
+        $this->actingAs($vendeur);
+        $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
+        auth()->logout();
+        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($magasin), $vendeur);
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->relance(1)->create(['destinataire' => 'client@exemple.fr', 'envoye_par' => null]);
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
+
+        Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('client@exemple.fr'));
+        $this->assertSame(StatutEnvoi::Envoye, $envoi->refresh()->statut);
+    }
+
+    /**
+     * L'échec d'un envoi demandé par un administrateur, qui ouvre toujours
+     * le magasin, le prévient lui, pas le propriétaire.
+     */
+    public function test_l_echec_d_un_envoi_d_un_administrateur_le_previent_lui(): void
+    {
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $administrateur = $this->administrateur($magasin);
+        $facture = $this->emettreFacture(Client::factory()->create());
+        $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['destinataire' => 'client@exemple.fr', 'envoye_par' => $administrateur->id]);
+
+        (new EnvoyerDocumentJob($magasin->id, $envoi->id))->failed(new TransportException('Connexion refusée'));
+
+        $this->assertSame(EnvoiDocumentEchoue::class, $administrateur->notifications()->sole()->type);
+        $this->assertSame(0, $this->proprietaireDe($magasin)->notifications()->count());
     }
 
     /**

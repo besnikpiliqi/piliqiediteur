@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\ResultatVerification;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Mail\CompteExistantMail;
@@ -20,6 +22,7 @@ use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
+use App\Filament\App\Pages\Auth\PageDuLien;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Http\Controllers\ConfirmerInscriptionController;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
@@ -261,6 +264,58 @@ class InscriptionSocieteTest extends TestCase
             && $mail->urlDeConnexion === rtrim((string) config('app.url'), '/').'/app/login');
         Mail::assertNotSent(DemandeInscriptionMail::class);
         $this->assertSame(0, DemandeInscription::query()->count());
+    }
+
+    /**
+     * L'adresse d'un compte retiré de sa société reçoit, au lieu du lien de
+     * connexion, celui de la page du lien : la personne y choisit son mot
+     * de passe, ce qui confirme son adresse, puis crée sa propre société ;
+     * celle d'un compte encore dans sa société ne reçoit que la connexion
+     * et « Mot de passe oublié ». L'écran répond pareil dans les deux cas.
+     */
+    public function test_un_compte_retire_recoit_le_lien_pour_creer_sa_propre_societe(): void
+    {
+        Mail::fake();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $retire = $this->membre($magasin, RoleMagasin::Vendeur, null, ['email' => 'retire@maboutique.fr']);
+        $this->membre($magasin, RoleMagasin::Vendeur, null, ['email' => 'actif@maboutique.fr']);
+        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($magasin), $retire);
+        app(TenantContext::class)->clear();
+        Filament::setCurrentPanel(Filament::getPanel('app'));
+
+        foreach (['retire@maboutique.fr', 'actif@maboutique.fr'] as $email) {
+            $this->demander(['email' => $email])->assertHasNoFormErrors()->assertSee(InscriptionSociete::MESSAGE_NEUTRE);
+        }
+
+        $pourLeRetire = Mail::sent(CompteExistantMail::class, fn (CompteExistantMail $mail): bool => $mail->hasTo('retire@maboutique.fr'))->sole();
+        $pourLActif = Mail::sent(CompteExistantMail::class, fn (CompteExistantMail $mail): bool => $mail->hasTo('actif@maboutique.fr'))->sole();
+        $this->assertNull($pourLActif->urlPourCreerSaSociete);
+        $this->assertNotNull($pourLeRetire->urlPourCreerSaSociete);
+        parse_str((string) parse_url($pourLeRetire->urlPourCreerSaSociete, PHP_URL_QUERY), $parametres);
+        Livewire::test(PageDuLien::class, ['email' => $parametres['email'], 'token' => $parametres['token']])
+            ->fillForm(['password' => 'mon-propre-mot-de-passe', 'passwordConfirmation' => 'mon-propre-mot-de-passe'])
+            ->call('choisir')
+            ->assertRedirect(route('societe.creer'));
+        $this->assertTrue($retire->refresh()->aConfirmeSonAdresse());
+        $this->assertSame(0, DemandeInscription::query()->count());
+    }
+
+    /**
+     * Le propriétaire que crée la confirmation de son lien, et non la
+     * fabrique, agit dès son inscription : son adresse est confirmée, son
+     * mot de passe est le sien, et il ouvre l'espace de sa société et son
+     * premier magasin.
+     */
+    public function test_le_proprietaire_inscrit_par_son_lien_peut_agir_des_son_inscription(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $proprietaire = $societe->proprietaire()->sole();
+
+        $this->assertTrue($proprietaire->peutAgir());
+        $this->assertTrue($proprietaire->aConfirmeSonAdresse());
+        $this->assertFalse($proprietaire->peutRefuserSonCompte());
+        $this->assertTrue($proprietaire->peutOuvrir(Magasin::query()->where('societe_id', $societe->id)->sole()));
+        $this->assertTrue($proprietaire->canAccessPanel(Filament::getPanel('societe')));
     }
 
     /**

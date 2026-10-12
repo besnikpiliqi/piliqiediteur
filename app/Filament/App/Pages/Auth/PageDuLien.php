@@ -31,8 +31,9 @@ use LogicException;
  * - compte suspendu : seulement « Refuser ce compte » s'il est refusable ;
  *   ni nouveau mot de passe, ni levée de la suspension ;
  * - compte retiré, par la société ou par son propre refus : « Choisir mon
- *   mot de passe », sans ouvrir aucun panneau, pour créer ensuite sa
- *   société ou accepter un rattachement ; « Refuser ce compte » s'il est
+ *   mot de passe », sans ouvrir aucun panneau, puis la page de création de
+ *   sa société (voir CreerSaSocieteController), ou un rattachement par le
+ *   lien qu'une société lui envoie ; « Refuser ce compte » s'il est
  *   refusable, la page prévenant que choisir son mot de passe confirme
  *   l'adresse et ferme le refus.
  * Seule la requête qui décide consomme le jeton, dans sa transaction (voir
@@ -116,13 +117,14 @@ class PageDuLien extends SimplePage
             return;
         }
 
-        Notification::make()
-            ->title($compte->refresh()->estRetire()
-                ? 'Votre mot de passe est enregistré : ce compte n\'appartient plus à aucune société, et vous pouvez créer la vôtre avec lui.'
-                : 'Votre mot de passe est enregistré : vous pouvez vous connecter.')
-            ->success()
-            ->send();
+        if ($compte->refresh()->estRetire()) {
+            Notification::make()->title('Votre mot de passe est enregistré : ce compte n\'appartient plus à aucune société, et vous pouvez créer la vôtre avec lui.')->success()->send();
+            $this->redirect(route('societe.creer'));
 
+            return;
+        }
+
+        Notification::make()->title('Votre mot de passe est enregistré : vous pouvez vous connecter.')->success()->send();
         $this->redirect(Filament::getLoginUrl());
     }
 

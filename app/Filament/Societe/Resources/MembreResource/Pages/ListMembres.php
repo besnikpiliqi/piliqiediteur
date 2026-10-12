@@ -6,7 +6,9 @@ use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Filament\Societe\Resources\MembreResource;
 use App\Models\User;
@@ -22,7 +24,10 @@ use Filament\Resources\Pages\ListRecords;
  * La liste des comptes, avec les créations que permet le rôle de la
  * personne connectée : un membre, un administrateur ou un expert-comptable
  * pour le propriétaire ; un responsable pour lui et pour un administrateur
- * autorisé à nommer les responsables. Chaque action du domaine revérifie
+ * autorisé à nommer les responsables. Chacun d'eux propose aussi, par son
+ * adresse, à une personne dont le compte a été retiré de sa société de
+ * rejoindre l'équipe avec ce compte, dans les rôles qu'il peut donner
+ * (voir ProposerUnRattachementAction). Chaque action du domaine revérifie
  * tout sur l'auteur relu sous ses verrous.
  */
 class ListMembres extends ListRecords
@@ -36,6 +41,7 @@ class ListMembres extends ListRecords
             $this->creerUnMembreAction(),
             $this->creerUnAdministrateurAction(),
             $this->creerUnExpertComptableAction(),
+            $this->proposerUnRattachementAction(),
         ];
     }
 
@@ -50,11 +56,11 @@ class ListMembres extends ListRecords
         return Action::make('nommerUnResponsable')
             ->label('Nommer un responsable')
             ->icon('heroicon-o-star')
-            ->visible(fn (): bool => collect(MembreResource::magasinsDeLaPortee())->keys()->contains(fn (int $id): bool => app(PorteeDesDroits::class)->peutNommerUnResponsable($this->auteur(), MembreResource::magasin($id))))
+            ->visible(fn (): bool => $this->magasinsOuNommerUnResponsable() !== [])
             ->form([
                 Select::make('magasin_id')
                     ->label('Magasin')
-                    ->options(fn (): array => collect(MembreResource::magasinsDeLaPortee())->filter(fn (string $nom, int $id): bool => app(PorteeDesDroits::class)->peutNommerUnResponsable($this->auteur(), MembreResource::magasin($id)))->all())
+                    ->options(fn (): array => $this->magasinsOuNommerUnResponsable())
                     ->required()
                     ->live(),
                 Radio::make('compte')
@@ -155,6 +161,65 @@ class ListMembres extends ListRecords
                     Notification::make()->title('Le compte de l\'expert-comptable est créé : remettez-lui son mot de passe provisoire.')->success()->send();
                 });
             });
+    }
+
+    /**
+     * Proposer à une personne dont le compte a été retiré de sa société de
+     * rejoindre l'équipe : le propriétaire, comme membre de magasins qu'il
+     * choisit ou comme expert-comptable ; un administrateur autorisé, comme
+     * responsable d'un magasin de sa portée. La réponse ne dit jamais si
+     * l'adresse est celle d'un compte.
+     */
+    public function proposerUnRattachementAction(): Action
+    {
+        return Action::make('proposerUnRattachement')
+            ->label('Proposer à un compte existant')
+            ->icon('heroicon-o-envelope')
+            ->visible(fn (): bool => $this->auteur()->estProprietaire() || $this->magasinsOuNommerUnResponsable() !== [])
+            ->modalDescription('Une personne dont le compte a été retiré de sa société peut rejoindre la vôtre avec ce compte, si elle accepte : elle reçoit une proposition à son adresse, valable sept jours.')
+            ->form([
+                TextInput::make('email')->label('Adresse e-mail de son compte')->email()->adresseDeConnexion()->required()->maxLength(255),
+                Radio::make('role_societe')
+                    ->label('Rôle proposé')
+                    ->options([RoleSociete::Membre->value => 'Membre de magasins', RoleSociete::ExpertComptable->value => 'Expert-comptable (lecture de tous les magasins)'])
+                    ->default(RoleSociete::Membre->value)
+                    ->required()
+                    ->live()
+                    ->visible(fn (): bool => $this->auteur()->estProprietaire()),
+                MembreResource::champAffectations()
+                    ->visible(fn (Get $get): bool => $this->auteur()->estProprietaire() && $get('role_societe') === RoleSociete::Membre->value),
+                Select::make('magasin_id')
+                    ->label('Responsable de')
+                    ->options(fn (): array => $this->magasinsOuNommerUnResponsable())
+                    ->required()
+                    ->visible(fn (): bool => ! $this->auteur()->estProprietaire()),
+            ])
+            ->action(function (array $data): void {
+                MembreResource::executerLeGeste(function () use ($data): void {
+                    $role = RoleSociete::from($data['role_societe'] ?? RoleSociete::Membre->value);
+                    $affectations = match (true) {
+                        $role === RoleSociete::ExpertComptable => [],
+                        isset($data['affectations']) => MembreResource::affectationsSaisies($data['affectations']),
+                        default => [(int) $data['magasin_id'] => ['role' => RoleMagasin::Responsable->value]],
+                    };
+
+                    app(ProposerUnRattachementAction::class)->handle($this->auteur(), MembreResource::societe(), $data['email'], $role, $affectations);
+                    Notification::make()->title(ProposerUnRattachementAction::REPONSE)->success()->send();
+                });
+            });
+    }
+
+    /**
+     * Les magasins de sa portée où la personne connectée peut nommer un
+     * responsable.
+     *
+     * @return array<int, string>
+     */
+    private function magasinsOuNommerUnResponsable(): array
+    {
+        return collect(MembreResource::magasinsDeLaPortee())
+            ->filter(fn (string $nom, int $id): bool => app(PorteeDesDroits::class)->peutNommerUnResponsable($this->auteur(), MembreResource::magasin($id)))
+            ->all();
     }
 
     private function auteur(): User

@@ -31,7 +31,9 @@ use Illuminate\Database\Eloquent\Builder;
  * gèrent son propriétaire et ses responsables, selon les règles de
  * PorteeDesDroits (voir AffectationPolicy et MembrePolicy) :
  * - créer un vendeur ou un observateur de ce magasin, avec les cases que
- *   son rôle précoche, et, pour le propriétaire, nommer un responsable ;
+ *   son rôle précoche, ou le proposer à un compte retiré de sa société
+ *   (voir ListEquipeDuMagasin), et, pour le propriétaire, nommer un
+ *   responsable ;
  * - changer le rôle et les cases d'un vendeur ou d'un observateur, le
  *   retirer du magasin (de la société, si c'était son dernier magasin) ;
  * - suspendre, réactiver, retirer de la société, renouveler l'accès, pour

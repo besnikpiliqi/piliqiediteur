@@ -40,13 +40,16 @@ use Illuminate\Database\Eloquent\Builder;
  *   expert-comptable ; nommer administrateur ; modifier les magasins d'un
  *   membre ; modifier ou rétrograder un administrateur ; suspendre,
  *   réactiver, retirer, réintégrer ; renouveler un accès ; annuler la
- *   nomination d'un responsable par un administrateur ;
+ *   nomination d'un responsable par un administrateur ; proposer à un
+ *   compte retiré de rejoindre la société ; transmettre la propriété à un
+ *   administrateur dont la qualité de représentant est prouvée ;
  * - pour un administrateur autorisé à nommer les responsables, les
  *   responsables de ses magasins : en nommer (un nouveau compte, ou un
  *   vendeur ou un observateur du magasin), leur retirer un magasin de sa
- *   portée ou les déplacer vers un autre, annuler sa propre nomination, et,
- *   pour une personne qui n'est que responsable de magasins de sa portée,
- *   la retirer de la société ou lui envoyer un lien ;
+ *   portée ou les déplacer vers un autre, annuler sa propre nomination,
+ *   proposer à un compte retiré d'en devenir un, et, pour une personne qui
+ *   n'est que responsable de magasins de sa portée, la retirer de la
+ *   société ou lui envoyer un lien ;
  * - fermée à tout autre compte.
  * Les magasins proposés se lisent par la portée de la personne connectée,
  * dans sa société. Personne ne change ici le nom ni l'adresse d'un autre

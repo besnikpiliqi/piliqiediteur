@@ -81,14 +81,14 @@ class HistoriqueAuNomFigeTest extends TestCase
         'pieces_verification' => ['deposee_par' => 'deposee_par_nom'],
         'codes_confirmation' => ['demande_par' => 'demande_par_nom'],
         'demandes_accord_dirigeant' => ['demande_par' => 'demande_par_nom'],
+        'demandes_rattachement' => ['demande_par' => 'demande_par_nom'],
     ];
 
     /**
      * Les colonnes vers un compte qui ne sont pas de l'historique : des
      * droits actuels, un panier en cours, un lien interne jamais affiché,
      * ou un nom déjà porté ailleurs (le contenu signé, le libellé de
-     * l'audit). La demande de rattachement, qui fige le nom de son auteur,
-     * arrive avec ses actions.
+     * l'audit).
      *
      * @var list<string>
      */
@@ -103,7 +103,6 @@ class HistoriqueAuNomFigeTest extends TestCase
         'enregistrements_fiscaux.operateur_id',
         'mandats_pdp.accorde_par',
         'demandes_rattachement.user_id',
-        'demandes_rattachement.demande_par',
     ];
 
     public function test_les_ecrans_de_l_historique_affichent_le_nom_tel_qu_il_etait_au_moment_de_l_operation(): void

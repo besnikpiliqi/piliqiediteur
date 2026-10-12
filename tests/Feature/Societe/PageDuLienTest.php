@@ -136,9 +136,9 @@ class PageDuLienTest extends TestCase
     }
 
     /**
-     * Un compte retiré choisit son mot de passe sur la page du lien (pour
-     * créer sa société ou accepter un rattachement), sans ouvrir aucun
-     * panneau.
+     * Un compte retiré choisit son mot de passe sur la page du lien, sans
+     * ouvrir aucun panneau, puis arrive sur la création de sa société (ou
+     * accepte un rattachement par le lien d'une société).
      */
     public function test_un_compte_retire_choisit_son_mot_de_passe_sur_la_page_de_lien_sans_ouvrir_aucun_panneau(): void
     {
@@ -150,7 +150,8 @@ class PageDuLienTest extends TestCase
             ->assertSee('n\'appartient plus à aucune société')
             ->fillForm(['password' => 'mon-nouveau-mot-de-passe', 'passwordConfirmation' => 'mon-nouveau-mot-de-passe'])
             ->call('choisir')
-            ->assertHasNoFormErrors();
+            ->assertHasNoFormErrors()
+            ->assertRedirect(route('societe.creer'));
 
         $compte->refresh();
         $this->assertTrue(Hash::check('mon-nouveau-mot-de-passe', $compte->password));

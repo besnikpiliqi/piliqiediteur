@@ -28,6 +28,7 @@ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
 use App\Models\User;
 use Closure;
@@ -108,6 +109,7 @@ class ActionsForgeesTest extends TestCase
             'clôturer la journée',
             'corriger le SIREN',
             'ouvrir la démonstration',
+            'transférer la propriété',
             'créer un vendeur',
             'nommer un responsable',
             'créer l\'expert-comptable',
@@ -159,6 +161,15 @@ class ActionsForgeesTest extends TestCase
                 $this->forgerLAction(Livewire::test(TableauDeBord::class)->assertActionHidden('ouvrirLaDemonstration'), 'ouvrirLaDemonstration');
 
                 return fn (): bool => $societe->demonstration()->doesntExist();
+            })(),
+            'transférer la propriété' => (function () use ($magasin, $societe): Closure {
+                $proprietaire = $this->proprietaireDe($magasin);
+                $administrateur = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();
+                $responsable = $this->responsable($magasin);
+                $this->dansLEspaceDeLaSociete($societe, $administrateur);
+                $this->forgerLAction(Livewire::test(FicheDuMembre::class, ['record' => $responsable->getRouteKey()])->assertActionHidden('transmettreLaPropriete'), 'transmettreLaPropriete', ['mot_de_passe' => self::MOT_DE_PASSE_CHOISI]);
+
+                return fn (): bool => $this->proprietaireDe($magasin)->is($proprietaire) && $administrateur->fresh()->estAdministrateur() && $responsable->fresh()->estMembre();
             })(),
             'créer un vendeur' => (function () use ($magasin): Closure {
                 $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes());

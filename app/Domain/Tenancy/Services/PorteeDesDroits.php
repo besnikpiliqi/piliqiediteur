@@ -443,6 +443,64 @@ final class PorteeDesDroits
     }
 
     /**
+     * Peut-il proposer ce rôle et ces affectations dans sa société, par un
+     * rattachement ? Comme une création : comme expert-comptable, le
+     * propriétaire seul, sans affectation ; comme membre, au moins un
+     * magasin, plusieurs par le propriétaire seul, et dans chacun le rôle
+     * qu'il peut donner (vendeur ou observateur par le propriétaire ou un
+     * responsable du magasin, responsable par le propriétaire ou un
+     * administrateur autorisé dans sa portée).
+     *
+     * @param  array<int, RoleMagasin>  $roles  par identifiant de magasin
+     */
+    public function peutProposerUnRattachement(User $auteur, RoleSociete $role, array $roles): bool
+    {
+        if (! $auteur->peutAgir()) {
+            return false;
+        }
+
+        if ($role === RoleSociete::ExpertComptable) {
+            return $auteur->estProprietaire() && $roles === [];
+        }
+
+        if ($role !== RoleSociete::Membre || $roles === [] || (count($roles) > 1 && ! $this->peutAffecterAPlusieursMagasins($auteur))) {
+            return false;
+        }
+
+        $magasins = Magasin::query()->where('societe_id', $auteur->societe_id)->whereKey(array_keys($roles))->get()->keyBy('id');
+
+        foreach ($roles as $magasinId => $roleDeMagasin) {
+            $magasin = $magasins->get($magasinId);
+
+            if ($magasin === null || ! $this->peutDonnerLeRole($auteur, null, $magasin, $roleDeMagasin)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Ce compte peut-il recevoir de l'auteur une proposition de
+     * rattachement à la société de l'auteur ? Seulement un compte retiré,
+     * membre (un administrateur ou un expert-comptable retiré l'est
+     * redevenu) ; retiré par le propriétaire de cette même société, par lui
+     * seul. Un compte encore actif ou suspendu, dans cette société ou une
+     * autre, jamais : il doit d'abord en être retiré.
+     */
+    public function peutRecevoirUnRattachement(User $auteur, User $compte): bool
+    {
+        if (! $compte->estRetire() || ! $compte->estMembre() || $compte->is($auteur)) {
+            return false;
+        }
+
+        return (int) $compte->societe_id !== (int) $auteur->societe_id
+            || (int) $compte->statut_change_par === (int) $compte->getKey()
+            || ! $this->estUneDecisionDuProprietaire($compte)
+            || $auteur->estProprietaire();
+    }
+
+    /**
      * Ce membre de l'équipe du magasin travaille-t-il aussi dans un autre
      * magasin ? Lu seulement pour savoir qui peut gérer son compte et le
      * dire à l'écran, sans jamais dire lequel (une lecture hors du magasin,

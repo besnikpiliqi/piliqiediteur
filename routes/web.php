@@ -2,7 +2,10 @@
 
 use App\Http\Controllers\AccordDirigeantController;
 use App\Http\Controllers\ConfirmerInscriptionController;
+use App\Http\Controllers\ConfirmerNouvelleAdresseController;
+use App\Http\Controllers\CreerSaSocieteController;
 use App\Http\Controllers\RappelsDesPrestatairesController;
+use App\Http\Controllers\RattachementController;
 use App\Http\Controllers\RetourVerificationIdentiteController;
 use Illuminate\Support\Facades\Route;
 
@@ -50,3 +53,38 @@ Route::post('/rappels/identite', [RappelsDesPrestatairesController::class, 'iden
 Route::post('/rappels/recommande', [RappelsDesPrestatairesController::class, 'recommande'])
     ->middleware('throttle:60,1')
     ->name('rappels.recommande');
+
+// La proposition de rattachement reçue par une personne (voir
+// RattachementController) : l'ouverture du lien ne change rien ; accepter
+// redemande l'adresse et le mot de passe du compte.
+Route::get('/rattachement/{jeton}', [RattachementController::class, 'afficher'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->name('rattachement.afficher');
+Route::post('/rattachement/{jeton}', [RattachementController::class, 'accepter'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:10,1')
+    ->name('rattachement.accepter');
+Route::post('/rattachement/{jeton}/refus', [RattachementController::class, 'refuser'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:10,1')
+    ->name('rattachement.refuser');
+
+// La création de sa propre société par un compte retiré (voir
+// CreerSaSocieteController) : l'adresse et le mot de passe du compte sont
+// redemandés dans la requête qui crée.
+Route::get('/societe/creer', [CreerSaSocieteController::class, 'afficher'])
+    ->name('societe.creer');
+Route::post('/societe/creer', [CreerSaSocieteController::class, 'creer'])
+    ->middleware('throttle:10,1')
+    ->name('societe.creer.enregistrer');
+
+// La confirmation d'une nouvelle adresse de connexion demandée dans le
+// profil (voir ConfirmerNouvelleAdresseController) : l'ouverture du lien ne
+// change rien, le bouton confirme.
+Route::get('/profil/adresse/{jeton}', [ConfirmerNouvelleAdresseController::class, 'afficher'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->name('profil.adresse.afficher');
+Route::post('/profil/adresse/{jeton}', [ConfirmerNouvelleAdresseController::class, 'confirmer'])
+    ->where('jeton', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:10,1')
+    ->name('profil.adresse.confirmer');

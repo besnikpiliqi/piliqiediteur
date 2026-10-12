@@ -24,11 +24,17 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Tenancy\Actions\AccepterUnRattachementAction;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Mail\PropositionDeRattachementMail;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\DemandeRattachement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CreationDesComptes;
@@ -36,10 +42,13 @@ use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Closure;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -110,6 +119,51 @@ class DroitsConcurrenceTest extends TestCase
         $resultat = $this->attendreLEchec($concurrente);
         $this->assertStringContainsString(CreationDesComptes::MESSAGE_ADRESSE_INUTILISABLE, $resultat);
         $this->assertSame(['Paul'], User::query()->where('email', 'paul@example.test')->pluck('name')->all());
+    }
+
+    /**
+     * Deux sociétés ont proposé au même compte retiré de les rejoindre, et
+     * la personne accepte les deux au même instant : sous le verrou de la
+     * ligne du compte, la seconde acceptation relit un compte qui n'est
+     * plus libre, ou une proposition annulée, et est refusée. Le compte
+     * n'appartient qu'à une société, et n'est affecté que dans elle.
+     */
+    public function test_deux_rattachements_acceptes_en_meme_temps_n_en_retiennent_qu_un(): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        Mail::fake();
+        $ancien = $this->ouvrirUneSociete(['nom' => 'Ancienne']);
+        $compte = $this->membre($ancien, RoleMagasin::Vendeur, null, ['email' => 'paul@example.test']);
+        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($ancien), $compte);
+        $premiere = $this->ouvrirUneSociete(['nom' => 'Première']);
+        $seconde = $this->ouvrirUneSociete(['nom' => 'Seconde']);
+        $jetons = [];
+        foreach ([$premiere, $seconde] as $magasin) {
+            app(TenantContext::class)->clear();
+            app(ProposerUnRattachementAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, 'paul@example.test', RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
+            $jetons[] = Str::afterLast(Mail::sent(PropositionDeRattachementMail::class)->last()->lien, '/');
+        }
+        app(TenantContext::class)->clear();
+        [$jetonDeLaPremiere, $jetonDeLaSeconde] = $jetons;
+        $concurrente = null;
+        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($jetonDeLaSeconde): void {
+            app(AccepterUnRattachementAction::class)->handle($jetonDeLaSeconde, 'paul@example.test', 'mot-de-passe-sur');
+        }, $concurrente);
+
+        try {
+            app(AccepterUnRattachementAction::class)->handle($jetonDeLaPremiere, 'paul@example.test', self::MOT_DE_PASSE_CHOISI);
+            $principaleRetenue = true;
+        } catch (AuthorizationException) {
+            $principaleRetenue = false;
+        }
+
+        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
+        $concurrenteRetenue = $concurrente->wait()->successful();
+        $this->assertNotSame($principaleRetenue, $concurrenteRetenue, 'Une seule des deux acceptations doit être retenue.');
+        $retenue = $principaleRetenue ? $premiere : $seconde;
+        $this->assertSame((int) $retenue->societe_id, (int) $compte->refresh()->societe_id);
+        $this->assertSame([(int) $retenue->id], Affectation::query()->where('user_id', $compte->id)->pluck('magasin_id')->map(fn ($id): int => (int) $id)->all());
+        $this->assertSame(1, DemandeRattachement::withoutGlobalScopes()->whereNotNull('acceptee_le')->count());
     }
 
     /**

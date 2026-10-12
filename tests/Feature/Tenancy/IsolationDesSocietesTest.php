@@ -18,6 +18,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\DemandeAccordDirigeant;
+use App\Domain\Tenancy\Models\DemandeRattachement;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PieceVerification;
@@ -67,6 +68,7 @@ class IsolationDesSocietesTest extends TestCase
     private const MODELES_DE_SOCIETE = [
         CodeConfirmation::class,
         DemandeAccordDirigeant::class,
+        DemandeRattachement::class,
         EntreeAudit::class,
         PieceVerification::class,
         TraceAudit::class,

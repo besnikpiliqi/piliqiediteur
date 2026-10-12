@@ -11,7 +11,6 @@ use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Filament\App\Pages\Caisse;
@@ -205,9 +204,9 @@ class ClientResourceTest extends TestCase
     public function test_un_observateur_n_archive_pas_de_clients_en_masse(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
-            'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Observateur);
+        $observateur = $this->membre($magasin, RoleMagasin::Observateur, null, [
+            'name' => 'Léa', 'email' => 'lea@example.test',
+        ]);
         $this->actingAs($observateur);
         Filament::setTenant($magasin);
         $clients = Client::factory()->count(2)->create();
@@ -1004,13 +1003,16 @@ class ClientResourceTest extends TestCase
     /**
      * Une vérification VIES est une preuve fiscale : qui voit les clients
      * la consulte sur leur fiche, même sans le droit de les modifier, donc
-     * sans « Modifier » ni « Vérifier sur VIES ».
+     * sans « Modifier » ni « Vérifier sur VIES ». L'expert-comptable, sans
+     * rôle de magasin, la consulte de même.
+     *
+     * @param  list<string>|null  $autorisations
      */
     #[DataProvider('rolesQuiVoientLesClientsSansLesModifier')]
-    public function test_un_membre_qui_voit_les_clients_sans_les_modifier_consulte_leurs_verifications_vies(RoleMagasin $role): void
+    public function test_un_membre_qui_voit_les_clients_sans_les_modifier_consulte_leurs_verifications_vies(?RoleMagasin $role, ?array $autorisations): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = $this->membre($magasin, $role);
+        $membre = $role === null ? $this->expertComptable($magasin) : $this->membre($magasin, $role, $autorisations);
         $allemand = Client::factory()->etranger('DE', 'DE123456789')->create();
         $this->consultationValide($allemand);
 
@@ -1025,13 +1027,14 @@ class ClientResourceTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: RoleMagasin}>
+     * @return array<string, array{0: RoleMagasin|null, 1: list<string>|null}>
      */
     public static function rolesQuiVoientLesClientsSansLesModifier(): array
     {
         return [
-            'comptable' => [RoleMagasin::Comptable],
-            'observateur' => [RoleMagasin::Observateur],
+            'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable()],
+            'observateur' => [RoleMagasin::Observateur, null],
+            'expert-comptable' => [null, null],
         ];
     }
 

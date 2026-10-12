@@ -3,7 +3,6 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Catalogue\Models\Service;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\ServiceResource\Pages\ManageServices;
@@ -131,9 +130,9 @@ class ServiceResourceTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
-            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, [
+            'name' => 'Paul', 'email' => 'paul@example.test',
+        ]);
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         $service = Service::factory()->create();

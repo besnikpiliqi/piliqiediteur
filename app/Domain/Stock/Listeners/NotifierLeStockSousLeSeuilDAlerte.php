@@ -7,18 +7,15 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Stock\Events\StockPasseSousLeSeuilDAlerte;
 use App\Domain\Stock\Notifications\StockSousLeSeuilDAlerte;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\DestinatairesDesAlertes;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Illuminate\Support\Facades\Notification;
 
 /**
- * Prévient le propriétaire de la société et les membres du magasin qui
- * gèrent son stock (voir PermissionRegistry::PRODUIT_AJUSTER_STOCK) --
- * jamais un membre d'un autre magasin, ni un membre suspendu.
- *
- * Les permissions d'un membre dépendent du magasin (voir
- * MagasinTeamResolver) : elles sont lues dans le contexte du magasin du
- * produit, quel que soit le contexte de l'appelant.
+ * Prévient le propriétaire de la société et toute personne qui peut ouvrir
+ * le magasin et y gère le stock (voir PermissionRegistry::PRODUIT_AJUSTER_STOCK
+ * et DestinatairesDesAlertes) -- jamais un compte d'un autre magasin, ni un
+ * compte suspendu.
  *
  * Le produit est relu une fois la transaction validée : la notification
  * donne le stock qui reste vraiment (une facture peut porter plusieurs
@@ -28,6 +25,8 @@ use Illuminate\Support\Facades\Notification;
  */
 class NotifierLeStockSousLeSeuilDAlerte
 {
+    public function __construct(private readonly DestinatairesDesAlertes $destinataires) {}
+
     public function handle(StockPasseSousLeSeuilDAlerte $event): void
     {
         $magasin = Magasin::query()->findOrFail($event->produit->magasin_id);
@@ -39,11 +38,7 @@ class NotifierLeStockSousLeSeuilDAlerte
                 return;
             }
 
-            $destinataires = $magasin->membresActifs()->get()
-                ->prepend($magasin->societe->proprietaire)
-                ->filter(fn (User $destinataire): bool => $destinataire->can(PermissionRegistry::PRODUIT_AJUSTER_STOCK));
-
-            Notification::send($destinataires, new StockSousLeSeuilDAlerte($produit));
+            Notification::send($this->destinataires->autorisesDans($magasin, PermissionRegistry::PRODUIT_AJUSTER_STOCK), new StockSousLeSeuilDAlerte($produit));
         });
     }
 }

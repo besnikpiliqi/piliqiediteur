@@ -43,10 +43,11 @@ use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Stock\Models\MouvementStock;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
+use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -56,10 +57,10 @@ use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\EnregistrementFiscalResource;
+use App\Filament\App\Resources\EquipeDuMagasinResource;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FournisseurResource;
-use App\Filament\App\Resources\MembreEquipeResource;
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\SoumissionEReportingResource;
 use App\Integrations\Pdp\Models\TransmissionPdp;
@@ -445,8 +446,9 @@ class TenantIsolationTest extends TestCase
             'facture, détail' => [FactureResource::class, 'view', static fn (): Model => Facture::factory()->create()],
             'facture, modification' => [FactureResource::class, 'edit', static fn (): Model => Facture::factory()->create()],
             'fournisseur, modification' => [FournisseurResource::class, 'edit', static fn (): Model => Fournisseur::factory()->create()],
-            'membre de l\'équipe, modification' => [MembreEquipeResource::class, 'edit', static fn (Magasin $magasin): Model => $magasin->membres()
-                ->where('user_id', app(CreerMembreMagasinAction::class)->handle($magasin->societe->proprietaire, $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur)->getKey())
+            'membre de l\'équipe, modification' => [EquipeDuMagasinResource::class, 'edit', static fn (Magasin $magasin): Model => Affectation::query()
+                ->where('magasin_id', $magasin->getKey())
+                ->where('user_id', app(CreerMembreAction::class)->handle($magasin->societe->proprietaire, $magasin->societe, ['name' => 'Paul', 'email' => 'paul@example.test'], 'provisoire-des-tests', [$magasin->getKey() => ['role' => RoleMagasin::Vendeur]])->getKey())
                 ->firstOrFail()],
             'produit, modification' => [ProduitResource::class, 'edit', static fn (): Model => Produit::factory()->create()],
             'soumission e-reporting, détail' => [SoumissionEReportingResource::class, 'view', static fn (): Model => self::creerEnregistrement(SoumissionEReporting::class)],

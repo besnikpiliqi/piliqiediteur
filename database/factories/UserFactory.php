@@ -14,10 +14,13 @@ use Illuminate\Support\Str;
  * @extends Factory<User>
  *
  * Le propriétaire d'une société qui vient de s'inscrire, sans magasin
- * encore (voir SocieteFactory::commeApresLInscription()) : un magasin
- * s'ouvre ensuite dans sa société (voir TestCase::ouvrirUneSociete()).
- * Avec ->for($societe), le propriétaire de cette société. Un membre de
- * l'équipe d'un magasin se crée par CreerMembreMagasinAction.
+ * encore (voir SocieteFactory::commeApresLInscription()), son adresse
+ * confirmée par le lien de son inscription (voir CreerSocieteAction) : un
+ * magasin s'ouvre ensuite dans sa société (voir
+ * TestCase::ouvrirUneSociete()). Avec ->for($societe), le propriétaire de
+ * cette société. Les membres, les administrateurs et les experts-comptables
+ * se créent par la société (voir CreerMembreAction,
+ * CreerAdministrateurAction et CreerExpertComptableAction).
  */
 class UserFactory extends Factory
 {

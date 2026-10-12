@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Authorization;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AccepterDevisAction;
@@ -13,7 +14,6 @@ use App\Domain\Facturation\Actions\ModifierDevisAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\DevisResource;
 use App\Models\User;
@@ -32,38 +32,38 @@ class DevisPolicyTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * @return array<string, array{RoleMagasin, bool}>
+     * @return array<string, array{RoleMagasin, list<string>|null, bool}>
      */
     public static function roles(): array
     {
         return [
-            'administrateur' => [RoleMagasin::Administrateur, true],
-            'comptable' => [RoleMagasin::Comptable, false],
-            'vendeur' => [RoleMagasin::Vendeur, true],
-            'observateur' => [RoleMagasin::Observateur, false],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(), true],
+            'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable(), false],
+            'vendeur' => [RoleMagasin::Vendeur, null, true],
+            'observateur' => [RoleMagasin::Observateur, null, false],
         ];
     }
 
     #[DataProvider('roles')]
-    public function test_envoyer_un_devis_selon_le_role(RoleMagasin $role, bool $peutEnvoyer): void
+    public function test_envoyer_un_devis_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutEnvoyer): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = $this->membre($magasin, $role, $autorisations, ['name' => 'Membre', 'email' => 'membre@example.test']);
         $devis = $this->creerUnDevis();
 
         $this->assertSame($peutEnvoyer, $membre->can('envoyer', $devis));
     }
 
     /**
-     * @return array<string, array{RoleMagasin, bool}>
+     * @return array<string, array{RoleMagasin, list<string>|null, bool}>
      */
     public static function rolesQuiModifientLesDevis(): array
     {
         return [
-            'administrateur' => [RoleMagasin::Administrateur, true],
-            'comptable' => [RoleMagasin::Comptable, false],
-            'vendeur' => [RoleMagasin::Vendeur, true],
-            'observateur' => [RoleMagasin::Observateur, false],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(), true],
+            'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable(), false],
+            'vendeur' => [RoleMagasin::Vendeur, null, true],
+            'observateur' => [RoleMagasin::Observateur, null, false],
         ];
     }
 
@@ -72,10 +72,10 @@ class DevisPolicyTest extends TestCase
      * qui modifient les devis, jamais l'observateur en lecture seule.
      */
     #[DataProvider('rolesQuiModifientLesDevis')]
-    public function test_supprimer_un_brouillon_jamais_envoye_selon_le_role(RoleMagasin $role, bool $peutSupprimer): void
+    public function test_supprimer_un_brouillon_jamais_envoye_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutSupprimer): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = $this->membre($magasin, $role, $autorisations, ['name' => 'Membre', 'email' => 'membre@example.test']);
         $devis = $this->creerUnDevis();
 
         $this->assertSame($peutSupprimer, $membre->can('deleteAny', Devis::class));

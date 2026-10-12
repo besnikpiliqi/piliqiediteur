@@ -2,19 +2,29 @@
 
 namespace Tests;
 
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\Tenancy\Actions\ChangerSonMotDePasseProvisoireAction;
+use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
+use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\DemarrerVerificationIdentiteAction;
 use App\Domain\Tenancy\Actions\RecevoirResultatIdentiteAction;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\GardesDesDroits;
 use App\Integrations\Identite\Contracts\VerificationIdentite;
 use App\Integrations\Identite\FausseVerificationIdentite;
 use App\Integrations\Sirene\FauxRepertoireSirene;
@@ -22,6 +32,8 @@ use App\Models\User;
 use Closure;
 use Database\Factories\MagasinFactory;
 use Database\Factories\SocieteFactory;
+use Filament\Facades\Filament;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
@@ -30,8 +42,10 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\SerializableClosure\SerializableClosure;
+use Livewire\Features\SupportTesting\Testable;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -217,20 +231,322 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
-     * Un nouveau membre de l'équipe du magasin, créé par son propriétaire
-     * (voir CreerMembreMagasinAction) : avec les autorisations données,
-     * ou, sans liste, celles du modèle de son rôle. Le magasin reste
-     * ensuite le magasin actif.
-     *
-     * @param  list<string>|null  $permissions
+     * Le mot de passe provisoire que les aides donnent aux comptes qu'elles
+     * créent, et celui que la personne choisit ensuite.
      */
-    protected function membre(Magasin $magasin, RoleMagasin $role, ?array $permissions = null): User
+    protected const MOT_DE_PASSE_PROVISOIRE = 'provisoire-des-tests';
+
+    protected const MOT_DE_PASSE_CHOISI = 'mot-de-passe-sur';
+
+    /**
+     * Un nouveau membre du magasin, comme dans le vrai parcours : créé par
+     * le propriétaire (voir CreerMembreAction), avec les autorisations
+     * données ou, sans liste, celles du modèle de son rôle (aucune pour un
+     * responsable, qui n'a pas de case), puis la personne choisit son mot
+     * de passe (voir ChangerSonMotDePasseProvisoireAction) ; son adresse
+     * n'est pas confirmée. Le magasin reste ensuite le magasin actif.
+     *
+     * @param  list<string>|null  $autorisations
+     * @param  array{name?: string, email?: string}  $identite
+     */
+    protected function membre(Magasin $magasin, RoleMagasin $role, ?array $autorisations = null, array $identite = []): User
     {
-        return app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
+        return $this->membreDeCesMagasins([$magasin->getKey() => ['role' => $role, 'autorisations' => $autorisations]], $magasin, $identite);
+    }
+
+    /**
+     * Les cases que précochait le modèle « comptable » de magasin, que
+     * l'éditeur a supprimé (un expert-comptable de la société, en lecture
+     * seule, le remplace) : un vendeur à qui on les coche garde, dans les
+     * tests des policies, les mêmes droits que l'ancien comptable.
+     *
+     * @return list<string>
+     */
+    protected static function casesDeLAncienComptable(): array
+    {
+        return [
+            PermissionRegistry::CLIENT_VIEW,
+            PermissionRegistry::FOURNISSEUR_VIEW,
+            PermissionRegistry::PRODUIT_VIEW,
+            PermissionRegistry::DEVIS_VIEW,
+            PermissionRegistry::FACTURE_VIEW,
+            PermissionRegistry::FACTURE_ACHAT_VIEW,
+            PermissionRegistry::AVOIR_FOURNISSEUR_VIEW,
+            PermissionRegistry::FACTURE_VIEW_TOUTES,
+            PermissionRegistry::FACTURE_ENVOYER,
+            PermissionRegistry::PAIEMENT_VIEW,
+            PermissionRegistry::PAIEMENT_CREER,
+            PermissionRegistry::PAIEMENT_CONTRE_PASSER,
+            PermissionRegistry::AVOIR_VIEW,
+            PermissionRegistry::AVOIR_ENVOYER,
+            PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK,
+            PermissionRegistry::CLOTURE_CAISSE_VIEW,
+            PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES,
+            PermissionRegistry::CAISSE_SECURISEE_CONSULTER,
+        ];
+    }
+
+    /**
+     * Un responsable de ces magasins de la société, créé par le
+     * propriétaire, son mot de passe choisi.
+     */
+    protected function responsable(Magasin ...$magasins): User
+    {
+        return $this->membreDeCesMagasins(
+            collect($magasins)->mapWithKeys(fn (Magasin $magasin): array => [$magasin->getKey() => ['role' => RoleMagasin::Responsable]])->all(),
+            $magasins[0],
+        );
+    }
+
+    /**
+     * Un membre affecté par le propriétaire à ces magasins, son mot de
+     * passe choisi.
+     *
+     * @param  array<int, array{role: RoleMagasin, autorisations?: list<string>|null}>  $affectations  par identifiant de magasin
+     * @param  array{name?: string, email?: string}  $identite
+     */
+    protected function membreDeCesMagasins(array $affectations, Magasin $magasin, array $identite = []): User
+    {
+        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe()->firstOrFail(), [
+            'name' => $identite['name'] ?? fake()->name(),
+            'email' => $identite['email'] ?? fake()->unique()->safeEmail(),
+        ], self::MOT_DE_PASSE_PROVISOIRE, $affectations));
+
+        return $this->choisirSonMotDePasse($compte);
+    }
+
+    /**
+     * Un administrateur de la société du magasin, créé par le propriétaire
+     * (voir CreerAdministrateurAction), son mot de passe choisi : de tous
+     * les magasins, ou de la sélection donnée, avec ces autorisations de
+     * société et ces cases de magasin (le modèle de l'administrateur à
+     * défaut).
+     *
+     * @param  list<int>|null  $selection
+     * @param  list<string>  $autorisationsSociete
+     * @param  array<int|string, mixed>|null  $autorisationsMagasin
+     */
+    protected function administrateur(Magasin $magasin, ?array $selection = null, array $autorisationsSociete = [], ?array $autorisationsMagasin = null): User
+    {
+        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerAdministrateurAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe()->firstOrFail(), [
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),
-            'password' => 'mot-de-passe-sur',
-        ], $role, $permissions);
+        ], self::MOT_DE_PASSE_PROVISOIRE, $selection, $autorisationsMagasin ?? PermissionRegistry::modeleDeLAdministrateur(), $autorisationsSociete));
+
+        return $this->choisirSonMotDePasse($compte);
+    }
+
+    /**
+     * Un expert-comptable de la société du magasin, créé par le
+     * propriétaire (voir CreerExpertComptableAction), son mot de passe
+     * choisi.
+     */
+    protected function expertComptable(Magasin $magasin): User
+    {
+        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerExpertComptableAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe()->firstOrFail(), [
+            'name' => fake()->name(),
+            'email' => fake()->unique()->safeEmail(),
+        ], self::MOT_DE_PASSE_PROVISOIRE));
+
+        return $this->choisirSonMotDePasse($compte);
+    }
+
+    /**
+     * Un membre du magasin créé par le propriétaire, qui n'a pas encore
+     * choisi son mot de passe : le compte et son mot de passe provisoire.
+     *
+     * @return array{0: User, 1: string}
+     */
+    protected function compteAuMotDePasseProvisoire(Magasin $magasin, RoleMagasin $role): array
+    {
+        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe()->firstOrFail(), [
+            'name' => fake()->name(),
+            'email' => fake()->unique()->safeEmail(),
+        ], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->getKey() => ['role' => $role]]));
+
+        return [$compte, self::MOT_DE_PASSE_PROVISOIRE];
+    }
+
+    /**
+     * La personne remplace son mot de passe provisoire par le sien, comme à
+     * sa première connexion ; le magasin actif reste le même.
+     */
+    protected function choisirSonMotDePasse(User $compte): User
+    {
+        app(ChangerSonMotDePasseProvisoireAction::class)->handle($compte, self::MOT_DE_PASSE_CHOISI);
+
+        return $compte->refresh();
+    }
+
+    /**
+     * Retire une garde des droits de la base (voir GardesDesDroits), comme
+     * le ferait un administrateur de la base, pour y glisser le temps d'un
+     * test une ligne qu'elle refuse : la transaction du test la rétablit.
+     */
+    protected function retirerLaGardeDesDroits(string $garde): void
+    {
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            DB::unprepared("DROP TRIGGER {$garde} ON ".match ($garde) {
+                GardesDesDroits::AFFECTATIONS => 'affectations',
+                GardesDesDroits::CASES => 'autorisations_affectations',
+                GardesDesDroits::AUTORISATIONS_SOCIETE => 'autorisations_societe',
+                GardesDesDroits::ROLES => 'users',
+            });
+
+            return;
+        }
+
+        foreach (GardesDesDroits::declencheursSqlite($garde) as $declencheur) {
+            DB::unprepared("DROP TRIGGER {$declencheur}");
+        }
+    }
+
+    /**
+     * Ce compte, connecté, dans l'espace d'administration de la société,
+     * comme pour un écran de ce panneau testé par Livewire. La session est
+     * repartie de zéro : celle d'un compte connecté avant n'y reste pas.
+     */
+    protected function dansLEspaceDeLaSociete(Societe $societe, User $compte): void
+    {
+        $this->flushSession();
+        app(TenantContext::class)->clear();
+        $this->actingAs($compte);
+        Filament::setCurrentPanel(Filament::getPanel('societe'));
+        Filament::setTenant($societe, isQuiet: true);
+        app(TenantContext::class)->poserSociete($societe);
+    }
+
+    /**
+     * Ce compte, connecté, dans le panneau de ce magasin, comme pour un
+     * écran de ce panneau testé par Livewire. La session est repartie de
+     * zéro.
+     */
+    protected function dansLeMagasin(Magasin $magasin, User $compte): void
+    {
+        $this->flushSession();
+        $this->actingAs($compte);
+        Filament::setCurrentPanel(Filament::getPanel('app'));
+        Filament::setTenant($magasin, isQuiet: true);
+        app(TenantContext::class)->set($magasin);
+    }
+
+    /**
+     * Une requête forgée : l'action d'en-tête de la page, appelée par
+     * Livewire comme si son bouton était là, avec ces données. Une action
+     * masquée ou non autorisée ne se monte pas, et rien ne s'exécute.
+     *
+     * @param  array<string, mixed>  $donnees
+     */
+    protected function forgerLAction(Testable $page, string $action, array $donnees = []): Testable
+    {
+        return $page->call('mountAction', $action)->set('mountedActionsData.0', $donnees)->call('callMountedAction');
+    }
+
+    /**
+     * Une requête forgée sur l'action d'une ligne d'un tableau, pour cet
+     * enregistrement, avec ces données.
+     *
+     * @param  array<string, mixed>  $donnees
+     */
+    protected function forgerLActionDeLigne(Testable $page, string $action, Model $enregistrement, array $donnees = []): Testable
+    {
+        return $page->call('mountTableAction', $action, (string) $enregistrement->getKey())->set('mountedTableActionsData.0', $donnees)->call('callMountedTableAction');
+    }
+
+    /**
+     * L'instantané Livewire du composant de cette page HTML, tel que le
+     * navigateur le renverrait : la page reste ouverte, et la requête
+     * suivante le rejoue (voir requeteLivewire()).
+     */
+    protected function instantaneLivewire(string $html, string $nomDuComposant): string
+    {
+        preg_match_all('/wire:snapshot="([^"]+)"/', $html, $trouves);
+
+        foreach ($trouves[1] as $brut) {
+            $instantane = html_entity_decode($brut, ENT_QUOTES);
+
+            if (str_contains(json_decode($instantane, true)['memo']['name'] ?? '', $nomDuComposant)) {
+                return $instantane;
+            }
+        }
+
+        $this->fail("Aucun composant {$nomDuComposant} dans la page.");
+    }
+
+    /**
+     * Une vraie requête Livewire (POST /livewire/update), comme celle d'un
+     * navigateur dont la page est restée ouverte : elle repasse par les
+     * intergiciels persistants du panneau, que Livewire::test ne rejoue
+     * pas.
+     *
+     * @param  array<string, mixed>  $modifications
+     * @param  list<mixed>  $parametres
+     */
+    protected function requeteLivewire(string $instantane, array $modifications, string $methode, array $parametres = []): TestResponse
+    {
+        return $this->withHeaders(['X-Livewire' => 'true'])->postJson('/livewire/update', [
+            'components' => [[
+                'snapshot' => $instantane,
+                'updates' => $modifications,
+                'calls' => [['path' => '', 'method' => $methode, 'params' => $parametres]],
+            ]],
+        ]);
+    }
+
+    /**
+     * Une session ouverte de ce compte dans la table des sessions, et son
+     * « se souvenir de moi », comme sur un autre appareil ; l'identifiant
+     * de la session.
+     */
+    protected function ouvrirUneSessionAilleurs(User $compte): string
+    {
+        $session = Str::random(40);
+        DB::table('sessions')->insert(['id' => $session, 'user_id' => $compte->getKey(), 'ip_address' => '192.0.2.1', 'user_agent' => 'Autre appareil', 'payload' => base64_encode(serialize([])), 'last_activity' => now()->getTimestamp()]);
+        $compte->forceFill(['remember_token' => 'jeton-de-l-autre-appareil'])->save();
+
+        return $session;
+    }
+
+    /**
+     * Les sessions ouvertes et le « se souvenir de moi » de ce compte
+     * sont-ils tous coupés ?
+     */
+    protected function assertSessionsFermees(User $compte): void
+    {
+        $this->assertSame(0, DB::table('sessions')->where('user_id', $compte->getKey())->count(), 'Une session de ce compte reste ouverte.');
+        $this->assertNotSame('jeton-de-l-autre-appareil', $compte->refresh()->getRememberToken(), 'Le « se souvenir de moi » de ce compte vaut toujours.');
+    }
+
+    /**
+     * Les droits avant et après de chaque modification des droits (JET 130)
+     * du journal des événements du magasin, dans l'ordre de sa chaîne.
+     *
+     * @return list<array{membre: array{id: int, nom: string}, avant: array<string, mixed>|null, apres: array<string, mixed>|null}>
+     */
+    protected function modificationsDesDroits(Magasin $magasin): array
+    {
+        return app(TenantContext::class)->runAs($magasin, fn (): array => EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', (string) CodeEvenement::ModificationDesDroits->value)
+            ->orderBy('sequence')
+            ->get()
+            ->map(fn (EnregistrementFiscal $evenement): array => $evenement->contenuSigne()['donnees']['details'])
+            ->all());
+    }
+
+    /**
+     * Les entrées du journal d'audit de la société, dans l'ordre de leur
+     * inscription, pour cette action.
+     *
+     * @return list<EntreeAudit>
+     */
+    protected function entreesDAudit(Societe $societe, ActionAuditee $action): array
+    {
+        return app(TenantContext::class)->runAsSociete($societe, fn (): array => EntreeAudit::query()
+            ->where('action', $action->value)
+            ->orderBy('id')
+            ->get()
+            ->all());
     }
 
     /**
@@ -331,12 +647,30 @@ abstract class TestCase extends BaseTestCase
      * caisses qui agissent au même instant, la seconde passant après la
      * première. $concurrente reçoit le processus démarré.
      *
+     * Le verrou est tenu à la première requête qui suit sa demande sans
+     * plus porter sur la tête du registre : quand le registre n'a pas
+     * encore de tête, la première demande ne trouve aucune ligne à
+     * verrouiller, et la tête s'insère puis se verrouille ensuite.
+     *
      * @param  Closure(): void  $operationConcurrente
      */
     protected function concurrencerDesQueLeRegistreEstVerrouille(Closure $operationConcurrente, ?InvokedProcess &$concurrente): void
     {
-        DB::listen(function (QueryExecuted $requete) use (&$concurrente, $operationConcurrente): void {
-            if ($concurrente === null && str_contains($requete->sql, 'from "tetes_registre_fiscal"') && str_contains($requete->sql, 'for update')) {
+        $connexionDuTest = DB::getDefaultConnection();
+        $verrouDemande = false;
+
+        DB::listen(function (QueryExecuted $requete) use (&$concurrente, &$verrouDemande, $operationConcurrente, $connexionDuTest): void {
+            if ($concurrente !== null || $requete->connectionName !== $connexionDuTest) {
+                return;
+            }
+
+            if (str_contains($requete->sql, '"tetes_registre_fiscal"')) {
+                $verrouDemande = $verrouDemande || str_contains($requete->sql, 'for update');
+
+                return;
+            }
+
+            if ($verrouDemande) {
                 $concurrente = $this->demarrerUnProcessusConcurrent($operationConcurrente);
                 $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
             }

@@ -3,7 +3,6 @@
 namespace Tests\Feature\Filament;
 
 use App\Domain\Contacts\Models\Fournisseur;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\FournisseurResource;
 use App\Filament\App\Resources\FournisseurResource\Pages\CreateFournisseur;
@@ -254,9 +253,9 @@ class FournisseurResourceTest extends TestCase
     public function test_un_observateur_ne_restaure_pas_un_fournisseur_archive(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
-            'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Observateur);
+        $observateur = $this->membre($magasin, RoleMagasin::Observateur, null, [
+            'name' => 'Léa', 'email' => 'lea@example.test',
+        ]);
         $this->actingAs($observateur);
         Filament::setTenant($magasin);
         $fournisseur = Fournisseur::factory()->trashed()->create();

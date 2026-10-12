@@ -6,10 +6,8 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
-use App\Domain\Tenancy\Actions\MettreAJourMembreMagasinAction;
+use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -34,7 +32,7 @@ class EnregistrementFiscalPolicyTest extends TestCase
 
     private function vendeur(Magasin $magasin): User
     {
-        return app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        return $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul', 'email' => 'paul@example.test']);
     }
 
     public function test_la_permission_ouvre_la_consultation_quel_que_soit_le_role(): void
@@ -45,13 +43,9 @@ class EnregistrementFiscalPolicyTest extends TestCase
         $this->assertFalse($vendeur->can('viewAny', EnregistrementFiscal::class));
         $this->assertFalse($vendeur->can('view', $evenement));
 
-        app(MettreAJourMembreMagasinAction::class)->handle(
-            $this->proprietaireDe($magasin),
-            $magasin->membres()->where('user_id', $vendeur->getKey())->firstOrFail(),
-            RoleMagasin::Vendeur,
-            StatutMembreMagasin::Actif,
-            [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CAISSE_SECURISEE_CONSULTER],
-        );
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [
+            $magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CAISSE_SECURISEE_CONSULTER]],
+        ]);
 
         $this->assertTrue($vendeur->fresh()->can('viewAny', EnregistrementFiscal::class));
         $this->assertTrue($vendeur->fresh()->can('view', $evenement));

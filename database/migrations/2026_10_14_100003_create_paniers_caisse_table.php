@@ -18,9 +18,10 @@ return new class extends Migration
         Schema::create('paniers_caisse', function (Blueprint $table) {
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
-            // Le vendeur, qui n'a qu'un panier en cours : un compte n'est
-            // jamais supprimé (voir RetirerMembreMagasinAction), et le panier
-            // d'un membre retiré s'abandonne à la clôture de sa journée.
+            // Le vendeur, qui n'a qu'un panier en cours par magasin : un
+            // compte n'est jamais supprimé (voir ChangerStatutCompteAction),
+            // et le panier d'un membre retiré du magasin s'abandonne à la
+            // clôture de sa journée.
             $table->foreignId('user_id')->constrained('users')->restrictOnDelete();
             $table->foreignId('client_id')->nullable()->constrained('clients')->nullOnDelete();
             // Les lignes où un produit ou un service est choisi, par clé du

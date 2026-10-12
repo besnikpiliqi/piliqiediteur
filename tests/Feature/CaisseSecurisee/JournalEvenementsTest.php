@@ -14,14 +14,11 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
-use App\Domain\Tenancy\Actions\MettreAJourMembreMagasinAction;
-use App\Domain\Tenancy\Actions\RetirerMembreMagasinAction;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
+use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Models\MagasinUser;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -98,11 +95,6 @@ class JournalEvenementsTest extends TestCase
                 $evenement->contenuSigne()['donnees']['details']['nouvelle_valeur'],
             ])
             ->all());
-    }
-
-    private function rattachement(Magasin $magasin, User $utilisateur): MagasinUser
-    {
-        return $magasin->membres()->where('user_id', $utilisateur->getKey())->firstOrFail();
     }
 
     /**
@@ -194,15 +186,15 @@ class JournalEvenementsTest extends TestCase
             return 'fermée';
         });
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul', 'email' => 'paul@example.test']);
         $this->actingAs($vendeur);
         $this->get("/app/{$magasin->uuid}")->assertSuccessful();
-        $magasin->utilisateurs()->detach($vendeur->getKey());
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => null]);
 
         $this->post('/test/fermer-la-session');
 
         $this->assertGuest();
-        $this->assertSame(['260', '130', '80'], $this->codes($magasin));
+        $this->assertSame(['260', '130', '80', '130'], $this->codes($magasin));
     }
 
     public function test_la_fermeture_de_la_session_de_cet_appareil_inscrit_aussi_la_fin_de_session(): void
@@ -261,46 +253,54 @@ class JournalEvenementsTest extends TestCase
         $autreMagasin = $this->magasinDe(User::factory()->create(), 'Autre boutique');
         $this->actingAs($proprietaire);
 
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Paul Vendeur', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE], ['name' => 'Paul Vendeur', 'email' => 'paul@example.test']);
 
         $this->assertSame(['260', '130'], $this->codes($magasin));
         $this->assertSame([], $this->codes($autreMagasin));
         $this->assertSame([
             'membre' => ['id' => $vendeur->id, 'nom' => 'Paul Vendeur'],
             'avant' => null,
-            'apres' => ['role' => 'employee', 'statut' => 'active', 'permissions' => ['facture.create', 'facture.view']],
+            'apres' => ['role_societe' => 'membre', 'role_magasin' => 'vendeur', 'statut' => 'actif', 'permissions' => ['facture.create', 'facture.view']],
         ], $this->details($magasin, CodeEvenement::ModificationDesDroits));
         $this->assertSame(['id' => $proprietaire->id, 'nom' => 'Alice Martin'], $this->dernier($magasin, CodeEvenement::ModificationDesDroits)->contenuSigne()['operateur']);
     }
 
     /**
      * Sans liste, un changement de rôle donne le modèle du nouveau rôle :
-     * les droits d'avant et d'après s'inscrivent ensemble.
+     * les droits d'avant et d'après s'inscrivent ensemble ; une suspension,
+     * geste sur tout le compte, s'inscrit à son tour avec le statut.
      */
     public function test_un_changement_de_role_ou_de_statut_inscrit_les_droits_avant_et_apres(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW], ['name' => 'Paul', 'email' => 'paul@example.test']);
+        $observateur = ['avoir_fournisseur.view', 'client.view', 'devis.view', 'facture.view', 'facture_achat.view', 'fournisseur.view', 'produit.view'];
 
-        app(MettreAJourMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $this->rattachement($magasin, $vendeur), RoleMagasin::Observateur, StatutMembreMagasin::Suspendu);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => ['role' => RoleMagasin::Observateur]]);
 
         $this->assertSame(['260', '130', '130'], $this->codes($magasin));
         $this->assertSame([
             'membre' => ['id' => $vendeur->id, 'nom' => 'Paul'],
-            'avant' => ['role' => 'employee', 'statut' => 'active', 'permissions' => ['facture.view']],
-            'apres' => ['role' => 'viewer', 'statut' => 'suspended', 'permissions' => [
-                'avoir_fournisseur.view', 'client.view', 'devis.view', 'facture.view', 'facture_achat.view', 'fournisseur.view', 'produit.view',
-            ]],
+            'avant' => ['role_societe' => 'membre', 'role_magasin' => 'vendeur', 'statut' => 'actif', 'permissions' => ['facture.view']],
+            'apres' => ['role_societe' => 'membre', 'role_magasin' => 'observateur', 'statut' => 'actif', 'permissions' => $observateur],
+        ], $this->details($magasin, CodeEvenement::ModificationDesDroits));
+
+        app(ChangerStatutCompteAction::class)->suspendre($this->proprietaireDe($magasin), $vendeur);
+
+        $this->assertSame(['260', '130', '130', '130'], $this->codes($magasin));
+        $this->assertSame([
+            'membre' => ['id' => $vendeur->id, 'nom' => 'Paul'],
+            'avant' => ['role_societe' => 'membre', 'role_magasin' => 'observateur', 'statut' => 'actif', 'permissions' => $observateur],
+            'apres' => ['role_societe' => 'membre', 'role_magasin' => 'observateur', 'statut' => 'suspendu', 'permissions' => $observateur],
         ], $this->details($magasin, CodeEvenement::ModificationDesDroits));
     }
 
     public function test_une_mise_a_jour_qui_ne_change_rien_n_inscrit_rien(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW], ['name' => 'Paul', 'email' => 'paul@example.test']);
 
-        app(MettreAJourMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $this->rattachement($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif);
-        app(MettreAJourMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $this->rattachement($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif, [PermissionRegistry::FACTURE_VIEW]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [PermissionRegistry::FACTURE_VIEW]]]);
 
         $this->assertSame(['260', '130'], $this->codes($magasin));
     }
@@ -308,28 +308,28 @@ class JournalEvenementsTest extends TestCase
     public function test_les_autorisations_cochees_s_inscrivent_avant_et_apres(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK], ['name' => 'Paul', 'email' => 'paul@example.test']);
 
-        app(MettreAJourMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $this->rattachement($magasin, $vendeur), RoleMagasin::Vendeur, StatutMembreMagasin::Actif, [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK, PermissionRegistry::AVOIR_VIEW]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK, PermissionRegistry::AVOIR_VIEW]]]);
 
         $this->assertSame(['260', '130', '130'], $this->codes($magasin));
         $this->assertSame([
             'membre' => ['id' => $vendeur->id, 'nom' => 'Paul'],
-            'avant' => ['role' => 'employee', 'statut' => 'active', 'permissions' => ['produit.voir_valeur_stock']],
-            'apres' => ['role' => 'employee', 'statut' => 'active', 'permissions' => ['avoir.view', 'produit.voir_valeur_stock']],
+            'avant' => ['role_societe' => 'membre', 'role_magasin' => 'vendeur', 'statut' => 'actif', 'permissions' => ['produit.voir_valeur_stock']],
+            'apres' => ['role_societe' => 'membre', 'role_magasin' => 'vendeur', 'statut' => 'actif', 'permissions' => ['avoir.view', 'produit.voir_valeur_stock']],
         ], $this->details($magasin, CodeEvenement::ModificationDesDroits));
     }
 
     public function test_le_retrait_d_un_membre_inscrit_les_droits_qu_il_perd(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_VIEW]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_VIEW], ['name' => 'Paul', 'email' => 'paul@example.test']);
 
-        app(RetirerMembreMagasinAction::class)->handle($this->rattachement($magasin, $vendeur));
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => null]);
 
         $this->assertSame([
             'membre' => ['id' => $vendeur->id, 'nom' => 'Paul'],
-            'avant' => ['role' => 'employee', 'statut' => 'active', 'permissions' => ['avoir.view']],
+            'avant' => ['role_societe' => 'membre', 'role_magasin' => 'vendeur', 'statut' => 'actif', 'permissions' => ['avoir.view']],
             'apres' => null,
         ], $this->details($magasin, CodeEvenement::ModificationDesDroits));
     }
@@ -337,15 +337,15 @@ class JournalEvenementsTest extends TestCase
     public function test_sans_cle_de_signature_aucun_droit_n_est_modifie(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul', 'email' => 'paul@example.test']);
         $this->retirerLaCleDeSignature();
 
         $this->assertThrows(
-            fn () => app(MettreAJourMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $this->rattachement($magasin, $vendeur), RoleMagasin::Comptable, StatutMembreMagasin::Actif),
+            fn () => app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => ['role' => RoleMagasin::Observateur]]),
             ModuleFiscalNonConfigureException::class,
         );
 
-        $this->assertSame(RoleMagasin::Vendeur, $this->rattachement($magasin, $vendeur)->role);
+        $this->assertSame(RoleMagasin::Vendeur, $vendeur->affectationQuiVautDans($magasin)->role);
         $this->assertSame(['260', '130'], $this->codes($magasin));
     }
 
@@ -579,7 +579,7 @@ class JournalEvenementsTest extends TestCase
         $proprietaire = User::factory()->create();
         $magasin = $this->magasinDe($proprietaire);
         $this->actingAs($proprietaire)->get("/app/{$magasin->uuid}")->assertSuccessful();
-        app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul', 'email' => 'paul@example.test']);
         Produit::factory()->create(['taux_tva' => 5.5])->update(['taux_tva' => 20]);
 
         $evenements = app(TenantContext::class)->runAs($magasin, fn () => EnregistrementFiscal::query()

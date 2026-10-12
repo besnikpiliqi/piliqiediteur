@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Authorization;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,23 +19,23 @@ class ProduitPolicyTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * @return array<string, array{RoleMagasin, bool}>
+     * @return array<string, array{RoleMagasin, list<string>|null, bool}>
      */
     public static function roles(): array
     {
         return [
-            'administrateur' => [RoleMagasin::Administrateur, true],
-            'comptable' => [RoleMagasin::Comptable, false],
-            'vendeur' => [RoleMagasin::Vendeur, false],
-            'observateur' => [RoleMagasin::Observateur, false],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(), true],
+            'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable(), false],
+            'vendeur' => [RoleMagasin::Vendeur, null, false],
+            'observateur' => [RoleMagasin::Observateur, null, false],
         ];
     }
 
     #[DataProvider('roles')]
-    public function test_archiver_des_produits_selon_le_role(RoleMagasin $role, bool $peutArchiver): void
+    public function test_archiver_des_produits_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutArchiver): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = $this->membre($magasin, $role, $autorisations, ['name' => 'Membre', 'email' => 'membre@example.test']);
         $produit = Produit::factory()->create();
 
         $this->assertSame($peutArchiver, $membre->can('deleteAny', Produit::class));
@@ -46,10 +46,10 @@ class ProduitPolicyTest extends TestCase
      * Restaurer défait l'archivage : les mêmes rôles que pour archiver.
      */
     #[DataProvider('roles')]
-    public function test_restaurer_des_produits_selon_le_role(RoleMagasin $role, bool $peutRestaurer): void
+    public function test_restaurer_des_produits_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutRestaurer): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = $this->membre($magasin, $role, $autorisations, ['name' => 'Membre', 'email' => 'membre@example.test']);
         $produit = Produit::factory()->trashed()->create();
 
         $this->assertSame($peutRestaurer, $membre->can('restore', $produit));

@@ -4,7 +4,6 @@ namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -14,10 +13,10 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Vérifie que la policy ne se fie jamais à la seule permission Spatie :
- * même avec la permission accordée, un enregistrement d'un autre magasin
- * (ou consulté hors du contexte où la permission a été accordée) doit
- * rester refusé. C'est la défense en profondeur décrite dans
+ * Vérifie que la policy ne se fie jamais à la seule autorisation du
+ * compte : même avec l'autorisation cochée, un enregistrement d'un autre
+ * magasin (ou consulté hors du contexte où l'autorisation a été cochée)
+ * doit rester refusé. C'est la défense en profondeur décrite dans
  * app/Policies/MagasinPolicy.php.
  */
 class ClientPolicyTest extends TestCase
@@ -25,15 +24,15 @@ class ClientPolicyTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * @return array<string, array{RoleMagasin, bool}>
+     * @return array<string, array{RoleMagasin, list<string>|null, bool}>
      */
     public static function roles(): array
     {
         return [
-            'administrateur' => [RoleMagasin::Administrateur, true],
-            'comptable' => [RoleMagasin::Comptable, false],
-            'vendeur' => [RoleMagasin::Vendeur, false],
-            'observateur' => [RoleMagasin::Observateur, false],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(), true],
+            'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable(), false],
+            'vendeur' => [RoleMagasin::Vendeur, null, false],
+            'observateur' => [RoleMagasin::Observateur, null, false],
         ];
     }
 
@@ -42,10 +41,10 @@ class ClientPolicyTest extends TestCase
      * d'archiver les clients -- pas le vendeur, qui en crée et en modifie.
      */
     #[DataProvider('roles')]
-    public function test_archiver_des_clients_selon_le_role(RoleMagasin $role, bool $peutArchiver): void
+    public function test_archiver_des_clients_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutArchiver): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = $this->membre($magasin, $role, $autorisations, ['name' => 'Membre', 'email' => 'membre@example.test']);
         $client = Client::factory()->create();
 
         $this->assertSame($peutArchiver, $membre->can('deleteAny', Client::class));
@@ -56,10 +55,10 @@ class ClientPolicyTest extends TestCase
      * Restaurer défait l'archivage : les mêmes rôles que pour archiver.
      */
     #[DataProvider('roles')]
-    public function test_restaurer_des_clients_selon_le_role(RoleMagasin $role, bool $peutRestaurer): void
+    public function test_restaurer_des_clients_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutRestaurer): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = $this->membre($magasin, $role, $autorisations, ['name' => 'Membre', 'email' => 'membre@example.test']);
         $client = Client::factory()->trashed()->create();
 
         $this->assertSame($peutRestaurer, $membre->can('restore', $client));
@@ -119,8 +118,8 @@ class ClientPolicyTest extends TestCase
 
         // Toujours dans le contexte B : même si on regarde clientA (du
         // magasin A), la policy doit refuser car le modèle n'appartient pas
-        // au magasin ACTIF -- défense en profondeur indépendante de la
-        // permission Spatie.
+        // au magasin ACTIF -- défense en profondeur indépendante de
+        // l'autorisation cochée.
         $this->assertFalse($user->can('view', $clientA), "Le modèle n'appartient pas au magasin actif.");
 
         // Retour dans le contexte où la permission a été accordée ET où le

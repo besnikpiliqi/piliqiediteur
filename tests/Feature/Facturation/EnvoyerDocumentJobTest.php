@@ -24,7 +24,6 @@ use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
 use App\Domain\Facturation\Services\ReglementComptant;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -358,7 +357,7 @@ class EnvoyerDocumentJobTest extends TestCase
     public function test_un_echec_passe_l_envoi_en_echec_et_previent_l_expediteur(): void
     {
         $magasin = $this->completerIdentiteLegale($this->magasinAvecProprietaire('Ma Boutique'));
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'secret123'], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr']);
         $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
         $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['destinataire' => 'compta@client.fr', 'envoye_par' => $vendeur->id]);
         Mail::shouldReceive('to')->andThrow(new TransportException('535 Authentication failed for smtp-user@editeur.example'));

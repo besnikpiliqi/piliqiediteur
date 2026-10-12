@@ -21,11 +21,12 @@ use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Recherche\ConnecteurSqlite;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Models\MagasinUser;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Models\User;
+use App\Policies\AffectationPolicy;
 use App\Policies\AvoirFournisseurPolicy;
 use App\Policies\AvoirPolicy;
 use App\Policies\ClientPolicy;
@@ -36,7 +37,8 @@ use App\Policies\EnregistrementFiscalPolicy;
 use App\Policies\FactureAchatPolicy;
 use App\Policies\FacturePolicy;
 use App\Policies\FournisseurPolicy;
-use App\Policies\MembreEquipePolicy;
+use App\Policies\MagasinDeLaSocietePolicy;
+use App\Policies\MembrePolicy;
 use App\Policies\PaiementPolicy;
 use App\Policies\ProduitPolicy;
 use App\Policies\ServicePolicy;
@@ -106,7 +108,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Service::class, ServicePolicy::class);
         Gate::policy(Devis::class, DevisPolicy::class);
         Gate::policy(Facture::class, FacturePolicy::class);
-        Gate::policy(MagasinUser::class, MembreEquipePolicy::class);
         Gate::policy(Paiement::class, PaiementPolicy::class);
         Gate::policy(Avoir::class, AvoirPolicy::class);
         Gate::policy(ClotureCaisse::class, ClotureCaissePolicy::class);
@@ -116,6 +117,9 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(SoumissionEReporting::class, SoumissionEReportingPolicy::class);
         Gate::policy(EnregistrementFiscal::class, EnregistrementFiscalPolicy::class);
         Gate::policy(Societe::class, SocietePolicy::class);
+        Gate::policy(Magasin::class, MagasinDeLaSocietePolicy::class);
+        Gate::policy(User::class, MembrePolicy::class);
+        Gate::policy(Affectation::class, AffectationPolicy::class);
 
         Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app['hash'], $config['model']));
 

@@ -26,7 +26,6 @@ use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
@@ -100,7 +99,7 @@ class PorteDeValidationTest extends TestCase
 
         $client = Client::factory()->create();
         $service = Service::factory()->create();
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul', 'email' => 'paul@example.test']);
         $magasin->update(['delai_paiement_jours' => 45]);
         $achat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [[
             'produit' => ['nom' => 'Câble USB-C', 'reference' => 'CBL-USBC', 'prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => true, 'seuil_alerte' => 2],

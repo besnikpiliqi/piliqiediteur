@@ -2,10 +2,9 @@
 
 namespace Tests\Feature\Tenancy;
 
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
-use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -123,9 +122,9 @@ class AccesAuxPanneauxTest extends TestCase
 
     private function membreSuspendu(Magasin $magasin): User
     {
-        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
-        $magasin->membres()->where('user_id', $membre->getKey())->update(['statut' => StatutMembreMagasin::Suspendu->value]);
+        $membre = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul', 'email' => 'paul@example.test']);
+        app(ChangerStatutCompteAction::class)->suspendre($this->proprietaireDe($magasin), $membre);
 
-        return $membre;
+        return $membre->refresh();
     }
 }

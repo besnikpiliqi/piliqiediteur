@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Domain\Authorization\ControleDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -19,13 +20,16 @@ class TenancyServiceProvider extends ServiceProvider
         // -- fuite de tenant silencieuse entre deux jobs sur le même
         // worker. scoped() rend cette classe d'erreur impossible.
         $this->app->scoped(TenantContext::class);
+        // Même raison : l'opérateur d'une requête ou d'un job ne survit
+        // jamais au suivant (voir OperateurCourant).
+        $this->app->scoped(OperateurCourant::class);
     }
 
     /**
-     * Le seul rappel exécuté avant les policies : les droits implicites du
-     * propriétaire de la société, les permissions d'un membre dans le
-     * magasin actif, la lecture seule d'un magasin et la porte de
-     * validation (voir ControleDesDroits). Il passe en closure pour que la
+     * Le seul rappel exécuté avant les policies : les droits du compte dans
+     * le magasin actif selon son rôle, la lecture seule d'un magasin, la
+     * porte de validation et la lecture seule de l'expert-comptable (voir
+     * ControleDesDroits). Il passe en closure pour que la
      * Gate lise ses paramètres : sans utilisateur connecté, elle ne
      * l'appelle pas.
      */

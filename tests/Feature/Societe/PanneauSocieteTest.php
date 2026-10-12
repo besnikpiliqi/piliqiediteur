@@ -2,10 +2,16 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\Societe\Pages\IdentiteSociete;
+use App\Filament\Societe\Pages\ParametresFiscauxSociete;
+use App\Filament\Societe\Pages\TableauDeBord;
 use App\Filament\Societe\RessourceDuPanneauSociete;
 use App\Models\User;
 use App\Policies\SocietePolicy;
@@ -14,15 +20,19 @@ use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Pages\Page;
 use Filament\Resources\Resource;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionMethod;
 use Tests\TestCase;
 
 /**
  * Le panneau de l'administration d'une société (voir SocietePanelProvider),
- * réservé à son propriétaire, en mode d'autorisation strict : chaque page
+ * réservé à son propriétaire et à ses administrateurs, en mode
+ * d'autorisation strict : chaque page
  * décide elle-même qui l'ouvre, chaque ressource hérite de
  * RessourceDuPanneauSociete et passe par une policy, et les champs de
  * choix n'y proposent des magasins ou des comptes que par une relation de
@@ -36,22 +46,30 @@ class PanneauSocieteTest extends TestCase
     /**
      * Chaque page déclare sa propre règle d'accès (Filament ouvre sinon une
      * page à tous) et ne s'ouvre qu'au propriétaire actif de la société
-     * affichée : ni à un membre d'un de ses magasins, ni au propriétaire
-     * d'une autre société, ni à un compte suspendu, ni sans connexion.
-     * Chaque ressource hérite de la base stricte, et le modèle qu'elle
-     * gère a une policy explicite : sans elle, la Gate refuserait tout.
+     * affichée et à ses administrateurs actifs selon la page : le tableau
+     * de bord et la vérification à tout administrateur, l'identité et la
+     * fiscalité au seul administrateur de tous les magasins autorisé à
+     * gérer les paramètres de la société ; ni à un responsable, un vendeur
+     * ou l'expert-comptable, ni au propriétaire d'une autre société, ni à
+     * un compte suspendu, ni sans connexion. Chaque ressource hérite de la
+     * base stricte, et le modèle qu'elle gère a une policy explicite : sans
+     * elle, la Gate refuserait tout.
      */
     public function test_chaque_ressource_et_page_du_panneau_societe_a_une_policy_complete(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
-        $administrateurDuMagasin = $this->membre($magasin, RoleMagasin::Administrateur);
+        $responsable = $this->responsable($magasin);
+        $expert = $this->expertComptable($magasin);
+        $administrateur = $this->administrateur($magasin, [$magasin->id]);
+        $administrateurDesParametres = $this->administrateur($magasin, null, [AutorisationsSociete::PARAMETRES_GERER]);
         $proprietaireDUneAutre = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Autre Boutique']));
         $suspendu = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Boutique suspendue']));
         $suspendu->forceFill(['statut' => StatutCompte::Suspendu])->save();
         $panneau = Filament::getPanel('societe');
         $pages = $panneau->getPages();
+        $pagesDesParametres = [IdentiteSociete::class, ParametresFiscauxSociete::class];
 
         $this->assertNotEmpty($pages);
         $this->assertInstanceOf(SocietePolicy::class, Gate::getPolicyFor(Societe::class));
@@ -60,11 +78,23 @@ class PanneauSocieteTest extends TestCase
             /** @var class-string<Page> $page */
             $this->assertSame($page, (new ReflectionMethod($page, 'canAccess'))->getDeclaringClass()->getName(), $page);
             $this->assertSame(
-                ['proprietaire' => true, 'vendeur' => false, 'administrateur_du_magasin' => false, 'autre_societe' => false, 'sans_connexion' => false],
+                [
+                    'proprietaire' => true,
+                    'administrateur' => ! in_array($page, $pagesDesParametres, true),
+                    'administrateur_des_parametres' => true,
+                    'responsable' => false,
+                    'vendeur' => false,
+                    'expert_comptable' => false,
+                    'autre_societe' => false,
+                    'sans_connexion' => false,
+                ],
                 [
                     'proprietaire' => $this->ouvre($page, $proprietaire, $magasin->societe),
+                    'administrateur' => $this->ouvre($page, $administrateur, $magasin->societe),
+                    'administrateur_des_parametres' => $this->ouvre($page, $administrateurDesParametres, $magasin->societe),
+                    'responsable' => $this->ouvre($page, $responsable, $magasin->societe),
                     'vendeur' => $this->ouvre($page, $vendeur, $magasin->societe),
-                    'administrateur_du_magasin' => $this->ouvre($page, $administrateurDuMagasin, $magasin->societe),
+                    'expert_comptable' => $this->ouvre($page, $expert, $magasin->societe),
                     'autre_societe' => $this->ouvre($page, $proprietaireDUneAutre, $magasin->societe),
                     'sans_connexion' => $this->ouvre($page, null, $magasin->societe),
                 ],
@@ -81,6 +111,40 @@ class PanneauSocieteTest extends TestCase
         }
 
         $this->assertFalse(RessourceDuPanneauSociete::shouldCheckPolicyExistence());
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function comptesSansEspaceSociete(): array
+    {
+        return [
+            'responsable' => ['responsable'],
+            'vendeur' => ['vendeur'],
+            'observateur' => ['observateur'],
+            'expert-comptable' => ['expert-comptable'],
+        ];
+    }
+
+    /**
+     * L'espace d'administration de la société ne s'ouvre ni à un membre,
+     * responsable compris, ni à l'expert-comptable : 403, et le panneau ne
+     * leur propose aucune société.
+     */
+    #[DataProvider('comptesSansEspaceSociete')]
+    public function test_ni_un_membre_ni_l_expert_comptable_n_ouvrent_l_espace_societe(string $compte): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $visiteur = match ($compte) {
+            'responsable' => $this->responsable($magasin),
+            'vendeur' => $this->membre($magasin, RoleMagasin::Vendeur),
+            'observateur' => $this->membre($magasin, RoleMagasin::Observateur),
+            'expert-comptable' => $this->expertComptable($magasin),
+        };
+
+        $this->assertFalse($visiteur->canAccessPanel(Filament::getPanel('societe')));
+        $this->assertSame([], $visiteur->getTenants(Filament::getPanel('societe'))->modelKeys());
+        $this->actingAs($visiteur)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))->assertForbidden();
     }
 
     /**
@@ -120,8 +184,8 @@ class PanneauSocieteTest extends TestCase
         Filament::setTenant($magasin, isQuiet: true);
         $contexte->set($magasin);
 
-        $this->assertSame([], Select::make('vendeur')->model($magasin)->relationship('utilisateurs', 'name')->getExtraAttributes());
-        $this->assertSame([], CheckboxList::make('vendeurs')->model($magasin)->relationship('utilisateurs', 'name')->getExtraAttributes());
+        $this->assertSame([], Select::make('vendeur')->model(ClotureCaissePersonnelle::class)->relationship('vendeur', 'name')->getExtraAttributes());
+        $this->assertSame([], CheckboxList::make('vendeurs')->model($this->magasinEtSesComptes($magasin))->relationship('comptes', 'name')->getExtraAttributes());
 
         $contexte->clear();
         Filament::setCurrentPanel(Filament::getPanel('societe'));
@@ -131,18 +195,40 @@ class PanneauSocieteTest extends TestCase
         $this->assertSame([], Select::make('magasin')->model($magasin->societe)->relationship('magasins', 'nom')->getExtraAttributes());
         $this->assertSame([], Select::make('membre')->model($magasin->societe)->relationship('membres', 'name')->getExtraAttributes());
         $this->assertThrows(
-            fn () => Select::make('vendeur')->model($magasin)->relationship('utilisateurs', 'name')->getExtraAttributes(),
+            fn () => Select::make('vendeur')->model(ClotureCaissePersonnelle::class)->relationship('vendeur', 'name')->getExtraAttributes(),
             LogicException::class,
             'Le champ « vendeur » de l\'espace société propose des magasins ou des comptes sans passer par une relation de la société.',
         );
         $this->assertThrows(
-            fn () => CheckboxList::make('vendeurs')->model($magasin)->relationship('utilisateurs', 'name')->getExtraAttributes(),
+            fn () => CheckboxList::make('vendeurs')->model($this->magasinEtSesComptes($magasin))->relationship('comptes', 'name')->getExtraAttributes(),
             LogicException::class,
         );
         $this->assertThrows(
             fn () => Select::make('magasin')->model($autreSociete)->relationship('magasins', 'nom')->getExtraAttributes(),
             LogicException::class,
         );
+    }
+
+    /**
+     * Le magasin, vu par un modèle qui propose ses comptes par une relation
+     * plusieurs-à-plusieurs (ses affectations), sans passer par la société.
+     */
+    private function magasinEtSesComptes(Magasin $magasin): Model
+    {
+        $modele = new class extends Model
+        {
+            protected $table = 'magasins';
+
+            /**
+             * @return BelongsToMany<User, $this>
+             */
+            public function comptes(): BelongsToMany
+            {
+                return $this->belongsToMany(User::class, 'affectations', 'magasin_id', 'user_id');
+            }
+        };
+
+        return $modele->newFromBuilder(['id' => $magasin->id]);
     }
 
     /**

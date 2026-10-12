@@ -43,7 +43,7 @@ class OutillageTest extends TestCase
      * l'ordre binaire, comme SQLite : majuscules d'abord, lettres
      * accentuées après « z », « . » avant « _ ». Un contenu signé trié en
      * SQL (les autorisations du journal des événements, voir
-     * User::autorisationsCocheesDans()) garde ainsi le même ordre sur les
+     * Affectation::autorisations()) garde ainsi le même ordre sur les
      * deux moteurs ; une collation linguistique le changerait.
      */
     public function test_la_base_trie_les_textes_dans_l_ordre_binaire(): void

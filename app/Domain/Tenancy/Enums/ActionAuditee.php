@@ -33,6 +33,27 @@ enum ActionAuditee: string implements HasLabel
     case MagasinModifie = 'magasin_modifie';
     case DemonstrationOuverte = 'demonstration_ouverte';
     case DemonstrationFermee = 'demonstration_fermee';
+    case MembreCree = 'membre_cree';
+    case AdministrateurCree = 'administrateur_cree';
+    case AdministrateurNomme = 'administrateur_nomme';
+    case AdministrateurModifie = 'administrateur_modifie';
+    case ExpertComptableCree = 'expert_comptable_cree';
+    case DroitsModifies = 'droits_modifies';
+    case ResponsableNomme = 'responsable_nomme';
+    case ResponsableRetire = 'responsable_retire';
+    case NominationAnnulee = 'nomination_annulee';
+    case CompteSuspendu = 'compte_suspendu';
+    case CompteReactive = 'compte_reactive';
+    case CompteRetire = 'compte_retire';
+    case CompteReintegre = 'compte_reintegre';
+    case CompteRefuse = 'compte_refuse';
+    case MotDePasseProvisoireDonne = 'provisoire_donne';
+    case LienDAccesEnvoye = 'lien_d_acces_envoye';
+    case RattachementPropose = 'rattachement_propose';
+    case RattachementAccepte = 'rattachement_accepte';
+    case SocieteCreeeParUnCompteRetire = 'societe_creee_par_un_compte_retire';
+    case ProprieteTransferee = 'propriete_transferee';
+    case AdresseDeConnexionChangee = 'adresse_de_connexion_changee';
 
     /**
      * Les mots qui, dans un nom de champ (entre ses traits de soulignement,
@@ -64,6 +85,27 @@ enum ActionAuditee: string implements HasLabel
             self::MagasinModifie => 'Magasin modifié',
             self::DemonstrationOuverte => 'Magasin de démonstration ouvert',
             self::DemonstrationFermee => 'Magasin de démonstration fermé',
+            self::MembreCree => 'Compte créé',
+            self::AdministrateurCree => 'Administrateur créé',
+            self::AdministrateurNomme => 'Administrateur nommé',
+            self::AdministrateurModifie => 'Administrateur modifié',
+            self::ExpertComptableCree => 'Expert-comptable créé',
+            self::DroitsModifies => 'Droits modifiés',
+            self::ResponsableNomme => 'Responsable nommé',
+            self::ResponsableRetire => 'Responsable retiré',
+            self::NominationAnnulee => 'Nomination d\'un responsable annulée',
+            self::CompteSuspendu => 'Compte suspendu',
+            self::CompteReactive => 'Compte réactivé',
+            self::CompteRetire => 'Compte retiré de la société',
+            self::CompteReintegre => 'Compte réintégré',
+            self::CompteRefuse => 'Compte refusé par la personne',
+            self::MotDePasseProvisoireDonne => 'Nouveau mot de passe provisoire donné',
+            self::LienDAccesEnvoye => 'Lien de renouvellement de l\'accès envoyé',
+            self::RattachementPropose => 'Rattachement proposé',
+            self::RattachementAccepte => 'Rattachement accepté',
+            self::SocieteCreeeParUnCompteRetire => 'Société créée par un compte retiré',
+            self::ProprieteTransferee => 'Propriété transférée',
+            self::AdresseDeConnexionChangee => 'Adresse de connexion changée',
         };
     }
 
@@ -72,6 +114,10 @@ enum ActionAuditee: string implements HasLabel
         return match ($this) {
             self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees, self::AccordDirigeantDemande, self::AccordDirigeantAnnule,
             self::CodeEnvoye, self::CodeSaisi, self::CodeAnnule, self::SocieteValidee, self::SocieteRefusee, self::ReclamationOuverte => CategorieAudit::Verification,
+            self::MembreCree, self::AdministrateurCree, self::AdministrateurNomme, self::AdministrateurModifie, self::ExpertComptableCree, self::DroitsModifies,
+            self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
+            self::CompteReintegre, self::CompteRefuse, self::MotDePasseProvisoireDonne, self::LienDAccesEnvoye, self::RattachementPropose,
+            self::RattachementAccepte, self::SocieteCreeeParUnCompteRetire, self::ProprieteTransferee, self::AdresseDeConnexionChangee => CategorieAudit::Acces,
             default => CategorieAudit::Operations,
         };
     }
@@ -102,6 +148,14 @@ enum ActionAuditee: string implements HasLabel
             self::SocieteValidee => ['preuve', 'beneficiaire', 'personne_verifiee', 'qualite_du_titulaire', 'sirets'],
             self::SocieteRefusee, self::ReclamationOuverte, self::DemonstrationOuverte, self::DemonstrationFermee => ['motif'],
             self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'etablissement_verifie'],
+            // Les droits de chaque compte touché, avant et après, avec son
+            // nom au moment de l'opération (voir JournalDesDroits).
+            self::MembreCree, self::AdministrateurCree, self::AdministrateurNomme, self::AdministrateurModifie, self::ExpertComptableCree, self::DroitsModifies,
+            self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
+            self::CompteReintegre, self::CompteRefuse, self::RattachementAccepte, self::ProprieteTransferee => ['droits'],
+            self::MotDePasseProvisoireDonne, self::LienDAccesEnvoye, self::AdresseDeConnexionChangee => ['compte'],
+            self::RattachementPropose => ['compte', 'role_societe', 'magasins'],
+            self::SocieteCreeeParUnCompteRetire => ['compte', 'siren', 'societe_quittee'],
         };
     }
 }

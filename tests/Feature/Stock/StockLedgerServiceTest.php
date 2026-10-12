@@ -10,7 +10,6 @@ use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Notifications\StockSousLeSeuilDAlerte;
 use App\Domain\Stock\Services\StockLedgerService;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -214,7 +213,7 @@ class StockLedgerServiceTest extends TestCase
         $this->ouvrirUneSociete(['nom' => 'Autre boutique'], $proprietaireAutreMagasin);
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'secret123'], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr']);
         $produit = Produit::factory()->create(['nom' => 'Câble USB-C', 'reference' => 'CAB-USBC', 'stock_quantite' => 7, 'seuil_alerte' => 5]);
 
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
@@ -230,14 +229,15 @@ class StockLedgerServiceTest extends TestCase
     }
 
     /**
-     * Les destinataires suivent les autorisations cochées : l'administrateur,
-     * qui gère le stock d'office, et le vendeur à qui le propriétaire l'a
-     * cochée sont prévenus ; un vendeur sans cette case ne l'est pas.
+     * Les destinataires suivent les autorisations cochées : un membre aux
+     * cases du modèle de l'administrateur, qui comprend la gestion du stock,
+     * et le vendeur à qui le propriétaire l'a cochée sont prévenus ; un
+     * vendeur sans cette case ne l'est pas.
      */
     public function test_l_alerte_previent_les_membres_a_qui_la_gestion_du_stock_est_cochee(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $administrateur = $this->membre($magasin, RoleMagasin::Administrateur);
+        $administrateur = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur());
         $vendeurQuiGereLeStock = $this->membre($magasin, RoleMagasin::Vendeur, [
             ...RoleMagasin::Vendeur->permissionsParDefaut(),
             PermissionRegistry::PRODUIT_AJUSTER_STOCK,

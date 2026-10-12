@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
@@ -9,11 +10,9 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\CategorieAudit;
 use App\Domain\Tenancy\Enums\ResultatVerification;
-use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\EntreeAudit;
@@ -66,18 +65,23 @@ class CreerEtablissementActionTest extends TestCase
     }
 
     /**
-     * Seul le propriétaire de la société crée un magasin : ni un membre de
-     * l'équipe, ni le propriétaire d'une autre société ; rien n'est créé.
+     * Seuls le propriétaire et un administrateur de tous les magasins
+     * autorisé à les gérer créent un magasin : ni un responsable, qui n'a
+     * aucun droit de la société, ni un administrateur sans cette
+     * autorisation ou d'une sélection, ni le propriétaire d'une autre
+     * société ; rien n'est créé.
      */
     public function test_sans_autorisation_aucun_magasin_ne_se_cree(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon centre']);
         $societe = $magasin->societe;
-        $administrateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Ali', 'email' => 'ali@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Administrateur);
+        $responsable = $this->responsable($magasin);
+        $administrateurSansLAutorisation = $this->administrateur($magasin);
+        $administrateurDUneSelection = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::MAGASINS_GERER]);
         $autreProprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ailleurs']));
         app(TenantContext::class)->clear();
 
-        foreach ([$administrateur, $autreProprietaire] as $auteur) {
+        foreach ([$responsable, $administrateurSansLAutorisation, $administrateurDUneSelection, $autreProprietaire] as $auteur) {
             $this->assertThrows(
                 fn () => app(CreerEtablissementAction::class)->handle($auteur, $societe, ['nom' => 'Lyon 2', 'nic' => $this->nic($societe, '0002')]),
                 LogicException::class,
@@ -323,7 +327,7 @@ class CreerEtablissementActionTest extends TestCase
         $droits = app(TenantContext::class)->runAs($magasin, fn (): array => json_decode(EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->where('type', (string) CodeEvenement::ModificationDesDroits->value)->sole()->contenu, true)['donnees']);
         $this->assertSame(['id' => $proprietaire->id, 'nom' => $proprietaire->name], $droits['details']['membre']);
         $this->assertNull($droits['details']['avant']);
-        $this->assertSame(['role' => 'proprietaire', 'statut' => 'actif', 'permissions' => $toutes], $droits['details']['apres']);
+        $this->assertSame(['role_societe' => 'proprietaire', 'role_magasin' => null, 'statut' => 'actif', 'permissions' => $toutes], $droits['details']['apres']);
         $this->assertSame($magasin->siret, SiretMagasin::query()->where('magasin_id', $magasin->id)->sole()->siret);
         $this->assertSame(1, PeriodeActivite::query()->where('magasin_id', $magasin->id)->whereNull('fin')->count());
     }

@@ -15,7 +15,6 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\AvoirResource\Pages\CreateAvoir;
@@ -525,13 +524,7 @@ class AvoirResourceTest extends TestCase
 
     private function vendeurQuiVoitLesAvoirs(Magasin $magasin, string $email): User
     {
-        return app(CreerMembreMagasinAction::class)->handle(
-            $this->proprietaireDe($magasin),
-            $magasin,
-            ['name' => $email, 'email' => $email, 'password' => 'mot-de-passe-sur'],
-            RoleMagasin::Vendeur,
-            [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_VIEW],
-        );
+        return $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_VIEW], ['name' => $email, 'email' => $email]);
     }
 
     /**

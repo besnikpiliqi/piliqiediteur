@@ -22,7 +22,6 @@ use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -1647,10 +1646,9 @@ class FactureAchatActionsTest extends TestCase
     private function connecterUnMembreQuiSaisitLesAchats(array $droitsProduit): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
-            'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Observateur);
-        $membre->givePermissionTo([PermissionRegistry::FACTURE_ACHAT_CREER, ...$droitsProduit]);
+        $membre = $this->membre($magasin, RoleMagasin::Observateur, [...RoleMagasin::Observateur->permissionsParDefaut(), PermissionRegistry::FACTURE_ACHAT_CREER, ...$droitsProduit], [
+            'name' => 'Léa', 'email' => 'lea@example.test',
+        ]);
         $this->actingAs($membre);
     }
 }

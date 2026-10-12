@@ -30,8 +30,9 @@ use Illuminate\Support\Facades\Gate;
  * un catalogue fictif (voir CatalogueDeDemonstration). C'est un mode école
  * au sens de la caisse sécurisée : un magasin distinct, avec son registre,
  * ses séries et ses clôtures ; chaque ouverture ouvre une période
- * d'activité et s'inscrit à son journal des événements (JET 100), avec les
- * droits implicites du propriétaire dans ce magasin (JET 130).
+ * d'activité et s'inscrit à son journal des événements (JET 100) ; à sa
+ * création, les droits implicites du propriétaire et des administrateurs
+ * de tous les magasins dans ce magasin s'y inscrivent aussi (JET 130).
  *
  * Déjà ouvert, il est rendu tel quel ; fermé après 30 jours sans opération
  * (voir app:fermer-demonstrations-inactives), il se rouvre, avec ses
@@ -51,7 +52,6 @@ class OuvrirLaDemonstrationAction
         private readonly JournalDesDroits $journalDesDroits,
         private readonly JournalAudit $journalAudit,
         private readonly CatalogueDeDemonstration $catalogue,
-        private readonly SeedMagasinRolesAction $seedMagasinRoles,
     ) {}
 
     /**
@@ -86,8 +86,6 @@ class OuvrirLaDemonstrationAction
                 'pays' => 'FR',
             ]);
 
-            $this->seedMagasinRoles->handle();
-
             app(TenantContext::class)->runAs($demonstration, function () use ($auteur, $demonstration): void {
                 $this->registre->verrouiller($demonstration);
 
@@ -98,9 +96,7 @@ class OuvrirLaDemonstrationAction
                 ]);
                 $this->catalogue->remplir($demonstration);
                 $this->entrer($auteur, $demonstration, 'ouverture');
-
-                $avant = $this->journalDesDroits->avant($demonstration, null);
-                $this->journalDesDroits->apres($demonstration, $demonstration->societe->proprietaire, $avant);
+                $this->journalDesDroits->inscrireLesDroitsImplicites($demonstration);
             });
 
             return $demonstration;

@@ -13,7 +13,6 @@ use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages\ListClotureCaissePersonnelles;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
@@ -32,9 +31,9 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
-            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, [
+            'name' => 'Paul', 'email' => 'paul@example.test',
+        ]);
 
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
@@ -63,12 +62,12 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeurA = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
-            'name' => 'Paul', 'email' => 'paul2@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Vendeur);
-        $vendeurB = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
-            'name' => 'Jean', 'email' => 'jean@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Vendeur);
+        $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, null, [
+            'name' => 'Paul', 'email' => 'paul2@example.test',
+        ]);
+        $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, null, [
+            'name' => 'Jean', 'email' => 'jean@example.test',
+        ]);
 
         $this->actingAs($vendeurA);
         Filament::setTenant($magasin);

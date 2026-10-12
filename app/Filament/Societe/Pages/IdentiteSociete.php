@@ -36,9 +36,10 @@ use Illuminate\Validation\ValidationException;
  * rappelle la dénomination que donne le répertoire Sirene quand elle en
  * diffère.
  *
- * Consultable par qui voit la société (voir SocietePolicy::view()) ; le
- * formulaire ne s'enregistre que pour qui en modifie les paramètres, tant
- * qu'elle n'est pas en lecture seule.
+ * Consultable par le propriétaire et un administrateur de tous les
+ * magasins autorisé à gérer les paramètres de la société (voir
+ * SocietePolicy::voirLesParametres()) ; le formulaire ne s'enregistre que
+ * tant qu'elle n'est pas en lecture seule.
  */
 class IdentiteSociete extends Page implements HasForms
 {
@@ -61,7 +62,7 @@ class IdentiteSociete extends Page implements HasForms
     {
         $societe = Filament::getTenant();
 
-        return $societe instanceof Societe && (auth()->user()?->can('view', $societe) ?? false);
+        return $societe instanceof Societe && (auth()->user()?->can('voirLesParametres', $societe) ?? false);
     }
 
     public function getTitle(): string|Htmlable

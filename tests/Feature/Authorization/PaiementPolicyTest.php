@@ -43,20 +43,23 @@ class PaiementPolicyTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
-        $comptable = $this->membre($magasin, RoleMagasin::Comptable);
+        $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable());
+        $expert = $this->expertComptable($magasin);
         $paiementDuVendeur = $this->encaisserUnPaiementEnTantQue($vendeur);
 
         $this->assertTrue($comptable->can('view', $paiementDuVendeur));
+        $this->assertTrue($expert->can('view', $paiementDuVendeur));
     }
 
     /**
-     * @return array<string, array{0: RoleMagasin}>
+     * @return array<string, array{0: RoleMagasin, 1: list<string>|null}>
      */
     public static function rolesQuiContrePassentDOffice(): array
     {
         return [
-            'administrateur' => [RoleMagasin::Administrateur],
-            'comptable' => [RoleMagasin::Comptable],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur()],
+            'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable()],
+            'responsable, sans case' => [RoleMagasin::Responsable, null],
         ];
     }
 
@@ -69,11 +72,11 @@ class PaiementPolicyTest extends TestCase
     }
 
     #[DataProvider('rolesQuiContrePassentDOffice')]
-    public function test_l_administrateur_et_le_comptable_contre_passent_un_paiement_d_office(RoleMagasin $role): void
+    public function test_le_responsable_et_un_vendeur_qui_en_a_la_case_contre_passent_un_paiement(RoleMagasin $role, ?array $autorisations): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
-        $membre = $this->membre($magasin, $role);
+        $membre = $this->membre($magasin, $role, $autorisations);
         $paiement = $this->encaisserUnPaiementEnTantQue($vendeur);
 
         $this->assertTrue($membre->can('contrePasser', $paiement));

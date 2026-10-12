@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\DemandeAccordDirigeant;
@@ -180,22 +181,23 @@ class IsolationDesSocietesTest extends TestCase
 
     /**
      * Les clés étrangères composites de l'équipe d'un magasin : la base
-     * refuse de rattacher un compte au magasin d'une autre société que la
+     * refuse d'affecter un compte au magasin d'une autre société que la
      * sienne, quelle que soit la société écrite sur la ligne ; dans sa
      * propre société, la même ligne s'écrit.
      */
     public function test_la_base_refuse_d_affecter_un_compte_au_magasin_d_une_autre_societe(): void
     {
         $magasinA = $this->ouvrirUneSociete(['nom' => 'A']);
+        $autreMagasinA = $this->ouvrirUnAutreMagasin($magasinA, ['nom' => 'A bis']);
+        $vendeurDeA = $this->membre($magasinA, RoleMagasin::Vendeur);
         $magasinB = $this->ouvrirUneSociete(['nom' => 'B']);
-        $compteDeA = $this->proprietaireDe($magasinA);
-        $ligne = fn (Magasin $magasin, int $societeId): array => ['societe_id' => $societeId, 'magasin_id' => $magasin->id, 'user_id' => $compteDeA->id, 'role' => 'vendeur', 'statut' => 'actif', 'created_at' => now(), 'updated_at' => now()];
+        $ligne = fn (Magasin $magasin, int $societeId): array => ['societe_id' => $societeId, 'magasin_id' => $magasin->id, 'user_id' => $vendeurDeA->id, 'role' => RoleMagasin::Vendeur->value, 'created_at' => now(), 'updated_at' => now()];
 
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('magasin_user')->insert($ligne($magasinB, $magasinA->societe_id))), QueryException::class);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('magasin_user')->insert($ligne($magasinB, $magasinB->societe_id))), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('affectations')->insert($ligne($magasinB, $magasinA->societe_id))), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('affectations')->insert($ligne($magasinB, $magasinB->societe_id))), QueryException::class);
 
-        $this->assertSame(0, DB::table('magasin_user')->where('magasin_id', $magasinB->id)->count());
-        $this->assertTrue(DB::table('magasin_user')->insert($ligne($magasinA, $magasinA->societe_id)));
+        $this->assertSame(0, DB::table('affectations')->where('magasin_id', $magasinB->id)->count());
+        $this->assertTrue(DB::table('affectations')->insert($ligne($autreMagasinA, $magasinA->societe_id)));
     }
 
     /**

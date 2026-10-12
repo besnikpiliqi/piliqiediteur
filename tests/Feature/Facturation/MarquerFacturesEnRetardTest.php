@@ -11,7 +11,6 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -174,7 +173,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         $this->travelTo('2026-10-01 10:00:00');
         $proprietaireA = User::factory()->create();
         $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A'], $proprietaireA);
-        $vendeurA = app(CreerMembreMagasinAction::class)->handle($proprietaireA, $magasinA, ['name' => 'Vendeur', 'email' => 'vendeur@boutique-a.fr', 'password' => 'secret123'], RoleMagasin::Vendeur);
+        $vendeurA = $this->membre($magasinA, RoleMagasin::Vendeur, null, ['name' => 'Vendeur', 'email' => 'vendeur@boutique-a.fr']);
         $proprietaireB = User::factory()->create();
         $magasinB = $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
         $factureA1 = $this->emettreFacture($magasinA, 0);

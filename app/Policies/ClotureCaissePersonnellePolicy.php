@@ -18,9 +18,9 @@ use App\Models\User;
  * pour lui (voir fermerLaCaisseDe()), depuis la page des relevés, qui lui
  * est donc ouverte même s'il ne vend ni n'encaisse ; et toute caisse
  * encore ouverte se ferme d'office avec la journée (voir
- * FermerLesCaissesPersonnellesAction). Le propriétaire et quiconque a
- * cloture_caisse.view_toutes (comptable...) voient les relevés de toute
- * l'équipe, pour la réconciliation de fin de journée ; tout autre membre
+ * FermerLesCaissesPersonnellesAction). Quiconque a
+ * cloture_caisse.view_toutes (le propriétaire, un comptable...) voit les
+ * relevés de toute l'équipe, pour la réconciliation de fin de journée ; tout autre membre
  * ne voit que les siens, même quand il ferme la caisse d'un autre (voir
  * ListClotureCaissePersonnelles).
  */
@@ -88,29 +88,14 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
     }
 
     /**
-     * Le droit de vendre ou d'encaisser, celui du propriétaire de la
-     * société, ou d'un membre lu sur ses permissions plutôt que demandé à
-     * la Gate : dans un magasin en lecture seule, celle-ci refuse
-     * facture.create et paiement.creer (voir ControleDesDroits), mais
-     * chacun ferme toujours sa caisse et consulte toujours ses relevés.
-     * Le propriétaire n'ouvre que les magasins de sa société.
+     * Le droit de vendre ou d'encaisser dans le magasin actif, lu sur ses
+     * autorisations dans ce magasin plutôt que demandé à la Gate : dans un
+     * magasin en lecture seule, celle-ci refuse facture.create et
+     * paiement.creer (voir ControleDesDroits), mais chacun ferme toujours sa
+     * caisse et consulte toujours ses relevés. Le propriétaire les a toutes
+     * dans les magasins de sa société, et seulement là.
      */
     private function tientUneCaisse(User $user): bool
-    {
-        return $user->estProprietaire()
-            || $user->checkPermissionTo(PermissionRegistry::FACTURE_CREATE)
-            || $user->checkPermissionTo(PermissionRegistry::PAIEMENT_CREER);
-    }
-
-    /**
-     * Le vendeur a sa caisse dans le magasin actif : il est le propriétaire
-     * de sa société, ou de son équipe, quel que soit l'état de son accès,
-     * ou il y a créé une facture ou
-     * enregistré un paiement (un membre retiré de l'équipe y garde sa
-     * caisse ouverte jusqu'à ce qu'elle soit fermée). Les factures et les
-     * paiements se lisent sous MagasinScope, dans ce seul magasin.
-     */
-    private function tientSaCaisseDansLeMagasinActif(User $vendeur): bool
     {
         $contexte = app(TenantContext::class);
 
@@ -118,8 +103,28 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
             return false;
         }
 
-        return $vendeur->estProprietaireDuMagasin($contexte->magasin())
-            || $vendeur->magasins()->whereKey($contexte->id())->exists()
+        return array_intersect([PermissionRegistry::FACTURE_CREATE, PermissionRegistry::PAIEMENT_CREER], $user->autorisationsDans($contexte->magasin())) !== [];
+    }
+
+    /**
+     * Le vendeur a sa caisse dans le magasin actif : un compte de sa
+     * société qui y a des droits, quel que soit l'état de son accès (le
+     * propriétaire, un administrateur de tous les magasins, un compte
+     * affecté à ce magasin), ou qui y a créé une facture ou enregistré un
+     * paiement (un membre qui n'y est plus affecté y garde sa caisse
+     * ouverte jusqu'à ce qu'elle soit fermée). Les factures et les
+     * paiements se lisent sous MagasinScope, dans ce seul magasin.
+     */
+    private function tientSaCaisseDansLeMagasinActif(User $vendeur): bool
+    {
+        $contexte = app(TenantContext::class);
+
+        if (! $contexte->has() || (int) $vendeur->societe_id !== (int) $contexte->magasin()->societe_id) {
+            return false;
+        }
+
+        return $vendeur->estProprietaire()
+            || $vendeur->affectationQuiVautDans($contexte->magasin()) !== null
             || Facture::query()->where('cree_par', $vendeur->getKey())->exists()
             || Paiement::query()->where('cree_par', $vendeur->getKey())->exists();
     }

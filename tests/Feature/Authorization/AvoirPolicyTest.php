@@ -10,7 +10,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Avoir;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
@@ -28,27 +27,43 @@ class AvoirPolicyTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * @return array<string, array{RoleMagasin, bool}>
+     * @return array<string, array{RoleMagasin, list<string>|null, bool}>
      */
     public static function roles(): array
     {
         return [
-            'administrateur' => [RoleMagasin::Administrateur, true],
-            'comptable' => [RoleMagasin::Comptable, true],
-            'vendeur' => [RoleMagasin::Vendeur, false],
-            'observateur' => [RoleMagasin::Observateur, false],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(), true],
+            'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable(), true],
+            'vendeur' => [RoleMagasin::Vendeur, null, false],
+            'observateur' => [RoleMagasin::Observateur, null, false],
         ];
     }
 
     #[DataProvider('roles')]
-    public function test_envoyer_un_avoir_selon_le_role(RoleMagasin $role, bool $peutEnvoyer): void
+    public function test_envoyer_un_avoir_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutEnvoyer): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $membre = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = $this->membre($magasin, $role, $autorisations, ['name' => 'Membre', 'email' => 'membre@example.test']);
         $avoir = $this->emettreUnAvoirEnTantQue($proprietaire);
 
         $this->assertSame($peutEnvoyer, $membre->can('envoyer', $avoir));
+    }
+
+    /**
+     * L'expert-comptable lit les avoirs de tout le magasin, mais n'en envoie
+     * aucun, contrairement à l'ancien comptable de magasin.
+     */
+    public function test_l_expert_comptable_voit_les_avoirs_de_toute_l_equipe_sans_les_envoyer(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $vendeur = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
+        $expert = $this->expertComptable($magasin);
+        $avoir = $this->emettreUnAvoirEnTantQue($vendeur);
+
+        $this->assertTrue($expert->can('view', $avoir));
+        $this->assertFalse($expert->can('envoyer', $avoir));
     }
 
     public function test_personne_n_envoie_l_avoir_d_un_autre_magasin(): void
@@ -82,7 +97,7 @@ class AvoirPolicyTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
-        $comptable = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Comptable', 'email' => 'comptable@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Comptable);
+        $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable(), ['name' => 'Comptable', 'email' => 'comptable@example.test']);
         $avoirDuVendeur = $this->emettreUnAvoirEnTantQue($vendeur);
 
         $this->assertTrue($comptable->can('view', $avoirDuVendeur));
@@ -90,13 +105,7 @@ class AvoirPolicyTest extends TestCase
 
     private function vendeurQuiVoitLesAvoirs(Magasin $magasin, string $email): User
     {
-        return app(CreerMembreMagasinAction::class)->handle(
-            $this->proprietaireDe($magasin),
-            $magasin,
-            ['name' => $email, 'email' => $email, 'password' => 'mot-de-passe-sur'],
-            RoleMagasin::Vendeur,
-            [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_VIEW],
-        );
+        return $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_VIEW], ['name' => $email, 'email' => $email]);
     }
 
     private function emettreUnAvoirEnTantQue(User $auteur): Avoir

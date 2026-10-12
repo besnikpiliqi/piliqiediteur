@@ -23,7 +23,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
+use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
@@ -105,9 +105,9 @@ class CaisseTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
-            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, [
+            'name' => 'Paul', 'email' => 'paul@example.test',
+        ]);
 
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
@@ -151,14 +151,16 @@ class CaisseTest extends TestCase
     public function test_la_caisse_est_refusee_sans_l_une_de_ses_trois_permissions(string $permissionManquante): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
-            'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Observateur);
-        $observateur->givePermissionTo(array_values(array_diff([
-            PermissionRegistry::FACTURE_CREATE,
-            PermissionRegistry::FACTURE_EMETTRE,
-            PermissionRegistry::PAIEMENT_CREER,
-        ], [$permissionManquante])));
+        $observateur = $this->membre($magasin, RoleMagasin::Observateur, [
+            ...RoleMagasin::Observateur->permissionsParDefaut(),
+            ...array_diff([
+                PermissionRegistry::FACTURE_CREATE,
+                PermissionRegistry::FACTURE_EMETTRE,
+                PermissionRegistry::PAIEMENT_CREER,
+            ], [$permissionManquante]),
+        ], [
+            'name' => 'Léa', 'email' => 'lea@example.test',
+        ]);
         $this->actingAs($observateur);
         Filament::setTenant($magasin);
 
@@ -173,9 +175,9 @@ class CaisseTest extends TestCase
     public function test_encaisser_est_refuse_des_que_le_vendeur_perd_une_permission_de_la_caisse(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
-            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, [
+            'name' => 'Paul', 'email' => 'paul@example.test',
+        ]);
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -183,7 +185,7 @@ class CaisseTest extends TestCase
             'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
             'mode_paiement' => ModePaiement::CarteBancaire->value,
         ]);
-        $vendeur->revokePermissionTo(PermissionRegistry::FACTURE_EMETTRE);
+        $this->retirerUneCase($magasin, $vendeur, PermissionRegistry::FACTURE_EMETTRE);
 
         $caisse->call('encaisser')->assertForbidden();
 
@@ -199,9 +201,9 @@ class CaisseTest extends TestCase
     public function test_encaisser_reverifie_les_permissions_de_la_caisse_sans_dependre_de_filament(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
-            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, [
+            'name' => 'Paul', 'email' => 'paul@example.test',
+        ]);
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -209,7 +211,7 @@ class CaisseTest extends TestCase
             'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'taux_tva' => 20, 'remise_pourcentage' => 0]],
             'mode_paiement' => ModePaiement::CarteBancaire->value,
         ])->instance();
-        $vendeur->revokePermissionTo(PermissionRegistry::FACTURE_EMETTRE);
+        $this->retirerUneCase($magasin, $vendeur, PermissionRegistry::FACTURE_EMETTRE);
 
         $this->assertThrows(
             fn () => $caisse->encaisser(),
@@ -854,9 +856,9 @@ class CaisseTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, [
-            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, [
+            'name' => 'Paul', 'email' => 'paul@example.test',
+        ]);
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
 
@@ -1574,6 +1576,17 @@ class CaisseTest extends TestCase
         $component->fillForm(['client_id' => $martin->id]);
 
         $component->assertFormSet(['bon_d_avoir' => 'AV-MABOUT-2026-000001']);
+    }
+
+    /**
+     * Le propriétaire décoche cette autorisation du vendeur dans le
+     * magasin (voir ModifierMembreAction).
+     */
+    private function retirerUneCase(Magasin $magasin, User $vendeur, string $autorisation): void
+    {
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [
+            $magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [$autorisation]))],
+        ]);
     }
 
     private function ouvrirLaCaisseDUnMagasin(): Magasin

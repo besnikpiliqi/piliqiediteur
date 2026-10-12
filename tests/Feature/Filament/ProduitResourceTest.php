@@ -11,7 +11,6 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -409,9 +408,9 @@ class ProduitResourceTest extends TestCase
     public function test_un_vendeur_n_archive_pas_de_produits_en_masse(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
-            'name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, [
+            'name' => 'Paul', 'email' => 'paul@example.test',
+        ]);
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         $produits = Produit::factory()->count(2)->create();

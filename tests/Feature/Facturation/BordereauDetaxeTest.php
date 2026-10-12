@@ -394,7 +394,8 @@ class BordereauDetaxeTest extends TestCase
     /**
      * Le bouton est réservé à qui peut émettre (FacturePolicy::justifier()),
      * sur un ticket qui se détaxe : ni sur une facture à un professionnel,
-     * ni pour un comptable.
+     * ni pour un vendeur aux cases de l'ancien comptable de magasin, ni pour
+     * un expert-comptable, qui n'écrit rien.
      */
     public function test_le_bouton_noter_le_bordereau_est_reserve_a_qui_peut_emettre_un_ticket_detaxable(): void
     {
@@ -403,7 +404,11 @@ class BordereauDetaxeTest extends TestCase
         $facture = $this->venteEmise('250.00', Client::factory()->professionnel()->create());
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])->assertActionHidden('noter_bordereau_detaxe');
-        $this->actingAs($this->membre($magasin, RoleMagasin::Comptable));
+        $expert = $this->expertComptable($magasin);
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable()));
+
+        Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])->assertActionHidden('noter_bordereau_detaxe');
+        $this->actingAs($expert);
 
         Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])->assertActionHidden('noter_bordereau_detaxe');
     }

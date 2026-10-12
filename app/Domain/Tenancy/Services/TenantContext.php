@@ -59,8 +59,6 @@ class TenantContext
         if (! $this->societeExplicite) {
             $this->societe = $magasin->societe;
         }
-
-        $this->invaliderPermissionsUtilisateurCourant();
     }
 
     /**
@@ -84,32 +82,6 @@ class TenantContext
         $this->magasin = null;
         $this->societe = null;
         $this->societeExplicite = false;
-
-        $this->invaliderPermissionsUtilisateurCourant();
-    }
-
-    /**
-     * Spatie Permission (mode teams) détermine les permissions d'un membre
-     * en filtrant par magasin au moment de la requête, mais Eloquent met en
-     * cache la relation `roles`/`permissions` sur l'instance User après le
-     * premier accès. Si le magasin actif change en cours de requête (dans
-     * un test qui enchaîne plusieurs contextes, une commande qui parcourt
-     * les magasins), cette collection resterait celle de l'ANCIEN magasin :
-     * on l'invalide à chaque changement de magasin, sur l'utilisateur
-     * authentifié s'il existe.
-     */
-    private function invaliderPermissionsUtilisateurCourant(): void
-    {
-        if (! auth()->check()) {
-            return;
-        }
-
-        $utilisateur = auth()->user();
-
-        if (method_exists($utilisateur, 'unsetRelation')) {
-            $utilisateur->unsetRelation('roles');
-            $utilisateur->unsetRelation('permissions');
-        }
     }
 
     public function has(): bool
@@ -189,14 +161,8 @@ class TenantContext
 
     private function restaurer(?Magasin $magasin, ?Societe $societe, bool $societeExplicite): void
     {
-        $magasinChange = $this->magasin !== $magasin;
-
         $this->magasin = $magasin;
         $this->societe = $societe;
         $this->societeExplicite = $societeExplicite;
-
-        if ($magasinChange) {
-            $this->invaliderPermissionsUtilisateurCourant();
-        }
     }
 }

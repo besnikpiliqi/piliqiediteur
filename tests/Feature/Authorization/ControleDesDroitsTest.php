@@ -2,22 +2,36 @@
 
 namespace Tests\Feature\Authorization;
 
+use App\Domain\Achats\Models\AvoirFournisseur;
+use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Models\MagasinUser;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\GardesDesDroits;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -49,9 +63,6 @@ class ControleDesDroitsTest extends TestCase
             PermissionRegistry::DEVIS_VIEW,
             PermissionRegistry::FACTURE_VIEW,
             PermissionRegistry::FACTURE_VIEW_TOUTES,
-            PermissionRegistry::EQUIPE_VIEW,
-            PermissionRegistry::EQUIPE_CREER,
-            PermissionRegistry::EQUIPE_MODIFIER,
             PermissionRegistry::PAIEMENT_VIEW,
             PermissionRegistry::AVOIR_VIEW,
             PermissionRegistry::CLOTURE_CAISSE_VIEW,
@@ -152,7 +163,7 @@ class ControleDesDroitsTest extends TestCase
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
-        $saLigne = $magasin->membres()->where('user_id', $vendeur->id)->sole();
+        $sonAffectation = Affectation::query()->where('magasin_id', $magasin->id)->where('user_id', $vendeur->id)->sole();
         $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['suivi_stock' => false])->id, 'quantite' => 1]]);
         $this->suspendre($magasin);
 
@@ -161,9 +172,9 @@ class ControleDesDroitsTest extends TestCase
         $this->assertTrue($proprietaire->can('cloturer', ClotureCaisse::class));
         $this->assertTrue($proprietaire->can('fermer', ClotureCaissePersonnelle::class));
         $this->assertTrue($proprietaire->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeur]));
-        $this->assertTrue($proprietaire->can('create', MagasinUser::class));
-        $this->assertTrue($proprietaire->can('update', $saLigne));
-        $this->assertTrue($proprietaire->can('delete', $saLigne));
+        $this->assertTrue($proprietaire->can('create', Affectation::class));
+        $this->assertTrue($proprietaire->can('update', $sonAffectation));
+        $this->assertTrue($proprietaire->can('delete', $sonAffectation));
     }
 
     public function test_en_lecture_seule_tout_autre_geste_est_refuse(): void
@@ -191,8 +202,7 @@ class ControleDesDroitsTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $autreMagasin = $this->ouvrirUnAutreMagasin($magasin);
 
-        $this->assertSame(0, MagasinUser::query()->where('user_id', $proprietaire->id)->count());
-        $this->assertSame([], $proprietaire->autorisationsCocheesDans($magasin));
+        $this->assertSame(0, Affectation::query()->where('user_id', $proprietaire->id)->count());
 
         foreach ([$magasin, $autreMagasin] as $chaqueMagasin) {
             app(TenantContext::class)->set($chaqueMagasin);
@@ -302,6 +312,148 @@ class ControleDesDroitsTest extends TestCase
                 $permission,
             );
         }
+    }
+
+    /**
+     * Sans magasin actif ni société posée (une commande, un job sans
+     * contexte), aucune policy d'un modèle de magasin n'accorde rien, ni
+     * aucune autorisation de magasin, pas même au propriétaire.
+     */
+    public function test_sans_contexte_aucune_policy_de_magasin_n_accorde_rien(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $responsable = $this->responsable($magasin);
+        app(TenantContext::class)->clear();
+
+        foreach ([$proprietaire, $responsable] as $compte) {
+            foreach ([Client::class, Fournisseur::class, Produit::class, Service::class, Devis::class, Facture::class, Paiement::class, Avoir::class, ClotureCaisse::class, ClotureCaissePersonnelle::class, FactureAchat::class, AvoirFournisseur::class, EnregistrementFiscal::class, Affectation::class] as $modele) {
+                $this->assertFalse($compte->can('viewAny', $modele), "viewAny {$modele}");
+                $this->assertFalse($compte->can('create', $modele), "create {$modele}");
+            }
+
+            foreach (PermissionRegistry::toutes() as $permission) {
+                $this->assertFalse($compte->can($permission), $permission);
+            }
+        }
+    }
+
+    /**
+     * Le propriétaire passe les policies sans aucune case, mais les règles
+     * qui valent pour tous s'appliquent à lui : un magasin fermé ne vend
+     * plus, une facture émise ne se supprime jamais, une journée clôturée
+     * refuse toute vente, et une société qui n'est pas validée n'émet rien.
+     */
+    public function test_le_proprietaire_n_a_besoin_d_aucune_case_mais_reste_soumis_aux_regles_de_tous(): void
+    {
+        $this->travelTo('2026-10-09 19:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $this->actingAs($proprietaire);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $emise = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
+        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        $this->assertSame(0, Affectation::query()->where('user_id', $proprietaire->id)->count());
+        $this->assertTrue($proprietaire->can('emettre', $brouillon));
+        $this->assertFalse($proprietaire->can('delete', $emise));
+        $this->assertFalse($proprietaire->can('update', $emise));
+
+        app(CloturerCaisseAction::class)->handle($magasin, now());
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($brouillon), LogicException::class);
+
+        $this->fermer($magasin);
+        $this->assertFalse($proprietaire->can('emettre', $brouillon));
+        $this->assertFalse($proprietaire->can(PermissionRegistry::FACTURE_CREATE));
+
+        $aValider = $this->ouvrirUneSociete(['nom' => 'Boutique à valider', 'a_verifier' => true]);
+        $proprietaireAValider = $this->proprietaireDe($aValider);
+        $this->assertFalse($proprietaireAValider->can(PermissionRegistry::FACTURE_EMETTRE));
+        $this->assertTrue($proprietaireAValider->can(PermissionRegistry::PRODUIT_CREATE));
+    }
+
+    /**
+     * Un responsable a toutes les autorisations de son magasin, sans case,
+     * et aucune dans un autre magasin de la société.
+     */
+    public function test_un_responsable_a_toutes_les_autorisations_de_son_magasin_et_aucune_ailleurs(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
+        $responsable = $this->responsable($magasin);
+
+        $this->assertSame(0, DB::table('autorisations_affectations')->join('affectations', 'affectations.id', '=', 'autorisations_affectations.affectation_id')->where('affectations.user_id', $responsable->id)->count());
+
+        app(TenantContext::class)->set($magasin);
+        foreach (PermissionRegistry::toutes() as $permission) {
+            $this->assertTrue($responsable->can($permission), "{$permission} dans son magasin");
+        }
+
+        app(TenantContext::class)->set($autre);
+        foreach (PermissionRegistry::toutes() as $permission) {
+            $this->assertFalse($responsable->can($permission), "{$permission} dans l'autre magasin");
+        }
+        $this->assertFalse($responsable->can('viewAny', Facture::class));
+    }
+
+    /**
+     * Une autorisation de société ne suffit jamais seule : l'administrateur
+     * d'une sélection, même autorisé à gérer les magasins et à nommer les
+     * responsables, ne gère ni ne nomme rien dans un magasin hors de sa
+     * sélection, et n'y a aucune autorisation de magasin.
+     */
+    public function test_une_autorisation_de_societe_ne_vaut_jamais_seule_pour_un_magasin_hors_de_la_portee(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $horsPortee = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Hors portée']);
+        $administrateur = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::RESPONSABLES_NOMMER]);
+
+        $this->assertTrue($administrateur->can(AutorisationsSociete::RESPONSABLES_NOMMER));
+        $this->assertTrue($administrateur->can('nommerUnResponsable', $magasin));
+        $this->assertTrue($administrateur->can('gererLesMagasins', $magasin->societe));
+        $this->assertTrue($administrateur->can('view', $magasin));
+        $this->assertFalse($administrateur->can('nommerUnResponsable', $horsPortee));
+        $this->assertFalse($administrateur->can('view', $horsPortee));
+        $this->assertFalse($administrateur->administreLeMagasin($horsPortee));
+        $this->assertFalse($administrateur->can('creerUnMagasin', $magasin->societe));
+
+        app(TenantContext::class)->set($horsPortee);
+        foreach (PermissionRegistry::toutes() as $permission) {
+            $this->assertFalse($administrateur->can($permission), $permission);
+        }
+    }
+
+    /**
+     * L'expert-comptable n'a que les consultations, quelles que soient les
+     * lignes que garderait la base : une affectation de responsable, des
+     * cases et des autorisations de société glissées sans les gardes ne lui
+     * donnent aucune écriture ni aucune autorisation de société.
+     */
+    public function test_l_expert_comptable_n_a_que_les_consultations_quelles_que_soient_les_lignes_en_base(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $expert = $this->expertComptable($magasin);
+        $this->retirerLaGardeDesDroits(GardesDesDroits::AFFECTATIONS);
+        $this->retirerLaGardeDesDroits(GardesDesDroits::CASES);
+        $this->retirerLaGardeDesDroits(GardesDesDroits::AUTORISATIONS_SOCIETE);
+        $affectation = DB::table('affectations')->insertGetId(['societe_id' => $magasin->societe_id, 'user_id' => $expert->id, 'magasin_id' => $magasin->id, 'role' => RoleMagasin::Vendeur->value, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('affectations')->insert(['societe_id' => $magasin->societe_id, 'user_id' => $expert->id, 'magasin_id' => null, 'role' => null, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('autorisations_affectations')->insert(array_map(fn (string $autorisation): array => ['affectation_id' => $affectation, 'autorisation' => $autorisation], PermissionRegistry::toutes()));
+        DB::table('autorisations_societe')->insert(array_map(fn (string $autorisation): array => ['societe_id' => $magasin->societe_id, 'user_id' => $expert->id, 'autorisation' => $autorisation], AutorisationsSociete::toutes()));
+        $expert = $expert->refresh();
+
+        app(TenantContext::class)->set($magasin);
+        foreach (PermissionRegistry::toutes() as $permission) {
+            $this->assertSame(in_array($permission, PermissionRegistry::consultations(), true), $expert->can($permission), $permission);
+        }
+        foreach (AutorisationsSociete::toutes() as $autorisation) {
+            $this->assertFalse($expert->can($autorisation), $autorisation);
+        }
+        $this->assertTrue($expert->can('viewAny', Facture::class));
+        $this->assertFalse($expert->can('create', Facture::class));
+        $this->assertFalse($expert->can('create', Client::class));
+        $this->assertFalse($expert->can('cloturer', ClotureCaisse::class));
+        $this->assertSame([], $expert->autorisationsDeSociete());
     }
 
     private function suspendre(Magasin $magasin): void

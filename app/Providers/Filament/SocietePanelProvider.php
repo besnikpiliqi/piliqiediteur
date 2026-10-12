@@ -3,9 +3,12 @@
 namespace App\Providers\Filament;
 
 use App\Domain\Tenancy\Models\Societe;
+use App\Filament\App\Pages\Auth\ChangerMotDePasseProvisoire;
+use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
+use App\Http\Middleware\ExigerUnMotDePasseDefinitif;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -27,8 +30,12 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 /**
  * L'espace d'administration d'une société (URL
  * /societe/{societe:uuid}/...) : son tableau de bord, sa vérification, son
- * identité légale et ses paramètres fiscaux, réservés à son propriétaire (voir
- * User::canAccessPanel() et SocietePolicy). La tenancy Filament y est
+ * identité légale et ses paramètres fiscaux, ses comptes (voir
+ * MembreResource), ouverts à son propriétaire et à ses administrateurs
+ * actifs, selon leurs autorisations et leur portée, jamais à un membre ni à
+ * un expert-comptable (voir User::canAccessPanel(), SocietePolicy et
+ * MembrePolicy). Un compte au mot de passe provisoire y est d'abord mené à
+ * son changement (voir ExigerUnMotDePasseDefinitif). La tenancy Filament y est
  * branchée sur Societe, sans menu de changement (un compte n'appartient
  * qu'à une seule société) ; le TenantContext n'y pose que la société (voir
  * BindTenantContextFromFilamentTenant) : tout modèle d'un magasin y échoue
@@ -46,8 +53,9 @@ class SocietePanelProvider extends PanelProvider
         return $panel
             ->id('societe')
             ->path('societe')
-            ->login()
+            ->login(Connexion::class)
             ->profile(ModifierProfil::class)
+            ->authenticatedRoutes(fn () => ChangerMotDePasseProvisoire::registerRoutes())
             ->tenant(Societe::class, slugAttribute: 'uuid')
             ->tenantMenu(false)
             ->tenantMiddleware([
@@ -81,7 +89,8 @@ class SocietePanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ])
+                ExigerUnMotDePasseDefinitif::class,
+            ], isPersistent: true)
             // Tant que la société n'est pas validée, ce qui reste désactivé.
             ->renderHook(PanelsRenderHook::CONTENT_START, fn (): View => view('filament.verification-en-cours', ['magasin' => null, 'societe' => Filament::getTenant()]));
     }

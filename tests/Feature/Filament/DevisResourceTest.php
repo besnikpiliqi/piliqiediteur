@@ -20,7 +20,6 @@ use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -708,9 +707,9 @@ class DevisResourceTest extends TestCase
     public function test_un_observateur_ne_supprime_pas_de_devis_en_masse(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $observateur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
-            'name' => 'Léa', 'email' => 'lea@example.test', 'password' => 'mot-de-passe-sur',
-        ], RoleMagasin::Observateur);
+        $observateur = $this->membre($magasin, RoleMagasin::Observateur, null, [
+            'name' => 'Léa', 'email' => 'lea@example.test',
+        ]);
         $this->actingAs($observateur);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);

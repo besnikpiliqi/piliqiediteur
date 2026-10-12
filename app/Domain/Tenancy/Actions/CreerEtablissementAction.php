@@ -30,9 +30,10 @@ use LogicException;
  * pour chacun des suivants.
  *
  * Contrôles, avant toute écriture :
- * - le propriétaire de la société, et lui seul, avec un compte actif,
- *   dans une société qui n'est pas en lecture seule (voir SocietePolicy) ;
- *   jamais dans une autre société que celle déjà active ;
+ * - le propriétaire de la société, ou un administrateur de tous ses
+ *   magasins autorisé à les gérer, dans une société qui n'est pas en
+ *   lecture seule (voir SocietePolicy::creerUnMagasin()) ; jamais dans une
+ *   autre société que celle déjà active ;
  * - le NIC, qui forme avec le SIREN de la société un SIRET valide, libre
  *   dans la société et, dans une société validée, qu'aucun magasin n'a
  *   réservé, même autrefois (voir SiretsDesMagasins) : le refus ne dit
@@ -58,26 +59,25 @@ use LogicException;
  * écritures qui ne font que la référencer, comme les entrées du journal
  * d'audit) : le magasin, toujours dans cette société, quel que soit
  * l'identifiant de société d'une requête (il ne se lit jamais dans les
- * données reçues) ; son client comptoir ; les autorisations que le
- * propriétaire cochera pour son équipe (voir SeedMagasinRolesAction) ; le
- * contrôle Sirene au registre des vérifications ; sa création au journal
- * d'audit. Dans une société validée, telle que la relit ce verrou (et non
+ * données reçues) ; son client comptoir ; le contrôle Sirene au registre
+ * des vérifications ; sa création au journal d'audit. Aucune affectation
+ * n'est créée. Dans une société validée, telle que la relit ce verrou (et non
  * telle qu'elle était au début de la requête, avant le contrôle Sirene),
  * le magasin se met aussitôt en activité : son SIRET se réserve, sa
  * première période d'activité s'ouvre, et les droits implicites du
- * propriétaire dans ce nouveau magasin s'inscrivent à son journal des
- * événements (voir MiseEnActiviteDesMagasins) ; dans une société en cours
+ * propriétaire et des administrateurs de tous les magasins dans ce nouveau
+ * magasin s'inscrivent à son journal des événements (voir
+ * MiseEnActiviteDesMagasins) ; dans une société en cours
  * de vérification, tout cela se fait à sa validation (voir
  * ValiderLaSocieteAction), qui, sous le même verrou, compte ce magasin
  * dès qu'il existe.
  */
 class CreerEtablissementAction
 {
-    public const MESSAGE_SANS_AUTORISATION = 'Seul le propriétaire de la société crée un magasin, tant que la société n\'est pas en lecture seule.';
+    public const MESSAGE_SANS_AUTORISATION = 'Seuls le propriétaire et un administrateur de tous les magasins autorisé à les gérer créent un magasin, tant que la société n\'est pas en lecture seule.';
 
     public function __construct(
         private readonly ControleSirene $controleSirene,
-        private readonly SeedMagasinRolesAction $seedMagasinRoles,
         private readonly MiseEnActiviteDesMagasins $miseEnActivite,
         private readonly JournalAudit $journalAudit,
     ) {}
@@ -97,7 +97,7 @@ class CreerEtablissementAction
         }
 
         return $contexte->runAsSociete($societe, function () use ($auteur, $societe, $donnees): Magasin {
-            if (Gate::forUser($auteur)->denies('gererLesMagasins', $societe)) {
+            if (Gate::forUser($auteur)->denies('creerUnMagasin', $societe)) {
                 throw new LogicException(self::MESSAGE_SANS_AUTORISATION);
             }
 
@@ -126,7 +126,6 @@ class CreerEtablissementAction
                     ...($etablissement === null ? [] : ControleSirene::adresseDe($etablissement)),
                 ]);
 
-                $this->seedMagasinRoles->handle();
                 $magasin->setRelation('societe', $verrouillee);
 
                 app(TenantContext::class)->runAs($magasin, function () use ($auteur, $verrouillee, $magasin): void {

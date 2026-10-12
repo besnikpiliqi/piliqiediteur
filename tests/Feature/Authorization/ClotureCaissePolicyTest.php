@@ -4,7 +4,6 @@ namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Models\ClotureCaisse;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
@@ -38,21 +37,18 @@ class ClotureCaissePolicyTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->vendeurQuiVoitLesClotures($magasin, 'paul@example.test');
-        $comptable = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Comptable', 'email' => 'comptable@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Comptable);
+        $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable(), ['name' => 'Comptable', 'email' => 'comptable@example.test']);
+        $expert = $this->expertComptable($magasin);
         $this->actingAs($vendeur);
         $clotureDuVendeur = ClotureCaisse::factory()->create();
 
         $this->assertTrue($comptable->can('view', $clotureDuVendeur));
+        $this->assertTrue($expert->can('view', $clotureDuVendeur));
+        $this->assertFalse($expert->can('cloturer', ClotureCaisse::class));
     }
 
     private function vendeurQuiVoitLesClotures(Magasin $magasin, string $email): User
     {
-        return app(CreerMembreMagasinAction::class)->handle(
-            $this->proprietaireDe($magasin),
-            $magasin,
-            ['name' => $email, 'email' => $email, 'password' => 'mot-de-passe-sur'],
-            RoleMagasin::Vendeur,
-            [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW],
-        );
+        return $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW], ['name' => $email, 'email' => $email]);
     }
 }

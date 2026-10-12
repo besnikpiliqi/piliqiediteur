@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Filament;
 
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\ParametresRelances;
@@ -167,7 +166,7 @@ class ParametresRelancesTest extends TestCase
     public function test_un_vendeur_n_accede_pas_aux_relances(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr']);
 
         $this->actingAs($vendeur)
             ->get(ParametresRelances::getUrl(tenant: $magasin))

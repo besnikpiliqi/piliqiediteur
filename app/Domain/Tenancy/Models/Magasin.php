@@ -13,11 +13,9 @@ use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Exceptions\IdentiteDeLaSocieteIncompleteException;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Enums\StatutMagasin;
-use App\Domain\Tenancy\Enums\StatutMembreMagasin;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Database\Factories\MagasinFactory;
 use Filament\Models\Contracts\HasName;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -26,7 +24,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
@@ -37,8 +34,9 @@ use LogicException;
  * Un établissement d'une société : son SIRET, son adresse, ses
  * coordonnées et ses paramètres locaux (barème, relances, échéance et
  * mentions des factures), avec sa caisse, ses stocks, ses ventes, ses
- * clients, son catalogue et son équipe, qu'il ne partage avec aucun autre
- * magasin (BelongsToMagasin + MagasinScope). Il imprime l'identité légale
+ * clients et son catalogue, qu'il ne partage avec aucun autre magasin
+ * (BelongsToMagasin + MagasinScope), et son équipe : les comptes de la
+ * société qui y sont affectés (voir Affectation). Il imprime l'identité légale
  * de sa société et en suit les réglages fiscaux (voir Societe et
  * Emetteur) ; aucun magasin n'a de privilège sur les autres.
  *
@@ -661,27 +659,6 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * Les membres de son équipe, rattachés à lui seul (voir MagasinUser) :
-     * le propriétaire de la société n'y figure pas.
-     */
-    public function utilisateurs(): BelongsToMany
-    {
-        return $this->belongsToMany(User::class, 'magasin_user')
-            ->using(MagasinUser::class)
-            ->withPivot(['role', 'statut', 'joined_at'])
-            ->withTimestamps();
-    }
-
-    /**
-     * Les membres qui ont aujourd'hui accès au magasin : un rattachement
-     * suspendu ne reçoit rien de lui (voir les notifications).
-     */
-    public function membresActifs(): BelongsToMany
-    {
-        return $this->utilisateurs()->wherePivot('statut', StatutMembreMagasin::Actif->value);
-    }
-
-    /**
      * Ses périodes d'activité (voir PeriodesDActivite) : les tickets Z ne
      * se produisent que pour leurs jours.
      *
@@ -730,12 +707,14 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * Les rattachements des membres de l'équipe (voir CreateMembreEquipe et
-     * EmailLibrePourUnNouveauMembre).
+     * Les affectations des comptes de la société à ce magasin (voir
+     * Affectation) : celles à tous les magasins n'y figurent pas.
+     *
+     * @return HasMany<Affectation, $this>
      */
-    public function membres(): HasMany
+    public function affectations(): HasMany
     {
-        return $this->hasMany(MagasinUser::class);
+        return $this->hasMany(Affectation::class);
     }
 
     public function getFilamentName(): string

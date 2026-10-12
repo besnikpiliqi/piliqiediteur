@@ -17,7 +17,6 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -286,13 +285,7 @@ class EnvoieLesDocumentsTest extends TestCase
     {
         $this->travelTo('2026-10-01 10:00:00');
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $vendeur = app(CreerMembreMagasinAction::class)->handle(
-            $this->proprietaireDe($magasin),
-            $magasin,
-            ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr', 'password' => 'mot-de-passe-sur'],
-            RoleMagasin::Vendeur,
-            array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [PermissionRegistry::FACTURE_ENVOYER])),
-        );
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [PermissionRegistry::FACTURE_ENVOYER])), ['name' => 'Vendeur', 'email' => 'vendeur@ma-boutique.fr']);
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         app(TenantContext::class)->set($magasin);

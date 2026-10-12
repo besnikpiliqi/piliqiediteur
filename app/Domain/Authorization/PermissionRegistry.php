@@ -8,15 +8,26 @@ use InvalidArgumentException;
  * Liste centrale des permissions de l'application. Aucune chaîne magique
  * ne doit être écrite ailleurs ("client.create", ...) : on référence
  * toujours ces constantes, pour que renommer/retrouver une permission
- * reste sûr (IDE, recherche, refactor).
+ * reste sûr (IDE, recherche, refactor). La base ne connaît qu'elles : la
+ * migration du référentiel des autorisations de magasin les y inscrit, et
+ * une case qui n'y figure pas est refusée par sa clé étrangère (voir
+ * Affectation::cocher()).
  *
- * Ces permissions sont scopées par magasin (Spatie Permission en mode
- * teams, voir config/permission.php) : accorder "client.create" à un
- * membre dans le magasin A n'accorde rien dans le magasin B. Le
- * propriétaire de la société les a toutes, dans chacun de ses magasins,
- * sans case (voir ControleDesDroits) ; un membre de l'équipe a celles que
- * le propriétaire coche pour lui, à partir du modèle de son rôle (voir
- * RoleMagasin::permissionsParDefaut() et MettreAJourMembreMagasinAction).
+ * Ces autorisations valent magasin par magasin (voir Affectation et
+ * User::autorisationsDans()) : cocher "client.create" pour un vendeur dans
+ * le magasin A ne lui donne rien dans le magasin B. Sans aucune case, le
+ * propriétaire de la société les a toutes dans chacun de ses magasins, un
+ * responsable toutes dans son magasin, et un expert-comptable les seules
+ * consultations dans chaque magasin réel de la société (voir
+ * consultations()). Un vendeur ou un observateur a celles de son
+ * affectation à ce magasin, cochées par le propriétaire ou un responsable
+ * du magasin à partir du modèle de son rôle (voir
+ * RoleMagasin::permissionsParDefaut()), jamais au-delà des autorisations
+ * de celui qui coche ; un administrateur, celles que le propriétaire lui
+ * a cochées pour tous les magasins ou pour chaque magasin de sa sélection
+ * (voir modeleDeLAdministrateur()). Les autorisations de la société
+ * elle-même (gérer ses magasins, nommer ses responsables, ses paramètres)
+ * sont à part (voir AutorisationsSociete).
  */
 final class PermissionRegistry
 {
@@ -66,9 +77,9 @@ final class PermissionRegistry
 
     // Un vendeur voit le prix/stock de chaque produit (nécessaire pour
     // vendre), mais pas la valorisation globale du stock du magasin --
-    // information sensible : parmi les membres, cochée d'office pour
-    // l'administrateur et le comptable seulement (voir
-    // RoleMagasin::permissionsParDefaut() et ProduitResource).
+    // information sensible : aucun modèle de vendeur ou d'observateur ne
+    // la coche d'office ; le propriétaire, un responsable et un
+    // expert-comptable l'ont toujours (voir ProduitResource).
     public const PRODUIT_VOIR_VALEUR_STOCK = 'produit.voir_valeur_stock';
 
     /**
@@ -115,22 +126,13 @@ final class PermissionRegistry
      * Régler les paramètres du magasin : le délai de paiement et les
      * mentions entre professionnels de ses factures (ParametresFactures).
      * L'identité légale et la TVA sont celles de la société, réglées dans
-     * son administration. Aucun modèle de rôle ne la coche d'office : le
-     * propriétaire la détient, et la coche pour le membre de son choix.
+     * son administration. Le propriétaire et les responsables du magasin
+     * l'ont toujours ; aucun modèle ne la coche d'office, pas même celui
+     * de l'administrateur : le propriétaire ou un responsable la coche
+     * pour qui il veut. L'équipe du magasin se gère par son responsable et
+     * le propriétaire (voir EquipeDuMagasinResource).
      */
     public const PARAMETRES_GERER = 'parametres.gerer';
-
-    // Équipe (membres du magasin) -- cochée d'office pour l'administrateur
-    // (voir RoleMagasin::permissionsParDefaut()). Gérer l'équipe ne fait
-    // jamais obtenir une autorisation qu'on n'a pas : seul le propriétaire
-    // coche les autorisations d'un membre et change son rôle (voir
-    // CreerMembreMagasinAction, MettreAJourMembreMagasinAction et
-    // ReinitialiserMotDePasseMembreAction).
-    public const EQUIPE_VIEW = 'equipe.view';
-
-    public const EQUIPE_CREER = 'equipe.creer';
-
-    public const EQUIPE_MODIFIER = 'equipe.modifier';
 
     // Paiements -- ni modification ni suppression après coup (voir
     // ProtegeLesDonneesValidees et PaiementPolicy) : une erreur de saisie se
@@ -142,9 +144,9 @@ final class PermissionRegistry
 
     /**
      * Contre-passer un paiement saisi par erreur (voir
-     * ContrePasserPaiementAction et PaiementPolicy::contrePasser()) :
-     * cochée d'office pour l'administrateur et le comptable, cochable pour
-     * un vendeur, sur les paiements qu'il voit.
+     * ContrePasserPaiementAction et PaiementPolicy::contrePasser()) : le
+     * propriétaire et les responsables l'ont toujours ; cochable pour un
+     * vendeur, sur les paiements qu'il voit.
      */
     public const PAIEMENT_CONTRE_PASSER = 'paiement.contre_passer';
 
@@ -199,7 +201,6 @@ final class PermissionRegistry
             self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ENVOYER, self::RELANCES_REGLER,
             self::PARAMETRES_GERER,
-            self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
             self::PAIEMENT_VIEW, self::PAIEMENT_CREER, self::PAIEMENT_CONTRE_PASSER,
             self::AVOIR_VIEW, self::AVOIR_CREER, self::AVOIR_ENVOYER,
             self::CLOTURE_CAISSE_VIEW, self::CLOTURE_CAISSE_VIEW_TOUTES, self::CLOTURE_CAISSE_GERER,
@@ -210,15 +211,20 @@ final class PermissionRegistry
     }
 
     /**
-     * Les autorisations qui restent permises quand le magasin est suspendu
-     * ou fermé (voir ControleDesDroits) : tout consulter, clôturer la
-     * journée et gérer l'équipe, pour couper un accès. Une nouvelle
-     * autorisation de consultation s'ajoute ici ; oubliée, elle est
-     * refusée en lecture seule, ce qui reste sûr.
+     * Les autorisations qui ne font que lire : les fiches, les documents,
+     * les paiements, les achats, les clôtures, la caisse sécurisée (son
+     * registre, son journal des événements, leur export et le contrôle
+     * d'intégrité) et les téléchargements. Ce sont toutes les autorisations
+     * d'un expert-comptable dans chaque magasin réel de sa société (voir
+     * User::autorisationsDans()), et celles qui restent permises dans un
+     * magasin en lecture seule (voir permisesEnLectureSeule()). Une
+     * nouvelle autorisation de consultation s'ajoute ici ; oubliée, elle
+     * manque à l'expert-comptable et est refusée en lecture seule, ce qui
+     * reste sûr.
      *
      * @return list<string>
      */
-    public static function permisesEnLectureSeule(): array
+    public static function consultations(): array
     {
         return [
             self::CLIENT_VIEW,
@@ -226,14 +232,41 @@ final class PermissionRegistry
             self::PRODUIT_VIEW, self::PRODUIT_VOIR_VALEUR_STOCK,
             self::DEVIS_VIEW,
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES,
-            self::EQUIPE_VIEW, self::EQUIPE_CREER, self::EQUIPE_MODIFIER,
             self::PAIEMENT_VIEW,
             self::AVOIR_VIEW,
-            self::CLOTURE_CAISSE_VIEW, self::CLOTURE_CAISSE_VIEW_TOUTES, self::CLOTURE_CAISSE_GERER,
+            self::CLOTURE_CAISSE_VIEW, self::CLOTURE_CAISSE_VIEW_TOUTES,
             self::FACTURE_ACHAT_VIEW,
             self::AVOIR_FOURNISSEUR_VIEW,
             self::CAISSE_SECURISEE_CONSULTER,
         ];
+    }
+
+    /**
+     * Les autorisations qui restent permises quand le magasin est suspendu
+     * ou fermé (voir ControleDesDroits) : tout consulter, et clôturer la
+     * journée, car les clôtures continuent jusqu'au bout. L'équipe reste
+     * gérable, par le propriétaire et les responsables (voir
+     * ControleDesDroits), et dans l'administration de la société (voir
+     * AutorisationsSociete::permisesEnLectureSeule()).
+     *
+     * @return list<string>
+     */
+    public static function permisesEnLectureSeule(): array
+    {
+        return [...self::consultations(), self::CLOTURE_CAISSE_GERER];
+    }
+
+    /**
+     * Le modèle des autorisations de magasin d'un nouvel administrateur,
+     * que le propriétaire décoche à son gré (voir
+     * CreerAdministrateurAction) : toutes, sauf les paramètres du magasin,
+     * qu'il coche pour qui il veut.
+     *
+     * @return list<string>
+     */
+    public static function modeleDeLAdministrateur(): array
+    {
+        return array_values(array_diff(self::toutes(), [self::PARAMETRES_GERER]));
     }
 
     /**
@@ -259,8 +292,8 @@ final class PermissionRegistry
     }
 
     /**
-     * Les autorisations cochées pour un membre, refusées dès que l'une
-     * d'elles est inconnue.
+     * Les autorisations cochées pour une affectation, refusées dès que
+     * l'une d'elles est inconnue, sans doublon, dans l'ordre alphabétique.
      *
      * @param  array<array-key, mixed>  $permissions
      * @return list<string>
@@ -275,12 +308,16 @@ final class PermissionRegistry
             }
         }
 
-        return array_values($permissions);
+        $connues = array_values(array_unique($permissions));
+        sort($connues);
+
+        return $connues;
     }
 
     /**
      * Libellés français affichés dans la liste des autorisations d'un
-     * membre (voir MembreEquipeResource) -- le propriétaire n'a jamais à
+     * vendeur, d'un observateur ou d'un administrateur (voir
+     * EquipeDuMagasinResource et MembreResource) -- personne n'a jamais à
      * lire une chaîne technique comme "avoir.view".
      *
      * @return array<string, string>
@@ -314,9 +351,6 @@ final class PermissionRegistry
             self::FACTURE_ENVOYER => 'Factures : envoyer par e-mail et relancer',
             self::RELANCES_REGLER => 'Relances : régler les relances automatiques',
             self::PARAMETRES_GERER => 'Paramètres du magasin : échéance et mentions des factures',
-            self::EQUIPE_VIEW => 'Équipe : voir',
-            self::EQUIPE_CREER => 'Équipe : créer des comptes',
-            self::EQUIPE_MODIFIER => 'Équipe : modifier',
             self::PAIEMENT_VIEW => 'Paiements : voir',
             self::PAIEMENT_CREER => 'Paiements : enregistrer',
             self::PAIEMENT_CONTRE_PASSER => 'Paiements : contre-passer une saisie erronée',

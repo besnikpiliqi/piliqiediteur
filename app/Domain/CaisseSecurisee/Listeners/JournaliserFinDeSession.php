@@ -24,9 +24,11 @@ use Illuminate\Support\Facades\DB;
  * L'événement est déclenché avant que la session soit invalidée, quand
  * l'utilisateur est encore celui de la garde par défaut : il est
  * l'opérateur de la fin de session. Elle s'écrit dans le registre de
- * chaque magasin (TenantContext::runAs()), seulement si l'utilisateur en
- * est encore le propriétaire de la société ou un membre de l'équipe, quel
- * que soit son statut : retiré de l'équipe, il n'a plus rien à y inscrire.
+ * chaque magasin (TenantContext::runAs()), seulement si l'utilisateur y a
+ * encore des droits, quel que soit son statut (voir User::droitsDans()) :
+ * le propriétaire de la société, un expert-comptable dans un magasin réel,
+ * ou un compte affecté à ce magasin ou à tous ; qui n'y en a plus n'a plus
+ * rien à y inscrire.
  *
  * Une déconnexion n'est jamais bloquée : laisser une session ouverte
  * parce que le registre refuse d'écrire (clé de signature absente,
@@ -50,7 +52,7 @@ class JournaliserFinDeSession
             ->where('societe_id', $utilisateur->societe_id)
             ->orderBy('id')
             ->get()
-            ->filter(fn (Magasin $magasin): bool => $utilisateur->estProprietaireDuMagasin($magasin) || $utilisateur->magasins()->whereKey($magasin->getKey())->exists());
+            ->filter(fn (Magasin $magasin): bool => $utilisateur->droitsDans($magasin) !== null);
 
         foreach ($magasins as $magasin) {
             try {

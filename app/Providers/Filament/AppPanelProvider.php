@@ -3,10 +3,15 @@
 namespace App\Providers\Filament;
 
 use App\Domain\Tenancy\Models\Magasin;
+use App\Filament\App\Pages\Auth\ChangerMotDePasseProvisoire;
+use App\Filament\App\Pages\Auth\Connexion;
+use App\Filament\App\Pages\Auth\DemandeDeLien;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
 use App\Filament\App\Pages\Auth\ModifierProfil;
+use App\Filament\App\Pages\Auth\PageDuLien;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
+use App\Http\Middleware\ExigerUnMotDePasseDefinitif;
 use App\Http\Middleware\JournaliserOuvertureDeSession;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
@@ -30,21 +35,23 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 /**
  * Panneau applicatif quotidien des magasins : le propriétaire de la
- * société, dans chacun de ses magasins, et les membres de l'équipe d'un
- * magasin y gèrent clients, produits, factures. C'est le panneau par
- * défaut (->default()), avec la tenancy Filament branchée sur Magasin (URL
- * /app/{magasin:uuid}/...), et celui de l'inscription d'une société (voir
- * InscriptionSociete). L'administration de la société a son propre
- * panneau (voir SocietePanelProvider).
+ * société, dans chacun de ses magasins, ses administrateurs, ses
+ * experts-comptables (en lecture) et les membres de l'équipe de chaque
+ * magasin y gèrent clients, produits, factures, et le propriétaire et les
+ * responsables d'un magasin son équipe (voir EquipeDuMagasinResource).
+ * C'est le panneau par défaut (->default()), avec la tenancy Filament
+ * branchée sur Magasin (URL /app/{magasin:uuid}/...), et celui de
+ * l'inscription d'une société (voir InscriptionSociete). L'administration
+ * de la société a son propre panneau (voir SocietePanelProvider).
  *
  * BindTenantContextFromFilamentTenant (en tenantMiddleware, donc exécuté
  * après que Filament ait résolu le tenant depuis l'URL) alimente notre
  * TenantContext -- seule source de vérité utilisée par MagasinScope, les
- * policies et le resolver de permissions Spatie (voir
- * app/Domain/Tenancy/Services/MagasinTeamResolver.php).
+ * policies et la lecture des droits (voir ControleDesDroits).
  * JournaliserOuvertureDeSession le suit : une fois le magasin actif
  * positionné, il inscrit l'ouverture de session (JET 80) au journal des
- * événements de ce magasin.
+ * événements de ce magasin. Avant tout cela, ExigerUnMotDePasseDefinitif
+ * mène un compte au mot de passe provisoire à son changement.
  */
 class AppPanelProvider extends PanelProvider
 {
@@ -54,16 +61,16 @@ class AppPanelProvider extends PanelProvider
             ->default()
             ->id('app')
             ->path('app')
-            ->login()
+            ->login(Connexion::class)
             ->registration(InscriptionSociete::class)
-            // « Mot de passe oublié » envoie un lien par e-mail (voir
-            // MAIL_MAILER ; textes dans lang/fr/passwords.php et
-            // lang/fr.json) ; le profil permet à chacun de changer son
-            // nom, son adresse de connexion et son mot de passe (voir
-            // ModifierProfil). Depuis l'équipe, le magasin donne un
-            // nouveau mot de passe à ses membres, jamais au propriétaire de
-            // la société ni à celui qui agit (voir ReinitialiserMotDePasseMembreAction).
-            ->passwordReset()
+            // « Mot de passe oublié » envoie un lien par e-mail à tout
+            // compte (voir DemandeDeLien), qui mène à la page du lien de
+            // PILIQI (voir PageDuLien) : choisir son mot de passe, ou
+            // refuser le compte s'il peut l'être. Le profil permet à chacun
+            // de changer son nom, son adresse de connexion et son mot de
+            // passe (voir ModifierProfil).
+            ->passwordReset(DemandeDeLien::class, PageDuLien::class)
+            ->authenticatedRoutes(fn () => ChangerMotDePasseProvisoire::registerRoutes())
             ->profile(ModifierProfil::class)
             ->tenant(Magasin::class, slugAttribute: 'uuid')
             ->tenantMiddleware([
@@ -108,7 +115,8 @@ class AppPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ])
+                ExigerUnMotDePasseDefinitif::class,
+            ], isPersistent: true)
             // Avant les scripts de Filament/Livewire : le script doit
             // s'abonner à "livewire:init" avant que Livewire ne démarre.
             ->renderHook(PanelsRenderHook::SCRIPTS_BEFORE, fn (): View => view('filament.app.saisie-protegee'))

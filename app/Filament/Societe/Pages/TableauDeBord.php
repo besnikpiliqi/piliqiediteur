@@ -16,11 +16,13 @@ use Illuminate\Database\Eloquent\Collection;
 /**
  * Le tableau de bord de la société : où en est sa vérification, ce qui
  * manque à son identité pour facturer un professionnel, ses magasins
- * réels, chacun avec son SIRET, son établissement (vérifié ou à vérifier)
- * et son état, et son magasin de démonstration, ouvert ici tant que la
- * société est en cours de vérification (voir OuvrirLaDemonstrationAction).
- * Ses magasins se lisent par la société (Societe::magasins()) : ceux
- * d'aucune autre société.
+ * réels de la portée de la personne connectée (tous pour le propriétaire
+ * et un administrateur de tous les magasins, ceux de sa sélection pour un
+ * autre administrateur), chacun avec son SIRET, son établissement (vérifié
+ * ou à vérifier) et son état, et son magasin de démonstration, ouvert ici
+ * tant que la société est en cours de vérification (voir
+ * OuvrirLaDemonstrationAction). Les magasins se lisent par la portée, dans
+ * la société affichée : ceux d'aucune autre société.
  */
 class TableauDeBord extends Dashboard
 {
@@ -65,18 +67,21 @@ class TableauDeBord extends Dashboard
     }
 
     /**
-     * Ses magasins réels.
+     * Ses magasins réels de la portée de la personne connectée.
      *
      * @return Collection<int, Magasin>
      */
     public function magasins(): Collection
     {
-        return $this->societe()->magasinsReels()->orderBy('nom')->orderBy('id')->get();
+        return auth()->user()->magasinsDeSaPortee()->where('est_demonstration', false)->orderBy('nom')->orderBy('id')->get();
     }
 
+    /**
+     * Le magasin de démonstration, pour qui administre tous les magasins.
+     */
     public function demonstration(): ?Magasin
     {
-        return $this->societe()->demonstration()->first();
+        return auth()->user()->administreTousLesMagasins() ? $this->societe()->demonstration()->first() : null;
     }
 
     protected function getHeaderActions(): array

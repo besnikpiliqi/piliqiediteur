@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Actions\ExporterJournalDesEvenementsAction;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
@@ -13,7 +14,6 @@ use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Paiement;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\EnregistrementFiscalResource;
@@ -99,21 +99,21 @@ class EnregistrementFiscalResourceTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: RoleMagasin}>
+     * @return array<string, array{0: RoleMagasin, 1: list<string>}>
      */
     public static function rolesQuiConsultent(): array
     {
         return [
-            'administrateur' => [RoleMagasin::Administrateur],
-            'comptable' => [RoleMagasin::Comptable],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur()],
+            'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable()],
         ];
     }
 
     #[DataProvider('rolesQuiConsultent')]
-    public function test_ce_membre_consulte_la_caisse_securisee(RoleMagasin $role): void
+    public function test_ce_membre_consulte_la_caisse_securisee(RoleMagasin $role, ?array $autorisations): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Camille', 'email' => 'camille@example.test', 'password' => 'mot-de-passe-sur'], $role);
+        $membre = $this->membre($magasin, $role, $autorisations, ['name' => 'Camille', 'email' => 'camille@example.test']);
 
         $reponse = $this->actingAs($membre)->get(EnregistrementFiscalResource::getUrl('index', ['tenant' => $magasin]));
 
@@ -123,7 +123,7 @@ class EnregistrementFiscalResourceTest extends TestCase
     public function test_un_vendeur_n_ouvre_pas_la_caisse_securisee(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $vendeur = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, ['name' => 'Paul', 'email' => 'paul@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul', 'email' => 'paul@example.test']);
 
         $reponse = $this->actingAs($vendeur)->get(EnregistrementFiscalResource::getUrl('index', ['tenant' => $magasin]));
 
@@ -345,16 +345,18 @@ class EnregistrementFiscalResourceTest extends TestCase
 
     /**
      * V1-7 : la trace d'un événement (adresse IP et navigateur) ne se lit
-     * que par le propriétaire. Le comptable, qui consulte la caisse
-     * sécurisée et exporte son journal, voit l'événement et son contenu
-     * signé, et laisse vides les deux colonnes de la trace dans l'export.
+     * que par le propriétaire. Un membre aux cases de l'ancien comptable de
+     * magasin, qui consulte la caisse sécurisée et exporte son journal,
+     * voit l'événement et son contenu signé, et laisse vides les deux
+     * colonnes de la trace dans l'export ; un expert-comptable voit
+     * l'événement sans sa trace.
      */
     public function test_seul_le_proprietaire_lit_l_adresse_ip_et_le_navigateur_d_un_evenement(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
         $proprietaire = User::factory()->create();
         $magasin = $this->magasinDe($proprietaire);
-        $comptable = app(CreerMembreMagasinAction::class)->handle($proprietaire, $magasin, ['name' => 'Camille', 'email' => 'camille@example.test', 'password' => 'mot-de-passe-sur'], RoleMagasin::Comptable);
+        $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable(), ['name' => 'Camille', 'email' => 'camille@example.test']);
         $this->actingAs($proprietaire)->withHeader('User-Agent', 'Navigateur du propriétaire')->get("/app/{$magasin->uuid}")->assertSuccessful();
         Filament::setTenant($magasin);
         $ouverture = EnregistrementFiscal::query()->where('type', '80')->sole();
@@ -370,6 +372,8 @@ class EnregistrementFiscalResourceTest extends TestCase
         $this->assertSame(['260', '130', '80', '110'], array_column($lignes, 3));
         $this->assertSame([['', ''], ['', ''], ['', ''], ['', '']], array_map(static fn (array $ligne): array => [$ligne[7], $ligne[8]], $lignes));
         $this->assertDatabaseCount('traces_evenements', 2);
+        Livewire::actingAs($this->expertComptable($magasin))->test(ViewEnregistrementFiscal::class, ['record' => $ouverture->getRouteKey()])
+            ->assertSee('80 – Ouverture de session dans le magasin')->assertDontSee('Trace technique')->assertDontSee('Navigateur du propriétaire');
     }
 
     /**

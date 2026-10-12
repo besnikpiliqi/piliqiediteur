@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Authorization;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Service;
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -22,25 +22,25 @@ class ServicePolicyTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * @return array<string, array{RoleMagasin, bool}>
+     * @return array<string, array{RoleMagasin, list<string>|null, bool}>
      */
     public static function roles(): array
     {
         return [
-            'administrateur' => [RoleMagasin::Administrateur, true],
-            'comptable' => [RoleMagasin::Comptable, false],
-            'vendeur' => [RoleMagasin::Vendeur, false],
-            'observateur' => [RoleMagasin::Observateur, false],
+            'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(), true],
+            'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable(), false],
+            'vendeur' => [RoleMagasin::Vendeur, null, false],
+            'observateur' => [RoleMagasin::Observateur, null, false],
         ];
     }
 
     #[DataProvider('roles')]
-    public function test_chaque_role_voit_les_services_et_seuls_les_gestionnaires_les_modifient(RoleMagasin $role, bool $gereLeCatalogue): void
+    public function test_chaque_role_voit_les_services_et_seuls_les_gestionnaires_les_modifient(RoleMagasin $role, ?array $autorisations, bool $gereLeCatalogue): void
     {
         $magasin = $this->creerMagasin();
-        $membre = app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
-            'name' => 'Membre', 'email' => 'membre@example.test', 'password' => 'mot-de-passe-sur',
-        ], $role);
+        $membre = $this->membre($magasin, $role, $autorisations, [
+            'name' => 'Membre', 'email' => 'membre@example.test',
+        ]);
         $service = Service::factory()->create();
 
         $this->assertTrue($membre->can('viewAny', Service::class));

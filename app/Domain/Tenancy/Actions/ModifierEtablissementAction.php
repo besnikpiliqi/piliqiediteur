@@ -33,8 +33,9 @@ use LogicException;
  * magasin ne change que par le registre des SIRET réservés.
  *
  * Réservé à qui gère les magasins de la société (voir SocietePolicy), dans
- * cette société ; le magasin de démonstration, à l'identité fictive, ne se
- * modifie pas. Tout se fait sous le verrou du registre du magasin, qui
+ * cette société et pour un magasin de sa portée (voir
+ * User::administreLeMagasin()) ; le magasin de démonstration, à l'identité
+ * fictive, ne se modifie pas. Tout se fait sous le verrou du registre du magasin, qui
  * reçoit un changement de SIRET à son journal des événements (JET 270), et
  * la ligne du magasin se relit verrouillée : un code devenu définitif
  * pendant la saisie n'est pas modifié, le reste l'est. Un code ou un
@@ -45,6 +46,8 @@ use LogicException;
  */
 class ModifierEtablissementAction
 {
+    public const MESSAGE_SANS_AUTORISATION = 'Seuls le propriétaire et un administrateur autorisé à gérer les magasins modifient un magasin de leur portée, tant que la société n\'est pas en lecture seule.';
+
     public const MESSAGE_TERRITOIRE_CHANGE = 'Cette adresse change le territoire de TVA du magasin : son taux par défaut et ses règles de vente en dépendent. Elle ne peut pas être enregistrée.';
 
     public const MESSAGE_SIRET_SOCIETE_VALIDEE = 'Le SIRET d\'un magasin d\'une société validée ne change que par un changement de SIRET.';
@@ -71,12 +74,12 @@ class ModifierEtablissementAction
         $contexte = app(TenantContext::class);
 
         if ($contexte->aUneSociete() && $contexte->societe()->getKey() !== $societe->getKey()) {
-            throw new LogicException(CreerEtablissementAction::MESSAGE_SANS_AUTORISATION);
+            throw new LogicException(self::MESSAGE_SANS_AUTORISATION);
         }
 
         return $contexte->runAsSociete($societe, function () use ($auteur, $magasin, $societe, $donnees): Magasin {
-            if (Gate::forUser($auteur)->denies('gererLesMagasins', $societe)) {
-                throw new LogicException(CreerEtablissementAction::MESSAGE_SANS_AUTORISATION);
+            if (Gate::forUser($auteur)->denies('gererLesMagasins', $societe) || ! $auteur->administreLeMagasin($magasin)) {
+                throw new LogicException(self::MESSAGE_SANS_AUTORISATION);
             }
 
             if ($magasin->est_demonstration) {

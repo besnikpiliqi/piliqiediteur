@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Filament;
 
-use App\Domain\Tenancy\Actions\CreerMembreMagasinAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Filament\App\Pages\Auth\ModifierProfil;
@@ -53,7 +52,7 @@ class ModifierProfilTest extends TestCase
             ->fillForm([
                 'name' => 'Paul Martin',
                 'email' => 'paul.martin@example.test',
-                'mot_de_passe_actuel' => 'ancien-mot-de-passe',
+                'mot_de_passe_actuel' => self::MOT_DE_PASSE_CHOISI,
             ])
             ->call('save')
             ->assertHasNoFormErrors();
@@ -61,9 +60,9 @@ class ModifierProfilTest extends TestCase
         $vendeur->refresh();
         $this->assertSame('Paul Martin', $vendeur->name);
         $this->assertSame('paul.martin@example.test', $vendeur->email);
-        $this->assertTrue(Hash::check('ancien-mot-de-passe', $vendeur->password));
-        $this->assertTrue(Auth::validate(['email' => 'paul.martin@example.test', 'password' => 'ancien-mot-de-passe']));
-        $this->assertFalse(Auth::validate(['email' => 'paul@example.test', 'password' => 'ancien-mot-de-passe']));
+        $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $vendeur->password));
+        $this->assertTrue(Auth::validate(['email' => 'paul.martin@example.test', 'password' => self::MOT_DE_PASSE_CHOISI]));
+        $this->assertFalse(Auth::validate(['email' => 'paul@example.test', 'password' => self::MOT_DE_PASSE_CHOISI]));
         $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'paul@example.test']);
         $this->assertDatabaseHas('password_reset_tokens', ['email' => 'autre@example.test']);
     }
@@ -113,7 +112,7 @@ class ModifierProfilTest extends TestCase
         Livewire::test(ModifierProfil::class)
             ->fillForm([
                 'email' => 'prise@example.test',
-                'mot_de_passe_actuel' => 'ancien-mot-de-passe',
+                'mot_de_passe_actuel' => self::MOT_DE_PASSE_CHOISI,
             ])
             ->call('save')
             ->assertHasFormErrors(['email' => 'Cette adresse e-mail ne peut pas être utilisée.']);
@@ -134,7 +133,7 @@ class ModifierProfilTest extends TestCase
         Livewire::test(ModifierProfil::class)
             ->fillForm([
                 'email' => ' PRISE@Example.test ',
-                'mot_de_passe_actuel' => 'ancien-mot-de-passe',
+                'mot_de_passe_actuel' => self::MOT_DE_PASSE_CHOISI,
             ])
             ->call('save')
             ->assertHasFormErrors(['email' => 'Cette adresse e-mail ne peut pas être utilisée.']);
@@ -150,7 +149,7 @@ class ModifierProfilTest extends TestCase
         Livewire::test(ModifierProfil::class)
             ->fillForm([
                 'name' => '',
-                'mot_de_passe_actuel' => 'ancien-mot-de-passe',
+                'mot_de_passe_actuel' => self::MOT_DE_PASSE_CHOISI,
             ])
             ->call('save')
             ->assertHasFormErrors(['name' => 'Le champ nom est obligatoire.']);
@@ -167,7 +166,7 @@ class ModifierProfilTest extends TestCase
             ->fillForm([
                 'password' => 'nouveau-mot-de-passe',
                 'passwordConfirmation' => 'nouveau-mot-de-passe',
-                'mot_de_passe_actuel' => 'ancien-mot-de-passe',
+                'mot_de_passe_actuel' => self::MOT_DE_PASSE_CHOISI,
             ])
             ->call('save')
             ->assertHasNoFormErrors();
@@ -188,7 +187,7 @@ class ModifierProfilTest extends TestCase
             ->call('save')
             ->assertHasFormErrors(['mot_de_passe_actuel' => 'Saisissez votre mot de passe actuel.']);
 
-        $this->assertTrue(Hash::check('ancien-mot-de-passe', $vendeur->fresh()->password));
+        $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $vendeur->fresh()->password));
     }
 
     /**
@@ -201,11 +200,11 @@ class ModifierProfilTest extends TestCase
         $this->actingAs($vendeur);
 
         Livewire::test(ModifierProfil::class)
-            ->fillForm(['mot_de_passe_actuel' => 'ancien-mot-de-passe'])
+            ->fillForm(['mot_de_passe_actuel' => self::MOT_DE_PASSE_CHOISI])
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertTrue(Hash::check('ancien-mot-de-passe', $vendeur->fresh()->password));
+        $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $vendeur->fresh()->password));
     }
 
     public function test_un_mot_de_passe_actuel_faux_est_refuse(): void
@@ -222,17 +221,16 @@ class ModifierProfilTest extends TestCase
             ->call('save')
             ->assertHasFormErrors(['mot_de_passe_actuel' => 'Le mot de passe actuel est incorrect.']);
 
-        $this->assertTrue(Hash::check('ancien-mot-de-passe', $vendeur->fresh()->password));
+        $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $vendeur->fresh()->password));
     }
 
     private function creerVendeur(): User
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 
-        return app(CreerMembreMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, [
+        return $this->membre($magasin, RoleMagasin::Vendeur, null, [
             'name' => 'Paul',
             'email' => 'paul@example.test',
-            'password' => 'ancien-mot-de-passe',
-        ], RoleMagasin::Vendeur);
+        ]);
     }
 }

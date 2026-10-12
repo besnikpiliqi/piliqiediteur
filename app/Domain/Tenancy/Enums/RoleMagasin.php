@@ -6,101 +6,55 @@ use App\Domain\Authorization\PermissionRegistry;
 use Filament\Support\Contracts\HasLabel;
 
 /**
- * Le rôle d'un membre, sur le pivot magasin_user : un libellé, et le
- * modèle des autorisations cochées pour lui à sa création ou quand le
- * propriétaire change son rôle (voir permissionsParDefaut()). Le
- * propriétaire coche ou décoche ensuite ce qu'il veut pour chacun (voir
- * CreerMembreMagasinAction et MettreAJourMembreMagasinAction).
+ * Le rôle d'un membre dans un magasin (voir Affectation::$role) :
+ * - responsable : il a toutes les autorisations de son magasin, sans
+ *   aucune case (voir User::autorisationsDans()), et jamais celles de la
+ *   société ; nommé par le propriétaire, ou par un administrateur autorisé
+ *   à nommer les responsables dans un magasin de sa portée ;
+ * - vendeur, observateur : le rôle n'est qu'un modèle qui précoche des
+ *   autorisations (voir permissionsParDefaut()) ; le propriétaire ou un
+ *   responsable du magasin coche ou décoche ensuite ce qu'il veut, pour ce
+ *   seul magasin, jamais au-delà de ses propres autorisations (voir
+ *   PorteeDesDroits).
  *
- * Un membre a les autorisations cochées pour lui, données directement
- * dans le magasin. Le propriétaire de la société n'est membre d'aucun
- * magasin : il a toutes les autorisations sans case (voir
- * ControleDesDroits) ; le rôle propriétaire ne s'attribue donc jamais par
- * la gestion d'équipe (voir assignables()).
+ * Le propriétaire, un administrateur et un expert-comptable n'ont aucun
+ * rôle de magasin (voir RoleSociete) : la base refuse toute autre valeur
+ * (voir GardesDesDroits).
  */
 enum RoleMagasin: string implements HasLabel
 {
-    case Proprietaire = 'owner';
-    case Administrateur = 'admin';
-    case Comptable = 'accountant';
-    case Vendeur = 'employee';
-    case Observateur = 'viewer';
+    case Responsable = 'responsable';
+    case Vendeur = 'vendeur';
+    case Observateur = 'observateur';
 
     public function getLabel(): string
     {
         return match ($this) {
-            self::Proprietaire => 'Propriétaire',
-            self::Administrateur => 'Administrateur',
-            self::Comptable => 'Comptable',
+            self::Responsable => 'Responsable',
             self::Vendeur => 'Vendeur',
             self::Observateur => 'Observateur',
         };
     }
 
     /**
-     * Rôles qu'un propriétaire peut attribuer à un membre de son équipe.
-     * « owner » est exclu : on ne devient propriétaire qu'en inscrivant sa
-     * société, jamais via la gestion d'équipe.
-     *
-     * @return list<self>
+     * Ce rôle porte-t-il des cases ? Pas le responsable, qui a toutes les
+     * autorisations de son magasin.
      */
-    public static function assignables(): array
+    public function aDesCases(): bool
     {
-        return [self::Administrateur, self::Comptable, self::Vendeur, self::Observateur];
+        return $this !== self::Responsable;
     }
 
     /**
-     * Les autorisations cochées d'office pour ce rôle. Le propriétaire les
-     * a toutes ; l'administrateur aussi, sauf les paramètres du magasin
-     * (échéance et mentions des factures).
+     * Les autorisations que ce modèle précoche. Aucune pour le
+     * responsable, qui n'a pas de case.
      *
      * @return list<string>
      */
     public function permissionsParDefaut(): array
     {
-        $lecture = [
-            PermissionRegistry::CLIENT_VIEW,
-            PermissionRegistry::FOURNISSEUR_VIEW,
-            PermissionRegistry::PRODUIT_VIEW,
-            PermissionRegistry::DEVIS_VIEW,
-            PermissionRegistry::FACTURE_VIEW,
-            // Les achats sont des documents de coût internes, pas des
-            // documents de vente : pas de confidentialité par créateur
-            // (voir PermissionRegistry), donc une simple permission de
-            // lecture d'équipe suffit pour le comptable et l'observateur.
-            PermissionRegistry::FACTURE_ACHAT_VIEW,
-            PermissionRegistry::AVOIR_FOURNISSEUR_VIEW,
-        ];
-
         return match ($this) {
-            self::Proprietaire => PermissionRegistry::toutes(),
-            self::Administrateur => array_values(array_diff(
-                PermissionRegistry::toutes(),
-                [PermissionRegistry::PARAMETRES_GERER],
-            )),
-            // Le comptable voit l'intégralité des factures du magasin
-            // (indispensable pour son travail), pas seulement les siennes.
-            // Il suit aussi les impayés : il envoie et relance factures et
-            // avoirs, sans régler les relances automatiques, qui écrivent
-            // aux clients au nom du magasin, et contre-passe un paiement
-            // saisi par erreur. Il ferme SA PROPRE caisse pour les paiements
-            // qu'il enregistre (voir ClotureCaissePersonnellePolicy).
-            self::Comptable => [
-                ...$lecture,
-                PermissionRegistry::FACTURE_VIEW_TOUTES,
-                PermissionRegistry::FACTURE_ENVOYER,
-                PermissionRegistry::PAIEMENT_VIEW,
-                PermissionRegistry::PAIEMENT_CREER,
-                PermissionRegistry::PAIEMENT_CONTRE_PASSER,
-                PermissionRegistry::AVOIR_VIEW,
-                PermissionRegistry::AVOIR_ENVOYER,
-                PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK,
-                PermissionRegistry::CLOTURE_CAISSE_VIEW,
-                PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES,
-                // Le registre fiscal et le journal des événements, qu'il
-                // présente à l'administration avec le propriétaire.
-                PermissionRegistry::CAISSE_SECURISEE_CONSULTER,
-            ],
+            self::Responsable => [],
             // Un vendeur crée/émet ses propres devis et factures, mais ne
             // voit et n'encaisse que celles qu'il a lui-même créées (voir
             // FacturePolicy) et ne les corrige pas par un avoir. Clôturer LA JOURNÉE DU
@@ -127,7 +81,19 @@ enum RoleMagasin: string implements HasLabel
                 PermissionRegistry::PAIEMENT_VIEW,
                 PermissionRegistry::PAIEMENT_CREER,
             ],
-            self::Observateur => $lecture,
+            self::Observateur => [
+                PermissionRegistry::CLIENT_VIEW,
+                PermissionRegistry::FOURNISSEUR_VIEW,
+                PermissionRegistry::PRODUIT_VIEW,
+                PermissionRegistry::DEVIS_VIEW,
+                PermissionRegistry::FACTURE_VIEW,
+                // Les achats sont des documents de coût internes, pas des
+                // documents de vente : pas de confidentialité par créateur
+                // (voir PermissionRegistry), donc une simple permission de
+                // lecture d'équipe suffit.
+                PermissionRegistry::FACTURE_ACHAT_VIEW,
+                PermissionRegistry::AVOIR_FOURNISSEUR_VIEW,
+            ],
         };
     }
 }

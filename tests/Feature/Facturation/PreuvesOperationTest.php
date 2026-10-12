@@ -540,7 +540,11 @@ class PreuvesOperationTest extends TestCase
         $enFrance = $this->venteEmise('france');
 
         Livewire::test(ViewFacture::class, ['record' => $enFrance->getRouteKey()])->assertActionHidden('ajouter_preuve');
-        $this->actingAs($this->membre($magasin, RoleMagasin::Comptable));
+        $expert = $this->expertComptable($magasin);
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable()));
+
+        Livewire::test(ViewFacture::class, ['record' => $export->getRouteKey()])->assertActionHidden('ajouter_preuve');
+        $this->actingAs($expert);
 
         Livewire::test(ViewFacture::class, ['record' => $export->getRouteKey()])->assertActionHidden('ajouter_preuve');
     }

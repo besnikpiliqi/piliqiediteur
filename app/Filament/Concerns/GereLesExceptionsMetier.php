@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Exceptions\JournalAuditNonConfigureException;
 use Closure;
 use Filament\Notifications\Notification;
 use Filament\Support\Exceptions\Halt;
+use Illuminate\Auth\Access\AuthorizationException;
 use LogicException;
 
 /**
@@ -16,6 +17,9 @@ use LogicException;
  *
  * - une LogicException (InvalidArgumentException y compris, puisqu'elle
  *   en hérite en PHP) pour un geste invalide ;
+ * - une AuthorizationException quand l'auteur, relu au moment où l'action
+ *   écrit, n'a pas, ou plus, le droit de faire ce geste (voir
+ *   LecteurDesDroits et PorteeDesDroits) ;
  * - une RefusFiscalException quand le module fiscal ne peut pas enregistrer
  *   l'opération (clé de signature absente, horloge du serveur qui recule),
  *   ou une JournalAuditNonConfigureException quand le journal d'audit ne
@@ -43,7 +47,7 @@ trait GereLesExceptionsMetier
     {
         try {
             $callback();
-        } catch (LogicException|RefusFiscalException|JournalAuditNonConfigureException $exception) {
+        } catch (LogicException|AuthorizationException|RefusFiscalException|JournalAuditNonConfigureException $exception) {
             static::notifierLeRefus($exception);
         }
     }
@@ -58,7 +62,7 @@ trait GereLesExceptionsMetier
     {
         try {
             return $callback();
-        } catch (LogicException|RefusFiscalException|JournalAuditNonConfigureException $exception) {
+        } catch (LogicException|AuthorizationException|RefusFiscalException|JournalAuditNonConfigureException $exception) {
             static::notifierLeRefus($exception);
 
             throw new Halt;
@@ -69,9 +73,9 @@ trait GereLesExceptionsMetier
      * Affiche pourquoi l'opération a été refusée ; un refus fiscal est en
      * plus signalé au journal de l'application.
      */
-    protected static function notifierLeRefus(LogicException|RefusFiscalException|JournalAuditNonConfigureException $exception): void
+    protected static function notifierLeRefus(LogicException|AuthorizationException|RefusFiscalException|JournalAuditNonConfigureException $exception): void
     {
-        if (! $exception instanceof LogicException) {
+        if ($exception instanceof RefusFiscalException || $exception instanceof JournalAuditNonConfigureException) {
             report($exception);
         }
 

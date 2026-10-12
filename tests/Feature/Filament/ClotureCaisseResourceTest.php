@@ -244,7 +244,7 @@ class ClotureCaisseResourceTest extends TestCase
     }
 
     /**
-     * Le comptable, avec les autorisations de son rôle, encaisse sans
+     * Un membre aux cases de l'ancien comptable de magasin encaisse sans
      * vendre : la clôture de la journée ferme d'office sa caisse, avec ses
      * 12,00 € en espèces, sans qu'il ait à la fermer lui-même.
      */
@@ -254,7 +254,7 @@ class ClotureCaisseResourceTest extends TestCase
         $magasin = $this->ouvrirLeMagasin();
         $ticket = $this->vendreUnTicket();
         app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
-        $comptable = $this->membre($magasin, RoleMagasin::Comptable);
+        $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable());
         $comptable->forceFill(['name' => 'Claire Compta'])->save();
         $this->actingAs($comptable);
         app(EnregistrerPaiementAction::class)->handle($ticket->client, [

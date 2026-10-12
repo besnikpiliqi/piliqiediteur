@@ -12,11 +12,11 @@ use Illuminate\Support\Facades\DB;
 /**
  * Chacun change ici son nom, son adresse e-mail de connexion et son mot
  * de passe, en donnant toujours son mot de passe actuel : une caisse
- * restée ouverte ne suffit pas à s'approprier le compte. Le magasin ne
- * les change jamais ; depuis l'équipe, il ne peut que donner un nouveau
- * mot de passe à un membre (voir ReinitialiserMotDePasseMembreAction).
- * Qui a oublié son mot de passe passe par « Mot de passe oublié » sur la
- * page de connexion.
+ * restée ouverte ne suffit pas à s'approprier le compte. Personne ne les
+ * change pour un autre : sa société ne peut que lui faire envoyer un lien
+ * pour choisir son mot de passe, ou redonner un provisoire à un compte qui
+ * ne l'a pas encore changé (voir GereLesComptes). Qui a oublié son mot de
+ * passe passe par « Mot de passe oublié » sur la page de connexion.
  *
  * Le nouveau mot de passe est facultatif : laissé vide, l'ancien reste.
  * L'adresse e-mail, enregistrée en minuscules (voir

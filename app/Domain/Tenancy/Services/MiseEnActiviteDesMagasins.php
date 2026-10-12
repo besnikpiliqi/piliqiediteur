@@ -12,8 +12,9 @@ use App\Models\User;
  * société déjà validée (voir CreerEtablissementAction). Son SIRET se
  * réserve dans tout le logiciel (voir SiretsDesMagasins), sa période
  * d'activité s'ouvre (voir PeriodesDActivite), et les droits implicites du
- * propriétaire de la société dans ce magasin s'inscrivent à son journal
- * des événements (JET 130, avant nul, après relu en base).
+ * propriétaire de la société et de ses administrateurs de tous les
+ * magasins dans ce magasin s'inscrivent à son journal des événements (JET
+ * 130, avant nul, après relu en base).
  *
  * Le magasin doit être le magasin actif, dans la transaction de
  * l'appelant, qui décide de ce que devient un SIRET déjà réservé.
@@ -30,8 +31,6 @@ class MiseEnActiviteDesMagasins
     {
         $this->siretsDesMagasins->reserver($magasin);
         $this->periodesDActivite->ouvrir($magasin, $auteur);
-
-        $avant = $this->journalDesDroits->avant($magasin, null);
-        $this->journalDesDroits->apres($magasin, $magasin->societe->proprietaire, $avant);
+        $this->journalDesDroits->inscrireLesDroitsImplicites($magasin);
     }
 }

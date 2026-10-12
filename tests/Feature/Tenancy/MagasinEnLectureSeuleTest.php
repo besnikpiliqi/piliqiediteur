@@ -49,8 +49,6 @@ use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages\ListClotur
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
-use App\Filament\App\Resources\MembreEquipeResource;
-use App\Filament\App\Resources\MembreEquipeResource\Pages\ListMembreEquipes;
 use App\Filament\App\Resources\ProduitResource;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -105,17 +103,6 @@ class MagasinEnLectureSeuleTest extends TestCase
     public static function situationsApresLaValidation(): array
     {
         return array_diff_key(self::situationsEnLectureSeule(), ['inscription refusée' => true]);
-    }
-
-    /**
-     * Les situations où l'équipe se gère encore : toutes, sauf la société
-     * révoquée, en lecture seule totale.
-     *
-     * @return array<string, array{0: string, 1: string}>
-     */
-    public static function situationsOuLEquipeSeGere(): array
-    {
-        return array_diff_key(self::situationsEnLectureSeule(), ['société révoquée' => true]);
     }
 
     #[DataProvider('situationsEnLectureSeule')]
@@ -200,31 +187,6 @@ class MagasinEnLectureSeuleTest extends TestCase
 
         $releve = ClotureCaissePersonnelle::query()->sole();
         $this->assertSame([$vendeur->id, 1, '12.00'], [$releve->vendeur_id, $releve->nombre_ventes, $releve->total_ttc]);
-    }
-
-    #[DataProvider('situationsOuLEquipeSeGere')]
-    public function test_l_equipe_reste_consultable_et_ouverte_aux_nouveaux_comptes(string $situation, string $motif): void
-    {
-        $magasin = $this->ouvrirLeMagasin();
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
-        $this->passerEn($magasin, $situation);
-
-        $this->get(MembreEquipeResource::getUrl('index'))->assertSee($vendeur->email);
-        $this->get(MembreEquipeResource::getUrl('create'))->assertOk();
-    }
-
-    #[DataProvider('situationsOuLEquipeSeGere')]
-    public function test_un_acces_se_coupe_toujours(string $situation, string $motif): void
-    {
-        $magasin = $this->ouvrirLeMagasin();
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
-        $saLigne = $magasin->membres()->where('user_id', $vendeur->id)->sole();
-        $this->passerEn($magasin, $situation);
-
-        Livewire::test(ListMembreEquipes::class)->callTableAction('retirer', $saLigne);
-
-        $this->assertModelMissing($saLigne);
-        $this->assertFalse($vendeur->fresh()->peutOuvrir($magasin));
     }
 
     #[DataProvider('situationsEnLectureSeule')]

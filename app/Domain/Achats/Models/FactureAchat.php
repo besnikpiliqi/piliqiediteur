@@ -9,7 +9,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
-use App\Models\User;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Database\Factories\FactureAchatFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +27,18 @@ use InvalidArgumentException;
  */
 class FactureAchat extends Model
 {
+    use FigeLeNomDeSesAuteurs;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'cree_par' => 'cree_par_nom',
+        ];
+    }
+
     /** @use HasFactory<FactureAchatFactory> */
     use BelongsToMagasin, HasFactory, VentileLaTvaParTaux;
 
@@ -60,7 +72,6 @@ class FactureAchat extends Model
         static::creating(function (FactureAchat $factureAchat) {
             $factureAchat->statut ??= StatutFactureAchat::Brouillon;
             $factureAchat->devise ??= 'EUR';
-            $factureAchat->cree_par ??= auth()->id();
         });
 
         static::saving(function (FactureAchat $factureAchat) {
@@ -80,11 +91,6 @@ class FactureAchat extends Model
     public function fournisseur(): BelongsTo
     {
         return $this->belongsTo(Fournisseur::class)->withTrashed();
-    }
-
-    public function creePar(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'cree_par');
     }
 
     public function lignes(): HasMany

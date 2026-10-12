@@ -103,10 +103,10 @@ class FranchiseEnBaseTest extends TestCase
         $client = $professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => '9.99', 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 3, 'remise_pourcentage' => 50],
         ]));
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
 
         $this->assertSame(['14.98', '0.00', '14.98'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertSame(['4.99', '0.00', '4.99'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
@@ -116,7 +116,7 @@ class FranchiseEnBaseTest extends TestCase
     {
         $this->magasin(RegimeTva::FranchiseEnBase);
 
-        $facture = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['service_id' => Service::factory()->create()->id, 'prix_unitaire_ttc' => '25.00', 'taux_tva' => 10, 'quantite' => 1],
         ]);
 
@@ -129,7 +129,7 @@ class FranchiseEnBaseTest extends TestCase
         $this->magasin(RegimeTva::FranchiseEnBase);
         $ticket = $this->encaisser($this->produitA12Euros(), 3);
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($ticket->client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $ticket->client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
 
         $this->assertSame(['12.00', '0.00', '12.00'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
         $this->assertSame('0.00', $avoir->lignes->sole()->taux_tva);
@@ -140,7 +140,7 @@ class FranchiseEnBaseTest extends TestCase
     public function test_un_brouillon_enregistre_au_reel_ne_s_emet_plus_une_fois_le_magasin_en_franchise(): void
     {
         $magasin = $this->magasin(RegimeTva::ReelNormalMensuel);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
         $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
 
         $this->assertEmissionRefusee($brouillon);
@@ -155,7 +155,7 @@ class FranchiseEnBaseTest extends TestCase
     public function test_un_brouillon_enregistre_en_franchise_ne_s_emet_plus_une_fois_le_magasin_sorti_de_la_franchise(): void
     {
         $magasin = $this->magasin(RegimeTva::FranchiseEnBase);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
         $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::ReelNormalMensuel]);
 
         $this->assertEmissionRefusee($brouillon);
@@ -176,11 +176,11 @@ class FranchiseEnBaseTest extends TestCase
         $magasin = $this->magasin(RegimeTva::ReelNormalMensuel);
         $client = Client::factory()->create();
         $produit = $this->produitA12Euros();
-        $brouillon = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 3]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 3]]);
         $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
         $this->assertEmissionRefusee($brouillon);
 
-        $ticket = app(EmettreFactureAction::class)->handle(app(ModifierFactureAction::class)->handle($brouillon, $client, [['produit_id' => $produit->id, 'quantite' => 3]]));
+        $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), app(ModifierFactureAction::class)->handle(self::auteur(), $brouillon, $client, [['produit_id' => $produit->id, 'quantite' => 3]]));
 
         $this->assertSame('TK-LYON1-2026-000001', $ticket->numero);
         $this->assertSame(['36.00', '0.00', '36.00'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
@@ -201,7 +201,7 @@ class FranchiseEnBaseTest extends TestCase
     {
         $this->magasin(RegimeTva::FranchiseEnBase);
 
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
 
         $this->assertSame('0.00', $devis->lignes->sole()->taux_tva);
         $this->assertSame(['36.00', '0.00', '36.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
@@ -231,11 +231,11 @@ class FranchiseEnBaseTest extends TestCase
     public function test_un_devis_ne_s_envoie_plus_une_fois_le_regime_du_magasin_change(RegimeTva $regimeALEnregistrement, RegimeTva $regimeALEnvoi, array $totauxEnregistres): void
     {
         $magasin = $this->magasin($regimeALEnregistrement);
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
         $this->reglerLaSociete($magasin, ['regime_tva' => $regimeALEnvoi]);
 
         try {
-            app(EmettreDevisAction::class)->handle($devis);
+            app(EmettreDevisAction::class)->handle(self::auteur(), $devis);
             $this->fail('L\'envoi aurait dû être refusé.');
         } catch (LogicException $refus) {
             $this->assertSame(self::REFUS_REGIME_CHANGE, $refus->getMessage());
@@ -250,7 +250,7 @@ class FranchiseEnBaseTest extends TestCase
     {
         $this->magasin(RegimeTva::ReelNormalMensuel);
 
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
 
         $this->assertSame(['30.00', '6.00', '36.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
         $this->assertStringNotContainsString(self::MENTION, $this->pdfDuDevis($devis));
@@ -263,10 +263,10 @@ class FranchiseEnBaseTest extends TestCase
     public function test_la_facture_tiree_d_un_devis_en_franchise_reprend_la_franchise(): void
     {
         $this->magasin(RegimeTva::FranchiseEnBase);
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->professionnel()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
-        app(AccepterDevisAction::class)->handle(app(EmettreDevisAction::class)->handle($devis));
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produitA12Euros()->id, 'quantite' => 3]]);
+        app(AccepterDevisAction::class)->handle(self::auteur(), app(EmettreDevisAction::class)->handle(self::auteur(), $devis));
 
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureDepuisDevisAction::class)->handle($devis->fresh()));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis->fresh()));
 
         $this->assertTrue($facture->franchise_en_base);
         $this->assertSame(['36.00', '0.00', '36.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
@@ -283,7 +283,7 @@ class FranchiseEnBaseTest extends TestCase
         $ticketEnFranchise = $this->encaisser($produit, 1, $client);
 
         try {
-            app(CreerAvoirAction::class)->handle($client, [
+            app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
                 ['ligne_facture_id' => $ticketAuReel->lignes->sole()->id, 'quantite' => 1],
                 ['ligne_facture_id' => $ticketEnFranchise->lignes->sole()->id, 'quantite' => 1],
             ]);
@@ -310,13 +310,13 @@ class FranchiseEnBaseTest extends TestCase
 
     private function encaisser(Produit $produit, int $quantite, ?Client $client = null): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle($client ?? Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]], ModePaiement::Especes);
+        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client ?? Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]], ModePaiement::Especes);
     }
 
     private function assertEmissionRefusee(Facture $brouillon): void
     {
         try {
-            app(EmettreFactureAction::class)->handle($brouillon);
+            app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
             $this->fail('L\'émission aurait dû être refusée.');
         } catch (LogicException $refus) {
             $this->assertSame(self::REFUS_REGIME_CHANGE, $refus->getMessage());

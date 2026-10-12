@@ -2,19 +2,45 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ValiderFactureAchatAction;
+use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CreationDesComptes;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Closure;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
+use Illuminate\Support\Facades\DB;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -131,6 +157,157 @@ class DroitsConcurrenceTest extends TestCase
         $this->assertStringContainsString(PorteeDesDroits::REFUS, $this->attendreLEchec($concurrente));
         $this->assertSame(RoleMagasin::Vendeur, Affectation::query()->where('user_id', $vendeur->id)->sole()->role);
         $this->assertSame([], $administrateur->refresh()->autorisationsDeSociete());
+    }
+
+    /**
+     * Une donnée par geste de vente : le geste, et l'autorisation que le
+     * propriétaire retire au même instant.
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function gestesDeVente(): array
+    {
+        return [
+            'émission' => ['émission', PermissionRegistry::FACTURE_EMETTRE],
+            'paiement' => ['paiement', PermissionRegistry::PAIEMENT_CREER],
+            'avoir' => ['avoir', PermissionRegistry::AVOIR_CREER],
+            'contre-passation' => ['contre-passation', PermissionRegistry::PAIEMENT_CONTRE_PASSER],
+            'clôture manuelle' => ['clôture manuelle', PermissionRegistry::CLOTURE_CAISSE_GERER],
+            'caisse' => ['caisse', PermissionRegistry::FACTURE_EMETTRE],
+        ];
+    }
+
+    /**
+     * Le propriétaire retire une autorisation au vendeur pendant que
+     * celui-ci fait le geste qu'elle permet, dans un autre processus : le
+     * geste attend le registre que tient le retrait, relit le vendeur sous
+     * ce verrou, et est refusé ; rien n'est écrit.
+     */
+    #[DataProvider('gestesDeVente')]
+    public function test_un_retrait_d_autorisation_et_une_emission_simultanes_dans_le_meme_magasin_ne_laissent_jamais_passer_une_vente_non_autorisee(string $geste, string $autorisation): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes());
+        [$documentId, $compter] = $this->preparerLeGeste($geste, $vendeur);
+        $avant = $compter();
+        [$vendeurId, $magasinId] = [$vendeur->id, $magasin->id];
+        $concurrente = null;
+        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($geste, $vendeurId, $magasinId, $documentId): void {
+            app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
+            self::faireLeGeste($geste, User::query()->findOrFail($vendeurId), $documentId);
+        }, $concurrente);
+
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => array_values(array_diff(PermissionRegistry::toutes(), [$autorisation]))]]);
+
+        $this->assertStringContainsString(LecteurDesDroits::REFUS, $this->attendreLEchec($concurrente));
+        $this->assertSame($avant, $compter());
+    }
+
+    /**
+     * Le propriétaire retire « valider les factures d'achat » pendant que
+     * le membre valide une facture d'achat : la validation attend la ligne
+     * du membre que tient le retrait, le relit, et est refusée ; aucune
+     * entrée en stock.
+     */
+    public function test_un_retrait_de_valider_et_une_validation_d_achat_simultanes_ne_valident_jamais_apres_le_retrait(): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $acheteur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER]);
+        $produit = Produit::factory()->create(['suivi_stock' => true]);
+        $factureAchat = app(CreerFactureAchatAction::class)->handle($acheteur, Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 20]]);
+        [$acheteurId, $magasinId, $factureAchatId] = [$acheteur->id, $magasin->id, $factureAchat->id];
+        $concurrente = null;
+        $this->concurrencerDesQueLesComptesSontVerrouilles(static function () use ($acheteurId, $magasinId, $factureAchatId): void {
+            app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
+            app(ValiderFactureAchatAction::class)->handle(User::query()->findOrFail($acheteurId), FactureAchat::query()->findOrFail($factureAchatId));
+        }, $concurrente);
+
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $acheteur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER]]]);
+
+        $this->assertStringContainsString(LecteurDesDroits::REFUS, $this->attendreLEchec($concurrente));
+        $this->assertSame([StatutFactureAchat::Brouillon, null, 0], [$factureAchat->fresh()->statut, $factureAchat->fresh()->numero, $produit->fresh()->stock_quantite]);
+    }
+
+    /**
+     * Ce que le vendeur a fait avant le geste, validé en base : l'identifiant
+     * du document que le geste reprend, et ce qui compte ses effets.
+     *
+     * @return array{0: int|null, 1: Closure(): int}
+     */
+    private function preparerLeGeste(string $geste, User $vendeur): array
+    {
+        $ticket = fn (): Facture => app(EmettreFactureAction::class)->handle($vendeur, app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), self::lignes()));
+
+        return match ($geste) {
+            'émission' => [app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), self::lignes())->id, fn (): int => Facture::query()->whereNotNull('numero')->count()],
+            'paiement' => [$ticket()->id, fn (): int => Paiement::query()->count()],
+            'avoir' => [$ticket()->id, fn (): int => Avoir::query()->count()],
+            'contre-passation' => [self::payer($vendeur, $ticket())->id, fn (): int => Paiement::query()->count()],
+            'clôture manuelle' => [$ticket()->id, fn (): int => ClotureCaisse::query()->count()],
+            'caisse' => [null, fn (): int => Facture::query()->count()],
+        };
+    }
+
+    /**
+     * Le geste, dans le processus concurrent, sur le document préparé.
+     */
+    private static function faireLeGeste(string $geste, User $vendeur, ?int $documentId): void
+    {
+        match ($geste) {
+            'émission' => app(EmettreFactureAction::class)->handle($vendeur, Facture::query()->findOrFail($documentId)),
+            'paiement' => self::payer($vendeur, Facture::query()->findOrFail($documentId)),
+            'avoir' => app(EnregistrerAvoirAction::class)->handle($vendeur, Facture::query()->findOrFail($documentId)->client, [['ligne_facture_id' => Facture::query()->findOrFail($documentId)->lignes->sole()->id, 'quantite' => 1]], 'Retour'),
+            'contre-passation' => app(ContrePasserPaiementAction::class)->handle($vendeur, Paiement::query()->findOrFail($documentId), 'Erreur de saisie'),
+            'clôture manuelle' => app(CloturerCaisseAction::class)->handle($vendeur, app(TenantContext::class)->magasin(), today()),
+            'caisse' => app(EnregistrerVenteCaisseAction::class)->handle($vendeur, Client::query()->where('est_comptoir', true)->sole(), self::lignes(), ModePaiement::Especes),
+        };
+    }
+
+    /**
+     * Une ligne de 12,00 € TTC d'un nouveau produit sans suivi de stock.
+     *
+     * @return list<array{produit_id: int, quantite: int}>
+     */
+    private static function lignes(): array
+    {
+        return [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]];
+    }
+
+    private static function payer(User $auteur, Facture $facture): Paiement
+    {
+        return app(EnregistrerPaiementAction::class)->handle($auteur, $facture->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $facture->total_ttc, 'recu_le' => today()->toDateString()], [['facture_id' => $facture->id, 'montant' => $facture->total_ttc]]);
+    }
+
+    /**
+     * Démarre l'opération concurrente dès que l'opération du test tient les
+     * lignes des comptes qu'elle modifie (voir JournalDesDroits), et
+     * attend qu'elle attende l'une d'elles.
+     *
+     * @param  Closure(): void  $operationConcurrente
+     */
+    private function concurrencerDesQueLesComptesSontVerrouilles(Closure $operationConcurrente, ?InvokedProcess &$concurrente): void
+    {
+        $connexionDuTest = DB::getDefaultConnection();
+        $verrouTenu = false;
+
+        DB::listen(function (QueryExecuted $requete) use (&$concurrente, &$verrouTenu, $operationConcurrente, $connexionDuTest): void {
+            if ($concurrente !== null || $requete->connectionName !== $connexionDuTest) {
+                return;
+            }
+
+            if (str_contains($requete->sql, 'from "users"') && str_ends_with($requete->sql, 'for update')) {
+                $verrouTenu = true;
+
+                return;
+            }
+
+            if ($verrouTenu) {
+                $concurrente = $this->demarrerUnProcessusConcurrent($operationConcurrente);
+                $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
+            }
+        });
     }
 
     private function attendreLaReussite(?InvokedProcess $concurrente): void

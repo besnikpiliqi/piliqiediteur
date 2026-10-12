@@ -23,7 +23,6 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
@@ -61,7 +60,7 @@ class ContrePasserPaiementActionTest extends TestCase
     {
         $produit = Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]));
     }
 
     /**
@@ -69,7 +68,7 @@ class ContrePasserPaiementActionTest extends TestCase
      */
     private function payer(Client $client, string $montant, array $imputations, ModePaiement $mode = ModePaiement::Especes, ?string $reference = null): Paiement
     {
-        return app(EnregistrerPaiementAction::class)->handle(
+        return app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
             ['mode_paiement' => $mode->value, 'montant' => $montant, 'reference' => $reference, 'recu_le' => today()->toDateString()],
             array_map(static fn (int $factureId, string $montantImpute): array => ['facture_id' => $factureId, 'montant' => $montantImpute], array_keys($imputations), $imputations),
@@ -78,7 +77,7 @@ class ContrePasserPaiementActionTest extends TestCase
 
     private function contrePasser(Paiement $paiement, string $motif = 'Erreur de saisie : 10 € reçus'): Paiement
     {
-        return app(ContrePasserPaiementAction::class)->handle($paiement, $motif);
+        return app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiement, $motif);
     }
 
     /**
@@ -97,8 +96,7 @@ class ContrePasserPaiementActionTest extends TestCase
     public function test_la_contre_passation_annule_le_paiement_errone_et_rouvre_la_facture(): void
     {
         $this->travelTo('2026-10-09 10:00:00');
-        $this->magasinActif();
-        $operateur = User::factory()->create();
+        $operateur = $this->responsable($this->magasinActif());
         $this->actingAs($operateur);
         $client = Client::factory()->professionnel()->create();
         $facture = $this->facture($client);
@@ -151,7 +149,7 @@ class ContrePasserPaiementActionTest extends TestCase
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create();
         $facture = $this->facture($client);
-        app(EnvoyerDocumentAction::class)->handle($facture, 'compta@client.fr', null, null);
+        app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'compta@client.fr', null);
         $errone = $this->payer($client, '100.00', [$facture->id => '100.00']);
 
         $this->contrePasser($errone);
@@ -224,7 +222,7 @@ class ContrePasserPaiementActionTest extends TestCase
         $client = Client::factory()->professionnel()->create();
         $facture = $this->facture($client);
         $errone = $this->payer($client, '100.00', [$facture->id => '100.00']);
-        app(CloturerCaisseAction::class)->handle($magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
 
         $this->assertThrows(fn () => $this->contrePasser($errone), LogicException::class, 'La journée du 09/10/2026 est clôturée : la contre-passation pourra être faite demain.');
         $this->travelTo('2026-10-10 09:00:00');
@@ -307,7 +305,7 @@ class ContrePasserPaiementActionTest extends TestCase
         $this->payer($client, '100.00', [$dejaPayee->id => '100.00'], ModePaiement::Virement);
         $facture = $this->facture($client);
         $errone = $this->payer($client, '100.00', [$facture->id => '100.00']);
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $dejaPayee->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $dejaPayee->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
         $this->contrePasser($errone);
         $this->assertSame([100.0, 100.0], [$client->soldeCrediteur(), $facture->fresh()->montantRestant()]);
 
@@ -347,7 +345,7 @@ class ContrePasserPaiementActionTest extends TestCase
         $this->travelTo('2026-10-09 10:02:00');
         $recente = $this->facture($client);
         $virementRejete = $this->payer($client, '200.00', [$ancienne->id => '100.00', $recente->id => '100.00'], ModePaiement::Virement);
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $dejaPayee->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $dejaPayee->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
         $this->contrePasser($virementRejete, 'Virement rejeté');
         $errone = $this->payer($client, '10.00', [$recente->id => '10.00']);
 
@@ -430,9 +428,9 @@ class ContrePasserPaiementActionTest extends TestCase
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 2]]));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 2]]));
         $errone = $this->payer($client, '80.00', [$facture->id => '80.00']);
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]]);
         $this->assertSame([StatutFacture::Payee, 30.0], [$facture->fresh()->statut, $avoir->fresh()->montantNonAlloue()]);
         $this->contrePasser($errone);
 
@@ -460,8 +458,8 @@ class ContrePasserPaiementActionTest extends TestCase
         $ancienne = $this->facture($client, 60);
         $recente = $this->facture($client, 40);
         $errone = $this->payer($client, '100.00', [$ancienne->id => '60.00', $recente->id => '40.00']);
-        $avoirAncien = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $retourneeA->lignes()->sole()->id, 'quantite' => 1]]);
-        $avoirRecent = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $retourneeB->lignes()->sole()->id, 'quantite' => 1]]);
+        $avoirAncien = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $retourneeA->lignes()->sole()->id, 'quantite' => 1]]);
+        $avoirRecent = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $retourneeB->lignes()->sole()->id, 'quantite' => 1]]);
         $this->contrePasser($errone);
 
         $bon = $this->payer($client, '30.00', [$recente->id => '20.00', $ancienne->id => '10.00']);

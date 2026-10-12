@@ -2,12 +2,15 @@
 
 namespace App\Domain\Contacts\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Facturation\Services\TerritoireFiscal;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Integrations\Vies\ClientVies;
 use App\Integrations\Vies\ViesIndisponibleException;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use InvalidArgumentException;
 use LogicException;
 
@@ -25,19 +28,26 @@ use LogicException;
  *
  * L'appel à VIES, qui peut durer plusieurs secondes, a lieu hors de toute
  * transaction : il ne retient aucun verrou, et la vérification
- * s'enregistre ensuite seule.
+ * s'enregistre ensuite seule. Son auteur, relu en base (voir
+ * LecteurDesDroits), doit pouvoir modifier la fiche du client ; la
+ * consultation note son nom figé.
  */
 class VerifierNumeroTvaAction
 {
-    public function __construct(private readonly ClientVies $vies) {}
+    public function __construct(
+        private readonly ClientVies $vies,
+        private readonly LecteurDesDroits $lecteur,
+    ) {}
 
     /**
+     * @throws AuthorizationException
      * @throws LogicException quand le client ne se vérifie pas sur VIES, ou quand VIES refuse le n° du magasin
      * @throws ViesIndisponibleException
      */
-    public function handle(Client $client): ConsultationVies
+    public function handle(User $auteur, Client $client): ConsultationVies
     {
         $client = Client::query()->whereKey($client->getKey())->firstOrFail();
+        $compte = $this->lecteur->exiger($auteur, 'update', app(TenantContext::class)->magasin(), $client);
 
         if (! $client->estProfessionnel()) {
             throw new InvalidArgumentException('Seul le n° de TVA d\'un client professionnel se vérifie sur VIES.');
@@ -61,7 +71,7 @@ class VerifierNumeroTvaAction
             'adresse' => $resultat->adresse,
             'identifiant_consultation' => $resultat->identifiantConsultation === null ? null : mb_substr($resultat->identifiantConsultation, 0, 64),
             'consultee_le' => now(),
-            'consultee_par' => auth()->id(),
+            'consultee_par' => $compte->getKey(),
             'reponse' => $resultat->reponse,
         ]);
     }

@@ -99,7 +99,7 @@ class PreuvesOperationTest extends TestCase
             'france' => [Client::factory()->create(), []],
         };
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 10]], $nature));
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 10]], $nature));
     }
 
     /**
@@ -123,7 +123,7 @@ class PreuvesOperationTest extends TestCase
 
     private function ajouter(Facture $facture, TypePreuve $type, string $reference, ?string $date = null, ?string $emetteur = null): PreuveOperation
     {
-        return app(AjouterPreuveOperationAction::class)->handle($facture, $type, $reference, $date, $emetteur);
+        return app(AjouterPreuveOperationAction::class)->handle(self::auteur(), $facture, $type, $reference, $date, $emetteur);
     }
 
     /**
@@ -283,7 +283,7 @@ class PreuvesOperationTest extends TestCase
         $this->magasin();
         $export = $this->venteEmise('export');
 
-        app(EnregistrerAvoirAction::class)->handle($export->client, [['ligne_facture_id' => $export->lignes->sole()->id, 'quantite' => 10]], 'Commande annulée avant l\'expédition');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $export->client, [['ligne_facture_id' => $export->lignes->sole()->id, 'quantite' => 10]], 'Commande annulée avant l\'expédition');
 
         $this->assertSame([], $this->manquantes($export));
         $this->assertSame([], Facture::query()->preuvesAFournir()->pluck('id')->all());
@@ -378,7 +378,7 @@ class PreuvesOperationTest extends TestCase
     public function test_une_preuve_ne_s_enregistre_pas_sur_un_brouillon(): void
     {
         $this->magasin();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '12.00', 'taux_tva' => 20])->id, 'quantite' => 1]], [
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '12.00', 'taux_tva' => 20])->id, 'quantite' => 1]], [
             'nature_operation' => NatureOperation::LivraisonDom, 'livraison_adresse' => '1 rue Victor Hugo', 'livraison_code_postal' => '97200', 'livraison_ville' => 'Fort-de-France', 'livraison_pays' => 'FR',
         ]);
 

@@ -5,6 +5,7 @@ namespace Tests\Feature\Societe;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
@@ -55,13 +56,13 @@ class PorteDeValidationTest extends TestCase
     {
         $magasin = $this->magasinDUneSocieteAVerifier();
         $produit = $this->produit();
-        $ticket = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
-        $facture = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $ticket = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
 
-        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($ticket), VenteNonAutoriseeException::class, self::REFUS);
-        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($facture), VenteNonAutoriseeException::class, self::REFUS);
-        $this->assertThrows(fn () => app(EmettreDevisAction::class)->handle($devis), VenteNonAutoriseeException::class, self::REFUS);
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $ticket), VenteNonAutoriseeException::class, self::REFUS);
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $facture), VenteNonAutoriseeException::class, self::REFUS);
+        $this->assertThrows(fn () => app(EmettreDevisAction::class)->handle(self::auteur(), $devis), VenteNonAutoriseeException::class, self::REFUS);
 
         $this->assertSame([StatutFacture::Brouillon, StatutFacture::Brouillon], [$ticket->fresh()->statut, $facture->fresh()->statut]);
         $this->assertSame([StatutDevis::Brouillon, null], [$devis->fresh()->statut, $devis->fresh()->numero]);
@@ -75,10 +76,10 @@ class PorteDeValidationTest extends TestCase
     {
         Mail::fake();
         $magasin = $this->magasinDUneSocieteAVerifier();
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(['email' => 'client@example.test']), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(['email' => 'client@example.test']), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         $proprietaire = $this->proprietaireDe($magasin);
 
-        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->handle($devis, 'client@example.test', null, $proprietaire), VenteNonAutoriseeException::class, self::REFUS);
+        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->handle($proprietaire, $devis, 'client@example.test', null), VenteNonAutoriseeException::class, self::REFUS);
 
         $this->assertFalse($proprietaire->can(PermissionRegistry::PAIEMENT_CREER));
         $this->assertFalse($proprietaire->can(PermissionRegistry::DEVIS_ENVOYER));
@@ -101,12 +102,12 @@ class PorteDeValidationTest extends TestCase
         $service = Service::factory()->create();
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul', 'email' => 'paul@example.test']);
         $magasin->update(['delai_paiement_jours' => 45]);
-        $achat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [[
+        $achat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [[
             'produit' => ['nom' => 'Câble USB-C', 'reference' => 'CBL-USBC', 'prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => true, 'seuil_alerte' => 2],
             'quantite' => 3,
             'prix_unitaire_ht' => 0.47,
         ]]));
-        $brouillon = app(CreerFactureAction::class)->handle($client, [['service_id' => $service->id, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['service_id' => $service->id, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20, 'quantite' => 1]]);
 
         $this->assertSame(3, Produit::query()->sole()->stock_quantite);
         $this->assertSame(StatutFactureAchat::Validee, $achat->fresh()->statut);
@@ -128,8 +129,9 @@ class PorteDeValidationTest extends TestCase
         $this->magasinDUneSocieteAVerifier();
         $registre = app(RegistreFiscal::class);
 
-        $this->assertThrows(fn () => DB::transaction(fn () => $registre->enregistrerVente('ticket', 1200, ['numero' => 'TK-X-2026-000001'])), VenteNonAutoriseeException::class, self::REFUS);
-        $this->assertThrows(fn () => DB::transaction(fn () => $registre->enregistrer(ChaineFiscale::Encaissement, 'paiement', ['montant' => 1200])), VenteNonAutoriseeException::class, self::REFUS);
+        $operateur = app(OperateurCourant::class);
+        $this->assertThrows(fn () => $operateur->pendantLeSysteme(fn () => DB::transaction(fn () => $registre->enregistrerVente('ticket', 1200, ['numero' => 'TK-X-2026-000001']))), VenteNonAutoriseeException::class, self::REFUS);
+        $this->assertThrows(fn () => $operateur->pendantLeSysteme(fn () => DB::transaction(fn () => $registre->enregistrer(ChaineFiscale::Encaissement, 'paiement', ['montant' => 1200]))), VenteNonAutoriseeException::class, self::REFUS);
         DB::transaction(fn () => $registre->journaliser(CodeEvenement::ExportDeDonnees));
 
         $this->assertSame([ChaineFiscale::Evenement, ChaineFiscale::Evenement], EnregistrementFiscal::query()->orderBy('id')->pluck('chaine')->all());
@@ -143,17 +145,17 @@ class PorteDeValidationTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'code' => 'MABOUT']);
         $magasin->forceFill(['etablissement_verifie_le' => null])->save();
-        $ticket = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $ticket = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
         $this->assertThrows(
-            fn () => app(EmettreFactureAction::class)->handle($ticket),
+            fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $ticket),
             VenteNonAutoriseeException::class,
             "L'établissement de ce magasin (SIRET {$magasin->siret}) n'est pas encore confirmé par le répertoire Sirene de l'INSEE : aucune vente avant sa confirmation.",
         );
         $this->assertSame(StatutFacture::Brouillon, $ticket->fresh()->statut);
 
         $magasin->forceFill(['etablissement_verifie_le' => now()])->save();
-        $this->assertSame('TK-MABOUT-'.now()->format('Y').'-000001', app(EmettreFactureAction::class)->handle($ticket)->numero);
+        $this->assertSame('TK-MABOUT-'.now()->format('Y').'-000001', app(EmettreFactureAction::class)->handle(self::auteur(), $ticket)->numero);
     }
 
     /**
@@ -206,8 +208,8 @@ class PorteDeValidationTest extends TestCase
     {
         $this->magasinDUneSocieteAVerifier();
         $produit = $this->produit();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
 
         $this->assertThrows(fn () => app(FacturePdfGenerator::class)->generer($brouillon), VenteNonAutoriseeException::class, self::REFUS);
         $this->assertThrows(fn () => app(DevisPdfGenerator::class)->generer($devis), VenteNonAutoriseeException::class, self::REFUS);

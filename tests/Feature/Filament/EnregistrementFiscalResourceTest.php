@@ -16,6 +16,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\EnregistrementFiscalResource;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Pages\ListEnregistrementsFiscaux;
 use App\Filament\App\Resources\EnregistrementFiscalResource\Pages\ViewEnregistrementFiscal;
@@ -64,7 +65,7 @@ class EnregistrementFiscalResourceTest extends TestCase
     {
         $produit = Produit::factory()->create(['nom' => 'Article à 12 €', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        app(EnregistrerVenteCaisseAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]], ModePaiement::Especes);
+        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]], ModePaiement::Especes);
     }
 
     /**
@@ -194,7 +195,7 @@ class EnregistrementFiscalResourceTest extends TestCase
     {
         $this->connecterProprietaire();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
         $paiement = Paiement::query()->sole();
 
         $composant = Livewire::test(ListEnregistrementsFiscaux::class);
@@ -393,6 +394,32 @@ class EnregistrementFiscalResourceTest extends TestCase
             ->assertSee('Hors du contenu signé, effacée 6 mois après l\'événement.');
     }
 
+    /**
+     * Deux magasins de la même société tiennent chacun leur journal :
+     * l'export de Lyon ne contient que les événements de Lyon, jamais un
+     * de Villeurbanne, même pour le propriétaire des deux.
+     */
+    public function test_l_export_du_journal_ne_contient_aucun_evenement_d_un_autre_magasin_de_la_societe(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
+        $lyon = $this->connecterProprietaire();
+        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
+        app(TenantContext::class)->runAs($villeurbanne, fn () => $this->journaliser(CodeEvenement::ParametreDeConformite, ['parametre' => 'regime_tva', 'ancienne_valeur' => null, 'nouvelle_valeur' => 'reel_simplifie']));
+        app(TenantContext::class)->set($lyon);
+        Filament::setTenant($lyon);
+        $this->journaliser(CodeEvenement::ExportDeDonnees);
+
+        $composant = Livewire::test(ListEnregistrementsFiscaux::class)
+            ->callAction('exporter_journal', ['du' => '2026-10-20', 'au' => '2026-10-20']);
+
+        $lignes = array_slice($this->lignesDuCsv($composant), 1);
+        $this->assertSame(EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->orderBy('sequence')->pluck('signature')->all(), array_column($lignes, 11));
+        foreach ($lignes as $ligne) {
+            $this->assertSame($lyon->uuid, json_decode($ligne[15], true, flags: JSON_THROW_ON_ERROR)['magasin']['uuid']);
+        }
+        $this->assertTrue(app(TenantContext::class)->runAs($villeurbanne, fn (): bool => EnregistrementFiscal::query()->where('type', '270')->exists()));
+    }
+
     public function test_l_export_ne_reprend_que_les_evenements_de_la_periode(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
@@ -494,8 +521,8 @@ class EnregistrementFiscalResourceTest extends TestCase
         $this->connecterProprietaire();
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 2]], ModePaiement::Especes);
-        app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 2]], ModePaiement::Especes);
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $clePublique = Arr::first(config('caisse_securisee.cles_publiques'));
         $cleId = hash('sha256', base64_decode(str_replace(['-----BEGIN PUBLIC KEY-----', '-----END PUBLIC KEY-----', "\n"], '', $clePublique)));
 

@@ -80,11 +80,11 @@ class SoumettreEReportingPeriodiqueTest extends TestCase
         $this->travelTo('2026-10-05 10:00:00');
         app(TenantContext::class)->runAs($magasin, function () {
             $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-            $ticket = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
-            app(EmettreFactureAction::class)->handle($ticket);
+            $ticket = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+            app(EmettreFactureAction::class)->handle(self::auteur(), $ticket);
         });
         $this->travelTo('2026-10-06 00:00:00');
-        app(TenantContext::class)->runAs($magasin, fn () => app(CloturerCaisseAction::class)->handle($magasin, '2026-10-05'));
+        app(TenantContext::class)->runAs($magasin, fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-05'));
 
         return $magasin;
     }

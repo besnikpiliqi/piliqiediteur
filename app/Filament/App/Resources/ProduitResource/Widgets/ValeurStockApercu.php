@@ -30,8 +30,10 @@ use Illuminate\Support\Number;
  * réapprovisionner, puisqu'il ne se rachète plus.
  *
  * Information sensible (elle révèle la trésorerie immobilisée en stock) :
- * réservée par défaut au propriétaire/administrateur/comptable via
- * produit.voir_valeur_stock (voir RoleMagasin::permissionsParDefaut()),
+ * réservée par défaut au propriétaire, aux responsables, aux
+ * administrateurs et à l'expert-comptable, via produit.voir_valeur_stock
+ * (voir PermissionRegistry::modeleDeLAdministrateur() et
+ * PermissionRegistry::consultations()),
  * un vendeur continue de voir le prix et la quantité de chaque produit
  * dans le tableau, juste pas ce total agrégé.
  *

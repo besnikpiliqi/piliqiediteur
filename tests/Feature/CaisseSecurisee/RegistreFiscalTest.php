@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\CaisseSecurisee;
 
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\DonneeFiscaleInalterableException;
@@ -53,16 +54,28 @@ class RegistreFiscalTest extends TestCase
     }
 
     /**
-     * Un enregistrement dans sa propre transaction ; une vente y porte pour
-     * montant son total_ttc_centimes.
+     * Un enregistrement dans sa propre transaction, au nom du système (voir
+     * OperateurCourant) ; une vente y porte pour montant son
+     * total_ttc_centimes.
      *
      * @param  array<array-key, mixed>  $donnees
      */
     private function enregistrer(ChaineFiscale $chaine = ChaineFiscale::Vente, string $type = 'ticket', array $donnees = ['total_ttc_centimes' => 1250], ?Model $document = null): EnregistrementFiscal
     {
-        return DB::transaction(fn (): EnregistrementFiscal => $chaine === ChaineFiscale::Vente
+        return $this->auNomDuSysteme(fn (): EnregistrementFiscal => DB::transaction(fn (): EnregistrementFiscal => $chaine === ChaineFiscale::Vente
             ? app(RegistreFiscal::class)->enregistrerVente($type, $donnees['total_ttc_centimes'] ?? 0, $donnees, $document)
-            : app(RegistreFiscal::class)->enregistrer($chaine, $type, $donnees, $document));
+            : app(RegistreFiscal::class)->enregistrer($chaine, $type, $donnees, $document)));
+    }
+
+    /**
+     * @template TResultat
+     *
+     * @param  Closure(): TResultat  $operation
+     * @return TResultat
+     */
+    private function auNomDuSysteme(Closure $operation): mixed
+    {
+        return app(OperateurCourant::class)->pendantLeSysteme($operation);
     }
 
     /**
@@ -80,7 +93,7 @@ class RegistreFiscalTest extends TestCase
         DB::beginTransaction();
 
         try {
-            $this->assertThrows(fn () => $appel(app(RegistreFiscal::class)), $exception, $message);
+            $this->assertThrows(fn () => $this->auNomDuSysteme(fn () => $appel(app(RegistreFiscal::class))), $exception, $message);
             $verifierLaBase();
         } finally {
             DB::rollBack();
@@ -185,11 +198,12 @@ class RegistreFiscalTest extends TestCase
         $magasin = Magasin::factory()->avecLaSociete(['siren' => '100000009'])->create(['siret' => '10000000900017']);
         app(TenantContext::class)->set($magasin);
         $vendeuse = User::factory()->create(['name' => 'Zoé Lefèvre']);
-        $this->actingAs($vendeuse);
         $facture = Facture::factory()->create();
         $cleId = $this->cleIdDe($this->clePubliqueDeTest());
 
-        $enregistrement = $this->enregistrer(ChaineFiscale::Vente, 'facture', ['numero' => 'FAC-LYON1-2026-000001', 'total_ttc_centimes' => 12000, 'acompte' => null, 'professionnel' => true], $facture);
+        $enregistrement = app(OperateurCourant::class)->pendant($vendeuse, fn (): EnregistrementFiscal => DB::transaction(
+            fn (): EnregistrementFiscal => app(RegistreFiscal::class)->enregistrerVente('facture', 12000, ['numero' => 'FAC-LYON1-2026-000001', 'total_ttc_centimes' => 12000, 'acompte' => null, 'professionnel' => true], $facture),
+        ));
 
         $initialisation = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->sole();
         $this->assertSame([
@@ -233,7 +247,7 @@ class RegistreFiscalTest extends TestCase
         $this->travelTo('2026-10-09 10:15:30');
         $magasin = $this->magasinActif();
 
-        [$instant, $redonne, $vente, $encaissement, $evenement] = DB::transaction(function () use ($magasin): array {
+        [$instant, $redonne, $vente, $encaissement, $evenement] = $this->auNomDuSysteme(fn (): array => DB::transaction(function () use ($magasin): array {
             $registre = app(RegistreFiscal::class);
             [$instant, $vente] = DB::transaction(function () use ($registre, $magasin): array {
                 $instant = $registre->verrouiller($magasin);
@@ -245,7 +259,7 @@ class RegistreFiscalTest extends TestCase
             $encaissement = $registre->enregistrer(ChaineFiscale::Encaissement, 'paiement', []);
 
             return DB::transaction(fn (): array => [$instant, $registre->verrouiller($magasin), $vente, $encaissement, $registre->journaliser(CodeEvenement::ParametreDeConformite)]);
-        });
+        }));
         $suivante = $this->enregistrer(ChaineFiscale::Vente);
 
         $this->assertSame('2026-10-09T08:15:30+00:00', $instant->utc->toIso8601String());
@@ -267,7 +281,7 @@ class RegistreFiscalTest extends TestCase
         $this->travelTo('2026-10-09 10:15:30');
         $this->magasinActif();
 
-        $vente = DB::transaction(function (): EnregistrementFiscal {
+        $vente = $this->auNomDuSysteme(fn (): EnregistrementFiscal => DB::transaction(function (): EnregistrementFiscal {
             $registre = app(RegistreFiscal::class);
             rescue(fn () => DB::transaction(function () use ($registre): never {
                 $registre->enregistrerVente('ticket', 0, []);
@@ -277,7 +291,7 @@ class RegistreFiscalTest extends TestCase
             $this->travel(5)->seconds();
 
             return $registre->enregistrerVente('ticket', 0, []);
-        });
+        }));
         $this->travelTo('2026-10-09 10:15:29');
 
         $this->assertSame([['evenement', 1, '260'], ['vente', 1, 'ticket']], $this->registre());
@@ -346,7 +360,7 @@ class RegistreFiscalTest extends TestCase
         $this->magasinActif();
 
         $this->assertThrows(
-            fn () => app(RegistreFiscal::class)->enregistrerVente('ticket', 0, []),
+            fn () => $this->auNomDuSysteme(fn () => app(RegistreFiscal::class)->enregistrerVente('ticket', 0, [])),
             LogicException::class,
             'Le registre fiscal ne se verrouille que dans une transaction',
         );

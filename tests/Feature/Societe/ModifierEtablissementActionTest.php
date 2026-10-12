@@ -313,8 +313,8 @@ class ModifierEtablissementActionTest extends TestCase
     private function numeroterUnPremierDevis(): void
     {
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
 
-        app(EmettreDevisAction::class)->handle($devis);
+        app(EmettreDevisAction::class)->handle(self::auteur(), $devis);
     }
 }

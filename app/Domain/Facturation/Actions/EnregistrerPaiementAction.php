@@ -2,6 +2,8 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
@@ -15,7 +17,11 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -50,6 +56,14 @@ use LogicException;
  * qu'il impute sont signés ensemble dans la chaîne des encaissements (voir
  * ContenuFiscal), dans la même transaction : sans clé de signature, rien
  * n'est enregistré.
+ *
+ * Son auteur est relu sous le verrou de sa ligne, après celui du registre
+ * (voir LecteurDesDroits) : il doit pouvoir enregistrer un paiement, et
+ * encaisser chaque facture qu'il règle (voir FacturePolicy::encaisser() :
+ * un vendeur sans « voir celles de toute l'équipe » n'encaisse que les
+ * siennes). Il n'encaisse que dans un magasin à la fois (voir
+ * VerificateurCaissesPersonnelles). C'est lui que le paiement enregistre
+ * et que le registre signe.
  */
 class EnregistrerPaiementAction
 {
@@ -57,17 +71,21 @@ class EnregistrerPaiementAction
         private readonly CalculateurLigne $calculateur,
         private readonly RegistreFiscal $registre,
         private readonly ContenuFiscal $contenuFiscal,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
+        private readonly VerificateurCaissesPersonnelles $caissesPersonnelles,
     ) {}
 
     /**
      * @param  array{mode_paiement: string, montant: float|string, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement
      * @param  array<int, array{facture_id: int|string, montant: float|string}>  $allocations
      *
+     * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(Client $client, array $donneesPaiement, array $allocations): Paiement
+    public function handle(User $auteur, Client $client, array $donneesPaiement, array $allocations): Paiement
     {
         if (Carbon::parse($donneesPaiement['recu_le'])->startOfDay()->gt(today())) {
             throw new LogicException('Un paiement ne peut pas être reçu à une date future.');
@@ -85,44 +103,63 @@ class EnregistrerPaiementAction
             throw new LogicException(sprintf('Le montant reçu (%s) doit être égal au total imputé sur les factures (%s).', self::enEuros($montant), self::enEuros($totalImpute)));
         }
 
-        return DB::transaction(function () use ($client, $donneesPaiement, $montant, $imputations) {
+        return DB::transaction(function () use ($auteur, $client, $donneesPaiement, $montant, $imputations) {
             $magasin = app(TenantContext::class)->magasin();
             $this->registre->verrouiller($magasin);
+            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Paiement::class);
+            $this->caissesPersonnelles->refuserSiSaCaisseEstOuverteAilleurs($compte, $magasin);
 
             if ((int) $client->magasin_id !== $magasin->getKey()) {
                 throw new LogicException('Ce client n\'est pas un client du magasin.');
             }
 
-            $paiement = Paiement::create([
-                ...$donneesPaiement,
-                'client_id' => $client->getKey(),
-                'montant' => $montant,
-            ]);
-            $factures = [];
-
-            foreach ($imputations as $factureId => $montantImpute) {
-                $facture = Facture::query()->whereKey($factureId)->lockForUpdate()->firstOrFail();
-                $this->verifierQuElleAttendCeReglement($facture, $client, $montantImpute);
-
-                PaiementAllocation::create([
-                    'paiement_id' => $paiement->id,
-                    'facture_id' => $facture->id,
-                    'montant_alloue' => $montantImpute,
-                ]);
-
-                $facture->constaterUnReglement();
-                $factures[] = $facture;
-            }
-
-            if (! $client->estComptoir()) {
-                $this->imputerLeCreditDisponible($paiement, $factures);
-            }
-
-            $paiement = $paiement->fresh();
-            $this->registre->enregistrer(ChaineFiscale::Encaissement, 'paiement', $this->contenuFiscal->encaissement($paiement), $paiement);
-
-            return $paiement;
+            return $this->operateur->pendant($compte, fn (): Paiement => $this->enregistrer($compte, $magasin, $client, $donneesPaiement, $montant, $imputations));
         });
+    }
+
+    /**
+     * @param  array{mode_paiement: string, montant: float|string, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement
+     * @param  array<int, float>  $imputations
+     *
+     * @throws AuthorizationException
+     * @throws LogicException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    private function enregistrer(User $compte, Magasin $magasin, Client $client, array $donneesPaiement, float $montant, array $imputations): Paiement
+    {
+        $paiement = new Paiement([
+            ...$donneesPaiement,
+            'client_id' => $client->getKey(),
+            'montant' => $montant,
+        ]);
+        $paiement->forceFill(['cree_par' => $compte->getKey()])->save();
+        $factures = [];
+
+        foreach ($imputations as $factureId => $montantImpute) {
+            $facture = Facture::query()->whereKey($factureId)->lockForUpdate()->firstOrFail();
+            $this->verifierQuElleAttendCeReglement($facture, $client, $montantImpute);
+            $this->lecteur->exiger($compte, 'encaisser', $magasin, $facture);
+
+            PaiementAllocation::create([
+                'paiement_id' => $paiement->id,
+                'facture_id' => $facture->id,
+                'montant_alloue' => $montantImpute,
+            ]);
+
+            $facture->constaterUnReglement();
+            $factures[] = $facture;
+        }
+
+        if (! $client->estComptoir()) {
+            $this->imputerLeCreditDisponible($paiement, $factures);
+        }
+
+        $paiement = $paiement->fresh();
+        $this->registre->enregistrer(ChaineFiscale::Encaissement, 'paiement', $this->contenuFiscal->encaissement($paiement), $paiement);
+
+        return $paiement;
     }
 
     /**

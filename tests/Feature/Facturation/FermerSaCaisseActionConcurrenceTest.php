@@ -38,10 +38,10 @@ class FermerSaCaisseActionConcurrenceTest extends TestCase
         $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
-        $vendeur = User::factory()->create();
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
         $this->actingAs($vendeur);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        app(EnregistrerVenteCaisseAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
         $magasinId = $magasin->id;
         $vendeurId = $vendeur->id;
         $concurrente = null;
@@ -49,13 +49,13 @@ class FermerSaCaisseActionConcurrenceTest extends TestCase
             if ($concurrente === null && str_contains($requete->sql, 'from "factures"') && str_contains($requete->sql, 'for update')) {
                 $concurrente = $this->demarrerUnProcessusConcurrent(static function () use ($magasinId, $vendeurId): void {
                     app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
-                    app(FermerSaCaisseAction::class)->handle(User::query()->findOrFail($vendeurId));
+                    app(FermerSaCaisseAction::class)->handle(User::query()->findOrFail($vendeurId), User::query()->findOrFail($vendeurId));
                 });
                 $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
             }
         });
 
-        $premiere = app(FermerSaCaisseAction::class)->handle($vendeur);
+        $premiere = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $concurrente->wait();

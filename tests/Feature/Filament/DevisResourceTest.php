@@ -114,13 +114,13 @@ class DevisResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $facture = app(EnregistrerVenteCaisseAction::class)->handle($client, [
+        $facture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ], ModePaiement::Especes);
-        $avoir = app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]);
-        app(EmettreAvoirAction::class)->handle($avoir);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
 
         Livewire::test(CreateDevis::class)
             ->fillForm(['client_id' => $client->id])
@@ -381,7 +381,7 @@ class DevisResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
-        $brouillon = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $brouillon = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
         $envoye = $this->envoyerDevis(Client::factory()->create(), $produit);
         $accepte = $this->envoyerDevis(Client::factory()->create(), $produit);
         Livewire::test(ListDevis::class)->callTableAction('accepter', $accepte);
@@ -424,7 +424,7 @@ class DevisResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
-        $devis = app(EmettreDevisAction::class)->handle(app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-08']));
+        $devis = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-08']));
         $this->travelTo('2026-10-09 10:00:00');
 
         Livewire::test(ListDevis::class)
@@ -439,7 +439,7 @@ class DevisResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $service = Service::factory()->create(['nom' => 'Remplacement écran']);
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['service_id' => $service->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
         ]);
 
@@ -465,7 +465,7 @@ class DevisResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['service_id' => Service::factory()->create(['nom' => 'Pose écran'])->id, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'quantite' => 1],
         ]);
         $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::ReelNormalMensuel]);
@@ -663,7 +663,7 @@ class DevisResourceTest extends TestCase
         $client = Client::factory()->create();
         $ecran = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
         $cable = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 0, 'suivi_stock' => false]);
-        $devis = app(CreerDevisAction::class)->handle($client, [
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $ecran->id, 'quantite' => 2],
             ['produit_id' => $cable->id, 'quantite' => 1],
         ]);
@@ -690,7 +690,7 @@ class DevisResourceTest extends TestCase
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20]);
-        $devis = app(CreerDevisAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
 
         Livewire::test(EditDevis::class, ['record' => $devis->getRouteKey()])
             ->fillForm(['client_id' => $clientDUnAutreMagasin->id])
@@ -710,10 +710,10 @@ class DevisResourceTest extends TestCase
         $observateur = $this->membre($magasin, RoleMagasin::Observateur, null, [
             'name' => 'Léa', 'email' => 'lea@example.test',
         ]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
+        $devis = app(CreerDevisAction::class)->handle($this->proprietaireDe($magasin), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
         $this->actingAs($observateur);
         Filament::setTenant($magasin);
-        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
 
         Livewire::test(ListDevis::class)
             ->assertTableBulkActionHidden('delete')
@@ -735,7 +735,7 @@ class DevisResourceTest extends TestCase
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
-        $devisBrouillon = app(CreerDevisAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $devisBrouillon = app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
         $devisConverti = $this->envoyerDevis($client, $produit);
         Livewire::test(ListDevis::class)->callTableAction('accepter', $devisConverti);
         Livewire::test(ListDevis::class)->callTableAction('convertir', $devisConverti->fresh());
@@ -774,7 +774,7 @@ class DevisResourceTest extends TestCase
     {
         $this->magasinQuiVendHorsDeFrance();
         $client = Client::factory()->etranger('DE', 'DE123456789')->create();
-        $devis = app(CreerDevisAction::class)->handle($client, [['service_id' => Service::factory()->create(['nom' => 'Conseil'])->id, 'prix_unitaire_ttc' => '500.00', 'quantite' => 1]], ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [['service_id' => Service::factory()->create(['nom' => 'Conseil'])->id, 'prix_unitaire_ttc' => '500.00', 'quantite' => 1]], ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]);
         $client->update(['type_client' => TypeClient::Particulier, 'numero_tva' => null]);
 
         $page = Livewire::test(EditDevis::class, ['record' => $devis->getRouteKey()]);
@@ -800,7 +800,7 @@ class DevisResourceTest extends TestCase
         $magasin = $this->magasinQuiVendHorsDeFrance();
         $client = Client::factory()->create(['nom' => 'Acme Inc.', 'type_client' => TypeClient::Professionnel, 'pays' => 'US', 'etabli_en_france' => false, 'identifiant_etranger' => 'EIN 12-3456789']);
         $produit = Produit::factory()->create(['prix_vente_ttc' => '1.00', 'taux_tva' => 20, 'suivi_stock' => false]);
-        $devis = app(CreerDevisAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1000]], [
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1000]], [
             'nature_operation' => NatureOperation::ExportHorsUe,
             'livraison_adresse' => '1 Main Street',
             'livraison_code_postal' => '10001',

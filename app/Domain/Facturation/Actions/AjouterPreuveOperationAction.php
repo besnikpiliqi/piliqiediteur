@@ -2,13 +2,16 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Services\PreuvesRequises;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\Exceptions\InvalidFormatException;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
@@ -30,18 +33,23 @@ use LogicException;
  * même preuve ne passent pas l'un à côté de l'autre. Un magasin suspendu
  * ou fermé n'enregistre plus rien (voir Magasin::verifierQuIlEstOuvert()).
  * La facture elle-même ne change pas : la preuve s'écrit à côté de son
- * contenu signé.
+ * contenu signé. Son auteur, relu en base après le verrou de la facture,
+ * doit pouvoir la justifier (voir FacturePolicy::justifier()) ; la preuve
+ * note son nom figé.
  */
 class AjouterPreuveOperationAction
 {
+    public function __construct(private readonly LecteurDesDroits $lecteur) {}
+
     /**
      * @param  string  $reference  la référence du document, telle qu'il la porte (n° MRN, de CN23, de lettre de voiture...)
      * @param  string|null  $dateDocument  AAAA-MM-JJ
      * @param  string|null  $emetteur  qui a établi le document
      *
+     * @throws AuthorizationException
      * @throws LogicException
      */
-    public function handle(Facture $facture, TypePreuve $type, string $reference, ?string $dateDocument = null, ?string $emetteur = null): PreuveOperation
+    public function handle(User $auteur, Facture $facture, TypePreuve $type, string $reference, ?string $dateDocument = null, ?string $emetteur = null): PreuveOperation
     {
         $reference = trim($reference);
         $emetteur = blank($emetteur) ? null : trim($emetteur);
@@ -56,9 +64,10 @@ class AjouterPreuveOperationAction
 
         $dateDocument = blank($dateDocument) ? null : $this->dateDuDocument($dateDocument);
 
-        return DB::transaction(function () use ($facture, $type, $reference, $dateDocument, $emetteur): PreuveOperation {
+        return DB::transaction(function () use ($auteur, $facture, $type, $reference, $dateDocument, $emetteur): PreuveOperation {
             $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
             $facture->magasin->verifierQuIlEstOuvert();
+            $compte = $this->lecteur->exiger($auteur, 'justifier', $facture->magasin, $facture);
 
             if (($refus = self::refusPour($facture)) !== null) {
                 throw new LogicException($refus);
@@ -81,7 +90,7 @@ class AjouterPreuveOperationAction
                 'reference' => $reference,
                 'date_document' => $dateDocument,
                 'emetteur' => $emetteur,
-                'note_par' => auth()->id(),
+                'note_par' => $compte->getKey(),
             ]);
         });
     }

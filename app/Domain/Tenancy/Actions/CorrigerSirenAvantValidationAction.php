@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
@@ -20,7 +21,6 @@ use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use LogicException;
@@ -102,9 +102,7 @@ class CorrigerSirenAvantValidationAction
         }
 
         return $contexte->runAsSociete($societe, function () use ($auteur, $societe, $siren, $nics): Societe {
-            if (Gate::forUser($auteur)->denies('corrigerLeSiren', $societe)) {
-                throw new LogicException(self::MESSAGE_SANS_AUTORISATION);
-            }
+            $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'corrigerLeSiren', $societe, $societe, new LogicException(self::MESSAGE_SANS_AUTORISATION));
 
             $siren = Validator::make(['siren' => $siren], ['siren' => ['required', 'string', new SirenValide]])->validate()['siren'];
             $magasins = $societe->magasinsReels()->orderBy('id')->get();

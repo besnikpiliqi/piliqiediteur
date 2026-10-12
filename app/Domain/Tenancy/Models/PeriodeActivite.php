@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Models;
 
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
@@ -18,6 +19,19 @@ use LogicException;
  */
 class PeriodeActivite extends Model
 {
+    use FigeLeNomDeSesAuteurs;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'ouverte_par' => 'ouverte_par_nom',
+            'fermee_par' => 'fermee_par_nom',
+        ];
+    }
+
     protected $table = 'periodes_activite';
 
     protected $fillable = [];

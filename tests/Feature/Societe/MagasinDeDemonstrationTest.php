@@ -111,7 +111,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
 
         $ticket = $this->vendre();
-        app(CloturerCaisseAction::class)->handle($demonstration, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $demonstration, now());
 
         $this->assertSame(['payee', 1, 1], [$ticket->fresh()->statut->value, ClotureCaisse::query()->count(), Facture::query()->count()]);
         $chainesDeLaDemonstration = EnregistrementFiscal::query()->pluck('chaine')->map->value->unique()->sort()->values()->all();
@@ -141,9 +141,9 @@ class MagasinDeDemonstrationTest extends TestCase
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
         $client = Client::query()->where('type_client', 'professionnel')->sole();
         $client->update(['email' => 'client@example.test']);
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => Produit::query()->where('reference', 'DEMO-TASSE')->value('id'), 'quantite' => 1]]));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => Produit::query()->where('reference', 'DEMO-TASSE')->value('id'), 'quantite' => 1]]));
 
-        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->handle($facture, 'client@example.test', null, $societe->proprietaire), VenteNonAutoriseeException::class, 'Le magasin de démonstration n\'écrit à aucun client et ne transmet rien.');
+        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->handle($societe->proprietaire, $facture, 'client@example.test', null), VenteNonAutoriseeException::class, 'Le magasin de démonstration n\'écrit à aucun client et ne transmet rien.');
         $this->assertThrows(fn () => app(CreerMandatPdpAction::class)->handle($demonstration, $societe->proprietaire), LogicException::class, 'Le magasin de démonstration ne transmet rien à la plateforme.');
         $this->assertSame(0, EnvoiDocument::query()->count());
         Mail::assertNothingSent();
@@ -159,7 +159,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $societe = $this->inscrireUneSociete();
         $this->ouvrirLaDemonstrationEtYEntrer($societe);
         $ticket = $this->vendre();
-        $devis = app(CreerDevisAction::class)->handle(Client::query()->where('type_client', 'professionnel')->sole(), [['produit_id' => Produit::query()->where('reference', 'DEMO-STYLO')->value('id'), 'quantite' => 3]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::query()->where('type_client', 'professionnel')->sole(), [['produit_id' => Produit::query()->where('reference', 'DEMO-STYLO')->value('id'), 'quantite' => 3]]);
 
         $pdfDuTicket = app(FacturePdfGenerator::class)->html($ticket);
         $pdfDuDevis = app(DevisPdfGenerator::class)->html($devis);
@@ -303,7 +303,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $societe = $this->inscrireUneSociete();
         $reel = $societe->magasinsReels()->sole();
         app(TenantContext::class)->set($reel);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::query()->sole(), [['service_id' => Service::factory()->create()->id, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::query()->sole(), [['service_id' => Service::factory()->create()->id, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'quantite' => 1]]);
         $this->ouvrirLaDemonstrationEtYEntrer($societe);
         $ticket = $this->vendre();
 
@@ -329,7 +329,7 @@ class MagasinDeDemonstrationTest extends TestCase
      */
     private function vendre(): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle(
+        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
             Client::query()->where('est_comptoir', true)->sole(),
             [['produit_id' => Produit::query()->where('reference', 'DEMO-CARNET')->value('id'), 'quantite' => 1]],
             ModePaiement::Especes,

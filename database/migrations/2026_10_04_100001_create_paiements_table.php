@@ -32,6 +32,10 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->date('recu_le');
             $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('cree_par_nom')->nullable();
             $table->foreignId('contre_passe_paiement_id')->nullable()->unique()->constrained('paiements')->restrictOnDelete();
             $table->timestamps();
 

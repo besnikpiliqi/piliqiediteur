@@ -104,7 +104,7 @@ class RelancerFacturesImpayeesTest extends TestCase
         $this->relancerLe('2026-10-08');
         $this->travelTo('2026-10-10 14:00:00');
         app(TenantContext::class)->set($facture->magasin);
-        app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null);
+        app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
 
         $this->relancerLe('2026-10-16');
         $this->relancerLe('2026-10-30');
@@ -160,9 +160,9 @@ class RelancerFacturesImpayeesTest extends TestCase
         $payee = $this->factureImpayee($magasin, 'payee@exemple.fr');
         $this->payer($payee, 120);
         $corrigeeParAvoir = $this->factureImpayee($magasin, 'avoir@exemple.fr');
-        app(EnregistrerAvoirAction::class)->handle($corrigeeParAvoir->client, [['ligne_facture_id' => $corrigeeParAvoir->lignes->first()->id, 'quantite' => 1]], 'Erreur');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $corrigeeParAvoir->client, [['ligne_facture_id' => $corrigeeParAvoir->lignes->first()->id, 'quantite' => 1]], 'Erreur');
         $sansAdresse = $this->factureImpayee($magasin, null);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(['delai_paiement_jours' => 0]), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(['delai_paiement_jours' => 0]), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         $partiellementPayee = $this->factureImpayee($magasin, 'partielle@exemple.fr');
         $this->payer($partiellementPayee, 20);
 
@@ -188,7 +188,7 @@ class RelancerFacturesImpayeesTest extends TestCase
         $this->travelTo('2026-10-01 09:00:00');
         $magasin = $this->magasinQuiRelance();
         app(TenantContext::class)->set($magasin);
-        $sansEnregistrement = app(CreerFactureAction::class)->handle(Client::factory()->create(['email' => 'anomalie@exemple.fr', 'delai_paiement_jours' => 0]), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $sansEnregistrement = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(['email' => 'anomalie@exemple.fr', 'delai_paiement_jours' => 0]), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $sansEnregistrement->id)
             ->update(['numero' => 'TK-RELANCE-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-01 09:00:00', 'date_echeance' => '2026-10-01']);
         $facture = $this->factureImpayee($magasin, 'client@exemple.fr');
@@ -298,14 +298,14 @@ class RelancerFacturesImpayeesTest extends TestCase
     {
         app(TenantContext::class)->set($magasin);
         $client = Client::factory()->create(['email' => $emailDuClient, 'delai_paiement_jours' => 0]);
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
-        return app(EmettreFactureAction::class)->handle($facture);
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
     }
 
     private function payer(Facture $facture, float $montant): void
     {
-        app(EnregistrerPaiementAction::class)->handle($facture->client, [
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes,
             'montant' => $montant,
             'recu_le' => today()->toDateString(),

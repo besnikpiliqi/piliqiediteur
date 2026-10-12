@@ -6,16 +6,16 @@ use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
-use App\Models\User;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Database\Factories\ClotureCaissePersonnelleFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * Relevé « Fermer ma caisse » d'UN vendeur (voir FermerSaCaisseAction) --
- * tout membre qui vend ou encaisse, le comptable compris --, en quatre
+ * tout membre qui vend ou encaisse, le propriétaire et les responsables
+ * compris --, en quatre
  * rubriques séparées (B18) :
  *  - les ventes : celles qu'il a émises et qu'aucune de ses fermetures
  *    n'a encore comptées, y compris celles d'un jour précédent ; leur
@@ -59,6 +59,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  */
 class ClotureCaissePersonnelle extends Model
 {
+    use FigeLeNomDeSesAuteurs;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'vendeur_id' => 'vendeur_nom',
+            'fermee_par' => 'fermee_par_nom',
+        ];
+    }
+
     /** @use HasFactory<ClotureCaissePersonnelleFactory> */
     use BelongsToMagasin, HasFactory;
 
@@ -81,16 +94,6 @@ class ClotureCaissePersonnelle extends Model
         'reste_du' => 'decimal:2',
     ];
 
-    public function vendeur(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'vendeur_id');
-    }
-
-    public function fermeePar(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'fermee_par');
-    }
-
     /**
      * Qui a fermé la caisse, tel que le relevé le dit : « Fermée par le
      * vendeur », « Fermée par Claire Martin » (un responsable), ou
@@ -100,7 +103,7 @@ class ClotureCaissePersonnelle extends Model
     {
         return match ($this->mode_fermeture) {
             ModeFermetureCaisse::Vendeur => 'Fermée par le vendeur',
-            ModeFermetureCaisse::Responsable => 'Fermée par '.$this->fermeePar->name,
+            ModeFermetureCaisse::Responsable => 'Fermée par '.$this->fermee_par_nom,
             ModeFermetureCaisse::Automatique => 'Fermée automatiquement',
         };
     }

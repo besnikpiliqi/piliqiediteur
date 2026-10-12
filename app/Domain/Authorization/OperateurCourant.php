@@ -78,6 +78,17 @@ final class OperateurCourant
     }
 
     /**
+     * La personne posée, et elle seule : null sous pendantLeSysteme() et
+     * quand rien n'est posé. Ce qu'une ligne d'historique enregistre comme
+     * son auteur quand elle naît d'une action, comme le mouvement de stock
+     * d'une vente ou d'une réception (voir StockLedgerService).
+     */
+    public function personnePosee(): ?User
+    {
+        return $this->pose ? $this->operateur : null;
+    }
+
+    /**
      * @template TResultat
      *
      * @param  Closure(): TResultat  $operation

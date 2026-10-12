@@ -50,11 +50,11 @@ class EmettreFactureActionTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
         $this->assertSame(StatutFacture::Emise, $facture->statut);
         $this->assertNotNull($facture->numero);
@@ -65,11 +65,11 @@ class EmettreFactureActionTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 3],
         ]);
 
-        app(EmettreFactureAction::class)->handle($facture);
+        app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
         $this->assertSame(7, $produit->fresh()->stock_quantite);
     }
@@ -84,17 +84,17 @@ class EmettreFactureActionTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 5, 'suivi_stock' => true]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 2],
         ]);
         $produit->delete();
 
-        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
         $this->assertSame(3, $produit->fresh()->stock_quantite);
         $this->assertDatabaseHas('mouvements_stock', ['produit_id' => $produit->id, 'type' => 'vente', 'quantite' => 2]);
 
-        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
 
@@ -106,11 +106,11 @@ class EmettreFactureActionTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 3],
         ]);
 
-        app(EmettreFactureAction::class)->handle($facture);
+        app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
         $this->assertSame(10, $produit->fresh()->stock_quantite);
     }
@@ -125,11 +125,11 @@ class EmettreFactureActionTest extends TestCase
     {
         $client = Client::factory()->create(); // particulier par défaut
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
         $this->assertStringStartsWith('TK-', $facture->numero);
     }
@@ -138,11 +138,11 @@ class EmettreFactureActionTest extends TestCase
     {
         $client = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
         $this->assertStringStartsWith('FAC-', $facture->numero);
     }
@@ -155,8 +155,8 @@ class EmettreFactureActionTest extends TestCase
     {
         $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $creerEtEmettre = fn (Client $client) => app(EmettreFactureAction::class)->handle(
-            app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]])
+        $creerEtEmettre = fn (Client $client) => app(EmettreFactureAction::class)->handle(self::auteur(),
+            app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]])
         );
 
         $ticket = $creerEtEmettre(Client::factory()->create());
@@ -172,8 +172,8 @@ class EmettreFactureActionTest extends TestCase
         $clientPro = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
 
-        $creerEtEmettre = fn (Client $client) => app(EmettreFactureAction::class)->handle(
-            app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]])
+        $creerEtEmettre = fn (Client $client) => app(EmettreFactureAction::class)->handle(self::auteur(),
+            app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]])
         );
 
         $ticket1 = $creerEtEmettre($clientParticulier);
@@ -195,11 +195,11 @@ class EmettreFactureActionTest extends TestCase
         $this->travelTo(Carbon::parse('2026-12-31 23:30:00', 'UTC'));
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
         $this->assertSame('TK-LYON1-2027-000001', $facture->numero);
         $this->assertSame('2027-01-01 00:30', $facture->fresh()->date_emission->format('Y-m-d H:i'));
@@ -215,11 +215,11 @@ class EmettreFactureActionTest extends TestCase
         $client = Client::factory()->professionnel()->create();
         $this->completerIdentiteLegale(app(TenantContext::class)->magasin());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle($client, [
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 100],
         ]);
 
-        $facture = app(EmettreFactureAction::class)->handle($brouillon);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
         $this->assertSame([StatutFacture::Payee, '0.00', 0.0, 0.0], [$facture->statut, $facture->total_ttc, $facture->montantPaye(), $facture->montantRestant()]);
         $this->assertSame(0, Paiement::query()->count());
@@ -235,12 +235,12 @@ class EmettreFactureActionTest extends TestCase
     public function test_l_avoir_d_un_client_nomme_ne_regle_jamais_une_vente_comme_bon_d_avoir(): void
     {
         $martin = Client::factory()->create();
-        $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle($martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
-        $avoirDeMartin = app(EnregistrerAvoirAction::class)->handle($martin, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]], 'Retour');
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
+        $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $avoirDeMartin = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $martin, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
 
         try {
-            app(EmettreFactureAction::class)->handle($brouillon, new ReglementComptant(ModePaiement::Especes, bonDAvoir: $avoirDeMartin));
+            app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon, new ReglementComptant(ModePaiement::Especes, bonDAvoir: $avoirDeMartin));
             $this->fail('L\'avoir d\'un client nommé aurait dû être refusé comme bon d\'avoir.');
         } catch (LogicException $refus) {
             $this->assertSame('Ce bon d\'avoir est introuvable ou déjà utilisé.', $refus->getMessage());
@@ -260,16 +260,16 @@ class EmettreFactureActionTest extends TestCase
         $autreMagasin = $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $bonDeLAutreMagasin = app(TenantContext::class)->runAs($autreMagasin, function (): Avoir {
             $comptoir = Client::query()->where('est_comptoir', true)->sole();
-            $ticket = app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+            $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
 
-            return app(EnregistrerAvoirAction::class)->handle($comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+            return app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         });
         // ouvrirUneSociete() a rendu actif le magasin qu'elle a ouvert.
         app(TenantContext::class)->set($magasin);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
 
         try {
-            app(EmettreFactureAction::class)->handle($brouillon, new ReglementComptant(ModePaiement::Especes, bonDAvoir: $bonDeLAutreMagasin));
+            app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon, new ReglementComptant(ModePaiement::Especes, bonDAvoir: $bonDeLAutreMagasin));
             $this->fail('Le bon d\'avoir d\'un autre magasin aurait dû être refusé.');
         } catch (LogicException $refus) {
             $this->assertSame('Ce bon d\'avoir est introuvable ou déjà utilisé.', $refus->getMessage());
@@ -284,21 +284,21 @@ class EmettreFactureActionTest extends TestCase
         $facture = Facture::factory()->for(Client::factory()->create())->create();
 
         $this->expectException(LogicException::class);
-        app(EmettreFactureAction::class)->handle($facture);
+        app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
     }
 
     public function test_impossible_demettre_deux_fois_la_meme_facture(): void
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        app(EmettreFactureAction::class)->handle($facture);
+        app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
         $this->expectException(LogicException::class);
-        app(EmettreFactureAction::class)->handle($facture->fresh());
+        app(EmettreFactureAction::class)->handle(self::auteur(), $facture->fresh());
     }
 
     /**
@@ -310,20 +310,20 @@ class EmettreFactureActionTest extends TestCase
     {
         $this->travelTo('2026-10-09 19:00:00');
         $magasin = app(TenantContext::class)->magasin();
-        app(CloturerCaisseAction::class)->handle($magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
         $this->travelTo('2026-10-09 19:30:00');
 
-        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($brouillon), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
 
         $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
         $this->assertFalse(SequenceDocument::query()->where('magasin_id', $magasin->id)->where('type_document', TypeDocument::TicketCaisse->value)->exists());
 
         $this->travelTo('2026-10-10 00:01:00');
-        $ticket = app(EmettreFactureAction::class)->handle($brouillon);
+        $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
         $this->assertSame('TK-LYON1-2026-000001', $ticket->numero);
     }
@@ -335,13 +335,13 @@ class EmettreFactureActionTest extends TestCase
     public function test_une_facture_a_un_professionnel_s_emet_encore_apres_la_cloture_de_la_journee(): void
     {
         $this->travelTo('2026-10-09 19:00:00');
-        app(CloturerCaisseAction::class)->handle(app(TenantContext::class)->magasin(), now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), now());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
         $this->assertSame('FAC-LYON1-2026-000001', $facture->numero);
     }
@@ -360,11 +360,11 @@ class EmettreFactureActionTest extends TestCase
         $this->travelTo('2026-10-09 19:30:00');
         (new TeteRegistreFiscal)->forceFill(['derniere_journee_cloturee' => '2026-10-09'])->save();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($brouillon), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
 
         $this->assertSame([StatutFacture::Brouillon, 0], [$brouillon->fresh()->statut, ClotureCaisse::query()->count()]);
     }
@@ -393,7 +393,7 @@ class EmettreFactureActionTest extends TestCase
         app(TenantContext::class)->magasin()->update(['delai_paiement_jours' => $delaiDuMagasin]);
         $client = Client::factory()->professionnel()->create(['delai_paiement_jours' => $delaiDuClient]);
 
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, $this->uneLigne()));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, $this->uneLigne()));
 
         $this->assertSame($echeance, $facture->date_echeance->toDateString());
     }
@@ -406,10 +406,10 @@ class EmettreFactureActionTest extends TestCase
     public function test_l_echeance_d_un_brouillon_se_calcule_le_jour_de_son_emission(): void
     {
         $this->travelTo(Carbon::parse('2026-10-01 10:00:00', 'Europe/Paris'));
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), $this->uneLigne());
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), $this->uneLigne());
         $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
 
-        $ticket = app(EmettreFactureAction::class)->handle($brouillon);
+        $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
         $this->assertNull($brouillon->date_echeance);
         $this->assertSame('2026-11-08', $ticket->date_echeance->toDateString());
@@ -425,10 +425,10 @@ class EmettreFactureActionTest extends TestCase
     {
         $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
         $magasin = $this->magasinSansIdentiteLegale();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->uneLigne());
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), $this->uneLigne());
 
         $this->assertThrows(
-            fn () => app(EmettreFactureAction::class)->handle($brouillon),
+            fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon),
             IdentiteDeLaSocieteIncompleteException::class,
             'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité de la société (Administration de la société > Identité) : raison sociale, forme juridique, immatriculation, adresse du siège, n° de TVA intracommunautaire, adresse du magasin, code postal du magasin, ville du magasin.',
         );
@@ -440,7 +440,7 @@ class EmettreFactureActionTest extends TestCase
         $this->completerIdentiteLegale($magasin);
         $this->reglerLaSociete($magasin, ['numero_tva' => 'FR88100000009']);
         $magasin->forceFill(['adresse' => '1 rue de la République', 'code_postal' => '69001', 'ville' => 'Lyon'])->save();
-        $facture = app(EmettreFactureAction::class)->handle($brouillon);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
         $this->assertSame('FAC-MABOUT-2026-000001', $facture->numero);
     }
@@ -453,7 +453,7 @@ class EmettreFactureActionTest extends TestCase
         $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
         $this->magasinSansIdentiteLegale();
 
-        $ticket = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), $this->uneLigne()));
+        $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), $this->uneLigne()));
 
         $this->assertSame('TK-MABOUT-2026-000001', $ticket->numero);
     }
@@ -467,7 +467,7 @@ class EmettreFactureActionTest extends TestCase
         $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
         $this->reglerLaSociete(app(TenantContext::class)->magasin(), ['regime_tva' => RegimeTva::FranchiseEnBase, 'numero_tva' => null]);
 
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->uneLigne()));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), $this->uneLigne()));
 
         $this->assertSame('FAC-LYON1-2026-000001', $facture->numero);
     }
@@ -476,10 +476,10 @@ class EmettreFactureActionTest extends TestCase
     {
         $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
         $this->reglerLaSociete(app(TenantContext::class)->magasin(), ['regime_tva' => RegimeTva::ReelNormalMensuel, 'numero_tva' => null]);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->uneLigne());
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), $this->uneLigne());
 
         $this->assertThrows(
-            fn () => app(EmettreFactureAction::class)->handle($brouillon),
+            fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon),
             IdentiteDeLaSocieteIncompleteException::class,
             'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité de la société (Administration de la société > Identité) : n° de TVA intracommunautaire.',
         );
@@ -494,10 +494,10 @@ class EmettreFactureActionTest extends TestCase
     public function test_la_facture_d_un_professionnel_etabli_en_france_attend_son_siren(): void
     {
         $client = Client::factory()->create(['type_client' => TypeClient::Professionnel]);
-        $brouillon = app(CreerFactureAction::class)->handle($client, $this->uneLigne());
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, $this->uneLigne());
 
         $this->assertThrows(
-            fn () => app(EmettreFactureAction::class)->handle($brouillon),
+            fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon),
             LogicException::class,
             'Renseignez le SIREN de ce client avant d\'émettre sa facture.',
         );

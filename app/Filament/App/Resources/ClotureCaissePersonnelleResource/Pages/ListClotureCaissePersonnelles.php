@@ -7,6 +7,7 @@ use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
+use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Models\User;
 use Filament\Actions;
 use Filament\Forms\Components\Placeholder;
@@ -31,6 +32,8 @@ use Illuminate\Support\HtmlString;
  */
 class ListClotureCaissePersonnelles extends ListRecords
 {
+    use GereLesExceptionsMetier;
+
     protected static string $resource = ClotureCaissePersonnelleResource::class;
 
     protected function getHeaderActions(): array
@@ -43,7 +46,7 @@ class ListClotureCaissePersonnelles extends ListRecords
                 ->requiresConfirmation()
                 ->modalDescription(fn (): HtmlString => self::recapitulatif(app(FermerSaCaisseAction::class)->apercu(auth()->user()), 'votre'))
                 ->visible(fn () => auth()->user()->can('fermer', ClotureCaissePersonnelle::class))
-                ->action(fn () => app(FermerSaCaisseAction::class)->handle(auth()->user())),
+                ->action(fn () => static::executerSansCasser(fn () => app(FermerSaCaisseAction::class)->handle(auth()->user(), auth()->user()))),
             Actions\Action::make('fermer_la_caisse_d_un_vendeur')
                 ->label('Fermer la caisse d\'un vendeur')
                 ->icon('heroicon-o-user-minus')
@@ -73,9 +76,11 @@ class ListClotureCaissePersonnelles extends ListRecords
                         return;
                     }
 
-                    app(FermerSaCaisseAction::class)->handle($vendeur, auth()->user());
+                    static::executerSansCasser(function () use ($vendeur): void {
+                        $releve = app(FermerSaCaisseAction::class)->handle(auth()->user(), $vendeur);
 
-                    Notification::make()->title("Caisse de {$vendeur->name} fermée")->success()->send();
+                        Notification::make()->title("Caisse de {$releve->vendeur_nom} fermée")->success()->send();
+                    });
                 }),
         ];
     }

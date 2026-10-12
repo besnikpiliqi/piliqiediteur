@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
@@ -18,7 +19,6 @@ use App\Models\User;
 use Closure;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\UniqueConstraintViolationException;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use LogicException;
@@ -78,7 +78,9 @@ class ModifierEtablissementAction
         }
 
         return $contexte->runAsSociete($societe, function () use ($auteur, $magasin, $societe, $donnees): Magasin {
-            if (Gate::forUser($auteur)->denies('gererLesMagasins', $societe) || ! $auteur->administreLeMagasin($magasin)) {
+            $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'gererLesMagasins', $societe, $societe, new LogicException(self::MESSAGE_SANS_AUTORISATION));
+
+            if (! $auteur->administreLeMagasin($magasin)) {
                 throw new LogicException(self::MESSAGE_SANS_AUTORISATION);
             }
 

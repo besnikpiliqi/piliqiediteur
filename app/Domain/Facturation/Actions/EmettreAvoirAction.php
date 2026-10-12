@@ -2,10 +2,13 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
+use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\TypeDocument;
@@ -17,6 +20,8 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -31,7 +36,10 @@ use LogicException;
  *  1. le registre fiscal du magasin actif est verrouillé, avant toute
  *     lecture, l'avoir et la numérotation (voir RegistreFiscal) ; il donne
  *     l'instant de l'émission ; le magasin, relu, doit pouvoir vendre (voir
- *     Magasin::verifierQuIlPeutVendre()) ;
+ *     Magasin::verifierQuIlPeutVendre()) ; l'auteur est relu sous le
+ *     verrou de sa ligne (voir LecteurDesDroits) : il doit pouvoir créer
+ *     un avoir, et le registre signe l'émission à son nom (voir
+ *     OperateurCourant) ;
  *  2. l'avoir, relu verrouillé dans le magasin actif, arrête ses
  *     montants, prend la copie du client figée sur le document qu'il
  *     corrige, le plus récent s'il en corrige plusieurs (voir
@@ -61,67 +69,83 @@ class EmettreAvoirAction
         private readonly CalculateurLigne $calculateur,
         private readonly RegistreFiscal $registre,
         private readonly ContenuFiscal $contenuFiscal,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
     ) {}
+
+    /**
+     * @throws AuthorizationException
+     * @throws LogicException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function handle(User $auteur, Avoir $avoir): Avoir
+    {
+        return DB::transaction(function () use ($auteur, $avoir) {
+            $magasin = app(TenantContext::class)->magasin();
+            $instant = $this->registre->verrouiller($magasin);
+            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Avoir::class);
+
+            return $this->operateur->pendant($compte, fn (): Avoir => $this->emettre($avoir, $instant));
+        });
+    }
 
     /**
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(Avoir $avoir): Avoir
+    private function emettre(Avoir $avoir, InstantFiscal $instant): Avoir
     {
-        return DB::transaction(function () use ($avoir) {
-            $instant = $this->registre->verrouiller(app(TenantContext::class)->magasin());
-            Magasin::query()->findOrFail(app(TenantContext::class)->id())->verifierQuIlPeutVendre();
-            $avoir = Avoir::query()->whereKey($avoir->getKey())->lockForUpdate()->firstOrFail();
+        $avoir = Avoir::query()->whereKey($avoir->getKey())->lockForUpdate()->firstOrFail();
 
-            if (! $avoir->statut->peutTransitionnerVers(StatutAvoir::Emise)) {
-                throw new LogicException("Impossible d'émettre un avoir au statut [{$avoir->statut->value}].");
-            }
+        if (! $avoir->statut->peutTransitionnerVers(StatutAvoir::Emise)) {
+            throw new LogicException("Impossible d'émettre un avoir au statut [{$avoir->statut->value}].");
+        }
 
-            if ($avoir->lignes->isEmpty()) {
-                throw new LogicException('Impossible d\'émettre un avoir sans lignes : il ne corrige aucun document.');
-            }
+        if ($avoir->lignes->isEmpty()) {
+            throw new LogicException('Impossible d\'émettre un avoir sans lignes : il ne corrige aucun document.');
+        }
 
-            if ($avoir->estPourUnProfessionnel()) {
-                $avoir->magasin->verifierSonIdentiteLegale();
-            }
+        if ($avoir->estPourUnProfessionnel()) {
+            $avoir->magasin->verifierSonIdentiteLegale();
+        }
 
-            if ($avoir->corrigeDesTickets()) {
-                ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($avoir->magasin, $instant);
-            }
+        if ($avoir->corrigeDesTickets()) {
+            ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($avoir->magasin, $instant);
+        }
 
-            $this->arreterLesMontants($avoir);
+        $this->arreterLesMontants($avoir);
 
-            $numero = $this->numerotation->suivant($avoir->magasin, TypeDocument::Avoir, $instant->enHeureLocale()->format('Y'));
+        $numero = $this->numerotation->suivant($avoir->magasin, TypeDocument::Avoir, $instant->enHeureLocale()->format('Y'));
 
-            $avoir->figerLeClient();
-            $avoir->forceFill([
-                'numero' => $numero,
-                'statut' => StatutAvoir::Emise,
-                'date_emission' => $instant->utc,
-            ])->save();
+        $avoir->figerLeClient();
+        $avoir->forceFill([
+            'numero' => $numero,
+            'statut' => StatutAvoir::Emise,
+            'date_emission' => $instant->utc,
+        ])->save();
 
-            // Synchrone et dans la même transaction, voir le commentaire
-            // de AvoirEmis.
-            AvoirEmis::dispatch($avoir);
+        // Synchrone et dans la même transaction, voir le commentaire
+        // de AvoirEmis.
+        AvoirEmis::dispatch($avoir);
 
-            $avoir = $avoir->fresh();
-            $contenu = $this->contenuFiscal->document($avoir);
-            $enregistrement = $this->registre->enregistrerVente('avoir', $contenu['document']['totaux']['ttc'], $contenu, $avoir);
+        $avoir = $avoir->fresh();
+        $contenu = $this->contenuFiscal->document($avoir);
+        $enregistrement = $this->registre->enregistrerVente('avoir', $contenu['document']['totaux']['ttc'], $contenu, $avoir);
 
-            if ($contenu['document']['corrige'] === 'ticket') {
-                $this->registre->journaliser(CodeEvenement::AnnulationDeTicket, [
-                    'avoir' => $avoir->numero,
-                    'tickets' => array_column($contenu['document']['documents_corriges'], 'numero'),
-                    'montant_ttc' => $contenu['document']['totaux']['ttc'],
-                    'sequence_vente' => $enregistrement->sequence,
-                    'motif' => $avoir->motif,
-                ], $avoir);
-            }
+        if ($contenu['document']['corrige'] === 'ticket') {
+            $this->registre->journaliser(CodeEvenement::AnnulationDeTicket, [
+                'avoir' => $avoir->numero,
+                'tickets' => array_column($contenu['document']['documents_corriges'], 'numero'),
+                'montant_ttc' => $contenu['document']['totaux']['ttc'],
+                'sequence_vente' => $enregistrement->sequence,
+                'motif' => $avoir->motif,
+            ], $avoir);
+        }
 
-            return $avoir;
-        });
+        return $avoir;
     }
 
     /**

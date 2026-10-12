@@ -11,6 +11,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -47,7 +48,9 @@ class ParametresFiscauxSocieteTest extends TestCase
     /**
      * Le propriétaire règle le régime de la société depuis son
      * administration : tous ses magasins vendent aussitôt selon lui, la
-     * franchise en base à 0 % avec sa mention.
+     * franchise en base à 0 % avec sa mention. Il encaisse dans un magasin
+     * à la fois : il ferme sa caisse de chacun avant de vendre dans le
+     * suivant.
      */
     public function test_le_regime_de_la_societe_s_applique_a_tous_ses_magasins(): void
     {
@@ -63,7 +66,12 @@ class ParametresFiscauxSocieteTest extends TestCase
 
         $this->assertSame(RegimeTva::FranchiseEnBase, $lyon->societe->fresh()->regime_tva);
         foreach ([$lyon, $villeurbanne] as $magasin) {
-            $ticket = app(TenantContext::class)->runAs($magasin->fresh(), fn (): Facture => app(EnregistrerVenteCaisseAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes));
+            $ticket = app(TenantContext::class)->runAs($magasin->fresh(), function (): Facture {
+                $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+                app(FermerSaCaisseAction::class)->handle(self::auteur(), self::auteur());
+
+                return $ticket;
+            });
             $this->assertSame([true, '0.00', '12.00'], [$ticket->franchise_en_base, $ticket->total_tva, $ticket->total_ttc]);
         }
     }
@@ -143,7 +151,7 @@ class ParametresFiscauxSocieteTest extends TestCase
         $proprietaire = $this->proprietaireDe($lyon);
         app(TenantContext::class)->clear();
         app(ModifierParametresFiscauxSocieteAction::class)->handle($proprietaire, $lyon->societe, ['mois_fin_exercice' => 6]);
-        app(TenantContext::class)->runAs($villeurbanne, fn (): Facture => app(EnregistrerVenteCaisseAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes));
+        app(TenantContext::class)->runAs($villeurbanne, fn (): Facture => app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes));
         app(TenantContext::class)->clear();
 
         $this->assertThrows(
@@ -168,7 +176,7 @@ class ParametresFiscauxSocieteTest extends TestCase
     public function test_une_emission_lit_le_regime_de_la_societe_apres_son_verrou(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon', 'regime_tva' => RegimeTva::ReelSimplifie]);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
         $regimeChange = false;
         DB::listen(function (QueryExecuted $requete) use (&$regimeChange, $magasin): void {
             if (! $regimeChange && str_contains($requete->sql, 'from "tetes_registre_fiscal"')) {
@@ -178,7 +186,7 @@ class ParametresFiscauxSocieteTest extends TestCase
         });
 
         $this->assertThrows(
-            fn () => app(EmettreFactureAction::class)->handle($brouillon),
+            fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon),
             LogicException::class,
             'Le régime de TVA de la société a changé depuis l\'enregistrement de ce brouillon',
         );
@@ -222,7 +230,7 @@ class ParametresFiscauxSocieteTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $this->assertThrows(
-            fn () => app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], [
+            fn () => app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], [
                 'nature_operation' => NatureOperation::ExportHorsUe,
                 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
             ]),

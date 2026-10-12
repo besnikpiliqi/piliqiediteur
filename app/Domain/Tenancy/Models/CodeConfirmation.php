@@ -4,6 +4,7 @@ namespace App\Domain\Tenancy\Models;
 
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Enums\CanalEnvoi;
 use App\Domain\Tenancy\Enums\MotifCode;
 use Illuminate\Database\Eloquent\Model;
@@ -28,7 +29,17 @@ use LogicException;
  */
 class CodeConfirmation extends Model
 {
-    use BelongsToSociete;
+    use BelongsToSociete, FigeLeNomDeSesAuteurs;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'demande_par' => 'demande_par_nom',
+        ];
+    }
 
     public const DUREE_DE_VALIDITE_EN_JOURS = 30;
 

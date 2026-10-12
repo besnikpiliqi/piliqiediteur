@@ -75,10 +75,10 @@ class FactureResourceTest extends TestCase
         $facture = $facture->fresh();
 
         $ligneFacture = $facture->lignes->firstOrFail();
-        $avoir = app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ], 'Produit défectueux');
-        app(EmettreAvoirAction::class)->handle($avoir);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
             ->assertSuccessful()
@@ -138,15 +138,15 @@ class FactureResourceTest extends TestCase
 
         // Premier achat payé puis intégralement retourné : 60 € de crédit
         // disponible.
-        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle($client, [
+        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ], ModePaiement::Especes);
 
         $ligneFacture = $premiereFacture->lignes->firstOrFail();
-        $avoir = app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
-        app(EmettreAvoirAction::class)->handle($avoir);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
 
         // Nouvel achat du même montant : couvert automatiquement par le crédit.
         Livewire::test(CreateFacture::class)->fillForm([
@@ -240,15 +240,15 @@ class FactureResourceTest extends TestCase
 
         // Premier achat payé puis intégralement retourné : 10 € de crédit
         // disponible.
-        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle($client, [
+        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produitRembourse->id, 'quantite' => 1],
         ], ModePaiement::Especes);
 
         $ligneFacture = $premiereFacture->lignes->firstOrFail();
-        $avoir = app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
-        app(EmettreAvoirAction::class)->handle($avoir);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
 
         // Nouvel achat d'un montant supérieur : seulement couvert en partie
         // par le crédit, aucun encaissement réel.
@@ -296,15 +296,15 @@ class FactureResourceTest extends TestCase
 
         // Premier achat payé puis intégralement retourné : 13 € de crédit
         // disponible.
-        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle($client, [
+        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produitRembourse->id, 'quantite' => 1],
         ], ModePaiement::Especes);
 
         $ligneFacture = $premiereFacture->lignes->firstOrFail();
-        $avoir = app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
-        app(EmettreAvoirAction::class)->handle($avoir);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
 
         // Nouvel achat d'un montant supérieur (61,20 € TTC) : seulement
         // couvert en partie par le crédit, aucun encaissement réel.
@@ -473,7 +473,7 @@ class FactureResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3]]);
         $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
 
         $component = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()]);
@@ -484,7 +484,7 @@ class FactureResourceTest extends TestCase
             ->assertSee('Total HT 36,00 € · TVA 0,00 € · Total TTC 36,00 €')
             ->call('save')
             ->assertHasNoFormErrors();
-        $facture = app(EmettreFactureAction::class)->handle($brouillon->fresh());
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon->fresh());
 
         $this->assertTrue($facture->franchise_en_base);
         $this->assertSame(['36.00', '0.00', '36.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
@@ -503,7 +503,7 @@ class FactureResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['service_id' => Service::factory()->create(['nom' => 'Pose écran'])->id, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'quantite' => 1],
         ]);
         $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::ReelNormalMensuel]);
@@ -513,7 +513,7 @@ class FactureResourceTest extends TestCase
             ->assertSet('data.lignes.'.array_key_first($component->get('data.lignes')).'.taux_tva', '20')
             ->call('save')
             ->assertHasNoFormErrors();
-        $facture = app(EmettreFactureAction::class)->handle($brouillon->fresh());
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon->fresh());
 
         $this->assertFalse($facture->franchise_en_base);
         $this->assertSame('20.00', $facture->lignes->sole()->taux_tva);
@@ -561,7 +561,7 @@ class FactureResourceTest extends TestCase
     private function lecturesDUneFrappeDansUnBrouillonDe(int $nombreDeLignes, string $totauxAttendus, bool $professionnel): array
     {
         $produits = Produit::factory()->count($nombreDeLignes)->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle($professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create(), $produits
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create(), $produits
             ->map(fn (Produit $produit): array => ['produit_id' => $produit->id, 'quantite' => 1])
             ->all());
         $component = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()]);
@@ -628,7 +628,7 @@ class FactureResourceTest extends TestCase
         $cable = Produit::factory()->create(['nom' => 'Cable ip 17', 'prix_vente_ttc' => 10, 'taux_tva' => 0, 'suivi_stock' => false]);
         $coque = Produit::factory()->create(['nom' => 'Coque ip 17', 'prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $ecran->id, 'quantite' => 2],
             ['produit_id' => $cable->id, 'quantite' => 1],
             ['produit_id' => $coque->id, 'quantite' => 1],
@@ -674,7 +674,7 @@ class FactureResourceTest extends TestCase
         $cable = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 0, 'suivi_stock' => false]);
         $coque = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $facture = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [
             ['produit_id' => $ecran->id, 'quantite' => 2],
             ['produit_id' => $cable->id, 'quantite' => 1],
             ['produit_id' => $coque->id, 'quantite' => 1],
@@ -705,7 +705,7 @@ class FactureResourceTest extends TestCase
         $client = Client::factory()->create();
         $ecran = Produit::factory()->create(['nom' => 'Ecran Iphone 18 Pro Max', 'prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
         $cable = Produit::factory()->create(['nom' => 'Cable ip 17', 'prix_vente_ttc' => 10, 'taux_tva' => 0, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $ecran->id, 'quantite' => 2],
             ['produit_id' => $cable->id, 'quantite' => 1],
         ]);
@@ -851,7 +851,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
         $client = Client::factory()->create(['nom' => 'Client archivé']);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
         $client->delete();
 
         Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
@@ -871,11 +871,11 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
-        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ticket->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
-        $brouillon = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
         $client->delete();
 
         Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
@@ -978,7 +978,7 @@ class FactureResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
         config(['caisse_securisee.cle_privee' => null]);
         Exceptions::fake([ModuleFiscalNonConfigureException::class]);
 
@@ -1088,7 +1088,7 @@ class FactureResourceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
         config(['caisse_securisee.cle_privee' => null]);
         $this->app->forgetInstance(RegistreFiscal::class);
         Exceptions::fake([ModuleFiscalNonConfigureException::class]);
@@ -1107,7 +1107,7 @@ class FactureResourceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
         config(['caisse_securisee.cle_privee' => null]);
         $this->app->forgetInstance(RegistreFiscal::class);
         Exceptions::fake([ModuleFiscalNonConfigureException::class]);
@@ -1178,7 +1178,7 @@ class FactureResourceTest extends TestCase
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 2],
         ]);
 
@@ -1291,7 +1291,7 @@ class FactureResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $service = Service::factory()->create(['nom' => 'Remplacement écran']);
-        $facture = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['service_id' => $service->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
         ]);
 
@@ -1351,8 +1351,8 @@ class FactureResourceTest extends TestCase
         $emise = $this->emettreFactureDepuisLePanneau($client);
         $client->update(['nom' => 'Marc Nouveau']);
         $produit = Produit::factory()->create(['suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle($client->fresh(), [['produit_id' => $produit->id, 'quantite' => 1]]);
-        $autre = app(CreerFactureAction::class)->handle(Client::factory()->create(['nom' => 'Paul Tiers']), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client->fresh(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $autre = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(['nom' => 'Paul Tiers']), [['produit_id' => $produit->id, 'quantite' => 1]]);
 
         $liste = Livewire::test(ListFactures::class);
 
@@ -1379,7 +1379,7 @@ class FactureResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(['nom' => 'Jean Ancien']), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(['nom' => 'Jean Ancien']), [['produit_id' => $produit->id, 'quantite' => 1]]);
         $intacte = $this->emettreFactureDepuisLePanneau(Client::factory()->create(['nom' => 'Paul Tiers']));
 
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
@@ -1476,10 +1476,10 @@ class FactureResourceTest extends TestCase
         $client = Client::factory()->create();
         $coque = Produit::factory()->create(['nom' => 'Coque bleue', 'prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
         $casque = Produit::factory()->create(['nom' => 'Casque sans fil', 'prix_vente_ttc' => 70, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $premiere = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $coque->id, 'quantite' => 1]]));
-        $seconde = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $casque->id, 'quantite' => 1]]));
+        $premiere = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $coque->id, 'quantite' => 1]]));
+        $seconde = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $casque->id, 'quantite' => 1]]));
 
-        $avoir = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $premiere->lignes->firstOrFail()->id, 'quantite' => 1],
             ['ligne_facture_id' => $seconde->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
@@ -1540,8 +1540,8 @@ class FactureResourceTest extends TestCase
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $avecRemise = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 2, 'remise_pourcentage' => 12.5]]);
-        $sansRemise = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 2]]);
+        $avecRemise = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 2, 'remise_pourcentage' => 12.5]]);
+        $sansRemise = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
 
         $rendre = fn (Facture $facture): string => app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
@@ -1568,7 +1568,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
 
         Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
             ->fillForm(['client_id' => $clientDUnAutreMagasin->id])
@@ -1588,7 +1588,7 @@ class FactureResourceTest extends TestCase
         $clientArchive = Client::factory()->create();
         $clientArchive->delete();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
 
         Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
             ->fillForm(['client_id' => $clientArchive->id])
@@ -1610,7 +1610,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
         $client->delete();
 
         Livewire::test(EditFacture::class, ['record' => $facture->getRouteKey()])
@@ -1665,7 +1665,7 @@ class FactureResourceTest extends TestCase
 
     private function brouillonDeLivraisonIntracommunautaire(Client $client): Facture
     {
-        return app(CreerFactureAction::class)->handle($client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '25.00', 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 12]], [
+        return app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '25.00', 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 12]], [
             'nature_operation' => NatureOperation::LivraisonIntracommunautaire,
             'livraison_adresse' => 'Musterstraße 1',
             'livraison_code_postal' => '10115',
@@ -1867,7 +1867,7 @@ class FactureResourceTest extends TestCase
         $this->magasinQuiVendHorsDeFrance();
         $client = Client::factory()->etranger('DE', 'DE123456789')->create();
         ConsultationVies::forceCreate(['client_id' => $client->id, 'numero_tva' => 'DE123456789', 'valide' => true, 'identifiant_consultation' => 'WAPIAAAAW1234567', 'consultee_le' => now()->subHour(), 'reponse' => '{"valid":true}']);
-        $facture = app(EmettreFactureAction::class)->handle($this->brouillonDeLivraisonIntracommunautaire($client));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillonDeLivraisonIntracommunautaire($client));
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
             ->assertSeeText('Livraison intracommunautaire à un professionnel')
@@ -1895,7 +1895,7 @@ class FactureResourceTest extends TestCase
         $client = $this->clientAmericain();
         $produit = Produit::factory()->create(['prix_vente_ttc' => '1.00', 'taux_tva' => 20, 'suivi_stock' => false]);
         $port = Service::factory()->fraisAccessoires()->create(['nom' => 'Frais de port']);
-        $brouillon = app(CreerFactureAction::class)->handle($client, [
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1000],
             ['service_id' => $port->id, 'prix_unitaire_ttc' => '15.00', 'quantite' => 1],
         ], ['nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US']);
@@ -1923,7 +1923,7 @@ class FactureResourceTest extends TestCase
     {
         $this->magasinQuiVendHorsDeFrance();
         $conseil = Service::factory()->create(['nom' => 'Conseil']);
-        $brouillon = app(CreerFactureAction::class)->handle($this->clientAmericain(), [['service_id' => $conseil->id, 'prix_unitaire_ttc' => '18.00', 'taux_tva' => 20, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $this->clientAmericain(), [['service_id' => $conseil->id, 'prix_unitaire_ttc' => '18.00', 'taux_tva' => 20, 'quantite' => 1]]);
 
         $page = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
             ->set('data.nature_operation', NatureOperation::PrestationHorsUe->value);
@@ -1965,7 +1965,7 @@ class FactureResourceTest extends TestCase
     {
         $this->magasinQuiVendHorsDeFrance();
         $client = Client::factory()->etranger('DE', 'DE123456789')->create();
-        $brouillon = app(CreerFactureAction::class)->handle($client, [['service_id' => Service::factory()->create()->id, 'prix_unitaire_ttc' => '500.00', 'quantite' => 1]], ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['service_id' => Service::factory()->create()->id, 'prix_unitaire_ttc' => '500.00', 'quantite' => 1]], ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]);
         $client->update(['type_client' => TypeClient::Particulier, 'numero_tva' => null]);
 
         Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()])
@@ -2005,7 +2005,7 @@ class FactureResourceTest extends TestCase
     {
         $this->magasinQuiVendHorsDeFrance();
         $produit = Produit::factory()->create(['prix_vente_ttc' => '7.00', 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($this->clientAmericain(), [['produit_id' => $produit->id, 'quantite' => 3]], [
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $this->clientAmericain(), [['produit_id' => $produit->id, 'quantite' => 3]], [
             'nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
         ]));
 

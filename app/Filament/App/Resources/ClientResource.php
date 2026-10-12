@@ -354,7 +354,7 @@ class ClientResource extends Resource
             ->visible(fn (Client $record): bool => $record->aUnNumeroTvaVerifiableSurVies())
             ->authorize('update')
             ->action(fn (Client $record) => static::executerSansCasser(
-                fn () => static::notifierLaVerification(app(VerifierNumeroTvaAction::class)->handle($record)),
+                fn () => static::notifierLaVerification(app(VerifierNumeroTvaAction::class)->handle(auth()->user(), $record)),
             ));
     }
 

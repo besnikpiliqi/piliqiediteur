@@ -81,7 +81,7 @@ class AvoirFournisseurResource extends Resource
                 Tables\Columns\TextColumn::make('motif')->limit(40)->toggleable(),
                 Tables\Columns\TextColumn::make('source')->badge()->toggleable(),
                 Tables\Columns\TextColumn::make('date_emission')->label('Émis le')->dateTime('d/m/Y')->sortable(),
-                Tables\Columns\TextColumn::make('creePar.name')->label('Émis par')->toggleable(),
+                Tables\Columns\TextColumn::make('cree_par_nom')->label('Émis par')->toggleable(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('source')->options(SourceAvoirFournisseur::class),

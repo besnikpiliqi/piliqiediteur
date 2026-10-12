@@ -159,7 +159,7 @@ class DevisResource extends Resource
                         ? 'Le devis reçoit son numéro et passe au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.'
                         : "Le devis garde son numéro {$record->numero} et repasse au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.")
                     ->visible(fn (Devis $record) => $record->statut === StatutDevis::Brouillon && auth()->user()->can('envoyer', $record))
-                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(EmettreDevisAction::class)->handle($record))),
+                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(EmettreDevisAction::class)->handle(auth()->user(), $record))),
                 // Masquée une fois la date de validité dépassée (voir
                 // DevisPolicy::accepter()).
                 Tables\Actions\Action::make('accepter')
@@ -168,14 +168,14 @@ class DevisResource extends Resource
                     ->color('success')
                     ->requiresConfirmation()
                     ->visible(fn (Devis $record) => $record->statut === StatutDevis::Envoye && auth()->user()->can('accepter', $record))
-                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(AccepterDevisAction::class)->handle($record))),
+                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(AccepterDevisAction::class)->handle(auth()->user(), $record))),
                 Tables\Actions\Action::make('refuser')
                     ->label('Refuser')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
                     ->requiresConfirmation()
                     ->visible(fn (Devis $record) => $record->statut === StatutDevis::Envoye && auth()->user()->can('refuser', $record))
-                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(RefuserDevisAction::class)->handle($record))),
+                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(RefuserDevisAction::class)->handle(auth()->user(), $record))),
                 Tables\Actions\Action::make('convertir')
                     ->label('Convertir en facture')
                     ->icon('heroicon-o-document-currency-euro')
@@ -185,7 +185,7 @@ class DevisResource extends Resource
                     ->visible(fn (Devis $record) => $record->statut === StatutDevis::Accepte
                         && $record->factures()->doesntExist()
                         && auth()->user()->can('convertir', $record))
-                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(CreerFactureDepuisDevisAction::class)->handle($record))),
+                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(CreerFactureDepuisDevisAction::class)->handle(auth()->user(), $record))),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

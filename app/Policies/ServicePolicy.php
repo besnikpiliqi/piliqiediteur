@@ -8,8 +8,9 @@ use App\Models\User;
 
 /**
  * Les services font partie du catalogue, comme les produits : mêmes
- * permissions (voir PermissionRegistry). Créer un service depuis la caisse
- * reste ouvert à quiconque encaisse (voir AjouteDesLignesDeVente::actionAjouterUnService()).
+ * permissions (voir PermissionRegistry), y compris pour créer un service
+ * depuis la caisse (voir TrouverOuCreerServiceAction et
+ * AjouteDesLignesDeVente::actionAjouterUnService()).
  */
 class ServicePolicy extends MagasinPolicy
 {

@@ -29,6 +29,7 @@ use App\Integrations\Identite\Contracts\VerificationIdentite;
 use App\Integrations\Identite\FausseVerificationIdentite;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Closure;
 use Database\Factories\MagasinFactory;
 use Database\Factories\SocieteFactory;
@@ -284,6 +285,32 @@ abstract class TestCase extends BaseTestCase
             PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES,
             PermissionRegistry::CAISSE_SECURISEE_CONSULTER,
         ];
+    }
+
+    /**
+     * Un vendeur du magasin, comme membre(), créé au début de l'activité
+     * des magasins de test (MagasinFactory::DEBUT_D_ACTIVITE), avant toute
+     * opération du test : un test qui voyage ensuite dans le temps ne
+     * trouve pas le registre du magasin verrouillé à une heure postérieure
+     * à ses ventes. La société du magasin reçoit son propriétaire si elle
+     * n'en a pas encore.
+     *
+     * @param  list<string>|null  $autorisations
+     */
+    protected function vendeurDeLaPremiereHeure(Magasin $magasin, ?array $autorisations = null): User
+    {
+        $maintenant = CarbonImmutable::now();
+        $this->travelTo(CarbonImmutable::parse(MagasinFactory::DEBUT_D_ACTIVITE, config('app.timezone')));
+
+        try {
+            if ($magasin->societe()->firstOrFail()->proprietaire()->doesntExist()) {
+                User::factory()->for($magasin->societe)->create();
+            }
+
+            return $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
+        } finally {
+            $this->travelTo($maintenant);
+        }
     }
 
     /**
@@ -556,6 +583,18 @@ abstract class TestCase extends BaseTestCase
     protected function proprietaireDe(Magasin $magasin): User
     {
         return $magasin->societe()->firstOrFail()->proprietaire()->firstOrFail();
+    }
+
+    /**
+     * L'auteur des actions qu'un test appelle directement, comme le ferait
+     * l'écran : la personne connectée, sinon le propriétaire de la société
+     * du magasin actif. Statique : un processus concurrent l'appelle aussi.
+     */
+    protected static function auteur(): User
+    {
+        $connecte = auth()->user();
+
+        return $connecte instanceof User ? $connecte : app(TenantContext::class)->magasin()->societe()->firstOrFail()->proprietaire()->firstOrFail();
     }
 
     /**

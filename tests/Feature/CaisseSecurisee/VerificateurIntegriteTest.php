@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\CaisseSecurisee;
 
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -82,11 +83,11 @@ class VerificateurIntegriteTest extends TestCase
         $cafe = $this->produit('CAF', 12);
         $livre = $this->produit('LIV', 5.50, 5.5);
         $ticket = $this->encaisser($particulier, [[$cafe, 2], [$livre, 1]], ModePaiement::CarteBancaire);
-        $avoir = app(EnregistrerAvoirAction::class)->handle($particulier, [['ligne_facture_id' => $ticket->lignes->firstWhere('produit_id', $cafe->id)->id, 'quantite' => 1]], 'Retour');
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $particulier, [['ligne_facture_id' => $ticket->lignes->firstWhere('produit_id', $cafe->id)->id, 'quantite' => 1]], 'Retour');
         $ticketAvecCredit = $this->encaisser($particulier, [[$cafe, 2]], ModePaiement::Especes);
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($professionnel, [['produit_id' => $cafe->id, 'quantite' => 5]]));
-        $avoirSurFacture = app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
-        $virement = app(EnregistrerPaiementAction::class)->handle(
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $professionnel, [['produit_id' => $cafe->id, 'quantite' => 5]]));
+        $avoirSurFacture = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
+        $virement = app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $professionnel,
             ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '48.00', 'reference' => 'VIR-1', 'recu_le' => '2026-10-09'],
             [['facture_id' => $facture->id, 'montant' => '48.00']],
@@ -109,8 +110,8 @@ class VerificateurIntegriteTest extends TestCase
         $this->travelTo('2026-10-09 10:00:00');
         $professionnel = Client::factory()->professionnel()->create();
         $article = $this->produit('ART', 60);
-        $emettre = fn (): Facture => app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($professionnel, [['produit_id' => $article->id, 'quantite' => 1]]));
-        $payer = fn (Facture $facture, string $montant): Paiement => app(EnregistrerPaiementAction::class)->handle(
+        $emettre = fn (): Facture => app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $professionnel, [['produit_id' => $article->id, 'quantite' => 1]]));
+        $payer = fn (Facture $facture, string $montant): Paiement => app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $professionnel,
             ['mode_paiement' => ModePaiement::Virement->value, 'montant' => $montant, 'recu_le' => '2026-10-09'],
             [['facture_id' => $facture->id, 'montant' => $montant]],
@@ -119,8 +120,8 @@ class VerificateurIntegriteTest extends TestCase
         $payer($payee, '60.00');
         $facture = $emettre();
         $errone = $payer($facture, '60.00');
-        $avoir = app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $payee->lignes->sole()->id, 'quantite' => 1]]);
-        $contrePassation = app(ContrePasserPaiementAction::class)->handle($errone, 'Virement d\'un autre client');
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $payee->lignes->sole()->id, 'quantite' => 1]]);
+        $contrePassation = app(ContrePasserPaiementAction::class)->handle(self::auteur(), $errone, 'Virement d\'un autre client');
         $bon = $payer($facture, '10.00');
 
         return compact('avoir', 'facture', 'errone', 'contrePassation', 'bon');
@@ -131,7 +132,7 @@ class VerificateurIntegriteTest extends TestCase
      */
     private function encaisser(Client $client, array $articles, ModePaiement $mode): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle(
+        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
             $client,
             array_map(static fn (array $article): array => ['produit_id' => $article[0]->id, 'quantite' => $article[1]], $articles),
             $mode,
@@ -231,10 +232,10 @@ class VerificateurIntegriteTest extends TestCase
     {
         $this->magasinActif();
         $professionnel = Client::factory()->professionnel()->create();
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($professionnel, [['produit_id' => $this->produit('VIS', 1)->id, 'quantite' => 1000]]));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $professionnel, [['produit_id' => $this->produit('VIS', 1)->id, 'quantite' => 1000]]));
         $ligne = $facture->lignes->sole();
-        app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]]);
-        app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]]);
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]]);
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]]);
 
         $rapport = $this->verifier();
 
@@ -704,7 +705,7 @@ class VerificateurIntegriteTest extends TestCase
     {
         $magasin = $this->magasinActif();
         $this->activite();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit('THE', 8)->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit('THE', 8)->id, 'quantite' => 1]]);
 
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-LYON1-2026-000003', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
 
@@ -779,7 +780,7 @@ class VerificateurIntegriteTest extends TestCase
     {
         $magasin = $this->magasinActif();
         $this->activite();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit('THE', 8)->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit('THE', 8)->id, 'quantite' => 1]]);
 
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => $numero, 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
 
@@ -1144,13 +1145,13 @@ class VerificateurIntegriteTest extends TestCase
         $ticket = $this->encaisser($client, [[$this->produit('ART', 100), 1]], ModePaiement::CarteBancaire);
         $this->assertSame(100.0, $ticket->montantPaye());
 
-        DB::transaction(function () use ($magasin, $client, $ticket): void {
+        app(OperateurCourant::class)->pendantLeSysteme(fn () => DB::transaction(function () use ($magasin, $client, $ticket): void {
             app(RegistreFiscal::class)->verrouiller($magasin);
             $second = Paiement::create(['client_id' => $client->id, 'mode_paiement' => ModePaiement::Especes->value, 'montant' => '20.00', 'recu_le' => '2026-10-09']);
             PaiementAllocation::create(['paiement_id' => $second->id, 'facture_id' => $ticket->id, 'montant_alloue' => '20.00']);
             $second = $second->fresh();
             app(RegistreFiscal::class)->enregistrer(ChaineFiscale::Encaissement, 'paiement', app(ContenuFiscal::class)->encaissement($second), $second);
-        });
+        }));
 
         $this->assertSame([
             [90, 'Le ticket TK-LYON1-2026-000001 : 120,00 € imputés (paiements et crédits d\'avoir) pour un total TTC de 100,00 €, soit 20,00 € de trop.'],

@@ -187,7 +187,7 @@ class FactureResource extends Resource
                 self::clientEntry(),
                 TextEntry::make('date_emission')->label('Émise le')->dateTime('d/m/Y')->placeholder('—'),
                 TextEntry::make('date_echeance')->label('Échéance')->date('d/m/Y')->placeholder('Fixée à l\'émission'),
-                TextEntry::make('creePar.name')->label('Créée par'),
+                TextEntry::make('cree_par_nom')->label('Créée par'),
                 self::natureEntry(),
                 TextEntry::make('consultation_vies')
                     ->label('Vérification VIES retenue')
@@ -403,7 +403,7 @@ class FactureResource extends Resource
                     ->color(fn (string $state): string => str_starts_with($state, 'À fournir') ? 'warning' : 'success'),
                 RepeatableEntry::make('preuves_enregistrees')
                     ->label('Preuves enregistrées')
-                    ->state(fn (Facture $record) => $record->preuvesOperation()->with('notePar')->get())
+                    ->state(fn (Facture $record) => $record->preuvesOperation()->get())
                     ->visible(fn (Facture $record): bool => $record->preuvesOperation()->exists())
                     ->schema([
                         TextEntry::make('type')->label('Type')->state(fn (PreuveOperation $record): string => $record->type->getLabel()),
@@ -412,7 +412,7 @@ class FactureResource extends Resource
                         TextEntry::make('emetteur')->label('Établie par')->state(fn (PreuveOperation $record): ?string => $record->emetteur)->placeholder('—'),
                         TextEntry::make('note')
                             ->label('Enregistrée')
-                            ->state(fn (PreuveOperation $record): string => 'le '.$record->created_at->format('d/m/Y à H:i').($record->notePar === null ? '' : ' par '.$record->notePar->name)),
+                            ->state(fn (PreuveOperation $record): string => 'le '.$record->created_at->format('d/m/Y à H:i').($record->note_par_nom === null ? '' : ' par '.$record->note_par_nom)),
                     ])
                     ->columns(5),
             ]);
@@ -461,7 +461,7 @@ class FactureResource extends Resource
                     ->state(function (Facture $record): ?string {
                         $bordereau = self::bordereauQuiFaitFoi($record);
 
-                        return $bordereau === null ? null : 'le '.$bordereau->created_at->format('d/m/Y à H:i').($bordereau->notePar === null ? '' : ' par '.$bordereau->notePar->name);
+                        return $bordereau === null ? null : 'le '.$bordereau->created_at->format('d/m/Y à H:i').($bordereau->note_par_nom === null ? '' : ' par '.$bordereau->note_par_nom);
                     }),
                 TextEntry::make('bordereaux_detaxe_remplaces')
                     ->label('N° remplacés')
@@ -481,7 +481,7 @@ class FactureResource extends Resource
      */
     private static function bordereauQuiFaitFoi(Facture $ticket): ?BordereauDetaxe
     {
-        return $ticket->bordereauDetaxe()->with('notePar')->first()?->setRelation('facture', $ticket);
+        return $ticket->bordereauDetaxe()->first()?->setRelation('facture', $ticket);
     }
 
     /**
@@ -628,7 +628,7 @@ class FactureResource extends Resource
                     ->label('Payé')
                     ->state(fn (Facture $record) => app(CalculateurLigne::class)->sommer([$record->montant_paye_somme, $record->montant_credite_somme]))
                     ->money('EUR'),
-                Tables\Columns\TextColumn::make('creePar.name')->label('Créée par')->toggleable(),
+                Tables\Columns\TextColumn::make('cree_par_nom')->label('Créée par')->toggleable(),
                 Tables\Columns\TextColumn::make('date_echeance')->label('Échéance')->date('d/m/Y'),
             ])
             ->filters([
@@ -665,7 +665,7 @@ class FactureResource extends Resource
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && auth()->user()->can('emettre', $record))
                     ->action(fn (Facture $record) => static::executerSansCasser(function () use ($record): void {
                         self::verifierLeNumeroTvaSurViesSiBesoin($record);
-                        app(EmettreFactureAction::class)->handle($record);
+                        app(EmettreFactureAction::class)->handle(auth()->user(), $record);
                     })),
                 Tables\Actions\Action::make('encaisser')
                     ->label('Encaisser')
@@ -705,7 +705,7 @@ class FactureResource extends Resource
                     ])
                     ->requiresConfirmation()
                     ->visible(fn (Facture $record): bool => auth()->user()->can('encaisser', $record))
-                    ->action(fn (Facture $record, array $data) => static::executerSansCasser(fn () => app(EnregistrerPaiementAction::class)->handle($record->client, [
+                    ->action(fn (Facture $record, array $data) => static::executerSansCasser(fn () => app(EnregistrerPaiementAction::class)->handle(auth()->user(), $record->client, [
                         'mode_paiement' => $data['mode_paiement'],
                         'montant' => $data['montant'],
                         'reference' => $data['reference'] ?? null,
@@ -760,7 +760,7 @@ class FactureResource extends Resource
                         && auth()->user()->can(PermissionRegistry::AVOIR_CREER))
                     ->action(function (Facture $record, array $data): void {
                         AvoirResource::autoriserLesLignesACrediter($data['lignes']);
-                        static::executerSansCasser(fn () => app(EnregistrerAvoirAction::class)->handle($record->client, $data['lignes'], $data['motif']));
+                        static::executerSansCasser(fn () => app(EnregistrerAvoirAction::class)->handle(auth()->user(), $record->client, $data['lignes'], $data['motif']));
                     }),
             ])
             // Seuls les brouillons partent : une facture déjà émise se
@@ -789,7 +789,7 @@ class FactureResource extends Resource
         if ($facture->nature_operation->exigeVies()
             && $client->aUnNumeroTvaVerifiableSurVies()
             && app(ControleNatureOperation::class)->consultationDuJour($client, now()) === null) {
-            app(VerifierNumeroTvaAction::class)->handle($client);
+            app(VerifierNumeroTvaAction::class)->handle(auth()->user(), $client);
         }
     }
 

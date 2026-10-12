@@ -37,11 +37,11 @@ class AvoirFournisseurActionsTest extends TestCase
 
     private function receptionnerAchat(Fournisseur $fournisseur, Produit $produit, int $quantite): FactureAchat
     {
-        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => 20],
         ]);
 
-        return app(ValiderFactureAchatAction::class)->handle($factureAchat);
+        return app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
     }
 
     public function test_creer_un_avoir_fournisseur_total_reprend_la_ligne_et_les_totaux(): void
@@ -51,7 +51,7 @@ class AvoirFournisseurActionsTest extends TestCase
         $factureAchat = $this->receptionnerAchat($fournisseur, $produit, 5);
         $ligneAchat = $factureAchat->lignes->firstOrFail();
 
-        $avoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+        $avoir = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 5],
         ], 'Marchandise non conforme');
 
@@ -73,10 +73,10 @@ class AvoirFournisseurActionsTest extends TestCase
         $this->assertSame(5, $produit->fresh()->stock_quantite);
         $ligneAchat = $factureAchat->lignes->firstOrFail();
 
-        $avoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+        $avoir = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 2],
         ]);
-        $avoir = app(EmettreAvoirFournisseurAction::class)->handle($avoir);
+        $avoir = app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $avoir);
 
         $this->assertSame(StatutAvoirFournisseur::Emise, $avoir->statut);
         $this->assertNotNull($avoir->numero);
@@ -97,16 +97,16 @@ class AvoirFournisseurActionsTest extends TestCase
     {
         $fournisseur = Fournisseur::factory()->create();
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
-        app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 8, 'prix_unitaire_ht' => 9],
         ]));
         $this->assertSame('9.0000', $produit->fresh()->cmup_ht);
-        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle($fournisseur, [
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 12, 'prix_unitaire_ht' => '12.50', 'remise_pourcentage' => 10],
         ], ['escompte_pourcentage' => 2]));
         $this->assertSame('10.2150', $produit->fresh()->cmup_ht);
 
-        $avoir = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+        $avoir = app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 5],
         ], 'Produit défectueux'))->fresh();
 
@@ -125,7 +125,7 @@ class AvoirFournisseurActionsTest extends TestCase
         $factureAchat = $this->receptionnerAchat(Fournisseur::factory()->create(), $produit, 5);
         $produit->delete();
 
-        $avoir = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+        $avoir = app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => 2],
         ]));
 
@@ -146,7 +146,7 @@ class AvoirFournisseurActionsTest extends TestCase
         $produit->delete();
 
         $this->assertThrows(
-            fn () => app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+            fn () => app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
                 ['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => 4],
             ]),
             LogicException::class,
@@ -161,12 +161,12 @@ class AvoirFournisseurActionsTest extends TestCase
     {
         $fournisseur = Fournisseur::factory()->create();
         $produit = Produit::factory()->create(['suivi_stock' => false]);
-        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit_id' => $produit->id, 'quantite' => 5],
         ]);
 
         $this->expectException(LogicException::class);
-        app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+        app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $factureAchat->lignes->first()->id, 'quantite' => 1],
         ]);
     }
@@ -192,10 +192,10 @@ class AvoirFournisseurActionsTest extends TestCase
         // 3 unités sont vendues à un client : il ne doit en rester que 2
         // disponibles au retour fournisseur, même si la ligne d'achat
         // porte sur 5.
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 3],
         ]);
-        app(EmettreFactureAction::class)->handle($facture);
+        app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
         $this->assertSame(2, $produit->fresh()->stock_quantite);
         $this->assertSame(2, $ligneAchat->fresh()->quantiteRetournableRestante());
@@ -203,7 +203,7 @@ class AvoirFournisseurActionsTest extends TestCase
         // Tenter de retourner les 5 unités d'origine (dont 3 déjà vendues)
         // doit échouer.
         try {
-            app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
+            app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat->fresh(), [
                 ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 5],
             ]);
             $this->fail('Une LogicException était attendue.');
@@ -212,10 +212,10 @@ class AvoirFournisseurActionsTest extends TestCase
         }
 
         // Retourner exactement les 2 unités encore en stock doit réussir.
-        $avoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
+        $avoir = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat->fresh(), [
             ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 2],
         ]);
-        app(EmettreAvoirFournisseurAction::class)->handle($avoir);
+        app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $avoir);
 
         $this->assertSame(0, $produit->fresh()->stock_quantite);
     }
@@ -235,7 +235,7 @@ class AvoirFournisseurActionsTest extends TestCase
         [$premiere, $seconde] = $factureAchat->lignes->all();
 
         $this->assertThrows(
-            fn () => app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+            fn () => app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
                 ['ligne_achat_id' => $premiere->id, 'quantite' => 5],
                 ['ligne_achat_id' => $seconde->id, 'quantite' => 5],
             ]),
@@ -258,14 +258,14 @@ class AvoirFournisseurActionsTest extends TestCase
         $factureAchat = $this->recevoirEnDeuxLignes($produit);
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 4);
         [$premiere, $seconde] = $factureAchat->lignes->all();
-        $avoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+        $avoir = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $premiere->id, 'quantite' => 3],
             ['ligne_achat_id' => $seconde->id, 'quantite' => 3],
         ]);
         app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
 
         $this->assertThrows(
-            fn () => app(EmettreAvoirFournisseurAction::class)->handle($avoir),
+            fn () => app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $avoir),
             LogicException::class,
             '« Câble USB-C » : ces lignes en retournent 6 au total, mais il n\'en reste que 4 en stock (les autres ont déjà été vendus ou retournés).',
         );
@@ -276,7 +276,7 @@ class AvoirFournisseurActionsTest extends TestCase
 
     private function recevoirEnDeuxLignes(Produit $produit): FactureAchat
     {
-        return app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+        return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
             ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 20],
         ]));
@@ -290,7 +290,7 @@ class AvoirFournisseurActionsTest extends TestCase
         $ligneAchat = $factureAchat->lignes->firstOrFail();
 
         $this->expectException(LogicException::class);
-        app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+        app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 4],
         ]);
     }
@@ -303,7 +303,7 @@ class AvoirFournisseurActionsTest extends TestCase
         $factureAchatB = $this->receptionnerAchat($fournisseur, $produit, 3);
 
         $this->expectException(InvalidArgumentException::class);
-        app(CreerAvoirFournisseurAction::class)->handle($factureAchatA, [
+        app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchatA, [
             ['ligne_achat_id' => $factureAchatB->lignes->first()->id, 'quantite' => 1],
         ]);
     }
@@ -315,17 +315,17 @@ class AvoirFournisseurActionsTest extends TestCase
         $factureAchat = $this->receptionnerAchat($fournisseur, $produit, 5);
         $ligneAchat = $factureAchat->lignes->firstOrFail();
 
-        $premierAvoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+        $premierAvoir = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 2],
         ]);
-        app(EmettreAvoirFournisseurAction::class)->handle($premierAvoir);
+        app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $premierAvoir);
 
         $this->assertSame(3, $ligneAchat->fresh()->quantiteRetournableRestante());
 
-        $secondAvoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
+        $secondAvoir = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat->fresh(), [
             ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 3],
         ]);
-        app(EmettreAvoirFournisseurAction::class)->handle($secondAvoir);
+        app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $secondAvoir);
 
         $this->assertSame(0, $ligneAchat->fresh()->quantiteRetournableRestante());
     }
@@ -334,7 +334,7 @@ class AvoirFournisseurActionsTest extends TestCase
     {
         $produit = Produit::factory()->create(['suivi_stock' => false]);
 
-        return app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+        return app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => $quantite, 'prix_unitaire_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'remise_pourcentage' => $remisePourcentage],
         ]));
     }
@@ -352,7 +352,7 @@ class AvoirFournisseurActionsTest extends TestCase
         $tvaParRetour = [];
 
         for ($retour = 1; $retour <= 10; $retour++) {
-            $avoir = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
+            $avoir = app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat->fresh(), [
                 ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1],
             ]));
             $tvaParRetour[] = $avoir->total_tva;
@@ -374,10 +374,10 @@ class AvoirFournisseurActionsTest extends TestCase
 
         $this->assertSame(['59.99', '12.00', '71.99'], [$factureAchat->total_ht, $factureAchat->total_tva, $factureAchat->total_ttc]);
 
-        $premier = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+        $premier = app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1],
         ]));
-        $second = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat->fresh(), [
+        $second = app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat->fresh(), [
             ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1],
         ]));
 
@@ -397,11 +397,11 @@ class AvoirFournisseurActionsTest extends TestCase
         $ligneAchat = $factureAchat->lignes->firstOrFail();
         $selection = [['ligne_achat_id' => $ligneAchat->id, 'quantite' => 1]];
 
-        $brouillonA = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, $selection);
-        $brouillonB = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, $selection);
+        $brouillonA = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, $selection);
+        $brouillonB = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, $selection);
 
-        $avoirA = app(EmettreAvoirFournisseurAction::class)->handle($brouillonA);
-        $avoirB = app(EmettreAvoirFournisseurAction::class)->handle($brouillonB);
+        $avoirA = app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $brouillonA);
+        $avoirB = app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $brouillonB);
 
         $this->assertSame(['2.36', '0.47', '2.83'], [$factureAchat->total_ht, $factureAchat->total_tva, $factureAchat->total_ttc]);
         $this->assertSame(['1.18', '0.24', '1.42'], [$avoirA->total_ht, $avoirA->total_tva, $avoirA->total_ttc]);
@@ -414,14 +414,14 @@ class AvoirFournisseurActionsTest extends TestCase
         $factureAchat = $this->acheter(1.18, 1);
         $selection = [['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => 1]];
 
-        $brouillonA = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, $selection);
-        $brouillonB = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, $selection);
-        app(EmettreAvoirFournisseurAction::class)->handle($brouillonA);
+        $brouillonA = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, $selection);
+        $brouillonB = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, $selection);
+        app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $brouillonA);
 
         $this->expectException(LogicException::class);
         $this->expectExceptionMessage('a été retournée ou vendue entre-temps : il ne reste que 0 article(s) à retourner.');
 
-        app(EmettreAvoirFournisseurAction::class)->handle($brouillonB);
+        app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $brouillonB);
     }
 
     public function test_une_quantite_a_retourner_non_entiere_est_refusee(): void
@@ -433,7 +433,7 @@ class AvoirFournisseurActionsTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("La quantité à retourner doit être un nombre entier d'articles, au moins 1.");
 
-        app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+        app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => '1.5'],
         ]);
     }
@@ -447,7 +447,7 @@ class AvoirFournisseurActionsTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+        app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $ligneAchatId, 'quantite' => 2],
             ['ligne_achat_id' => $ligneAchatId, 'quantite' => 2],
         ]);

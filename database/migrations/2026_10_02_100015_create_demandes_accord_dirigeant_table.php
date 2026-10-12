@@ -21,6 +21,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('societe_id')->constrained('societes')->restrictOnDelete();
             $table->foreignId('demande_par')->constrained('users')->restrictOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('demande_par_nom');
             // Le SIREN de l'entreprise dont le dirigeant est visé : le
             // mandat ne vaut que pour lui.
             $table->string('siren', 9);

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
@@ -9,6 +10,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
@@ -36,6 +38,7 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Exceptions;
 use Livewire\Features\SupportTesting\Testable;
@@ -237,7 +240,7 @@ class CaisseTest extends TestCase
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
         $produit = Produit::factory()->create(['prix_vente_ht' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
         $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:05', 'UTC'));
-        app(EnregistrerVenteCaisseAction::class)->handle($clientComptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $clientComptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
         $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:04', 'UTC'));
         Exceptions::fake([HorlogeRegressiveException::class]);
 
@@ -360,8 +363,8 @@ class CaisseTest extends TestCase
 
         $client = Client::factory()->create(['nom' => 'Mme Martin']);
         $produitRendu = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $venteInitiale = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $produitRendu->id, 'quantite' => 1]], ModePaiement::Especes);
-        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        $venteInitiale = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produitRendu->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteInitiale->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
         $this->assertSame(10.0, $client->soldeCrediteur());
@@ -849,14 +852,36 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * Le vendeur au comptoir doit pouvoir facturer une réparation qui n'est
-     * pas encore dans la liste, sans permission de catalogue.
+     * Créer un service, même depuis la caisse, demande l'autorisation de
+     * créer des produits et des services : le vendeur aux autorisations par
+     * défaut coche les services du magasin, sans champ pour en créer un, et
+     * l'action appelée directement le refuse.
      */
-    public function test_un_vendeur_avec_les_permissions_par_defaut_cree_un_service_depuis_la_caisse(): void
+    public function test_un_vendeur_avec_les_permissions_par_defaut_ne_cree_pas_de_service_depuis_la_caisse(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        Service::factory()->create(['nom' => 'Diagnostic']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, [
+            'name' => 'Paul', 'email' => 'paul@example.test',
+        ]);
+        $this->actingAs($vendeur);
+        Filament::setTenant($magasin);
+
+        Livewire::test(Caisse::class)
+            ->mountFormComponentAction('ajouterUnServiceAction', 'ajouterUnService')
+            ->assertSee('Diagnostic')
+            ->assertDontSee('Le service n\'est pas dans la liste ?');
+        $this->assertThrows(fn () => app(TrouverOuCreerServiceAction::class)->handle($vendeur, 'Pose de verre trempé'), AuthorizationException::class, LecteurDesDroits::REFUS);
+
+        $this->assertSame(['Diagnostic'], Service::query()->pluck('nom')->all());
+    }
+
+    public function test_un_vendeur_autorise_a_creer_des_produits_et_des_services_cree_un_service_depuis_la_caisse(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PRODUIT_CREATE], [
             'name' => 'Paul', 'email' => 'paul@example.test',
         ]);
         $this->actingAs($vendeur);
@@ -995,8 +1020,8 @@ class CaisseTest extends TestCase
         $this->ouvrirLaCaisseDUnMagasin();
         $client = Client::factory()->create();
         $produitRendu = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $venteInitiale = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $produitRendu->id, 'quantite' => 1]], ModePaiement::Especes);
-        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        $venteInitiale = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produitRendu->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteInitiale->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -1055,7 +1080,7 @@ class CaisseTest extends TestCase
     {
         $this->travelTo('2026-10-09 19:00:00');
         $magasin = $this->ouvrirLaCaisseDUnMagasin();
-        app(CloturerCaisseAction::class)->handle($magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $vente = ['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes'];
         $this->travelTo('2026-10-09 19:30:00');
@@ -1094,7 +1119,7 @@ class CaisseTest extends TestCase
 
         $this->get(Caisse::getUrl(tenant: $magasin))->assertForbidden();
         $this->assertThrows(
-            fn () => app(EnregistrerVenteCaisseAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes),
+            fn () => app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes),
             VenteNonAutoriseeException::class,
             'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation.',
         );
@@ -1329,7 +1354,7 @@ class CaisseTest extends TestCase
     {
         $this->travelTo('2026-10-09 19:00:00');
         $magasin = $this->ouvrirLaCaisseDUnMagasin();
-        app(CloturerCaisseAction::class)->handle($magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
         $professionnel = Client::factory()->professionnel()->create();
         $ecran = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
         $this->travelTo('2026-10-09 19:30:00');
@@ -1444,7 +1469,7 @@ class CaisseTest extends TestCase
         $this->ouvrirLaCaisseDUnMagasin();
         $bon = $this->bonDAvoirDeDouzeEuros();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $bon->numero);
+        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $bon->numero);
 
         Livewire::test(Caisse::class)
             ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001'])
@@ -1460,8 +1485,8 @@ class CaisseTest extends TestCase
     {
         $this->ouvrirLaCaisseDUnMagasin();
         $martin = Client::factory()->create(['nom' => 'Mme Martin']);
-        $vente = app(EnregistrerVenteCaisseAction::class)->handle($martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
-        app(EnregistrerAvoirAction::class)->handle($martin, [['ligne_facture_id' => $vente->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $vente = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $martin, [['ligne_facture_id' => $vente->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $this->assertSame(12.0, $martin->soldeCrediteur());
 
         Livewire::test(Caisse::class)
@@ -1511,7 +1536,7 @@ class CaisseTest extends TestCase
         $component = Livewire::test(Caisse::class)
             ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes'])
             ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001']);
-        app(EnregistrerVenteCaisseAction::class)->handle(Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::CarteBancaire, bonDAvoir: $bon->numero);
+        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::CarteBancaire, bonDAvoir: $bon->numero);
 
         $component
             ->set('data.reference', null)
@@ -1534,8 +1559,8 @@ class CaisseTest extends TestCase
         $magasin = $this->ouvrirLaCaisseDUnMagasin();
         $bon = $this->bonDAvoirDeDouzeEuros();
         $martin = Client::factory()->create(['nom' => 'Mme Martin']);
-        $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle($martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
-        $avoirDeMartin = app(EnregistrerAvoirAction::class)->handle($martin, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $avoirDeMartin = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $martin, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $produit = Produit::factory()->create(['prix_vente_ttc' => 15, 'taux_tva' => 20, 'suivi_stock' => false]);
         $component = Livewire::test(Caisse::class)
             ->fillForm(['client_id' => $martin->id, 'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes'])
@@ -1606,9 +1631,9 @@ class CaisseTest extends TestCase
     private function bonDAvoirDeDouzeEuros(): Avoir
     {
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
 
-        return app(EnregistrerAvoirAction::class)->handle($comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        return app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
     }
 
     /**

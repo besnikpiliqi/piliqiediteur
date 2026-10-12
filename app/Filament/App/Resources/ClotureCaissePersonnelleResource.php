@@ -56,7 +56,7 @@ class ClotureCaissePersonnelleResource extends Resource
         return $table
             ->defaultSort('cloturee_a', 'desc')
             ->columns([
-                Tables\Columns\TextColumn::make('vendeur.name')->label('Vendeur'),
+                Tables\Columns\TextColumn::make('vendeur_nom')->label('Vendeur'),
                 Tables\Columns\TextColumn::make('periode_debut')->label('Depuis')->dateTime('d/m/Y H:i'),
                 Tables\Columns\TextColumn::make('jusqu_au')->label('Jusqu\'à')->dateTime('d/m/Y H:i')->sortable(),
                 Tables\Columns\TextColumn::make('mode_fermeture')

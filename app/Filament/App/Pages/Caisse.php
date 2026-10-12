@@ -35,6 +35,7 @@ use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Enums\MaxWidth;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
 use Illuminate\Validation\Rules\Exists;
@@ -458,13 +459,14 @@ class Caisse extends Page implements HasForms
         try {
             $this->enregistrerLePanier();
             $facture = app(EnregistrerVenteCaisseAction::class)->handle(
+                auth()->user(),
                 $client,
                 $data['lignes'],
                 $modePaiement,
                 $data['reference'] ?? null,
                 $data['bon_d_avoir'] ?? null,
             );
-        } catch (LogicException|RefusFiscalException $exception) {
+        } catch (LogicException|AuthorizationException|RefusFiscalException $exception) {
             static::notifierLeRefus($exception);
 
             return;

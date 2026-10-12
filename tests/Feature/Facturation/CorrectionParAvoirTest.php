@@ -41,12 +41,12 @@ class CorrectionParAvoirTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
-        $ticket = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+        $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 3],
         ]));
         $ligne = $ticket->lignes->firstOrFail();
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligne->id, 'quantite' => 3],
         ], 'Erreur de saisie');
 
@@ -69,7 +69,7 @@ class CorrectionParAvoirTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
-        $brouillon = app(CreerFactureAction::class)->handle($client, [
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 4],
         ]);
 

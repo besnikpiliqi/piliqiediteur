@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -19,7 +21,6 @@ use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
@@ -41,7 +42,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         app(TenantContext::class)->set($magasin);
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
     }
@@ -54,7 +55,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         app(TenantContext::class)->set($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
     }
@@ -65,7 +66,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
@@ -73,7 +74,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         // EmettreFactureAction), et une facture émise ne se modifie plus :
         // une vente d'hier s'émet hier.
         $this->travel(-1)->days();
-        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
         $this->travelBack();
 
         return $facture;
@@ -104,15 +105,15 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
 
-        $vendeur = User::factory()->create();
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
         $this->actingAs($vendeur);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
         $this->travel(-1)->days();
-        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
         $this->travelBack();
 
         // Le vendeur n'a jamais fermé sa caisse personnelle (voir
@@ -134,7 +135,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $this->emettreFactureHier($magasin);
 
         app(TenantContext::class)->set($magasin);
-        app(CloturerCaisseAction::class)->handle($magasin, now()->subDay());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now()->subDay());
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
@@ -192,11 +193,11 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         app(TenantContext::class)->set($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
         $this->travelTo(Carbon::parse('2026-07-14 21:30:00', 'UTC'));
-        app(EmettreFactureAction::class)->handle($facture);
+        app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
         $this->travelTo(Carbon::parse('2026-07-14 22:00:30', 'UTC'));
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
@@ -344,20 +345,20 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $this->vendreUnTicketDe12Euros($autreMagasin);
         $this->travelTo('2026-10-09 00:00:00');
         Exceptions::fake([RuntimeException::class]);
-        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), $magasinEnPanne->id) extends CloturerCaisseAction
+        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), app(LecteurDesDroits::class), app(OperateurCourant::class), $magasinEnPanne->id) extends CloturerCaisseAction
         {
-            public function __construct(DocumentNumberingService $numerotation, CalculateurLigne $calculateur, RegistreFiscal $registre, PanierDeCaisse $panierDeCaisse, JourneesDeCaisse $journeesDeCaisse, private readonly int $magasinEnPanne)
+            public function __construct(DocumentNumberingService $numerotation, CalculateurLigne $calculateur, RegistreFiscal $registre, PanierDeCaisse $panierDeCaisse, JourneesDeCaisse $journeesDeCaisse, LecteurDesDroits $lecteur, OperateurCourant $operateur, private readonly int $magasinEnPanne)
             {
-                parent::__construct($numerotation, $calculateur, $registre, $panierDeCaisse, $journeesDeCaisse);
+                parent::__construct($numerotation, $calculateur, $registre, $panierDeCaisse, $journeesDeCaisse, $lecteur, $operateur);
             }
 
-            public function handle(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
+            public function parLeSysteme(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
             {
                 if ($magasin->id === $this->magasinEnPanne) {
                     throw new RuntimeException('Panne du serveur de base de données.');
                 }
 
-                return parent::handle($magasin, $date);
+                return parent::parLeSysteme($magasin, $date);
             }
         });
 

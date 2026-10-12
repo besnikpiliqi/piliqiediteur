@@ -24,10 +24,8 @@ class ClotureCaissePolicyTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeurA = $this->vendeurQuiVoitLesClotures($magasin, 'paul@example.test');
         $vendeurB = $this->vendeurQuiVoitLesClotures($magasin, 'jean@example.test');
-        $this->actingAs($vendeurA);
-        $clotureDeA = ClotureCaisse::factory()->create(['date_cloture' => '2026-10-07']);
-        $this->actingAs($vendeurB);
-        $clotureDeB = ClotureCaisse::factory()->create(['date_cloture' => '2026-10-08']);
+        $clotureDeA = ClotureCaisse::factory()->create(['date_cloture' => '2026-10-07', 'cree_par' => $vendeurA->id]);
+        $clotureDeB = ClotureCaisse::factory()->create(['date_cloture' => '2026-10-08', 'cree_par' => $vendeurB->id]);
 
         $this->assertTrue($vendeurB->can('view', $clotureDeB));
         $this->assertFalse($vendeurB->can('view', $clotureDeA));
@@ -39,8 +37,7 @@ class ClotureCaissePolicyTest extends TestCase
         $vendeur = $this->vendeurQuiVoitLesClotures($magasin, 'paul@example.test');
         $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable(), ['name' => 'Comptable', 'email' => 'comptable@example.test']);
         $expert = $this->expertComptable($magasin);
-        $this->actingAs($vendeur);
-        $clotureDuVendeur = ClotureCaisse::factory()->create();
+        $clotureDuVendeur = ClotureCaisse::factory()->create(['cree_par' => $vendeur->id]);
 
         $this->assertTrue($comptable->can('view', $clotureDuVendeur));
         $this->assertTrue($expert->can('view', $clotureDuVendeur));

@@ -52,7 +52,7 @@ class RepartitionTvaParCumulTest extends TestCase
         $farine = $article('Farine', 4.50, 5.5);
         $cheville = $article('Cheville', 2.00, 20);
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $vis->id, 'quantite' => 1],
             ['produit_id' => $farine->id, 'quantite' => 2],
             ['produit_id' => $cheville->id, 'quantite' => 2],
@@ -117,7 +117,7 @@ class RepartitionTvaParCumulTest extends TestCase
     {
         $facture = $this->factureProfessionnelle();
         $cheville = $facture->lignes()->orderBy('ordre')->get()[2];
-        $rendre = fn (LigneFacture $ligne): Avoir => app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($facture->client, [
+        $rendre = fn (LigneFacture $ligne): Avoir => app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $facture->client, [
             ['ligne_facture_id' => $ligne->id, 'quantite' => 1],
         ]));
 

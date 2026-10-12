@@ -2,6 +2,9 @@
 
 namespace App\Domain\CaisseSecurisee\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Enums\DeclenchementVerification;
@@ -14,6 +17,8 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -39,6 +44,11 @@ use Illuminate\Support\Facades\Log;
  *
  * Fermé par défaut : sans clé de signature, la vérification ne pourrait
  * pas s'inscrire au journal, elle est refusée avant de commencer.
+ *
+ * Lancée depuis l'écran de la caisse sécurisée par une personne
+ * (handle()), relue en base, qui doit pouvoir la consulter (voir
+ * LecteurDesDroits) : la vérification s'inscrit à son nom. Lancée par la
+ * commande caisse:verifier (parLeSysteme()), au nom du système.
  */
 class VerifierIntegriteAction
 {
@@ -46,7 +56,23 @@ class VerifierIntegriteAction
         private readonly VerificateurIntegrite $verificateur,
         private readonly RegistreFiscal $registre,
         private readonly SignataireFiscal $signataire,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
     ) {}
+
+    /**
+     * @param  bool  $complet  tout le registre, au lieu de ce qui s'y est inscrit depuis la dernière vérification
+     *
+     * @throws AuthorizationException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function handle(User $auteur, Magasin $magasin, bool $complet): RapportIntegrite
+    {
+        $compte = $this->lecteur->exiger($auteur, PermissionRegistry::CAISSE_SECURISEE_CONSULTER, $magasin);
+
+        return $this->operateur->pendant($compte, fn (): RapportIntegrite => $this->verifier($magasin, $complet, DeclenchementVerification::Ecran));
+    }
 
     /**
      * @param  bool  $complet  tout le registre, au lieu de ce qui s'y est inscrit depuis la dernière vérification
@@ -54,7 +80,16 @@ class VerifierIntegriteAction
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(Magasin $magasin, bool $complet, DeclenchementVerification $declenchement): RapportIntegrite
+    public function parLeSysteme(Magasin $magasin, bool $complet): RapportIntegrite
+    {
+        return $this->operateur->pendantLeSysteme(fn (): RapportIntegrite => $this->verifier($magasin, $complet, DeclenchementVerification::Commande));
+    }
+
+    /**
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    private function verifier(Magasin $magasin, bool $complet, DeclenchementVerification $declenchement): RapportIntegrite
     {
         $this->signataire->cleId();
 

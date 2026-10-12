@@ -40,7 +40,7 @@ class VentesEnAttenteApercuTest extends TestCase
 
     private function emettreAvoir(Client $client, Facture $facture): Avoir
     {
-        return app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        return app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
     }

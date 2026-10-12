@@ -17,7 +17,7 @@ use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\CopieClient;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
-use App\Models\User;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -44,7 +44,17 @@ use Illuminate\Support\Collection;
  */
 class Avoir extends Model implements DocumentEnvoyable
 {
-    use BelongsToMagasin, EstEnvoyeParEmail, FigeLeClient, FigeSonEmetteur, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
+    use BelongsToMagasin, EstEnvoyeParEmail, FigeLeClient, FigeLeNomDeSesAuteurs, FigeSonEmetteur, HorodateSonEmission, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'cree_par' => 'cree_par_nom',
+        ];
+    }
 
     /**
      * Le refus d'un numéro saisi à la caisse qui ne désigne aucun bon
@@ -88,7 +98,6 @@ class Avoir extends Model implements DocumentEnvoyable
         static::creating(function (Avoir $avoir) {
             $avoir->statut ??= StatutAvoir::Brouillon;
             $avoir->devise ??= 'EUR';
-            $avoir->cree_par ??= auth()->id();
         });
     }
 
@@ -189,11 +198,6 @@ class Avoir extends Model implements DocumentEnvoyable
     public function corrigeDesTickets(): bool
     {
         return ! $this->estPourUnProfessionnel();
-    }
-
-    public function creePar(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'cree_par');
     }
 
     public function lignes(): HasMany

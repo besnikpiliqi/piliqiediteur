@@ -2,12 +2,15 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -17,22 +20,28 @@ use Illuminate\Support\Facades\DB;
  * de l'opération, que ce client et ce régime doivent permettre (voir
  * ContexteDeVente::pourEnregistrer()), et la livraison (voir
  * NoteSaNatureDOperation), que reprend la facture qui en est tirée (voir
- * CreerFactureDepuisDevisAction).
+ * CreerFactureDepuisDevisAction). Son auteur, relu en base au moment où
+ * elle écrit, doit pouvoir créer un devis dans le magasin actif (voir
+ * LecteurDesDroits).
  */
 class CreerDevisAction
 {
     public function __construct(
         private readonly ConstructeurLigneDocument $constructeurLigne,
         private readonly CalculateurLigne $calculateurLigne,
+        private readonly LecteurDesDroits $lecteur,
     ) {}
 
     /**
      * @param  list<array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs  date_validite, conditions_paiement, notes, et la nature et la livraison (voir NoteSaNatureDOperation::noterSaNatureDOperation())
+     *
+     * @throws AuthorizationException
      */
-    public function handle(Client $client, array $lignes, array $attributs = []): Devis
+    public function handle(User $auteur, Client $client, array $lignes, array $attributs = []): Devis
     {
-        return DB::transaction(function () use ($client, $lignes, $attributs) {
+        return DB::transaction(function () use ($auteur, $client, $lignes, $attributs) {
+            $this->lecteur->exiger($auteur, 'create', app(TenantContext::class)->magasin(), Devis::class);
             $devis = new Devis($attributs);
             $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $devis->noterSaNatureDOperation($attributs));
             $devis->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();

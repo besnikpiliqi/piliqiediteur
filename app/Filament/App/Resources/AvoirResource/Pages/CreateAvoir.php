@@ -32,7 +32,7 @@ class CreateAvoir extends CreateRecord
     {
         AvoirResource::autoriserLesLignesACrediter($data['lignes']);
 
-        return static::executerOuInterrompre(fn () => app(EnregistrerAvoirAction::class)->handle(
+        return static::executerOuInterrompre(fn () => app(EnregistrerAvoirAction::class)->handle(auth()->user(),
             // Limité au magasin par MagasinScope ; withTrashed() garde le
             // client archivé dont un achat se retourne (voir
             // Client::scopeQuiPeuventEtreCredites()).

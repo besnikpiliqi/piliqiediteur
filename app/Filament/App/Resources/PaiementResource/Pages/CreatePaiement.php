@@ -56,7 +56,7 @@ class CreatePaiement extends CreateRecord
         // via maxValue() : ce garde-fou ne se déclenche qu'en cas de
         // changement du solde entre l'affichage du formulaire et sa
         // soumission (ex : un autre paiement ou avoir appliqué entre-temps).
-        return static::executerOuInterrompre(fn () => app(EnregistrerPaiementAction::class)->handle($client, [
+        return static::executerOuInterrompre(fn () => app(EnregistrerPaiementAction::class)->handle(auth()->user(), $client, [
             'mode_paiement' => $data['mode_paiement'],
             'montant' => $data['montant'],
             'reference' => $data['reference'] ?? null,

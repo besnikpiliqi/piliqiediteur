@@ -120,7 +120,7 @@ class EnvoieLesDocumentsTest extends TestCase
     public function test_une_facture_brouillon_n_a_ni_envoi_ni_pdf(): void
     {
         $this->connecterLeProprietaire();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
         Livewire::test(ListFactures::class)
             ->assertTableActionHidden('envoyer_par_email', $brouillon)
@@ -203,7 +203,7 @@ class EnvoieLesDocumentsTest extends TestCase
     {
         Mail::fake();
         $this->connecterLeProprietaire();
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(['email' => 'client@exemple.fr']), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(['email' => 'client@exemple.fr']), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
         Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
             ->assertActionHidden('telecharger_pdf')
@@ -226,7 +226,7 @@ class EnvoieLesDocumentsTest extends TestCase
     {
         Mail::fake();
         $this->connecterLeProprietaire();
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         $devis->lignes()->delete();
 
         Livewire::test(ListDevis::class)
@@ -242,7 +242,7 @@ class EnvoieLesDocumentsTest extends TestCase
         Mail::fake();
         $this->connecterLeProprietaire();
         $facture = $this->emettreFacture(Client::factory()->create(['email' => 'client@exemple.fr']));
-        $avoir = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]));
+        $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]));
 
         Livewire::test(ListAvoirs::class)
             ->callTableAction('envoyer_par_email', $avoir, data: ['destinataire' => 'client@exemple.fr'])
@@ -266,7 +266,7 @@ class EnvoieLesDocumentsTest extends TestCase
     {
         Exceptions::fake([DocumentSansEnregistrementSigneException::class]);
         $magasin = $this->connecterLeProprietaire();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
 
         Livewire::test(ListFactures::class)
@@ -337,9 +337,9 @@ class EnvoieLesDocumentsTest extends TestCase
      */
     private function emettreFacture(Client $client): Facture
     {
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
-        return app(EmettreFactureAction::class)->handle($facture);
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
     }
 
     /**

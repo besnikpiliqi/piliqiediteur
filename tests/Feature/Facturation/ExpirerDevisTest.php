@@ -52,7 +52,7 @@ class ExpirerDevisTest extends TestCase
         $this->travelTo('2026-10-01 10:00:00');
         $magasin = Magasin::factory()->create();
         $brouillon = $this->devisBrouillon($magasin, '2026-10-08');
-        $accepte = app(TenantContext::class)->runAs($magasin, fn (): Devis => app(AccepterDevisAction::class)->handle($this->devisEnvoye($magasin, '2026-10-08')));
+        $accepte = app(TenantContext::class)->runAs($magasin, fn (): Devis => app(AccepterDevisAction::class)->handle(self::auteur(), $this->devisEnvoye($magasin, '2026-10-08')));
         $sansValidite = $this->devisEnvoye($magasin, null);
         $this->travelTo('2026-10-09 00:30:00');
 
@@ -181,7 +181,7 @@ class ExpirerDevisTest extends TestCase
         return app(TenantContext::class)->runAs($magasin, function () use ($dateValidite): Devis {
             $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
 
-            return app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => $dateValidite]);
+            return app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => $dateValidite]);
         });
     }
 
@@ -189,6 +189,6 @@ class ExpirerDevisTest extends TestCase
     {
         $devis = $this->devisBrouillon($magasin, $dateValidite);
 
-        return app(TenantContext::class)->runAs($magasin, fn (): Devis => app(EmettreDevisAction::class)->handle($devis));
+        return app(TenantContext::class)->runAs($magasin, fn (): Devis => app(EmettreDevisAction::class)->handle(self::auteur(), $devis));
     }
 }

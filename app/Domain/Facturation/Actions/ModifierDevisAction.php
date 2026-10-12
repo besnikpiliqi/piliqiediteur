@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
@@ -9,6 +10,8 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -34,17 +37,19 @@ class ModifierDevisAction
     public function __construct(
         private readonly ConstructeurLigneDocument $constructeurLigne,
         private readonly CalculateurLigne $calculateurLigne,
+        private readonly LecteurDesDroits $lecteur,
     ) {}
 
     /**
      * @param  list<array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs
      *
+     * @throws AuthorizationException
      * @throws LogicException
      */
-    public function handle(Devis $devis, Client $client, array $lignes, array $attributs = []): Devis
+    public function handle(User $auteur, Devis $devis, Client $client, array $lignes, array $attributs = []): Devis
     {
-        return DB::transaction(function () use ($devis, $client, $lignes, $attributs) {
+        return DB::transaction(function () use ($auteur, $devis, $client, $lignes, $attributs) {
             $devis = Devis::query()->whereKey($devis->getKey())->lockForUpdate()->firstOrFail();
 
             if (! $devis->estModifiable()) {
@@ -54,6 +59,8 @@ class ModifierDevisAction
                     default => 'Ce devis ne peut plus être modifié : un devis refusé reste tel quel, établissez-en un nouveau.',
                 });
             }
+
+            $this->lecteur->exiger($auteur, 'update', $devis->magasin, $devis);
 
             $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $devis->fill($attributs)->noterSaNatureDOperation($attributs));
             $devis->forceFill([

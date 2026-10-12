@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Domain\CaisseSecurisee\Actions\VerifierIntegriteAction;
-use App\Domain\CaisseSecurisee\Enums\DeclenchementVerification;
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
 use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
 use App\Domain\Tenancy\Models\Magasin;
@@ -59,7 +58,7 @@ class VerifierIntegriteFiscale extends Command
             $complet = $this->option('complet') || now()->day === self::jourDeLaVerificationComplete($magasin);
 
             try {
-                $rapport = $tenantContext->runAs($magasin, fn () => $verifier->handle($magasin, $complet, DeclenchementVerification::Commande));
+                $rapport = $tenantContext->runAs($magasin, fn () => $verifier->parLeSysteme($magasin, $complet));
             } catch (RefusFiscalException $refus) {
                 $echecs++;
                 $lignes[] = [$magasin->nom, '—', '—', 'Refusée : '.$refus->getMessage()];

@@ -57,7 +57,7 @@ class TypeClientFigeTest extends TestCase
 
     private function emettre(Client $client): Facture
     {
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, $this->uneLigneA120Euros()));
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, $this->uneLigneA120Euros()));
     }
 
     private function rendu(Facture $facture): string
@@ -90,7 +90,7 @@ class TypeClientFigeTest extends TestCase
         [, $ticket] = $this->ticketDontLeClientDevientProfessionnel();
         $this->travelTo('2026-10-09 19:00:00');
 
-        $cloture = app(CloturerCaisseAction::class)->handle($magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
 
         $this->assertSame(['TK-MABOUT-2026-000001', '100.00', '20.00', '120.00'], [$ticket->numero, $ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
         $this->assertSame(['Ticket de caisse', 'ticket-TK-MABOUT-2026-000001.pdf', false], [$ticket->libelleDocument(), app(FacturePdfGenerator::class)->nomFichier($ticket), $ticket->relevantDeLeInvoicing()]);
@@ -140,11 +140,11 @@ class TypeClientFigeTest extends TestCase
         $this->magasin();
         $client = $professionnelAuBrouillon ? Client::factory()->professionnel()->create() : Client::factory()->create();
         $lignes = $this->uneLigneA120Euros();
-        $brouillon = app(CreerFactureAction::class)->handle($client, $lignes);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, $lignes);
         $client->update($nouvelleFiche);
 
         $this->assertThrows(
-            fn () => app(EmettreFactureAction::class)->handle($brouillon),
+            fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon),
             LogicException::class,
             "Ce client est devenu {$nouveauType} depuis l'enregistrement du brouillon : ouvrez-le et enregistrez-le de nouveau.",
         );
@@ -153,9 +153,9 @@ class TypeClientFigeTest extends TestCase
         $this->assertDatabaseCount('sequences_documents', 0);
         $this->assertSame(0, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Vente->value)->count());
 
-        $reenregistre = app(ModifierFactureAction::class)->handle($brouillon, $client->fresh(), $lignes);
+        $reenregistre = app(ModifierFactureAction::class)->handle(self::auteur(), $brouillon, $client->fresh(), $lignes);
 
-        $this->assertSame($numeroApresReenregistrement, app(EmettreFactureAction::class)->handle($reenregistre)->numero);
+        $this->assertSame($numeroApresReenregistrement, app(EmettreFactureAction::class)->handle(self::auteur(), $reenregistre)->numero);
     }
 
     /**
@@ -169,10 +169,10 @@ class TypeClientFigeTest extends TestCase
         $magasin = $this->magasin();
         [$client, $ticket] = $this->ticketDontLeClientDevientProfessionnel();
         $this->travelTo('2026-10-09 19:00:00');
-        app(CloturerCaisseAction::class)->handle($magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
         $this->travelTo('2026-10-10 10:00:00');
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client->fresh(), [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client->fresh(), [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
 
         $this->assertSame(['AV-MABOUT-2026-000001', TypeClient::Particulier, 'Jean Ancien', null, '120.00'], [$avoir->numero, $avoir->type_client, $avoir->client_nom, $avoir->client_siren, $avoir->total_ttc]);
         $this->assertSame(
@@ -180,7 +180,7 @@ class TypeClientFigeTest extends TestCase
             Arr::only($this->clientSigne($avoir), ['type_client', 'nom', 'siren']),
         );
         $this->travelTo('2026-10-10 19:00:00');
-        $cloture = app(CloturerCaisseAction::class)->handle($magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
         $this->assertSame([0, 1, '-120.00'], [$cloture->nombre_ventes, $cloture->nombre_avoirs, $cloture->total_ttc]);
         $this->assertSame($cloture->id, $avoir->fresh()->cloture_caisse_id);
     }
@@ -198,7 +198,7 @@ class TypeClientFigeTest extends TestCase
         $facture = $this->emettre($client);
         $client->update(['type_client' => TypeClient::Particulier]);
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client->fresh(), [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client->fresh(), [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
 
         $this->assertSame([null, null, null], [$client->fresh()->siren, $client->fresh()->siret, $client->fresh()->numero_tva]);
         $this->assertSame(
@@ -226,17 +226,17 @@ class TypeClientFigeTest extends TestCase
         $this->magasin();
         $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '100000009', 'adresse' => '3 rue des Forges', 'code_postal' => '69002', 'ville' => 'Lyon']);
         $this->travelTo('2026-10-08 09:00:00');
-        $emiseEnDernier = app(CreerFactureAction::class)->handle($client, $this->uneLigneA120Euros());
-        $emiseEnPremier = app(CreerFactureAction::class)->handle($client, $this->uneLigneA120Euros());
+        $emiseEnDernier = app(CreerFactureAction::class)->handle(self::auteur(), $client, $this->uneLigneA120Euros());
+        $emiseEnPremier = app(CreerFactureAction::class)->handle(self::auteur(), $client, $this->uneLigneA120Euros());
         $this->travelTo('2026-10-08 10:00:00');
-        $emiseEnPremier = app(EmettreFactureAction::class)->handle($emiseEnPremier);
+        $emiseEnPremier = app(EmettreFactureAction::class)->handle(self::auteur(), $emiseEnPremier);
         $client->update(['nom' => 'Atelier Durand et Fils', 'adresse' => '18 avenue Jean Jaurès', 'code_postal' => '69007']);
         $this->travelTo('2026-10-09 10:00:00');
-        $emiseEnDernier = app(EmettreFactureAction::class)->handle($emiseEnDernier);
+        $emiseEnDernier = app(EmettreFactureAction::class)->handle(self::auteur(), $emiseEnDernier);
         $client->update(['nom' => 'Durand Industries', 'adresse' => '1 place Bellecour']);
         $this->travelTo('2026-10-10 10:00:00');
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client->fresh(), [
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client->fresh(), [
             ['ligne_facture_id' => $emiseEnPremier->lignes->sole()->id, 'quantite' => 1],
             ['ligne_facture_id' => $emiseEnDernier->lignes->sole()->id, 'quantite' => 1],
         ]);

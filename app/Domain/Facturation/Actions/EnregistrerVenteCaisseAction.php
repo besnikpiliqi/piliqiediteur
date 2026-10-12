@@ -2,6 +2,8 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
@@ -11,8 +13,10 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -42,6 +46,12 @@ use LogicException;
  * trouve plus que ce que la première a laissé. Le panier de caisse du
  * vendeur, sa vente étant encaissée, se vide dans la même transaction
  * (voir PanierDeCaisse).
+ *
+ * Son auteur, le vendeur, est relu sous le verrou de sa ligne après celui
+ * du registre (voir LecteurDesDroits) : il doit pouvoir créer et émettre
+ * une facture et enregistrer un paiement dans ce magasin. Les actions
+ * qu'elle compose reçoivent ce même auteur, relu : c'est lui que la vente
+ * enregistre et que le registre signe.
  */
 class EnregistrerVenteCaisseAction
 {
@@ -50,21 +60,29 @@ class EnregistrerVenteCaisseAction
         private readonly CreerFactureAction $creerFacture,
         private readonly EmettreFactureAction $emettreFacture,
         private readonly PanierDeCaisse $panierDeCaisse,
+        private readonly LecteurDesDroits $lecteur,
     ) {}
 
     /**
      * @param  list<array<string, mixed>>  $lignes
      * @param  string|null  $bonDAvoir  le numéro du bon d'avoir présenté (AV-...)
      *
+     * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(Client $client, array $lignes, ModePaiement $modePaiement, ?string $reference = null, ?string $bonDAvoir = null): Facture
+    public function handle(User $auteur, Client $client, array $lignes, ModePaiement $modePaiement, ?string $reference = null, ?string $bonDAvoir = null): Facture
     {
-        return DB::transaction(function () use ($client, $lignes, $modePaiement, $reference, $bonDAvoir) {
+        return DB::transaction(function () use ($auteur, $client, $lignes, $modePaiement, $reference, $bonDAvoir) {
             $magasin = app(TenantContext::class)->magasin();
             $this->registre->verrouiller($magasin);
+            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+            $vendeur = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::FACTURE_CREATE, $magasin);
+
+            foreach ([PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER] as $autorisation) {
+                $this->lecteur->exiger($vendeur, $autorisation, $magasin);
+            }
 
             if ((int) $client->magasin_id !== $magasin->getKey()) {
                 throw new LogicException('Ce client n\'est pas un client du magasin.');
@@ -72,15 +90,12 @@ class EnregistrerVenteCaisseAction
 
             $bon = $bonDAvoir === null ? null : $this->bonDAvoirUtilisable($bonDAvoir);
             $facture = $this->emettreFacture->handle(
-                $this->creerFacture->handle($client, $lignes),
+                $vendeur,
+                $this->creerFacture->handle($vendeur, $client, $lignes),
                 new ReglementComptant($modePaiement, $reference, $bon),
             );
 
-            $vendeur = auth()->user();
-
-            if ($vendeur instanceof User) {
-                $this->panierDeCaisse->vider($vendeur);
-            }
+            $this->panierDeCaisse->vider($vendeur);
 
             return $facture->fresh('lignes');
         });

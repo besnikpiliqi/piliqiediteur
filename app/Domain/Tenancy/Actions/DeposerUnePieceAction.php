@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\TypePiece;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
@@ -13,7 +14,6 @@ use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -51,9 +51,7 @@ class DeposerUnePieceAction
     public function handle(User $proprietaire, Societe $societe, TypePiece $type, string $contenu): PieceVerification
     {
         $piece = app(TenantContext::class)->runAsSociete($societe, function () use ($proprietaire, $societe, $type, $contenu): PieceVerification {
-            if (Gate::forUser($proprietaire)->denies('verifierLaSociete', $societe)) {
-                throw new VerificationRefuseeException(DemarrerVerificationIdentiteAction::MESSAGE_SANS_AUTORISATION);
-            }
+            $proprietaire = app(LecteurDesDroits::class)->exigerDansLaSociete($proprietaire, 'verifierLaSociete', $societe, $societe, new VerificationRefuseeException(DemarrerVerificationIdentiteAction::MESSAGE_SANS_AUTORISATION));
 
             if ($contenu === '' || strlen($contenu) > self::TAILLE_MAXIMALE_EN_OCTETS) {
                 throw new VerificationRefuseeException(self::MESSAGE_VIDE_OU_TROP_GROS);

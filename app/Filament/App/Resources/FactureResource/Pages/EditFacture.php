@@ -56,7 +56,7 @@ class EditFacture extends EditRecord
         // AppServiceProvider::limiterLesChoixAuMagasin()).
         $client = Client::withTrashed()->findOrFail($data['client_id']);
 
-        return static::executerOuInterrompre(fn () => app(ModifierFactureAction::class)->handle($record, $client, $data['lignes'], [
+        return static::executerOuInterrompre(fn () => app(ModifierFactureAction::class)->handle(auth()->user(), $record, $client, $data['lignes'], [
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,
             ...FactureResource::attributsDeLaNature($data),

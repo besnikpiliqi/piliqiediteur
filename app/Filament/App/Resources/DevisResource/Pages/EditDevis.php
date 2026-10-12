@@ -66,7 +66,7 @@ class EditDevis extends EditRecord
         // AppServiceProvider::limiterLesChoixAuMagasin()).
         $client = Client::withTrashed()->findOrFail($data['client_id']);
 
-        return static::executerOuInterrompre(fn () => app(ModifierDevisAction::class)->handle($record, $client, $data['lignes'], [
+        return static::executerOuInterrompre(fn () => app(ModifierDevisAction::class)->handle(auth()->user(), $record, $client, $data['lignes'], [
             'date_validite' => $data['date_validite'] ?? null,
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,

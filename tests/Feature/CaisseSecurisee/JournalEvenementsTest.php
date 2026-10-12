@@ -470,7 +470,7 @@ class JournalEvenementsTest extends TestCase
     {
         $magasin = $this->magasinDe(User::factory()->create());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12.5, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 2]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 2]]);
 
         $brouillon->delete();
 
@@ -482,7 +482,7 @@ class JournalEvenementsTest extends TestCase
     public function test_sans_cle_de_signature_un_brouillon_ne_se_supprime_pas(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
         $this->retirerLaCleDeSignature();
 
         $this->assertThrows(fn () => $brouillon->delete(), ModuleFiscalNonConfigureException::class);
@@ -498,7 +498,7 @@ class JournalEvenementsTest extends TestCase
     public function test_un_brouillon_ne_se_supprime_pas_depuis_un_autre_magasin_actif(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]);
         $autreMagasin = $this->magasinDe(User::factory()->create(), 'Autre Boutique');
 
         $this->assertThrows(fn () => $brouillon->delete(), LogicException::class, 'Le registre fiscal ne se verrouille que pour le magasin actif.');
@@ -518,12 +518,12 @@ class JournalEvenementsTest extends TestCase
         $client = Client::factory()->create();
         $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
         $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'prix_vente_ttc' => 5, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle($client, [
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $ecran->id, 'quantite' => 1],
             ['produit_id' => $cable->id, 'quantite' => 3],
         ]);
 
-        $modifie = app(ModifierFactureAction::class)->handle($brouillon, $client, [['produit_id' => $cable->id, 'quantite' => 1]]);
+        $modifie = app(ModifierFactureAction::class)->handle(self::auteur(), $brouillon, $client, [['produit_id' => $cable->id, 'quantite' => 1]]);
 
         $this->assertSame('5.00', $modifie->total_ttc);
         $this->assertSame(['260', '323', '323'], $this->codes($magasin));
@@ -548,11 +548,11 @@ class JournalEvenementsTest extends TestCase
         $magasin = $this->magasinDe(User::factory()->create());
         $client = Client::factory()->create();
         $reparation = Service::factory()->create(['nom' => 'Remplacement écran']);
-        $brouillon = app(CreerFactureAction::class)->handle($client, [
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['service_id' => $reparation->id, 'quantite' => 1, 'prix_unitaire_ttc' => 50, 'taux_tva' => 20],
         ]);
 
-        $modifie = app(ModifierFactureAction::class)->handle($brouillon, $client, [
+        $modifie = app(ModifierFactureAction::class)->handle(self::auteur(), $brouillon, $client, [
             ['service_id' => $reparation->id, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20],
         ]);
 
@@ -565,10 +565,10 @@ class JournalEvenementsTest extends TestCase
         $magasin = $this->magasinDe(User::factory()->create());
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 2]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
         $this->retirerLaCleDeSignature();
 
-        $this->assertThrows(fn () => app(ModifierFactureAction::class)->handle($brouillon, $client, [['produit_id' => $produit->id, 'quantite' => 1]]), ModuleFiscalNonConfigureException::class);
+        $this->assertThrows(fn () => app(ModifierFactureAction::class)->handle(self::auteur(), $brouillon, $client, [['produit_id' => $produit->id, 'quantite' => 1]]), ModuleFiscalNonConfigureException::class);
 
         $this->assertSame([2, '24.00'], [$brouillon->fresh()->lignes->sole()->quantite, $brouillon->fresh()->total_ttc]);
         $this->assertSame([], $this->codes($magasin));

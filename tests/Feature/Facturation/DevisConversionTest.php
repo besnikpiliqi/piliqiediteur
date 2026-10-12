@@ -37,11 +37,11 @@ class DevisConversionTest extends TestCase
 
     private function envoyerDevis(Client $client, Produit $produit): Devis
     {
-        $devis = app(CreerDevisAction::class)->handle($client, [
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 2],
         ]);
 
-        return app(EmettreDevisAction::class)->handle($devis);
+        return app(EmettreDevisAction::class)->handle(self::auteur(), $devis);
     }
 
     public function test_accepter_un_devis_envoye_change_son_statut(): void
@@ -50,7 +50,7 @@ class DevisConversionTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
 
-        $devis = app(AccepterDevisAction::class)->handle($devis);
+        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $devis);
 
         $this->assertSame(StatutDevis::Accepte, $devis->statut);
     }
@@ -61,7 +61,7 @@ class DevisConversionTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
 
-        $devis = app(RefuserDevisAction::class)->handle($devis);
+        $devis = app(RefuserDevisAction::class)->handle(self::auteur(), $devis);
 
         $this->assertSame(StatutDevis::Refuse, $devis->statut);
     }
@@ -75,13 +75,13 @@ class DevisConversionTest extends TestCase
     {
         $this->travelTo(Carbon::parse('2026-10-05 10:00:00', 'Europe/Paris'));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
-        $devis = app(EmettreDevisAction::class)->handle(app(CreerDevisAction::class)->handle(Client::factory()->create(), [
+        $devis = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ], ['date_validite' => '2026-10-08']));
         $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
 
         $this->assertThrows(
-            fn () => app(AccepterDevisAction::class)->handle($devis),
+            fn () => app(AccepterDevisAction::class)->handle(self::auteur(), $devis),
             LogicException::class,
             'La date de validité de ce devis est dépassée (08/10/2026) : il ne peut plus être accepté.',
         );
@@ -93,12 +93,12 @@ class DevisConversionTest extends TestCase
     {
         $this->travelTo(Carbon::parse('2026-10-05 10:00:00', 'Europe/Paris'));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
-        $devis = app(EmettreDevisAction::class)->handle(app(CreerDevisAction::class)->handle(Client::factory()->create(), [
+        $devis = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ], ['date_validite' => '2026-10-08']));
         $this->travelTo(Carbon::parse('2026-10-08 23:59:00', 'Europe/Paris'));
 
-        $devis = app(AccepterDevisAction::class)->handle($devis);
+        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $devis);
 
         $this->assertSame(StatutDevis::Accepte, $devis->statut);
     }
@@ -112,12 +112,12 @@ class DevisConversionTest extends TestCase
     {
         $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ], ['date_validite' => '2026-10-08']);
 
         $this->assertThrows(
-            fn () => app(EmettreDevisAction::class)->handle($devis),
+            fn () => app(EmettreDevisAction::class)->handle(self::auteur(), $devis),
             LogicException::class,
             'La date de validité de ce devis est dépassée (08/10/2026) : changez-la avant de l\'envoyer.',
         );
@@ -131,12 +131,12 @@ class DevisConversionTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $devis = app(CreerDevisAction::class)->handle($client, [
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
         $this->expectException(LogicException::class);
-        app(AccepterDevisAction::class)->handle($devis);
+        app(AccepterDevisAction::class)->handle(self::auteur(), $devis);
     }
 
     /**
@@ -152,11 +152,11 @@ class DevisConversionTest extends TestCase
     {
         $client = Client::factory()->create();
         $lignes = [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 1, 'taux_tva' => 20])->id, 'quantite' => 1000]];
-        $devis = app(CreerDevisAction::class)->handle($client, $lignes);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, $lignes);
         $client->update(['type_client' => TypeClient::Professionnel, 'siren' => '111222333']);
 
         $this->assertThrows(
-            fn () => app(EmettreDevisAction::class)->handle($devis),
+            fn () => app(EmettreDevisAction::class)->handle(self::auteur(), $devis),
             LogicException::class,
             "Ce client est devenu professionnel depuis l'enregistrement du brouillon : ouvrez-le et enregistrez-le de nouveau.",
         );
@@ -166,7 +166,7 @@ class DevisConversionTest extends TestCase
         $this->assertSame(['830.00', '170.00', '1000.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
         $this->assertDatabaseCount('sequences_documents', 0);
 
-        $envoye = app(EmettreDevisAction::class)->handle(app(ModifierDevisAction::class)->handle($devis, $client->fresh(), $lignes));
+        $envoye = app(EmettreDevisAction::class)->handle(self::auteur(), app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client->fresh(), $lignes));
 
         $this->assertSame([StatutDevis::Envoye, TypeClient::Professionnel], [$envoye->statut, $envoye->type_client]);
         $this->assertStringEndsWith('-000001', $envoye->numero);
@@ -181,14 +181,14 @@ class DevisConversionTest extends TestCase
     public function test_la_facture_tiree_du_devis_prend_son_type_de_client_et_son_emission_signale_le_changement(): void
     {
         $client = Client::factory()->create();
-        $devis = app(AccepterDevisAction::class)->handle($this->envoyerDevis($client, Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20])));
+        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $this->envoyerDevis($client, Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20])));
         $client->update(['type_client' => TypeClient::Professionnel, 'siren' => '111222333']);
 
-        $facture = app(CreerFactureDepuisDevisAction::class)->handle($devis);
+        $facture = app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis);
 
         $this->assertSame([TypeClient::Particulier, TypeClient::Particulier], [$devis->type_client, $facture->type_client]);
         $this->assertThrows(
-            fn () => app(EmettreFactureAction::class)->handle($facture),
+            fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $facture),
             LogicException::class,
             "Ce client est devenu professionnel depuis l'enregistrement du brouillon : ouvrez-le et enregistrez-le de nouveau.",
         );
@@ -199,9 +199,9 @@ class DevisConversionTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
-        $devis = app(AccepterDevisAction::class)->handle($devis);
+        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $devis);
 
-        $facture = app(CreerFactureDepuisDevisAction::class)->handle($devis);
+        $facture = app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis);
 
         $this->assertSame(StatutFacture::Brouillon, $facture->statut);
         $this->assertSame($devis->id, $facture->devis_id);
@@ -229,13 +229,13 @@ class DevisConversionTest extends TestCase
         $client = Client::factory()->professionnel()->create();
         $sacoche = Produit::factory()->create(['prix_vente_ttc' => '49.90', 'taux_tva' => 20, 'suivi_stock' => false]);
         $livre = Produit::factory()->create(['prix_vente_ttc' => '4.20', 'taux_tva' => 5.5, 'suivi_stock' => false]);
-        $devis = app(CreerDevisAction::class)->handle($client, [
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $sacoche->id, 'quantite' => 2],
             ['produit_id' => $livre->id, 'quantite' => 3],
         ]);
-        $devis = app(AccepterDevisAction::class)->handle(app(EmettreDevisAction::class)->handle($devis));
+        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), app(EmettreDevisAction::class)->handle(self::auteur(), $devis));
 
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureDepuisDevisAction::class)->handle($devis));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis));
 
         $this->assertSame(['95.11', '17.29', '112.40'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
         $this->assertSame(TypeClient::Professionnel, $facture->type_client);
@@ -253,11 +253,11 @@ class DevisConversionTest extends TestCase
     {
         $this->travelTo(Carbon::parse('2026-10-05 10:00:00', 'Europe/Paris'));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $devis = app(AccepterDevisAction::class)->handle($this->envoyerDevis(Client::factory()->professionnel()->create(), $produit));
-        $brouillon = app(CreerFactureDepuisDevisAction::class)->handle($devis);
+        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $this->envoyerDevis(Client::factory()->professionnel()->create(), $produit));
+        $brouillon = app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis);
         $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
 
-        $facture = app(EmettreFactureAction::class)->handle($brouillon);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
         $this->assertNull($brouillon->date_echeance);
         $this->assertSame('2026-11-08', $facture->date_echeance->toDateString());
@@ -267,12 +267,12 @@ class DevisConversionTest extends TestCase
     {
         $client = Client::factory()->create();
         $service = Service::factory()->create(['nom' => 'Remplacement écran']);
-        $devis = app(CreerDevisAction::class)->handle($client, [
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [
             ['service_id' => $service->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
         ]);
-        $devis = app(AccepterDevisAction::class)->handle(app(EmettreDevisAction::class)->handle($devis));
+        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), app(EmettreDevisAction::class)->handle(self::auteur(), $devis));
 
-        $facture = app(CreerFactureDepuisDevisAction::class)->handle($devis);
+        $facture = app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis);
 
         $ligne = $facture->lignes->sole();
         $this->assertSame($service->id, $ligne->service_id);
@@ -287,7 +287,7 @@ class DevisConversionTest extends TestCase
         $devis = $this->envoyerDevis($client, $produit);
 
         $this->expectException(LogicException::class);
-        app(CreerFactureDepuisDevisAction::class)->handle($devis);
+        app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis);
     }
 
     public function test_impossible_de_convertir_deux_fois_le_meme_devis(): void
@@ -295,11 +295,11 @@ class DevisConversionTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
-        $devis = app(AccepterDevisAction::class)->handle($devis);
+        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $devis);
 
-        app(CreerFactureDepuisDevisAction::class)->handle($devis);
+        app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis);
 
         $this->expectException(LogicException::class);
-        app(CreerFactureDepuisDevisAction::class)->handle($devis->fresh());
+        app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis->fresh());
     }
 }

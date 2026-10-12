@@ -3,7 +3,7 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\AutorisationsSociete;
-use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Magasin;
@@ -184,7 +184,7 @@ class PanneauSocieteTest extends TestCase
         Filament::setTenant($magasin, isQuiet: true);
         $contexte->set($magasin);
 
-        $this->assertSame([], Select::make('vendeur')->model(ClotureCaissePersonnelle::class)->relationship('vendeur', 'name')->getExtraAttributes());
+        $this->assertSame([], Select::make('operateur')->model(EnregistrementFiscal::class)->relationship('operateur', 'name')->getExtraAttributes());
         $this->assertSame([], CheckboxList::make('vendeurs')->model($this->magasinEtSesComptes($magasin))->relationship('comptes', 'name')->getExtraAttributes());
 
         $contexte->clear();
@@ -195,9 +195,9 @@ class PanneauSocieteTest extends TestCase
         $this->assertSame([], Select::make('magasin')->model($magasin->societe)->relationship('magasins', 'nom')->getExtraAttributes());
         $this->assertSame([], Select::make('membre')->model($magasin->societe)->relationship('membres', 'name')->getExtraAttributes());
         $this->assertThrows(
-            fn () => Select::make('vendeur')->model(ClotureCaissePersonnelle::class)->relationship('vendeur', 'name')->getExtraAttributes(),
+            fn () => Select::make('operateur')->model(EnregistrementFiscal::class)->relationship('operateur', 'name')->getExtraAttributes(),
             LogicException::class,
-            'Le champ « vendeur » de l\'espace société propose des magasins ou des comptes sans passer par une relation de la société.',
+            'Le champ « operateur » de l\'espace société propose des magasins ou des comptes sans passer par une relation de la société.',
         );
         $this->assertThrows(
             fn () => CheckboxList::make('vendeurs')->model($this->magasinEtSesComptes($magasin))->relationship('comptes', 'name')->getExtraAttributes(),

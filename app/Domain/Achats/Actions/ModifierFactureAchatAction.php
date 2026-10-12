@@ -6,9 +6,14 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -39,26 +44,39 @@ use LogicException;
  * registre fiscal du magasin est le premier verrou de sa transaction,
  * avant la facture d'achat (voir
  * ConstructeurLigneAchat::verrouillerLeRegistreSiUnTauxChange()).
+ *
+ * Son auteur est relu sous le verrou de sa ligne, après le registre et
+ * avant la facture d'achat et ses produits : il doit pouvoir saisir les
+ * factures d'achat ; puis, la facture relue verrouillée et encore
+ * modifiable, pouvoir la modifier (voir LecteurDesDroits et
+ * FactureAchatPolicy::update()) : le droit de valider, retiré pendant que
+ * son écran restait ouvert, ne corrige plus une facture validée.
  */
 class ModifierFactureAchatAction
 {
     public function __construct(
         private readonly ConstructeurLigneAchat $constructeurLignes,
         private readonly StockLedgerService $stockLedger,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
      * @param  list<array<string, mixed>>  $lignes  voir ConstructeurLigneAchat::enregistrer()
      * @param  array<string, mixed>  $attributs
+     *
+     * @throws AuthorizationException
      */
-    public function handle(FactureAchat $factureAchat, Fournisseur $fournisseur, array $lignes, array $attributs = []): FactureAchat
+    public function handle(User $auteur, FactureAchat $factureAchat, Fournisseur $fournisseur, array $lignes, array $attributs = []): FactureAchat
     {
         if ($lignes === []) {
             throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
         }
 
-        return DB::transaction(function () use ($factureAchat, $fournisseur, $lignes, $attributs) {
+        return DB::transaction(function () use ($auteur, $factureAchat, $fournisseur, $lignes, $attributs) {
             $this->constructeurLignes->verrouillerLeRegistreSiUnTauxChange($lignes);
+            $magasin = app(TenantContext::class)->magasin();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, FactureAchat::class);
 
             // Verrouillée comme à sa validation (voir
             // ValiderFactureAchatAction) : une validation simultanée ne peut
@@ -68,6 +86,8 @@ class ModifierFactureAchatAction
             if (! $factureAchat->estModifiable()) {
                 throw new LogicException('Cette facture d\'achat n\'est plus modifiable.');
             }
+
+            $this->lecteur->exiger($compte, 'update', $magasin, $factureAchat);
 
             $estValidee = $factureAchat->statut === StatutFactureAchat::Validee;
 
@@ -89,15 +109,17 @@ class ModifierFactureAchatAction
                 ? $factureAchat->lignes->pluck('produit_id')->map(fn (int|string $produitId): int => (int) $produitId)->unique()->values()->all()
                 : [];
 
-            $factureAchat->update([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]);
+            return $this->operateur->pendant($compte, function () use ($compte, $factureAchat, $fournisseur, $lignes, $attributs, $estValidee, $produitsAvant): FactureAchat {
+                $factureAchat->update([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]);
 
-            $this->constructeurLignes->enregistrer($factureAchat, $lignes);
+                $this->constructeurLignes->enregistrer($compte, $factureAchat, $lignes);
 
-            if ($estValidee) {
-                $this->corrigerLaReception($factureAchat->fresh('lignes'), $produitsAvant);
-            }
+                if ($estValidee) {
+                    $this->corrigerLaReception($factureAchat->fresh('lignes'), $produitsAvant);
+                }
 
-            return $factureAchat->fresh('lignes');
+                return $factureAchat->fresh('lignes');
+            });
         });
     }
 

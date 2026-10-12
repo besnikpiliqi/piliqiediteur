@@ -66,10 +66,10 @@ class DevisPdfGeneratorTest extends TestCase
         app(TenantContext::class)->set(Magasin::factory()->create());
         $client = Client::factory()->professionnel()->create(['nom' => 'Jean Ancien', 'siren' => '999888777', 'siret' => null, 'numero_tva' => null]);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20]);
-        $devis = app(CreerDevisAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
         $client->update(['nom' => 'Marc Nouveau', 'siren' => '111222333']);
 
-        $devis = app(EmettreDevisAction::class)->handle($devis);
+        $devis = app(EmettreDevisAction::class)->handle(self::auteur(), $devis);
 
         $this->assertStringContainsString(
             '<div class="bloc-client"><div class="titre">Établi pour</div><strong>Marc Nouveau</strong><br>SIREN : 111222333<br></div>',
@@ -89,7 +89,7 @@ class DevisPdfGeneratorTest extends TestCase
         $note = 'Client professionnel : HT de chaque ligne = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA calculée sur le total HT de chaque taux.';
         $devisProfessionnel = $this->devisEnvoye();
         $client = Client::factory()->create(['nom' => 'Jean Ancien']);
-        $devisParticulier = app(EmettreDevisAction::class)->handle(app(CreerDevisAction::class)->handle($client, [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]));
+        $devisParticulier = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]));
         $client->update(['type_client' => TypeClient::Professionnel, 'siren' => '111222333']);
 
         $renduParticulier = $this->compacte(app(DevisPdfGenerator::class)->html($devisParticulier->fresh()->load('client', 'lignes', 'magasin')));
@@ -109,7 +109,7 @@ class DevisPdfGeneratorTest extends TestCase
         $devis = $this->devisEnvoye();
         $client = $devis->client;
         $lignes = $devis->lignes->map(fn (LigneDevis $ligne): array => ['produit_id' => $ligne->produit_id, 'quantite' => $ligne->quantite])->all();
-        $modifie = app(ModifierDevisAction::class)->handle($devis, $client, $lignes, ['date_validite' => '2026-12-31']);
+        $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client, $lignes, ['date_validite' => '2026-12-31']);
 
         $html = app(DevisPdfGenerator::class)->html($modifie->load('client', 'lignes', 'magasin'));
 
@@ -134,12 +134,12 @@ class DevisPdfGeneratorTest extends TestCase
         ]));
         $ecran = Produit::factory()->create(['nom' => 'Écran 15 pouces', 'prix_vente_ttc' => 120, 'taux_tva' => 20]);
         $cable = Produit::factory()->create(['nom' => 'Câble secteur', 'prix_vente_ttc' => 10.55, 'taux_tva' => 5.5]);
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->professionnel()->create(['nom' => 'Atelier Martin']), [
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(['nom' => 'Atelier Martin']), [
             ['produit_id' => $ecran->id, 'quantite' => 2],
             ['produit_id' => $cable->id, 'quantite' => 1],
         ], ['date_validite' => '2026-12-31']);
 
-        return app(EmettreDevisAction::class)->handle($devis);
+        return app(EmettreDevisAction::class)->handle(self::auteur(), $devis);
     }
 
     /**

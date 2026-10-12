@@ -12,7 +12,6 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
@@ -40,10 +39,10 @@ class CaissesPersonnellesFermeesDOfficeConcurrenceTest extends TestCase
         $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
-        $vendeur = User::factory()->create();
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
         $this->actingAs($vendeur);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        app(EnregistrerVenteCaisseAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
         $magasinId = $magasin->id;
         $concurrente = null;
         DB::listen(function (QueryExecuted $requete) use (&$concurrente, $magasinId): void {
@@ -57,7 +56,7 @@ class CaissesPersonnellesFermeesDOfficeConcurrenceTest extends TestCase
             }
         });
 
-        $releveDuVendeur = app(FermerSaCaisseAction::class)->handle($vendeur);
+        $releveDuVendeur = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $concurrente->wait();

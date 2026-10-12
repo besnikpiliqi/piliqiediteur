@@ -4,10 +4,14 @@ namespace App\Domain\Facturation\Services;
 
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Collection;
+use LogicException;
 
 /**
  * Les caisses personnelles restées ouvertes (voir FermerSaCaisseAction) :
@@ -23,8 +27,13 @@ use Illuminate\Support\Collection;
  * journée de son émission, à l'heure de Paris ; un encaissement, de celle
  * où il est reçu, une contre-passation comprise, qui revient au vendeur du
  * paiement qu'elle corrige (voir Paiement::scopeNonFermesParLeVendeur()).
- * Quiconque enregistre un paiement a ainsi sa caisse, le comptable comme le
- * vendeur (voir ClotureCaissePersonnellePolicy::fermer()).
+ * Quiconque enregistre un paiement a ainsi sa caisse (voir
+ * ClotureCaissePersonnellePolicy::fermer()).
+ *
+ * Une personne n'encaisse que dans un magasin à la fois : tant que sa
+ * caisse est ouverte dans un magasin de sa société, elle n'émet, n'encaisse
+ * ni ne contre-passe rien dans un autre (voir
+ * refuserSiSaCaisseEstOuverteAilleurs()).
  */
 class VerificateurCaissesPersonnelles
 {
@@ -55,5 +64,44 @@ class VerificateurCaissesPersonnelles
             ->unique();
 
         return User::query()->whereKey($vendeurIds->all())->orderBy('id')->get();
+    }
+
+    /**
+     * Refuse l'opération dans ce magasin si ce compte a encore sa caisse
+     * personnelle ouverte dans un autre magasin de la même société : une
+     * vente émise ou un encaissement reçu là-bas qu'aucune de ses
+     * fermetures n'a comptés. C'est une lecture hors du magasin, déclarée
+     * dans CLAUDE.md : seulement les magasins de la société de ce magasin,
+     * pour ce seul compte, et seulement l'identifiant et le nom du premier
+     * magasin trouvé. L'appelante tient déjà la ligne du compte verrouillée
+     * (voir LecteurDesDroits::exigerSousVerrou()) : deux opérations de la
+     * même personne dans deux magasins se suivent, et la seconde voit la
+     * première.
+     *
+     * @throws LogicException
+     */
+    public function refuserSiSaCaisseEstOuverteAilleurs(User $compte, Magasin $magasin): void
+    {
+        $ailleurs = Magasin::query()
+            ->where('societe_id', $magasin->societe_id)
+            ->whereKeyNot($magasin->getKey())
+            ->where(fn ($magasins) => $magasins
+                ->whereIn('id', Facture::withoutGlobalScope(MagasinScope::class)
+                    ->select('factures.magasin_id')
+                    ->emises()
+                    ->where('factures.cree_par', $compte->getKey())
+                    ->whereNotExists(fn (Builder $fermetures) => $fermetures->selectRaw('1')->from('clotures_caisse_personnelles_factures')->whereColumn('clotures_caisse_personnelles_factures.facture_id', 'factures.id')))
+                ->orWhereIn('id', Paiement::withoutGlobalScope(MagasinScope::class)
+                    ->select('paiements.magasin_id')
+                    ->where(fn ($paiements) => $paiements
+                        ->where(fn ($saisis) => $saisis->whereNull('paiements.contre_passe_paiement_id')->where('paiements.cree_par', $compte->getKey()))
+                        ->orWhereIn('paiements.contre_passe_paiement_id', Paiement::withoutGlobalScope(MagasinScope::class)->select('id')->where('cree_par', $compte->getKey())))
+                    ->whereNotExists(fn (Builder $fermetures) => $fermetures->selectRaw('1')->from('clotures_caisse_personnelles_paiements')->whereColumn('clotures_caisse_personnelles_paiements.paiement_id', 'paiements.id'))))
+            ->orderBy('id')
+            ->first(['id', 'nom']);
+
+        if ($ailleurs !== null) {
+            throw new LogicException("Fermez d'abord votre caisse de {$ailleurs->nom} : vous n'encaissez que dans un magasin à la fois.");
+        }
     }
 }

@@ -12,6 +12,10 @@ return new class extends Migration
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('cree_par_nom')->nullable();
             $table->string('numero', 40)->nullable();
             // La journée comptable clôturée, pas l'instant où le bouton a
             // été cliqué (voir cloturee_a) : une clôture peut être faite

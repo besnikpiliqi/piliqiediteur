@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
@@ -14,7 +15,6 @@ use App\Integrations\Identite\DemandeDIdentite;
 use App\Integrations\Identite\IdentiteIndisponibleException;
 use App\Integrations\Identite\SessionDIdentite;
 use App\Models\User;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 
 /**
@@ -89,9 +89,7 @@ class DemarrerVerificationIdentiteAction
      */
     public static function verifierLaVoie(User $proprietaire, Societe $societe, EvaluateurDeVerification $evaluateur): void
     {
-        if (Gate::forUser($proprietaire)->denies('verifierLaSociete', $societe)) {
-            throw new VerificationRefuseeException(self::MESSAGE_SANS_AUTORISATION);
-        }
+        app(LecteurDesDroits::class)->exigerDansLaSociete($proprietaire, 'verifierLaSociete', $societe, $societe, new VerificationRefuseeException(self::MESSAGE_SANS_AUTORISATION));
 
         if ($evaluateur->evaluer($societe)->voiesAutomatiquesBloquees()) {
             throw new VerificationRefuseeException(self::MESSAGE_VOIES_BLOQUEES);

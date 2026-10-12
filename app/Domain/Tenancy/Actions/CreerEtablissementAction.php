@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -19,7 +20,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Closure;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use LogicException;
@@ -97,9 +97,7 @@ class CreerEtablissementAction
         }
 
         return $contexte->runAsSociete($societe, function () use ($auteur, $societe, $donnees): Magasin {
-            if (Gate::forUser($auteur)->denies('creerUnMagasin', $societe)) {
-                throw new LogicException(self::MESSAGE_SANS_AUTORISATION);
-            }
+            $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'creerUnMagasin', $societe, $societe, new LogicException(self::MESSAGE_SANS_AUTORISATION));
 
             $valides = $this->valider($societe, $donnees);
             $siret = $societe->siren.$valides['nic'];

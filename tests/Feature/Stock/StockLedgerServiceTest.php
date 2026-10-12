@@ -10,6 +10,7 @@ use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Notifications\StockSousLeSeuilDAlerte;
 use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -250,6 +251,68 @@ class StockLedgerServiceTest extends TestCase
         $this->assertSame(1, $administrateur->notifications()->count());
         $this->assertSame(1, $vendeurQuiGereLeStock->notifications()->count());
         $this->assertSame(0, $vendeur->notifications()->count());
+    }
+
+    /**
+     * L'alerte va au propriétaire, sans case, et à toute personne qui a
+     * accès au magasin et y est autorisée à gérer le stock : un
+     * administrateur du magasin qui en a la case, un vendeur à qui on l'a
+     * cochée ; ni à un vendeur sans la case, ni à une autre société.
+     */
+    public function test_l_alerte_de_stock_va_au_proprietaire_et_aux_personnes_autorisees_du_magasin(): void
+    {
+        $proprietaireDAilleurs = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ailleurs']));
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $administrateur = $this->administrateur($magasin, [$magasin->id]);
+        $vendeurQuiGereLeStock = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PRODUIT_AJUSTER_STOCK]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $produit = Produit::factory()->create(['stock_quantite' => 7, 'seuil_alerte' => 5]);
+
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+
+        $this->assertSame(
+            [1, 1, 1, 0, 0],
+            [$this->proprietaireDe($magasin)->notifications()->count(), $administrateur->notifications()->count(), $vendeurQuiGereLeStock->notifications()->count(), $vendeur->notifications()->count(), $proprietaireDAilleurs->notifications()->count()],
+        );
+    }
+
+    /**
+     * Un responsable a tous les droits de son magasin, sans case : il est
+     * prévenu ; celui d'un autre magasin de la société ne l'est pas.
+     */
+    public function test_l_alerte_de_stock_va_aux_responsables_du_magasin_sans_case(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autreMagasin = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']);
+        $responsable = $this->responsable($magasin);
+        $coResponsable = $this->responsable($magasin);
+        $responsableDAilleurs = $this->responsable($autreMagasin);
+        app(TenantContext::class)->set($magasin);
+        $produit = Produit::factory()->create(['stock_quantite' => 7, 'seuil_alerte' => 5]);
+
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+
+        $this->assertSame([1, 1, 0], [$responsable->notifications()->count(), $coResponsable->notifications()->count(), $responsableDAilleurs->notifications()->count()]);
+    }
+
+    public function test_l_alerte_de_stock_ne_va_ni_a_un_compte_suspendu_ni_retire_ni_a_un_administrateur_hors_de_sa_selection_ni_a_l_expert_comptable(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autreMagasin = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $suspendu = $this->responsable($magasin);
+        $retire = $this->responsable($magasin);
+        app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $suspendu);
+        app(ChangerStatutCompteAction::class)->retirer($proprietaire, $retire);
+        $administrateurDAilleurs = $this->administrateur($magasin, [$autreMagasin->id]);
+        $expert = $this->expertComptable($magasin);
+        app(TenantContext::class)->set($magasin);
+        $produit = Produit::factory()->create(['stock_quantite' => 7, 'seuil_alerte' => 5]);
+
+        app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::Vente, 2);
+
+        $this->assertSame(1, $proprietaire->notifications()->count());
+        $this->assertSame([0, 0, 0, 0], [$suspendu->notifications()->count(), $retire->notifications()->count(), $administrateurDAilleurs->notifications()->count(), $expert->notifications()->count()]);
     }
 
     /**

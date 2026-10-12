@@ -29,6 +29,10 @@ return new class extends Migration
             // du serveur d'envoi (voir EnvoyerDocumentJob::failed()).
             $table->string('erreur')->nullable();
             $table->foreignId('envoye_par')->nullable()->constrained('users')->nullOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('envoye_par_nom')->nullable();
             $table->timestamp('envoye_le')->nullable();
             $table->timestamps();
 

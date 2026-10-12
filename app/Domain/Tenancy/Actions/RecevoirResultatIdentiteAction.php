@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\SignalDeRisque;
 use App\Domain\Tenancy\Enums\TypeVerification;
@@ -18,7 +19,6 @@ use App\Integrations\Identite\ResultatDIdentite;
 use App\Integrations\Rne\RneIndisponibleException;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -141,9 +141,7 @@ class RecevoirResultatIdentiteAction
     public function rapprocherDeNouveau(User $proprietaire, Societe $societe): VerificationSociete
     {
         $ligne = app(TenantContext::class)->runAsSociete($societe, function () use ($proprietaire, $societe): VerificationSociete {
-            if (Gate::forUser($proprietaire)->denies('verifierLaSociete', $societe)) {
-                throw new VerificationRefuseeException(DemarrerVerificationIdentiteAction::MESSAGE_SANS_AUTORISATION);
-            }
+            $proprietaire = app(LecteurDesDroits::class)->exigerDansLaSociete($proprietaire, 'verifierLaSociete', $societe, $societe, new VerificationRefuseeException(DemarrerVerificationIdentiteAction::MESSAGE_SANS_AUTORISATION));
 
             $identite = self::rapprochementEnAttente($proprietaire, $societe->fresh());
 

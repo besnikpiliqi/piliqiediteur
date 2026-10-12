@@ -2,11 +2,16 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -31,16 +36,26 @@ use LogicException;
  */
 class EmettreDevisAction
 {
-    public function __construct(private readonly DocumentNumberingService $numerotation) {}
+    public function __construct(
+        private readonly DocumentNumberingService $numerotation,
+        private readonly LecteurDesDroits $lecteur,
+    ) {}
 
     /**
+     * Le magasin actif, relu, doit pouvoir vendre ; puis son auteur, relu
+     * sous le verrou de sa ligne avant celui du devis (voir
+     * LecteurDesDroits), doit pouvoir envoyer ce devis.
+     *
+     * @throws AuthorizationException
      * @throws LogicException
      */
-    public function handle(Devis $devis): Devis
+    public function handle(User $auteur, Devis $devis): Devis
     {
-        return DB::transaction(function () use ($devis) {
+        return DB::transaction(function () use ($auteur, $devis) {
+            $magasin = Magasin::query()->findOrFail(app(TenantContext::class)->id());
+            $magasin->verifierQuIlPeutVendre();
+            $this->lecteur->exigerSousVerrou($auteur, 'envoyer', $magasin, $devis);
             $devis = Devis::query()->whereKey($devis->getKey())->lockForUpdate()->firstOrFail();
-            $devis->magasin->verifierQuIlPeutVendre();
 
             if (! $devis->statut->peutTransitionnerVers(StatutDevis::Envoye)) {
                 throw new LogicException("Impossible d'envoyer un devis au statut [{$devis->statut->value}].");

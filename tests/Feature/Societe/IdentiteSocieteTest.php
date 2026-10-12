@@ -6,6 +6,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Exceptions\IdentiteDeLaSocieteIncompleteException;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Facturation\Services\Emetteur;
@@ -97,7 +98,9 @@ class IdentiteSocieteTest extends TestCase
 
     /**
      * Une identité incomplète bloque les factures aux professionnels dans
-     * chacun des magasins de la société, jamais les tickets.
+     * chacun des magasins de la société, jamais les tickets. Le
+     * propriétaire ferme sa caisse d'un magasin avant de vendre dans le
+     * suivant.
      */
     public function test_une_identite_incomplete_bloque_les_factures_professionnelles_de_tous_les_magasins_mais_pas_les_tickets(): void
     {
@@ -108,15 +111,16 @@ class IdentiteSocieteTest extends TestCase
         foreach ([$lyon, $villeurbanne] as $magasin) {
             app(TenantContext::class)->set($magasin->fresh());
             $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-            $facture = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
-            $ticket = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+            $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+            $ticket = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
 
             $this->assertThrows(
-                fn () => app(EmettreFactureAction::class)->handle($facture),
+                fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $facture),
                 IdentiteDeLaSocieteIncompleteException::class,
                 'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité de la société (Administration de la société > Identité) : immatriculation.',
             );
-            $this->assertNotNull(app(EmettreFactureAction::class)->handle($ticket)->numero);
+            $this->assertNotNull(app(EmettreFactureAction::class)->handle(self::auteur(), $ticket)->numero);
+            app(FermerSaCaisseAction::class)->handle(self::auteur(), self::auteur());
         }
     }
 

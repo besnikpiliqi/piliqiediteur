@@ -76,7 +76,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(self::reponseVies(['name' => 'ACME GMBH', 'address' => "MUSTERSTRASSE 1\n10115 BERLIN"]))]);
 
-        $consultation = app(VerifierNumeroTvaAction::class)->handle($client);
+        $consultation = app(VerifierNumeroTvaAction::class)->handle(self::auteur(), $client);
 
         $this->assertSame([
             'client_id' => $client->id,
@@ -106,7 +106,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(self::reponseVies(['vatNumber' => '999999999', 'valid' => false]))]);
 
-        $consultation = app(VerifierNumeroTvaAction::class)->handle($client);
+        $consultation = app(VerifierNumeroTvaAction::class)->handle(self::auteur(), $client);
 
         $this->assertSame(
             ['numero_tva' => 'DE999999999', 'valide' => false, 'nom' => null, 'adresse' => null, 'identifiant_consultation' => 'WAPIAAAAW1234567'],
@@ -125,7 +125,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(['actionSucceed' => false, 'errorWrappers' => [['error' => 'INVALID_INPUT', 'message' => 'Invalid input']]], 400)]);
 
-        $consultation = app(VerifierNumeroTvaAction::class)->handle($client);
+        $consultation = app(VerifierNumeroTvaAction::class)->handle(self::auteur(), $client);
 
         $this->assertSame(['numero_tva' => 'DE12345', 'valide' => false], $consultation->fresh()->only(['numero_tva', 'valide']));
     }
@@ -137,7 +137,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(self::reponseVies(['countryCode' => 'EL']))]);
 
-        app(VerifierNumeroTvaAction::class)->handle($client);
+        app(VerifierNumeroTvaAction::class)->handle(self::auteur(), $client);
 
         Http::assertSent(fn (Request $requete): bool => $requete['countryCode'] === 'EL' && $requete['vatNumber'] === '123456789');
     }
@@ -154,7 +154,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(self::reponseVies(['requestIdentifier' => '']))]);
 
-        $consultation = app(VerifierNumeroTvaAction::class)->handle($client);
+        $consultation = app(VerifierNumeroTvaAction::class)->handle(self::auteur(), $client);
 
         Http::assertSent(fn (Request $requete): bool => $requete->data() === ['countryCode' => 'DE', 'vatNumber' => '123456789']);
         $this->assertSame(['valide' => true, 'identifiant_consultation' => null], $consultation->fresh()->only(['valide', 'identifiant_consultation']));
@@ -184,7 +184,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => $reponse()]);
 
-        $this->assertThrows(fn () => app(VerifierNumeroTvaAction::class)->handle($client), ViesIndisponibleException::class, self::MESSAGE_INDISPONIBLE);
+        $this->assertThrows(fn () => app(VerifierNumeroTvaAction::class)->handle(self::auteur(), $client), ViesIndisponibleException::class, self::MESSAGE_INDISPONIBLE);
 
         $this->assertSame(0, ConsultationVies::query()->count());
     }
@@ -201,7 +201,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::failedConnection()]);
 
-        $this->assertThrows(fn () => app(VerifierNumeroTvaAction::class)->handle($client), ViesIndisponibleException::class, self::MESSAGE_INDISPONIBLE);
+        $this->assertThrows(fn () => app(VerifierNumeroTvaAction::class)->handle(self::auteur(), $client), ViesIndisponibleException::class, self::MESSAGE_INDISPONIBLE);
 
         Sleep::assertSequence([Sleep::for(500)->milliseconds()]);
         $this->assertSame(0, ConsultationVies::query()->count());
@@ -219,7 +219,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         Http::fake([self::URL_VIES => Http::response(['actionSucceed' => false, 'errorWrappers' => [['error' => 'MS_UNAVAILABLE', 'message' => 'DE123456789']]], 500)]);
         Log::spy();
 
-        $this->assertThrows(fn () => app(VerifierNumeroTvaAction::class)->handle($client), ViesIndisponibleException::class);
+        $this->assertThrows(fn () => app(VerifierNumeroTvaAction::class)->handle(self::auteur(), $client), ViesIndisponibleException::class);
 
         Log::shouldHaveReceived('warning')->once()->with('VIES n\'a pas pu vérifier un n° de TVA.', ['pays' => 'DE', 'statut_http' => 500, 'erreurs' => ['MS_UNAVAILABLE']]);
     }
@@ -232,7 +232,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         Http::fake([self::URL_VIES => Http::response(['actionSucceed' => false, 'errorWrappers' => [['error' => 'INVALID_REQUESTER_INFO']]], 400)]);
 
         $this->assertThrows(
-            fn () => app(VerifierNumeroTvaAction::class)->handle($client),
+            fn () => app(VerifierNumeroTvaAction::class)->handle(self::auteur(), $client),
             LogicException::class,
             'VIES refuse le n° de TVA de la société, qui identifie chaque vérification : contrôlez-le dans Administration de la société > Identité. Sans n° de TVA vérifié, la vente reste à la TVA française.',
         );
@@ -263,7 +263,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(self::reponseVies([]))]);
 
-        $this->assertThrows(fn () => app(VerifierNumeroTvaAction::class)->handle($client), InvalidArgumentException::class, $message);
+        $this->assertThrows(fn () => app(VerifierNumeroTvaAction::class)->handle(self::auteur(), $client), InvalidArgumentException::class, $message);
 
         Http::assertNothingSent();
         $this->assertSame(0, ConsultationVies::query()->count());
@@ -283,7 +283,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(self::reponseVies([]))]);
 
-        $this->assertThrows(fn () => app(VerifierNumeroTvaAction::class)->handle($clientDUnAutreMagasin), ModelNotFoundException::class);
+        $this->assertThrows(fn () => app(VerifierNumeroTvaAction::class)->handle(self::auteur(), $clientDUnAutreMagasin), ModelNotFoundException::class);
 
         Http::assertNothingSent();
         $this->assertSame(0, ConsultationVies::query()->withoutGlobalScope(MagasinScope::class)->count());
@@ -302,7 +302,7 @@ class VerifierNumeroTvaActionTest extends TestCase
         Http::preventStrayRequests();
         Http::fake([self::URL_VIES => Http::response(self::reponseVies([]))]);
 
-        $consultation = app(VerifierNumeroTvaAction::class)->handle($client);
+        $consultation = app(VerifierNumeroTvaAction::class)->handle(self::auteur(), $client);
 
         $this->assertSame('DE123456789', $consultation->numero_tva);
         Http::assertSent(fn (Request $requete): bool => $requete['vatNumber'] === '123456789');

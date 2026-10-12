@@ -34,6 +34,10 @@ return new class extends Migration
             $table->date('date_document')->nullable();
             $table->string('emetteur', 150)->nullable();
             $table->foreignId('note_par')->nullable()->constrained('users')->restrictOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('note_par_nom')->nullable();
             $table->timestamp('created_at')->useCurrent();
 
             $table->index(['magasin_id', 'facture_id']);

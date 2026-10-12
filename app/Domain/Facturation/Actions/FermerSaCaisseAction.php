@@ -2,12 +2,14 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
@@ -15,7 +17,6 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 
 /**
  * Ferme la caisse personnelle d'un vendeur -- tout membre qui vend ou
@@ -29,12 +30,17 @@ use Illuminate\Support\Facades\Gate;
  * apercu()).
  *
  * Trois façons de fermer (voir ModeFermetureCaisse) :
- * - le vendeur ferme la sienne (handle()) ;
- * - un responsable, autorisé à clôturer la journée, ferme celle d'un
- *   autre vendeur pour lui (handle() avec son auteur, voir
+ * - le vendeur ferme la sienne (handle(), auteur et vendeur confondus,
+ *   voir ClotureCaissePersonnellePolicy::fermer()) ;
+ * - une personne autorisée à clôturer la journée ferme celle d'un autre
+ *   vendeur pour lui (handle(), voir
  *   ClotureCaissePersonnellePolicy::fermerLaCaisseDe()) ;
- * - elle est fermée d'office après la clôture de la journée et à minuit
- *   (fermerDOffice(), voir FermerLesCaissesPersonnellesAction).
+ * - elle est fermée d'office après la clôture de la journée et à minuit,
+ *   par le système (fermerDOffice(), voir
+ *   FermerLesCaissesPersonnellesAction).
+ * L'auteur d'une fermeture est relu sous le verrou de sa ligne, prise avec
+ * celle du vendeur par identifiant croissant (voir LecteurDesDroits) : une
+ * autorisation retirée pendant que sa page restait ouverte est vue.
  * Le relevé compte les ventes émises jusqu'à sa borne et les encaissements
  * reçus jusqu'à la journée de sa borne (jusqu_au) : maintenant pour le
  * vendeur et le responsable, la fin de la journée clôturée pour une
@@ -64,24 +70,31 @@ use Illuminate\Support\Facades\Gate;
  */
 class FermerSaCaisseAction
 {
-    public function __construct(private readonly CalculateurLigne $calculateur) {}
+    public function __construct(
+        private readonly CalculateurLigne $calculateur,
+        private readonly LecteurDesDroits $lecteur,
+    ) {}
 
     /**
-     * Le vendeur ferme sa caisse, ou, avec $responsable, un autre membre
-     * autorisé à clôturer la journée la ferme pour lui : tout ce qui n'est
-     * pas encore compté jusqu'à maintenant.
+     * L'auteur ferme sa propre caisse, ou celle d'un autre vendeur pour
+     * lui s'il est autorisé à clôturer la journée : tout ce qui n'est pas
+     * encore compté jusqu'à maintenant.
      *
-     * @throws AuthorizationException quand le responsable n'est pas autorisé à fermer la caisse de ce vendeur
+     * @throws AuthorizationException quand l'auteur n'est pas, ou plus, autorisé à fermer cette caisse
      */
-    public function handle(User $vendeur, ?User $responsable = null): ClotureCaissePersonnelle
+    public function handle(User $auteur, User $vendeur): ClotureCaissePersonnelle
     {
-        if ($responsable === null || $responsable->is($vendeur)) {
-            return $this->fermer($vendeur, ModeFermetureCaisse::Vendeur, $vendeur, CarbonImmutable::now(), memeAZero: true);
-        }
+        $saPropreCaisse = $auteur->is($vendeur);
 
-        Gate::forUser($responsable)->authorize('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeur]);
+        return DB::transaction(function () use ($auteur, $vendeur, $saPropreCaisse): ClotureCaissePersonnelle {
+            User::query()->whereKey([$auteur->getKey(), $vendeur->getKey()])->orderBy('id')->lock('for no key update')->get();
+            $magasin = app(TenantContext::class)->magasin();
+            $compte = $saPropreCaisse
+                ? $this->lecteur->exigerSousVerrou($auteur, 'fermer', $magasin, ClotureCaissePersonnelle::class)
+                : $this->lecteur->exigerSousVerrou($auteur, 'fermerLaCaisseDe', $magasin, [ClotureCaissePersonnelle::class, $vendeur]);
 
-        return $this->fermer($vendeur, ModeFermetureCaisse::Responsable, $responsable, CarbonImmutable::now(), memeAZero: true);
+            return $this->fermer($vendeur, $saPropreCaisse ? ModeFermetureCaisse::Vendeur : ModeFermetureCaisse::Responsable, $compte, CarbonImmutable::now(), memeAZero: true);
+        });
     }
 
     /**

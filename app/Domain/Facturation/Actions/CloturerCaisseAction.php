@@ -2,8 +2,11 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
@@ -14,8 +17,10 @@ use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\JourneesDeCaisse;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -61,6 +66,13 @@ use LogicException;
  * appelants ferment ensuite d'office, hors de sa transaction, les caisses
  * encore ouvertes (voir FermerLesCaissesPersonnellesAction), dont l'échec
  * ne la défait jamais.
+ *
+ * Une clôture est faite par une personne (handle()) : relue sous le verrou
+ * de sa ligne, après celui du registre (voir LecteurDesDroits), elle doit
+ * pouvoir clôturer la journée ; la clôture l'enregistre comme auteur, avec
+ * son nom figé, et le registre signe à son nom. Ou par le système
+ * (parLeSysteme()) : la clôture automatique de minuit et ses journées
+ * rattrapées, sans auteur (voir CloturerLesJourneesAction).
  */
 class CloturerCaisseAction
 {
@@ -70,57 +82,90 @@ class CloturerCaisseAction
         private readonly RegistreFiscal $registre,
         private readonly PanierDeCaisse $panierDeCaisse,
         private readonly JourneesDeCaisse $journeesDeCaisse,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
     ) {}
+
+    /**
+     * La clôture de cette journée par son auteur.
+     *
+     * @throws AuthorizationException
+     * @throws LogicException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function handle(User $auteur, Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
+    {
+        return DB::transaction(function () use ($auteur, $magasin, $date): ClotureCaisse {
+            $instant = $this->registre->verrouiller($magasin);
+            $compte = $this->lecteur->exigerSousVerrou($auteur, 'cloturer', $magasin, ClotureCaisse::class);
+
+            return $this->operateur->pendant($compte, fn (): ClotureCaisse => $this->cloturer($compte, $magasin, Carbon::parse($date)->toDateString(), $instant));
+        });
+    }
+
+    /**
+     * La clôture de cette journée par le système, sans auteur : la
+     * clôture automatique de minuit et ses journées rattrapées.
+     *
+     * @throws LogicException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function parLeSysteme(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
+    {
+        return DB::transaction(function () use ($magasin, $date): ClotureCaisse {
+            $instant = $this->registre->verrouiller($magasin);
+
+            return $this->operateur->pendantLeSysteme(fn (): ClotureCaisse => $this->cloturer(null, $magasin, Carbon::parse($date)->toDateString(), $instant));
+        });
+    }
 
     /**
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
+    private function cloturer(?User $compte, Magasin $magasin, string $journee, InstantFiscal $instant): ClotureCaisse
     {
-        $journee = Carbon::parse($date)->toDateString();
+        $this->verifierQueLaJourneePeutEtreCloturee($magasin, $journee, $instant->enHeureLocale()->toDateString(), $this->registre->derniereJourneeCloturee($magasin));
+        $this->panierDeCaisse->abandonnerLesVentesOuvertesLe($journee);
 
-        return DB::transaction(function () use ($magasin, $journee) {
-            $instant = $this->registre->verrouiller($magasin);
-            $this->verifierQueLaJourneePeutEtreCloturee($magasin, $journee, $instant->enHeureLocale()->toDateString(), $this->registre->derniereJourneeCloturee($magasin));
-            $this->panierDeCaisse->abandonnerLesVentesOuvertesLe($journee);
+        $ventes = Facture::query()->enAttenteDeCloture($journee)->lockForUpdate()->get();
+        $avoirs = Avoir::query()->enAttenteDeCloture($journee)->lockForUpdate()->get();
 
-            $ventes = Facture::query()->enAttenteDeCloture($journee)->lockForUpdate()->get();
-            $avoirs = Avoir::query()->enAttenteDeCloture($journee)->lockForUpdate()->get();
+        $cloture = (new ClotureCaisse(['date_cloture' => $journee]))->forceFill(['cree_par' => $compte?->getKey()]);
+        $cloture->save();
 
-            $cloture = ClotureCaisse::create(['date_cloture' => $journee]);
+        $numero = $this->numerotation->suivant($magasin, TypeDocument::ClotureCaisse, CarbonImmutable::parse($journee)->format('Y'));
 
-            $numero = $this->numerotation->suivant($magasin, TypeDocument::ClotureCaisse, CarbonImmutable::parse($journee)->format('Y'));
+        $cloture->forceFill([
+            'numero' => $numero,
+            'nombre_ventes' => $ventes->count(),
+            'nombre_avoirs' => $avoirs->count(),
+            ...$this->calculateur->deduire($this->calculateur->cumuler($ventes), $this->calculateur->cumuler($avoirs)),
+            'cloturee_a' => now(),
+        ])->save();
 
-            $cloture->forceFill([
-                'numero' => $numero,
-                'nombre_ventes' => $ventes->count(),
-                'nombre_avoirs' => $avoirs->count(),
-                ...$this->calculateur->deduire($this->calculateur->cumuler($ventes), $this->calculateur->cumuler($avoirs)),
-                'cloturee_a' => now(),
-            ])->save();
+        // Seule écriture, avec le statut, encore faite sur des documents
+        // émis : un update() en masse, qui ne passe pas par
+        // ProtegeLesDonneesValidees. L'étape des clôtures, calculées
+        // depuis le registre fiscal, la supprimera.
+        if ($ventes->isNotEmpty()) {
+            Facture::query()
+                ->whereIn('id', $ventes->pluck('id'))
+                ->update(['cloture_caisse_id' => $cloture->id]);
+        }
 
-            // Seule écriture, avec le statut, encore faite sur des documents
-            // émis : un update() en masse, qui ne passe pas par
-            // ProtegeLesDonneesValidees. L'étape des clôtures, calculées
-            // depuis le registre fiscal, la supprimera.
-            if ($ventes->isNotEmpty()) {
-                Facture::query()
-                    ->whereIn('id', $ventes->pluck('id'))
-                    ->update(['cloture_caisse_id' => $cloture->id]);
-            }
+        if ($avoirs->isNotEmpty()) {
+            Avoir::query()
+                ->whereIn('id', $avoirs->pluck('id'))
+                ->update(['cloture_caisse_id' => $cloture->id]);
+        }
 
-            if ($avoirs->isNotEmpty()) {
-                Avoir::query()
-                    ->whereIn('id', $avoirs->pluck('id'))
-                    ->update(['cloture_caisse_id' => $cloture->id]);
-            }
+        $this->registre->noterLaJourneeCloturee($magasin, $journee);
 
-            $this->registre->noterLaJourneeCloturee($magasin, $journee);
-
-            return $cloture;
-        });
+        return $cloture;
     }
 
     /**

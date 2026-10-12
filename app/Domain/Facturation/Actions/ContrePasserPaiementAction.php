@@ -2,6 +2,8 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
@@ -11,8 +13,12 @@ use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -43,20 +49,30 @@ use LogicException;
  * signée dans la chaîne des encaissements (type « contre_passation », voir
  * ContenuFiscal), imputations et crédits inversés compris, dans la même
  * transaction.
+ *
+ * Son auteur est relu sous le verrou de sa ligne, après celui du registre
+ * (voir LecteurDesDroits) : il doit pouvoir contre-passer ce paiement (voir
+ * PaiementPolicy::contrePasser()), et n'encaisse que dans un magasin à la
+ * fois (voir VerificateurCaissesPersonnelles). C'est lui que la
+ * contre-passation enregistre et que le registre signe.
  */
 class ContrePasserPaiementAction
 {
     public function __construct(
         private readonly RegistreFiscal $registre,
         private readonly ContenuFiscal $contenuFiscal,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
+        private readonly VerificateurCaissesPersonnelles $caissesPersonnelles,
     ) {}
 
     /**
+     * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(Paiement $paiementErrone, string $motif): Paiement
+    public function handle(User $auteur, Paiement $paiementErrone, string $motif): Paiement
     {
         $motif = trim($motif);
 
@@ -64,7 +80,7 @@ class ContrePasserPaiementAction
             throw new LogicException('Indiquez le motif de la contre-passation.');
         }
 
-        return DB::transaction(function () use ($paiementErrone, $motif) {
+        return DB::transaction(function () use ($auteur, $paiementErrone, $motif) {
             $magasin = app(TenantContext::class)->magasin();
             $journee = $this->registre->verrouiller($magasin)->enHeureLocale();
             $original = Paiement::query()->whereKey($paiementErrone->getKey())->firstOrFail();
@@ -78,48 +94,61 @@ class ContrePasserPaiementAction
             }
 
             $this->refuserSiLaJourneeEstCloturee($journee, $this->registre->derniereJourneeCloturee($magasin));
+            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, 'contrePasser', $magasin, $original);
+            $this->caissesPersonnelles->refuserSiSaCaisseEstOuverteAilleurs($compte, $magasin);
 
-            $contrePassation = new Paiement([
-                'client_id' => $original->client_id,
-                'mode_paiement' => $original->mode_paiement,
-                'montant' => '-'.$original->montant,
-                'reference' => $original->reference,
-                'notes' => $motif,
-                'recu_le' => $journee->toDateString(),
-            ]);
-            $contrePassation->forceFill(['contre_passe_paiement_id' => $original->getKey()])->save();
-            $factures = [];
-
-            foreach ($original->allocations()->orderBy('id')->get() as $allocation) {
-                $factures[$allocation->facture_id] ??= Facture::query()->whereKey($allocation->facture_id)->lockForUpdate()->firstOrFail();
-
-                PaiementAllocation::create([
-                    'paiement_id' => $contrePassation->id,
-                    'facture_id' => $allocation->facture_id,
-                    'montant_alloue' => '-'.$allocation->montant_alloue,
-                ]);
-            }
-
-            foreach ($original->creditsImputes()->orderBy('id')->get() as $credit) {
-                $factures[$credit->facture_id] ??= Facture::query()->whereKey($credit->facture_id)->lockForUpdate()->firstOrFail();
-
-                AvoirAllocation::create([
-                    'avoir_id' => $credit->avoir_id,
-                    'facture_id' => $credit->facture_id,
-                    'paiement_id' => $contrePassation->id,
-                    'montant_alloue' => '-'.$credit->montant_alloue,
-                ]);
-            }
-
-            foreach ($factures as $facture) {
-                $facture->constaterUnReglement();
-            }
-
-            $contrePassation = $contrePassation->fresh();
-            $this->registre->enregistrer(ChaineFiscale::Encaissement, 'contre_passation', $this->contenuFiscal->encaissement($contrePassation), $contrePassation);
-
-            return $contrePassation;
+            return $this->operateur->pendant($compte, fn (): Paiement => $this->contrePasser($compte, $original, $motif, $journee));
         });
+    }
+
+    /**
+     * @throws LogicException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    private function contrePasser(User $compte, Paiement $original, string $motif, CarbonImmutable $journee): Paiement
+    {
+        $contrePassation = new Paiement([
+            'client_id' => $original->client_id,
+            'mode_paiement' => $original->mode_paiement,
+            'montant' => '-'.$original->montant,
+            'reference' => $original->reference,
+            'notes' => $motif,
+            'recu_le' => $journee->toDateString(),
+        ]);
+        $contrePassation->forceFill(['contre_passe_paiement_id' => $original->getKey(), 'cree_par' => $compte->getKey()])->save();
+        $factures = [];
+
+        foreach ($original->allocations()->orderBy('id')->get() as $allocation) {
+            $factures[$allocation->facture_id] ??= Facture::query()->whereKey($allocation->facture_id)->lockForUpdate()->firstOrFail();
+
+            PaiementAllocation::create([
+                'paiement_id' => $contrePassation->id,
+                'facture_id' => $allocation->facture_id,
+                'montant_alloue' => '-'.$allocation->montant_alloue,
+            ]);
+        }
+
+        foreach ($original->creditsImputes()->orderBy('id')->get() as $credit) {
+            $factures[$credit->facture_id] ??= Facture::query()->whereKey($credit->facture_id)->lockForUpdate()->firstOrFail();
+
+            AvoirAllocation::create([
+                'avoir_id' => $credit->avoir_id,
+                'facture_id' => $credit->facture_id,
+                'paiement_id' => $contrePassation->id,
+                'montant_alloue' => '-'.$credit->montant_alloue,
+            ]);
+        }
+
+        foreach ($factures as $facture) {
+            $facture->constaterUnReglement();
+        }
+
+        $contrePassation = $contrePassation->fresh();
+        $this->registre->enregistrer(ChaineFiscale::Encaissement, 'contre_passation', $this->contenuFiscal->encaissement($contrePassation), $contrePassation);
+
+        return $contrePassation;
     }
 
     /**

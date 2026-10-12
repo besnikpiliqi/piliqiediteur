@@ -27,7 +27,7 @@ class FactureAchatPolicyTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER]);
         $brouillon = $this->brouillon();
-        $validee = app(ValiderFactureAchatAction::class)->handle($this->brouillon());
+        $validee = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->brouillon());
 
         $this->assertTrue($vendeur->can('update', $brouillon));
         $this->assertFalse($vendeur->can('update', $validee));
@@ -37,14 +37,14 @@ class FactureAchatPolicyTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER]);
-        $validee = app(ValiderFactureAchatAction::class)->handle($this->brouillon());
+        $validee = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $this->brouillon());
 
         $this->assertTrue($vendeur->can('update', $validee));
     }
 
     private function brouillon(): FactureAchat
     {
-        return app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+        return app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 2, 'prix_unitaire_ht' => 5],
         ]);
     }

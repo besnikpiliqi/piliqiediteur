@@ -6,7 +6,7 @@ use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
-use App\Models\User;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,7 +24,17 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 class Paiement extends Model
 {
-    use BelongsToMagasin, ProtegeLesDonneesValidees;
+    use BelongsToMagasin, FigeLeNomDeSesAuteurs, ProtegeLesDonneesValidees;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'cree_par' => 'cree_par_nom',
+        ];
+    }
 
     protected $table = 'paiements';
 
@@ -45,13 +55,6 @@ class Paiement extends Model
         'recu_le' => 'date',
     ];
 
-    protected static function booted(): void
-    {
-        static::creating(function (Paiement $paiement) {
-            $paiement->cree_par ??= auth()->id();
-        });
-    }
-
     public function estValidee(): bool
     {
         return $this->exists;
@@ -69,11 +72,6 @@ class Paiement extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class)->withTrashed();
-    }
-
-    public function creePar(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'cree_par');
     }
 
     public function allocations(): HasMany

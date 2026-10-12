@@ -38,11 +38,11 @@ class AvoirActionsTest extends TestCase
 
     private function emettreFacture(Client $client, Produit $produit, int $quantite = 1): Facture
     {
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => $quantite],
         ]);
 
-        return app(EmettreFactureAction::class)->handle($facture);
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
     }
 
     public function test_creer_un_avoir_total_reprend_toutes_les_lignes_et_totaux_de_la_facture(): void
@@ -52,7 +52,7 @@ class AvoirActionsTest extends TestCase
         $facture = $this->emettreFacture($client, $produit, 3);
         $ligneFacture = $facture->lignes->firstOrFail();
 
-        $avoir = app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 3],
         ], 'Produit défectueux');
 
@@ -82,7 +82,7 @@ class AvoirActionsTest extends TestCase
         $factureA = $this->emettreFacture($client, $produitA, 2);
         $factureB = $this->emettreFacture($client, $produitB, 1);
 
-        $avoir = app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $factureA->lignes->firstOrFail()->id, 'quantite' => 2],
             ['ligne_facture_id' => $factureB->lignes->firstOrFail()->id, 'quantite' => 1],
         ], 'Retour de deux achats différents');
@@ -106,7 +106,7 @@ class AvoirActionsTest extends TestCase
         $factureDeB = $this->emettreFacture($clientB, $produit);
 
         $this->expectException(InvalidArgumentException::class);
-        app(CreerAvoirAction::class)->handle($clientA, [
+        app(CreerAvoirAction::class)->handle(self::auteur(), $clientA, [
             ['ligne_facture_id' => $factureDeB->lignes->firstOrFail()->id, 'quantite' => 1],
         ]);
     }
@@ -124,7 +124,7 @@ class AvoirActionsTest extends TestCase
         $facture = $this->emettreFacture($client, $produit, 3);
         $ligneFacture = $facture->lignes->firstOrFail();
 
-        $avoir = app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ], 'Retour partiel');
 
@@ -137,7 +137,7 @@ class AvoirActionsTest extends TestCase
         // et ne réduit pas encore la quantité restante créditable (voir
         // LigneFacture::quantiteDejaCreditee).
         $this->assertSame(3, $ligneFacture->quantiteCreditableRestante());
-        app(EmettreAvoirAction::class)->handle($avoir);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
         $this->assertSame(2, $ligneFacture->fresh()->quantiteCreditableRestante());
     }
 
@@ -148,7 +148,7 @@ class AvoirActionsTest extends TestCase
         $facture = $this->emettreFacture($client, $produit, 3);
         $this->assertSame(7, $produit->fresh()->stock_quantite);
 
-        app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
+        app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
 
         $this->assertSame(7, $produit->fresh()->stock_quantite);
     }
@@ -159,8 +159,8 @@ class AvoirActionsTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 3);
 
-        $avoir = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
-        $avoir = app(EmettreAvoirAction::class)->handle($avoir);
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
+        $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
 
         $this->assertSame(StatutAvoir::Emise, $avoir->statut);
         $this->assertNotNull($avoir->numero);
@@ -179,7 +179,7 @@ class AvoirActionsTest extends TestCase
         $facture = $this->emettreFacture($client, $produit, 3);
         $produit->delete();
 
-        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture)));
+        app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture)));
 
         $this->assertSame(10, $produit->fresh()->stock_quantite);
         $this->assertDatabaseHas('mouvements_stock', ['produit_id' => $produit->id, 'type' => 'retour_client', 'quantite' => 3]);
@@ -196,10 +196,10 @@ class AvoirActionsTest extends TestCase
         $facture = $this->emettreFacture($client, $produit, 3);
         $ligneFacture = $facture->lignes->firstOrFail();
 
-        $avoir = app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
-        app(EmettreAvoirAction::class)->handle($avoir);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
 
         $this->assertSame(8, $produit->fresh()->stock_quantite);
     }
@@ -210,8 +210,8 @@ class AvoirActionsTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit, 3);
 
-        $avoir = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
-        app(EmettreAvoirAction::class)->handle($avoir);
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
 
         $this->assertSame(10, $produit->fresh()->stock_quantite);
     }
@@ -228,7 +228,7 @@ class AvoirActionsTest extends TestCase
         $facture = $this->emettreFacture($client, $produit, 3);
         $produit->update(['suivi_stock' => true]);
 
-        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture)));
+        app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture)));
 
         $this->assertSame(0, $produit->fresh()->stock_quantite);
         $this->assertSame(0, $produit->mouvementsStock()->count());
@@ -246,8 +246,8 @@ class AvoirActionsTest extends TestCase
         $facture = $this->emettreFacture($client, $produit, 3);
         $ligneFacture = $facture->lignes->firstOrFail();
 
-        $premier = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]]));
-        $second = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 2]]));
+        $premier = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]]));
+        $second = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 2]]));
 
         $this->assertSame(0, $produit->fresh()->stock_quantite);
         $this->assertSame(0, $facture->quantiteSortieDuStock($produit));
@@ -261,12 +261,12 @@ class AvoirActionsTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
         $this->expectException(LogicException::class);
-        app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
+        app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
     }
 
     /**
@@ -278,11 +278,11 @@ class AvoirActionsTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit);
-        app(EnregistrerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture), 'Erreur de saisie');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture), 'Erreur de saisie');
 
         $this->expectExceptionObject(new LogicException("La ligne \"{$produit->nom}\" ne peut pas être créditée au-delà de la quantité restante (0)."));
 
-        app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
+        app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
     }
 
     /**
@@ -302,7 +302,7 @@ class AvoirActionsTest extends TestCase
         $this->expectExceptionObject(new InvalidArgumentException('Un avoir ne mélange jamais des tickets de caisse et des factures : faites un avoir pour les tickets, et un autre pour les factures.'));
 
         try {
-            app(CreerAvoirAction::class)->handle($client, [
+            app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
                 ['ligne_facture_id' => $ticket->lignes->firstOrFail()->id, 'quantite' => 1],
                 ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
             ]);
@@ -324,7 +324,7 @@ class AvoirActionsTest extends TestCase
         $ligneFacture = $facture->lignes->firstOrFail();
 
         $this->expectException(LogicException::class);
-        app(CreerAvoirAction::class)->handle($client, [
+        app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 4],
         ]);
     }
@@ -341,16 +341,16 @@ class AvoirActionsTest extends TestCase
         $facture = $this->emettreFacture($client, $produit, 3);
         $ligneFacture = $facture->lignes->firstOrFail();
 
-        $premierAvoir = app(CreerAvoirAction::class)->handle($client, [
+        $premierAvoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
-        app(EmettreAvoirAction::class)->handle($premierAvoir);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $premierAvoir);
 
         $this->assertSame(2, $ligneFacture->fresh()->quantiteCreditableRestante());
 
         // Tenter de créditer plus que le reliquat (2) échoue toujours.
         try {
-            app(CreerAvoirAction::class)->handle($client, [
+            app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
                 ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 3],
             ]);
             $this->fail('Une LogicException était attendue.');
@@ -358,10 +358,10 @@ class AvoirActionsTest extends TestCase
             // Comportement attendu.
         }
 
-        $secondAvoir = app(CreerAvoirAction::class)->handle($client, [
+        $secondAvoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 2],
         ]);
-        app(EmettreAvoirAction::class)->handle($secondAvoir);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $secondAvoir);
 
         $this->assertSame(0, $ligneFacture->fresh()->quantiteCreditableRestante());
     }
@@ -376,9 +376,9 @@ class AvoirActionsTest extends TestCase
         // existence légale : il ne doit pas réduire la quantité restante
         // créditable, seul un avoir EMIS compte (voir
         // LigneFacture::quantiteDejaCreditee).
-        app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
+        app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
 
-        $second = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture->fresh()));
+        $second = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture->fresh()));
         $this->assertNotNull($second);
     }
 
@@ -388,11 +388,11 @@ class AvoirActionsTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit);
 
-        $avoir = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
-        $avoir = app(EmettreAvoirAction::class)->handle($avoir);
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
+        $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
 
         $this->expectException(LogicException::class);
-        app(EmettreAvoirAction::class)->handle($avoir->fresh());
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir->fresh());
     }
 
     /**
@@ -406,7 +406,7 @@ class AvoirActionsTest extends TestCase
         $brouillon->forceFill(['client_id' => Client::factory()->create()->id, 'type_client' => TypeClient::Particulier])->save();
 
         $this->assertThrows(
-            fn () => app(EmettreAvoirAction::class)->handle($brouillon),
+            fn () => app(EmettreAvoirAction::class)->handle(self::auteur(), $brouillon),
             LogicException::class,
             'Impossible d\'émettre un avoir sans lignes : il ne corrige aucun document.',
         );
@@ -426,14 +426,14 @@ class AvoirActionsTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 1);
-        $premier = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
-        $second = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
-        app(EmettreAvoirAction::class)->handle($premier);
+        $premier = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
+        $second = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $premier);
 
         $this->expectExceptionObject(new LogicException("La ligne \"{$produit->nom}\" a été créditée entre-temps par un autre avoir : il ne reste que 0 article(s) à créditer."));
 
         try {
-            app(EmettreAvoirAction::class)->handle($second);
+            app(EmettreAvoirAction::class)->handle(self::auteur(), $second);
         } finally {
             $this->assertSame(StatutAvoir::Brouillon, $second->fresh()->statut);
             $this->assertSame(10, $produit->fresh()->stock_quantite);
@@ -451,19 +451,19 @@ class AvoirActionsTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 2, 'remise_pourcentage' => 10],
         ]));
         $ligneFacture = $facture->lignes->firstOrFail();
-        $premier = app(CreerAvoirAction::class)->handle($client, [
+        $premier = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
-        $dernier = app(CreerAvoirAction::class)->handle($client, [
+        $dernier = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
-        app(EmettreAvoirAction::class)->handle($premier);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $premier);
 
-        app(EmettreAvoirAction::class)->handle($dernier);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $dernier);
 
         $dernier = $dernier->fresh('lignes');
         $ligneAvoir = $dernier->lignes->firstOrFail();
@@ -482,13 +482,13 @@ class AvoirActionsTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 1);
-        $brouillon = app(CreerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture));
-        app(EnregistrerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture), 'Erreur de saisie');
+        $brouillon = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture), 'Erreur de saisie');
 
         $this->expectExceptionObject(new LogicException("La ligne \"{$produit->nom}\" a été créditée entre-temps par un autre avoir : il ne reste que 0 article(s) à créditer."));
 
         try {
-            app(EmettreAvoirAction::class)->handle($brouillon);
+            app(EmettreAvoirAction::class)->handle(self::auteur(), $brouillon);
         } finally {
             $this->assertSame(StatutAvoir::Brouillon, $brouillon->fresh()->statut);
             $this->assertSame(10, $produit->fresh()->stock_quantite);
@@ -501,7 +501,7 @@ class AvoirActionsTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 3);
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture), 'Produit défectueux');
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture), 'Produit défectueux');
 
         $avoir->refresh();
         $this->assertSame(StatutAvoir::Emise, $avoir->statut);
@@ -531,7 +531,7 @@ class AvoirActionsTest extends TestCase
         });
 
         try {
-            app(EnregistrerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture), 'Produit défectueux');
+            app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture), 'Produit défectueux');
             $this->fail("L'émission aurait dû échouer.");
         } catch (LogicException $exception) {
             $this->assertSame('Émission impossible.', $exception->getMessage());
@@ -541,7 +541,7 @@ class AvoirActionsTest extends TestCase
         $this->assertSame(0, LigneAvoir::query()->count());
         $this->assertSame(7, $produit->fresh()->stock_quantite);
         $this->assertSame(0, $produit->mouvementsStock()->where('type', 'retour_client')->count());
-        $this->assertSame('AV-LYON1-2026-000001', app(EnregistrerAvoirAction::class)->handle($client, $this->toutesLesLignes($facture), 'Produit défectueux')->numero);
+        $this->assertSame('AV-LYON1-2026-000001', app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture), 'Produit défectueux')->numero);
     }
 
     /**
@@ -559,10 +559,10 @@ class AvoirActionsTest extends TestCase
 
         $this->assertSame('80.00', $facture->total_ttc);
 
-        $premierRetour = app(CreerAvoirAction::class)->handle($client, [
+        $premierRetour = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
-        $secondRetour = app(CreerAvoirAction::class)->handle($client, [
+        $secondRetour = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
 
@@ -585,10 +585,10 @@ class AvoirActionsTest extends TestCase
         $facture = $this->emettreFacture($client, $produit, 2);
         $ligneFacture = $facture->lignes->firstOrFail();
 
-        $premier = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        $premier = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]));
-        $dernier = app(CreerAvoirAction::class)->handle($client, [
+        $dernier = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
 
@@ -609,17 +609,17 @@ class AvoirActionsTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 2, 'remise_pourcentage' => 10],
         ]));
         $ligneFacture = $facture->lignes->firstOrFail();
 
         $this->assertSame(['59.99', '12.01', '72.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
 
-        $premier = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        $premier = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]));
-        $dernier = app(CreerAvoirAction::class)->handle($client, [
+        $dernier = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
 
@@ -641,8 +641,8 @@ class AvoirActionsTest extends TestCase
         $facture = $this->emettreFacture($client, $produit, 1000);
         $ligneFacture = $facture->lignes->sole();
 
-        $premier = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 500]]);
-        $second = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 500]]);
+        $premier = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 500]]);
+        $second = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 500]]);
 
         $this->assertSame(['833.33', '166.67', '1000.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertSame(['416.67', '83.33', '500.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
@@ -661,8 +661,8 @@ class AvoirActionsTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
         $ligneFacture = $this->emettreFacture($client, $produit, 2)->lignes->sole();
 
-        $premier = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]]);
-        $second = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]]);
+        $premier = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]]);
+        $second = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]]);
 
         $this->assertSame(['66.67', '13.33', '80.00'], [$ligneFacture->montant_ht, $ligneFacture->montant_tva, $ligneFacture->montant_ttc]);
         $this->assertSame(['33.33', '6.67', '40.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
@@ -678,11 +678,11 @@ class AvoirActionsTest extends TestCase
     {
         $client = Client::factory()->professionnel()->create();
         $produits = Produit::factory()->count(3)->create(['prix_vente_ttc' => '0.10', 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, $produits
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, $produits
             ->map(fn (Produit $produit): array => ['produit_id' => $produit->id, 'quantite' => 1])
             ->all()));
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes[1]->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes[1]->id, 'quantite' => 1]]);
 
         $this->assertSame(['0.08', '0.01', '0.09'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
         $this->assertSame(['0.08', '0.01', '0.09'], [$avoir->lignes->sole()->montant_ht, $avoir->lignes->sole()->montant_tva, $avoir->lignes->sole()->montant_ttc]);
@@ -697,7 +697,7 @@ class AvoirActionsTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("La quantité à créditer doit être un nombre entier d'articles, au moins 1.");
 
-        app(CreerAvoirAction::class)->handle($client, [
+        app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1.5],
         ]);
     }
@@ -726,7 +726,7 @@ class AvoirActionsTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("Une même ligne de facture ne peut apparaître qu'une fois dans un avoir.");
 
-        app(CreerAvoirAction::class)->handle($client, [
+        app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 2],
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 2],
         ]);
@@ -742,14 +742,14 @@ class AvoirActionsTest extends TestCase
         $client = Client::factory()->create();
         $ticket = $this->emettreFacture($client, Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]));
         $this->travelTo('2026-10-09 19:00:00');
-        app(CloturerCaisseAction::class)->handle(app(TenantContext::class)->magasin(), now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), now());
         $retour = [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]];
 
-        $this->assertThrows(fn () => app(EnregistrerAvoirAction::class)->handle($client, $retour), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
+        $this->assertThrows(fn () => app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $retour), LogicException::class, 'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.');
         $this->assertSame(0, Avoir::query()->count());
 
         $this->travelTo('2026-10-10 00:01:00');
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, $retour);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $retour);
 
         $this->assertSame(['AV-LYON1-2026-000001', '12.00'], [$avoir->numero, $avoir->total_ttc]);
     }
@@ -760,9 +760,9 @@ class AvoirActionsTest extends TestCase
         $professionnel = Client::factory()->professionnel()->create();
         $facture = $this->emettreFacture($professionnel, Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]));
         $this->travelTo('2026-10-09 19:00:00');
-        app(CloturerCaisseAction::class)->handle(app(TenantContext::class)->magasin(), now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), now());
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
 
         $this->assertSame('AV-LYON1-2026-000001', $avoir->numero);
     }
@@ -780,19 +780,19 @@ class AvoirActionsTest extends TestCase
         $client = Client::factory()->professionnel()->create();
         $facture = $this->emettreFacture($client, Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]));
         $this->travelTo('2026-10-08 19:00:00');
-        app(CloturerCaisseAction::class)->handle($magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
         $this->travelTo('2026-10-09 18:00:00');
         $client->update(['type_client' => TypeClient::Particulier]);
         $this->travelTo('2026-10-09 19:00:00');
-        app(CloturerCaisseAction::class)->handle($magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
         $this->travelTo('2026-10-09 19:30:00');
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
 
         $this->assertSame(['FAC-LYON1-2026-000001', 'AV-LYON1-2026-000001', '120.00'], [$facture->numero, $avoir->numero, $avoir->total_ttc]);
         $this->assertSame(0, Avoir::query()->enAttenteDeCloture('2026-10-09')->count());
         $this->travelTo('2026-10-11 00:00:00');
-        $cloture = app(CloturerCaisseAction::class)->handle($magasin, '2026-10-10');
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-10');
         $this->assertSame([0, '0.00'], [$cloture->nombre_avoirs, $cloture->total_ttc]);
         $this->assertNull($avoir->fresh()->cloture_caisse_id);
     }
@@ -811,12 +811,12 @@ class AvoirActionsTest extends TestCase
         $client->update(['type_client' => TypeClient::Professionnel]);
         $this->travelTo('2026-10-09 19:00:00');
 
-        $cloture = app(CloturerCaisseAction::class)->handle(app(TenantContext::class)->magasin(), now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), app(TenantContext::class)->magasin(), now());
 
         $this->assertSame(['TK-LYON1-2026-000001', 1, '12.00'], [$ticket->numero, $cloture->nombre_ventes, $cloture->total_ttc]);
         $this->travelTo('2026-10-09 19:30:00');
         $this->assertThrows(
-            fn () => app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]),
+            fn () => app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]),
             LogicException::class,
             'La journée du 09/10/2026 est clôturée : les ventes reprennent demain.',
         );
@@ -840,13 +840,13 @@ class AvoirActionsTest extends TestCase
         $this->reglerLaSociete(app(TenantContext::class)->magasin(), ['raison_sociale' => null, 'immatriculation' => null]);
 
         $this->assertThrows(
-            fn () => app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]),
+            fn () => app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]),
             IdentiteDeLaSocieteIncompleteException::class,
             'Pour émettre une facture à un professionnel, complétez d\'abord l\'identité de la société (Administration de la société > Identité) : raison sociale, immatriculation.',
         );
         $this->assertSame(0, Avoir::query()->count());
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($particulier, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $particulier, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
 
         $this->assertSame(['AV-LYON1-2026-000001', '12.00'], [$avoir->numero, $avoir->total_ttc]);
     }

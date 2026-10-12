@@ -26,7 +26,7 @@ class FactureBrouillonSuppressionTest extends TestCase
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create();
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
@@ -47,7 +47,7 @@ class FactureBrouillonSuppressionTest extends TestCase
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create();
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
         $ligne = $facture->lignes->firstOrFail();

@@ -13,6 +13,10 @@ return new class extends Migration
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('fournisseur_id')->constrained('fournisseurs')->restrictOnDelete();
             $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('cree_par_nom')->nullable();
             // Une facture saisie à la main reste modifiable même validée
             // (voir FactureAchat::estModifiable()), une facture récupérée
             // par API ne l'est jamais.

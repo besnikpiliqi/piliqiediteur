@@ -4,7 +4,6 @@ namespace App\Filament\App\Resources\EnregistrementFiscalResource\Pages;
 
 use App\Domain\CaisseSecurisee\Actions\ExporterJournalDesEvenementsAction;
 use App\Domain\CaisseSecurisee\Actions\VerifierIntegriteAction;
-use App\Domain\CaisseSecurisee\Enums\DeclenchementVerification;
 use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
 use App\Domain\CaisseSecurisee\Services\AnomalieFiscale;
 use App\Domain\CaisseSecurisee\Services\RapportIntegrite;
@@ -17,6 +16,7 @@ use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Auth\Access\AuthorizationException;
 use LogicException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -67,11 +67,11 @@ class ListEnregistrementsFiscaux extends ListRecords
                 ->action(function (array $data): void {
                     try {
                         $rapport = app(VerifierIntegriteAction::class)->handle(
+                            auth()->user(),
                             app(TenantContext::class)->magasin(),
                             (bool) ($data['complet'] ?? false),
-                            DeclenchementVerification::Ecran,
                         );
-                    } catch (LogicException|RefusFiscalException $refus) {
+                    } catch (LogicException|AuthorizationException|RefusFiscalException $refus) {
                         static::notifierLeRefus($refus);
 
                         return;
@@ -92,8 +92,8 @@ class ListEnregistrementsFiscaux extends ListRecords
                 ->authorize(static fn (): bool => EnregistrementFiscalResource::canViewAny())
                 ->action(function (array $data): ?StreamedResponse {
                     try {
-                        $ecrire = app(ExporterJournalDesEvenementsAction::class)->handle($data['du'], $data['au']);
-                    } catch (LogicException|RefusFiscalException $refus) {
+                        $ecrire = app(ExporterJournalDesEvenementsAction::class)->handle(auth()->user(), $data['du'], $data['au']);
+                    } catch (LogicException|AuthorizationException|RefusFiscalException $refus) {
                         static::notifierLeRefus($refus);
 
                         return null;

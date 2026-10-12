@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
@@ -28,13 +29,15 @@ use Throwable;
  * l'échec d'une fermeture, signalé au journal de l'application
  * (report()), n'annule ni la clôture de la journée ni la fermeture des
  * autres caisses, et sa caisse se ferme au passage suivant, au plus tard à
- * minuit.
+ * minuit. Ces fermetures sont celles du système, jamais de la personne
+ * connectée (voir OperateurCourant).
  */
 class FermerLesCaissesPersonnellesAction
 {
     public function __construct(
         private readonly VerificateurCaissesPersonnelles $verificateur,
         private readonly FermerSaCaisseAction $fermerSaCaisse,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
@@ -55,7 +58,7 @@ class FermerLesCaissesPersonnellesAction
 
         $borne = CarbonImmutable::instance($jusquAu)->setTimezone(config('app.timezone'));
 
-        return $this->verificateur->vendeursAvecCaisseOuverte($borne)
+        return $this->operateur->pendantLeSysteme(fn (): Collection => $this->verificateur->vendeursAvecCaisseOuverte($borne)
             ->map(function (User $vendeur) use ($borne): ?ClotureCaissePersonnelle {
                 try {
                     return $this->fermerSaCaisse->fermerDOffice($vendeur, $borne);
@@ -66,6 +69,6 @@ class FermerLesCaissesPersonnellesAction
                 }
             })
             ->filter()
-            ->values();
+            ->values());
     }
 }

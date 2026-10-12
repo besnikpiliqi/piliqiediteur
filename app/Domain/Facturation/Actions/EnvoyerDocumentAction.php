@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
@@ -14,6 +15,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
@@ -45,6 +47,15 @@ use LogicException;
  * EnvoiDocument::objetPour()) : un ticket, une facture ou un avoir
  * numéroté sans enregistrement signé n'en a aucun, et ne part pas (voir
  * DocumentSansEnregistrementSigneException).
+ *
+ * Un envoi ou une relance demandé par une personne (handle(), relancer())
+ * relit son auteur sous le verrou de sa ligne, avant celui du document
+ * (voir LecteurDesDroits) : il doit pouvoir envoyer ce document-là dans ce
+ * magasin (un vendeur sans « voir celles de toute l'équipe » n'envoie que
+ * ses factures). L'envoi note son nom figé, et l'e-mail ne part que si,
+ * au moment de partir, il le peut encore (voir EnvoyerDocumentJob). La
+ * relance automatique (relanceAutomatique()) est celle du système, sans
+ * auteur.
  */
 class EnvoyerDocumentAction
 {
@@ -52,7 +63,10 @@ class EnvoyerDocumentAction
 
     public const ENVOIS_PAR_HEURE_ET_PAR_MAGASIN = 200;
 
-    public function __construct(private readonly EmettreDevisAction $emettreDevis) {}
+    public function __construct(
+        private readonly EmettreDevisAction $emettreDevis,
+        private readonly LecteurDesDroits $lecteur,
+    ) {}
 
     /**
      * Un devis brouillon part au statut « Envoyé », avec le numéro qu'il
@@ -62,20 +76,21 @@ class EnvoyerDocumentAction
      *
      * @param  Facture|Devis|Avoir  $document
      *
+     * @throws AuthorizationException
      * @throws LogicException
      * @throws DocumentSansEnregistrementSigneException
      */
-    public function handle(DocumentEnvoyable $document, string $destinataire, ?string $message, ?User $expediteur): EnvoiDocument
+    public function handle(User $auteur, DocumentEnvoyable $document, string $destinataire, ?string $message): EnvoiDocument
     {
         $destinataire = $this->destinataireValide($destinataire);
 
-        return DB::transaction(function () use ($document, $destinataire, $message, $expediteur) {
+        return DB::transaction(function () use ($auteur, $document, $destinataire, $message) {
+            $expediteur = $this->expediteur($auteur, $document);
             $document = $this->verrouiller($document);
-            $document->magasin->verifierQuIlPeutEcrireAuxClients();
             $this->verifierLeDebit($document, $expediteur);
 
             if ($document instanceof Devis && $document->statut === StatutDevis::Brouillon) {
-                $document = $this->emettreDevis->handle($document);
+                $document = $this->emettreDevis->handle($expediteur, $document);
             }
 
             if (! $document->peutEtreEnvoye()) {
@@ -91,7 +106,7 @@ class EnvoyerDocumentAction
                 'objet' => EnvoiDocument::objetPour($document),
                 'message' => filled($message) ? trim($message) : null,
                 'nature' => NatureEnvoi::Envoi,
-                'envoye_par' => $expediteur?->getKey(),
+                'envoye_par' => $expediteur->getKey(),
             ]);
 
             return $this->programmer($envoi, $expediteur);
@@ -108,57 +123,99 @@ class EnvoyerDocumentAction
      * Facture::relancesComptees()) : c'est elle qui repart, à sa place dans
      * l'historique, vers l'adresse donnée cette fois.
      *
+     * Demandée par une personne, à l'adresse qu'elle donne.
+     *
+     * @throws AuthorizationException
      * @throws LogicException
      * @throws DocumentSansEnregistrementSigneException
      */
-    public function relancer(Facture $facture, string $destinataire, ?User $expediteur): EnvoiDocument
+    public function relancer(User $auteur, Facture $facture, string $destinataire): EnvoiDocument
     {
         $destinataire = $this->destinataireValide($destinataire);
 
-        return DB::transaction(function () use ($facture, $destinataire, $expediteur) {
-            $facture = $this->verrouiller($facture);
-            $facture->magasin->verifierQuIlPeutEcrireAuxClients();
-            $this->verifierLeDebit($facture, $expediteur);
+        return DB::transaction(fn (): EnvoiDocument => $this->relance($facture, $destinataire, $this->expediteur($auteur, $facture)));
+    }
 
-            if (! $facture->estEchueEtImpayee()) {
-                throw new LogicException("La facture {$facture->numero} n'est pas une facture échue et impayée : elle ne se relance pas.");
-            }
+    /**
+     * La relance due d'une facture échue et impayée, par le système, à
+     * l'adresse de son client (voir RelancerFacturesImpayees).
+     *
+     * @throws LogicException
+     * @throws DocumentSansEnregistrementSigneException
+     */
+    public function relanceAutomatique(Facture $facture): EnvoiDocument
+    {
+        $destinataire = $this->destinataireValide((string) $facture->client->email);
 
-            if ($facture->joursDepuisLaDerniereRelance() === 0) {
-                throw new LogicException("La facture {$facture->numero} a déjà été relancée aujourd'hui : la relance suivante pourra partir demain.");
-            }
+        return DB::transaction(fn (): EnvoiDocument => $this->relance($facture, $destinataire, null));
+    }
 
-            $niveau = $facture->niveauDeRelanceAtteint() + 1;
-            $attributs = [
-                'destinataire' => $destinataire,
-                'objet' => EnvoiDocument::objetPour($facture, $niveau),
-                'message' => $facture->messageDeRelance(),
-                'envoye_par' => $expediteur?->getKey(),
-            ];
+    /**
+     * @throws LogicException
+     * @throws DocumentSansEnregistrementSigneException
+     */
+    private function relance(Facture $facture, string $destinataire, ?User $expediteur): EnvoiDocument
+    {
+        $facture = $this->verrouiller($facture);
+        $facture->magasin->verifierQuIlPeutEcrireAuxClients();
+        $this->verifierLeDebit($facture, $expediteur);
 
-            $enEchec = $facture->envois()
-                ->where('nature', NatureEnvoi::Relance)
-                ->where('niveau_relance', $niveau)
-                ->where('statut', StatutEnvoi::Echec)
-                ->first();
+        if (! $facture->estEchueEtImpayee()) {
+            throw new LogicException("La facture {$facture->numero} n'est pas une facture échue et impayée : elle ne se relance pas.");
+        }
 
-            if ($enEchec === null) {
-                $envoi = $facture->envois()->create([...$attributs, 'nature' => NatureEnvoi::Relance, 'niveau_relance' => $niveau]);
-            } else {
-                $envoi = $enEchec;
-                $envoi->forceFill([
-                    ...$attributs,
-                    'statut' => StatutEnvoi::EnAttente,
-                    'erreur' => null,
-                    'envoye_le' => null,
-                    // La date de la nouvelle tentative : celle que montre la
-                    // fiche, et qui compte pour « une relance par jour ».
-                    'created_at' => now(),
-                ])->save();
-            }
+        if ($facture->joursDepuisLaDerniereRelance() === 0) {
+            throw new LogicException("La facture {$facture->numero} a déjà été relancée aujourd'hui : la relance suivante pourra partir demain.");
+        }
 
-            return $this->programmer($envoi, $expediteur);
-        });
+        $niveau = $facture->niveauDeRelanceAtteint() + 1;
+        $attributs = [
+            'destinataire' => $destinataire,
+            'objet' => EnvoiDocument::objetPour($facture, $niveau),
+            'message' => $facture->messageDeRelance(),
+            'envoye_par' => $expediteur?->getKey(),
+        ];
+
+        $enEchec = $facture->envois()
+            ->where('nature', NatureEnvoi::Relance)
+            ->where('niveau_relance', $niveau)
+            ->where('statut', StatutEnvoi::Echec)
+            ->first();
+
+        if ($enEchec === null) {
+            $envoi = $facture->envois()->create([...$attributs, 'nature' => NatureEnvoi::Relance, 'niveau_relance' => $niveau]);
+        } else {
+            $envoi = $enEchec;
+            $envoi->forceFill([
+                ...$attributs,
+                'statut' => StatutEnvoi::EnAttente,
+                'erreur' => null,
+                'envoye_le' => null,
+                // La date de la nouvelle tentative : celle que montre la
+                // fiche, et qui compte pour « une relance par jour ».
+                'created_at' => now(),
+            ])->save();
+        }
+
+        return $this->programmer($envoi, $expediteur);
+    }
+
+    /**
+     * La personne qui demande l'envoi ou la relance, relue sous le verrou de
+     * sa ligne, avant celui du document : le document, lu par la requête du
+     * magasin actif (un document d'un autre magasin n'existe pas ici), puis
+     * son magasin, qui doit pouvoir écrire à ses clients, puis son droit
+     * d'envoyer ce document-là.
+     *
+     * @throws AuthorizationException
+     * @throws LogicException
+     */
+    private function expediteur(User $auteur, DocumentEnvoyable $document): User
+    {
+        $document = $document::query()->whereKey($document->getKey())->firstOrFail();
+        $document->magasin->verifierQuIlPeutEcrireAuxClients();
+
+        return $this->lecteur->exigerSousVerrou($auteur, 'envoyer', $document->magasin, $document);
     }
 
     /**

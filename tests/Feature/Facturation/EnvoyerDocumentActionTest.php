@@ -46,10 +46,10 @@ class EnvoyerDocumentActionTest extends TestCase
     {
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->magasin('Ma Boutique');
-        $expediteur = User::factory()->create();
+        $expediteur = $this->responsable($magasin);
         $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
 
-        $envoi = app(EnvoyerDocumentAction::class)->handle($facture, ' compta@client.fr ', 'Merci de votre confiance.', $expediteur);
+        $envoi = app(EnvoyerDocumentAction::class)->handle($expediteur, $facture, ' compta@client.fr ', 'Merci de votre confiance.');
 
         $this->assertSame(StatutFacture::Envoyee, $facture->fresh()->statut);
         $this->assertSame(
@@ -71,7 +71,7 @@ class EnvoyerDocumentActionTest extends TestCase
         $facture = $this->emettreFacture(Client::factory()->create());
 
         $envoi = DB::transaction(function () use ($facture) {
-            $envoi = app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, null);
+            $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'client@exemple.fr', null);
             Mail::assertNothingSent();
 
             return $envoi;
@@ -88,7 +88,7 @@ class EnvoyerDocumentActionTest extends TestCase
         $facture = $this->emettreFacture(Client::factory()->create());
         $this->payer($facture, 50);
 
-        app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, null);
+        app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'client@exemple.fr', null);
 
         $this->assertSame(StatutFacture::PartiellementPayee, $facture->fresh()->statut);
     }
@@ -97,10 +97,10 @@ class EnvoyerDocumentActionTest extends TestCase
     {
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin();
-        $facture = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
         $this->assertThrows(
-            fn () => app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, null),
+            fn () => app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'client@exemple.fr', null),
             LogicException::class,
             'Impossible d\'envoyer ce document au statut « Brouillon ».',
         );
@@ -119,9 +119,9 @@ class EnvoyerDocumentActionTest extends TestCase
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin();
         $facture = $this->emettreFacture(Client::factory()->create());
-        app(EnregistrerAvoirAction::class)->handle($facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]], 'Erreur de client');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]], 'Erreur de client');
 
-        $envoi = app(EnvoyerDocumentAction::class)->handle($facture->fresh(), 'client@exemple.fr', null, null);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture->fresh(), 'client@exemple.fr', null);
 
         $this->assertTrue($envoi->document->is($facture));
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
@@ -134,7 +134,7 @@ class EnvoyerDocumentActionTest extends TestCase
         $this->magasin('Ma Boutique');
         $avoir = $this->emettreAvoir();
 
-        $envoi = app(EnvoyerDocumentAction::class)->handle($avoir, 'client@exemple.fr', null, null);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $avoir, 'client@exemple.fr', null);
 
         $this->assertSame(StatutAvoir::Emise, $avoir->fresh()->statut);
         $this->assertSame("Avoir {$avoir->numero} — Ma Boutique", $envoi->objet);
@@ -145,10 +145,10 @@ class EnvoyerDocumentActionTest extends TestCase
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin();
         $facture = $this->emettreFacture(Client::factory()->create());
-        $avoir = app(CreerAvoirAction::class)->handle($facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]);
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]);
 
         $this->assertThrows(
-            fn () => app(EnvoyerDocumentAction::class)->handle($avoir, 'client@exemple.fr', null, null),
+            fn () => app(EnvoyerDocumentAction::class)->handle(self::auteur(), $avoir, 'client@exemple.fr', null),
             LogicException::class,
             'Impossible d\'envoyer ce document au statut « Brouillon ».',
         );
@@ -167,11 +167,11 @@ class EnvoyerDocumentActionTest extends TestCase
     {
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->magasin();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-ENVOI-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
 
         $this->assertThrows(
-            fn () => app(EnvoyerDocumentAction::class)->handle($brouillon->fresh(), 'client@exemple.fr', null, null),
+            fn () => app(EnvoyerDocumentAction::class)->handle(self::auteur(), $brouillon->fresh(), 'client@exemple.fr', null),
             DocumentSansEnregistrementSigneException::class,
             'Le ticket TK-ENVOI-2026-000009 n\'a aucun enregistrement signé au registre fiscal : son PDF n\'est pas produit.',
         );
@@ -185,9 +185,9 @@ class EnvoyerDocumentActionTest extends TestCase
     {
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin('Ma Boutique');
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
-        $envoi = app(EnvoyerDocumentAction::class)->handle($devis, 'client@exemple.fr', null, null);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null);
 
         $devis->refresh();
         $this->assertSame(StatutDevis::Envoye, $devis->statut);
@@ -200,11 +200,11 @@ class EnvoyerDocumentActionTest extends TestCase
     {
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin();
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
-        app(EnvoyerDocumentAction::class)->handle($devis, 'client@exemple.fr', null, null);
-        app(AccepterDevisAction::class)->handle($devis);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null);
+        app(AccepterDevisAction::class)->handle(self::auteur(), $devis);
 
-        app(EnvoyerDocumentAction::class)->handle($devis, 'client@exemple.fr', 'Le voici à nouveau.', null);
+        app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', 'Le voici à nouveau.');
 
         $this->assertSame(StatutDevis::Accepte, $devis->fresh()->statut);
         $this->assertSame(2, $devis->envois()->count());
@@ -217,7 +217,7 @@ class EnvoyerDocumentActionTest extends TestCase
         $facture = $this->emettreFacture(Client::factory()->create());
 
         $this->assertThrows(
-            fn () => app(EnvoyerDocumentAction::class)->handle($facture, 'pas-une-adresse', null, null),
+            fn () => app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'pas-une-adresse', null),
             InvalidArgumentException::class,
             'L\'adresse e-mail « pas-une-adresse » n\'est pas valide.',
         );
@@ -239,7 +239,7 @@ class EnvoyerDocumentActionTest extends TestCase
 
         foreach (['jean(bureau)@client.fr', 'jean@client', '"jean dupont"@client.fr'] as $adresse) {
             $this->assertThrows(
-                fn () => app(EnvoyerDocumentAction::class)->handle($facture, $adresse, null, null),
+                fn () => app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, $adresse, null),
                 InvalidArgumentException::class,
                 "L'adresse e-mail « {$adresse} » n'est pas valide.",
             );
@@ -256,7 +256,7 @@ class EnvoyerDocumentActionTest extends TestCase
         $this->magasin();
 
         $this->assertThrows(
-            fn () => app(EnvoyerDocumentAction::class)->handle($factureDuMagasinA, 'client@exemple.fr', null, null),
+            fn () => app(EnvoyerDocumentAction::class)->handle(self::auteur(), $factureDuMagasinA, 'client@exemple.fr', null),
             ModelNotFoundException::class,
         );
 
@@ -273,7 +273,7 @@ class EnvoyerDocumentActionTest extends TestCase
         $this->payer($facture, 50);
         $facture->refresh();
 
-        $relance = app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null);
+        $relance = app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
 
         $this->assertSame(
             [NatureEnvoi::Relance, 1, "Relance n°1 : Facture {$facture->numero} — Ma Boutique"],
@@ -295,7 +295,7 @@ class EnvoyerDocumentActionTest extends TestCase
         $this->magasin('Ma Boutique');
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
 
-        $relance = app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null);
+        $relance = app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
 
         $this->assertSame("Relance n°1 : Ticket de caisse {$facture->numero} — Ma Boutique", $relance->objet);
         $this->assertStringContainsString("le ticket de caisse {$facture->numero} d'un montant de 120,00 € TTC, arrivé à échéance le 30/09/2026, n'est pas entièrement réglé : il reste 120,00 € à payer.", $relance->message);
@@ -309,10 +309,10 @@ class EnvoyerDocumentActionTest extends TestCase
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
-        app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null);
+        app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
         $this->travelTo('2026-10-16 10:00:00');
 
-        $relance = app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null);
+        $relance = app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
 
         $this->assertSame(2, $relance->niveau_relance);
         $this->assertSame([1, 2], $facture->envois()->orderBy('niveau_relance')->pluck('niveau_relance')->all());
@@ -328,11 +328,11 @@ class EnvoyerDocumentActionTest extends TestCase
         Queue::fake([EnvoyerDocumentJob::class]);
         $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
-        app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null);
+        app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
         $this->travelTo('2026-10-15 23:59:00');
 
         $this->assertThrows(
-            fn () => app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null),
+            fn () => app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr'),
             LogicException::class,
             "La facture {$facture->numero} a déjà été relancée aujourd'hui : la relance suivante pourra partir demain.",
         );
@@ -349,11 +349,11 @@ class EnvoyerDocumentActionTest extends TestCase
     public function test_une_relance_en_echec_repart_a_son_niveau_vers_l_adresse_corrigee(): void
     {
         $this->travelTo('2026-10-15 10:00:00');
-        $this->magasin();
-        $expediteur = User::factory()->create();
+        $magasin = $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
+        $expediteur = $this->responsable($magasin);
         Mail::shouldReceive('to')->andThrow(new TransportException('550 Mailbox unavailable'));
-        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->relancer($facture, 'erreur@exemple.fr', null), TransportException::class);
+        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'erreur@exemple.fr'), TransportException::class);
         $enEchec = $facture->envois()->sole();
         $this->assertSame(StatutEnvoi::Echec, $enEchec->statut);
         $this->assertSame(0, $facture->fresh()->niveauDeRelanceAtteint());
@@ -364,7 +364,7 @@ class EnvoyerDocumentActionTest extends TestCase
         Mail::fake();
         $this->travelTo('2026-10-15 16:00:00');
 
-        $relance = app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', $expediteur);
+        $relance = app(EnvoyerDocumentAction::class)->relancer($expediteur, $facture, 'client@exemple.fr');
 
         $this->assertTrue($relance->is($enEchec));
         $relance->refresh();
@@ -390,8 +390,8 @@ class EnvoyerDocumentActionTest extends TestCase
         $facture = $this->emettreFactureEchueLe($client, '2026-09-30');
         $client->delete();
 
-        $envoi = app(EnvoyerDocumentAction::class)->handle($facture->fresh(), 'client@exemple.fr', null, null);
-        $relance = app(EnvoyerDocumentAction::class)->relancer($facture->fresh(), 'client@exemple.fr', null);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture->fresh(), 'client@exemple.fr', null);
+        $relance = app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture->fresh(), 'client@exemple.fr');
 
         $this->assertSame("Facture {$facture->numero} — Ma Boutique", $envoi->objet);
         $this->assertSame("Relance n°1 : Facture {$facture->numero} — Ma Boutique", $relance->objet);
@@ -406,24 +406,23 @@ class EnvoyerDocumentActionTest extends TestCase
     {
         $this->travelTo('2026-10-15 10:00:00');
         Queue::fake([EnvoyerDocumentJob::class]);
-        $this->magasin();
-        $vendeur = User::factory()->create();
+        $membre = $this->responsable($this->magasin());
         $facture = $this->emettreFacture(Client::factory()->create());
 
         foreach (range(1, EnvoyerDocumentAction::ENVOIS_PAR_HEURE_ET_PAR_MEMBRE) as $numero) {
-            app(EnvoyerDocumentAction::class)->handle($facture, "client{$numero}@exemple.fr", null, $vendeur);
+            app(EnvoyerDocumentAction::class)->handle($membre, $facture, "client{$numero}@exemple.fr", null);
         }
 
         $this->assertThrows(
-            fn () => app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, $vendeur),
+            fn () => app(EnvoyerDocumentAction::class)->handle($membre, $facture, 'client@exemple.fr', null),
             LogicException::class,
             'Trop d\'e-mails envoyés en une heure : réessayez dans 60 minute(s).',
         );
         $this->assertSame(60, $facture->envois()->count());
 
-        app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, null);
+        app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'client@exemple.fr', null);
         $this->travelTo('2026-10-15 11:00:01');
-        app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, $vendeur);
+        app(EnvoyerDocumentAction::class)->handle($membre, $facture, 'client@exemple.fr', null);
 
         $this->assertSame(62, $facture->envois()->count());
     }
@@ -437,23 +436,23 @@ class EnvoyerDocumentActionTest extends TestCase
     {
         $this->travelTo('2026-10-15 10:00:00');
         Queue::fake([EnvoyerDocumentJob::class]);
-        $this->magasin();
+        $magasin = $this->magasin();
         $facture = $this->emettreFacture(Client::factory()->create());
-        $membres = User::factory()->count(4)->create();
+        $membres = array_map(fn (): User => $this->responsable($magasin), range(1, 5));
 
         foreach (range(1, EnvoyerDocumentAction::ENVOIS_PAR_HEURE_ET_PAR_MAGASIN) as $numero) {
-            app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, $membres[$numero % 4]);
+            app(EnvoyerDocumentAction::class)->handle($membres[$numero % 4], $facture, 'client@exemple.fr', null);
         }
 
         $this->assertThrows(
-            fn () => app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, User::factory()->create()),
+            fn () => app(EnvoyerDocumentAction::class)->handle($membres[4], $facture, 'client@exemple.fr', null),
             LogicException::class,
             'Trop d\'e-mails envoyés en une heure',
         );
 
-        $this->magasin();
+        $autreMagasin = $this->magasin();
         $factureDUnAutreMagasin = $this->emettreFacture(Client::factory()->create());
-        app(EnvoyerDocumentAction::class)->handle($factureDUnAutreMagasin, 'client@exemple.fr', null, User::factory()->create());
+        app(EnvoyerDocumentAction::class)->handle($this->responsable($autreMagasin), $factureDUnAutreMagasin, 'client@exemple.fr', null);
         $this->assertSame(1, $factureDUnAutreMagasin->envois()->count());
     }
 
@@ -465,7 +464,7 @@ class EnvoyerDocumentActionTest extends TestCase
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-10-15');
 
         $this->assertThrows(
-            fn () => app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null),
+            fn () => app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr'),
             LogicException::class,
             "La facture {$facture->numero} n'est pas une facture échue et impayée : elle ne se relance pas.",
         );
@@ -482,7 +481,7 @@ class EnvoyerDocumentActionTest extends TestCase
         $this->payer($facture, 120);
 
         $this->assertThrows(
-            fn () => app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null),
+            fn () => app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr'),
             LogicException::class,
         );
 
@@ -507,9 +506,9 @@ class EnvoyerDocumentActionTest extends TestCase
      */
     private function emettreFacture(Client $client): Facture
     {
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
-        return app(EmettreFactureAction::class)->handle($facture);
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
     }
 
     /**
@@ -531,14 +530,14 @@ class EnvoyerDocumentActionTest extends TestCase
     private function emettreAvoir(): Avoir
     {
         $facture = $this->emettreFacture(Client::factory()->create());
-        $avoir = app(CreerAvoirAction::class)->handle($facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]);
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]);
 
-        return app(EmettreAvoirAction::class)->handle($avoir);
+        return app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
     }
 
     private function payer(Facture $facture, float $montant): void
     {
-        app(EnregistrerPaiementAction::class)->handle($facture->client, [
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes,
             'montant' => $montant,
             'recu_le' => today()->toDateString(),

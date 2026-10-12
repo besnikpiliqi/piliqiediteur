@@ -49,7 +49,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->magasin(['nom' => 'Ma Boutique', 'email' => 'contact@ma-boutique.fr']);
         $facture = $this->emettreFacture(Client::factory()->professionnel()->create());
 
-        $envoi = app(EnvoyerDocumentAction::class)->handle($facture, 'compta@client.fr', "Bonjour Paul,\nVoici la facture de la réparation.", null);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'compta@client.fr', "Bonjour Paul,\nVoici la facture de la réparation.");
 
         Mail::assertSent(DocumentMail::class, function (DocumentMail $mail) use ($facture): bool {
             $pdf = $mail->attachments()[0];
@@ -99,8 +99,8 @@ class EnvoyerDocumentJobTest extends TestCase
     {
         $this->travelTo('2026-10-09 10:00:00');
         $this->magasin();
-        $facture = app(EmettreFactureAction::class)->handle(
-            app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]),
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(),
+            app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]),
             new ReglementComptant(ModePaiement::CarteBancaire),
         );
         $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['message' => 'Merci de votre visite.']);
@@ -157,9 +157,9 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->travelTo('2026-10-09 10:00:00');
         Mail::fake();
         $this->magasin();
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], ['date_validite' => '2026-12-31']);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], ['date_validite' => '2026-12-31']);
 
-        app(EnvoyerDocumentAction::class)->handle($devis, 'client@exemple.fr', null, null);
+        app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null);
 
         $devis->refresh();
         Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->attachments()[0]->as === "devis-{$devis->numero}.pdf");
@@ -174,9 +174,9 @@ class EnvoyerDocumentJobTest extends TestCase
         Mail::fake();
         $this->magasin();
         $facture = $this->emettreFacture(Client::factory()->create());
-        $avoir = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]));
+        $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]));
 
-        app(EnvoyerDocumentAction::class)->handle($avoir, 'client@exemple.fr', null, null);
+        app(EnvoyerDocumentAction::class)->handle(self::auteur(), $avoir, 'client@exemple.fr', null);
 
         Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->attachments()[0]->as === "avoir-{$avoir->numero}.pdf"
             && str_starts_with($this->contenuDe($mail->attachments()[0]), '%PDF'));
@@ -193,7 +193,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
 
-        app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null);
+        app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
 
         Mail::assertSent(DocumentMail::class, function (DocumentMail $mail) use ($facture): bool {
             $html = $mail->render();
@@ -227,7 +227,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
         Queue::fake([EnvoyerDocumentJob::class]);
-        $relance = app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null);
+        $relance = app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
         $this->payer($facture, 120);
 
         (new EnvoyerDocumentJob($magasin->id, $relance->id))->handle();
@@ -249,7 +249,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $facture = $this->emettreFacture(Client::factory()->create());
         Queue::fake([EnvoyerDocumentJob::class]);
-        $envoi = app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, null);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'client@exemple.fr', null);
         $magasin->forceFill(['suspendu_le' => now()])->save();
 
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
@@ -271,7 +271,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $magasin = $this->magasin();
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
         Queue::fake([EnvoyerDocumentJob::class]);
-        $relance = app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', null);
+        $relance = app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
         $this->payer($facture, 50);
 
         (new EnvoyerDocumentJob($magasin->id, $relance->id))->handle();
@@ -292,8 +292,8 @@ class EnvoyerDocumentJobTest extends TestCase
         $magasin = $this->magasin();
         $facture = $this->emettreFacture(Client::factory()->create());
         Queue::fake([EnvoyerDocumentJob::class]);
-        $envoi = app(EnvoyerDocumentAction::class)->handle($facture, 'client@exemple.fr', null, null);
-        app(EnregistrerAvoirAction::class)->handle($facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]], 'Erreur de client');
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'client@exemple.fr', null);
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]], 'Erreur de client');
 
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
 
@@ -334,7 +334,7 @@ class EnvoyerDocumentJobTest extends TestCase
         Mail::fake();
         Exceptions::fake([DocumentSansEnregistrementSigneException::class]);
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
         $envoi = EnvoiDocument::factory()->for($brouillon->fresh(), 'document')->create(['destinataire' => 'client@exemple.fr']);
 
@@ -420,8 +420,8 @@ class EnvoyerDocumentJobTest extends TestCase
     {
         Mail::fake();
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
-        $devis = app(EmettreDevisAction::class)->handle($devis);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $devis = app(EmettreDevisAction::class)->handle(self::auteur(), $devis);
         $envoi = EnvoiDocument::factory()->for($devis, 'document')->create(['destinataire' => 'client@exemple.fr']);
         $this->assertThrows(fn () => $devis->delete(), LogicException::class, 'Ce devis ne peut pas être supprimé : seul un brouillon jamais envoyé se supprime, un devis numéroté reste.');
 
@@ -443,10 +443,10 @@ class EnvoyerDocumentJobTest extends TestCase
         Mail::fake();
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $produit = $this->produit();
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-31']);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-31']);
         Queue::fake([EnvoyerDocumentJob::class]);
-        $envoi = app(EnvoyerDocumentAction::class)->handle($devis, 'client@exemple.fr', null, null);
-        app(ModifierDevisAction::class)->handle($devis, $devis->client, [['produit_id' => $produit->id, 'quantite' => 5]]);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', null);
+        app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $devis->client, [['produit_id' => $produit->id, 'quantite' => 5]]);
 
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
 
@@ -469,12 +469,12 @@ class EnvoyerDocumentJobTest extends TestCase
         Mail::fake();
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $produit = $this->produit();
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-31']);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-31']);
         Queue::fake([EnvoyerDocumentJob::class]);
-        $premier = app(EnvoyerDocumentAction::class)->handle($devis, 'client@exemple.fr', 'Voici le devis pour un article.', null);
+        $premier = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'client@exemple.fr', 'Voici le devis pour un article.');
         $this->travelTo('2026-10-09 10:20:00');
-        $modifie = app(ModifierDevisAction::class)->handle($devis, $devis->client, [['produit_id' => $produit->id, 'quantite' => 5]]);
-        $second = app(EnvoyerDocumentAction::class)->handle($modifie, 'client@exemple.fr', 'Voici le devis pour cinq articles.', null);
+        $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $devis->client, [['produit_id' => $produit->id, 'quantite' => 5]]);
+        $second = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $modifie, 'client@exemple.fr', 'Voici le devis pour cinq articles.');
 
         (new EnvoyerDocumentJob($magasin->id, $premier->id))->handle();
         (new EnvoyerDocumentJob($magasin->id, $second->id))->handle();
@@ -541,9 +541,9 @@ class EnvoyerDocumentJobTest extends TestCase
      */
     private function emettreFacture(Client $client): Facture
     {
-        $facture = app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
-        return app(EmettreFactureAction::class)->handle($facture);
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
     }
 
     /**
@@ -564,7 +564,7 @@ class EnvoyerDocumentJobTest extends TestCase
 
     private function payer(Facture $facture, float $montant): void
     {
-        app(EnregistrerPaiementAction::class)->handle($facture->client, [
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes,
             'montant' => $montant,
             'recu_le' => today()->toDateString(),

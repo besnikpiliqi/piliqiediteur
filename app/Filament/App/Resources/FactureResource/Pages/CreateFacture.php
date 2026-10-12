@@ -20,7 +20,7 @@ class CreateFacture extends CreateRecord
     {
         $client = Client::query()->findOrFail($data['client_id']);
 
-        return static::executerOuInterrompre(fn () => app(CreerFactureAction::class)->handle($client, $data['lignes'], [
+        return static::executerOuInterrompre(fn () => app(CreerFactureAction::class)->handle(auth()->user(), $client, $data['lignes'], [
             'conditions_paiement' => $data['conditions_paiement'] ?? null,
             'notes' => $data['notes'] ?? null,
             ...FactureResource::attributsDeLaNature($data),

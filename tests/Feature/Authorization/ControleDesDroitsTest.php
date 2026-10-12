@@ -164,7 +164,7 @@ class ControleDesDroitsTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $sonAffectation = Affectation::query()->where('magasin_id', $magasin->id)->where('user_id', $vendeur->id)->sole();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['suivi_stock' => false])->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['suivi_stock' => false])->id, 'quantite' => 1]]);
         $this->suspendre($magasin);
 
         $this->assertTrue($proprietaire->can('viewAny', Facture::class));
@@ -182,7 +182,7 @@ class ControleDesDroitsTest extends TestCase
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $produit = Produit::factory()->create(['suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
         $this->fermer($magasin);
 
         $this->assertFalse($proprietaire->can('create', Facture::class));
@@ -221,7 +221,7 @@ class ControleDesDroitsTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['suivi_stock' => false])->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['suivi_stock' => false])->id, 'quantite' => 1]]);
         $autreSociete = $this->ouvrirUneSociete(['nom' => 'Autre Boutique']);
 
         $this->assertSame($autreSociete->id, app(TenantContext::class)->id());
@@ -351,16 +351,16 @@ class ControleDesDroitsTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $this->actingAs($proprietaire);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $emise = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $emise = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
 
         $this->assertSame(0, Affectation::query()->where('user_id', $proprietaire->id)->count());
         $this->assertTrue($proprietaire->can('emettre', $brouillon));
         $this->assertFalse($proprietaire->can('delete', $emise));
         $this->assertFalse($proprietaire->can('update', $emise));
 
-        app(CloturerCaisseAction::class)->handle($magasin, now());
-        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($brouillon), LogicException::class);
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon), LogicException::class);
 
         $this->fermer($magasin);
         $this->assertFalse($proprietaire->can('emettre', $brouillon));

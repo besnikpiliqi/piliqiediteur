@@ -5,8 +5,12 @@ namespace App\Domain\Achats\Actions;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
@@ -24,17 +28,26 @@ use LogicException;
  * quantité retournable de chaque ligne au stock actuellement disponible du
  * produit, et AvoirFournisseur::verifierQueLeStockSuffit(), qui plafonne
  * aussi le total des lignes d'un même produit.
+ *
+ * Son auteur, relu en base (voir LecteurDesDroits), doit pouvoir créer un
+ * avoir fournisseur ; l'avoir l'enregistre comme auteur.
  */
 class CreerAvoirFournisseurAction
 {
-    public function __construct(private readonly CalculateurLigne $calculateurLigne) {}
+    public function __construct(
+        private readonly CalculateurLigne $calculateurLigne,
+        private readonly LecteurDesDroits $lecteur,
+    ) {}
 
     /**
      * @param  list<array{ligne_achat_id: int|string, quantite: int|string}>  $lignesSelectionnees
+     *
+     * @throws AuthorizationException
      */
-    public function handle(FactureAchat $factureAchat, array $lignesSelectionnees, ?string $motif = null): AvoirFournisseur
+    public function handle(User $auteur, FactureAchat $factureAchat, array $lignesSelectionnees, ?string $motif = null): AvoirFournisseur
     {
-        return DB::transaction(function () use ($factureAchat, $lignesSelectionnees, $motif) {
+        return DB::transaction(function () use ($auteur, $factureAchat, $lignesSelectionnees, $motif) {
+            $compte = $this->lecteur->exiger($auteur, 'create', app(TenantContext::class)->magasin(), AvoirFournisseur::class);
             $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->firstOrFail();
             $factureAchat->load('lignes');
 
@@ -53,10 +66,11 @@ class CreerAvoirFournisseurAction
                 throw new InvalidArgumentException('Une même ligne de facture d\'achat ne peut apparaître qu\'une fois dans un avoir fournisseur.');
             }
 
-            $avoir = AvoirFournisseur::create([
+            $avoir = (new AvoirFournisseur([
                 'facture_achat_id' => $factureAchat->id,
                 'motif' => $motif,
-            ]);
+            ]))->forceFill(['cree_par' => $compte->getKey()]);
+            $avoir->save();
 
             $lignesConstruites = [];
 

@@ -2,6 +2,8 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
@@ -14,6 +16,8 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\LignesRetirees;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use LogicException;
 
 /**
@@ -43,6 +47,10 @@ use LogicException;
  * son client a changé de type s'émet dans l'autre série, et celui
  * réenregistré après un changement de régime de la société s'émet de nouveau
  * (voir EmettreFactureAction).
+ *
+ * Son auteur, relu en base après le verrou du brouillon, doit pouvoir le
+ * modifier (voir FacturePolicy::update() et LecteurDesDroits) ; le
+ * journal des événements l'inscrit à son nom.
  */
 class ModifierFactureAction
 {
@@ -51,7 +59,33 @@ class ModifierFactureAction
         private readonly CalculateurLigne $calculateurLigne,
         private readonly RegistreFiscal $registre,
         private readonly LignesRetirees $lignesRetirees,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
     ) {}
+
+    /**
+     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<string, mixed>  $attributs
+     *
+     * @throws AuthorizationException
+     * @throws LogicException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function handle(User $auteur, Facture $facture, Client $client, array $lignes, array $attributs = []): Facture
+    {
+        return $this->registre->sousVerrou($facture->magasin, function () use ($auteur, $facture, $client, $lignes, $attributs): Facture {
+            $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
+
+            if ($facture->statut !== StatutFacture::Brouillon) {
+                throw new LogicException('Seule une facture brouillon peut être modifiée.');
+            }
+
+            $compte = $this->lecteur->exiger($auteur, 'update', $facture->magasin, $facture);
+
+            return $this->operateur->pendant($compte, fn (): Facture => $this->modifier($facture, $client, $lignes, $attributs));
+        });
+    }
 
     /**
      * @param  list<array<string, mixed>>  $lignes
@@ -61,42 +95,34 @@ class ModifierFactureAction
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(Facture $facture, Client $client, array $lignes, array $attributs = []): Facture
+    private function modifier(Facture $facture, Client $client, array $lignes, array $attributs): Facture
     {
-        return $this->registre->sousVerrou($facture->magasin, function () use ($facture, $client, $lignes, $attributs): Facture {
-            $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
+        $avant = $facture->lignes
+            ->map(fn (LigneFacture $ligne): array => $this->lignesRetirees->comparable($ligne->produit_id, $ligne->service_id, $ligne->description, $ligne->quantite, $ligne->prix_unitaire_ttc))
+            ->all();
 
-            if ($facture->statut !== StatutFacture::Brouillon) {
-                throw new LogicException('Seule une facture brouillon peut être modifiée.');
-            }
+        $contexte = ContexteDeVente::pourEnregistrer($client, $facture->magasin, $facture->fill($attributs)->noterSaNatureDOperation($attributs));
+        $facture->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
 
-            $avant = $facture->lignes
-                ->map(fn (LigneFacture $ligne): array => $this->lignesRetirees->comparable($ligne->produit_id, $ligne->service_id, $ligne->description, $ligne->quantite, $ligne->prix_unitaire_ttc))
-                ->all();
+        $facture->lignes()->delete();
 
-            $contexte = ContexteDeVente::pourEnregistrer($client, $facture->magasin, $facture->fill($attributs)->noterSaNatureDOperation($attributs));
-            $facture->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
+        $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
 
-            $facture->lignes()->delete();
+        foreach ($lignesConstruites as $ligne) {
+            $facture->lignes()->create($ligne);
+        }
 
-            $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
+        $apres = array_map(
+            fn (array $ligne): array => $this->lignesRetirees->comparable($ligne['produit_id'], $ligne['service_id'], $ligne['description'], $ligne['quantite'], $ligne['prix_unitaire_ttc']),
+            $lignesConstruites,
+        );
 
-            foreach ($lignesConstruites as $ligne) {
-                $facture->lignes()->create($ligne);
-            }
+        foreach ($this->lignesRetirees->entre($avant, $apres) as $retrait) {
+            $this->registre->journaliser(CodeEvenement::LigneRetiree, ['origine' => 'brouillon', 'facture_id' => $facture->getKey(), ...$retrait]);
+        }
 
-            $apres = array_map(
-                fn (array $ligne): array => $this->lignesRetirees->comparable($ligne['produit_id'], $ligne['service_id'], $ligne['description'], $ligne['quantite'], $ligne['prix_unitaire_ttc']),
-                $lignesConstruites,
-            );
+        $facture->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
 
-            foreach ($this->lignesRetirees->entre($avant, $apres) as $retrait) {
-                $this->registre->journaliser(CodeEvenement::LigneRetiree, ['origine' => 'brouillon', 'facture_id' => $facture->getKey(), ...$retrait]);
-            }
-
-            $facture->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
-
-            return $facture->fresh('lignes');
-        });
+        return $facture->fresh('lignes');
     }
 }

@@ -166,7 +166,7 @@ class AvoirResource extends Resource
                     ->label('Factures créditées')
                     ->state(fn (Avoir $record) => $record->facturesConcernees()->pluck('numero')->implode(', ')),
                 TextEntry::make('date_emission')->label('Émis le')->dateTime('d/m/Y à H:i'),
-                TextEntry::make('creePar.name')->label('Émis par'),
+                TextEntry::make('cree_par_nom')->label('Émis par'),
                 TextEntry::make('motif')->label('Motif')->columnSpanFull(),
             ])->columns(2),
 
@@ -309,7 +309,7 @@ class AvoirResource extends Resource
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('motif')->limit(40)->toggleable(),
                 Tables\Columns\TextColumn::make('date_emission')->label('Émis le')->dateTime('d/m/Y')->sortable(),
-                Tables\Columns\TextColumn::make('creePar.name')->label('Émis par')->toggleable(),
+                Tables\Columns\TextColumn::make('cree_par_nom')->label('Émis par')->toggleable(),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

@@ -2,12 +2,16 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -21,34 +25,54 @@ use Illuminate\Support\Facades\DB;
  * nature que ce client et le régime de la société permettent (voir
  * ContexteDeVente::pourEnregistrer()), dont les autres conditions se
  * contrôlent à l'émission (voir ControleNatureOperation).
+ *
+ * Son auteur, relu en base au moment où elle écrit, doit pouvoir créer une
+ * facture dans le magasin actif (voir LecteurDesDroits) : c'est lui que le
+ * brouillon enregistre comme auteur, avec son nom figé.
  */
 class CreerFactureAction
 {
     public function __construct(
         private readonly ConstructeurLigneDocument $constructeurLigne,
         private readonly CalculateurLigne $calculateurLigne,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
      * @param  list<array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs  conditions_paiement, notes, et la nature et la livraison (voir NoteSaNatureDOperation::noterSaNatureDOperation())
+     *
+     * @throws AuthorizationException
      */
-    public function handle(Client $client, array $lignes, array $attributs = []): Facture
+    public function handle(User $auteur, Client $client, array $lignes, array $attributs = []): Facture
     {
-        return DB::transaction(function () use ($client, $lignes, $attributs) {
-            $facture = new Facture($attributs);
-            $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $facture->noterSaNatureDOperation($attributs));
-            $facture->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
+        return DB::transaction(function () use ($auteur, $client, $lignes, $attributs) {
+            $magasin = app(TenantContext::class)->magasin();
+            $compte = $this->lecteur->exiger($auteur, 'create', $magasin, Facture::class);
 
-            $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
-
-            foreach ($lignesConstruites as $ligne) {
-                $facture->lignes()->create($ligne);
-            }
-
-            $facture->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
-
-            return $facture->fresh('lignes');
+            return $this->operateur->pendant($compte, fn (): Facture => $this->creer($compte, $client, $lignes, $attributs));
         });
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<string, mixed>  $attributs
+     */
+    private function creer(User $compte, Client $client, array $lignes, array $attributs): Facture
+    {
+        $facture = new Facture($attributs);
+        $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $facture->noterSaNatureDOperation($attributs));
+        $facture->forceFill(['client_id' => $client->getKey(), 'cree_par' => $compte->getKey(), ...$contexte->colonnes()])->save();
+
+        $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
+
+        foreach ($lignesConstruites as $ligne) {
+            $facture->lignes()->create($ligne);
+        }
+
+        $facture->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
+
+        return $facture->fresh('lignes');
     }
 }

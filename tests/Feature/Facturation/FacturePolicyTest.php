@@ -10,6 +10,7 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -31,21 +32,21 @@ class FacturePolicyTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $contexte = app(TenantContext::class);
-        $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
-        $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
+        $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 10, 'taux_tva' => 20]);
 
         $this->actingAs($vendeurA);
         $contexte->set($magasin);
-        $factureDeA = app(CreerFactureAction::class)->handle($client, [
+        $factureDeA = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
         $this->actingAs($vendeurB);
         $contexte->set($magasin);
-        $factureDeB = app(CreerFactureAction::class)->handle($client, [
+        $factureDeB = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
@@ -62,7 +63,7 @@ class FacturePolicyTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $contexte = app(TenantContext::class);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
         $comptable = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $expert = $this->expertComptable($magasin);
 
@@ -71,7 +72,7 @@ class FacturePolicyTest extends TestCase
 
         $this->actingAs($vendeur);
         $contexte->set($magasin);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
@@ -187,7 +188,7 @@ class FacturePolicyTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $facture = $this->emettreUneFactureEnTantQue($vendeur, $magasin);
-        app(EnregistrerPaiementAction::class)->handle($facture->client, [
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 12,
             'recu_le' => today()->toDateString(),
@@ -221,6 +222,8 @@ class FacturePolicyTest extends TestCase
      * Les listes de factures (Facture::scopeVisiblesPar()) montrent
      * exactement celles que FacturePolicy::view() laisse voir : une facture
      * proposée dans un formulaire n'est jamais refusée à l'enregistrement.
+     * Le membre a émis la sienne avec les cases de son rôle, puis le
+     * propriétaire lui a coché celles qui sont vérifiées.
      *
      * @param  list<string>  $autorisations
      * @param  list<string>  $attendues
@@ -230,11 +233,13 @@ class FacturePolicyTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $collegue = $this->membre($magasin, RoleMagasin::Vendeur);
-        $membre = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
+        $membre = $this->membre($magasin, RoleMagasin::Vendeur);
         $factures = [
             'la sienne' => $this->emettreUneFactureEnTantQue($membre, $magasin),
             'celle du collègue' => $this->emettreUneFactureEnTantQue($collegue, $magasin),
         ];
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $membre, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => $autorisations]]);
+        $membre->refresh();
 
         $listees = Facture::query()->visiblesPar($membre)->orderBy('id')->pluck('id')->all();
         $autorisees = array_keys(array_filter($factures, fn (Facture $facture): bool => $membre->can('view', $facture)));
@@ -287,7 +292,7 @@ class FacturePolicyTest extends TestCase
         app(TenantContext::class)->set($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
     }

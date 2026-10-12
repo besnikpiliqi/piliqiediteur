@@ -127,10 +127,10 @@ class AvoirFournisseurResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $produit = Produit::factory()->create(['nom' => 'Ecran Iphone 18', 'taux_tva' => 20, 'suivi_stock' => false]);
-        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => '33.65', 'taux_tva' => 20],
         ]));
-        $avoir = app(EmettreAvoirFournisseurAction::class)->handle(app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [
+        $avoir = app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
             ['ligne_achat_id' => $factureAchat->lignes->firstOrFail()->id, 'quantite' => 1],
         ], 'Écran fêlé'));
 

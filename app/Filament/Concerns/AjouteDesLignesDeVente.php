@@ -35,6 +35,7 @@ use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Support\Enums\ActionSize;
 use Filament\Support\Enums\MaxWidth;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use InvalidArgumentException;
 use Livewire\Component as LivewireComponent;
@@ -450,9 +451,11 @@ trait AjouteDesLignesDeVente
      * d'une liste de cases à cocher de Filament, faite dans le navigateur,
      * tiendrait compte des accents.
      *
-     * Ouvert à quiconque peut vendre, création comprise : un service n'est
-     * qu'un nom, sans prix ni stock, et le vendeur doit pouvoir facturer une
-     * réparation qui n'est pas encore dans la liste.
+     * Cocher est ouvert à quiconque peut vendre ; créer un service demande
+     * l'autorisation de créer des produits et des services (voir
+     * TrouverOuCreerServiceAction) : sans elle, le champ du nouveau service
+     * n'apparaît pas, et le bouton non plus tant que le magasin n'a aucun
+     * service.
      */
     private static function actionAjouterUnService(): Action
     {
@@ -464,6 +467,7 @@ trait AjouteDesLignesDeVente
             ->modalDescription('Cochez les services réalisés : chacun devient une ligne dont vous saisissez le prix.')
             ->modalSubmitActionLabel('Ajouter')
             ->modalWidth(MaxWidth::Large)
+            ->visible(fn (): bool => Service::query()->actifs()->exists() || self::peutCreerUnService())
             ->form([
                 TextInput::make('recherche')
                     ->label('Rechercher un service')
@@ -476,9 +480,9 @@ trait AjouteDesLignesDeVente
                     ->options(fn (Get $get): array => self::servicesProposes($get('recherche'), $get('services')))
                     ->visible(fn (): bool => Service::query()->actifs()->exists())
                     ->required(fn (Get $get): bool => blank($get('nouveau_service')))
-                    // Pas d'astérisque : un nouveau service tapé plus bas
-                    // dispense de cocher.
-                    ->markAsRequired(false)
+                    // Pas d'astérisque quand un nouveau service tapé plus
+                    // bas dispense de cocher.
+                    ->markAsRequired(fn (): bool => ! self::peutCreerUnService())
                     ->validationMessages(['required' => 'Cochez au moins un service, ou écrivez le nom d\'un nouveau service.']),
                 Placeholder::make('aucun_service_ne_correspond')
                     ->hiddenLabel()
@@ -490,9 +494,15 @@ trait AjouteDesLignesDeVente
                     ->helperText('Il sera ajouté à la liste : la prochaine fois, il suffira de le cocher.')
                     ->maxLength(Service::LONGUEUR_MAXIMALE_NOM)
                     ->rule(fn (): Closure => ServiceResource::regleNomRempli())
-                    ->required(fn (): bool => ! Service::query()->actifs()->exists()),
+                    ->required(fn (): bool => ! Service::query()->actifs()->exists())
+                    ->visible(fn (): bool => self::peutCreerUnService()),
             ])
             ->action(fn (array $data, HasForms $livewire) => self::ajouterLesServices($livewire, $data));
+    }
+
+    private static function peutCreerUnService(): bool
+    {
+        return auth()->user()?->can('create', Service::class) ?? false;
     }
 
     /**
@@ -530,8 +540,8 @@ trait AjouteDesLignesDeVente
 
         if ($nouveauService !== '') {
             try {
-                $nouveau = app(TrouverOuCreerServiceAction::class)->handle($nouveauService);
-            } catch (InvalidArgumentException $exception) {
+                $nouveau = app(TrouverOuCreerServiceAction::class)->handle(auth()->user(), $nouveauService);
+            } catch (InvalidArgumentException|AuthorizationException $exception) {
                 Notification::make()->title($exception->getMessage())->danger()->send();
 
                 return;

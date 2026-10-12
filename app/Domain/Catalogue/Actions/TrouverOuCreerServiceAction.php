@@ -2,7 +2,11 @@
 
 namespace App\Domain\Catalogue\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use InvalidArgumentException;
 
 /**
@@ -11,14 +15,18 @@ use InvalidArgumentException;
  * fois. S'il existe déjà sous une autre écriture ("main d’œuvre" pour
  * "Main d'œuvre", voir Service::normaliserNom()), c'est lui qui est repris
  * -- jamais un doublon. Un service archivé que l'on tape de nouveau
- * redevient actif : le magasin le réalise à nouveau.
+ * redevient actif : le magasin le réalise à nouveau. Son auteur, relu en
+ * base (voir LecteurDesDroits), doit pouvoir créer un service.
  */
 class TrouverOuCreerServiceAction
 {
+    public function __construct(private readonly LecteurDesDroits $lecteur) {}
+
     /**
+     * @throws AuthorizationException
      * @throws InvalidArgumentException
      */
-    public function handle(string $nom): Service
+    public function handle(User $auteur, string $nom): Service
     {
         $nom = Service::nettoyerNom($nom);
 
@@ -29,6 +37,8 @@ class TrouverOuCreerServiceAction
         if (mb_strlen($nom) > Service::LONGUEUR_MAXIMALE_NOM) {
             throw new InvalidArgumentException('Le nom du service ne doit pas dépasser '.Service::LONGUEUR_MAXIMALE_NOM.' caractères.');
         }
+
+        $this->lecteur->exiger($auteur, 'create', app(TenantContext::class)->magasin(), Service::class);
 
         // Deux caisses DU MÊME MAGASIN qui créent le même service au même
         // instant : l'unicité (magasin_id, nom_normalise) tranche, et

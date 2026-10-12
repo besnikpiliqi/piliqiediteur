@@ -3,7 +3,13 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ChoisirSonMotDePasseParLeLienAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
@@ -336,5 +342,32 @@ class RefusDUnCompteTest extends TestCase
             ->assertActionVisible('refuserCeCompte')
             ->callAction('refuserCeCompte')
             ->assertRedirect(Filament::getLoginUrl());
+    }
+
+    /**
+     * Version déterministe, sous les deux moteurs, de
+     * RefusDUnCompteConcurrenceTest : les effets du refus (compte retiré,
+     * sans magasin), validés par une autre transaction, arrivent dès que
+     * la vente a verrouillé le registre ; sous le verrou de sa ligne, la
+     * vente relit le compte retiré et est refusée.
+     */
+    public function test_un_refus_et_une_vente_simultanes_du_meme_compte_ne_laissent_jamais_passer_une_vente_apres_le_refus(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $lignes = [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]];
+        $refuse = false;
+        DB::listen(function () use (&$refuse, $vendeur): void {
+            if (! $refuse) {
+                $refuse = true;
+                DB::table('affectations')->where('user_id', $vendeur->id)->delete();
+                DB::table('users')->where('id', $vendeur->id)->update(['statut' => StatutCompte::Retire->value, 'statut_change_par' => $vendeur->id]);
+            }
+        });
+
+        $this->assertThrows(fn () => app(EnregistrerVenteCaisseAction::class)->handle($vendeur, $comptoir, $lignes, ModePaiement::Especes), AuthorizationException::class, LecteurDesDroits::REFUS);
+
+        $this->assertSame(0, Facture::query()->count());
     }
 }

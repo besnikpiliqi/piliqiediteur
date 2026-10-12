@@ -2,6 +2,7 @@
 
 namespace App\Domain\Stock\Services;
 
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Stock\Enums\TypeMouvementStock;
@@ -158,7 +159,7 @@ class StockLedgerService
                 $this->changerLeCmup($produit, $produitVerrouille, $cmup);
             }
 
-            return $this->appliquer($produit, TypeMouvementStock::RetourFournisseur, $quantite, $source, $note, null, $coutUnitaireHt);
+            return $this->appliquer($produit, TypeMouvementStock::RetourFournisseur, $quantite, $source, $note, $coutUnitaireHt);
         });
     }
 
@@ -196,7 +197,6 @@ class StockLedgerService
         int $quantite,
         ?Model $source = null,
         ?string $note = null,
-        ?int $creeParUserId = null,
     ): MouvementStock {
         if ($type === TypeMouvementStock::RetourFournisseur) {
             throw new InvalidArgumentException('Un retour fournisseur passe par retournerAuFournisseur(), avec le coût de sa ligne d\'achat.');
@@ -204,7 +204,7 @@ class StockLedgerService
 
         $this->verifierLeMouvement($produit, $quantite);
 
-        return $this->appliquer($produit, $type, $quantite, $source, $note, $creeParUserId);
+        return $this->appliquer($produit, $type, $quantite, $source, $note);
     }
 
     /**
@@ -229,7 +229,7 @@ class StockLedgerService
      * compté 42 articles") plutôt qu'à une mécanique interne. Le sens de
      * l'écart donne le type du mouvement (entrée ou sortie).
      */
-    public function ajuster(Produit $produit, int $quantiteCible, string $note, ?Model $source = null, ?int $creeParUserId = null): MouvementStock
+    public function ajuster(Produit $produit, int $quantiteCible, string $note, ?Model $source = null): MouvementStock
     {
         $delta = $quantiteCible - $produit->stock_quantite;
 
@@ -239,7 +239,7 @@ class StockLedgerService
 
         $type = $delta > 0 ? TypeMouvementStock::AjustementEntree : TypeMouvementStock::AjustementSortie;
 
-        return $this->appliquer($produit, $type, abs($delta), $source, $note, $creeParUserId);
+        return $this->appliquer($produit, $type, abs($delta), $source, $note);
     }
 
     /**
@@ -251,10 +251,9 @@ class StockLedgerService
         int $quantite,
         ?Model $source,
         ?string $note,
-        ?int $creeParUserId,
         ?float $coutUnitaireHt = null,
     ): MouvementStock {
-        return DB::transaction(function () use ($produit, $type, $quantite, $source, $note, $creeParUserId, $coutUnitaireHt) {
+        return DB::transaction(function () use ($produit, $type, $quantite, $source, $note, $coutUnitaireHt) {
             $produitVerrouille = $this->verrouiller($produit);
 
             $nouvelleQuantite = $produitVerrouille->stock_quantite + $type->variation($quantite);
@@ -267,7 +266,7 @@ class StockLedgerService
                 'source_type' => $source?->getMorphClass(),
                 'source_id' => $source?->getKey(),
                 'survenu_le' => now(),
-                'cree_par' => $creeParUserId,
+                'cree_par' => app(OperateurCourant::class)->personnePosee()?->getKey(),
                 'note' => $note,
             ]);
 

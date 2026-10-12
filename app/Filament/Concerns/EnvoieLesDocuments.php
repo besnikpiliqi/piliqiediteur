@@ -110,7 +110,7 @@ trait EnvoieLesDocuments
                     ->validationMessages(['max' => 'Un message de 2 000 caractères au plus.']),
             ])
             ->action(fn (Model&DocumentEnvoyable $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
-                $envoi = app(EnvoyerDocumentAction::class)->handle($record, $data['destinataire'], $data['message'] ?? null, auth()->user());
+                $envoi = app(EnvoyerDocumentAction::class)->handle(auth()->user(), $record, $data['destinataire'], $data['message'] ?? null);
 
                 static::confirmerLEnvoi($envoi, $record);
             }));
@@ -138,7 +138,7 @@ trait EnvoieLesDocuments
             ->fillForm(fn (Facture $record): array => ['destinataire' => $record->client->email])
             ->form([static::champDestinataire()])
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
-                $envoi = app(EnvoyerDocumentAction::class)->relancer($record, $data['destinataire'], auth()->user());
+                $envoi = app(EnvoyerDocumentAction::class)->relancer(auth()->user(), $record, $data['destinataire']);
 
                 static::confirmerLEnvoi($envoi, $record);
             }));
@@ -146,7 +146,8 @@ trait EnvoieLesDocuments
 
     /**
      * Chaque envoi et chaque relance du document, du plus récent au plus
-     * ancien, aboutis ou non.
+     * ancien, aboutis ou non, avec le nom de la personne qui l'a demandé
+     * tel qu'il était ce jour-là.
      */
     public static function envoisSection(): Section
     {
@@ -163,8 +164,9 @@ trait EnvoieLesDocuments
                         TextEntry::make('niveau_relance')->label('Niveau')->state(fn (EnvoiDocument $record) => $record->niveau_relance)->prefix('n°')->placeholder('—'),
                         TextEntry::make('statut')->label('Statut')->state(fn (EnvoiDocument $record) => $record->statut)->badge(),
                         TextEntry::make('erreur')->label('Erreur')->state(fn (EnvoiDocument $record) => $record->erreur)->placeholder('—'),
+                        TextEntry::make('envoye_par_nom')->label('Demandé par')->state(fn (EnvoiDocument $record) => $record->envoye_par_nom)->placeholder('Relance automatique'),
                     ])
-                    ->columns(6),
+                    ->columns(7),
             ]);
     }
 

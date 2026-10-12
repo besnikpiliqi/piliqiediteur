@@ -35,11 +35,11 @@ class MarquerFacturesEnRetardTest extends TestCase
 
         $client = Client::factory()->create(['delai_paiement_jours' => $delaiDuClient]);
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        return app(EmettreFactureAction::class)->handle($facture);
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
     }
 
     public function test_une_facture_emise_dont_lecheance_est_depassee_passe_en_retard(): void
@@ -59,7 +59,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         $this->travelTo('2026-10-01 10:00:00');
         $magasin = Magasin::factory()->create();
         $facture = $this->emettreFacture($magasin, 0);
-        app(EnregistrerPaiementAction::class)->handle($facture->client, [
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 50,
             'recu_le' => now()->toDateString(),
@@ -133,7 +133,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 100],
         ]));
         app(TenantContext::class)->clear();
@@ -227,7 +227,7 @@ class MarquerFacturesEnRetardTest extends TestCase
 
         $this->travelTo('2026-10-02 15:00:00');
         app(TenantContext::class)->set($magasin);
-        app(EnregistrerPaiementAction::class)->handle($facture->client, [
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes,
             'montant' => 20,
             'recu_le' => today()->toDateString(),

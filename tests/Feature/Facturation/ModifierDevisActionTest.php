@@ -35,11 +35,11 @@ class ModifierDevisActionTest extends TestCase
         $client = Client::factory()->create();
         $autreClient = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $devis = app(CreerDevisAction::class)->handle($client, [
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        $devis = app(ModifierDevisAction::class)->handle($devis, $autreClient, [
+        $devis = app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $autreClient, [
             ['produit_id' => $produit->id, 'quantite' => 3],
         ]);
 
@@ -66,12 +66,12 @@ class ModifierDevisActionTest extends TestCase
         $devis = $this->envoyerUnDevis($client, $produit);
         $this->travelTo('2026-10-07 15:00:00');
 
-        $modifie = app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
+        $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
 
         $this->assertSame(['DEV-MABOUT-2026-000003', StatutDevis::Brouillon, '2026-10-05 10:00'], [$modifie->numero, $modifie->statut, $modifie->date_emission->format('Y-m-d H:i')]);
         $this->assertSame(['100.00', '20.00', '120.00'], [$modifie->total_ht, $modifie->total_tva, $modifie->total_ttc]);
 
-        $renvoye = app(EmettreDevisAction::class)->handle($modifie);
+        $renvoye = app(EmettreDevisAction::class)->handle(self::auteur(), $modifie);
         $suivant = $this->envoyerUnDevis($client, $produit);
 
         $this->assertSame(['DEV-MABOUT-2026-000003', StatutDevis::Envoye, '2026-10-07 15:00'], [$renvoye->numero, $renvoye->statut, $renvoye->date_emission->format('Y-m-d H:i')]);
@@ -87,13 +87,13 @@ class ModifierDevisActionTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
-        $devis = app(AccepterDevisAction::class)->handle($this->envoyerUnDevis($client, $produit));
+        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $this->envoyerUnDevis($client, $produit));
 
-        $modifie = app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
+        $modifie = app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
 
         $this->assertSame([StatutDevis::Brouillon, $devis->numero, '120.00'], [$modifie->statut, $modifie->numero, $modifie->total_ttc]);
         $this->assertThrows(
-            fn () => app(CreerFactureDepuisDevisAction::class)->handle($modifie),
+            fn () => app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $modifie),
             LogicException::class,
             'Seul un devis accepté peut être converti en facture (statut actuel : [brouillon]).',
         );
@@ -107,10 +107,10 @@ class ModifierDevisActionTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
-        $devis = app(RefuserDevisAction::class)->handle($this->envoyerUnDevis($client, $produit));
+        $devis = app(RefuserDevisAction::class)->handle(self::auteur(), $this->envoyerUnDevis($client, $produit));
 
         $this->assertThrows(
-            fn () => app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 4]]),
+            fn () => app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client, [['produit_id' => $produit->id, 'quantite' => 4]]),
             LogicException::class,
             'Ce devis ne peut plus être modifié : un devis refusé reste tel quel, établissez-en un nouveau.',
         );
@@ -130,7 +130,7 @@ class ModifierDevisActionTest extends TestCase
         app(TenantContext::class)->set($devis->magasin);
 
         $this->assertThrows(
-            fn () => app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 4]], ['date_validite' => '2026-11-30']),
+            fn () => app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client, [['produit_id' => $produit->id, 'quantite' => 4]], ['date_validite' => '2026-11-30']),
             LogicException::class,
             'Ce devis ne peut plus être modifié : un devis expiré reste tel quel, établissez-en un nouveau.',
         );
@@ -152,7 +152,7 @@ class ModifierDevisActionTest extends TestCase
         $this->travelTo('2026-10-09 00:10:00');
 
         $this->assertThrows(
-            fn () => app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 4]], ['date_validite' => '2026-11-30']),
+            fn () => app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client, [['produit_id' => $produit->id, 'quantite' => 4]], ['date_validite' => '2026-11-30']),
             LogicException::class,
             'Ce devis ne peut plus être modifié : un devis expiré reste tel quel, établissez-en un nouveau.',
         );
@@ -165,11 +165,11 @@ class ModifierDevisActionTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
-        $devis = app(AccepterDevisAction::class)->handle($this->envoyerUnDevis($client, $produit));
-        app(CreerFactureDepuisDevisAction::class)->handle($devis);
+        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $this->envoyerUnDevis($client, $produit));
+        app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis);
 
         $this->assertThrows(
-            fn () => app(ModifierDevisAction::class)->handle($devis, $client, [['produit_id' => $produit->id, 'quantite' => 9]]),
+            fn () => app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client, [['produit_id' => $produit->id, 'quantite' => 9]]),
             LogicException::class,
             'Ce devis ne peut plus être modifié : il a déjà été transformé en facture.',
         );
@@ -180,8 +180,8 @@ class ModifierDevisActionTest extends TestCase
 
     private function envoyerUnDevis(Client $client, Produit $produit, ?string $dateValidite = null): Devis
     {
-        $devis = app(CreerDevisAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => $dateValidite]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => $dateValidite]);
 
-        return app(EmettreDevisAction::class)->handle($devis);
+        return app(EmettreDevisAction::class)->handle(self::auteur(), $devis);
     }
 }

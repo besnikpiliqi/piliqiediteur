@@ -96,22 +96,22 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
      * 30,00 € de crédit (un ticket de 30,00 € payé puis repris par un
      * avoir, avant une première fermeture) ; le vendeur lui vend 60,00 €,
      * réglés par ce crédit et 30,00 € en espèces, et vend 45,00 € à Durand,
-     * qui ne paie pas encore.
+     * qui ne paie pas encore. Le vendeur est autorisé à faire des avoirs.
      */
     public function test_le_releve_montre_le_vendu_l_encaisse_par_mode_le_credit_d_avoir_et_le_reste_du(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_CREER]);
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         $martin = Client::factory()->create(['nom' => 'Martin']);
         $ticketRepris = $this->vendreAuComptoir($martin, 30);
-        app(EnregistrerAvoirAction::class)->handle($martin, [['ligne_facture_id' => $ticketRepris->lignes->sole()->id, 'quantite' => 1]], 'Retour');
-        app(FermerSaCaisseAction::class)->handle($vendeur);
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $martin, [['ligne_facture_id' => $ticketRepris->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         $this->vendreAuComptoir($martin, 60);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 45, 'taux_tva' => 20, 'suivi_stock' => false]);
-        app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(['nom' => 'Durand']), [['produit_id' => $produit->id, 'quantite' => 1]]));
+        app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(['nom' => 'Durand']), [['produit_id' => $produit->id, 'quantite' => 1]]));
 
         $page = Livewire::test(ListClotureCaissePersonnelles::class)->mountAction('fermer_ma_caisse');
 
@@ -133,6 +133,6 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
     {
         $produit = Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
     }
 }

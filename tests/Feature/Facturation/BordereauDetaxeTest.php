@@ -79,7 +79,7 @@ class BordereauDetaxeTest extends TestCase
      */
     private function emettre(array $lignes, ?Client $client = null, array $nature = []): Facture
     {
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client ?? Client::factory()->create(), $lignes, $nature));
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client ?? Client::factory()->create(), $lignes, $nature));
     }
 
     /**
@@ -107,12 +107,12 @@ class BordereauDetaxeTest extends TestCase
      */
     private function rendre(Facture $vente, string $article): void
     {
-        app(EnregistrerAvoirAction::class)->handle($vente->client, [['ligne_facture_id' => $vente->lignes->firstWhere('description', $article)->id, 'quantite' => 1]], 'Article rendu');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $vente->client, [['ligne_facture_id' => $vente->lignes->firstWhere('description', $article)->id, 'quantite' => 1]], 'Article rendu');
     }
 
     private function noter(Facture $ticket, string $numero): BordereauDetaxe
     {
-        return app(NoterBordereauDetaxeAction::class)->handle($ticket, $numero);
+        return app(NoterBordereauDetaxeAction::class)->handle(self::auteur(), $ticket, $numero);
     }
 
     public function test_un_ticket_de_100_euros_est_detaxe_avec_un_avertissement(): void
@@ -301,7 +301,7 @@ class BordereauDetaxeTest extends TestCase
     public function test_un_brouillon_ne_se_detaxe_pas(): void
     {
         $this->magasin();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '250.00', 'taux_tva' => 20])->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '250.00', 'taux_tva' => 20])->id, 'quantite' => 1]]);
 
         $this->assertThrows(
             fn () => $this->noter($brouillon, '2026FR000123456'),

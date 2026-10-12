@@ -29,7 +29,6 @@ use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\Eloquent\Model;
@@ -84,7 +83,7 @@ class EmissionSigneeTest extends TestCase
      */
     private function encaisser(Client $client, array $articles, ModePaiement $mode = ModePaiement::CarteBancaire, ?string $reference = null): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle(
+        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
             $client,
             array_map(static fn (array $article): array => ['produit_id' => $article[0]->id, 'quantite' => $article[1]], $articles),
             $mode,
@@ -98,7 +97,7 @@ class EmissionSigneeTest extends TestCase
      */
     private function emettre(Client $client, array $articles, array $attributs = []): Facture
     {
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(),
             $client,
             array_map(static fn (array $article): array => ['produit_id' => $article[0]->id, 'quantite' => $article[1]], $articles),
             $attributs,
@@ -209,8 +208,8 @@ class EmissionSigneeTest extends TestCase
             'telephone' => '01 23 45 67 89',
             'regime_tva' => RegimeTva::ReelNormalMensuel,
         ]);
-        $vendeuse = User::factory()->create(['name' => 'Zoé Lefèvre']);
-        $this->actingAs($vendeuse);
+        $proprietaire = $this->proprietaireDe(app(TenantContext::class)->magasin());
+        $this->actingAs($proprietaire);
         $client = Client::factory()->create(['nom' => 'Alice Martin', 'adresse' => '3 place du Marché', 'code_postal' => '75011', 'ville' => 'Paris', 'email' => 'alice@example.test', 'telephone' => '06 00 00 00 01']);
         $cafe = $this->produit('CAF-250', 'Café moulu 250 g', 12);
         $livre = $this->produit('LIV-001', 'Livre de recettes', 5.50, 5.5);
@@ -260,7 +259,7 @@ class EmissionSigneeTest extends TestCase
                 'nature_operation' => 'vente_france',
                 'livraison' => ['adresse' => null, 'complement' => null, 'code_postal' => null, 'ville' => null, 'pays' => null, 'date' => null, 'transport_par' => null],
                 'consultation_vies_id' => null,
-                'cree_par' => $vendeuse->id,
+                'cree_par' => $proprietaire->id,
                 'devis_id' => null,
                 'devise' => 'EUR',
                 'date_echeance' => '2026-11-08',
@@ -318,7 +317,7 @@ class EmissionSigneeTest extends TestCase
         ], $this->contenu($vente)['donnees']);
         $this->assertSame(['montant' => 2950, 'perpetuel_reel' => 2950, 'perpetuel_absolu' => 2950], $this->contenu($vente)['gt']);
         $this->assertSame([
-            'paiement' => ['client_id' => $client->id, 'mode' => 'carte_bancaire', 'montant' => 2950, 'reference' => 'TRX-42', 'notes' => null, 'recu_le' => '2026-10-09', 'cree_par' => $vendeuse->id],
+            'paiement' => ['client_id' => $client->id, 'mode' => 'carte_bancaire', 'montant' => 2950, 'reference' => 'TRX-42', 'notes' => null, 'recu_le' => '2026-10-09', 'cree_par' => $proprietaire->id],
             'contre_passe' => null,
             'client' => $ficheDuClient,
             'allocations' => [['facture_id' => $ticket->id, 'numero' => 'TK-LYON1-2026-000001', 'montant' => 2950]],
@@ -448,7 +447,7 @@ class EmissionSigneeTest extends TestCase
         $ticket = $this->encaisser($client, [[$produit, 1]]);
         $this->travelTo(CarbonImmutable::parse('2026-10-25 01:10:00', 'UTC'));
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
 
         $venteDuTicket = $this->enregistrementDe($ticket, ChaineFiscale::Vente);
         $venteDeLAvoir = $this->enregistrementDe($avoir, ChaineFiscale::Vente);
@@ -550,7 +549,7 @@ class EmissionSigneeTest extends TestCase
         $premier = $this->encaisser($client, [[$centEuros, 1], [$vingtEuros, 1]]);
         $deuxieme = $this->encaisser($client, [[$cinquanteEuros, 1]]);
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $premier->lignes->firstWhere('produit_id', $vingtEuros->id)->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $premier->lignes->firstWhere('produit_id', $vingtEuros->id)->id, 'quantite' => 1]]);
 
         $this->assertSame(['montant' => 12000, 'perpetuel_reel' => 12000, 'perpetuel_absolu' => 12000], $this->contenu($this->enregistrementDe($premier, ChaineFiscale::Vente))['gt']);
         $this->assertSame(['montant' => 5000, 'perpetuel_reel' => 17000, 'perpetuel_absolu' => 17000], $this->contenu($this->enregistrementDe($deuxieme, ChaineFiscale::Vente))['gt']);
@@ -566,14 +565,14 @@ class EmissionSigneeTest extends TestCase
     {
         $this->travelTo('2026-10-09 10:15:30');
         $this->magasinActif();
-        $vendeuse = User::factory()->create(['name' => 'Zoé Lefèvre']);
-        $this->actingAs($vendeuse);
+        $proprietaire = $this->proprietaireDe(app(TenantContext::class)->magasin());
+        $this->actingAs($proprietaire);
         $client = Client::factory()->create(['nom' => 'Claire Petit']);
         $produit = $this->produit('A-020', 'Article à 20 €', 20);
         $ticket = $this->encaisser($client, [[$produit, 2]]);
         $ligne = $ticket->lignes->sole();
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligne->id, 'quantite' => 1]], 'Article abîmé');
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligne->id, 'quantite' => 1]], 'Article abîmé');
 
         $vente = $this->enregistrementDe($avoir, ChaineFiscale::Vente);
         $annulation = $this->enregistrementDe($avoir, ChaineFiscale::Evenement);
@@ -600,7 +599,7 @@ class EmissionSigneeTest extends TestCase
             ],
             'franchise_en_base' => false,
             'nature_operation' => 'vente_france',
-            'cree_par' => $vendeuse->id,
+            'cree_par' => $proprietaire->id,
             'devise' => 'EUR',
             'motif' => 'Article abîmé',
             'corrige' => 'ticket',
@@ -636,7 +635,7 @@ class EmissionSigneeTest extends TestCase
         $produit = $this->produit('A-020', 'Article à 20 €', 20);
         $facture = $this->emettre($client, [[$produit, 3]]);
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
 
         $donnees = $this->contenu($this->enregistrementDe($avoir, ChaineFiscale::Vente))['donnees'];
         $this->assertSame(['facture', [['numero' => 'FAC-LYON1-2026-000001', 'date_emission' => '2026-10-09']]], [$donnees['document']['corrige'], $donnees['document']['documents_corriges']]);
@@ -655,7 +654,7 @@ class EmissionSigneeTest extends TestCase
         $client = Client::factory()->create();
         $produit = $this->produit('A-060', 'Article à 60 €', 60);
         $premier = $this->encaisser($client, [[$produit, 1]]);
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $premier->lignes->sole()->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $premier->lignes->sole()->id, 'quantite' => 1]]);
 
         $ticket = $this->encaisser($client, [[$produit, 1]]);
 
@@ -675,7 +674,7 @@ class EmissionSigneeTest extends TestCase
         $produit = $this->produit('A-020', 'Article à 20 €', 20);
         $factures = [$this->emettre($client, [[$produit, 1]]), $this->emettre($client, [[$produit, 2]]), $this->emettre($client, [[$produit, 3]])];
 
-        $paiement = app(EnregistrerPaiementAction::class)->handle(
+        $paiement = app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
             ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '120.00', 'reference' => 'VIR-7', 'recu_le' => today()->toDateString()],
             [['facture_id' => $factures[0]->id, 'montant' => '20.00'], ['facture_id' => $factures[1]->id, 'montant' => '40.00'], ['facture_id' => $factures[2]->id, 'montant' => '60.00']],
@@ -701,10 +700,10 @@ class EmissionSigneeTest extends TestCase
     {
         $this->magasinActif();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 10]);
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 3]]);
         config(['caisse_securisee.cle_privee' => null]);
 
-        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($brouillon), ModuleFiscalNonConfigureException::class);
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon), ModuleFiscalNonConfigureException::class);
 
         $this->assertSame([StatutFacture::Brouillon, null, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero, $brouillon->fresh()->date_emission]);
         $this->assertDatabaseCount('sequences_documents', 0);
@@ -757,9 +756,9 @@ class EmissionSigneeTest extends TestCase
     public function test_l_emission_verrouille_le_registre_puis_la_facture_puis_la_numerotation(): void
     {
         $this->magasinActif();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit('A-020', 'Article à 20 €', 20)->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit('A-020', 'Article à 20 €', 20)->id, 'quantite' => 1]]);
 
-        $requetes = $this->requetesDe(fn () => app(EmettreFactureAction::class)->handle($brouillon));
+        $requetes = $this->requetesDe(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon));
 
         $registre = $this->position($requetes, 'select * from "tetes_registre_fiscal"');
         $facture = $this->position($requetes, 'select * from "factures"');
@@ -777,6 +776,8 @@ class EmissionSigneeTest extends TestCase
         $this->magasinActif();
         $produit = $this->produit('A-020', 'Article à 20 €', 20);
         $client = Client::query()->findOrFail(Client::factory()->create()->id);
+
+        $this->actingAs(self::auteur());
 
         $requetes = $this->requetesDe(fn () => $this->encaisser($client, [[$produit, 1]]));
 
@@ -797,7 +798,9 @@ class EmissionSigneeTest extends TestCase
         $ligne = $ticket->lignes->sole();
         $client = Client::query()->findOrFail($ticket->client_id);
 
-        $requetes = $this->requetesDe(fn () => app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligne->id, 'quantite' => 1]]));
+        $this->actingAs(self::auteur());
+
+        $requetes = $this->requetesDe(fn () => app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligne->id, 'quantite' => 1]]));
 
         $this->assertSame(0, $this->position($requetes, 'select * from "tetes_registre_fiscal"'));
         $this->assertLessThan($this->position($requetes, 'insert into "avoirs"'), $this->position($requetes, 'select * from "lignes_facture"'));
@@ -813,7 +816,7 @@ class EmissionSigneeTest extends TestCase
         $clientDeB = Client::factory()->create();
         $this->magasinActif();
 
-        $this->assertThrows(fn () => app(EnregistrerAvoirAction::class)->handle($clientDeB, [['ligne_facture_id' => 1, 'quantite' => 1]]), LogicException::class, 'Ce client n\'est pas un client du magasin.');
+        $this->assertThrows(fn () => app(EnregistrerAvoirAction::class)->handle(self::auteur(), $clientDeB, [['ligne_facture_id' => 1, 'quantite' => 1]]), LogicException::class, 'Ce client n\'est pas un client du magasin.');
 
         $this->assertSame(0, Avoir::query()->withoutGlobalScope(MagasinScope::class)->count());
     }
@@ -830,7 +833,9 @@ class EmissionSigneeTest extends TestCase
         $facture = $this->emettre(Client::factory()->professionnel()->create(), [[$this->produit('A-020', 'Article à 20 €', 20), 1]]);
         $client = Client::query()->findOrFail($facture->client_id);
 
-        $requetes = $this->requetesDe(fn () => app(EnregistrerPaiementAction::class)->handle(
+        $this->actingAs(self::auteur());
+
+        $requetes = $this->requetesDe(fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
             ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '20.00', 'recu_le' => today()->toDateString()],
             [['facture_id' => $facture->id, 'montant' => '20.00']],

@@ -6,7 +6,7 @@ use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
-use App\Models\User;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,7 +26,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class BordereauDetaxe extends Model
 {
-    use BelongsToMagasin, ProtegeLesDonneesValidees;
+    use BelongsToMagasin, FigeLeNomDeSesAuteurs, ProtegeLesDonneesValidees;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'note_par' => 'note_par_nom',
+        ];
+    }
 
     /**
      * La détaxe exige plus de 100,00 € TTC de biens achetés (art. 24 bis
@@ -53,11 +63,6 @@ class BordereauDetaxe extends Model
     public function facture(): BelongsTo
     {
         return $this->belongsTo(Facture::class);
-    }
-
-    public function notePar(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'note_par');
     }
 
     /**

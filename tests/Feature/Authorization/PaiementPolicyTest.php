@@ -112,7 +112,7 @@ class PaiementPolicyTest extends TestCase
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $paiement = $this->encaisserUnPaiementEnTantQue($proprietaire);
 
-        $contrePassation = app(ContrePasserPaiementAction::class)->handle($paiement, 'Saisi deux fois');
+        $contrePassation = app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiement, 'Saisi deux fois');
 
         $this->assertFalse($proprietaire->can('contrePasser', $contrePassation));
         $this->assertFalse($proprietaire->can('contrePasser', $paiement->fresh()));
@@ -122,9 +122,9 @@ class PaiementPolicyTest extends TestCase
     {
         $this->actingAs($auteur);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
 
-        return app(EnregistrerPaiementAction::class)->handle(
+        return app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $facture->client,
             ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()],
             [['facture_id' => $facture->id, 'montant' => '12.00']],

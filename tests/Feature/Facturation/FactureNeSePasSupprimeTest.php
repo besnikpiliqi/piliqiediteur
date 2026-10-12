@@ -33,10 +33,10 @@ class FactureNeSePasSupprimeTest extends TestCase
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create();
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
-        $facture = app(EmettreFactureAction::class)->handle($facture);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
         $this->actingAs($proprietaire);
 
@@ -51,11 +51,11 @@ class FactureNeSePasSupprimeTest extends TestCase
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create();
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
-        $facture = app(EmettreFactureAction::class)->handle($facture);
-        app(EnregistrerAvoirAction::class)->handle($client, [
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ], 'Erreur de saisie');
 
@@ -86,11 +86,11 @@ class FactureNeSePasSupprimeTest extends TestCase
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create();
-        $brouillon = app(CreerFactureAction::class)->handle($client, [
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
-        $emise = app(EmettreFactureAction::class)->handle(
-            app(CreerFactureAction::class)->handle($client, [
+        $emise = app(EmettreFactureAction::class)->handle(self::auteur(),
+            app(CreerFactureAction::class)->handle(self::auteur(), $client, [
                 ['produit_id' => $produit->id, 'quantite' => 1],
             ])
         );

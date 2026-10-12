@@ -43,11 +43,11 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
 
     private function emettreFacture(Client $client, Produit $produit, int $quantite): Facture
     {
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => $quantite],
         ]);
 
-        return app(EmettreFactureAction::class)->handle($facture);
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
     }
 
     /**
@@ -63,7 +63,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
 
     private function encaisser(Facture $facture, float $montant): void
     {
-        app(EnregistrerPaiementAction::class)->handle($facture->client, [
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => $montant,
             'recu_le' => now()->toDateString(),
@@ -75,12 +75,12 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
      */
     private function emettreAvoir(Client $client, array $retours): Avoir
     {
-        $avoir = app(CreerAvoirAction::class)->handle($client, array_map(
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, array_map(
             fn (array $retour): array => ['ligne_facture_id' => $retour[0]->lignes->firstOrFail()->id, 'quantite' => $retour[1]],
             $retours,
         ));
 
-        return app(EmettreAvoirAction::class)->handle($avoir);
+        return app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
     }
 
     /**
@@ -90,7 +90,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
     {
         $this->travelTo("{$jour} 10:00:00");
 
-        return app(EnregistrerAvoirAction::class)->handle($facture->client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
+        return app(EnregistrerAvoirAction::class)->handle(self::auteur(), $facture->client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
     }
 
     /**
@@ -283,7 +283,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
         app(TenantContext::class)->set($magasin);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $this->travelTo('2026-10-09 10:00:00');
-        $ticketPaye = app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticketPaye = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
         $ticketImpaye = $this->emettreFacture($comptoir, Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]), 1);
 
         $avoir = $this->avoirTotalDu('2026-10-09', $ticketPaye);
@@ -299,7 +299,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
         $martin = Client::factory()->professionnel()->create(['nom' => 'Martin']);
         $f0 = $this->factureDu('2026-10-01', $dupont, 100);
         $this->encaisser($f0, 100);
-        $brouillon = app(CreerFactureAction::class)->handle($dupont, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $dupont, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
         $factureDeMartin = $this->factureDu('2026-10-02', $martin, 50);
 
         $avoir = $this->avoirTotalDu('2026-10-09', $f0);

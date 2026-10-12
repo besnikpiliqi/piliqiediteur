@@ -58,7 +58,7 @@ class AvoirPolicyTest extends TestCase
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $vendeur = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
+        $vendeur = $this->vendeurQuiFaitDesAvoirs($magasin, 'paul@example.test');
         $expert = $this->expertComptable($magasin);
         $avoir = $this->emettreUnAvoirEnTantQue($vendeur);
 
@@ -84,8 +84,8 @@ class AvoirPolicyTest extends TestCase
     public function test_sans_vue_totale_un_membre_ne_voit_que_ses_propres_avoirs(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $vendeurA = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
-        $vendeurB = $this->vendeurQuiVoitLesAvoirs($magasin, 'jean@example.test');
+        $vendeurA = $this->vendeurQuiFaitDesAvoirs($magasin, 'paul@example.test');
+        $vendeurB = $this->vendeurQuiFaitDesAvoirs($magasin, 'jean@example.test');
         $avoirDeA = $this->emettreUnAvoirEnTantQue($vendeurA);
         $avoirDeB = $this->emettreUnAvoirEnTantQue($vendeurB);
 
@@ -96,24 +96,28 @@ class AvoirPolicyTest extends TestCase
     public function test_avec_la_vue_totale_un_membre_voit_les_avoirs_de_toute_l_equipe(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $vendeur = $this->vendeurQuiVoitLesAvoirs($magasin, 'paul@example.test');
+        $vendeur = $this->vendeurQuiFaitDesAvoirs($magasin, 'paul@example.test');
         $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable(), ['name' => 'Comptable', 'email' => 'comptable@example.test']);
         $avoirDuVendeur = $this->emettreUnAvoirEnTantQue($vendeur);
 
         $this->assertTrue($comptable->can('view', $avoirDuVendeur));
     }
 
-    private function vendeurQuiVoitLesAvoirs(Magasin $magasin, string $email): User
+    /**
+     * Un vendeur qui voit les avoirs et en fait, sans voir les ventes de
+     * toute l'équipe.
+     */
+    private function vendeurQuiFaitDesAvoirs(Magasin $magasin, string $email): User
     {
-        return $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_VIEW], ['name' => $email, 'email' => $email]);
+        return $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER], ['name' => $email, 'email' => $email]);
     }
 
     private function emettreUnAvoirEnTantQue(User $auteur): Avoir
     {
         $this->actingAs($auteur);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
 
-        return app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]));
+        return app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $facture->client, [['ligne_facture_id' => $facture->lignes->first()->id, 'quantite' => 1]]));
     }
 }

@@ -111,7 +111,7 @@ class FactureAchatResource extends Resource
                 TextEntry::make('numero_fournisseur')->label('N° facture fournisseur')->placeholder('—'),
                 TextEntry::make('date_facture')->label('Date facture')->date('d/m/Y')->placeholder('—'),
                 TextEntry::make('date_validation')->label('Validée le')->dateTime('d/m/Y')->placeholder('—'),
-                TextEntry::make('creePar.name')->label('Créée par'),
+                TextEntry::make('cree_par_nom')->label('Créée par'),
                 TextEntry::make('escompte_pourcentage')
                     ->label('Escompte obtenu')
                     ->numeric(maxDecimalPlaces: 2)
@@ -192,7 +192,7 @@ class FactureAchatResource extends Resource
                     ->requiresConfirmation()
                     ->modalDescription('Un numéro définitif sera attribué et le stock des produits sera incrémenté. Cette action est irréversible.')
                     ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Brouillon && auth()->user()->can('valider', $record))
-                    ->action(fn (FactureAchat $record) => static::executerSansCasser(fn () => app(ValiderFactureAchatAction::class)->handle($record))),
+                    ->action(fn (FactureAchat $record) => static::executerSansCasser(fn () => app(ValiderFactureAchatAction::class)->handle(auth()->user(), $record))),
                 Tables\Actions\Action::make('avoir_fournisseur')
                     ->label('Avoir fournisseur')
                     ->icon('heroicon-o-arrow-uturn-left')
@@ -224,8 +224,8 @@ class FactureAchatResource extends Resource
                         && $record->possedeDesLignesRetournables()
                         && auth()->user()->can(PermissionRegistry::AVOIR_FOURNISSEUR_CREER))
                     ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
-                        $avoir = app(CreerAvoirFournisseurAction::class)->handle($record, $data['lignes'], $data['motif']);
-                        app(EmettreAvoirFournisseurAction::class)->handle($avoir);
+                        $avoir = app(CreerAvoirFournisseurAction::class)->handle(auth()->user(), $record, $data['lignes'], $data['motif']);
+                        app(EmettreAvoirFournisseurAction::class)->handle(auth()->user(), $avoir);
                     })),
             ])
             ->bulkActions([

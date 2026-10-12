@@ -2,12 +2,16 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
@@ -48,15 +52,25 @@ use LogicException;
  * L'avoir créé ici reste un brouillon jusqu'à son émission : l'interface
  * passe toujours par EnregistrerAvoirAction, qui fait les deux d'un seul
  * geste.
+ *
+ * Son auteur, relu en base, doit pouvoir créer un avoir dans le magasin
+ * actif et voir chaque facture qu'il corrige (voir FacturePolicy::view() :
+ * un vendeur sans « voir celles de toute l'équipe » ne corrige que les
+ * siennes) ; c'est lui que l'avoir enregistre comme auteur.
  */
 class CreerAvoirAction
 {
-    public function __construct(private readonly CalculateurLigne $calculateurLigne) {}
+    public function __construct(
+        private readonly CalculateurLigne $calculateurLigne,
+        private readonly LecteurDesDroits $lecteur,
+    ) {}
 
     /**
      * @param  list<array{ligne_facture_id: int|string, quantite: int|string}>  $lignesSelectionnees
+     *
+     * @throws AuthorizationException
      */
-    public function handle(Client $client, array $lignesSelectionnees, ?string $motif = null): Avoir
+    public function handle(User $auteur, Client $client, array $lignesSelectionnees, ?string $motif = null): Avoir
     {
         if ($lignesSelectionnees === []) {
             throw new InvalidArgumentException('Un avoir doit porter sur au moins une ligne.');
@@ -71,7 +85,9 @@ class CreerAvoirAction
             throw new InvalidArgumentException('Une même ligne de facture ne peut apparaître qu\'une fois dans un avoir.');
         }
 
-        return DB::transaction(function () use ($client, $lignesSelectionnees, $motif) {
+        return DB::transaction(function () use ($auteur, $client, $lignesSelectionnees, $motif) {
+            $magasin = app(TenantContext::class)->magasin();
+            $compte = $this->lecteur->exiger($auteur, 'create', $magasin, Avoir::class);
             $lignesDeLAvoir = [];
             $typeClient = null;
             $franchiseEnBase = null;
@@ -93,6 +109,8 @@ class CreerAvoirAction
                 if ((int) $facture->client_id !== $client->getKey()) {
                     throw new InvalidArgumentException("Cette ligne appartient à une facture d'un autre client.");
                 }
+
+                $this->lecteur->exiger($compte, 'view', $magasin, $facture);
 
                 if ($facture->statut === StatutFacture::Brouillon) {
                     throw new LogicException("Impossible de créditer une ligne d'une facture au statut [{$facture->statut->value}].");
@@ -143,6 +161,7 @@ class CreerAvoirAction
             $avoir = new Avoir(['motif' => $motif]);
             $avoir->forceFill([
                 'client_id' => $client->getKey(),
+                'cree_par' => $compte->getKey(),
                 'type_client' => $typeClient,
                 'franchise_en_base' => $franchiseEnBase,
                 'nature_operation' => $natureOperation,

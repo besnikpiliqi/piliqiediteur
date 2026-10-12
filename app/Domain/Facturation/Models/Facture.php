@@ -31,6 +31,7 @@ use App\Domain\Facturation\Services\CopieClient;
 use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -69,6 +70,18 @@ use LogicException;
  */
 class Facture extends Model implements DocumentEnvoyable
 {
+    use FigeLeNomDeSesAuteurs;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'cree_par' => 'cree_par_nom',
+        ];
+    }
+
     /** @use HasFactory<FactureFactory> */
     use BelongsToMagasin, EstEnvoyeParEmail, FigeLeClient, FigeSonEmetteur, HasFactory, HorodateSonEmission, NoteSaNatureDOperation, ProtegeLesDonneesValidees, VentileLaTvaParTaux;
 
@@ -114,10 +127,6 @@ class Facture extends Model implements DocumentEnvoyable
         static::creating(function (Facture $facture) {
             $facture->statut ??= StatutFacture::Brouillon;
             $facture->devise ??= 'EUR';
-            // Jamais fourni par le payload : c'est toujours l'auteur réel
-            // de la requête, pour que la restriction de visibilité par
-            // vendeur (voir FacturePolicy) ne puisse pas être usurpée.
-            $facture->cree_par ??= auth()->id();
         });
 
         // Après la garde de ProtegeLesDonneesValidees, qui refuse la
@@ -192,11 +201,6 @@ class Facture extends Model implements DocumentEnvoyable
     protected function clientAFiger(): CopieClient
     {
         return CopieClient::depuisClient($this->client);
-    }
-
-    public function creePar(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'cree_par');
     }
 
     /**

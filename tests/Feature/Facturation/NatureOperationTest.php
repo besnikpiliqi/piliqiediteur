@@ -115,12 +115,12 @@ class NatureOperationTest extends TestCase
      */
     private function brouillon(Client $client, array $lignes, NatureOperation $natureOperation, array $nature = []): Facture
     {
-        return app(CreerFactureAction::class)->handle($client, $lignes, ['nature_operation' => $natureOperation, ...$nature]);
+        return app(CreerFactureAction::class)->handle(self::auteur(), $client, $lignes, ['nature_operation' => $natureOperation, ...$nature]);
     }
 
     private function assertEmissionRefusee(Facture $brouillon, string $refus): void
     {
-        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($brouillon), NatureOperationRefuseeException::class, $refus);
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon), NatureOperationRefuseeException::class, $refus);
 
         $brouillon->refresh();
         $this->assertSame([StatutFacture::Brouillon, null, null], [$brouillon->statut, $brouillon->numero, $brouillon->consultation_vies_id]);
@@ -136,7 +136,7 @@ class NatureOperationTest extends TestCase
     {
         $this->magasin();
 
-        $facture = app(EmettreFactureAction::class)->handle($this->brouillon($this->clientAmericain(), [['produit_id' => $this->produit()->id, 'quantite' => 1000]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($this->clientAmericain(), [['produit_id' => $this->produit()->id, 'quantite' => 1000]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
 
         $ligne = $facture->lignes->sole();
         $this->assertSame([StatutFacture::Emise, 'FAC-LYON1-2026-000001'], [$facture->statut, $facture->numero]);
@@ -160,7 +160,7 @@ class NatureOperationTest extends TestCase
         $this->magasin();
         $port = Service::factory()->fraisAccessoires()->create(['nom' => 'Frais de port']);
 
-        $facture = app(EmettreFactureAction::class)->handle($this->brouillon($this->clientAmericain(), [
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($this->clientAmericain(), [
             ['produit_id' => $this->produit('7.00')->id, 'quantite' => 3],
             ['service_id' => $port->id, 'prix_unitaire_ttc' => '15.00', 'quantite' => 1],
         ], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
@@ -178,7 +178,7 @@ class NatureOperationTest extends TestCase
     {
         $this->magasin();
 
-        $ticket = app(EmettreFactureAction::class)->handle($this->brouillon(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1000]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
+        $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1000]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
 
         $this->assertSame('TK-LYON1-2026-000001', $ticket->numero);
         $this->assertSame('0.83', $ticket->lignes->sole()->prix_unitaire_ht);
@@ -202,7 +202,7 @@ class NatureOperationTest extends TestCase
     {
         $this->magasin();
 
-        $facture = app(EmettreFactureAction::class)->handle($this->brouillon($this->clientAmericain(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], NatureOperation::ExportHorsUe, [...self::LIVRAISON_NEW_YORK, 'livraison_pays' => $pays, 'livraison_code_postal' => $codePostal]));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($this->clientAmericain(), [['produit_id' => $this->produit()->id, 'quantite' => 1]], NatureOperation::ExportHorsUe, [...self::LIVRAISON_NEW_YORK, 'livraison_pays' => $pays, 'livraison_code_postal' => $codePostal]));
 
         $this->assertSame(StatutFacture::Emise, $facture->statut);
     }
@@ -238,7 +238,7 @@ class NatureOperationTest extends TestCase
         $this->magasin();
         $port = Service::factory()->fraisAccessoires()->create(['nom' => 'Frais de port']);
 
-        $facture = app(EmettreFactureAction::class)->handle($this->brouillon($this->clientAmericain(), [
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($this->clientAmericain(), [
             ['produit_id' => $this->produit()->id, 'quantite' => 1000],
             ['service_id' => $port->id, 'prix_unitaire_ttc' => '15.00', 'quantite' => 1],
         ], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
@@ -268,7 +268,7 @@ class NatureOperationTest extends TestCase
     {
         $this->magasin();
 
-        $ticket = app(EmettreFactureAction::class)->handle($this->brouillon(Client::factory()->create(), [['produit_id' => $this->produit('49.90')->id, 'quantite' => 3]], NatureOperation::LivraisonDom, self::LIVRAISON_FORT_DE_FRANCE));
+        $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon(Client::factory()->create(), [['produit_id' => $this->produit('49.90')->id, 'quantite' => 3]], NatureOperation::LivraisonDom, self::LIVRAISON_FORT_DE_FRANCE));
 
         $this->assertSame('41.58', $ticket->lignes->sole()->prix_unitaire_ht);
         $this->assertSame(['124.74', '0.00', '124.74'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
@@ -309,7 +309,7 @@ class NatureOperationTest extends TestCase
         $client = $this->clientAllemand();
         $consultation = $this->consultation($client);
 
-        $facture = app(EmettreFactureAction::class)->handle($this->brouillon($client, [['produit_id' => $this->produit('25.00')->id, 'quantite' => 12]], NatureOperation::LivraisonIntracommunautaire, self::LIVRAISON_BERLIN));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($client, [['produit_id' => $this->produit('25.00')->id, 'quantite' => 12]], NatureOperation::LivraisonIntracommunautaire, self::LIVRAISON_BERLIN));
 
         $this->assertSame(['250.00', '0.00', '250.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertSame($consultation->id, $facture->consultation_vies_id);
@@ -352,7 +352,7 @@ class NatureOperationTest extends TestCase
         $client = Client::factory()->etranger('GB', 'XI123456789')->create(['code_postal' => 'BT1 1AA']);
         $this->consultation($client);
 
-        $facture = app(EmettreFactureAction::class)->handle($this->brouillon($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]], NatureOperation::LivraisonIntracommunautaire, [...self::LIVRAISON_BERLIN, 'livraison_code_postal' => 'BT1 1AA', 'livraison_ville' => 'Belfast', 'livraison_pays' => 'GB']));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]], NatureOperation::LivraisonIntracommunautaire, [...self::LIVRAISON_BERLIN, 'livraison_code_postal' => 'BT1 1AA', 'livraison_ville' => 'Belfast', 'livraison_pays' => 'GB']));
 
         $this->assertSame(StatutFacture::Emise, $facture->statut);
     }
@@ -384,7 +384,7 @@ class NatureOperationTest extends TestCase
         $this->consultation($client, '2026-10-09 08:00', valide: false);
         $derniere = $this->consultation($client, '2026-10-09 09:30');
 
-        $facture = app(EmettreFactureAction::class)->handle($this->brouillon($client, [['produit_id' => $this->produit('25.00')->id, 'quantite' => 12]], NatureOperation::LivraisonIntracommunautaire, self::LIVRAISON_BERLIN));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($client, [['produit_id' => $this->produit('25.00')->id, 'quantite' => 12]], NatureOperation::LivraisonIntracommunautaire, self::LIVRAISON_BERLIN));
 
         $this->assertSame([StatutFacture::Emise, $derniere->id], [$facture->statut, $facture->consultation_vies_id]);
     }
@@ -395,7 +395,7 @@ class NatureOperationTest extends TestCase
         $client = $this->clientAllemand();
         $consultation = $this->consultation($client);
 
-        $facture = app(EmettreFactureAction::class)->handle($this->brouillon($client, [['service_id' => Service::factory()->create(['nom' => 'Conseil'])->id, 'prix_unitaire_ttc' => '500.00', 'quantite' => 1]], NatureOperation::PrestationUeAutoliquidation));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($client, [['service_id' => Service::factory()->create(['nom' => 'Conseil'])->id, 'prix_unitaire_ttc' => '500.00', 'quantite' => 1]], NatureOperation::PrestationUeAutoliquidation));
 
         $this->assertSame(['500.00', '0.00', '500.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertSame($consultation->id, $facture->consultation_vies_id);
@@ -444,7 +444,7 @@ class NatureOperationTest extends TestCase
     {
         $this->magasin();
 
-        $facture = app(EmettreFactureAction::class)->handle($this->brouillon($this->clientAmericain(), [['service_id' => Service::factory()->create(['nom' => 'Conseil'])->id, 'prix_unitaire_ttc' => '1200.00', 'quantite' => 1]], NatureOperation::PrestationHorsUe));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($this->clientAmericain(), [['service_id' => Service::factory()->create(['nom' => 'Conseil'])->id, 'prix_unitaire_ttc' => '1200.00', 'quantite' => 1]], NatureOperation::PrestationHorsUe));
 
         $this->assertSame(['1200.00', '0.00', '1200.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertNull($facture->consultation_vies_id);
@@ -489,11 +489,11 @@ class NatureOperationTest extends TestCase
         $client = $this->clientAllemand();
         $service = Service::factory()->create(['nom' => 'Conseil']);
         $lignes = [['service_id' => $service->id, 'prix_unitaire_ttc' => '500.00', 'quantite' => 1]];
-        $devis = app(CreerDevisAction::class)->handle($client, $lignes, ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, $lignes, ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]);
         $client->update(['type_client' => TypeClient::Particulier, 'numero_tva' => null]);
 
         $this->assertThrows(
-            fn () => app(ModifierDevisAction::class)->handle($devis, $client->fresh(), $lignes, ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]),
+            fn () => app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client->fresh(), $lignes, ['nature_operation' => NatureOperation::PrestationUeAutoliquidation]),
             LogicException::class,
             'Impossible d\'enregistrer en « Prestation à un professionnel de l\'UE (autoliquidation) » : cette nature est réservée aux clients professionnels. Choisissez une autre nature.',
         );
@@ -501,7 +501,7 @@ class NatureOperationTest extends TestCase
         $devis->refresh();
         $this->assertSame([NatureOperation::PrestationUeAutoliquidation, TypeClient::Professionnel], [$devis->nature_operation, $devis->type_client]);
         $this->assertSame(['500.00', '0.00', '500.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
-        $this->assertThrows(fn () => app(EmettreDevisAction::class)->handle($devis), LogicException::class, 'Ce client est devenu particulier depuis l\'enregistrement du brouillon : ouvrez-le et enregistrez-le de nouveau.');
+        $this->assertThrows(fn () => app(EmettreDevisAction::class)->handle(self::auteur(), $devis), LogicException::class, 'Ce client est devenu particulier depuis l\'enregistrement du brouillon : ouvrez-le et enregistrez-le de nouveau.');
     }
 
     /**
@@ -548,7 +548,7 @@ class NatureOperationTest extends TestCase
         $produit = $this->produit();
         $brouillon = $this->brouillon($client, [['produit_id' => $produit->id, 'quantite' => 1000]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK);
 
-        $brouillon = app(ModifierFactureAction::class)->handle($brouillon, $client, [['produit_id' => $produit->id, 'quantite' => 1000]], ['nature_operation' => NatureOperation::VenteEnFrance->value]);
+        $brouillon = app(ModifierFactureAction::class)->handle(self::auteur(), $brouillon, $client, [['produit_id' => $produit->id, 'quantite' => 1000]], ['nature_operation' => NatureOperation::VenteEnFrance->value]);
 
         $this->assertSame(NatureOperation::VenteEnFrance, $brouillon->nature_operation);
         $this->assertSame([null, null, null], [$brouillon->livraison_pays, $brouillon->livraison_ville, $brouillon->transport_par]);
@@ -560,10 +560,10 @@ class NatureOperationTest extends TestCase
         $this->magasin();
         $client = $this->clientAmericain();
         $produit = $this->produit();
-        $enFrance = app(EmettreFactureAction::class)->handle($this->brouillon($client, [['produit_id' => $produit->id, 'quantite' => 1]], NatureOperation::VenteEnFrance));
-        $export = app(EmettreFactureAction::class)->handle($this->brouillon($client, [['produit_id' => $produit->id, 'quantite' => 1]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
+        $enFrance = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($client, [['produit_id' => $produit->id, 'quantite' => 1]], NatureOperation::VenteEnFrance));
+        $export = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($client, [['produit_id' => $produit->id, 'quantite' => 1]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
 
-        $this->assertThrows(fn () => app(CreerAvoirAction::class)->handle($client, [
+        $this->assertThrows(fn () => app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $enFrance->lignes->sole()->id, 'quantite' => 1],
             ['ligne_facture_id' => $export->lignes->sole()->id, 'quantite' => 1],
         ]), InvalidArgumentException::class, 'Un avoir ne mélange pas des factures de natures d\'opération différentes : faites un avoir par nature.');
@@ -579,9 +579,9 @@ class NatureOperationTest extends TestCase
     {
         $this->magasin();
         $client = $this->clientAmericain();
-        $export = app(EmettreFactureAction::class)->handle($this->brouillon($client, [['produit_id' => $this->produit()->id, 'quantite' => 1000]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
+        $export = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($client, [['produit_id' => $this->produit()->id, 'quantite' => 1000]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $export->lignes->sole()->id, 'quantite' => 500]], 'Retour partiel');
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $export->lignes->sole()->id, 'quantite' => 500]], 'Retour partiel');
 
         $this->assertSame(NatureOperation::ExportHorsUe, $avoir->nature_operation);
         $this->assertSame(['416.67', '0.00', '416.67'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
@@ -599,11 +599,11 @@ class NatureOperationTest extends TestCase
     {
         $this->magasin();
         $client = Client::factory()->create();
-        $ticket = app(EmettreFactureAction::class)->handle($this->brouillon($client, [['produit_id' => $this->produit()->id, 'quantite' => 1000]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
+        $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon($client, [['produit_id' => $this->produit()->id, 'quantite' => 1000]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
         $ligne = $ticket->lignes->sole();
 
-        $premier = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]], 'Retour partiel');
-        $dernier = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]], 'Retour du reste');
+        $premier = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]], 'Retour partiel');
+        $dernier = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]], 'Retour du reste');
 
         $this->assertSame(['415.00', '0.00', '415.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
         $this->assertSame(['415.00', '0.00', '415.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
@@ -614,7 +614,7 @@ class NatureOperationTest extends TestCase
     {
         $this->magasin();
 
-        $devis = app(CreerDevisAction::class)->handle($this->clientAmericain(), [['produit_id' => $this->produit()->id, 'quantite' => 1000]], ['nature_operation' => NatureOperation::ExportHorsUe, ...self::LIVRAISON_NEW_YORK]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $this->clientAmericain(), [['produit_id' => $this->produit()->id, 'quantite' => 1000]], ['nature_operation' => NatureOperation::ExportHorsUe, ...self::LIVRAISON_NEW_YORK]);
 
         $pdf = app(DevisPdfGenerator::class)->html($devis);
         $this->assertSame(['833.33', '0.00', '833.33'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
@@ -626,10 +626,10 @@ class NatureOperationTest extends TestCase
     public function test_la_facture_tiree_d_un_devis_d_export_garde_sa_nature_et_sa_livraison(): void
     {
         $this->magasin();
-        $devis = app(CreerDevisAction::class)->handle($this->clientAmericain(), [['produit_id' => $this->produit()->id, 'quantite' => 1000]], ['nature_operation' => NatureOperation::ExportHorsUe, ...self::LIVRAISON_NEW_YORK, 'livraison_date' => '2026-10-20']);
-        app(AccepterDevisAction::class)->handle(app(EmettreDevisAction::class)->handle($devis));
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $this->clientAmericain(), [['produit_id' => $this->produit()->id, 'quantite' => 1000]], ['nature_operation' => NatureOperation::ExportHorsUe, ...self::LIVRAISON_NEW_YORK, 'livraison_date' => '2026-10-20']);
+        app(AccepterDevisAction::class)->handle(self::auteur(), app(EmettreDevisAction::class)->handle(self::auteur(), $devis));
 
-        $facture = app(CreerFactureDepuisDevisAction::class)->handle($devis->fresh());
+        $facture = app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis->fresh());
 
         $this->assertSame(NatureOperation::ExportHorsUe, $facture->nature_operation);
         $this->assertSame(['1 Main Street', '10001', 'New York', 'US', '2026-10-20', TransportPar::Magasin], [$facture->livraison_adresse, $facture->livraison_code_postal, $facture->livraison_ville, $facture->livraison_pays, $facture->livraison_date->toDateString(), $facture->transport_par]);

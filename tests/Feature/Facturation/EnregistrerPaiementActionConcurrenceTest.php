@@ -54,12 +54,12 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
      */
     private static function emettreUneFacture(int $clientId, int $produitId): Facture
     {
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::query()->findOrFail($clientId), [['produit_id' => $produitId, 'quantite' => 1]]));
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::query()->findOrFail($clientId), [['produit_id' => $produitId, 'quantite' => 1]]));
     }
 
     private static function payer(int $clientId, int $factureId, string $montant): Paiement
     {
-        return app(EnregistrerPaiementAction::class)->handle(
+        return app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             Client::query()->findOrFail($clientId),
             ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $montant, 'recu_le' => today()->toDateString()],
             [['facture_id' => $factureId, 'montant' => $montant]],
@@ -101,10 +101,10 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
         $concurrente = null;
         $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($magasinId, $paiementId): void {
             app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
-            app(ContrePasserPaiementAction::class)->handle(Paiement::query()->findOrFail($paiementId), 'Saisi deux fois');
+            app(ContrePasserPaiementAction::class)->handle(self::auteur(), Paiement::query()->findOrFail($paiementId), 'Saisi deux fois');
         }, $concurrente);
 
-        app(ContrePasserPaiementAction::class)->handle($errone, 'Saisi deux fois');
+        app(ContrePasserPaiementAction::class)->handle(self::auteur(), $errone, 'Saisi deux fois');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $concurrente->wait();
@@ -132,8 +132,8 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
         self::payer((int) $client->id, $reprise->id, '12.00');
         $rouverte = self::emettreUneFacture((int) $client->id, Produit::factory()->create(['prix_vente_ttc' => 100, 'taux_tva' => 20, 'suivi_stock' => false])->id);
         $paiementErrone = self::payer((int) $client->id, $rouverte->id, '100.00');
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $reprise->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
-        app(ContrePasserPaiementAction::class)->handle($paiementErrone, 'Saisi sur la mauvaise facture');
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $reprise->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
+        app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiementErrone, 'Saisi sur la mauvaise facture');
         $this->assertSame([100.0, 12.0], [$rouverte->fresh()->montantRestant(), $client->soldeCrediteur()]);
         $magasinId = $magasin->id;
         $clientId = (int) $client->id;

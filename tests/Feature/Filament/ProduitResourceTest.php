@@ -203,10 +203,10 @@ class ProduitResourceTest extends TestCase
     {
         $this->connecterProprietaire();
         $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste du Sud']);
-        $factureAchat = app(CreerFactureAchatAction::class)->handle($fournisseur, [
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [
             ['produit' => ['nom' => 'Câble USB-C', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 0.47],
         ]);
-        app(ValiderFactureAchatAction::class)->handle($factureAchat);
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat);
         $cable = Produit::query()->sole();
 
         Livewire::test(EditProduit::class, ['record' => $cable->getRouteKey()])
@@ -216,7 +216,7 @@ class ProduitResourceTest extends TestCase
         Livewire::test(CreateProduit::class)
             ->assertSee('Aucun achat validé');
 
-        app(ModifierFactureAchatAction::class)->handle($factureAchat, $fournisseur, [
+        app(ModifierFactureAchatAction::class)->handle(self::auteur(), $factureAchat, $fournisseur, [
             ['produit_id' => Produit::factory()->create(['taux_tva' => 20])->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
         ]);
 
@@ -234,7 +234,7 @@ class ProduitResourceTest extends TestCase
     {
         $this->connecterProprietaire();
         $produit = Produit::factory()->create(['nom' => 'Ecran', 'prix_vente_ttc' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
-        app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['source' => SourceFactureAchat::Api]);
+        app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['source' => SourceFactureAchat::Api]);
 
         $component = Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()]);
 
@@ -255,7 +255,7 @@ class ProduitResourceTest extends TestCase
     {
         $this->connecterProprietaire();
         $produit = Produit::factory()->create(['nom' => 'Ecran']);
-        app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
 
         Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
             ->assertFormFieldIsEnabled('nom')

@@ -21,6 +21,7 @@ use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -62,7 +63,7 @@ class InalterabiliteTest extends TestCase
 
     private function emettre(Client $client, int $quantite = 3): Facture
     {
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => $quantite]]));
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => $quantite]]));
     }
 
     /**
@@ -115,9 +116,9 @@ class InalterabiliteTest extends TestCase
      */
     public function test_une_copie_chargee_avant_l_emission_ne_reecrit_pas_la_facture_emise(): void
     {
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         $copieDuBrouillon = Facture::query()->findOrFail($brouillon->id);
-        app(EmettreFactureAction::class)->handle($brouillon);
+        app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
         $this->assertThrows(fn () => $copieDuBrouillon->forceFill(['notes' => 'Réécrite après coup'])->save(), DonneeFiscaleInalterableException::class, 'Modification refusée : notes.');
 
@@ -192,7 +193,7 @@ class InalterabiliteTest extends TestCase
     {
         $client = Client::factory()->create();
         $facture = $this->emettre($client);
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]], 'Article abîmé');
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]], 'Article abîmé');
         $avant = [DB::table('avoirs')->get()->all(), DB::table('lignes_avoir')->get()->all()];
 
         $this->assertThrows(fn () => $ecriture($avoir), DonneeFiscaleInalterableException::class, $refus);
@@ -210,7 +211,7 @@ class InalterabiliteTest extends TestCase
         $this->travelTo('2026-10-08 10:00:00');
         $client = Client::factory()->professionnel()->create(['delai_paiement_jours' => 0]);
         $facture = $this->emettre($client);
-        $payer = fn (string $montant): Paiement => app(EnregistrerPaiementAction::class)->handle(
+        $payer = fn (string $montant): Paiement => app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
             ['mode_paiement' => ModePaiement::Virement->value, 'montant' => $montant, 'recu_le' => today()->toDateString()],
             [['facture_id' => $facture->id, 'montant' => $montant]],
@@ -235,10 +236,10 @@ class InalterabiliteTest extends TestCase
      */
     public function test_un_brouillon_se_modifie_et_se_supprime(): void
     {
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         $autreClient = Client::factory()->create();
 
-        $modifie = app(ModifierFactureAction::class)->handle($brouillon, $autreClient, [['produit_id' => $this->produit()->id, 'quantite' => 4]], ['notes' => 'Quatre articles']);
+        $modifie = app(ModifierFactureAction::class)->handle(self::auteur(), $brouillon, $autreClient, [['produit_id' => $this->produit()->id, 'quantite' => 4]], ['notes' => 'Quatre articles']);
         $modifie->delete();
 
         $this->assertSame([$autreClient->id, 'Quatre articles', 4], [$modifie->client_id, $modifie->notes, $modifie->lignes->sole()->quantite]);
@@ -259,12 +260,12 @@ class InalterabiliteTest extends TestCase
     {
         $client = Client::factory()->professionnel()->create();
         $facture = $this->emettre($client);
-        app(EnregistrerPaiementAction::class)->handle(
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
             ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '20.00', 'recu_le' => today()->toDateString()],
             [['facture_id' => $facture->id, 'montant' => '20.00']],
         );
-        app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]]);
     }
 
     /**
@@ -367,7 +368,7 @@ class InalterabiliteTest extends TestCase
     {
         return [
             'magasin' => [static fn (Facture $facture): Model => $facture->magasin],
-            'auteur de la facture' => [static fn (Facture $facture): Model => $facture->creePar],
+            'auteur de la facture' => [static fn (Facture $facture): Model => User::query()->findOrFail($facture->cree_par)],
             'produit d\'une ligne' => [static fn (Facture $facture): Model => $facture->lignes->firstWhere('produit_id', '!=', null)->produit],
             'service d\'une ligne' => [static fn (Facture $facture): Model => $facture->lignes->firstWhere('service_id', '!=', null)->service],
         ];
@@ -379,15 +380,14 @@ class InalterabiliteTest extends TestCase
     #[DataProvider('fichesReferencees')]
     public function test_une_fiche_que_reference_une_facture_emise_ne_se_supprime_pas_definitivement(Closure $fiche): void
     {
-        $this->actingAs(User::factory()->create());
+        $magasin = app(TenantContext::class)->magasin();
         $service = Service::factory()->create();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        $brouillon = app(CreerFactureAction::class)->handle($this->membre($magasin, RoleMagasin::Vendeur), Client::factory()->create(), [
             ['produit_id' => $this->produit()->id, 'quantite' => 1],
             ['service_id' => $service->id, 'quantite' => 1, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20],
         ]);
-        // Émise sans opérateur connecté : seul cree_par référence l'auteur.
-        auth()->forgetUser();
-        $facture = app(EmettreFactureAction::class)->handle($brouillon);
+        // Émise par le propriétaire : seul cree_par référence l'auteur.
+        $facture = app(EmettreFactureAction::class)->handle($this->proprietaireDe($magasin), $brouillon);
         $referencee = $fiche($facture);
 
         // La base refuse d'elle-même, quel que soit le code qui le tente : la

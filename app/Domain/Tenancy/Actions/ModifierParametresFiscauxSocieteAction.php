@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RegimeTva;
@@ -9,7 +10,6 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -59,9 +59,7 @@ class ModifierParametresFiscauxSocieteAction
         }
 
         return $contexte->runAsSociete($societe, function () use ($auteur, $societe, $donnees): Societe {
-            if (Gate::forUser($auteur)->denies('modifierLesParametres', $societe)) {
-                throw new LogicException(ModifierIdentiteSocieteAction::MESSAGE_SANS_AUTORISATION);
-            }
+            $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'modifierLesParametres', $societe, $societe, new LogicException(ModifierIdentiteSocieteAction::MESSAGE_SANS_AUTORISATION));
 
             $valides = Validator::make(array_intersect_key($donnees, array_flip(self::CHAMPS)), [
                 'regime_tva' => ['sometimes', 'required', Rule::enum(RegimeTva::class)],

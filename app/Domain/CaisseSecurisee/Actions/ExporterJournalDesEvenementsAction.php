@@ -2,6 +2,9 @@
 
 namespace App\Domain\CaisseSecurisee\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
@@ -14,6 +17,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\Exceptions\InvalidFormatException;
 use Closure;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
@@ -68,36 +72,45 @@ class ExporterJournalDesEvenementsAction
         'Contenu signé',
     ];
 
-    public function __construct(private readonly RegistreFiscal $registre) {}
+    public function __construct(
+        private readonly RegistreFiscal $registre,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
+    ) {}
 
     /**
-     * Inscrit l'export au journal, puis rend ce qui écrit le fichier dans
-     * le flux qu'on lui passe.
+     * Inscrit l'export au journal, au nom de son auteur relu en base, qui
+     * doit pouvoir consulter la caisse sécurisée du magasin actif (voir
+     * LecteurDesDroits), puis rend ce qui écrit le fichier dans le flux
+     * qu'on lui passe : avec l'adresse IP et le navigateur de chaque
+     * événement pour le seul propriétaire de la société.
      *
      * @param  string  $du  AAAA-MM-JJ
      * @param  string  $au  AAAA-MM-JJ, pas avant $du
      * @return Closure(resource): void
      *
+     * @throws AuthorizationException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(string $du, string $au): Closure
+    public function handle(User $auteur, string $du, string $au): Closure
     {
         if (self::jour($au)->lessThan(self::jour($du))) {
             throw new InvalidArgumentException('La période de l\'export se termine au plus tôt le jour où elle commence.');
         }
 
-        DB::transaction(fn () => $this->registre->journaliser(CodeEvenement::ExportDeDonnees, [
+        $magasin = app(TenantContext::class)->magasin();
+        $exportateur = $this->lecteur->exiger($auteur, PermissionRegistry::CAISSE_SECURISEE_CONSULTER, $magasin);
+
+        $this->operateur->pendant($exportateur, fn () => DB::transaction(fn () => $this->registre->journaliser(CodeEvenement::ExportDeDonnees, [
             'export' => 'journal_des_evenements',
             'format' => 'csv',
             'du' => $du,
             'au' => $au,
-        ]));
+        ])));
 
-        $magasin = app(TenantContext::class)->magasin();
         $magasinId = $magasin->getKey();
-        $exportateur = auth()->user();
-        $avecLesTraces = $exportateur instanceof User && $exportateur->estProprietaireDuMagasin($magasin);
+        $avecLesTraces = $exportateur->estProprietaireDuMagasin($magasin);
 
         return static function ($flux) use ($magasinId, $du, $au, $avecLesTraces): void {
             fwrite($flux, "\u{FEFF}");

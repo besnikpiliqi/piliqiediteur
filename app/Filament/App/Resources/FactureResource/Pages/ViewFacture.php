@@ -82,7 +82,7 @@ class ViewFacture extends ViewRecord
                 ];
             })
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
-                app(AjouterPreuveOperationAction::class)->handle($record, TypePreuve::from($data['type']), $data['reference'], $data['date_document'] ?? null, $data['emetteur'] ?? null);
+                app(AjouterPreuveOperationAction::class)->handle(auth()->user(), $record, TypePreuve::from($data['type']), $data['reference'], $data['date_document'] ?? null, $data['emetteur'] ?? null);
 
                 Notification::make()->title('Preuve enregistrée.')->success()->send();
             }));
@@ -109,7 +109,7 @@ class ViewFacture extends ViewRecord
                     ->maxLength(30),
             ])
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data): void {
-                $bordereau = app(NoterBordereauDetaxeAction::class)->handle($record, $data['numero']);
+                $bordereau = app(NoterBordereauDetaxeAction::class)->handle(auth()->user(), $record, $data['numero']);
                 $notification = Notification::make()->title("Bordereau de détaxe n° {$bordereau->numero} noté.");
                 $avertissement = $bordereau->avertissement();
 

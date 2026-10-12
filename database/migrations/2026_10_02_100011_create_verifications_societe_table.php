@@ -33,12 +33,20 @@ return new class extends Migration
             $table->string('signal', 40)->nullable();
             $table->json('details')->nullable();
             $table->foreignId('auteur_id')->nullable()->constrained('users')->restrictOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('auteur_nom')->nullable();
             $table->json('operateur')->nullable();
             // La personne dont la ligne prouve l'identité ou la qualité de
             // représentant (voir EvaluateurDeVerification) ; nulle pour un
             // contrôle de l'entreprise, ou l'identité d'un dirigeant sans
             // compte qui approuve un mandat.
             $table->foreignId('beneficiaire_id')->nullable()->constrained('users')->restrictOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('beneficiaire_nom')->nullable();
             $table->dateTime('expire_le')->nullable();
             $table->timestamp('created_at')->useCurrent();
 

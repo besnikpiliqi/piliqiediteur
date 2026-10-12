@@ -2,6 +2,7 @@
 
 namespace App\Domain\CaisseSecurisee\Services;
 
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
@@ -12,7 +13,6 @@ use App\Domain\CaisseSecurisee\Models\TraceEvenement;
 use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Database\DatabaseTransactionRecord;
@@ -81,6 +81,15 @@ use LogicException;
  * donc en tête de toute transaction qui écrit au registre, y compris celle
  * d'une action qui modifie un paramètre ayant un impact sur la conformité
  * (voir sousVerrouDesMagasins()).
+ *
+ * Chaque enregistrement signe son opérateur (voir OperateurCourant) :
+ * l'auteur qu'une action a relu et contrôlé, ou le système (opérateur
+ * nul) ; jamais la personne connectée à leur place. Une vente, un avoir ou
+ * un encaissement ne s'inscrit qu'une fois l'un ou l'autre posé : une
+ * action qui oublierait de poser son auteur échoue au lieu de signer au
+ * hasard. Seul un événement technique hors action (ouverture et fin de
+ * session, vente abandonnée, ligne retirée du panier) s'inscrit, sans rien
+ * de posé, au nom de la personne connectée.
  *
  * Lié en scoped() (voir AppServiceProvider) : l'instant que donne le verrou
  * vaut pour toutes les écritures fiscales de la transaction, transactions
@@ -323,6 +332,10 @@ class RegistreFiscal
     {
         self::refuserCeQuiNeSeSignePas($donnees, 'donnees');
 
+        if ($chaine !== ChaineFiscale::Evenement && ! app(OperateurCourant::class)->estPose()) {
+            throw new LogicException('Une vente, un avoir ou un encaissement ne s\'inscrit qu\'au nom de l\'auteur contrôlé par son action, ou du système.');
+        }
+
         $magasin = app(TenantContext::class)->magasin();
 
         if ($document !== null && (! $document->exists || (int) $document->getAttribute('magasin_id') !== $magasin->getKey())) {
@@ -461,8 +474,7 @@ class RegistreFiscal
         $teteDeLaChaine = $chaines[$chaine->value] ?? ['sequence' => 0, 'signature' => null];
         $sequence = $teteDeLaChaine['sequence'] + 1;
         $signaturePrecedente = $teteDeLaChaine['signature'];
-        /** @var User|null $operateur */
-        $operateur = auth()->user();
+        $operateur = app(OperateurCourant::class)->actuel();
         $cleId = $this->signataire->cleId();
         $grandsTotaux = $montantVente === null ? null : [
             'montant' => $montantVente,

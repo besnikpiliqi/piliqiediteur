@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -49,7 +51,7 @@ class CloturerLesJourneesActionTest extends TestCase
     {
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
     }
@@ -59,7 +61,7 @@ class CloturerLesJourneesActionTest extends TestCase
         $this->travelTo('2026-10-09 19:00:00');
         $magasin = $this->magasin();
 
-        $clotures = app(CloturerLesJourneesAction::class)->jusquAu($magasin, now());
+        $clotures = app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, now());
 
         $this->assertTrue($clotures->isEmpty());
         $this->assertSame(0, ClotureCaisse::query()->count());
@@ -78,7 +80,7 @@ class CloturerLesJourneesActionTest extends TestCase
         $venteDu7 = $this->vendreUnTicket();
         $this->travelTo('2026-10-09 19:00:00');
 
-        $clotures = app(CloturerLesJourneesAction::class)->jusquAu($magasin, now());
+        $clotures = app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, now());
 
         $this->assertSame(
             [['2026-10-07', 'Z-MABOUT-2026-000001', 1, '12.00'], ['2026-10-08', 'Z-MABOUT-2026-000002', 0, '0.00'], ['2026-10-09', 'Z-MABOUT-2026-000003', 0, '0.00']],
@@ -92,7 +94,7 @@ class CloturerLesJourneesActionTest extends TestCase
         $magasin = $this->magasin();
         $this->travelTo('2026-10-05 10:00:00');
         $this->vendreUnTicket();
-        app(CloturerCaisseAction::class)->handle($magasin, '2026-10-05');
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-05');
         $this->travelTo('2026-10-08 19:00:00');
 
         $journees = app(CloturerLesJourneesAction::class)->journeesEnAttente(now());
@@ -114,7 +116,7 @@ class CloturerLesJourneesActionTest extends TestCase
         (new PeriodeActivite)->forceFill(['magasin_id' => $magasin->id, 'debut' => CarbonImmutable::parse('2026-10-08 09:00:00', config('app.timezone'))])->save();
         $this->travelTo('2026-10-09 19:00:00');
 
-        $clotures = app(CloturerLesJourneesAction::class)->jusquAu($magasin, now());
+        $clotures = app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, now());
 
         $this->assertSame(['2026-10-05', '2026-10-06', '2026-10-08', '2026-10-09'], $clotures->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->toDateString())->all());
         $this->assertTrue(app(CloturerLesJourneesAction::class)->journeesEnAttente(now())->isEmpty());
@@ -131,23 +133,23 @@ class CloturerLesJourneesActionTest extends TestCase
         $this->travelTo('2026-10-05 10:00:00');
         $this->vendreUnTicket();
         $this->travelTo('2026-10-08 19:00:00');
-        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class)) extends CloturerCaisseAction
+        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), app(LecteurDesDroits::class), app(OperateurCourant::class)) extends CloturerCaisseAction
         {
-            public function handle(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
+            public function parLeSysteme(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
             {
                 if (CarbonImmutable::parse($date)->toDateString() === '2026-10-07') {
                     throw new RuntimeException('Panne du serveur de base de données.');
                 }
 
-                return parent::handle($magasin, $date);
+                return parent::parLeSysteme($magasin, $date);
             }
         });
 
-        $this->assertThrows(fn () => app(CloturerLesJourneesAction::class)->jusquAu($magasin, now()), RuntimeException::class, 'Panne du serveur de base de données.');
+        $this->assertThrows(fn () => app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, now()), RuntimeException::class, 'Panne du serveur de base de données.');
         $this->assertSame(['2026-10-05', '2026-10-06'], ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->toDateString())->all());
 
         $this->app->forgetInstance(CloturerCaisseAction::class);
-        $reprise = app(CloturerLesJourneesAction::class)->jusquAu($magasin, now());
+        $reprise = app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, now());
 
         $this->assertSame(['2026-10-07', '2026-10-08'], $reprise->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->toDateString())->all());
     }
@@ -164,8 +166,8 @@ class CloturerLesJourneesActionTest extends TestCase
         $this->vendreUnTicket();
         $magasin = $this->magasin();
 
-        $this->assertThrows(fn () => app(CloturerLesJourneesAction::class)->jusquAu($autreMagasin, now()), LogicException::class, 'Les journées d\'un magasin ne se clôturent que depuis ce magasin.');
+        $this->assertThrows(fn () => app(CloturerLesJourneesAction::class)->parLeSysteme($autreMagasin, now()), LogicException::class, 'Les journées d\'un magasin ne se clôturent que depuis ce magasin.');
         $this->assertSame(0, ClotureCaisse::withoutGlobalScopes()->count());
-        $this->assertTrue(app(CloturerLesJourneesAction::class)->jusquAu($magasin, now())->isEmpty());
+        $this->assertTrue(app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, now())->isEmpty());
     }
 }

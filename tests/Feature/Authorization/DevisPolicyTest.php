@@ -107,13 +107,13 @@ class DevisPolicyTest extends TestCase
         $this->travelTo('2026-10-05 10:00:00');
         $proprietaire = User::factory()->create();
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $envoye = app(EmettreDevisAction::class)->handle($this->creerUnDevis(['date_validite' => '2026-10-08']));
+        $envoye = app(EmettreDevisAction::class)->handle(self::auteur(), $this->creerUnDevis(['date_validite' => '2026-10-08']));
 
         $devis = match ($statut) {
             StatutDevis::Envoye => $envoye,
-            StatutDevis::Brouillon => app(ModifierDevisAction::class)->handle($envoye, $envoye->client, [['produit_id' => $envoye->lignes->sole()->produit_id, 'quantite' => 2]]),
-            StatutDevis::Accepte => app(AccepterDevisAction::class)->handle($envoye),
-            StatutDevis::Refuse => app(RefuserDevisAction::class)->handle($envoye),
+            StatutDevis::Brouillon => app(ModifierDevisAction::class)->handle(self::auteur(), $envoye, $envoye->client, [['produit_id' => $envoye->lignes->sole()->produit_id, 'quantite' => 2]]),
+            StatutDevis::Accepte => app(AccepterDevisAction::class)->handle(self::auteur(), $envoye),
+            StatutDevis::Refuse => app(RefuserDevisAction::class)->handle(self::auteur(), $envoye),
             StatutDevis::Expire => $this->expirer($envoye),
         };
 
@@ -133,7 +133,7 @@ class DevisPolicyTest extends TestCase
     {
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $chargeBrouillon = $this->creerUnDevis();
-        app(EmettreDevisAction::class)->handle($chargeBrouillon);
+        app(EmettreDevisAction::class)->handle(self::auteur(), $chargeBrouillon);
 
         $this->assertThrows(fn () => $chargeBrouillon->delete(), LogicException::class, 'Ce devis ne peut pas être supprimé : seul un brouillon jamais envoyé se supprime, un devis numéroté reste.');
 
@@ -151,7 +151,7 @@ class DevisPolicyTest extends TestCase
         $this->travelTo('2026-10-05 10:00:00');
         $proprietaire = User::factory()->create();
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $devis = app(EmettreDevisAction::class)->handle($this->creerUnDevis(['date_validite' => '2026-10-08']));
+        $devis = app(EmettreDevisAction::class)->handle(self::auteur(), $this->creerUnDevis(['date_validite' => '2026-10-08']));
 
         $this->travelTo('2026-10-08 23:59:00');
         $leDernierJour = $proprietaire->can('accepter', $devis);
@@ -170,8 +170,8 @@ class DevisPolicyTest extends TestCase
         $proprietaire = User::factory()->create();
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $devis = $this->creerUnDevis();
-        app(AccepterDevisAction::class)->handle(app(EmettreDevisAction::class)->handle($devis));
-        app(CreerFactureDepuisDevisAction::class)->handle($devis->fresh());
+        app(AccepterDevisAction::class)->handle(self::auteur(), app(EmettreDevisAction::class)->handle(self::auteur(), $devis));
+        app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis->fresh());
 
         $this->assertFalse($proprietaire->can('delete', $devis->fresh()));
     }
@@ -233,6 +233,6 @@ class DevisPolicyTest extends TestCase
     {
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
 
-        return app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], $attributs);
+        return app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], $attributs);
     }
 }

@@ -240,8 +240,8 @@ class ProduitTest extends TestCase
     {
         return [
             'grand livre du stock' => [static fn (Produit $produit) => app(StockLedgerService::class)->enregistrer($produit, TypeMouvementStock::AjustementEntree, 3)],
-            'ligne d\'achat' => [static fn (Produit $produit) => app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 2]])],
-            'ligne de devis' => [static fn (Produit $produit) => app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]])],
+            'ligne d\'achat' => [static fn (Produit $produit) => app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 2]])],
+            'ligne de devis' => [static fn (Produit $produit) => app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]])],
         ];
     }
 

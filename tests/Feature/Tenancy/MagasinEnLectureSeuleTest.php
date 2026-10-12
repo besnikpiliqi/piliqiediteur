@@ -11,7 +11,6 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\CaisseSecurisee\Actions\VerifierIntegriteAction;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
-use App\Domain\CaisseSecurisee\Enums\DeclenchementVerification;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -160,7 +159,7 @@ class MagasinEnLectureSeuleTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasin();
         $this->vendreUnTicket();
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
         $this->passerEn($magasin, $situation);
 
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
@@ -193,10 +192,10 @@ class MagasinEnLectureSeuleTest extends TestCase
     public function test_une_vente_ne_s_emet_plus(string $situation, string $motif): void
     {
         $magasin = $this->ouvrirLeMagasin();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         $this->passerEn($magasin, $situation);
 
-        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($brouillon), LogicException::class, $this->refus($motif));
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon), LogicException::class, $this->refus($motif));
 
         $brouillon->refresh();
         $this->assertSame([StatutFacture::Brouillon, null], [$brouillon->statut, $brouillon->numero]);
@@ -210,7 +209,7 @@ class MagasinEnLectureSeuleTest extends TestCase
         $ticket = $this->vendreUnTicket();
         $this->passerEn($magasin, $situation);
 
-        $this->assertThrows(fn () => app(EnregistrerPaiementAction::class)->handle($ticket->client, [
+        $this->assertThrows(fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(), $ticket->client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 12,
             'recu_le' => today()->toDateString(),
@@ -226,10 +225,10 @@ class MagasinEnLectureSeuleTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasin();
         $ticket = $this->vendreUnTicket();
-        $avoir = app(CreerAvoirAction::class)->handle($ticket->client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $ticket->client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
         $this->passerEn($magasin, $situation);
 
-        $this->assertThrows(fn () => app(EmettreAvoirAction::class)->handle($avoir), LogicException::class, $this->refus($motif));
+        $this->assertThrows(fn () => app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir), LogicException::class, $this->refus($motif));
 
         $avoir->refresh();
         $this->assertSame([StatutAvoir::Brouillon, null], [$avoir->statut, $avoir->numero]);
@@ -241,12 +240,12 @@ class MagasinEnLectureSeuleTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasin();
         $produit = Produit::factory()->create(['suivi_stock' => true]);
-        $factureAchat = app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+        $factureAchat = app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 20],
         ]);
         $this->passerEn($magasin, $situation);
 
-        $this->assertThrows(fn () => app(ValiderFactureAchatAction::class)->handle($factureAchat), LogicException::class, $this->refus($motif));
+        $this->assertThrows(fn () => app(ValiderFactureAchatAction::class)->handle(self::auteur(), $factureAchat), LogicException::class, $this->refus($motif));
 
         $factureAchat->refresh();
         $this->assertSame([StatutFactureAchat::Brouillon, null], [$factureAchat->statut, $factureAchat->numero]);
@@ -258,13 +257,13 @@ class MagasinEnLectureSeuleTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasin();
         $produit = Produit::factory()->create(['suivi_stock' => true]);
-        $factureAchat = app(ValiderFactureAchatAction::class)->handle(app(CreerFactureAchatAction::class)->handle(Fournisseur::factory()->create(), [
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 20],
         ]));
-        $avoir = app(CreerAvoirFournisseurAction::class)->handle($factureAchat, [['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 1]]);
+        $avoir = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 1]]);
         $this->passerEn($magasin, $situation);
 
-        $this->assertThrows(fn () => app(EmettreAvoirFournisseurAction::class)->handle($avoir), LogicException::class, $this->refus($motif));
+        $this->assertThrows(fn () => app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $avoir), LogicException::class, $this->refus($motif));
 
         $avoir->refresh();
         $this->assertSame([StatutAvoirFournisseur::Brouillon, null], [$avoir->statut, $avoir->numero]);
@@ -275,10 +274,10 @@ class MagasinEnLectureSeuleTest extends TestCase
     public function test_un_devis_ne_se_numerote_plus(string $situation, string $motif): void
     {
         $magasin = $this->ouvrirLeMagasin();
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         $this->passerEn($magasin, $situation);
 
-        $this->assertThrows(fn () => app(EmettreDevisAction::class)->handle($devis), LogicException::class, $this->refus($motif));
+        $this->assertThrows(fn () => app(EmettreDevisAction::class)->handle(self::auteur(), $devis), LogicException::class, $this->refus($motif));
 
         $devis->refresh();
         $this->assertSame([StatutDevis::Brouillon, null], [$devis->statut, $devis->numero]);
@@ -292,7 +291,7 @@ class MagasinEnLectureSeuleTest extends TestCase
         $ticket = $this->vendreUnTicket();
         $this->passerEn($magasin, $situation);
 
-        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->handle($ticket, 'client@exemple.fr', null, $this->proprietaireDe($magasin)), LogicException::class, $this->refus($motif));
+        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->handle($this->proprietaireDe($magasin), $ticket, 'client@exemple.fr', null), LogicException::class, $this->refus($motif));
 
         Queue::assertNotPushed(EnvoyerDocumentJob::class);
         $this->assertSame(0, EnvoiDocument::query()->count());
@@ -309,7 +308,7 @@ class MagasinEnLectureSeuleTest extends TestCase
         $this->passerEn($magasin, $situation);
         $this->travelTo('2026-10-20 09:00:00');
 
-        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->relancer($facture, 'client@exemple.fr', $this->proprietaireDe($magasin)), LogicException::class, $this->refus($motif));
+        $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->relancer($this->proprietaireDe($magasin), $facture, 'client@exemple.fr'), LogicException::class, $this->refus($motif));
 
         Queue::assertNotPushed(EnvoyerDocumentJob::class);
         $this->assertSame(0, EnvoiDocument::query()->count());
@@ -398,7 +397,7 @@ class MagasinEnLectureSeuleTest extends TestCase
         $this->vendreUnTicket();
         $this->passerEn($magasin, $situation);
 
-        $rapport = app(VerifierIntegriteAction::class)->handle($magasin, true, DeclenchementVerification::Commande);
+        $rapport = app(VerifierIntegriteAction::class)->parLeSysteme($magasin, true);
 
         $this->assertTrue($rapport->estConforme());
         $this->assertSame(1, EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement)->where('type', (string) CodeEvenement::OperationDeControle->value)->count());
@@ -415,7 +414,7 @@ class MagasinEnLectureSeuleTest extends TestCase
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->ouvrirLeMagasin();
         $ticket = $this->vendreUnTicket();
-        $envoi = app(EnvoyerDocumentAction::class)->handle($ticket, 'client@exemple.fr', null, null);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $ticket, 'client@exemple.fr', null);
         $magasin->societe->forceFill(['statut' => StatutSociete::Suspendue])->save();
 
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
@@ -500,9 +499,9 @@ class MagasinEnLectureSeuleTest extends TestCase
      */
     private function vendreUnTicket(): Facture
     {
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
-        return app(EmettreFactureAction::class)->handle($brouillon);
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
     }
 
     /**
@@ -511,11 +510,11 @@ class MagasinEnLectureSeuleTest extends TestCase
      */
     private function factureEchueAujourdhui(): Facture
     {
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(['email' => 'client@exemple.fr', 'delai_paiement_jours' => 0]), [
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(['email' => 'client@exemple.fr', 'delai_paiement_jours' => 0]), [
             ['produit_id' => $this->produit()->id, 'quantite' => 1],
         ]);
 
-        return app(EmettreFactureAction::class)->handle($brouillon);
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
     }
 
     private function refus(string $motif): string

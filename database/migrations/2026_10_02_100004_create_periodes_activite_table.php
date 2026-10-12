@@ -27,7 +27,15 @@ return new class extends Migration
             $table->string('motif_fin', 30)->nullable();
             // null : le système.
             $table->foreignId('ouverte_par')->nullable()->constrained('users')->restrictOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('ouverte_par_nom')->nullable();
             $table->foreignId('fermee_par')->nullable()->constrained('users')->restrictOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('fermee_par_nom')->nullable();
             $table->timestamps();
 
             $table->index(['magasin_id', 'debut']);

@@ -43,7 +43,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
 
     private function emettreFacture(Client $client, Produit $produit, int $quantite = 1): Facture
     {
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => $quantite],
         ]);
 
@@ -52,7 +52,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         // facture (voir son docblock), jamais l'objet $facture détenu ici
         // -- sans ce rechargement, le statut en mémoire resterait "Emise"
         // même si la ligne en base a bien été mise à jour.
-        return app(EmettreFactureAction::class)->handle($facture)->fresh();
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $facture)->fresh();
     }
 
     /**
@@ -61,7 +61,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
      */
     private function vendreEnCaisse(Client $client, Produit $produit, int $quantite = 1): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle($client, [
+        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => $quantite],
         ], ModePaiement::Especes);
     }
@@ -70,11 +70,11 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
     {
         $ligneFacture = $factureOrigine->lignes->firstOrFail();
 
-        $avoir = app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => $quantite],
         ], 'Produit défectueux');
 
-        return app(EmettreAvoirAction::class)->handle($avoir);
+        return app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
     }
 
     public function test_un_credit_suffisant_couvre_integralement_une_nouvelle_facture(): void
@@ -118,7 +118,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $this->assertSame(0.0, $client->soldeCrediteur());
 
         // Le reliquat se règle ensuite normalement, comme un paiement classique.
-        app(EnregistrerPaiementAction::class)->handle($client, [
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 30,
             'recu_le' => now()->toDateString(),

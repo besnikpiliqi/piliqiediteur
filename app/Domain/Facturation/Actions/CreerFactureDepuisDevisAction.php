@@ -2,9 +2,12 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -20,12 +23,22 @@ use LogicException;
  * régime, l'émission le signale, et elle contrôle les conditions de la
  * nature (voir EmettreFactureAction). Converti, le devis n'est plus
  * modifiable (voir Devis::estModifiable()).
+ *
+ * Son auteur, relu en base après le verrou du devis, doit pouvoir le
+ * convertir (voir DevisPolicy::convertir()) : c'est lui que la facture
+ * enregistre comme auteur.
  */
 class CreerFactureDepuisDevisAction
 {
-    public function handle(Devis $devis): Facture
+    public function __construct(private readonly LecteurDesDroits $lecteur) {}
+
+    /**
+     * @throws AuthorizationException
+     * @throws LogicException
+     */
+    public function handle(User $auteur, Devis $devis): Facture
     {
-        return DB::transaction(function () use ($devis) {
+        return DB::transaction(function () use ($auteur, $devis) {
             $devis = Devis::query()->whereKey($devis->getKey())->lockForUpdate()->firstOrFail();
 
             if ($devis->statut !== StatutDevis::Accepte) {
@@ -36,6 +49,8 @@ class CreerFactureDepuisDevisAction
                 throw new LogicException('Ce devis a déjà été converti en facture.');
             }
 
+            $compte = $this->lecteur->exiger($auteur, 'convertir', $devis->magasin, $devis);
+
             $facture = new Facture([
                 'devise' => $devis->devise,
                 'conditions_paiement' => $devis->conditions_paiement,
@@ -43,6 +58,7 @@ class CreerFactureDepuisDevisAction
             $facture->forceFill([
                 'client_id' => $devis->client_id,
                 'devis_id' => $devis->id,
+                'cree_par' => $compte->getKey(),
                 'type_client' => $devis->type_client,
                 'franchise_en_base' => $devis->franchise_en_base,
                 ...$devis->only(['nature_operation', 'livraison_adresse', 'livraison_complement', 'livraison_code_postal', 'livraison_ville', 'livraison_pays', 'livraison_date', 'transport_par']),

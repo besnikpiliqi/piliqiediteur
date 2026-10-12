@@ -102,7 +102,7 @@ class ClotureCaisseResource extends Resource
                 TextEntry::make('numero')->label('Numéro'),
                 TextEntry::make('date_cloture')->label('Journée clôturée')->date('d/m/Y'),
                 TextEntry::make('cloturee_a')->label('Clôturée le')->dateTime('d/m/Y à H:i'),
-                TextEntry::make('creePar.name')->label('Déclenchée par')->placeholder('Automatique (planifiée à minuit)'),
+                TextEntry::make('cree_par_nom')->label('Déclenchée par')->placeholder('Automatique (planifiée à minuit)'),
             ])->columns(2),
 
             // Ventes moins avoirs du jour (voir CloturerCaisseAction).
@@ -169,7 +169,7 @@ class ClotureCaisseResource extends Resource
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR'),
                 Tables\Columns\TextColumn::make('cree_par')
                     ->label('Déclenchée par')
-                    ->state(fn (ClotureCaisse $record) => $record->creePar?->name ?? 'Automatique')
+                    ->state(fn (ClotureCaisse $record) => $record->cree_par_nom ?? 'Automatique')
                     ->badge()
                     ->color(fn (ClotureCaisse $record) => $record->cree_par === null ? 'gray' : 'info'),
                 Tables\Columns\TextColumn::make('cloturee_a')->label('Clôturée le')->dateTime('d/m/Y H:i'),

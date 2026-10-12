@@ -42,12 +42,12 @@ class ImputerAvoirSurSesFacturesActionConcurrenceTest extends TestCase
     {
         $produit = Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]));
     }
 
     private function payee(Facture $facture): Facture
     {
-        app(EnregistrerPaiementAction::class)->handle($facture->client, [
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Virement->value,
             'montant' => $facture->total_ttc,
             'recu_le' => today()->toDateString(),
@@ -58,7 +58,7 @@ class ImputerAvoirSurSesFacturesActionConcurrenceTest extends TestCase
 
     private static function avoirTotal(int $clientId, int $ligneFactureId): Avoir
     {
-        return app(EnregistrerAvoirAction::class)->handle(Client::query()->findOrFail($clientId), [['ligne_facture_id' => $ligneFactureId, 'quantite' => 1]], 'Retour');
+        return app(EnregistrerAvoirAction::class)->handle(self::auteur(), Client::query()->findOrFail($clientId), [['ligne_facture_id' => $ligneFactureId, 'quantite' => 1]], 'Retour');
     }
 
     /**

@@ -26,6 +26,10 @@ return new class extends Migration
             // SHA-256 du fichier déposé, avant son chiffrement.
             $table->char('empreinte', 64);
             $table->foreignId('deposee_par')->constrained('users')->restrictOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('deposee_par_nom');
             $table->timestamp('deposee_le');
             $table->timestamp('effacee_le')->nullable();
             $table->timestamps();

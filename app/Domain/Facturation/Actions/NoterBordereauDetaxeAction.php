@@ -2,11 +2,14 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\BordereauDetaxe;
 use App\Domain\Facturation\Models\Facture;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -40,14 +43,19 @@ use LogicException;
  *
  * Le ticket se relit, verrouillé, dans le magasin actif (MagasinScope) :
  * celui d'un autre magasin est introuvable. Un magasin suspendu ou fermé
- * ne note plus rien (voir Magasin::verifierQuIlEstOuvert()).
+ * ne note plus rien (voir Magasin::verifierQuIlEstOuvert()). Son auteur,
+ * relu en base après le verrou du ticket, doit pouvoir le justifier (voir
+ * FacturePolicy::justifier()) ; le bordereau note son nom figé.
  */
 class NoterBordereauDetaxeAction
 {
+    public function __construct(private readonly LecteurDesDroits $lecteur) {}
+
     /**
+     * @throws AuthorizationException
      * @throws LogicException
      */
-    public function handle(Facture $facture, string $numero): BordereauDetaxe
+    public function handle(User $auteur, Facture $facture, string $numero): BordereauDetaxe
     {
         $numero = Str::upper(trim($numero));
 
@@ -55,9 +63,10 @@ class NoterBordereauDetaxeAction
             throw new InvalidArgumentException('Le n° du bordereau de détaxe compte de 4 à 30 lettres, chiffres ou tirets.');
         }
 
-        return DB::transaction(function () use ($facture, $numero): BordereauDetaxe {
+        return DB::transaction(function () use ($auteur, $facture, $numero): BordereauDetaxe {
             $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
             $facture->magasin->verifierQuIlEstOuvert();
+            $compte = $this->lecteur->exiger($auteur, 'justifier', $facture->magasin, $facture);
 
             if (($refus = self::refusPour($facture)) !== null) {
                 throw new LogicException($refus);
@@ -70,7 +79,7 @@ class NoterBordereauDetaxeAction
             return BordereauDetaxe::forceCreate([
                 'facture_id' => $facture->getKey(),
                 'numero' => $numero,
-                'note_par' => auth()->id(),
+                'note_par' => $compte->getKey(),
             ])->setRelation('facture', $facture);
         });
     }

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
@@ -15,6 +16,7 @@ use App\Domain\Tenancy\Services\PeriodesDActivite;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Closure;
 use LogicException;
 use Throwable;
 
@@ -27,6 +29,8 @@ use Throwable;
  * journal des événements (JET 105), son statut passe à fermé (JET 270),
  * sa période d'activité se ferme ; puis ses caisses personnelles restées
  * ouvertes se ferment d'office (R5), sans jamais annuler la fermeture.
+ * Le registre l'inscrit au nom de la personne qui la ferme, ou du système ;
+ * les journées se clôturent et les caisses se ferment au nom du système.
  *
  * Fermé, il reste consultable, en lecture seule (« Démonstration
  * (terminée) »), et ne produit plus de ticket Z. Déjà fermé, rien n'est
@@ -40,6 +44,7 @@ class FermerLaDemonstrationAction
         private readonly FermerLesCaissesPersonnellesAction $fermerLesCaisses,
         private readonly PeriodesDActivite $periodesDActivite,
         private readonly JournalAudit $journalAudit,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
@@ -56,14 +61,16 @@ class FermerLaDemonstrationAction
         $contexte = app(TenantContext::class);
         $maintenant = CarbonImmutable::now();
 
-        $fermee = $contexte->runAs($demonstration, fn (): bool => $this->registre->sousVerrou($demonstration, function () use ($demonstration, $motif, $auteur, $maintenant): bool {
+        $auNomDe = fn (Closure $operation): mixed => $auteur === null ? $this->operateur->pendantLeSysteme($operation) : $this->operateur->pendant($auteur, $operation);
+
+        $fermee = $contexte->runAs($demonstration, fn (): bool => $auNomDe(fn (): bool => $this->registre->sousVerrou($demonstration, function () use ($demonstration, $motif, $auteur, $maintenant): bool {
             $verrouille = Magasin::query()->whereKey($demonstration->getKey())->lockForUpdate()->firstOrFail();
 
             if ($verrouille->statut === StatutMagasin::Ferme) {
                 return false;
             }
 
-            $this->cloturerLesJournees->jusquAu($verrouille, $maintenant);
+            $this->cloturerLesJournees->parLeSysteme($verrouille, $maintenant);
             $this->registre->journaliser(CodeEvenement::SortieDuModeDemonstration, ['motif' => $motif->value]);
             $verrouille->forceFill(['statut' => StatutMagasin::Ferme])->save();
             $this->registre->journaliser(CodeEvenement::ParametreDeConformite, [
@@ -76,7 +83,7 @@ class FermerLaDemonstrationAction
             $this->journalAudit->inscrire(ActionAuditee::DemonstrationFermee, $auteur, $verrouille, null, ['motif' => $motif->value], $verrouille);
 
             return true;
-        }));
+        })));
 
         if (! $fermee) {
             return;

@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * La fiche d'un client en lecture seule, ses vérifications VIES comprises
  * (voir ClientResource::sectionDesVerificationsVies()) : à qui peut voir
- * le client (voir ClientPolicy::view()), y compris le comptable ou
+ * le client (voir ClientPolicy::view()), y compris l'expert-comptable ou
  * l'observateur, dans un magasin suspendu ou fermé, et pour un client
  * archivé, dont les preuves restent lisibles.
  */

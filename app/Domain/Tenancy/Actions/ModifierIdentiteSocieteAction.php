@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -10,7 +11,6 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -94,9 +94,7 @@ class ModifierIdentiteSocieteAction
         }
 
         return $contexte->runAsSociete($societe, function () use ($auteur, $societe, $donnees): Societe {
-            if (Gate::forUser($auteur)->denies('modifierLesParametres', $societe)) {
-                throw new LogicException(self::MESSAGE_SANS_AUTORISATION);
-            }
+            $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'modifierLesParametres', $societe, $societe, new LogicException(self::MESSAGE_SANS_AUTORISATION));
 
             $valides = array_map(fn (mixed $valeur): mixed => is_string($valeur) && trim($valeur) === '' ? null : $valeur, $this->valider($societe, $donnees));
 

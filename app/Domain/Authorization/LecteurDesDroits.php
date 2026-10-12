@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;
 use LogicException;
+use Throwable;
 
 /**
  * Le contrôle des droits que fait chaque action métier, au moment même où
@@ -45,7 +46,7 @@ final class LecteurDesDroits
      * Relit l'auteur en base et lui pose la question dans ce magasin, qui
      * doit être le magasin actif.
      *
-     * @param  mixed  $cible  le modèle, ou sa classe, sur lequel porte la question
+     * @param  mixed  $cible  le modèle, ou sa classe, sur lequel porte la question ; une liste pour une question à plusieurs arguments
      *
      * @throws AuthorizationException
      * @throws LogicException
@@ -74,12 +75,13 @@ final class LecteurDesDroits
 
     /**
      * Pour un geste de la société (son espace d'administration, ses
-     * actions), la société devant être celle du contexte.
+     * actions), la société devant être celle du contexte. Une action qui
+     * dit son refus par sa propre exception la passe en $refus.
      *
      * @throws AuthorizationException
      * @throws LogicException
      */
-    public function exigerDansLaSociete(User $auteur, string $geste, Societe $societe, mixed $cible = null): User
+    public function exigerDansLaSociete(User $auteur, string $geste, Societe $societe, mixed $cible = null, ?Throwable $refus = null): User
     {
         $contexte = app(TenantContext::class);
 
@@ -87,16 +89,20 @@ final class LecteurDesDroits
             throw new LogicException('Un geste de la société ne se contrôle que dans le contexte de cette société.');
         }
 
-        return $this->repondre(User::query()->whereKey($auteur->getKey())->first(), $geste, $cible, self::REFUS_DANS_LA_SOCIETE);
+        return $this->repondre(User::query()->whereKey($auteur->getKey())->first(), $geste, $cible, $refus ?? new AuthorizationException(self::REFUS_DANS_LA_SOCIETE));
     }
 
     /**
-     * @throws AuthorizationException
+     * @throws Throwable
      */
-    private function repondre(?User $compteRelu, string $geste, mixed $cible, string $refus): User
+    private function repondre(?User $compteRelu, string $geste, mixed $cible, string|Throwable $refus): User
     {
-        if ($compteRelu === null || Gate::forUser($compteRelu)->denies($geste, $cible === null ? [] : [$cible])) {
-            throw new AuthorizationException($refus);
+        if ($compteRelu === null || Gate::forUser($compteRelu)->denies($geste, match (true) {
+            $cible === null => [],
+            is_array($cible) => $cible,
+            default => [$cible],
+        })) {
+            throw is_string($refus) ? new AuthorizationException($refus) : $refus;
         }
 
         return $compteRelu;

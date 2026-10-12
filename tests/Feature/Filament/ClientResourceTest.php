@@ -168,13 +168,13 @@ class ClientResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $facture = app(EnregistrerVenteCaisseAction::class)->handle($client, [
+        $facture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ], ModePaiement::Especes);
-        $avoir = app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]);
-        app(EmettreAvoirAction::class)->handle($avoir);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), $avoir);
 
         Livewire::test(ListClients::class)
             ->assertSuccessful()
@@ -333,7 +333,7 @@ class ClientResourceTest extends TestCase
         $this->connecterLeProprietaire();
         $client = Client::factory()->create(['nom' => 'Jeanne Martin']);
         $produit = Produit::factory()->create(['nom' => 'Coque', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
 
         Livewire::test(EditClient::class, ['record' => $client->getRouteKey()])
             ->callAction('archiver')

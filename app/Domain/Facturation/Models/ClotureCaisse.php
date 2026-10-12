@@ -9,8 +9,8 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Database\Factories\ClotureCaisseFactory;
@@ -36,6 +36,18 @@ use LogicException;
  */
 class ClotureCaisse extends Model
 {
+    use FigeLeNomDeSesAuteurs;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'cree_par' => 'cree_par_nom',
+        ];
+    }
+
     /** @use HasFactory<ClotureCaisseFactory> */
     use BelongsToMagasin, HasFactory, VentileLaTvaParTaux;
 
@@ -54,13 +66,6 @@ class ClotureCaisse extends Model
         'total_ttc' => 'decimal:2',
         'cloturee_a' => 'datetime',
     ];
-
-    protected static function booted(): void
-    {
-        static::creating(function (ClotureCaisse $cloture) {
-            $cloture->cree_par ??= auth()->id();
-        });
-    }
 
     /**
      * La clôture de tel jour (AAAA-MM-JJ). whereDate() plutôt qu'une
@@ -129,11 +134,6 @@ class ClotureCaisse extends Model
         if ($refus !== null) {
             throw new LogicException($refus);
         }
-    }
-
-    public function creePar(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'cree_par');
     }
 
     public function factures(): HasMany

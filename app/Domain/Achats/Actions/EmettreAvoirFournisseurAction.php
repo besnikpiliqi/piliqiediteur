@@ -6,9 +6,15 @@ use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Events\AvoirFournisseurEmis;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -18,44 +24,63 @@ use LogicException;
  * (voir AvoirFournisseurEmis/DecrementerStockApresEmissionAvoirFournisseur).
  * Un magasin suspendu ou fermé n'en émet plus (voir
  * Magasin::verifierQuIlEstOuvert()).
+ *
+ * Il fait sortir du stock et recalcule le coût moyen, comme une
+ * validation d'achat : son auteur est relu sous le verrou de sa ligne,
+ * avant l'avoir et ses produits (voir LecteurDesDroits), et doit pouvoir
+ * créer un avoir fournisseur.
  */
 class EmettreAvoirFournisseurAction
 {
     public function __construct(
         private readonly DocumentNumberingService $numerotation,
         private readonly CalculateurLigne $calculateur,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
     ) {}
+
+    /**
+     * @throws AuthorizationException
+     * @throws LogicException
+     */
+    public function handle(User $auteur, AvoirFournisseur $avoirFournisseur): AvoirFournisseur
+    {
+        return DB::transaction(function () use ($auteur, $avoirFournisseur) {
+            $magasin = app(TenantContext::class)->magasin();
+            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlEstOuvert();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, AvoirFournisseur::class);
+
+            return $this->operateur->pendant($compte, fn (): AvoirFournisseur => $this->emettre($avoirFournisseur));
+        });
+    }
 
     /**
      * @throws LogicException
      */
-    public function handle(AvoirFournisseur $avoirFournisseur): AvoirFournisseur
+    private function emettre(AvoirFournisseur $avoirFournisseur): AvoirFournisseur
     {
-        return DB::transaction(function () use ($avoirFournisseur) {
-            $avoirFournisseur = AvoirFournisseur::query()->whereKey($avoirFournisseur->getKey())->lockForUpdate()->firstOrFail();
-            $avoirFournisseur->magasin->verifierQuIlEstOuvert();
+        $avoirFournisseur = AvoirFournisseur::query()->whereKey($avoirFournisseur->getKey())->lockForUpdate()->firstOrFail();
 
-            if (! $avoirFournisseur->statut->peutTransitionnerVers(StatutAvoirFournisseur::Emise)) {
-                throw new LogicException("Impossible d'émettre un avoir fournisseur au statut [{$avoirFournisseur->statut->value}].");
-            }
+        if (! $avoirFournisseur->statut->peutTransitionnerVers(StatutAvoirFournisseur::Emise)) {
+            throw new LogicException("Impossible d'émettre un avoir fournisseur au statut [{$avoirFournisseur->statut->value}].");
+        }
 
-            $this->arreterLesMontants($avoirFournisseur);
-            $avoirFournisseur->verifierQueLeStockSuffit();
+        $this->arreterLesMontants($avoirFournisseur);
+        $avoirFournisseur->verifierQueLeStockSuffit();
 
-            $numero = $this->numerotation->suivant($avoirFournisseur->magasin, TypeDocument::AvoirFournisseur, now()->format('Y'));
+        $numero = $this->numerotation->suivant($avoirFournisseur->magasin, TypeDocument::AvoirFournisseur, now()->format('Y'));
 
-            $avoirFournisseur->forceFill([
-                'numero' => $numero,
-                'statut' => StatutAvoirFournisseur::Emise,
-                'date_emission' => now(),
-            ])->save();
+        $avoirFournisseur->forceFill([
+            'numero' => $numero,
+            'statut' => StatutAvoirFournisseur::Emise,
+            'date_emission' => now(),
+        ])->save();
 
-            // Synchrone et dans la même transaction, voir le commentaire de
-            // AvoirFournisseurEmis.
-            AvoirFournisseurEmis::dispatch($avoirFournisseur);
+        // Synchrone et dans la même transaction, voir le commentaire de
+        // AvoirFournisseurEmis.
+        AvoirFournisseurEmis::dispatch($avoirFournisseur);
 
-            return $avoirFournisseur;
-        });
+        return $avoirFournisseur;
     }
 
     /**

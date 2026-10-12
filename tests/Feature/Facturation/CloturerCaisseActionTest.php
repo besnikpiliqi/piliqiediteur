@@ -44,11 +44,11 @@ class CloturerCaisseActionTest extends TestCase
     private function emettreFacturePour(Client $client, float $prixUnitaireHt = 100): Facture
     {
         $produit = Produit::factory()->create(['prix_vente_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        return app(EmettreFactureAction::class)->handle($facture);
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
     }
 
     public function test_agrege_uniquement_les_ventes_a_des_clients_particuliers(): void
@@ -59,7 +59,7 @@ class CloturerCaisseActionTest extends TestCase
         $factureParticulier = $this->emettreFacturePour($particulier, 100); // 120 TTC
         $this->emettreFacturePour($professionnel, 50); // ne doit jamais être agrégée
 
-        $cloture = app(CloturerCaisseAction::class)->handle($this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
 
         $this->assertSame(1, $cloture->nombre_ventes);
         $this->assertSame('120.00', $cloture->total_ttc);
@@ -77,16 +77,16 @@ class CloturerCaisseActionTest extends TestCase
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         // Brouillon jamais émis : pas de date_emission, jamais inclus.
-        app(CreerFactureAction::class)->handle($client, [
+        app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
         $venteCorrigee = $this->emettreFacturePour($client);
-        app(EnregistrerAvoirAction::class)->handle($client, [
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteCorrigee->lignes->firstOrFail()->id, 'quantite' => 1],
         ], 'Erreur de saisie');
 
-        $cloture = app(CloturerCaisseAction::class)->handle($this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
 
         $this->assertSame(1, $cloture->nombre_ventes);
         $this->assertSame(1, $cloture->nombre_avoirs);
@@ -103,14 +103,14 @@ class CloturerCaisseActionTest extends TestCase
         $client = Client::factory()->create();
         $this->travelTo(now()->subDay());
         $venteDHier = $this->emettreFacturePour($client, 50); // 60 TTC
-        app(CloturerCaisseAction::class)->handle($this->magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
         $this->travelBack();
         $this->emettreFacturePour($client, 100); // 120 TTC
-        $avoir = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteDHier->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
 
-        $cloture = app(CloturerCaisseAction::class)->handle($this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
 
         $this->assertSame(1, $cloture->nombre_ventes);
         $this->assertSame(1, $cloture->nombre_avoirs);
@@ -134,12 +134,12 @@ class CloturerCaisseActionTest extends TestCase
         $venteDu14 = $this->emettreFacturePour($client, 50);
         $this->travelTo(CarbonImmutable::parse('2026-07-14 22:30:00', 'UTC'));
         $venteDu15 = $this->emettreFacturePour($client, 100);
-        $avoirDu15 = app(EnregistrerAvoirAction::class)->handle($client, [
+        $avoirDu15 = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteDu14->lignes->firstOrFail()->id, 'quantite' => 1],
         ]);
 
-        $clotureDu14 = app(CloturerCaisseAction::class)->handle($this->magasin, '2026-07-14');
-        $clotureDu15 = app(CloturerCaisseAction::class)->handle($this->magasin, '2026-07-15');
+        $clotureDu14 = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-07-14');
+        $clotureDu15 = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-07-15');
 
         $this->assertSame([1, 0, '60.00'], [$clotureDu14->nombre_ventes, $clotureDu14->nombre_avoirs, $clotureDu14->total_ttc]);
         $this->assertSame([1, 1, '60.00'], [$clotureDu15->nombre_ventes, $clotureDu15->nombre_avoirs, $clotureDu15->total_ttc]);
@@ -158,15 +158,15 @@ class CloturerCaisseActionTest extends TestCase
         $client = Client::factory()->create();
         $ecran = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $pose = Service::factory()->create();
-        $vente = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+        $vente = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $ecran->id, 'quantite' => 2],
             ['service_id' => $pose->id, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20, 'quantite' => 1],
         ]));
-        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $vente->lignes->firstWhere('produit_id', $ecran->id)->id, 'quantite' => 1],
         ]));
 
-        $cloture = app(CloturerCaisseAction::class)->handle($this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
 
         $this->assertSame([
             ['nature' => NatureLigne::Bien, 'taux_tva' => '20.00', 'montant_ht' => 50.0, 'montant_tva' => 10.0, 'montant_ttc' => 60.0],
@@ -183,12 +183,12 @@ class CloturerCaisseActionTest extends TestCase
         $client = Client::factory()->create();
         $this->emettreFacturePour($client, 100); // 120 TTC
         $venteRendue = $this->emettreFacturePour($client, 50); // 60 TTC
-        app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteRendue->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
         $client->delete();
 
-        $cloture = app(CloturerCaisseAction::class)->handle($this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
 
         $this->assertSame(2, $cloture->nombre_ventes);
         $this->assertSame(1, $cloture->nombre_avoirs);
@@ -199,11 +199,11 @@ class CloturerCaisseActionTest extends TestCase
     {
         $professionnel = Client::factory()->professionnel()->create();
         $facture = $this->emettreFacturePour($professionnel, 50);
-        $avoir = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($professionnel, [
+        $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $professionnel, [
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
 
-        $cloture = app(CloturerCaisseAction::class)->handle($this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
 
         $this->assertSame(0, $cloture->nombre_avoirs);
         $this->assertSame('0.00', $cloture->total_ttc);
@@ -212,7 +212,7 @@ class CloturerCaisseActionTest extends TestCase
 
     public function test_numerote_la_cloture(): void
     {
-        $cloture = app(CloturerCaisseAction::class)->handle($this->magasin, now());
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
 
         $this->assertNotNull($cloture->numero);
         $this->assertNotNull($cloture->cloturee_a);
@@ -221,9 +221,9 @@ class CloturerCaisseActionTest extends TestCase
     public function test_une_journee_deja_cloturee_ne_peut_pas_letre_deux_fois(): void
     {
         $this->travelTo('2026-10-09 19:00:00');
-        app(CloturerCaisseAction::class)->handle($this->magasin, now());
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
 
-        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle($this->magasin, now()), LogicException::class, 'La journée du 09/10/2026 est déjà clôturée.');
+        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now()), LogicException::class, 'La journée du 09/10/2026 est déjà clôturée.');
     }
 
     public function test_deux_journees_differentes_peuvent_chacune_etre_cloturees(): void
@@ -231,8 +231,8 @@ class CloturerCaisseActionTest extends TestCase
         $hier = now()->subDay();
         $aujourdhui = now();
 
-        $clotureHier = app(CloturerCaisseAction::class)->handle($this->magasin, $hier);
-        $clotureAujourdhui = app(CloturerCaisseAction::class)->handle($this->magasin, $aujourdhui);
+        $clotureHier = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, $hier);
+        $clotureAujourdhui = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, $aujourdhui);
 
         $this->assertNotSame($clotureHier->id, $clotureAujourdhui->id);
     }
@@ -247,7 +247,7 @@ class CloturerCaisseActionTest extends TestCase
         $this->emettreFacturePour(Client::factory()->create());
         $this->travelTo('2026-10-09 19:00:00');
 
-        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-09'), LogicException::class, "Clôturez d'abord la journée du 08/10/2026.");
+        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09'), LogicException::class, "Clôturez d'abord la journée du 08/10/2026.");
         $this->assertSame(0, ClotureCaisse::query()->count());
     }
 
@@ -260,13 +260,13 @@ class CloturerCaisseActionTest extends TestCase
     {
         $this->travelTo('2026-10-06 10:00:00');
         $this->emettreFacturePour(Client::factory()->create());
-        app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-06');
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-06');
         PeriodeActivite::query()->where('magasin_id', $this->magasin->id)->sole()->forceFill(['fin' => CarbonImmutable::parse('2026-10-06 19:00:00', config('app.timezone')), 'motif_fin' => MotifFermeture::Temporaire])->save();
         (new PeriodeActivite)->forceFill(['magasin_id' => $this->magasin->id, 'debut' => CarbonImmutable::parse('2026-10-08 09:00:00', config('app.timezone'))])->save();
         $this->travelTo('2026-10-08 19:00:00');
 
-        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-07'), LogicException::class, "Le magasin était fermé le 07/10/2026 : cette journée n'a pas de clôture.");
-        $this->assertSame('2026-10-08', app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-08')->date_cloture->toDateString());
+        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-07'), LogicException::class, "Le magasin était fermé le 07/10/2026 : cette journée n'a pas de clôture.");
+        $this->assertSame('2026-10-08', app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-08')->date_cloture->toDateString());
         $this->assertSame(2, ClotureCaisse::query()->count());
     }
 
@@ -274,16 +274,16 @@ class CloturerCaisseActionTest extends TestCase
     {
         $this->travelTo('2026-10-09 19:00:00');
 
-        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-10'), LogicException::class, "La journée du 10/10/2026 n'est pas encore commencée.");
+        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-10'), LogicException::class, "La journée du 10/10/2026 n'est pas encore commencée.");
         $this->assertSame(0, ClotureCaisse::query()->count());
     }
 
     public function test_une_journee_anterieure_a_la_derniere_journee_cloturee_est_refusee(): void
     {
         $this->travelTo('2026-10-09 19:00:00');
-        app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-09');
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
 
-        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-07'), LogicException::class, "La journée du 07/10/2026 précède la dernière journée clôturée, celle du 09/10/2026 : les journées se clôturent dans l'ordre.");
+        $this->assertThrows(fn () => app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-07'), LogicException::class, "La journée du 07/10/2026 précède la dernière journée clôturée, celle du 09/10/2026 : les journées se clôturent dans l'ordre.");
         $this->assertSame(1, ClotureCaisse::query()->count());
     }
 
@@ -303,7 +303,7 @@ class CloturerCaisseActionTest extends TestCase
         $vendeurDeNuit = User::factory()->create();
         PanierCaisse::factory()->create(['user_id' => $vendeurDeNuit->id]);
 
-        app(CloturerCaisseAction::class)->handle($this->magasin, '2026-10-09');
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
 
         $this->assertSame([
             ['260', []],

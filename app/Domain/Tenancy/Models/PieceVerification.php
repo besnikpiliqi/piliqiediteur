@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Models;
 
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Enums\TypePiece;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
@@ -20,7 +21,17 @@ use LogicException;
  */
 class PieceVerification extends Model
 {
-    use BelongsToSociete;
+    use BelongsToSociete, FigeLeNomDeSesAuteurs;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'deposee_par' => 'deposee_par_nom',
+        ];
+    }
 
     public const CONSERVATION_EN_JOURS = 30;
 

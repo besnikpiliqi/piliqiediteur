@@ -47,12 +47,20 @@ class VerifierIntegriteActionTest extends TestCase
     {
         $produit = Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EnregistrerVenteCaisseAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
     }
 
+    /**
+     * Une vérification lancée par la commande, au nom du système, ou depuis
+     * l'écran, au nom de son auteur.
+     */
     private function verifier(bool $complet, DeclenchementVerification $declenchement = DeclenchementVerification::Commande): RapportIntegrite
     {
-        return app(VerifierIntegriteAction::class)->handle(app(TenantContext::class)->magasin(), $complet, $declenchement);
+        $magasin = app(TenantContext::class)->magasin();
+
+        return $declenchement === DeclenchementVerification::Commande
+            ? app(VerifierIntegriteAction::class)->parLeSysteme($magasin, $complet)
+            : app(VerifierIntegriteAction::class)->handle(self::auteur(), $magasin, $complet);
     }
 
     /**

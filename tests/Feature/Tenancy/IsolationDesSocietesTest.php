@@ -29,6 +29,7 @@ use App\Domain\Tenancy\Services\EvaluateurDeVerification;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\FactureResource;
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
@@ -393,7 +394,7 @@ class IsolationDesSocietesTest extends TestCase
         $contexte->set($lyon);
         $client = Client::factory()->create(['nom' => 'Client de Lyon']);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 5]);
-        $vente = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        $vente = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
 
         $vuDeVilleurbanne = $contexte->runAs($villeurbanne, fn (): array => [
             Client::query()->where('nom', 'Client de Lyon')->exists(),
@@ -406,9 +407,28 @@ class IsolationDesSocietesTest extends TestCase
         $this->assertTrue($contexte->runAs($lyon, fn (): bool => MouvementStock::query()->where('produit_id', $produit->id)->exists()));
     }
 
+    /**
+     * Une vente de Lyon, ouverte à l'adresse du magasin de Villeurbanne,
+     * répond 404 à chaque compte qui a pourtant accès aux deux magasins :
+     * le propriétaire, un responsable des deux, l'expert-comptable.
+     */
+    public function test_l_url_d_un_enregistrement_d_un_autre_magasin_de_la_societe_repond_404_meme_pour_un_compte_autorise_dans_les_deux(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
+        $venteDeLyon = $this->vendre($lyon);
+
+        foreach ([$this->proprietaireDe($lyon), $this->responsable($lyon, $villeurbanne), $this->expertComptable($lyon)] as $compte) {
+            $this->flushSession();
+            $this->actingAs($compte);
+            $this->get(FactureResource::getUrl('view', ['record' => $venteDeLyon], tenant: $lyon))->assertOk();
+            $this->get(FactureResource::getUrl('view', ['record' => $venteDeLyon], tenant: $villeurbanne))->assertNotFound();
+        }
+    }
+
     private function vendre(Magasin $magasin): Facture
     {
-        return app(TenantContext::class)->runAs($magasin, fn (): Facture => app(EnregistrerVenteCaisseAction::class)->handle(
+        return app(TenantContext::class)->runAs($magasin, fn (): Facture => app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
             Client::factory()->create(),
             [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]],
             ModePaiement::Especes,

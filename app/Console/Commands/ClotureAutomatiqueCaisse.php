@@ -61,7 +61,7 @@ class ClotureAutomatiqueCaisse extends Command
                 $enEchec = false;
 
                 try {
-                    $cloturerLesJournees->jusquAu($magasin, $hier);
+                    $cloturerLesJournees->parLeSysteme($magasin, $hier);
                 } catch (Throwable $exception) {
                     report($exception);
                     $enEchec = true;

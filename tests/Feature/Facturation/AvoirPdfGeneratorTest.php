@@ -34,10 +34,10 @@ class AvoirPdfGeneratorTest extends TestCase
         app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['option_debits_tva' => true])->create());
         $client = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create();
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
-        $avoir = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
 
@@ -63,10 +63,10 @@ class AvoirPdfGeneratorTest extends TestCase
         ]));
         $client = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create();
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
-        $avoir = app(EmettreAvoirAction::class)->handle(app(CreerAvoirAction::class)->handle($client, [
+        $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
 
@@ -138,9 +138,9 @@ class AvoirPdfGeneratorTest extends TestCase
         $professionnel = Client::factory()->professionnel()->create();
         $particulier = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => '0.10', 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($professionnel, array_fill(0, 3, ['produit_id' => $produit->id, 'quantite' => 1])));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $professionnel, array_fill(0, 3, ['produit_id' => $produit->id, 'quantite' => 1])));
 
-        $avoirProfessionnel = app(EnregistrerAvoirAction::class)->handle($professionnel, [['ligne_facture_id' => $facture->lignes[1]->id, 'quantite' => 1]]);
+        $avoirProfessionnel = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $facture->lignes[1]->id, 'quantite' => 1]]);
         $avoirSurTicket = $this->crediter($particulier, $this->emettreUneFacture($particulier));
 
         $this->assertSame(['0.08', '0.01', '0.09'], [$avoirProfessionnel->total_ht, $avoirProfessionnel->total_tva, $avoirProfessionnel->total_ttc]);
@@ -166,7 +166,7 @@ class AvoirPdfGeneratorTest extends TestCase
         $this->travelTo('2026-10-12 10:00:00');
         $seconde = $this->emettreUneFacture($client);
 
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $premiere->lignes->firstOrFail()->id, 'quantite' => 1],
             ['ligne_facture_id' => $seconde->lignes->firstOrFail()->id, 'quantite' => 1],
         ]);
@@ -200,9 +200,9 @@ class AvoirPdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
         $avoir = $this->crediter($comptoir, $ticket);
-        app(EnregistrerVenteCaisseAction::class)->handle($comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $avoir->numero);
+        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $avoir->numero);
 
         $html = $this->rendu($avoir->fresh());
 
@@ -218,7 +218,7 @@ class AvoirPdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
         $client = Client::factory()->create();
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
 
         $avoir = $this->crediter($client, $ticket);
 
@@ -230,14 +230,14 @@ class AvoirPdfGeneratorTest extends TestCase
     {
         $produit = Produit::factory()->create(['suivi_stock' => false]);
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
     }
 
     private function crediter(Client $client, Facture $facture): Avoir
     {
-        return app(EnregistrerAvoirAction::class)->handle($client, [
+        return app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]);
     }

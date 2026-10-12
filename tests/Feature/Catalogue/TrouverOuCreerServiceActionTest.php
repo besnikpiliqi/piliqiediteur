@@ -26,7 +26,7 @@ class TrouverOuCreerServiceActionTest extends TestCase
 
     public function test_un_nouveau_nom_cree_un_service_actif_au_nom_nettoye(): void
     {
-        $service = app(TrouverOuCreerServiceAction::class)->handle("  Remplacement \t  écran ");
+        $service = app(TrouverOuCreerServiceAction::class)->handle(self::auteur(), "  Remplacement \t  écran ");
 
         $this->assertModelExists($service);
         $this->assertSame('Remplacement écran', $service->nom);
@@ -54,7 +54,7 @@ class TrouverOuCreerServiceActionTest extends TestCase
     {
         $existant = Service::factory()->create(['nom' => 'Main d\'œuvre']);
 
-        $service = app(TrouverOuCreerServiceAction::class)->handle($saisie);
+        $service = app(TrouverOuCreerServiceAction::class)->handle(self::auteur(), $saisie);
 
         $this->assertTrue($service->is($existant));
         $this->assertSame('Main d\'œuvre', $service->nom);
@@ -65,7 +65,7 @@ class TrouverOuCreerServiceActionTest extends TestCase
     {
         $existant = Service::factory()->create(['nom' => 'Remplacement écran']);
 
-        $service = app(TrouverOuCreerServiceAction::class)->handle('REMPLACEMENT ECRAN');
+        $service = app(TrouverOuCreerServiceAction::class)->handle(self::auteur(), 'REMPLACEMENT ECRAN');
 
         $this->assertTrue($service->is($existant));
         $this->assertSame(1, Service::query()->count());
@@ -73,9 +73,9 @@ class TrouverOuCreerServiceActionTest extends TestCase
 
     public function test_deux_noms_faits_seulement_d_emojis_differents_restent_deux_services(): void
     {
-        $telephone = app(TrouverOuCreerServiceAction::class)->handle('📱');
+        $telephone = app(TrouverOuCreerServiceAction::class)->handle(self::auteur(), '📱');
 
-        $deuxTelephones = app(TrouverOuCreerServiceAction::class)->handle('📱📱');
+        $deuxTelephones = app(TrouverOuCreerServiceAction::class)->handle(self::auteur(), '📱📱');
 
         $this->assertFalse($deuxTelephones->is($telephone));
         $this->assertSame(2, Service::query()->count());
@@ -106,7 +106,7 @@ class TrouverOuCreerServiceActionTest extends TestCase
             }
         });
 
-        $service = app(TrouverOuCreerServiceAction::class)->handle('diagnostic');
+        $service = app(TrouverOuCreerServiceAction::class)->handle(self::auteur(), 'diagnostic');
 
         $this->assertTrue($insere);
         $this->assertSame('Diagnostic', $service->nom);
@@ -118,7 +118,7 @@ class TrouverOuCreerServiceActionTest extends TestCase
     {
         $archive = Service::factory()->archive()->create(['nom' => 'Désoxydation']);
 
-        $service = app(TrouverOuCreerServiceAction::class)->handle('désoxydation');
+        $service = app(TrouverOuCreerServiceAction::class)->handle(self::auteur(), 'désoxydation');
 
         $this->assertTrue($service->is($archive));
         $this->assertTrue($archive->fresh()->actif);
@@ -129,7 +129,7 @@ class TrouverOuCreerServiceActionTest extends TestCase
         $serviceAutreMagasin = Service::factory()->create(['nom' => 'Diagnostic']);
         app(TenantContext::class)->set(Magasin::factory()->create());
 
-        $service = app(TrouverOuCreerServiceAction::class)->handle('Diagnostic');
+        $service = app(TrouverOuCreerServiceAction::class)->handle(self::auteur(), 'Diagnostic');
 
         $this->assertFalse($service->is($serviceAutreMagasin));
         $this->assertNotSame($serviceAutreMagasin->magasin_id, $service->magasin_id);
@@ -140,7 +140,7 @@ class TrouverOuCreerServiceActionTest extends TestCase
         $this->expectExceptionObject(new InvalidArgumentException('Le nom du service est obligatoire.'));
 
         try {
-            app(TrouverOuCreerServiceAction::class)->handle("  \t ");
+            app(TrouverOuCreerServiceAction::class)->handle(self::auteur(), "  \t ");
         } finally {
             $this->assertSame(0, Service::query()->count());
         }
@@ -148,7 +148,7 @@ class TrouverOuCreerServiceActionTest extends TestCase
 
     public function test_un_nom_de_150_caracteres_accentues_est_accepte(): void
     {
-        $service = app(TrouverOuCreerServiceAction::class)->handle(str_repeat('é', 150));
+        $service = app(TrouverOuCreerServiceAction::class)->handle(self::auteur(), str_repeat('é', 150));
 
         $this->assertSame(150, mb_strlen($service->fresh()->nom));
     }
@@ -158,7 +158,7 @@ class TrouverOuCreerServiceActionTest extends TestCase
         $this->expectExceptionObject(new InvalidArgumentException('Le nom du service ne doit pas dépasser 150 caractères.'));
 
         try {
-            app(TrouverOuCreerServiceAction::class)->handle(str_repeat('é', 151));
+            app(TrouverOuCreerServiceAction::class)->handle(self::auteur(), str_repeat('é', 151));
         } finally {
             $this->assertSame(0, Service::query()->count());
         }

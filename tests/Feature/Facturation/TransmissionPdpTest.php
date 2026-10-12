@@ -39,11 +39,11 @@ class TransmissionPdpTest extends TestCase
     private function emettreFacturePour(Client $client): Facture
     {
         $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        return app(EmettreFactureAction::class)->handle($facture);
+        return app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
     }
 
     public function test_une_facture_a_un_client_professionnel_avec_mandat_actif_declenche_la_transmission(): void

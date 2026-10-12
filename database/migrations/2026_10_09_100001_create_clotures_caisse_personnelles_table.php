@@ -15,6 +15,10 @@ return new class extends Migration
             // Le vendeur dont la caisse est fermée : tout membre qui vend ou
             // encaisse. Un compte n'est jamais supprimé.
             $table->foreignId('vendeur_id')->constrained('users')->restrictOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('vendeur_nom');
             // Qui l'a fermée (voir ModeFermetureCaisse) : le vendeur
             // (fermee_par, lui-même), un responsable pour lui (fermee_par),
             // ou d'office, après la clôture de la journée ou à minuit
@@ -22,6 +26,10 @@ return new class extends Migration
             // colonnes (voir ci-dessous).
             $table->string('mode_fermeture', 20);
             $table->foreignId('fermee_par')->nullable()->constrained('users')->restrictOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('fermee_par_nom')->nullable();
             // jusqu_au : la borne des opérations comptées (les ventes émises
             // jusqu'à cet instant, les encaissements reçus jusqu'à sa
             // journée), maintenant pour une fermeture par le vendeur ou un

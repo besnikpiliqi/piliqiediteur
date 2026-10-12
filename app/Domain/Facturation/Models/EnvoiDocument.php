@@ -7,6 +7,7 @@ use App\Domain\Facturation\Contracts\DocumentEnvoyable;
 use App\Domain\Facturation\Enums\NatureEnvoi;
 use App\Domain\Facturation\Enums\StatutEnvoi;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Models\User;
 use Database\Factories\EnvoiDocumentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -29,6 +30,18 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  */
 class EnvoiDocument extends Model
 {
+    use FigeLeNomDeSesAuteurs;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'envoye_par' => 'envoye_par_nom',
+        ];
+    }
+
     /** @use HasFactory<EnvoiDocumentFactory> */
     use BelongsToMagasin, HasFactory;
 

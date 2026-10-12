@@ -35,7 +35,7 @@ class CreerFactureActionTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20]);
 
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 2],
         ]);
 
@@ -58,7 +58,7 @@ class CreerFactureActionTest extends TestCase
         $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 13']);
         $mainDOeuvre = Service::factory()->create(['nom' => 'Pose écran']);
 
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $ecran->id, 'nature' => 'service', 'description' => 'Autre chose', 'quantite' => 1],
             ['service_id' => $mainDOeuvre->id, 'description' => 'Autre chose', 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
         ]);
@@ -76,7 +76,7 @@ class CreerFactureActionTest extends TestCase
         $this->expectExceptionObject(new InvalidArgumentException('Une ligne vend un produit ou un service du catalogue.'));
 
         try {
-            app(CreerFactureAction::class)->handle($client, [
+            app(CreerFactureAction::class)->handle(self::auteur(), $client, [
                 ['description' => 'Coque', 'prix_unitaire_ttc' => 10, 'taux_tva' => 20, 'quantite' => 1],
             ]);
         } finally {
@@ -97,7 +97,7 @@ class CreerFactureActionTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("La quantité doit être un nombre entier d'articles, au moins 1.");
 
-        app(CreerFactureAction::class)->handle($client, [
+        app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1.5],
         ]);
     }
@@ -109,7 +109,7 @@ class CreerFactureActionTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        app(CreerFactureAction::class)->handle($client, [
+        app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 0],
         ]);
     }
@@ -120,7 +120,7 @@ class CreerFactureActionTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        app(CreerFactureAction::class)->handle($client, []);
+        app(CreerFactureAction::class)->handle(self::auteur(), $client, []);
     }
 
     public function test_une_remise_reduit_le_montant_ht_de_la_ligne(): void
@@ -128,7 +128,7 @@ class CreerFactureActionTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20]);
 
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 10],
         ]);
 
@@ -146,7 +146,7 @@ class CreerFactureActionTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
 
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'taux_tva' => 0, 'quantite' => 3],
         ]);
 
@@ -164,7 +164,7 @@ class CreerFactureActionTest extends TestCase
         $client = Client::factory()->create();
         $service = Service::factory()->create();
 
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['service_id' => $service->id, 'prix_unitaire_ttc' => '108.50', 'quantite' => 1],
         ]);
 
@@ -177,7 +177,7 @@ class CreerFactureActionTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20]);
 
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
@@ -201,7 +201,7 @@ class CreerFactureActionTest extends TestCase
         $coque = Produit::factory()->create(['taux_tva' => 20]);
         $cable = Produit::factory()->create(['taux_tva' => 20]);
 
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $coque->id, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20],
             ['produit_id' => $cable->id, 'quantite' => 3, 'prix_unitaire_ttc' => '10.05', 'taux_tva' => 20],
         ]);
@@ -227,7 +227,7 @@ class CreerFactureActionTest extends TestCase
         $coque = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
         $cable = Produit::factory()->create(['prix_vente_ht' => 10.01, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $coque->id, 'quantite' => 2],
             ['produit_id' => $cable->id, 'quantite' => 3],
         ]);
@@ -289,7 +289,7 @@ class CreerFactureActionTest extends TestCase
     {
         $client = $professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create();
 
-        $facture = app(CreerFactureAction::class)->handle($client, $this->lignesDesArticles($articles));
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, $this->lignesDesArticles($articles));
 
         $this->assertSame($lignesAttendues, $facture->lignes->map(fn (LigneFacture $ligne): array => [$ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc])->all());
         $this->assertSame($totauxAttendus, [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
@@ -302,7 +302,7 @@ class CreerFactureActionTest extends TestCase
      */
     public function test_la_tva_de_chaque_taux_d_une_facture_professionnelle_est_celle_de_son_total_ht(): void
     {
-        $facture = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->lignesDesArticles([
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), $this->lignesDesArticles([
             ['0.10', 20, 1, 0], ['4.20', 5.5, 3, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0],
         ]));
 
@@ -321,7 +321,7 @@ class CreerFactureActionTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['regime_tva' => RegimeTva::FranchiseEnBase])->create());
 
-        $facture = app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), $this->lignesDesArticles([['1.00', 20, 1000, 0]]));
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), $this->lignesDesArticles([['1.00', 20, 1000, 0]]));
 
         $this->assertSame(['1000.00', '0.00', '1000.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
@@ -331,7 +331,7 @@ class CreerFactureActionTest extends TestCase
         $client = Client::factory()->create();
         $service = Service::factory()->create(['nom' => 'Main-d\'œuvre']);
 
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['service_id' => $service->id, 'prix_unitaire_ttc' => '15.03', 'taux_tva' => 20, 'quantite' => 1],
         ]);
 
@@ -351,7 +351,7 @@ class CreerFactureActionTest extends TestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        app(CreerFactureAction::class)->handle($client, [
+        app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['service_id' => $service->id, 'taux_tva' => 20, 'quantite' => 1],
         ]);
     }
@@ -363,7 +363,7 @@ class CreerFactureActionTest extends TestCase
         $service = Service::factory()->create();
 
         try {
-            app(CreerFactureAction::class)->handle($client, [
+            app(CreerFactureAction::class)->handle(self::auteur(), $client, [
                 ['produit_id' => $produit->id, 'service_id' => $service->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
             ]);
             $this->fail('La ligne aurait dû être refusée.');
@@ -382,7 +382,7 @@ class CreerFactureActionTest extends TestCase
 
         $this->expectException(ModelNotFoundException::class);
 
-        app(CreerFactureAction::class)->handle($client, [
+        app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produitAutreMagasin->id, 'quantite' => 1],
         ]);
     }
@@ -395,7 +395,7 @@ class CreerFactureActionTest extends TestCase
 
         $this->expectException(ModelNotFoundException::class);
 
-        app(CreerFactureAction::class)->handle($client, [
+        app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['service_id' => $serviceAutreMagasin->id, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'quantite' => 1],
         ]);
     }

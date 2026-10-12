@@ -7,7 +7,7 @@ use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
-use App\Models\User;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Database\Factories\AvoirFournisseurFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -25,6 +25,18 @@ use LogicException;
  */
 class AvoirFournisseur extends Model
 {
+    use FigeLeNomDeSesAuteurs;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'cree_par' => 'cree_par_nom',
+        ];
+    }
+
     /** @use HasFactory<AvoirFournisseurFactory> */
     use BelongsToMagasin, HasFactory, VentileLaTvaParTaux;
 
@@ -53,18 +65,12 @@ class AvoirFournisseur extends Model
         static::creating(function (AvoirFournisseur $avoir) {
             $avoir->statut ??= StatutAvoirFournisseur::Brouillon;
             $avoir->devise ??= 'EUR';
-            $avoir->cree_par ??= auth()->id();
         });
     }
 
     public function factureAchat(): BelongsTo
     {
         return $this->belongsTo(FactureAchat::class);
-    }
-
-    public function creePar(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'cree_par');
     }
 
     public function lignes(): HasMany

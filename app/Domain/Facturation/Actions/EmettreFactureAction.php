@@ -2,9 +2,13 @@
 
 namespace App\Domain\Facturation\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
+use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
@@ -17,8 +21,11 @@ use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -69,7 +76,15 @@ use LogicException;
  *     lecture, la facture et la numérotation (voir RegistreFiscal) ; il
  *     donne l'instant de l'émission ; le magasin, relu, doit pouvoir
  *     vendre ;
- *  2. la facture, relue verrouillée, prend la copie de son client (nom,
+ *  2. l'auteur est relu sous le verrou de sa ligne (voir
+ *     LecteurDesDroits::exigerSousVerrou()) : il doit pouvoir émettre
+ *     cette facture, et, pour une vente au comptoir réglée à l'émission,
+ *     enregistrer un paiement ; une autorisation retirée pendant que son
+ *     écran restait ouvert est vue. Il n'encaisse que dans un magasin à la
+ *     fois : sa caisse personnelle d'un autre magasin de la société doit
+ *     être fermée (voir VerificateurCaissesPersonnelles). Le registre signe
+ *     l'émission à son nom (voir OperateurCourant) ;
+ *  3. la facture, relue verrouillée, prend la copie de son client (nom,
  *     adresse, identifiants), la vérification VIES que retient sa nature,
  *     son numéro, dans la série et l'année de cet
  *     instant à l'heure de Paris, cet instant, en UTC, pour date
@@ -79,9 +94,9 @@ use LogicException;
  *     passé : un brouillon n'en a pas. Un ticket n'est plus émis une fois
  *     sa journée clôturée, jusqu'à minuit (voir
  *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
- *  3. FactureEmise sort le stock, applique le crédit d'avoir du client et
+ *  4. FactureEmise sort le stock, applique le crédit d'avoir du client et
  *     prépare la transmission PDP ;
- *  4. le règlement comptant d'une vente au comptoir impute d'abord le
+ *  5. le règlement comptant d'une vente au comptoir impute d'abord le
  *     bon d'avoir présenté, s'il y en a un, sur ce que le crédit du client
  *     laisse dû (voir imputerLeBonDAvoir()) ;
  *     une facture dont il ne reste alors rien à payer, parce que ce crédit
@@ -90,7 +105,7 @@ use LogicException;
  *     sera jamais en retard (G1) ; sinon ce règlement, s'il y en a un, paie
  *     ce qui reste dû (voir EnregistrerPaiementAction, signé dans la
  *     chaîne des encaissements) ;
- *  5. le document, tel qu'il est alors en base, est signé dans la chaîne
+ *  6. le document, tel qu'il est alors en base, est signé dans la chaîne
  *     des ventes (voir ContenuFiscal) : client figé, règlement, crédit et
  *     bon d'avoir compris.
  * Sans clé de signature, ou si l'horloge du serveur a reculé, rien de tout
@@ -104,82 +119,105 @@ class EmettreFactureAction
         private readonly ContenuFiscal $contenuFiscal,
         private readonly EnregistrerPaiementAction $enregistrerPaiement,
         private readonly ControleNatureOperation $controleNatureOperation,
+        private readonly LecteurDesDroits $lecteur,
+        private readonly OperateurCourant $operateur,
+        private readonly VerificateurCaissesPersonnelles $caissesPersonnelles,
     ) {}
 
     /**
      * @param  ReglementComptant|null  $reglement  le règlement d'une vente au comptoir, encaissé à l'émission
      *
+     * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(Facture $facture, ?ReglementComptant $reglement = null): Facture
+    public function handle(User $auteur, Facture $facture, ?ReglementComptant $reglement = null): Facture
     {
-        return DB::transaction(function () use ($facture, $reglement) {
-            $instant = $this->registre->verrouiller(app(TenantContext::class)->magasin());
-            Magasin::query()->findOrFail(app(TenantContext::class)->id())->verifierQuIlPeutVendre();
-            $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
+        return DB::transaction(function () use ($auteur, $facture, $reglement) {
+            $magasin = app(TenantContext::class)->magasin();
+            $instant = $this->registre->verrouiller($magasin);
+            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
+            $compte = $this->lecteur->exigerSousVerrou($auteur, 'emettre', $magasin, $facture);
 
-            if (! $facture->statut->peutTransitionnerVers(StatutFacture::Emise)) {
-                throw new LogicException("Impossible d'émettre une facture au statut [{$facture->statut->value}].");
+            if ($reglement !== null) {
+                $this->lecteur->exiger($compte, PermissionRegistry::PAIEMENT_CREER, $magasin);
             }
 
-            if ($facture->lignes()->doesntExist()) {
-                throw new LogicException('Impossible d\'émettre une facture sans lignes.');
-            }
+            $this->caissesPersonnelles->refuserSiSaCaisseEstOuverteAilleurs($compte, $magasin);
 
-            ContexteDeVente::refuserSiLeTypeDeClientAChange($facture);
-            ContexteDeVente::refuserSiLeRegimeAChange($facture);
-
-            if ($facture->estPourUnProfessionnel()) {
-                $this->refuserUneFactureProfessionnelleIncomplete($facture);
-            }
-
-            $typeDocument = $facture->serie();
-
-            if ($typeDocument === TypeDocument::TicketCaisse) {
-                ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($facture->magasin, $instant);
-            }
-
-            $consultationVies = $this->controleNatureOperation->verifier($facture, $instant->enHeureLocale());
-            $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, $instant->enHeureLocale()->format('Y'));
-
-            $facture->figerLeClient();
-            $facture->forceFill([
-                'numero' => $numero,
-                'statut' => StatutFacture::Emise,
-                'consultation_vies_id' => $consultationVies?->getKey(),
-                'date_emission' => $instant->utc,
-                'date_echeance' => $instant->enHeureLocale()->addDays($facture->magasin->delaiDePaiementPour($facture->client))->toDateString(),
-            ])->save();
-
-            // Synchrone et dans la même transaction : voir le commentaire
-            // de FactureEmise sur pourquoi ce event n'est pas différé.
-            FactureEmise::dispatch($facture);
-
-            $facture = $facture->fresh();
-
-            if ($reglement?->bonDAvoir !== null && $facture->montantRestant() > 0) {
-                $this->imputerLeBonDAvoir($facture, $reglement->bonDAvoir);
-            }
-
-            if ($facture->montantRestant() <= 0) {
-                $facture->constaterUnReglement();
-            } elseif ($reglement !== null) {
-                $this->encaisserComptant($facture, $reglement, $instant->enHeureLocale()->toDateString());
-            }
-
-            $facture = $facture->fresh();
-            $contenu = $this->contenuFiscal->document($facture);
-            $this->registre->enregistrerVente(
-                $typeDocument === TypeDocument::Facture ? 'facture' : 'ticket',
-                $contenu['document']['totaux']['ttc'],
-                $contenu,
-                $facture,
-            );
-
-            return $facture;
+            return $this->operateur->pendant($compte, fn (): Facture => $this->emettre($compte, $facture, $reglement, $instant));
         });
+    }
+
+    /**
+     * @throws LogicException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    private function emettre(User $compte, Facture $facture, ?ReglementComptant $reglement, InstantFiscal $instant): Facture
+    {
+        $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
+
+        if (! $facture->statut->peutTransitionnerVers(StatutFacture::Emise)) {
+            throw new LogicException("Impossible d'émettre une facture au statut [{$facture->statut->value}].");
+        }
+
+        if ($facture->lignes()->doesntExist()) {
+            throw new LogicException('Impossible d\'émettre une facture sans lignes.');
+        }
+
+        ContexteDeVente::refuserSiLeTypeDeClientAChange($facture);
+        ContexteDeVente::refuserSiLeRegimeAChange($facture);
+
+        if ($facture->estPourUnProfessionnel()) {
+            $this->refuserUneFactureProfessionnelleIncomplete($facture);
+        }
+
+        $typeDocument = $facture->serie();
+
+        if ($typeDocument === TypeDocument::TicketCaisse) {
+            ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($facture->magasin, $instant);
+        }
+
+        $consultationVies = $this->controleNatureOperation->verifier($facture, $instant->enHeureLocale());
+        $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, $instant->enHeureLocale()->format('Y'));
+
+        $facture->figerLeClient();
+        $facture->forceFill([
+            'numero' => $numero,
+            'statut' => StatutFacture::Emise,
+            'consultation_vies_id' => $consultationVies?->getKey(),
+            'date_emission' => $instant->utc,
+            'date_echeance' => $instant->enHeureLocale()->addDays($facture->magasin->delaiDePaiementPour($facture->client))->toDateString(),
+        ])->save();
+
+        // Synchrone et dans la même transaction : voir le commentaire
+        // de FactureEmise sur pourquoi ce event n'est pas différé.
+        FactureEmise::dispatch($facture);
+
+        $facture = $facture->fresh();
+
+        if ($reglement?->bonDAvoir !== null && $facture->montantRestant() > 0) {
+            $this->imputerLeBonDAvoir($facture, $reglement->bonDAvoir);
+        }
+
+        if ($facture->montantRestant() <= 0) {
+            $facture->constaterUnReglement();
+        } elseif ($reglement !== null) {
+            $this->encaisserComptant($compte, $facture, $reglement, $instant->enHeureLocale()->toDateString());
+        }
+
+        $facture = $facture->fresh();
+        $contenu = $this->contenuFiscal->document($facture);
+        $this->registre->enregistrerVente(
+            $typeDocument === TypeDocument::Facture ? 'facture' : 'ticket',
+            $contenu['document']['totaux']['ttc'],
+            $contenu,
+            $facture,
+        );
+
+        return $facture;
     }
 
     /**
@@ -229,11 +267,12 @@ class EmettreFactureAction
      * après le crédit d'avoir du client et le bon d'avoir présenté est
      * encaissé.
      */
-    private function encaisserComptant(Facture $facture, ReglementComptant $reglement, string $recuLe): void
+    private function encaisserComptant(User $compte, Facture $facture, ReglementComptant $reglement, string $recuLe): void
     {
         $montantRestant = $facture->montantRestant();
 
         $this->enregistrerPaiement->handle(
+            $compte,
             $facture->client,
             [
                 'mode_paiement' => $reglement->mode->value,

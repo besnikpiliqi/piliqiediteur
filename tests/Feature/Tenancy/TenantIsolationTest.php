@@ -21,6 +21,7 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
@@ -373,7 +374,7 @@ class TenantIsolationTest extends TestCase
         $contexte->set($memeSociete);
 
         $this->assertThrows(
-            fn () => app(CreerAvoirAction::class)->handle(Client::factory()->create(), [['ligne_facture_id' => $ligneVendue->id, 'quantite' => 1]]),
+            fn () => app(CreerAvoirAction::class)->handle(self::auteur(), Client::factory()->create(), [['ligne_facture_id' => $ligneVendue->id, 'quantite' => 1]]),
             InvalidArgumentException::class,
             'Cette ligne de facture est introuvable.',
         );
@@ -384,7 +385,8 @@ class TenantIsolationTest extends TestCase
     /**
      * Un paiement se fait dans le magasin qui a vendu (J6) : depuis un
      * autre magasin de la même société, la facture est introuvable, et
-     * rien n'est encaissé.
+     * rien n'est encaissé. La personne a fermé sa caisse du magasin qui a
+     * vendu : elle peut encaisser dans l'autre.
      */
     public function test_un_magasin_de_la_meme_societe_n_encaisse_pas_une_vente_d_un_autre(): void
     {
@@ -392,10 +394,11 @@ class TenantIsolationTest extends TestCase
         $contexte = app(TenantContext::class);
         $contexte->set($this->magasinA);
         $vente = $this->venteEmise();
+        app(FermerSaCaisseAction::class)->handle(self::auteur(), self::auteur());
         $contexte->set($memeSociete);
 
         $this->assertThrows(
-            fn () => app(EnregistrerPaiementAction::class)->handle(Client::factory()->create(), ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $vente->id, 'montant' => '12.00']]),
+            fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(), Client::factory()->create(), ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $vente->id, 'montant' => '12.00']]),
             ModelNotFoundException::class,
         );
 
@@ -416,13 +419,13 @@ class TenantIsolationTest extends TestCase
         $contexte->set($this->magasinA);
         $ticket = $this->venteEmise();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $export = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], [
+        $export = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], [
             'nature_operation' => NatureOperation::ExportHorsUe, 'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
         ]));
         $contexte->set($memeSociete);
 
-        $this->assertThrows(fn () => app(AjouterPreuveOperationAction::class)->handle($export, TypePreuve::Mrn, '26FR000000123456E1'), ModelNotFoundException::class);
-        $this->assertThrows(fn () => app(NoterBordereauDetaxeAction::class)->handle($ticket, '2026FR000123456'), ModelNotFoundException::class);
+        $this->assertThrows(fn () => app(AjouterPreuveOperationAction::class)->handle(self::auteur(), $export, TypePreuve::Mrn, '26FR000000123456E1'), ModelNotFoundException::class);
+        $this->assertThrows(fn () => app(NoterBordereauDetaxeAction::class)->handle(self::auteur(), $ticket, '2026FR000123456'), ModelNotFoundException::class);
 
         $this->assertSame(0, PreuveOperation::query()->withoutGlobalScope(MagasinScope::class)->count());
         $this->assertSame(0, BordereauDetaxe::query()->withoutGlobalScope(MagasinScope::class)->count());
@@ -568,7 +571,7 @@ class TenantIsolationTest extends TestCase
     {
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
     }
 
     /**

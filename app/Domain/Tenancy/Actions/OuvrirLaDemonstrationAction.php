@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -19,7 +20,6 @@ use App\Domain\Tenancy\Services\PeriodesDActivite;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Gate;
 
 /**
  * Ouvre le magasin de démonstration d'une société en cours de vérification
@@ -60,9 +60,7 @@ class OuvrirLaDemonstrationAction
     public function handle(User $auteur, Societe $societe): Magasin
     {
         return app(TenantContext::class)->runAsSociete($societe, function () use ($auteur, $societe): Magasin {
-            if (Gate::forUser($auteur)->denies('ouvrirLaDemonstration', $societe)) {
-                throw new VerificationRefuseeException(self::MESSAGE_SANS_AUTORISATION);
-            }
+            $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'ouvrirLaDemonstration', $societe, $societe, new VerificationRefuseeException(self::MESSAGE_SANS_AUTORISATION));
 
             $existante = $societe->demonstration()->first();
 
@@ -94,7 +92,7 @@ class OuvrirLaDemonstrationAction
                     'type_client' => TypeClient::Particulier,
                     'est_comptoir' => true,
                 ]);
-                $this->catalogue->remplir($demonstration);
+                $this->catalogue->remplir($auteur, $demonstration);
                 $this->entrer($auteur, $demonstration, 'ouverture');
                 $this->journalDesDroits->inscrireLesDroitsImplicites($demonstration);
             });

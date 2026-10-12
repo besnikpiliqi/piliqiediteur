@@ -64,7 +64,7 @@ class FacturesApercuWidgetTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20]);
-        app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
@@ -87,7 +87,7 @@ class FacturesApercuWidgetTest extends TestCase
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
         $this->travelTo(CarbonImmutable::parse('2026-10-11 22:30:00', 'UTC'));
-        app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
 
@@ -144,7 +144,7 @@ class FacturesApercuWidgetTest extends TestCase
     {
         ['magasin' => $magasin, 'proprietaire' => $proprietaire, 'vendeur' => $vendeur, 'f1' => $f1] = $this->ventesDuVendeurEtDuProprietaire();
         $this->actingAs($proprietaire);
-        app(EnregistrerAvoirAction::class)->handle($f1->client, [['ligne_facture_id' => $f1->lignes->sole()->id, 'quantite' => 1]], 'Retour complet');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $f1->client, [['ligne_facture_id' => $f1->lignes->sole()->id, 'quantite' => 1]], 'Retour complet');
 
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
@@ -169,7 +169,7 @@ class FacturesApercuWidgetTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00'));
         $vente = $this->emettreUnTicket($proprietaire, Client::factory()->create(), 120.0, 1);
         $this->travelTo(CarbonImmutable::parse('2026-11-02 10:00:00'));
-        app(EnregistrerAvoirAction::class)->handle($vente->client, [['ligne_facture_id' => $vente->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $vente->client, [['ligne_facture_id' => $vente->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         Filament::setTenant($magasin);
 
         $widget = Livewire::test(FacturesApercu::class);
@@ -223,7 +223,7 @@ class FacturesApercuWidgetTest extends TestCase
         $client = Client::factory()->create();
         $f1 = $this->emettreUnTicket($vendeur, $client, 120.0, 1);
         $f2 = $this->emettreUnTicket($proprietaire, $client, 40.0, 2);
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $f2->lignes->sole()->id, 'quantite' => 1]], 'Retour d\'un article');
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $f2->lignes->sole()->id, 'quantite' => 1]], 'Retour d\'un article');
 
         return ['magasin' => $magasin, 'proprietaire' => $proprietaire, 'vendeur' => $vendeur, 'f1' => $f1, 'f2' => $f2, 'avoir' => $avoir];
     }
@@ -236,7 +236,7 @@ class FacturesApercuWidgetTest extends TestCase
         $this->actingAs($vendeur);
         $produit = Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => $quantite],
         ]));
     }

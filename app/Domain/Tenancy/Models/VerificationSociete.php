@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Models;
 
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\SignalDeRisque;
 use App\Domain\Tenancy\Enums\TypeVerification;
@@ -28,7 +29,18 @@ use LogicException;
  */
 class VerificationSociete extends Model
 {
-    use BelongsToSociete;
+    use BelongsToSociete, FigeLeNomDeSesAuteurs;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'auteur_id' => 'auteur_nom',
+            'beneficiaire_id' => 'beneficiaire_nom',
+        ];
+    }
 
     protected $table = 'verifications_societe';
 

@@ -21,7 +21,7 @@ class CreateFactureAchat extends CreateRecord
         return static::executerOuInterrompre(function () use ($data) {
             $fournisseur = Fournisseur::query()->findOrFail($data['fournisseur_id']);
 
-            return app(CreerFactureAchatAction::class)->handle($fournisseur, array_values($data['lignes']), [
+            return app(CreerFactureAchatAction::class)->handle(auth()->user(), $fournisseur, array_values($data['lignes']), [
                 'numero_fournisseur' => $data['numero_fournisseur'] ?? null,
                 'date_facture' => $data['date_facture'] ?? null,
                 'escompte_pourcentage' => $data['escompte_pourcentage'] ?? 0,

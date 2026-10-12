@@ -464,25 +464,11 @@ class PaiementResourceTest extends TestCase
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, $autorisations);
 
         $client = Client::factory()->create();
-
-        $this->actingAs($vendeurA);
-        Filament::setTenant($magasin);
-        $paiementA = Paiement::create([
-            'client_id' => $client->id,
-            'mode_paiement' => ModePaiement::Especes,
-            'montant' => 10,
-            'recu_le' => now()->toDateString(),
-        ]);
+        $paiementA = $this->paiementEnregistrePar($vendeurA, $client, 10);
+        $paiementB = $this->paiementEnregistrePar($vendeurB, $client, 20);
 
         $this->actingAs($vendeurB);
         Filament::setTenant($magasin);
-        $paiementB = Paiement::create([
-            'client_id' => $client->id,
-            'mode_paiement' => ModePaiement::Especes,
-            'montant' => 20,
-            'recu_le' => now()->toDateString(),
-        ]);
-
         Livewire::test(ListPaiements::class)
             ->assertCanSeeTableRecords([$paiementB])
             ->assertCanNotSeeTableRecords([$paiementA]);
@@ -507,8 +493,9 @@ class PaiementResourceTest extends TestCase
 
     /**
      * Sans « Factures : voir (les siennes) », un membre ne se voit proposer
-     * aucune facture, pas même son propre ticket de 12,00 €, dont il ne
-     * peut pas lire le reste dû (voir FacturePolicy::view()).
+     * aucune facture, pas même son propre ticket de 12,00 € (créé par lui,
+     * émis par le propriétaire), dont il ne peut pas lire le reste dû (voir
+     * FacturePolicy::view()).
      */
     public function test_sans_voir_ses_factures_aucune_facture_n_est_proposee(): void
     {
@@ -518,7 +505,10 @@ class PaiementResourceTest extends TestCase
             [PermissionRegistry::FACTURE_VIEW],
         )));
         $client = Client::factory()->create();
-        $this->emettreUnTicketEnTantQue($membre, $client, 12);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $brouillon = app(CreerFactureAction::class)->handle($membre, $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        app(EmettreFactureAction::class)->handle($this->proprietaireDe($magasin), $brouillon);
+        $this->actingAs($membre);
         Filament::setTenant($magasin);
 
         $formulaire = Livewire::test(CreatePaiement::class)->fillForm(['client_id' => $client->id, 'allocations' => [['facture_id' => null]]]);
@@ -567,6 +557,23 @@ class PaiementResourceTest extends TestCase
      *
      * @return array{magasin: Magasin, vendeurB: User, client: Client, factureDeA: Facture, factureDeB: Facture}
      */
+    /**
+     * Un paiement que ce membre a enregistré : la liste ne lit que son
+     * auteur.
+     */
+    private function paiementEnregistrePar(User $membre, Client $client, float $montant): Paiement
+    {
+        $paiement = new Paiement([
+            'client_id' => $client->id,
+            'mode_paiement' => ModePaiement::Especes,
+            'montant' => $montant,
+            'recu_le' => now()->toDateString(),
+        ]);
+        $paiement->forceFill(['cree_par' => $membre->getKey()])->save();
+
+        return $paiement;
+    }
+
     private function clientQuiDoitAuxDeuxVendeurs(): array
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
@@ -585,7 +592,7 @@ class PaiementResourceTest extends TestCase
         $this->actingAs($vendeur);
         $produit = Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]));
     }
 
     /**
@@ -813,17 +820,17 @@ class PaiementResourceTest extends TestCase
     private function clientAvecDuCreditEtDesFacturesDues(array $prixDesFactures): array
     {
         $client = Client::factory()->create();
-        $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle($client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 36, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
-        $factures = array_map(fn (float $prix): Facture => app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+        $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 36, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $factures = array_map(fn (float $prix): Facture => app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => Produit::factory()->create(['prix_vente_ttc' => $prix, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1],
         ])), $prixDesFactures);
-        $virementRejete = app(EnregistrerPaiementAction::class)->handle(
+        $virementRejete = app(EnregistrerPaiementAction::class)->handle(self::auteur(),
             $client,
             ['mode_paiement' => ModePaiement::Virement->value, 'montant' => array_sum($prixDesFactures), 'recu_le' => today()->toDateString()],
             array_map(fn (Facture $facture): array => ['facture_id' => $facture->id, 'montant' => $facture->total_ttc], $factures),
         );
-        app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]]);
-        app(ContrePasserPaiementAction::class)->handle($virementRejete, 'Virement rejeté');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]]);
+        app(ContrePasserPaiementAction::class)->handle(self::auteur(), $virementRejete, 'Virement rejeté');
         $this->assertSame(36.0, $client->soldeCrediteur());
 
         return ['client' => $client, 'factures' => $factures];

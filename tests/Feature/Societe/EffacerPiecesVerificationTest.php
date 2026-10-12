@@ -65,6 +65,7 @@ class EffacerPiecesVerificationTest extends TestCase
             'chemin' => null,
             'empreinte' => str_repeat('0', 64),
             'deposee_par' => $societe->proprietaire->id,
+            'deposee_par_nom' => $societe->proprietaire->name,
             'deposee_le' => $deposeeLe,
             'created_at' => $deposeeLe,
             'updated_at' => $deposeeLe,

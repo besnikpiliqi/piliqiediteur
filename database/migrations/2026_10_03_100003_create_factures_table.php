@@ -82,6 +82,10 @@ return new class extends Migration
             // visibilité d'un vendeur à ses propres ventes par défaut
             // (voir FacturePolicy et FACTURE_VIEW_TOUTES).
             $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('cree_par_nom')->nullable();
             $table->string('numero', 40)->nullable();
             $table->string('statut', 20)->default('brouillon');
             // L'instant du registre fiscal à l'émission, en UTC à la seconde

@@ -184,7 +184,7 @@ class EmetteurFigeTest extends TestCase
         $client = Client::factory()->professionnel()->create();
         $facture = $this->emettre($client);
         $this->changerLIdentiteDuMagasin($magasin, self::IDENTITE_DES_QUAIS);
-        $avoir = app(EnregistrerAvoirAction::class)->handle($client, [['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1]]);
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1]]);
         $this->changerLIdentiteDuMagasin($magasin, self::IDENTITE_DU_CANAL);
 
         $htmlDeLAvoir = app(AvoirPdfGenerator::class)->html($avoir->fresh());
@@ -204,8 +204,8 @@ class EmetteurFigeTest extends TestCase
     {
         $magasin = $this->magasinDuPort();
         $client = Client::factory()->professionnel()->create();
-        $brouillon = app(CreerFactureAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
-        $devis = app(EmettreDevisAction::class)->handle(app(CreerDevisAction::class)->handle($client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]));
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $devis = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]));
         $this->changerLIdentiteDuMagasin($magasin, self::IDENTITE_DES_QUAIS);
 
         $htmlDuBrouillon = app(FacturePdfGenerator::class)->html($brouillon->fresh());
@@ -229,7 +229,7 @@ class EmetteurFigeTest extends TestCase
         $this->changerLIdentiteDuMagasin($magasin, self::IDENTITE_DES_QUAIS);
         $emetteursImprimes = $this->emetteursImprimesSur('factures.pdf');
 
-        app(EnvoyerDocumentAction::class)->handle($facture->fresh(), 'compta@client.fr', null, null);
+        app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture->fresh(), 'compta@client.fr', null);
 
         Mail::assertSent(DocumentMail::class, fn (DocumentMail $mail): bool => $mail->hasTo('compta@client.fr')
             && $mail->hasSubject("Facture {$facture->numero} — Boutique du Port")
@@ -282,7 +282,7 @@ class EmetteurFigeTest extends TestCase
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->magasinDuPort();
         $facture = $this->emettre(Client::factory()->professionnel()->create());
-        $envoi = app(EnvoyerDocumentAction::class)->handle($facture, 'compta@client.fr', null, null);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'compta@client.fr', null);
         $this->changerLIdentiteDuMagasin($magasin, self::IDENTITE_DES_QUAIS);
         $emetteursImprimes = $this->emetteursImprimesSur('factures.pdf');
 
@@ -318,8 +318,8 @@ class EmetteurFigeTest extends TestCase
         Mail::fake();
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->magasinDuPort();
-        $devis = app(CreerDevisAction::class)->handle(Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
-        $envoi = app(EnvoyerDocumentAction::class)->handle($devis, 'achats@client.fr', null, null);
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $devis, 'achats@client.fr', null);
         $this->changerLIdentiteDuMagasin($magasin, self::IDENTITE_DES_QUAIS);
         $emetteursImprimes = $this->emetteursImprimesSur('devis.pdf');
 
@@ -362,7 +362,7 @@ class EmetteurFigeTest extends TestCase
         ]);
 
         $html = app(FacturePdfGenerator::class)->html($facture->fresh());
-        $htmlDUnBrouillon = app(FacturePdfGenerator::class)->html(app(CreerFactureAction::class)->handle(Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]));
+        $htmlDUnBrouillon = app(FacturePdfGenerator::class)->html(app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]));
 
         $this->assertSame(self::EN_TETE_DU_PORT, $this->enTete($html));
         $this->assertStringContainsString('Martin et Fils SAS à capital variable, au capital de 25 000,00 €<br>', $this->enTete($htmlDUnBrouillon));
@@ -465,7 +465,7 @@ class EmetteurFigeTest extends TestCase
     public function test_un_document_emis_sans_enregistrement_signe_refuse_de_produire_son_pdf(): void
     {
         $magasin = $this->magasinDuPort();
-        $brouillon = app(CreerFactureAction::class)->handle(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-PORT-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
 
         $this->assertThrows(
@@ -570,7 +570,7 @@ class EmetteurFigeTest extends TestCase
 
     private function emettre(Client $client): Facture
     {
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $this->produit()->id, 'quantite' => 1],
         ]));
     }

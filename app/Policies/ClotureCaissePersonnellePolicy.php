@@ -13,15 +13,16 @@ use App\Models\User;
  * Aucune permission dédiée n'est nécessaire pour fermer SA PROPRE caisse :
  * quiconque vend (facture.create) ou encaisse (paiement.creer) la ferme et
  * consulte ses relevés, voir le docblock de ClotureCaissePersonnelle, le
- * comptable comme le vendeur. Qui peut clôturer la journée
+ * responsable comme le vendeur. Qui peut clôturer la journée
  * (cloture_caisse.gerer) ferme aussi celle d'un autre vendeur du magasin,
  * pour lui (voir fermerLaCaisseDe()), depuis la page des relevés, qui lui
  * est donc ouverte même s'il ne vend ni n'encaisse ; et toute caisse
  * encore ouverte se ferme d'office avec la journée (voir
  * FermerLesCaissesPersonnellesAction). Quiconque a
- * cloture_caisse.view_toutes (le propriétaire, un comptable...) voit les
- * relevés de toute l'équipe, pour la réconciliation de fin de journée ; tout autre membre
- * ne voit que les siens, même quand il ferme la caisse d'un autre (voir
+ * cloture_caisse.view_toutes (le propriétaire, un responsable,
+ * l'expert-comptable...) voit les relevés de toute l'équipe, pour la
+ * réconciliation de fin de journée ; tout autre membre ne voit que les
+ * siens, même quand il ferme la caisse d'un autre (voir
  * ListClotureCaissePersonnelles).
  */
 class ClotureCaissePersonnellePolicy extends MagasinPolicy

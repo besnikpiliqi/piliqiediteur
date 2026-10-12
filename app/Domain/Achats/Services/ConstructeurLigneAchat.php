@@ -12,7 +12,9 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 use LogicException;
 
@@ -119,9 +121,12 @@ class ConstructeurLigneAchat
      * verifierLesNouveauxProduits()). Une facture déjà validée crée tout
      * de suite ses nouveaux produits (voir creerLesNouveauxProduits()).
      *
+     * Le droit de créer ou de corriger un produit se demande à son auteur,
+     * relu par l'action qui l'appelle (voir verifierLeDroitDEnregistrer()).
+     *
      * @param  list<array{produit_id?: int|string|null, produit?: array<string, mixed>, quantite: int|string, prix_unitaire_ht?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}>  $lignes
      */
-    public function enregistrer(FactureAchat $factureAchat, array $lignes): void
+    public function enregistrer(User $auteur, FactureAchat $factureAchat, array $lignes): void
     {
         if ($lignes === []) {
             throw new InvalidArgumentException('Une facture d\'achat doit contenir au moins une ligne.');
@@ -137,10 +142,10 @@ class ConstructeurLigneAchat
         $lignesEnregistrees = [];
 
         foreach (array_values($lignes) as $ordre => $donnees) {
-            $lignesEnregistrees[] = $this->enregistrerUneLigne($factureAchat, $donnees, $ordre);
+            $lignesEnregistrees[] = $this->enregistrerUneLigne($auteur, $factureAchat, $donnees, $ordre);
         }
 
-        $this->verifierLesNouveauxProduits($lignesEnregistrees, $fichesDejaSaisies);
+        $this->verifierLesNouveauxProduits($auteur, $lignesEnregistrees, $fichesDejaSaisies);
 
         $factureAchat->forceFill($this->calculateur->totaliser(array_map(
             fn (LigneAchat $ligne): array => $ligne->only(['montant_ht', 'montant_tva', 'montant_ttc']),
@@ -209,7 +214,7 @@ class ConstructeurLigneAchat
      * @param  list<LigneAchat>  $lignes
      * @param  list<array<string, mixed>>  $fichesDejaSaisies  voir ficheComparable()
      */
-    private function verifierLesNouveauxProduits(array $lignes, array $fichesDejaSaisies): void
+    private function verifierLesNouveauxProduits(User $auteur, array $lignes, array $fichesDejaSaisies): void
     {
         $referencesDesNouveauxProduits = [];
 
@@ -222,7 +227,7 @@ class ConstructeurLigneAchat
             $ficheDejaSaisie = array_search(self::ficheComparable($ligne->nouveau_produit), $fichesDejaSaisies, true);
 
             if ($ficheDejaSaisie === false) {
-                $this->verifierLeDroitDEnregistrer($produit);
+                $this->verifierLeDroitDEnregistrer($auteur, $produit);
             } else {
                 unset($fichesDejaSaisies[$ficheDejaSaisie]);
             }
@@ -260,7 +265,7 @@ class ConstructeurLigneAchat
     /**
      * @param  array<string, mixed>  $donnees
      */
-    private function enregistrerUneLigne(FactureAchat $factureAchat, array $donnees, int $ordre): LigneAchat
+    private function enregistrerUneLigne(User $auteur, FactureAchat $factureAchat, array $donnees, int $ordre): LigneAchat
     {
         $produit = $this->produitDeLaLigne($factureAchat, $donnees);
         $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
@@ -282,7 +287,7 @@ class ConstructeurLigneAchat
                 $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, $prixUnitaireHt, $remise, (float) $produit->taux_tva);
             }
         } elseif ($produit->isDirty()) {
-            $this->verifierLeDroitDEnregistrer($produit);
+            $this->verifierLeDroitDEnregistrer($auteur, $produit);
             $produit->save();
         }
 
@@ -326,19 +331,22 @@ class ConstructeurLigneAchat
         return array_filter($produit->only(self::ATTRIBUTS_DU_PRODUIT), fn (mixed $valeur): bool => filled($valeur));
     }
 
-    private function verifierLeDroitDEnregistrer(Produit $produit): void
+    /**
+     * L'auteur de la facture d'achat, relu par son action (voir
+     * LecteurDesDroits), crée-t-il ou corrige-t-il ce produit ? Toujours
+     * contrôlé : il n'y a pas d'enregistrement sans auteur.
+     *
+     * @throws LogicException
+     */
+    private function verifierLeDroitDEnregistrer(User $auteur, Produit $produit): void
     {
-        $utilisateur = auth()->user();
+        $utilisateur = Gate::forUser($auteur);
 
-        if ($utilisateur === null) {
-            return;
-        }
-
-        if (! $produit->exists && $utilisateur->cannot('create', Produit::class)) {
+        if (! $produit->exists && $utilisateur->denies('create', Produit::class)) {
             throw new LogicException("Vous ne pouvez pas créer de produit : « {$produit->nom} » doit d'abord être ajouté au catalogue.");
         }
 
-        if ($produit->exists && $utilisateur->cannot('update', $produit)) {
+        if ($produit->exists && $utilisateur->denies('update', $produit)) {
             throw new LogicException("Vous ne pouvez pas modifier la fiche du produit « {$produit->getOriginal('nom')} » : seule la ligne se modifie ici.");
         }
     }

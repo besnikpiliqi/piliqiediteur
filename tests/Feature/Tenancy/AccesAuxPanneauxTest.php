@@ -6,6 +6,7 @@ use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Panel;
@@ -118,6 +119,34 @@ class AccesAuxPanneauxTest extends TestCase
         $reponse = $this->actingAs($proprietaire)->get('/app/pas-un-uuid');
 
         $reponse->assertNotFound();
+    }
+
+    public function test_un_responsable_ouvre_ses_magasins_et_pas_l_espace_societe(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
+        $responsable = $this->responsable($lyon);
+
+        $this->assertTrue($responsable->canAccessPanel(Filament::getPanel('app')));
+        $this->assertSame([true, false], [$responsable->canAccessTenant($lyon), $responsable->canAccessTenant($villeurbanne)]);
+        $this->actingAs($responsable)->get("/app/{$lyon->uuid}")->assertOk();
+        $this->assertFalse($responsable->canAccessPanel(Filament::getPanel('societe')));
+        $this->assertSame([], $responsable->getTenants(Filament::getPanel('societe'))->modelKeys());
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe))->assertForbidden();
+    }
+
+    public function test_l_expert_comptable_ouvre_les_magasins_reels_et_pas_l_espace_societe(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
+        $expert = $this->expertComptable($lyon);
+
+        $this->assertTrue($expert->canAccessPanel(Filament::getPanel('app')));
+        $this->assertSame([true, true], [$expert->canAccessTenant($lyon), $expert->canAccessTenant($villeurbanne)]);
+        $this->actingAs($expert)->get("/app/{$villeurbanne->uuid}")->assertOk();
+        $this->assertFalse($expert->canAccessPanel(Filament::getPanel('societe')));
+        $this->assertSame([], $expert->getTenants(Filament::getPanel('societe'))->modelKeys());
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe))->assertForbidden();
     }
 
     private function membreSuspendu(Magasin $magasin): User

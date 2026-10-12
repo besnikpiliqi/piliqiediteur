@@ -5,6 +5,7 @@ namespace App\Domain\Contacts\Models;
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,7 +26,17 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ConsultationVies extends Model
 {
-    use BelongsToMagasin, ProtegeLesDonneesValidees;
+    use BelongsToMagasin, FigeLeNomDeSesAuteurs, ProtegeLesDonneesValidees;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'consultee_par' => 'consultee_par_nom',
+        ];
+    }
 
     protected $table = 'consultations_vies';
 

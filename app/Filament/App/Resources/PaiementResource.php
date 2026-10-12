@@ -352,7 +352,7 @@ class PaiementResource extends Resource
                         ->join(', '))
                     ->wrap(),
                 Tables\Columns\TextColumn::make('reference')->label('Référence')->toggleable(),
-                Tables\Columns\TextColumn::make('creePar.name')->label('Enregistré par')->toggleable(),
+                Tables\Columns\TextColumn::make('cree_par_nom')->label('Enregistré par')->toggleable(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('mode_paiement')->options(ModePaiement::class),
@@ -376,7 +376,7 @@ class PaiementResource extends Resource
                         $record->creditsImputes()->exists() ? ' ; le crédit d\'avoir qu\'il y avait imputé redeviendra disponible' : '',
                     ))
                     ->visible(fn (Paiement $record): bool => auth()->user()->can('contrePasser', $record))
-                    ->action(fn (Paiement $record, array $data) => static::executerSansCasser(fn () => app(ContrePasserPaiementAction::class)->handle($record, $data['motif']))),
+                    ->action(fn (Paiement $record, array $data) => static::executerSansCasser(fn () => app(ContrePasserPaiementAction::class)->handle(auth()->user(), $record, $data['motif']))),
             ])
             ->bulkActions([]);
     }

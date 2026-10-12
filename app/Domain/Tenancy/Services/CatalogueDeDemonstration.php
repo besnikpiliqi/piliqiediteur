@@ -9,6 +9,7 @@ use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Models\User;
 use LogicException;
 
 /**
@@ -27,11 +28,12 @@ class CatalogueDeDemonstration
     ) {}
 
     /**
-     * Remplit le magasin de démonstration, qui doit être le magasin actif.
+     * Remplit le magasin de démonstration, qui doit être le magasin actif,
+     * au nom de la personne qui l'ouvre.
      *
      * @throws LogicException
      */
-    public function remplir(Magasin $demonstration): void
+    public function remplir(User $auteur, Magasin $demonstration): void
     {
         if (! $demonstration->est_demonstration || app(TenantContext::class)->id() !== $demonstration->getKey()) {
             throw new LogicException('Le catalogue de démonstration ne remplit que le magasin de démonstration actif.');
@@ -40,7 +42,7 @@ class CatalogueDeDemonstration
         $fournisseur = Fournisseur::query()->create(['nom' => 'Grossiste de démonstration', 'pays' => 'FR']);
         $taux = $demonstration->tauxTvaParDefaut();
 
-        $this->validerFactureAchat->handle($this->creerFactureAchat->handle($fournisseur, [
+        $this->validerFactureAchat->handle($auteur, $this->creerFactureAchat->handle($auteur, $fournisseur, [
             ['produit' => ['nom' => 'Carnet A5', 'reference' => 'DEMO-CARNET', 'prix_vente_ttc' => '4.90', 'taux_tva' => $taux, 'suivi_stock' => true, 'seuil_alerte' => 5], 'quantite' => 20, 'prix_unitaire_ht' => '1.50'],
             ['produit' => ['nom' => 'Stylo bille bleu', 'reference' => 'DEMO-STYLO', 'prix_vente_ttc' => '1.20', 'taux_tva' => $taux, 'suivi_stock' => true, 'seuil_alerte' => 10], 'quantite' => 50, 'prix_unitaire_ht' => '0.30'],
             ['produit' => ['nom' => 'Tasse en céramique', 'reference' => 'DEMO-TASSE', 'prix_vente_ttc' => '9.90', 'taux_tva' => $taux, 'suivi_stock' => true, 'seuil_alerte' => 2], 'quantite' => 10, 'prix_unitaire_ht' => '3.20'],

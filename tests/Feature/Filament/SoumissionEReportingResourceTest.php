@@ -30,14 +30,14 @@ class SoumissionEReportingResourceTest extends TestCase
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
         // La vente s'émet le jour clôturé : elle se date à l'instant du
         // registre fiscal (voir EmettreFactureAction).
         $this->travelTo('2026-10-03 10:00:00');
-        app(EmettreFactureAction::class)->handle($facture);
-        app(CloturerCaisseAction::class)->handle($magasin, '2026-10-03');
+        app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-03');
         $this->travelBack();
 
         $periode = new PeriodeEReporting(

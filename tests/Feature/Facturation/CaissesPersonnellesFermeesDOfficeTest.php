@@ -76,7 +76,7 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
         $connecte = auth()->user();
         $this->actingAs($vendeur);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle(Client::factory()->create(), [
+        $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
         $this->actingAs($connecte);
@@ -99,7 +99,7 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
         $lea = $this->vendeur($magasin, 'Léa Durand');
         $ticketDePaul = $this->vendreUnTicket($paul);
         $this->vendreUnTicket($lea);
-        $releveDeLea = app(FermerSaCaisseAction::class)->handle($lea);
+        $releveDeLea = app(FermerSaCaisseAction::class)->handle($lea, $lea);
         $this->travelTo('2026-10-09 19:00:00');
 
         $this->cloturerLaJourneeDepuisLePanneau();
@@ -122,7 +122,7 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
         $lea = $this->vendeur($magasin, 'Léa Durand');
         $this->vendreUnTicket($paul);
         $this->vendreUnTicket($lea);
-        $releveDeLea = app(FermerSaCaisseAction::class)->handle($lea);
+        $releveDeLea = app(FermerSaCaisseAction::class)->handle($lea, $lea);
         $this->travelTo('2026-10-09 19:00:00');
         $this->cloturerLaJourneeDepuisLePanneau();
         $releveDePaul = ClotureCaissePersonnelle::query()->where('vendeur_id', $paul->id)->sole();
@@ -149,7 +149,7 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
         $this->cloturerLaJourneeDepuisLePanneau();
         $this->travelTo('2026-10-09 20:00:00');
         $this->actingAs($paul);
-        app(EnregistrerPaiementAction::class)->handle($ticket->client, [
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $ticket->client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 12,
             'recu_le' => '2026-10-09',
@@ -287,7 +287,7 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
         app(TenantContext::class)->set($magasin);
 
         $this->assertFalse($alice->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $bob]));
-        $this->assertThrows(fn () => app(FermerSaCaisseAction::class)->handle($bob, $alice), AuthorizationException::class);
+        $this->assertThrows(fn () => app(FermerSaCaisseAction::class)->handle($alice, $bob), AuthorizationException::class);
         $this->assertDatabaseCount('clotures_caisse_personnelles', 0);
     }
 
@@ -342,7 +342,7 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
             ->assertActionVisible('fermer_ma_caisse')
             ->assertActionHidden('fermer_la_caisse_d_un_vendeur');
 
-        $this->assertThrows(fn () => app(FermerSaCaisseAction::class)->handle($paul, $lea), AuthorizationException::class);
+        $this->assertThrows(fn () => app(FermerSaCaisseAction::class)->handle($lea, $paul), AuthorizationException::class);
         $this->assertDatabaseCount('clotures_caisse_personnelles', 0);
     }
 

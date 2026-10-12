@@ -87,7 +87,7 @@ class RelancerFacturesImpayees extends Command
                 }
 
                 try {
-                    $envoyer->relancer($facture, $facture->client->email, null);
+                    $envoyer->relanceAutomatique($facture);
                     $relancees++;
                 } catch (LogicException|RefusFiscalException $exception) {
                     // Réglée ou relancée par quelqu'un d'autre entre la

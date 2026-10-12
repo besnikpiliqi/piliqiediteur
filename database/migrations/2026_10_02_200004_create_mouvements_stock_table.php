@@ -30,6 +30,10 @@ return new class extends Migration
             $table->nullableMorphs('source');
             $table->timestamp('survenu_le');
             $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('cree_par_nom')->nullable();
             $table->text('note')->nullable();
             // Ledger immuable : pas d'updated_at, un mouvement ne se
             // modifie jamais, il se compense par un mouvement inverse.

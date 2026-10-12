@@ -38,6 +38,10 @@ return new class extends Migration
             $table->string('identifiant_consultation', 64)->nullable();
             $table->dateTime('consultee_le');
             $table->foreignId('consultee_par')->nullable()->constrained('users')->restrictOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('consultee_par_nom')->nullable();
             $table->text('reponse');
 
             $table->index(['magasin_id', 'client_id', 'consultee_le']);

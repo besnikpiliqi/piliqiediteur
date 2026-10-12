@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Models;
 
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Integrations\Rne\RepresentantRne;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -23,7 +24,17 @@ use LogicException;
  */
 class DemandeAccordDirigeant extends Model
 {
-    use BelongsToSociete;
+    use BelongsToSociete, FigeLeNomDeSesAuteurs;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'demande_par' => 'demande_par_nom',
+        ];
+    }
 
     public const DUREE_DE_VALIDITE_EN_JOURS = 7;
 

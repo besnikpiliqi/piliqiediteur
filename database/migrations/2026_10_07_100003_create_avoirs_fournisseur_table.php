@@ -17,6 +17,10 @@ return new class extends Migration
             // silencieusement la trace d'un avoir fournisseur.
             $table->foreignId('facture_achat_id')->constrained('factures_achat')->restrictOnDelete();
             $table->foreignId('cree_par')->nullable()->constrained('users')->nullOnDelete();
+            // Le nom de cette personne au moment de l'opération (voir
+            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
+            // son compte.
+            $table->string('cree_par_nom')->nullable();
             // Traçabilité (voir SourceAvoirFournisseur) : manuelle
             // aujourd'hui, une future synchronisation par API viendra.
             $table->string('source', 20)->default('manuelle');

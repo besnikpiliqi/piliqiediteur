@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
@@ -14,6 +15,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -37,10 +39,10 @@ class VerificateurCaissesPersonnellesTest extends TestCase
     private function emettreFacturePour(User $vendeur, Client $client, Produit $produit): void
     {
         $this->actingAs($vendeur);
-        $facture = app(CreerFactureAction::class)->handle($client, [
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
-        app(EmettreFactureAction::class)->handle($facture);
+        app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
     }
 
     public function test_un_vendeur_sans_cloture_personnelle_apparait_en_attente(): void
@@ -48,7 +50,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
 
-        $vendeur = User::factory()->create();
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['suivi_stock' => false]);
 
@@ -66,7 +68,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
 
-        $vendeur = User::factory()->create();
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['suivi_stock' => false]);
 
@@ -74,7 +76,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $this->emettreFacturePour($vendeur, $client, $produit);
         $this->travelBack();
 
-        app(FermerSaCaisseAction::class)->handle($vendeur);
+        app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
         $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(now()->subDay());
 
@@ -86,8 +88,8 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
 
-        $vendeurOuvert = User::factory()->create();
-        $vendeurFerme = User::factory()->create();
+        $vendeurOuvert = $this->vendeurDeLaPremiereHeure($magasin);
+        $vendeurFerme = $this->vendeurDeLaPremiereHeure($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['suivi_stock' => false]);
 
@@ -96,7 +98,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $this->emettreFacturePour($vendeurFerme, $client, $produit);
         $this->travelBack();
 
-        app(FermerSaCaisseAction::class)->handle($vendeurFerme);
+        app(FermerSaCaisseAction::class)->handle($vendeurFerme, $vendeurFerme);
 
         $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(now()->subDay());
 
@@ -113,7 +115,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
     {
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
-        $vendeur = User::factory()->create();
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['suivi_stock' => false]);
         $this->travelTo(CarbonImmutable::parse('2026-07-14 22:30:00', 'UTC'));
@@ -145,7 +147,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
 
-        $vendeur = User::factory()->create();
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['suivi_stock' => false]);
 
@@ -154,7 +156,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $this->travelBack();
 
         // Le vendeur ne ferme sa caisse que deux jours plus tard.
-        app(FermerSaCaisseAction::class)->handle($vendeur);
+        app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
         $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(now()->subDays(2));
 
@@ -172,14 +174,14 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
 
-        $vendeur = User::factory()->create();
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_CREER]);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['suivi_stock' => false]);
 
         $this->travelTo(now()->subDay());
         $this->emettreFacturePour($vendeur, $client, $produit);
         $venteCorrigee = Facture::query()->latest('id')->firstOrFail();
-        app(EnregistrerAvoirAction::class)->handle($client, [
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteCorrigee->lignes->firstOrFail()->id, 'quantite' => 1],
         ], 'Erreur de saisie');
         $this->travelBack();
@@ -187,7 +189,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $verificateur = app(VerificateurCaissesPersonnelles::class);
         $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(now()->subDay())->contains('id', $vendeur->id));
 
-        app(FermerSaCaisseAction::class)->handle($vendeur);
+        app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         $this->assertFalse($verificateur->vendeursAvecCaisseOuverte(now()->subDay())->contains('id', $vendeur->id));
     }
 
@@ -200,20 +202,20 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
 
-        $vendeur = User::factory()->create();
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['suivi_stock' => false]);
         $this->actingAs($vendeur);
 
-        $brouillon = app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
         $this->emettreFacturePour($vendeur, $client, $produit);
-        app(FermerSaCaisseAction::class)->handle($vendeur);
-        app(EmettreFactureAction::class)->handle($brouillon);
+        app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
+        app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon);
 
         $verificateur = app(VerificateurCaissesPersonnelles::class);
         $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(now())->contains('id', $vendeur->id));
 
-        app(FermerSaCaisseAction::class)->handle($vendeur);
+        app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         $this->assertFalse($verificateur->vendeursAvecCaisseOuverte(now())->contains('id', $vendeur->id));
     }
 
@@ -225,10 +227,10 @@ class VerificateurCaissesPersonnellesTest extends TestCase
     {
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
-        $collegue = User::factory()->create();
-        $vendeur = User::factory()->create();
+        $collegue = $this->vendeurDeLaPremiereHeure($magasin);
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $facture = $this->emettreUnTicketPour($collegue, Client::factory()->create());
-        app(FermerSaCaisseAction::class)->handle($collegue);
+        app(FermerSaCaisseAction::class)->handle($collegue, $collegue);
         $this->actingAs($vendeur);
         $this->encaisser($facture, 12, today());
         $verificateur = app(VerificateurCaissesPersonnelles::class);
@@ -236,7 +238,7 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $vendeursEnAttente = $verificateur->vendeursAvecCaisseOuverte(now());
 
         $this->assertSame([$vendeur->id], $vendeursEnAttente->pluck('id')->all());
-        app(FermerSaCaisseAction::class)->handle($vendeur);
+        app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         $this->assertTrue($verificateur->vendeursAvecCaisseOuverte(now())->isEmpty());
     }
 
@@ -248,15 +250,15 @@ class VerificateurCaissesPersonnellesTest extends TestCase
     {
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
-        $vendeur = User::factory()->create();
-        $proprietaire = User::factory()->create();
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
+        $proprietaire = $this->proprietaireDe($magasin);
         $this->travelTo(now()->subDay());
         $facture = $this->emettreUnTicketPour($vendeur, Client::factory()->create());
         $paiement = $this->encaisser($facture, 12, today());
-        app(FermerSaCaisseAction::class)->handle($vendeur);
+        app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         $this->travelBack();
         $this->actingAs($proprietaire);
-        app(ContrePasserPaiementAction::class)->handle($paiement, 'Chèque sans provision');
+        app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiement, 'Chèque sans provision');
 
         $vendeursEnAttente = app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(now());
 
@@ -272,11 +274,11 @@ class VerificateurCaissesPersonnellesTest extends TestCase
     {
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
-        $collegue = User::factory()->create();
-        $vendeur = User::factory()->create();
+        $collegue = $this->vendeurDeLaPremiereHeure($magasin);
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $this->travelTo(now()->subDays(2));
         $facture = $this->emettreUnTicketPour($collegue, Client::factory()->create());
-        app(FermerSaCaisseAction::class)->handle($collegue);
+        app(FermerSaCaisseAction::class)->handle($collegue, $collegue);
         $this->travelBack();
         $this->actingAs($vendeur);
         $this->encaisser($facture, 12, today()->subDay());
@@ -294,12 +296,12 @@ class VerificateurCaissesPersonnellesTest extends TestCase
         $this->actingAs($vendeur);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EmettreFactureAction::class)->handle(app(CreerFactureAction::class)->handle($client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]));
     }
 
     private function encaisser(Facture $facture, float $montant, CarbonInterface $recuLe): Paiement
     {
-        return app(EnregistrerPaiementAction::class)->handle($facture->client, [
+        return app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => $montant,
             'recu_le' => $recuLe->toDateString(),

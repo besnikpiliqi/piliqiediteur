@@ -5,7 +5,7 @@ namespace App\Domain\Stock\Models;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
-use App\Models\User;
+use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -18,7 +18,17 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  */
 class MouvementStock extends Model
 {
-    use BelongsToMagasin;
+    use BelongsToMagasin, FigeLeNomDeSesAuteurs;
+
+    /**
+     * @return array<string, string>
+     */
+    protected static function colonnesAuNomFige(): array
+    {
+        return [
+            'cree_par' => 'cree_par_nom',
+        ];
+    }
 
     protected $table = 'mouvements_stock';
 
@@ -55,10 +65,5 @@ class MouvementStock extends Model
     public function source(): MorphTo
     {
         return $this->morphTo();
-    }
-
-    public function creePar(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'cree_par');
     }
 }

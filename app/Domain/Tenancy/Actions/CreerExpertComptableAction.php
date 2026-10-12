@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CreationDesComptes;
 use App\Domain\Tenancy\Services\JournalDesDroits;
+use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Validation\ValidationException;
@@ -63,7 +64,7 @@ class CreerExpertComptableAction
      */
     private static function exigerLeProprietaire(User $auteur, Societe $societe): void
     {
-        if (! $auteur->peutAgir() || ! $auteur->estProprietaire() || (int) $auteur->societe_id !== $societe->getKey()) {
+        if (! app(PorteeDesDroits::class)->gereSonEquipe($auteur) || ! $auteur->estProprietaire() || (int) $auteur->societe_id !== $societe->getKey()) {
             throw new AuthorizationException(self::MESSAGE_PROPRIETAIRE_SEUL);
         }
     }

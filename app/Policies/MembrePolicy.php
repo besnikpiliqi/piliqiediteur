@@ -106,6 +106,22 @@ class MembrePolicy
     }
 
     /**
+     * Transmettre la propriété à cet administrateur actif de sa société
+     * (voir TransfererProprieteAction, qui exige en plus sa qualité de
+     * représentant prouvée et le mot de passe du propriétaire) : le
+     * propriétaire seul, jamais à un expert-comptable ni à un membre. Un
+     * geste sur l'équipe : permis dans une société suspendue, jamais dans
+     * une société révoquée (voir ControleDesDroits).
+     */
+    public function transmettreLaPropriete(User $user, User $administrateur): bool
+    {
+        return $this->creerUnAdministrateur($user)
+            && $administrateur->estAdministrateur()
+            && $administrateur->peutAgir()
+            && (int) $administrateur->societe_id === (int) $user->societe_id;
+    }
+
+    /**
      * Créer un expert-comptable : le propriétaire seul.
      */
     public function creerLExpertComptable(User $user): bool

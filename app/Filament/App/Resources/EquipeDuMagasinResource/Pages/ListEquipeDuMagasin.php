@@ -39,7 +39,7 @@ class ListEquipeDuMagasin extends ListRecords
         return Actions\Action::make('proposerUnRattachement')
             ->label('Proposer à un compte existant')
             ->icon('heroicon-o-envelope')
-            ->visible(fn (): bool => app(PorteeDesDroits::class)->gereLEquipeDe($this->auteur(), $this->magasin()))
+            ->visible(fn (): bool => app(PorteeDesDroits::class)->gereSonEquipe($this->auteur()) && app(PorteeDesDroits::class)->gereLEquipeDe($this->auteur(), $this->magasin()))
             ->modalDescription('Une personne dont le compte a été retiré de sa société peut rejoindre l\'équipe de ce magasin avec ce compte, si elle accepte : elle reçoit une proposition à son adresse, valable sept jours.')
             ->form([
                 TextInput::make('email')->label('Adresse e-mail de son compte')->email()->adresseDeConnexion()->required()->maxLength(255),

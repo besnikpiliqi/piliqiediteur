@@ -109,14 +109,4 @@ class SocietePolicy
             && ! $societe->estValidee()
             && ($user->estProprietaire() || ($user->administreTousLesMagasins() && $user->aLAutorisationDeSociete(AutorisationsSociete::MAGASINS_GERER)));
     }
-
-    /**
-     * Transmettre la propriété à un administrateur dont la qualité de
-     * représentant est prouvée (voir TransfererProprieteAction) : le
-     * propriétaire seul, tant que la société n'est pas en lecture seule.
-     */
-    public function transfererLaPropriete(User $user, Societe $societe): bool
-    {
-        return $this->view($user, $societe) && $user->estProprietaire() && ! $societe->estEnLectureSeule();
-    }
 }

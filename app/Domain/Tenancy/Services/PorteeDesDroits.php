@@ -7,6 +7,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
@@ -23,7 +24,7 @@ use LogicException;
  * Règles générales :
  * - aucun geste sur un compte d'une autre société, ni sur son propre
  *   compte (ses droits, son rôle, ses affectations, son statut), ni sur le
- *   propriétaire ;
+ *   propriétaire ; aucun dans une société révoquée (voir gereSonEquipe()) ;
  * - seul le propriétaire gère les administrateurs et les experts-comptables,
  *   et seul il affecte une même personne à plusieurs magasins (voir
  *   peutAffecterAPlusieursMagasins()) ;
@@ -70,9 +71,23 @@ final class PorteeDesDroits
     public const REFUS_PROVISOIRE = 'Cette personne n\'a pas encore choisi son mot de passe : seule la personne qui a créé son compte peut lui donner un nouveau magasin, un rôle de responsable ou la réintégrer.';
 
     /**
-     * Gère-t-il l'équipe de ce magasin (ses vendeurs et ses observateurs) ?
-     * Le propriétaire de la société du magasin, ou un responsable de ce
-     * magasin, avec un compte qui peut agir.
+     * Peut-il gérer l'équipe de sa société, dans la mesure de son rôle ? Un
+     * compte qui peut agir, dans une société qui n'est pas révoquée : celle
+     * d'un usurpateur garde son équipe consultable, mais plus rien ne s'y
+     * gère ; une société suspendue, résiliée ou refusée, ou un magasin
+     * fermé, la gère encore (un accès se coupe toujours).
+     */
+    public function gereSonEquipe(User $auteur): bool
+    {
+        return $auteur->peutAgir() && $auteur->societe()->where('statut', StatutSociete::Revoquee->value)->doesntExist();
+    }
+
+    /**
+     * L'équipe de ce magasin (ses vendeurs et ses observateurs) est-elle la
+     * sienne ? Le propriétaire de la société du magasin, ou un responsable
+     * de ce magasin, avec un compte qui peut agir : il la voit, et la gère
+     * tant que sa société n'est pas révoquée (voir gereSonEquipe(), que
+     * chaque geste exige en plus).
      */
     public function gereLEquipeDe(User $auteur, Magasin $magasin): bool
     {
@@ -88,7 +103,7 @@ final class PorteeDesDroits
      */
     public function peutNommerUnResponsable(User $auteur, Magasin $magasin): bool
     {
-        if (! $auteur->peutAgir() || (int) $magasin->societe_id !== (int) $auteur->societe_id) {
+        if (! $this->gereSonEquipe($auteur) || (int) $magasin->societe_id !== (int) $auteur->societe_id) {
             return false;
         }
 
@@ -103,7 +118,7 @@ final class PorteeDesDroits
      */
     public function peutAffecterAPlusieursMagasins(User $auteur): bool
     {
-        return $auteur->peutAgir() && $auteur->estProprietaire();
+        return $this->gereSonEquipe($auteur) && $auteur->estProprietaire();
     }
 
     /**
@@ -139,7 +154,7 @@ final class PorteeDesDroits
      */
     public function peutDonnerLeRole(User $auteur, ?User $compte, Magasin $magasin, RoleMagasin $role): bool
     {
-        if (! $auteur->peutAgir() || (int) $magasin->societe_id !== (int) $auteur->societe_id) {
+        if (! $this->gereSonEquipe($auteur) || (int) $magasin->societe_id !== (int) $auteur->societe_id) {
             return false;
         }
 
@@ -282,7 +297,7 @@ final class PorteeDesDroits
      */
     public function peutReintegrer(User $auteur, User $compte, array $roles): bool
     {
-        if (! $auteur->peutAgir() || ! $compte->estRetire() || ! $compte->estMembre() || $roles === []
+        if (! $this->gereSonEquipe($auteur) || ! $compte->estRetire() || ! $compte->estMembre() || $roles === []
             || (int) $compte->societe_id !== (int) $auteur->societe_id || $compte->is($auteur)) {
             return false;
         }
@@ -327,7 +342,7 @@ final class PorteeDesDroits
             return false;
         }
 
-        if (! $auteur->peutAgir() || (int) $magasin->societe_id !== (int) $auteur->societe_id) {
+        if (! $this->gereSonEquipe($auteur) || (int) $magasin->societe_id !== (int) $auteur->societe_id) {
             return false;
         }
 
@@ -455,7 +470,7 @@ final class PorteeDesDroits
      */
     public function peutProposerUnRattachement(User $auteur, RoleSociete $role, array $roles): bool
     {
-        if (! $auteur->peutAgir()) {
+        if (! $this->gereSonEquipe($auteur)) {
             return false;
         }
 
@@ -518,11 +533,11 @@ final class PorteeDesDroits
 
     /**
      * Une cible possible d'un geste : un compte de sa société, autre que le
-     * sien et que celui du propriétaire, par un compte qui peut agir.
+     * sien et que celui du propriétaire, par un compte qui gère son équipe.
      */
     private function estUneCible(User $auteur, User $compte): bool
     {
-        return $auteur->peutAgir()
+        return $this->gereSonEquipe($auteur)
             && (int) $compte->societe_id === (int) $auteur->societe_id
             && ! $compte->is($auteur)
             && ! $compte->estProprietaire();

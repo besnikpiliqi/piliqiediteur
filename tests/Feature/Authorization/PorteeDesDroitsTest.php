@@ -13,10 +13,14 @@ use App\Domain\Tenancy\Actions\EnvoyerUnLienDeReinitialisationAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\NommerAdministrateurAction;
+use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
 use App\Domain\Tenancy\Actions\RefuserSonCompteAction;
+use App\Domain\Tenancy\Actions\TransfererProprieteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\DemandeRattachement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -26,6 +30,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -166,6 +171,7 @@ class PorteeDesDroitsTest extends TestCase
             ['A', 'retirer de la société', 'administrateur', $tous(true, false, false, false, false, false)],
             ['A', 'renvoyer un lien', 'administrateur', $tous(true, false, false, false, false, false)],
             ['A', 'redonner un provisoire', 'administrateur au provisoire', $tous(true, false, false, false, false, false)],
+            ['A', 'transmettre la propriété', 'administrateur à la qualité prouvée', $tous(true, false, false, false, false, false)],
 
             ['B', 'créer un responsable de M', null, ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
             ['B', 'nommer responsable de M', 'vendeur de M', ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
@@ -227,6 +233,9 @@ class PorteeDesDroitsTest extends TestCase
             ['H', 'réintégrer comme responsable de M', 'ancien vendeur retiré par le propriétaire', ['P' => true, 'A+' => false]],
             ['H', 'réintégrer comme vendeur de M', 'compte refusé', ['P' => false, 'R(M)' => false]],
             ['H', 'réintégrer comme responsable de M', 'compte refusé', ['P' => false, 'A+' => false]],
+            ['H', 'proposer un rattachement comme vendeur de M', 'compte refusé', ['P' => true, 'A+' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],
+            ['H', 'proposer un rattachement comme vendeur de M', 'compte retiré d\'une autre société', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],
+            ['H', 'proposer un rattachement comme responsable de M', 'compte retiré d\'une autre société', ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A-' => false, 'R(M)' => false, 'V' => false, 'E' => false]],
 
             ['I', 'créer un expert-comptable', null, ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => false, 'V' => false]],
             ['I', 'créer un second expert-comptable', null, ['P' => true, 'A+' => false]],
@@ -239,6 +248,8 @@ class PorteeDesDroitsTest extends TestCase
             ['I', 'nommer responsable de M', 'expert-comptable', ['P' => false, 'A+' => false]],
             ['I', 'ajouter N comme vendeur', 'expert-comptable', ['P' => false, 'R(N)' => false]],
             ['I', 'nommer administrateur', 'expert-comptable', ['P' => false, 'A+' => false, 'A-' => false]],
+            ['I', 'proposer un rattachement comme expert-comptable', 'compte retiré d\'une autre société', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => false, 'V' => false, 'E' => false]],
+            ['I', 'transmettre la propriété', 'expert-comptable à la qualité prouvée', $tous(false, false, false, false, false, false)],
 
             ['J', 'voir la liste des comptes de la société', null, $tous(true, true, false, false, false, false)],
             ['J', 'voir ce compte dans l\'espace société', 'expert-comptable', $tous(true, false, false, false, false, false)],
@@ -262,6 +273,7 @@ class PorteeDesDroitsTest extends TestCase
     public function test_les_regles_de_la_matrice_sont_respectees_geste_par_geste(string $geste, ?string $cible, string $acteur, bool $attendu): void
     {
         Notification::fake();
+        Mail::fake();
         $this->m = $this->ouvrirUneSociete(['nom' => 'M']);
         $this->n = $this->ouvrirUnAutreMagasin($this->m, ['nom' => 'N']);
         $this->o = $this->ouvrirUnAutreMagasin($this->m, ['nom' => 'O']);
@@ -306,6 +318,9 @@ class PorteeDesDroitsTest extends TestCase
         $compte = match ($nom) {
             'propriétaire' => $proprietaire,
             'administrateur', 'administrateur suspendu' => $this->administrateur($this->m, [$this->m->id]),
+            'administrateur à la qualité prouvée' => tap($this->administrateur($this->m, null, AutorisationsSociete::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save(),
+            'expert-comptable à la qualité prouvée' => tap($this->expertComptable($this->m)->forceFill(['qualite_verifiee_le' => now()]))->save(),
+            'compte retiré d\'une autre société' => $this->compteRetireDUneAutreSociete(),
             'administrateur au provisoire' => app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alix', 'email' => 'alix@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$this->m->id], [], []),
             'responsable de M', 'responsable de M suspendu' => $this->responsable($this->m),
             'responsable de M au provisoire' => $auProvisoire([$this->m->id => ['role' => RoleMagasin::Responsable]]),
@@ -372,6 +387,10 @@ class PorteeDesDroitsTest extends TestCase
             'réintégrer comme expert-comptable' => app(ChangerStatutCompteAction::class)->reintegrerCommeExpertComptable($auteur, $compte),
             'créer un expert-comptable' => app(CreerExpertComptableAction::class)->handle($auteur, $societe, $nouveau, self::MOT_DE_PASSE_PROVISOIRE),
             'créer un second expert-comptable' => $this->secondExpertComptable($auteur),
+            'transmettre la propriété' => app(TransfererProprieteAction::class)->handle($auteur, $compte, 'password'),
+            'proposer un rattachement comme vendeur de M' => $this->proposer($auteur, $compte, RoleSociete::Membre, [$m => ['role' => RoleMagasin::Vendeur]]),
+            'proposer un rattachement comme responsable de M' => $this->proposer($auteur, $compte, RoleSociete::Membre, [$m => ['role' => RoleMagasin::Responsable]]),
+            'proposer un rattachement comme expert-comptable' => $this->proposer($auteur, $compte, RoleSociete::ExpertComptable, []),
             'voir la liste des comptes de la société' => $this->exiger($auteur->can('viewAny', User::class)),
             'voir ce compte dans l\'espace société' => $this->exiger($auteur->can('view', $compte)),
             'voir l\'équipe du magasin M' => $this->exiger(app(TenantContext::class)->runAs($this->m, fn (): bool => $auteur->can('viewAny', Affectation::class))),
@@ -408,6 +427,32 @@ class PorteeDesDroitsTest extends TestCase
     {
         $this->expertComptable($this->m);
         app(CreerExpertComptableAction::class)->handle($auteur, $this->m->societe, ['name' => 'Second', 'email' => 'second@example.test'], self::MOT_DE_PASSE_PROVISOIRE);
+    }
+
+    /**
+     * Une proposition de rattachement : faite, elle doit avoir créé la
+     * demande, que rien ne dit à l'auteur.
+     *
+     * @param  array<int, array{role: RoleMagasin}>  $affectations
+     */
+    private function proposer(User $auteur, User $compte, RoleSociete $role, array $affectations): void
+    {
+        app(ProposerUnRattachementAction::class)->handle($auteur, $this->m->societe, $compte->email, $role, $affectations);
+        $this->exiger(DemandeRattachement::withoutGlobalScopes()->where('user_id', $compte->id)->exists());
+    }
+
+    /**
+     * Un vendeur d'une autre société, retiré par elle ; le magasin M reste
+     * le magasin actif.
+     */
+    private function compteRetireDUneAutreSociete(): User
+    {
+        $ailleurs = $this->ouvrirUneSociete(['nom' => 'Ailleurs']);
+        $compte = $this->membre($ailleurs, RoleMagasin::Vendeur);
+        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($ailleurs), $compte);
+        app(TenantContext::class)->set($this->m);
+
+        return $compte;
     }
 
     private function exiger(bool $permis): void

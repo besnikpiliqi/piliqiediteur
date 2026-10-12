@@ -19,6 +19,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Auth\Access\AuthorizationException;
 
 /**
  * La liste des comptes, avec les créations que permet le rôle de la
@@ -70,7 +71,7 @@ class ListMembres extends ListRecords
                     ->live(),
                 Select::make('candidat')
                     ->label('Personne')
-                    ->options(fn (Get $get): array => filled($get('magasin_id'))
+                    ->options(fn (Get $get): array => array_key_exists((int) $get('magasin_id'), $this->magasinsOuNommerUnResponsable())
                         ? app(PorteeDesDroits::class)->candidatsResponsables($this->auteur(), MembreResource::magasin((int) $get('magasin_id')))->orderBy('name')->pluck('name', 'users.id')->all()
                         : [])
                     ->required(fn (Get $get): bool => $get('compte') === 'existant')
@@ -85,7 +86,7 @@ class ListMembres extends ListRecords
                     $affectation = [(int) $data['magasin_id'] => ['role' => RoleMagasin::Responsable]];
 
                     if ($data['compte'] === 'existant') {
-                        app(ModifierMembreAction::class)->handle($this->auteur(), User::query()->where('societe_id', MembreResource::societe()->getKey())->findOrFail($data['candidat']), $affectation);
+                        app(ModifierMembreAction::class)->handle($this->auteur(), User::query()->where('societe_id', MembreResource::societe()->getKey())->find($data['candidat']) ?? throw new AuthorizationException(PorteeDesDroits::REFUS), $affectation);
                     } else {
                         app(CreerMembreAction::class)->handle($this->auteur(), MembreResource::societe(), ['name' => $data['name'], 'email' => $data['email']], $data['mot_de_passe_provisoire'], $affectation);
                     }
@@ -100,7 +101,7 @@ class ListMembres extends ListRecords
         return Action::make('creerUnMembre')
             ->label('Créer un membre')
             ->icon('heroicon-o-user-plus')
-            ->visible(fn (): bool => $this->auteur()->estProprietaire())
+            ->visible(fn (): bool => $this->gereLEquipe() && $this->auteur()->estProprietaire())
             ->form([
                 TextInput::make('name')->label('Nom complet')->required()->maxLength(255),
                 TextInput::make('email')->label('Adresse e-mail de connexion')->email()->adresseDeConnexion()->required()->maxLength(255),
@@ -175,7 +176,7 @@ class ListMembres extends ListRecords
         return Action::make('proposerUnRattachement')
             ->label('Proposer à un compte existant')
             ->icon('heroicon-o-envelope')
-            ->visible(fn (): bool => $this->auteur()->estProprietaire() || $this->magasinsOuNommerUnResponsable() !== [])
+            ->visible(fn (): bool => $this->gereLEquipe() && ($this->auteur()->estProprietaire() || $this->magasinsOuNommerUnResponsable() !== []))
             ->modalDescription('Une personne dont le compte a été retiré de sa société peut rejoindre la vôtre avec ce compte, si elle accepte : elle reçoit une proposition à son adresse, valable sept jours.')
             ->form([
                 TextInput::make('email')->label('Adresse e-mail de son compte')->email()->adresseDeConnexion()->required()->maxLength(255),
@@ -220,6 +221,15 @@ class ListMembres extends ListRecords
         return collect(MembreResource::magasinsDeLaPortee())
             ->filter(fn (string $nom, int $id): bool => app(PorteeDesDroits::class)->peutNommerUnResponsable($this->auteur(), MembreResource::magasin($id)))
             ->all();
+    }
+
+    /**
+     * La personne connectée gère-t-elle encore l'équipe de sa société (pas
+     * dans une société révoquée, voir PorteeDesDroits::gereSonEquipe()) ?
+     */
+    private function gereLEquipe(): bool
+    {
+        return app(PorteeDesDroits::class)->gereSonEquipe($this->auteur());
     }
 
     private function auteur(): User

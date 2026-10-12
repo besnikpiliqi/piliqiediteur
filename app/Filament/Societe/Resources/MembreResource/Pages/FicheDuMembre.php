@@ -62,7 +62,7 @@ class FicheDuMembre extends ViewRecord
         return Action::make('modifierLesMagasins')
             ->label('Modifier ses magasins')
             ->icon('heroicon-o-building-storefront')
-            ->visible(fn (): bool => $this->auteur()->estProprietaire() && $this->compte()->estMembre() && ! $this->compte()->estRetire())
+            ->visible(fn (): bool => $this->gereLEquipe() && $this->auteur()->estProprietaire() && $this->compte()->estMembre() && ! $this->compte()->estRetire())
             ->fillForm(fn (): array => ['affectations' => $this->compte()->affectationsDeMembre()->map(fn (Affectation $affectation): array => [
                 'magasin_id' => (int) $affectation->magasin_id,
                 'role' => $affectation->role->value,
@@ -198,7 +198,7 @@ class FicheDuMembre extends ViewRecord
             ->label('Transmettre la propriété')
             ->icon('heroicon-o-key')
             ->color('danger')
-            ->visible(fn (): bool => $this->auteur()->estProprietaire() && $this->compte()->estAdministrateur() && $this->compte()->peutAgir())
+            ->visible(fn (): bool => $this->auteur()->can('transmettreLaPropriete', $this->compte()))
             ->modalDescription(fn (): string => "{$this->compte()->name} deviendra le propriétaire de la société, avec tous les droits ; vous en deviendrez administrateur de tous les magasins, avec toutes les autorisations. Sa qualité de représentant légal ou de mandataire doit être prouvée à son nom.")
             ->form([
                 TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->autocomplete('current-password')->required(),
@@ -228,7 +228,7 @@ class FicheDuMembre extends ViewRecord
         return Action::make('reintegrer')
             ->label('Réintégrer')
             ->icon('heroicon-o-arrow-path')
-            ->visible(fn (): bool => $this->compte()->estRetire() && $this->compte()->estMembre() && (int) $this->compte()->statut_change_par !== (int) $this->compte()->getKey())
+            ->visible(fn (): bool => $this->gereLEquipe() && $this->compte()->estRetire() && $this->compte()->estMembre() && (int) $this->compte()->statut_change_par !== (int) $this->compte()->getKey())
             ->form(fn (): array => $this->auteur()->estProprietaire()
                 ? [MembreResource::champAffectations()]
                 : [Select::make('magasin_id')->label('Responsable de')->options(fn (): array => MembreResource::magasinsDeLaPortee())->required()])
@@ -247,7 +247,7 @@ class FicheDuMembre extends ViewRecord
             ->label('Réintégrer comme expert-comptable')
             ->icon('heroicon-o-calculator')
             ->requiresConfirmation()
-            ->visible(fn (): bool => $this->auteur()->estProprietaire() && $this->compte()->estRetire() && (int) $this->compte()->statut_change_par !== (int) $this->compte()->getKey())
+            ->visible(fn (): bool => $this->gereLEquipe() && $this->auteur()->estProprietaire() && $this->compte()->estRetire() && (int) $this->compte()->statut_change_par !== (int) $this->compte()->getKey())
             ->action(function (): void {
                 $this->agir(fn () => app(ChangerStatutCompteAction::class)->reintegrerCommeExpertComptable($this->auteur(), $this->compte()));
             });
@@ -318,6 +318,15 @@ class FicheDuMembre extends ViewRecord
     {
         MembreResource::executerLeGeste($geste);
         $this->getRecord()->refresh();
+    }
+
+    /**
+     * La personne connectée gère-t-elle encore l'équipe de sa société (pas
+     * dans une société révoquée, voir PorteeDesDroits::gereSonEquipe()) ?
+     */
+    private function gereLEquipe(): bool
+    {
+        return app(PorteeDesDroits::class)->gereSonEquipe($this->auteur());
     }
 
     private function compte(): User

@@ -471,6 +471,29 @@ class EnvoyerDocumentJobTest extends TestCase
     }
 
     /**
+     * Une relance demandée à la main se relit au départ comme tout envoi :
+     * son auteur, suspendu entre-temps, ne la fait pas partir, et le
+     * propriétaire est prévenu.
+     */
+    public function test_une_relance_manuelle_d_un_membre_suspendu_entre_temps_ne_part_pas(): void
+    {
+        $this->travelTo('2026-10-15 10:00:00');
+        Mail::fake();
+        Queue::fake([EnvoyerDocumentJob::class]);
+        $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $vendeur = $this->vendeurDeLaPremiereHeure($magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+        $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
+        $relance = app(EnvoyerDocumentAction::class)->relancer($vendeur, $facture, 'client@exemple.fr');
+        app(ChangerStatutCompteAction::class)->suspendre($this->proprietaireDe($magasin), $vendeur);
+
+        (new EnvoyerDocumentJob($magasin->id, $relance->id))->handle();
+
+        Mail::assertNothingSent();
+        $this->assertSame([StatutEnvoi::Echec, EnvoyerDocumentJob::MOTIF_EXPEDITEUR_SANS_DROIT], [$relance->refresh()->statut, $relance->erreur]);
+        $this->assertSame(1, $this->proprietaireDe($magasin)->notifications()->where('type', EnvoiDocumentEchoue::class)->count());
+    }
+
+    /**
      * Une relance automatique n'a pas d'auteur : elle part même quand la
      * personne qui avait émis la facture a quitté la société depuis.
      */

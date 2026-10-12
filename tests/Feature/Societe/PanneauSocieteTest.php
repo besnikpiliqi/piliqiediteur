@@ -4,26 +4,47 @@ namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
+use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
+use App\Domain\Tenancy\Actions\CreerEtablissementAction;
+use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
+use App\Domain\Tenancy\Actions\CreerMembreAction;
+use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
+use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
+use App\Domain\Tenancy\Actions\TransfererProprieteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\ParametresFiscauxSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\Societe\Resources\MembreResource;
+use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
+use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
 use App\Filament\Societe\RessourceDuPanneauSociete;
 use App\Models\User;
 use App\Policies\SocietePolicy;
+use Database\Factories\MagasinFactory;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
 use Filament\Pages\Page;
 use Filament\Resources\Resource;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Mail;
+use Livewire\Livewire;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use ReflectionMethod;
@@ -145,6 +166,181 @@ class PanneauSocieteTest extends TestCase
         $this->assertFalse($visiteur->canAccessPanel(Filament::getPanel('societe')));
         $this->assertSame([], $visiteur->getTenants(Filament::getPanel('societe'))->modelKeys());
         $this->actingAs($visiteur)->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))->assertForbidden();
+    }
+
+    /**
+     * Un administrateur de tous les magasins à qui le propriétaire a coché
+     * les paramètres de la société ouvre son identité et ses réglages
+     * fiscaux, et les modifie.
+     */
+    public function test_un_administrateur_avec_parametres_ouvre_l_identite(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::PARAMETRES_GERER]);
+
+        $this->actingAs($administrateur);
+        $this->get(IdentiteSociete::getUrl(panel: 'societe', tenant: $magasin->societe))->assertOk();
+        $this->get(ParametresFiscauxSociete::getUrl(panel: 'societe', tenant: $magasin->societe))->assertOk();
+        app(TenantContext::class)->clear();
+        app(ModifierIdentiteSocieteAction::class)->handle($administrateur, $magasin->societe, ['capital_social' => '5000']);
+
+        $this->assertSame('5000.00', (string) $magasin->societe->fresh()->capital_social);
+    }
+
+    /**
+     * Sans l'autorisation des paramètres, ni un administrateur de tous les
+     * magasins ni celui d'une sélection n'ouvrent l'identité ou la
+     * fiscalité, ni ne les modifient par l'action.
+     */
+    public function test_un_administrateur_sans_parametres_n_ouvre_ni_l_identite_ni_la_fiscalite(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $deTous = $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::RESPONSABLES_NOMMER]);
+        $dUneSelection = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::MAGASINS_GERER, AutorisationsSociete::RESPONSABLES_NOMMER]);
+        $capital = $magasin->societe->capital_social;
+
+        foreach ([$deTous, $dUneSelection] as $administrateur) {
+            $this->flushSession();
+            $this->actingAs($administrateur);
+            $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))->assertOk();
+            $this->get(IdentiteSociete::getUrl(panel: 'societe', tenant: $magasin->societe))->assertForbidden();
+            $this->get(ParametresFiscauxSociete::getUrl(panel: 'societe', tenant: $magasin->societe))->assertForbidden();
+            app(TenantContext::class)->clear();
+            $this->assertThrows(fn () => app(ModifierIdentiteSocieteAction::class)->handle($administrateur, $magasin->societe, ['capital_social' => '5000']), LogicException::class, ModifierIdentiteSocieteAction::MESSAGE_SANS_AUTORISATION);
+        }
+
+        $this->assertSame($capital, $magasin->societe->fresh()->capital_social);
+    }
+
+    /**
+     * Les magasins et les comptes que proposent les formulaires de l'espace
+     * société sont ceux de la société affichée, et, pour un administrateur,
+     * de sa portée : jamais ceux d'une autre société, ni ceux d'un magasin
+     * hors de sa sélection ; un magasin forcé hors de ces choix est
+     * refusé.
+     */
+    public function test_les_options_des_formulaires_et_filtres_se_limitent_a_la_societe_et_a_la_portee(): void
+    {
+        $ailleurs = $this->ouvrirUneSociete(['nom' => 'Ailleurs']);
+        $vendeurDAilleurs = $this->membre($ailleurs, RoleMagasin::Vendeur);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon Centre']);
+        $horsPortee = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Villeurbanne']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $vendeurHorsPortee = $this->membre($horsPortee, RoleMagasin::Vendeur);
+        $administrateur = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::RESPONSABLES_NOMMER]);
+
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+        $this->assertEqualsCanonicalizing([$magasin->id, $horsPortee->id], array_keys(MembreResource::magasinsDeLaPortee()));
+
+        $this->dansLEspaceDeLaSociete($magasin->societe, $administrateur);
+        $this->assertSame([$magasin->id], array_keys(MembreResource::magasinsDeLaPortee()));
+        $candidats = app(PorteeDesDroits::class)->candidatsResponsables($administrateur, $magasin)->pluck('users.id')->all();
+        $this->assertSame([$vendeur->id], array_map(intval(...), $candidats));
+        $this->assertSame([], app(PorteeDesDroits::class)->candidatsResponsables($administrateur, $horsPortee)->pluck('users.id')->all());
+        $this->assertNotContains($vendeurDAilleurs->id, MembreResource::getEloquentQuery()->pluck('users.id')->all());
+        $this->assertNotContains($vendeurHorsPortee->id, MembreResource::getEloquentQuery()->pluck('users.id')->all());
+
+        $this->forgerLAction(Livewire::test(ListMembres::class), 'nommerUnResponsable', ['magasin_id' => $horsPortee->id, 'compte' => 'existant', 'candidat' => $vendeurHorsPortee->id]);
+        $this->forgerLAction(Livewire::test(ListMembres::class), 'nommerUnResponsable', ['magasin_id' => $ailleurs->id, 'compte' => 'existant', 'candidat' => $vendeurDAilleurs->id]);
+
+        $this->assertSame(RoleMagasin::Vendeur, Affectation::query()->where('user_id', $vendeurHorsPortee->id)->sole()->role);
+        $this->assertSame(RoleMagasin::Vendeur, Affectation::query()->where('user_id', $vendeurDAilleurs->id)->sole()->role);
+    }
+
+    /**
+     * Une société suspendue garde son espace consultable et son équipe
+     * gérable, mais n'y crée plus de magasin et n'y modifie plus ses
+     * paramètres.
+     */
+    public function test_une_societe_suspendue_garde_son_espace_consultable_mais_ne_cree_rien(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $societe = $magasin->societe;
+        $proprietaire = $this->proprietaireDe($magasin);
+        $societe->forceFill(['statut' => StatutSociete::Suspendue])->save();
+        $magasins = Magasin::query()->where('societe_id', $societe->id)->count();
+
+        $this->actingAs($proprietaire);
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertOk();
+        $this->get(IdentiteSociete::getUrl(panel: 'societe', tenant: $societe))->assertOk();
+        $this->get(MembreResource::getUrl('index', panel: 'societe', tenant: $societe))->assertOk();
+        app(TenantContext::class)->clear();
+        $this->assertThrows(fn () => app(CreerEtablissementAction::class)->handle($proprietaire, $societe, ['nom' => 'Lyon 2', 'nic' => MagasinFactory::nicLibre($societe)]), LogicException::class, CreerEtablissementAction::MESSAGE_SANS_AUTORISATION);
+        $this->assertThrows(fn () => app(ModifierIdentiteSocieteAction::class)->handle($proprietaire, $societe, ['capital_social' => '5000']), LogicException::class, ModifierIdentiteSocieteAction::MESSAGE_SANS_AUTORISATION);
+        $compte = app(CreerMembreAction::class)->handle($proprietaire, $societe, ['name' => 'Paul', 'email' => 'paul@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
+
+        $this->assertSame($magasins, Magasin::query()->where('societe_id', $societe->id)->count());
+        $this->assertTrue($compte->exists);
+    }
+
+    /**
+     * Une société révoquée (un usurpateur) garde son espace et son équipe
+     * consultables, mais plus rien ne s'y gère, ni par l'écran ni par les
+     * actions : aucun compte créé, suspendu, nommé ou proposé, aucun
+     * administrateur ni expert-comptable, aucune propriété transmise.
+     */
+    public function test_une_societe_revoquee_ne_gere_plus_son_equipe(): void
+    {
+        Mail::fake();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $societe = $magasin->societe;
+        $proprietaire = $this->proprietaireDe($magasin);
+        $responsable = $this->responsable($magasin);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $administrateur = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $societe->forceFill(['statut' => StatutSociete::Revoquee])->save();
+        app(TenantContext::class)->clear();
+        $avant = User::query()->where('societe_id', $societe->id)->orderBy('id')->get(['id', 'role_societe', 'statut'])->toArray();
+        $affectations = Affectation::query()->where('societe_id', $societe->id)->count();
+
+        $gestes = [
+            fn () => app(CreerMembreAction::class)->handle($proprietaire, $societe, ['name' => 'Paul', 'email' => 'paul@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Vendeur]]),
+            fn () => app(CreerMembreAction::class)->handle($responsable, $societe, ['name' => 'Jean', 'email' => 'jean@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Vendeur]]),
+            fn () => app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $vendeur),
+            fn () => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, [$magasin->id => ['role' => RoleMagasin::Responsable]]),
+            fn () => app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice', 'email' => 'alice@example.test'], self::MOT_DE_PASSE_PROVISOIRE, null, [], []),
+            fn () => app(CreerExpertComptableAction::class)->handle($proprietaire, $societe, ['name' => 'Émile', 'email' => 'emile@example.test'], self::MOT_DE_PASSE_PROVISOIRE),
+            fn () => app(ProposerUnRattachementAction::class)->handle($proprietaire, $societe, 'quelquun@example.test', RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur]]),
+            fn () => app(TransfererProprieteAction::class)->handle($proprietaire, $administrateur, 'password'),
+        ];
+        foreach ($gestes as $geste) {
+            $this->assertThrows($geste, AuthorizationException::class);
+        }
+
+        $this->assertSame($avant, User::query()->where('societe_id', $societe->id)->orderBy('id')->get(['id', 'role_societe', 'statut'])->toArray());
+        $this->assertSame($affectations, Affectation::query()->where('societe_id', $societe->id)->count());
+        $this->dansLeMagasin($magasin, $responsable);
+        Livewire::test(ListEquipeDuMagasin::class)->assertActionHidden('proposerUnRattachement');
+        $this->dansLEspaceDeLaSociete($societe, $proprietaire);
+        Livewire::test(ListMembres::class)
+            ->assertCanSeeTableRecords([$vendeur])
+            ->assertActionHidden('creerUnMembre')
+            ->assertActionHidden('proposerUnRattachement');
+        Livewire::test(FicheDuMembre::class, ['record' => $administrateur->getRouteKey()])->assertActionHidden('transmettreLaPropriete');
+        Mail::assertNothingOutgoing();
+    }
+
+    /**
+     * Le tableau de bord d'un administrateur d'une sélection ne montre que
+     * les magasins de sa sélection ; celui du propriétaire, tous.
+     */
+    public function test_le_tableau_de_bord_d_un_administrateur_d_une_selection_ne_montre_que_ses_magasins(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon Centre']);
+        $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Villeurbanne Gratte-Ciel']);
+        $administrateur = $this->administrateur($magasin, [$magasin->id]);
+
+        $this->actingAs($administrateur)
+            ->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))
+            ->assertOk()
+            ->assertSeeText('Lyon Centre')
+            ->assertDontSeeText('Villeurbanne Gratte-Ciel');
+        $this->flushSession();
+        $this->actingAs($this->proprietaireDe($magasin))
+            ->get(TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe))
+            ->assertOk()
+            ->assertSeeText('Lyon Centre')
+            ->assertSeeText('Villeurbanne Gratte-Ciel');
     }
 
     /**

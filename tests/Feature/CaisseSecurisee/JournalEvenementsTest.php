@@ -174,6 +174,50 @@ class JournalEvenementsTest extends TestCase
     }
 
     /**
+     * Le propriétaire ouvre tour à tour deux magasins de sa société, puis
+     * revient au premier : une seule ouverture de session par magasin.
+     */
+    public function test_ouvrir_a_puis_b_puis_a_inscrit_une_ouverture_par_magasin(): void
+    {
+        $alice = User::factory()->create(['name' => 'Alice Martin']);
+        $premier = $this->magasinDe($alice, 'Boutique A');
+        $second = $this->ouvrirUnAutreMagasin($premier, ['nom' => 'Boutique B']);
+        $this->actingAs($alice);
+
+        $this->get("/app/{$premier->uuid}")->assertSuccessful();
+        $this->get("/app/{$second->uuid}")->assertSuccessful();
+        $this->get("/app/{$premier->uuid}/clients")->assertSuccessful();
+
+        foreach ([$premier, $second] as $magasin) {
+            $this->assertSame(1, collect($this->codes($magasin))->filter(fn (string $code): bool => $code === '80')->count(), $magasin->nom);
+            $this->assertSame(['id' => $alice->id, 'nom' => 'Alice Martin'], $this->dernier($magasin, CodeEvenement::OuvertureDeSession)->contenuSigne()['operateur']);
+        }
+    }
+
+    /**
+     * La déconnexion inscrit la fin de session dans chacun des magasins que
+     * la session a ouverts, et dans eux seuls.
+     */
+    public function test_la_deconnexion_inscrit_la_fin_de_session_dans_chaque_magasin_ouvert(): void
+    {
+        $alice = User::factory()->create(['name' => 'Alice Martin']);
+        $premier = $this->magasinDe($alice, 'Boutique A');
+        $second = $this->ouvrirUnAutreMagasin($premier, ['nom' => 'Boutique B']);
+        $jamaisOuvert = $this->ouvrirUnAutreMagasin($premier, ['nom' => 'Boutique C']);
+        $this->actingAs($alice);
+        $this->get("/app/{$premier->uuid}")->assertSuccessful();
+        $this->get("/app/{$second->uuid}")->assertSuccessful();
+
+        $this->post(route('filament.app.auth.logout'));
+
+        $this->assertGuest();
+        foreach ([$premier, $second] as $magasin) {
+            $this->assertSame(['80', '40'], array_values(array_filter($this->codes($magasin), fn (string $code): bool => in_array($code, ['80', '40'], true))), $magasin->nom);
+        }
+        $this->assertSame([], array_values(array_filter($this->codes($jamaisOuvert), fn (string $code): bool => in_array($code, ['80', '40'], true))));
+    }
+
+    /**
      * Retiré de l'équipe, il n'ouvre plus le panneau, dont la déconnexion
      * passe par la même porte : sa session ne se ferme que par une autre
      * voie, comme ici, et n'inscrit plus rien dans le magasin.

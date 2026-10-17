@@ -2,12 +2,15 @@
 
 namespace App\Filament\Societe\Pages;
 
+use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\EvaluateurDeVerification;
+use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MembreResource;
@@ -19,17 +22,23 @@ use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Le tableau de bord de la société, où arrive son propriétaire après le
- * lien de son inscription : pour lui seul, la liste de ses premières
- * étapes, chacune avec son état et l'écran qui la fait (voir etapes()),
- * tant qu'il en reste une à faire ; où en est sa vérification ; ce qui manque à son identité pour
+ * lien de son inscription : en tête, « Bonjour » et le rôle de la personne
+ * dans la société (voir User::libelleDuRoleDeSociete()) ; pour le
+ * propriétaire seul, la liste de ses premières étapes, chacune avec son
+ * état et l'écran qui la fait (voir etapes()), tant qu'il en reste une à
+ * faire ; où en est sa vérification ; ce qui manque à son identité pour
  * facturer un professionnel ; ses magasins réels de la portée de la
  * personne connectée (tous pour le propriétaire et un administrateur de
  * tous les magasins, ceux de sa sélection pour un autre administrateur),
- * chacun avec son SIRET, son établissement (vérifié ou à vérifier) et son
- * état ; et son magasin de démonstration, ouvert ici tant que la société
- * est en cours de vérification (voir OuvrirLaDemonstrationAction). Les
- * magasins et les comptes se lisent dans la société affichée : ceux
- * d'aucune autre société.
+ * chacun avec son SIRET, son établissement (vérifié ou à vérifier), son
+ * état et, quand la personne y voit toutes les factures, le nombre, le
+ * restant dû et le retard de ses factures à encaisser (voir
+ * facturesAEncaisser()), qui mènent à leur liste dans le magasin ; pour un
+ * administrateur autorisé à nommer les responsables, où le faire (voir
+ * peutNommerUnResponsable()) ; et son magasin de démonstration, ouvert ici
+ * tant que la société est en cours de vérification (voir
+ * OuvrirLaDemonstrationAction). Les magasins et les comptes se lisent dans
+ * la société affichée : ceux d'aucune autre société.
  */
 class TableauDeBord extends Dashboard
 {
@@ -164,6 +173,51 @@ class TableauDeBord extends Dashboard
     public function magasins(): Collection
     {
         return auth()->user()->magasinsDeSaPortee()->where('est_demonstration', false)->orderBy('nom')->orderBy('id')->get();
+    }
+
+    /**
+     * Le nombre, le restant dû et le retard des factures à encaisser de
+     * chaque magasin réel de la portée où la personne voit toutes les
+     * factures, par identifiant de magasin (voir
+     * FacturesAEncaisserDeLaSociete) : un magasin qui n'y figure pas n'en
+     * montre rien.
+     *
+     * @return array<int, array{nombre: int, restant_du: int, nombre_en_retard: int, restant_du_en_retard: int}>
+     */
+    public function facturesAEncaisser(): array
+    {
+        return app(FacturesAEncaisserDeLaSociete::class)->pour(auth()->user());
+    }
+
+    /**
+     * La liste des factures à encaisser de ce magasin, dans son panneau.
+     */
+    public function urlDesFacturesAEncaisser(Magasin $magasin): string
+    {
+        return FactureResource::urlDesFacturesAEncaisser($magasin);
+    }
+
+    /**
+     * « 1 234,50 € », depuis un montant en centimes.
+     */
+    public function enEuros(int $centimes): string
+    {
+        $absolu = abs($centimes);
+
+        return ($centimes < 0 ? '-' : '').number_format(intdiv($absolu, 100), 0, ',', ' ').','.str_pad((string) ($absolu % 100), 2, '0', STR_PAD_LEFT).' €';
+    }
+
+    /**
+     * Un administrateur autorisé à nommer les responsables le fait ici,
+     * dans « Comptes » (voir MembreResource), jamais dans l'équipe d'un
+     * magasin, qui lui reste fermée : le tableau de bord le lui dit, tant
+     * que la société lui permet de le faire (voir ControleDesDroits).
+     */
+    public function peutNommerUnResponsable(): bool
+    {
+        $compte = auth()->user();
+
+        return $compte->estAdministrateur() && $compte->can(AutorisationsSociete::RESPONSABLES_NOMMER);
     }
 
     /**

@@ -356,6 +356,35 @@ class PanneauSocieteTest extends TestCase
     }
 
     /**
+     * Le tableau de bord de la société dit, après « Bonjour » et le nom de
+     * la personne, son rôle dans la société ; à un administrateur autorisé
+     * à nommer les responsables, et à lui seul, où le faire : dans
+     * « Comptes ».
+     */
+    public function test_le_tableau_de_bord_de_la_societe_dit_bonjour_avec_le_role(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon Centre', 'raison_sociale' => 'Ma Boutique SAS'], User::factory()->create(['name' => 'Jeanne Dupont']));
+        $autorise = $this->administrateur($magasin, autorisationsSociete: [AutorisationsSociete::RESPONSABLES_NOMMER]);
+        $nonAutorise = $this->administrateur($magasin);
+        $tableauDeBord = TableauDeBord::getUrl(panel: 'societe', tenant: $magasin->societe);
+
+        $this->actingAs($this->proprietaireDe($magasin))
+            ->get($tableauDeBord)
+            ->assertSeeTextInOrder(['Bonjour Jeanne Dupont', 'Propriétaire de Ma Boutique SAS', 'Vos magasins'])
+            ->assertDontSeeText('Nommer un responsable');
+        $this->flushSession();
+        $this->actingAs($autorise)
+            ->get($tableauDeBord)
+            ->assertSeeTextInOrder(['Bonjour '.$autorise->name, 'Administrateur', 'Nommer un responsable : Comptes'])
+            ->assertSee(htmlspecialchars(MembreResource::getUrl('index', panel: 'societe', tenant: $magasin->societe)), escape: false);
+        $this->flushSession();
+        $this->actingAs($nonAutorise)
+            ->get($tableauDeBord)
+            ->assertSeeTextInOrder(['Bonjour '.$nonAutorise->name, 'Administrateur'])
+            ->assertDontSeeText('Nommer un responsable');
+    }
+
+    /**
      * Le tableau de bord du propriétaire coche chaque première étape
      * faite : le premier magasin créé, un compte ajouté à l'équipe, la
      * démonstration essayée, la société validée ; chacune mène à son écran

@@ -204,6 +204,39 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         return $this->role_societe === RoleSociete::Membre;
     }
 
+    /**
+     * Son rôle dans sa société, tel que le dit le tableau de bord de
+     * l'espace d'administration après « Bonjour » : « Propriétaire de »
+     * suivi de la dénomination de la société quand elle est connue,
+     * sinon le libellé de son rôle (« Administrateur »,
+     * « Expert-comptable »).
+     */
+    public function libelleDuRoleDeSociete(): string
+    {
+        $denomination = $this->societe?->raison_sociale;
+
+        return $this->estProprietaire() && filled($denomination)
+            ? "Propriétaire de {$denomination}"
+            : $this->role_societe->getLabel();
+    }
+
+    /**
+     * Son rôle dans ce magasin, tel que le dit son tableau de bord après
+     * « Bonjour » : pour un membre, le rôle de son affectation à ce
+     * magasin, suivi du nom du magasin (« Vendeur · Boutique Lyon 1 ») ;
+     * pour le propriétaire, un administrateur ou un expert-comptable, son
+     * rôle de société (voir libelleDuRoleDeSociete()) ; suivi de
+     * « (démonstration) » dans le magasin de démonstration.
+     */
+    public function libelleDuRoleDans(Magasin $magasin): string
+    {
+        $libelle = $this->estMembre()
+            ? ($this->affectationQuiVautDans($magasin)?->role?->getLabel() ?? RoleSociete::Membre->getLabel()).' · '.$magasin->nom
+            : $this->libelleDuRoleDeSociete();
+
+        return $magasin->est_demonstration ? "{$libelle} (démonstration)" : $libelle;
+    }
+
     public function estActif(): bool
     {
         return $this->statut === StatutCompte::Actif;

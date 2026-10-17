@@ -235,6 +235,44 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
+     * Les factures et les tickets émis dont il reste quelque chose à
+     * régler : émis, envoyés, partiellement payés ou en retard (voir
+     * StatutFacture::quiAttendentUnReglement()), jamais un brouillon ni un
+     * document payé. Une facture rouverte par la contre-passation d'un
+     * paiement y revient (voir constaterUnReglement()) : l'alerte du
+     * tableau de bord (voir FacturesAEncaisserApercu), le filtre « À
+     * encaisser » de la liste des factures et les totaux de l'espace de la
+     * société (voir FacturesAEncaisserDeLaSociete) la montrent.
+     */
+    public function scopeAEncaisser(Builder $query): Builder
+    {
+        return $query->whereIn($query->qualifyColumn('statut'), StatutFacture::quiAttendentUnReglement());
+    }
+
+    /**
+     * Le nombre et le restant dû de ces factures, dont celles en retard
+     * (échéance dépassée, voir estEchue()), en centimes : chaque restant dû
+     * se calcule ici, depuis les imputations chargées avec les factures
+     * (voir resteDuEnCentimes()), jamais par une somme que la base ferait
+     * sur une colonne décimale.
+     *
+     * @param  Collection<int, Facture>  $factures
+     * @return array{nombre: int, restant_du: int, nombre_en_retard: int, restant_du_en_retard: int}
+     */
+    public static function totauxAEncaisser(Collection $factures): array
+    {
+        $enRetard = $factures->filter(fn (Facture $facture): bool => $facture->estEchue());
+        $restantDu = fn (Collection $parmi): int => (int) $parmi->sum(fn (Facture $facture): int => $facture->resteDuEnCentimes());
+
+        return [
+            'nombre' => $factures->count(),
+            'restant_du' => $restantDu($factures),
+            'nombre_en_retard' => $enRetard->count(),
+            'restant_du_en_retard' => $restantDu($enRetard),
+        ];
+    }
+
+    /**
      * Les factures que cet utilisateur voit (B16), exactement comme
      * FacturePolicy::view() : toutes avec l'autorisation « voir celles de
      * toute l'équipe », celles qu'il a créées avec « voir (les siennes) »,
@@ -458,6 +496,30 @@ class Facture extends Model implements DocumentEnvoyable
     public function montantRestant(): float
     {
         return app(CalculateurLigne::class)->soustraire($this->total_ttc, $this->montantPaye(), $this->montantCrediteParAvoir());
+    }
+
+    /**
+     * Ce que la facture a reçu, paiements et crédit d'avoir compris (une
+     * contre-passation en déduction), en centimes : la somme, faite ici,
+     * de ses imputations. Une liste de factures les charge avec elles
+     * (voir FactureResource::table()), pour ne pas les relire une à une.
+     */
+    public function regleEnCentimes(): int
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        return (int) $this->allocationsPaiement->concat($this->allocationsAvoir)->sum(
+            fn (PaiementAllocation|AvoirAllocation $allocation): int => $calculateur->enCentiemes($allocation->montant_alloue),
+        );
+    }
+
+    /**
+     * Ce qu'il reste à régler, en centimes : son total TTC moins ce
+     * qu'elle a reçu (voir regleEnCentimes()).
+     */
+    public function resteDuEnCentimes(): int
+    {
+        return app(CalculateurLigne::class)->enCentiemes($this->total_ttc) - $this->regleEnCentimes();
     }
 
     /**

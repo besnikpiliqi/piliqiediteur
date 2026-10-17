@@ -3,6 +3,8 @@
     @php($societe = $this->societe())
     @php($manquantes = $societe->mentionsLegalesManquantes())
 
+    @include('filament.bienvenue', ['compte' => auth()->user(), 'role' => auth()->user()->libelleDuRoleDeSociete()])
+
     @if ($this->resteDesEtapes())
         <x-filament::section icon="heroicon-o-list-bullet">
             <x-slot name="heading">Vos premières étapes</x-slot>
@@ -64,19 +66,53 @@
     <x-filament::section icon="heroicon-o-building-storefront">
         <x-slot name="heading">Vos magasins</x-slot>
 
+        @if ($this->peutNommerUnResponsable())
+            <p class="mb-4">Nommer un responsable : <x-filament::link :href="\App\Filament\Societe\Resources\MembreResource::getUrl('index')">Comptes</x-filament::link></p>
+        @endif
+
         @php($magasins = $this->magasins())
         @if ($magasins->isEmpty())
             <p>Aucun magasin pour le moment.</p>
         @else
-            <ul>
-                @foreach ($magasins as $magasin)
-                    <li>
-                        <strong>{{ $magasin->nom }}</strong> ({{ $magasin->code }}) · SIRET {{ $magasin->siret }}
-                        · {{ $magasin->etablissement_verifie_le === null ? 'établissement à vérifier' : 'établissement vérifié' }}
-                        · {{ $magasin->motifDeLectureSeule() ?? 'ouvert' }}
-                    </li>
-                @endforeach
-            </ul>
+            @php($aEncaisser = $this->facturesAEncaisser())
+            <table class="w-full text-start text-sm">
+                <thead>
+                    <tr class="text-gray-500 dark:text-gray-400">
+                        <th class="py-1 pe-3 text-start font-medium">Magasin</th>
+                        <th class="py-1 pe-3 text-start font-medium">SIRET</th>
+                        <th class="py-1 pe-3 text-start font-medium">État</th>
+                        <th class="py-1 pe-3 text-end font-medium">À encaisser</th>
+                        <th class="py-1 pe-3 text-end font-medium">Restant dû</th>
+                        <th class="py-1 text-end font-medium">dont en retard</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($magasins as $magasin)
+                        @php($totaux = $aEncaisser[$magasin->id] ?? null)
+                        <tr class="border-t border-gray-200 dark:border-white/10">
+                            <td class="py-1 pe-3"><strong>{{ $magasin->nom }}</strong> ({{ $magasin->code }})</td>
+                            <td class="py-1 pe-3">
+                                {{ $magasin->siret }}
+                                · {{ $magasin->etablissement_verifie_le === null ? 'établissement à vérifier' : 'établissement vérifié' }}
+                            </td>
+                            <td class="py-1 pe-3">{{ $magasin->motifDeLectureSeule() ?? 'ouvert' }}</td>
+                            @if ($totaux === null)
+                                <td class="py-1 pe-3 text-end">—</td>
+                                <td class="py-1 pe-3 text-end">—</td>
+                                <td class="py-1 text-end">—</td>
+                            @else
+                                <td class="py-1 pe-3 text-end">
+                                    <x-filament::link :href="$this->urlDesFacturesAEncaisser($magasin)">{{ $totaux['nombre'] }}</x-filament::link>
+                                </td>
+                                <td class="py-1 pe-3 text-end">{{ $this->enEuros($totaux['restant_du']) }}</td>
+                                <td @class(['py-1 text-end', 'font-semibold text-danger-600 dark:text-danger-400' => $totaux['nombre_en_retard'] > 0])>
+                                    {{ $totaux['nombre_en_retard'] }} · {{ $this->enEuros($totaux['restant_du_en_retard']) }}
+                                </td>
+                            @endif
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
         @endif
     </x-filament::section>
 </x-filament-panels::page>

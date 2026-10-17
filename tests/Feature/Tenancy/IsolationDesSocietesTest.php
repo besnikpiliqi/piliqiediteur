@@ -5,9 +5,12 @@ namespace Tests\Feature\Tenancy;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
@@ -315,6 +318,26 @@ class IsolationDesSocietesTest extends TestCase
     }
 
     /**
+     * Les factures à encaisser que lit l'espace d'administration d'une
+     * société sont celles de ses seuls magasins : ni le magasin ni la somme
+     * d'une autre société n'y entrent.
+     */
+    public function test_aucune_somme_d_une_autre_societe_n_entre_dans_les_factures_a_encaisser(): void
+    {
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'A']);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'B']);
+        $this->emettreSansLaRegler($magasinA, 12);
+        $this->emettreSansLaRegler($magasinB, 99);
+        app(TenantContext::class)->clear();
+
+        $vuParA = app(FacturesAEncaisserDeLaSociete::class)->pour($this->proprietaireDe($magasinA));
+        $vuParB = app(FacturesAEncaisserDeLaSociete::class)->pour($this->proprietaireDe($magasinB));
+
+        $this->assertSame([$magasinA->id => ['nombre' => 1, 'restant_du' => 1200, 'nombre_en_retard' => 0, 'restant_du_en_retard' => 0]], $vuParA);
+        $this->assertSame([$magasinB->id => ['nombre' => 1, 'restant_du' => 9900, 'nombre_en_retard' => 0, 'restant_du_en_retard' => 0]], $vuParB);
+    }
+
+    /**
      * L'évaluation de la vérification d'une société ne lit, des autres
      * sociétés du même SIREN, que trois réponses par oui ou non (une autre
      * est-elle validée, a-t-elle prouvé sa qualité, une société de ce SIREN
@@ -435,6 +458,18 @@ class IsolationDesSocietesTest extends TestCase
             [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]],
             ModePaiement::Especes,
         ));
+    }
+
+    /**
+     * Un ticket d'un article au prix TTC donné, émis dans ce magasin pour un
+     * nouveau client particulier et laissé sans règlement.
+     */
+    private function emettreSansLaRegler(Magasin $magasin, float $prixTtc): Facture
+    {
+        return app(TenantContext::class)->runAs($magasin, fn (): Facture => app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(),
+            Client::factory()->create(),
+            [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]],
+        )));
     }
 
     /**

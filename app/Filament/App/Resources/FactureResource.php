@@ -86,6 +86,21 @@ class FactureResource extends Resource
     protected static ?string $pluralModelLabel = 'factures';
 
     /**
+     * Le filtre « À encaisser » de la liste (voir table()).
+     */
+    public const FILTRE_A_ENCAISSER = 'a_encaisser';
+
+    /**
+     * La liste des factures du magasin, filtrée sur celles à encaisser :
+     * celle du magasin actif, ou de ce magasin depuis l'espace de la
+     * société (voir TableauDeBord).
+     */
+    public static function urlDesFacturesAEncaisser(?Magasin $magasin = null): string
+    {
+        return static::getUrl('index', ['tableFilters' => [self::FILTRE_A_ENCAISSER => ['isActive' => true]]], panel: 'app', tenant: $magasin);
+    }
+
+    /**
      * Confidentialité entre vendeurs (B16) : la liste elle-même ne montre
      * que les factures que l'utilisateur voit (voir
      * Facture::scopeVisiblesPar()) -- une policy sur l'accès direct ne
@@ -615,15 +630,12 @@ class FactureResource extends Resource
     /**
      * Ce que la facture a reçu, paiements et crédit d'avoir compris, écrit
      * comme sa colonne (« 12.50 ») : ses imputations, chargées avec les
-     * factures de la liste (voir table()), sommées en centimes.
+     * factures de la liste (voir table()), sommées en centimes (voir
+     * Facture::regleEnCentimes()).
      */
     private static function paye(Facture $facture): string
     {
-        $calculateur = app(CalculateurLigne::class);
-
-        return $calculateur->enDecimal($facture->allocationsPaiement->concat($facture->allocationsAvoir)->sum(
-            fn (PaiementAllocation|AvoirAllocation $allocation): int => $calculateur->enCentiemes($allocation->montant_alloue),
-        ));
+        return app(CalculateurLigne::class)->enDecimal($facture->regleEnCentimes());
     }
 
     public static function table(Table $table): Table
@@ -664,6 +676,14 @@ class FactureResource extends Resource
                     ->label('Preuves à fournir')
                     ->toggle()
                     ->query(fn (Builder $query): Builder => $query->preuvesAFournir()),
+                // Les factures et les tickets émis dont il reste quelque
+                // chose à régler (voir Facture::scopeAEncaisser()), où mène
+                // l'alerte du tableau de bord (voir
+                // FacturesAEncaisserApercu).
+                Tables\Filters\Filter::make(self::FILTRE_A_ENCAISSER)
+                    ->label('À encaisser')
+                    ->toggle()
+                    ->query(fn (Builder $query): Builder => $query->aEncaisser()),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),

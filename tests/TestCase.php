@@ -103,12 +103,12 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
-     * Une société et son premier magasin, comme après son inscription (voir
-     * CreerSocieteAction) : l'identité que le répertoire Sirene préremplit
-     * (voir SocieteFactory::commeApresLInscription()), sans capital ni
-     * immatriculation ; le magasin, créé par CreerEtablissementAction, son
-     * établissement vérifié. La société est ensuite validée, et son SIRET
-     * réservé, comme à sa validation ; le magasin est en activité depuis
+     * Une société et un magasin que son propriétaire y crée (voir
+     * CreerEtablissementAction), son établissement vérifié : l'identité de
+     * la société est celle que le répertoire Sirene préremplit à
+     * l'inscription (voir SocieteFactory::commeApresLInscription()), sans
+     * capital ni immatriculation. La société est ensuite validée, et le
+     * SIRET du magasin réservé, comme à sa validation ; le magasin est en activité depuis
      * MagasinFactory::DEBUT_D_ACTIVITE, avant toute journée que visitent
      * les tests. Avec ['a_verifier' => true], la société reste en cours de
      * vérification. Le magasin devient le magasin actif.

@@ -13,7 +13,6 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Rules\CodeMagasinLibre;
 use App\Domain\Tenancy\Rules\NicValide;
 use App\Domain\Tenancy\Rules\SiretValide;
-use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\MiseEnActiviteDesMagasins;
@@ -46,8 +45,8 @@ use LogicException;
  *   réservation se joue à la validation, et une société en cours de
  *   vérification ne se voit jamais refuser un magasin parce qu'une autre
  *   société a réservé ce SIRET ; le code, libre dans la société (voir
- *   CodeMagasinLibre) et enregistré en majuscules, ou proposé depuis le
- *   nom s'il n'est pas choisi ;
+ *   CodeMagasinLibre), ou proposé depuis le nom s'il n'est pas choisi, et
+ *   que le modèle enregistre en majuscules (voir Magasin::code()) ;
  * - le répertoire Sirene de l'INSEE, consulté tout de suite (voir
  *   ControleSirene) : un établissement fermé, inconnu ou rattaché à une
  *   autre entreprise est refusé, et rien n'est créé ; un établissement
@@ -62,20 +61,24 @@ use LogicException;
  * société (FOR NO KEY UPDATE sous PostgreSQL : il attend la validation,
  * qui la verrouille FOR UPDATE, et la fait attendre, sans bloquer les
  * écritures qui ne font que la référencer, comme les entrées du journal
- * d'audit) : le magasin, toujours dans cette société, quel que soit
- * l'identifiant de société d'une requête (il ne se lit jamais dans les
- * données reçues) ; son client comptoir ; le contrôle Sirene au registre
- * des vérifications ; sa création au journal d'audit. Aucune affectation
- * n'est créée. Dans une société validée, telle que la relit ce verrou (et non
- * telle qu'elle était au début de la requête, avant le contrôle Sirene),
- * le magasin se met aussitôt en activité : son SIRET se réserve, sa
- * première période d'activité s'ouvre, et les droits implicites du
- * propriétaire et des administrateurs de tous les magasins dans ce nouveau
- * magasin s'inscrivent à son journal des événements (voir
- * MiseEnActiviteDesMagasins) ; dans une société en cours
- * de vérification, tout cela se fait à sa validation (voir
- * ValiderLaSocieteAction), qui, sous le même verrou, compte ce magasin
- * dès qu'il existe.
+ * d'audit ; il attend aussi toute autre création de magasin dans la
+ * société) : les contrôles du code et du SIRET, refaits sous ce verrou,
+ * avec les mêmes messages, pour la société telle qu'il la relit (une
+ * création concurrente qui a pris le même code ou le même SIRET pendant le
+ * contrôle Sirene est passée avant, et une société validée entre-temps
+ * refuse un SIRET réservé) ; le magasin, toujours dans cette société, quel
+ * que soit l'identifiant de société d'une requête (il ne se lit jamais
+ * dans les données reçues) ; son client comptoir ; le contrôle Sirene au
+ * registre des vérifications ; sa création au journal d'audit. Aucune
+ * affectation n'est créée. Dans une société validée, telle que la relit ce
+ * verrou (et non telle qu'elle était au début de la requête, avant le
+ * contrôle Sirene), le magasin se met aussitôt en activité : son SIRET se
+ * réserve, sa première période d'activité s'ouvre, et les droits
+ * implicites du propriétaire et des administrateurs de tous les magasins
+ * dans ce nouveau magasin s'inscrivent à son journal des événements (voir
+ * MiseEnActiviteDesMagasins) ; dans une société en cours de vérification,
+ * tout cela se fait à sa validation (voir ValiderLaSocieteAction), qui,
+ * sous le même verrou, compte ce magasin dès qu'il existe.
  */
 class CreerEtablissementAction
 {
@@ -118,12 +121,13 @@ class CreerEtablissementAction
                 throw ValidationException::withMessages(['nic' => ControleSirene::MOTIF_TERRITOIRE_NON_GERE]);
             }
 
-            return $this->operateur->pendant($auteur, fn (): Magasin => DB::transaction(function () use ($auteur, $societe, $valides, $siret, $consultation, $etablissement): Magasin {
+            return $this->operateur->pendant($auteur, fn (): Magasin => DB::transaction(function () use ($auteur, $societe, $donnees, $valides, $siret, $consultation, $etablissement): Magasin {
                 $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
+                $this->valider($verrouillee, $donnees);
                 $magasin = Magasin::forceCreate([
                     'societe_id' => $societe->getKey(),
                     'nom' => $valides['nom'],
-                    'code' => filled($valides['code'] ?? null) ? CodeMagasin::normaliser($valides['code']) : null,
+                    'code' => filled($valides['code'] ?? null) ? $valides['code'] : null,
                     'email' => filled($valides['email'] ?? null) ? $valides['email'] : null,
                     'siret' => $siret,
                     'etablissement_verifie_le' => $etablissement === null ? null : now(),

@@ -966,6 +966,32 @@ class VerificationSocieteTest extends TestCase
     }
 
     /**
+     * Aucun magasin n'est nécessaire, mais l'établissement de chaque
+     * magasin réel actif doit être confirmé : un magasin créé pendant que
+     * l'INSEE ne répondait pas retient la validation, malgré la qualité
+     * prouvée du propriétaire, jusqu'à la reprise du contrôle, qui confirme
+     * son établissement et valide la société.
+     */
+    public function test_un_magasin_reel_actif_a_verifier_retient_la_validation_jusqu_a_la_confirmation_de_son_etablissement(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $this->repertoire()->rendreInjoignable();
+        $magasin = $this->creerLeMagasinDuSiege($societe);
+        $this->repertoire()->rendreInjoignable(false);
+
+        $this->verifierLIdentiteDuProprietaire($societe);
+
+        $etat = $this->etat($societe);
+        $this->assertSame([false, EtatDeVerification::PREUVE_IDENTITE_RAPPROCHEE, false], [$etat->entrepriseEtEtablissements, $etat->preuveDeQualite, $societe->fresh()->estValidee()]);
+
+        app(ReverificationSirene::class)->reprendre($societe->fresh(), false);
+
+        $this->assertTrue($societe->fresh()->estValidee());
+        $this->assertNotNull($magasin->fresh()->etablissement_verifie_le);
+        $this->assertSame([$magasin->id], SiretMagasin::query()->pluck('magasin_id')->all());
+    }
+
+    /**
      * Un magasin réel fermé avant la validation, même dont l'établissement
      * n'a jamais été confirmé, ne compte pas : la société est validée, et
      * lui n'est ni réservé ni ouvert.

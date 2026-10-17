@@ -28,6 +28,8 @@ use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
+use App\Integrations\Sirene\EtablissementSirene;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Closure;
 use Database\Factories\MagasinFactory;
@@ -148,6 +150,41 @@ class CreerEtablissementActionTest extends TestCase
         );
 
         $this->assertSame(1, Magasin::query()->count());
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function valeursPrisesPendantLeControleSirene(): array
+    {
+        return [
+            'code' => ['code'],
+            'SIRET' => ['nic'],
+        ];
+    }
+
+    /**
+     * Un code ou un SIRET, libre au premier contrôle, pris par une création
+     * concurrente dans la société pendant le contrôle Sirene : refusé sous
+     * le verrou de la société avec le message de la validation, sans
+     * erreur du serveur, et rien n'est créé ni inscrit au journal d'audit.
+     */
+    #[DataProvider('valeursPrisesPendantLeControleSirene')]
+    public function test_une_valeur_prise_pendant_le_controle_sirene_est_refusee_comme_par_la_validation(string $champ): void
+    {
+        $premier = $this->ouvrirUneSociete(['nom' => 'Lyon centre']);
+        $societe = $premier->societe;
+        $nic = $this->nic($societe, '0005');
+        $this->pendantLeControleSirene(fn () => Magasin::factory()->for($societe)->create($champ === 'code' ? ['code' => 'PARIS'] : ['siret' => $societe->siren.$nic]));
+        $entrees = $this->nombreDEntreesAudit($societe);
+
+        $this->assertThrows(
+            fn () => $this->creer($premier, ['nom' => 'Paris', 'code' => 'PARIS', 'nic' => $nic]),
+            fn (ValidationException $refus): bool => $refus->errors() === [$champ => [$champ === 'code' ? CodeMagasinLibre::MESSAGE_DEJA_UTILISE : SiretsDesMagasins::MESSAGE_SIRET_RESERVE]],
+        );
+
+        $this->assertSame(2, Magasin::query()->where('societe_id', $societe->id)->count());
+        $this->assertSame($entrees, $this->nombreDEntreesAudit($societe));
     }
 
     /**
@@ -517,6 +554,29 @@ class CreerEtablissementActionTest extends TestCase
         app(TenantContext::class)->clear();
 
         return app(CreerEtablissementAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe()->firstOrFail(), $donnees);
+    }
+
+    /**
+     * Le répertoire Sirene factice, qui exécute la création concurrente à la
+     * première consultation d'un établissement, une seule fois.
+     */
+    private function pendantLeControleSirene(Closure $creationConcurrente): void
+    {
+        $this->app->instance(RepertoireSirene::class, new class($creationConcurrente) extends FauxRepertoireSirene
+        {
+            public function __construct(private ?Closure $creationConcurrente) {}
+
+            public function etablissement(string $siret): ?EtablissementSirene
+            {
+                if ($this->creationConcurrente !== null) {
+                    $creation = $this->creationConcurrente;
+                    $this->creationConcurrente = null;
+                    $creation();
+                }
+
+                return parent::etablissement($siret);
+            }
+        });
     }
 
     /**

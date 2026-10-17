@@ -16,6 +16,8 @@ use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MagasinResource\Pages\CreerMagasin;
 use App\Filament\Societe\Resources\MagasinResource\Pages\ListMagasins;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
+use App\Integrations\Sirene\EtablissementsActifs;
+use App\Integrations\Sirene\EtablissementSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Database\Factories\SocieteFactory;
@@ -154,6 +156,36 @@ class MagasinResourceTest extends TestCase
         $this->assertSame(['Lyon Centre', 'LYON1'], [Magasin::query()->sole()->nom, Magasin::query()->sole()->code]);
     }
 
+    /**
+     * Passer à la saisie du NIC vide le NIC, le nom et le code que proposait
+     * l'établissement choisi avant, qui ne sont plus ceux du magasin, mais
+     * garde ce que la personne a saisi : le magasin créé sur un NIC d'un
+     * établissement de Lyon ne s'appelle pas comme celui de Paris et ne
+     * prend pas son code.
+     */
+    public function test_passer_a_la_saisie_du_nic_vide_le_nom_et_le_code_proposes_sans_toucher_une_saisie(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $lyon = IdentifiantsInsee::avecSaCle($societe->siren.'0004');
+        $this->repertoire()->deplacer($lyon, '69002', 'LYON');
+
+        $this->ouvrirLaCreation($societe)
+            ->fillForm(['etablissement' => $this->siege($societe)])
+            ->assertFormSet(['nom' => 'Magasin Paris', 'code' => 'PARIS'])
+            ->fillForm(['etablissement' => CreerMagasin::AUTRE_ETABLISSEMENT])
+            ->assertFormSet(['nic' => null, 'nom' => null, 'code' => null])
+            ->fillForm(['etablissement' => $this->siege($societe)])
+            ->fillForm(['nom' => 'Lyon Centre'])
+            ->fillForm(['etablissement' => CreerMagasin::AUTRE_ETABLISSEMENT])
+            ->assertFormSet(['nic' => null, 'nom' => 'Lyon Centre', 'code' => null])
+            ->fillForm(['nic' => substr($lyon, 9)])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $magasin = Magasin::query()->where('societe_id', $societe->id)->sole();
+        $this->assertSame(['Lyon Centre', 'LYONCE', $lyon, 'LYON'], [$magasin->nom, $magasin->code, $magasin->siret, $magasin->ville]);
+    }
+
     public function test_un_code_mal_forme_est_refuse_sans_rien_creer(): void
     {
         $societe = $this->inscrireUneSociete();
@@ -243,6 +275,69 @@ class MagasinResourceTest extends TestCase
         $this->ouvrirLaCreation($societe)
             ->assertSet('listeComplete', false)
             ->assertSeeText(CreerMagasin::MESSAGE_LISTE_PARTIELLE);
+    }
+
+    /**
+     * La liste lue au répertoire se garde pour la société : rouvrir la page,
+     * même par un autre compte, ne la relit pas ; une autre société du même
+     * SIREN lit la sienne, sans rien recevoir de la première.
+     */
+    public function test_rouvrir_la_creation_ne_relit_pas_la_liste_qui_se_garde_pour_la_societe(): void
+    {
+        $repertoire = $this->repertoireQuiCompte();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
+        $societe = $magasin->societe;
+        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER]);
+
+        $this->ouvrirLaCreation($societe)->assertSet('listeDisponible', true);
+        $this->ouvrirLaCreation($societe)->assertSet('listeDisponible', true);
+        $this->ouvrirLaCreation($societe, $administrateur)->assertSeeText($this->boutique($societe).' · '.FauxRepertoireSirene::ENSEIGNE_DE_LA_BOUTIQUE);
+        $this->assertSame(1, $repertoire->listes);
+
+        $this->ouvrirLaCreation($this->inscrireUneSociete($societe->siren))->assertSet('listeDisponible', true);
+        $this->assertSame(2, $repertoire->listes);
+    }
+
+    /**
+     * Chaque lecture de la liste au répertoire et chaque tentative de
+     * création comptent : au-delà de la limite de la minute, la création
+     * est refusée sans consulter le répertoire, et la liste qui n'est pas
+     * gardée n'est pas lue, le NIC se saisissant ; la minute suivante, le
+     * répertoire se consulte de nouveau.
+     */
+    public function test_au_dela_de_la_limite_la_page_ne_consulte_plus_le_repertoire(): void
+    {
+        $repertoire = $this->repertoireQuiCompte();
+        $societe = $this->inscrireUneSociete();
+        $repertoire->rendreInjoignable();
+        $page = $this->ouvrirLaCreation($societe)->assertSet('listeDisponible', false);
+        $repertoire->rendreInjoignable(false);
+        $nicACleInvalide = substr($this->boutique($societe), 9, 4).(((int) substr($this->boutique($societe), -1) + 1) % 10);
+
+        for ($tentative = 2; $tentative <= CreerMagasin::CONSULTATIONS_SIRENE_PAR_MINUTE; $tentative++) {
+            $page->fillForm(['etablissement' => CreerMagasin::AUTRE_ETABLISSEMENT, 'nic' => $nicACleInvalide, 'nom' => 'Ma Boutique'])
+                ->call('create')
+                ->assertHasFormErrors(['nic' => fn (array $reglesEnEchec, array $messages): bool => $messages === [SiretValide::MESSAGE]]);
+        }
+        $etablissementsConsultes = $repertoire->etablissements;
+
+        $page->fillForm(['etablissement' => CreerMagasin::AUTRE_ETABLISSEMENT, 'nic' => substr($this->boutique($societe), 9), 'nom' => 'Ma Boutique'])
+            ->call('create')
+            ->assertHasFormErrors(['nic' => fn (array $reglesEnEchec, array $messages): bool => $messages === [CreerMagasin::MESSAGE_TROP_DE_CONSULTATIONS]]);
+        $this->ouvrirLaCreation($societe)
+            ->assertSet('listeDisponible', false)
+            ->assertSeeText(CreerMagasin::MESSAGE_LISTE_INDISPONIBLE);
+
+        $this->assertSame([1, $etablissementsConsultes, 0], [$repertoire->listes, $repertoire->etablissements, Magasin::query()->count()]);
+
+        $this->travel(1)->minutes();
+
+        $this->ouvrirLaCreation($societe)
+            ->assertSet('listeDisponible', true)
+            ->fillForm(['etablissement' => $this->boutique($societe)])
+            ->call('create')
+            ->assertHasNoFormErrors();
+        $this->assertSame([2, $this->boutique($societe)], [$repertoire->listes, Magasin::query()->sole()->siret]);
     }
 
     /**
@@ -348,6 +443,38 @@ class MagasinResourceTest extends TestCase
         $this->dansLEspaceDeLaSociete($societe, $compte ?? $societe->proprietaire()->firstOrFail());
 
         return Livewire::test(CreerMagasin::class);
+    }
+
+    /**
+     * Le répertoire Sirene factice, qui compte ses consultations : les
+     * listes d'établissements actifs, et les établissements, lus seuls ou
+     * pour une liste.
+     */
+    private function repertoireQuiCompte(): FauxRepertoireSirene
+    {
+        $repertoire = new class extends FauxRepertoireSirene
+        {
+            public int $listes = 0;
+
+            public int $etablissements = 0;
+
+            public function etablissementsActifs(string $siren): EtablissementsActifs
+            {
+                $this->listes++;
+
+                return parent::etablissementsActifs($siren);
+            }
+
+            public function etablissement(string $siret): ?EtablissementSirene
+            {
+                $this->etablissements++;
+
+                return parent::etablissement($siret);
+            }
+        };
+        $this->app->instance(RepertoireSirene::class, $repertoire);
+
+        return $repertoire;
     }
 
     private function siege(Societe $societe): string

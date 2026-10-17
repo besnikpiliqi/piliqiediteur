@@ -235,20 +235,19 @@ class InscriptionSocieteTest extends TestCase
         return [
             'tout est libre' => [static fn (): mixed => null],
             'SIREN d\'une société validée' => [static fn (): mixed => Magasin::factory()->avecLaSociete(['siren' => self::SIREN])->create(['siret' => '10000000900025'])],
-            'SIRET réservé' => [static fn (): mixed => Magasin::factory()->avecLaSociete(['siren' => self::SIREN])->create(['siret' => FauxRepertoireSirene::siretDuSiege(self::SIREN)])],
             'adresse d\'un compte' => [static fn (): mixed => User::factory()->create(['email' => 'jeanne@maboutique.fr'])],
         ];
     }
 
     /**
-     * L'écran de la demande ne dit jamais si le SIREN, le SIRET ou
-     * l'adresse sont déjà connus du logiciel : la même réponse, sans
-     * erreur, dans tous les cas.
+     * L'écran de la demande ne dit jamais si le SIREN ou l'adresse sont
+     * déjà connus du logiciel : la même réponse, sans erreur, dans tous les
+     * cas.
      *
      * @param  Closure(): mixed  $situation
      */
     #[DataProvider('situationsDejaConnues')]
-    public function test_l_ecran_repond_pareil_que_le_siren_l_adresse_ou_le_siret_soient_libres_ou_non(Closure $situation): void
+    public function test_l_ecran_repond_pareil_que_le_siren_ou_l_adresse_soient_libres_ou_non(Closure $situation): void
     {
         Mail::fake();
         $situation();

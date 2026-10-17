@@ -23,24 +23,34 @@ use Filament\Forms\Set;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Locked;
 
 /**
  * La création d'un magasin de la société, le premier compris : la page
- * propose les établissements actifs de son SIREN, lus une fois au
- * répertoire Sirene de l'INSEE à son ouverture (voir
- * ControleSirene::etablissementsActifs()). Choisir un établissement
- * préremplit son NIC, le nom du magasin (son enseigne, sinon « Magasin »
- * et sa commune) et son adresse, et propose un code tiré de sa commune,
- * libre dans la société (voir CodeMagasin::proposer()), que la personne
- * modifie à son gré. Un établissement qui est déjà un magasin de la
- * société est marqué « déjà un magasin de votre société », un
- * établissement d'un territoire que le logiciel ne gère pas l'est aussi, et
- * aucun ne se choisit. La liste ne dit jamais rien d'une autre société.
- * Quand le répertoire ne répond pas, ou pour un établissement absent de la
- * liste, le NIC se saisit.
+ * propose les établissements actifs de son SIREN, lus au répertoire Sirene
+ * de l'INSEE à son ouverture (voir ControleSirene::etablissementsActifs())
+ * puis gardés quelques minutes pour cette société (voir
+ * listeDuRepertoire()). Choisir un établissement préremplit son NIC, le
+ * nom du magasin (son enseigne, sinon « Magasin » et sa commune) et son
+ * adresse, et propose un code tiré de sa commune, libre dans la société
+ * (voir CodeMagasin::proposer()), que la personne modifie à son gré. Un
+ * établissement qui est déjà un magasin de la société est marqué « déjà
+ * un magasin de votre société », un établissement d'un territoire que le
+ * logiciel ne gère pas l'est aussi, et aucun ne se choisit. La liste ne
+ * dit jamais rien d'une autre société. Quand le répertoire ne répond pas,
+ * ou pour un établissement absent de la liste, le NIC se saisit.
+ *
+ * La limite de l'API de l'INSEE est commune à tout le logiciel (voir
+ * InseeSirene) : une société ne l'épuise pas, en rouvrant la page ou en
+ * essayant des NIC, au détriment des inscriptions et des contrôles des
+ * autres. Chaque lecture de la liste au répertoire et chaque tentative de
+ * création compte parmi CONSULTATIONS_SIRENE_PAR_MINUTE par minute et par
+ * société ; au-delà, la liste n'est pas lue (le NIC se saisit) et la
+ * création est refusée, sans consulter le répertoire.
  *
  * Ce que montre la page n'est qu'une proposition : la création passe,
  * comme pour tout magasin, par CreerEtablissementAction, qui revérifie
@@ -65,13 +75,23 @@ class CreerMagasin extends CreateRecord
 
     public const MESSAGE_LISTE_PARTIELLE = 'Votre entreprise compte plus d\'établissements que le répertoire Sirene n\'en liste en une fois : si celui du magasin n\'y est pas, saisissez son NIC.';
 
+    public const MESSAGE_TROP_DE_CONSULTATIONS = 'Trop de contrôles au répertoire Sirene de l\'INSEE en peu de temps : réessayez dans une minute.';
+
+    public const CONSULTATIONS_SIRENE_PAR_MINUTE = 10;
+
+    /**
+     * Combien de minutes la liste lue au répertoire se garde pour la
+     * société.
+     */
+    public const MINUTES_DE_LA_LISTE = 5;
+
     protected static string $resource = MagasinResource::class;
 
     protected static bool $canCreateAnother = false;
 
     /**
      * Les établissements actifs du SIREN, tels que le répertoire les a
-     * listés à l'ouverture de la page, par SIRET.
+     * listés, par SIRET (voir listeDuRepertoire()).
      *
      * @var array<string, array{nic: string, enseigne: string|null, adresse: string, ville: string|null, siege: bool, territoire_gere: bool}>
      */
@@ -96,17 +116,10 @@ class CreerMagasin extends CreateRecord
     {
         parent::mount();
 
-        $liste = app(ControleSirene::class)->etablissementsActifs((string) $this->societe()->siren);
-        $this->listeDisponible = $liste['resultat'] === ResultatVerification::Concluante;
-        $this->listeComplete = $liste['complete'];
-        $this->etablissements = collect($liste['etablissements'])->mapWithKeys(fn (EtablissementSirene $etablissement): array => [$etablissement->siret => [
-            'nic' => $etablissement->nic(),
-            'enseigne' => $etablissement->enseigne,
-            'adresse' => ControleSirene::adresseEnUneLigne($etablissement),
-            'ville' => $etablissement->ville,
-            'siege' => $etablissement->estSiege,
-            'territoire_gere' => ControleSirene::estDansUnTerritoireGere($etablissement),
-        ]])->all();
+        $liste = $this->listeDuRepertoire();
+        $this->listeDisponible = $liste !== null;
+        $this->listeComplete = $liste['complete'] ?? true;
+        $this->etablissements = $liste['etablissements'] ?? [];
     }
 
     public function getTitle(): string|Htmlable
@@ -188,6 +201,10 @@ class CreerMagasin extends CreateRecord
      */
     protected function handleRecordCreation(array $data): Model
     {
+        if (! $this->consulterLeRepertoire()) {
+            throw ValidationException::withMessages(['data.nic' => self::MESSAGE_TROP_DE_CONSULTATIONS]);
+        }
+
         return static::executerOuInterrompre(function () use ($data): Magasin {
             try {
                 return app(CreerEtablissementAction::class)->handle(auth()->user(), $this->societe(), [
@@ -216,6 +233,62 @@ class CreerMagasin extends CreateRecord
     {
         /** @var Societe */
         return Filament::getTenant();
+    }
+
+    /**
+     * Les établissements actifs du SIREN de la société, tels que la page
+     * les montre : lus au répertoire, puis gardés MINUTES_DE_LA_LISTE
+     * minutes pour cette société seule, qui ne lit jamais ceux qu'une autre
+     * société du même SIREN a fait lire (rien ne lui dit qu'elle existe).
+     * Null, sans rien garder, quand le répertoire ne répond pas ou que la
+     * société a atteint sa limite de consultations.
+     *
+     * @return array{etablissements: array<string, array{nic: string, enseigne: string|null, adresse: string, ville: string|null, siege: bool, territoire_gere: bool}>, complete: bool}|null
+     */
+    private function listeDuRepertoire(): ?array
+    {
+        $societe = $this->societe();
+        $cle = "sirene-etablissements-actifs:{$societe->getKey()}:{$societe->siren}";
+        $gardee = Cache::get($cle);
+
+        if (is_array($gardee)) {
+            return $gardee;
+        }
+
+        if (! $this->consulterLeRepertoire()) {
+            return null;
+        }
+
+        $lue = app(ControleSirene::class)->etablissementsActifs((string) $societe->siren);
+
+        if ($lue['resultat'] !== ResultatVerification::Concluante) {
+            return null;
+        }
+
+        $liste = [
+            'complete' => $lue['complete'],
+            'etablissements' => collect($lue['etablissements'])->mapWithKeys(fn (EtablissementSirene $etablissement): array => [$etablissement->siret => [
+                'nic' => $etablissement->nic(),
+                'enseigne' => $etablissement->enseigne,
+                'adresse' => ControleSirene::adresseEnUneLigne($etablissement),
+                'ville' => $etablissement->ville,
+                'siege' => $etablissement->estSiege,
+                'territoire_gere' => ControleSirene::estDansUnTerritoireGere($etablissement),
+            ]])->all(),
+        ];
+        Cache::put($cle, $liste, now()->addMinutes(self::MINUTES_DE_LA_LISTE));
+
+        return $liste;
+    }
+
+    /**
+     * Compte une consultation du répertoire Sirene pour la société : faux,
+     * sans rien compter, au-delà de CONSULTATIONS_SIRENE_PAR_MINUTE dans la
+     * minute.
+     */
+    private function consulterLeRepertoire(): bool
+    {
+        return RateLimiter::attempt('consultations-sirene-magasins:'.$this->societe()->getKey(), self::CONSULTATIONS_SIRENE_PAR_MINUTE, static fn (): bool => true, 60);
     }
 
     /**
@@ -267,31 +340,25 @@ class CreerMagasin extends CreateRecord
     }
 
     /**
-     * Un établissement de la liste choisi : son NIC, le nom qu'il propose et
-     * le code tiré de sa commune. Un nom ou un code que la personne a saisi
-     * n'est jamais écrasé : chacun ne change que vide, ou encore égal à ce
-     * que proposait l'établissement choisi avant. La saisie du NIC vide le
-     * champ du NIC.
+     * Le choix d'un établissement : celui de la liste donne son NIC, le nom
+     * qu'il propose et le code tiré de sa commune ; la saisie du NIC vide
+     * le NIC, et le nom et le code que proposait l'établissement choisi
+     * avant, qui ne sont plus ceux du magasin. Un nom ou un code que la
+     * personne a saisi n'est jamais écrasé : chacun ne change que vide, ou
+     * encore égal à ce que proposait l'établissement choisi avant.
      */
     private function preremplir(?string $choix, ?string $avant, Get $get, Set $set): void
     {
         $etablissement = $this->etablissements[(string) $choix] ?? null;
-
-        if ($etablissement === null) {
-            $set('nic', null);
-
-            return;
-        }
-
         $precedent = $this->etablissements[(string) $avant] ?? null;
-        $set('nic', $etablissement['nic']);
+        $set('nic', $etablissement['nic'] ?? null);
 
         if (blank($get('nom')) || ($precedent !== null && $get('nom') === self::nomPropose($precedent))) {
-            $set('nom', self::nomPropose($etablissement));
+            $set('nom', $etablissement === null ? null : self::nomPropose($etablissement));
         }
 
         if (blank($get('code')) || ($precedent !== null && $get('code') === CodeMagasin::proposer($this->societe(), (string) $precedent['ville']))) {
-            $set('code', CodeMagasin::proposer($this->societe(), (string) $etablissement['ville']));
+            $set('code', $etablissement === null ? null : CodeMagasin::proposer($this->societe(), (string) $etablissement['ville']));
         }
     }
 }

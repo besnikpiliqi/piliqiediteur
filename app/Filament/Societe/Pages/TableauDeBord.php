@@ -3,7 +3,6 @@
 namespace App\Filament\Societe\Pages;
 
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
-use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -20,9 +19,9 @@ use Illuminate\Database\Eloquent\Collection;
 
 /**
  * Le tableau de bord de la société, où arrive son propriétaire après le
- * lien de son inscription : la liste de ses premières étapes, chacune avec
- * son état et l'écran qui la fait (voir etapes()), tant qu'il en reste une
- * à faire ; où en est sa vérification ; ce qui manque à son identité pour
+ * lien de son inscription : pour lui seul, la liste de ses premières
+ * étapes, chacune avec son état et l'écran qui la fait (voir etapes()),
+ * tant qu'il en reste une à faire ; où en est sa vérification ; ce qui manque à son identité pour
  * facturer un professionnel ; ses magasins réels de la portée de la
  * personne connectée (tous pour le propriétaire et un administrateur de
  * tous les magasins, ceux de sa sélection pour un autre administrateur),
@@ -83,21 +82,32 @@ class TableauDeBord extends Dashboard
     }
 
     /**
-     * Les premières étapes de la société, dans l'ordre : vérifier la
-     * société, créer son premier magasin, ajouter son équipe, essayer le
-     * magasin de démonstration. Chacune dit si elle est faite, où elle en
-     * est, et mène à l'écran qui la fait quand la personne connectée peut
+     * Les premières étapes de la société, celles de son propriétaire, dans
+     * l'ordre : vérifier la société, créer son premier magasin, ajouter son
+     * équipe, essayer le magasin de démonstration. Chacune dit si elle est
+     * faite, où elle en est, et mène à l'écran qui la fait quand il peut
      * l'ouvrir ; l'essai de la démonstration se fait par le bouton de
      * l'étape (voir ouvrirLaDemonstrationAction()). L'essai ne se fait plus
      * une fois la société validée : l'étape compte alors comme faite.
+     * Aucune pour un administrateur, qui ne voit jamais ici le nombre des
+     * magasins ni celui des comptes de la société. Les magasins et les
+     * comptes se comptent dans la portée du propriétaire (voir
+     * User::magasinsDeSaPortee() et MembreResource::getEloquentQuery()) :
+     * toute la société, sans son propre compte.
      *
      * @return list<array{titre: string, faite: bool, etat: string, url: string|null}>
      */
     public function etapes(): array
     {
+        $compte = auth()->user();
+
+        if (! $compte->estProprietaire()) {
+            return [];
+        }
+
         $societe = $this->societe();
-        $magasins = $societe->magasinsReels()->count();
-        $comptes = $societe->membres()->where('role_societe', '!=', RoleSociete::Proprietaire->value)->where('statut', '!=', StatutCompte::Retire->value)->count();
+        $magasins = $compte->magasinsDeSaPortee()->where('est_demonstration', false)->count();
+        $comptes = MembreResource::getEloquentQuery()->whereKeyNot($compte->getKey())->where('statut', '!=', StatutCompte::Retire->value)->count();
         $demonstration = $societe->demonstration()->first();
 
         return [
@@ -132,14 +142,14 @@ class TableauDeBord extends Dashboard
                     $societe->estValidee() => 'Plus disponible : votre société est validée.',
                     default => 'Un magasin d\'entraînement, sans valeur, à essayer avant la validation.',
                 },
-                'url' => $demonstration?->statut === StatutMagasin::Actif && auth()->user()->peutOuvrir($demonstration) ? Dashboard::getUrl(panel: 'app', tenant: $demonstration) : null,
+                'url' => $demonstration?->statut === StatutMagasin::Actif && $compte->peutOuvrir($demonstration) ? Dashboard::getUrl(panel: 'app', tenant: $demonstration) : null,
             ],
         ];
     }
 
     /**
-     * Reste-t-il une première étape à faire ? La liste ne se montre que
-     * tant qu'il en reste une.
+     * Reste-t-il une première étape à faire ? La liste ne se montre qu'au
+     * propriétaire, tant qu'il en reste une.
      */
     public function resteDesEtapes(): bool
     {

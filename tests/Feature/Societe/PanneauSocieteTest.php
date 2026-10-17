@@ -356,12 +356,12 @@ class PanneauSocieteTest extends TestCase
     }
 
     /**
-     * Le tableau de bord coche chaque première étape faite : le premier
-     * magasin créé, un compte ajouté à l'équipe, la démonstration essayée,
-     * la société validée ; chacune mène à son écran (la création du premier
-     * magasin pour qui peut le créer, la liste des magasins pour un
-     * administrateur qui ne le peut pas), et la liste disparaît quand tout
-     * est fait.
+     * Le tableau de bord du propriétaire coche chaque première étape
+     * faite : le premier magasin créé, un compte ajouté à l'équipe, la
+     * démonstration essayée, la société validée ; chacune mène à son écran
+     * (la création du premier magasin tant qu'il n'existe pas, puis la
+     * liste des magasins), et la liste disparaît quand tout est fait. Un
+     * administrateur n'a pas de premières étapes.
      */
     public function test_le_tableau_de_bord_coche_chaque_premiere_etape_faite(): void
     {
@@ -380,7 +380,7 @@ class PanneauSocieteTest extends TestCase
             TableauDeBord::ETAPE_EQUIPE => [true, MembreResource::getUrl('index', panel: 'societe', tenant: $societe)],
             TableauDeBord::ETAPE_DEMONSTRATION => [false, null],
         ], $etapes($proprietaire));
-        $this->assertSame([false, MagasinResource::getUrl('index', panel: 'societe', tenant: $societe)], $etapes($administrateur)[TableauDeBord::ETAPE_PREMIER_MAGASIN]);
+        $this->assertSame([], $etapes($administrateur));
 
         $magasin = $this->creerLeMagasinDuSiege($societe);
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe->fresh());
@@ -395,6 +395,35 @@ class PanneauSocieteTest extends TestCase
 
         $this->assertSame([true, true, true, true], array_column(array_values($etapes($proprietaire)), 0));
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertOk()->assertDontSeeText('Vos premières étapes')->assertSeeText($magasin->nom);
+    }
+
+    /**
+     * Les premières étapes ne comptent que dans la portée du propriétaire,
+     * sans son propre compte ; un administrateur d'une sélection, même
+     * autorisé à nommer les responsables, n'y voit ni le nombre des
+     * magasins de la société, ni celui de ses comptes, ni l'état de sa
+     * démonstration : seulement les magasins de sa sélection.
+     */
+    public function test_les_premieres_etapes_ne_montrent_a_un_administrateur_aucun_nombre_hors_de_sa_portee(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon Centre', 'a_verifier' => true]);
+        $paris = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Paris Bastille']);
+        $this->membre($paris, RoleMagasin::Vendeur);
+        $this->membre($paris, RoleMagasin::Vendeur);
+        $administrateur = $this->administrateur($lyon, [$lyon->id], [AutorisationsSociete::RESPONSABLES_NOMMER]);
+        app(OuvrirLaDemonstrationAction::class)->handle($this->proprietaireDe($lyon), $lyon->societe);
+        $tableauDeBord = TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe);
+
+        $this->actingAs($administrateur)
+            ->get($tableauDeBord)
+            ->assertOk()
+            ->assertSeeText('Lyon Centre')
+            ->assertDontSeeText(['Vos premières étapes', 'Paris Bastille', '2 magasins', 'en plus du vôtre', 'Ouvert : vendez']);
+        $this->flushSession();
+        $this->actingAs($this->proprietaireDe($lyon))
+            ->get($tableauDeBord)
+            ->assertOk()
+            ->assertSeeText(['Vos premières étapes', '2 magasins', '3 comptes en plus du vôtre', 'Ouvert : vendez']);
     }
 
     /**

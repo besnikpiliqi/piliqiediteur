@@ -66,7 +66,7 @@ class NommerAdministrateurAction
                 Affectation::query()->where('user_id', $compteRelu->getKey())->delete();
                 $compteRelu->forceFill([
                     'role_societe' => RoleSociete::Administrateur,
-                    ...($compteRelu->estRetire() ? ['statut' => StatutCompte::Actif, 'statut_change_par' => $auteurRelu->getKey()] : []),
+                    ...($compteRelu->estRetire() ? $compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu) : []),
                 ])->save();
                 $this->porteeDesAdministrateurs->ecrire($compteRelu, $portee);
             });
@@ -78,14 +78,15 @@ class NommerAdministrateurAction
     /**
      * Un membre de la société, autre que le propriétaire lui-même : actif,
      * suspendu, ou retiré par la société (pas par son propre refus) ; au
-     * mot de passe provisoire, seulement par la personne qui l'a créé.
+     * mot de passe provisoire, seulement par la personne qui l'a créé et
+     * lui a donné ce provisoire (voir User::recoitDeNouveauxDroitsDe()).
      */
     private static function peutEtreNomme(User $proprietaire, User $compte): bool
     {
         return $compte->estMembre()
             && (int) $compte->societe_id === (int) $proprietaire->societe_id
             && ! $compte->is($proprietaire)
-            && ! ($compte->estRetire() && (int) $compte->statut_change_par === (int) $compte->getKey())
-            && (! $compte->doitChangerSonMotDePasse() || (int) $compte->cree_par === (int) $proprietaire->getKey());
+            && ! $compte->estRetireParSonRefus()
+            && $compte->recoitDeNouveauxDroitsDe($proprietaire);
     }
 }

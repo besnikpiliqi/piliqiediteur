@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
@@ -60,6 +61,7 @@ class ModifierEtablissementAction
         private readonly ControleSirene $controleSirene,
         private readonly RegistreFiscal $registre,
         private readonly JournalAudit $journalAudit,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
@@ -104,7 +106,7 @@ class ModifierEtablissementAction
             }
 
             try {
-                return $this->registre->sousVerrouDesMagasins(new Collection([$magasin]), fn (): Magasin => $this->enregistrer($magasin, $valides, $consultation, $auteur));
+                return $this->operateur->pendant($auteur, fn (): Magasin => $this->registre->sousVerrouDesMagasins(new Collection([$magasin]), fn (): Magasin => $this->enregistrer($magasin, $valides, $consultation, $auteur)));
             } catch (UniqueConstraintViolationException $doublon) {
                 throw $this->refusDuDoublon($doublon);
             }

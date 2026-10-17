@@ -12,6 +12,8 @@ use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Pages\Auth\EditProfile;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\ValidationException;
+use LogicException;
 
 /**
  * Chacun change ici son nom, son adresse e-mail de connexion et son mot
@@ -101,8 +103,10 @@ class ModifierProfil extends EditProfile
     }
 
     /**
-     * Le nom et le mot de passe s'écrivent tout de suite ; une adresse qui
-     * change ne fait que partir en confirmation.
+     * Une adresse qui change ne fait que partir en confirmation, d'abord :
+     * refusée (débit des e-mails de la personne atteint, voir
+     * DebitDesEmails), rien ne s'écrit, ni le nom ni le mot de passe. Le
+     * nom et le mot de passe s'écrivent ensuite tout de suite.
      *
      * @param  User  $record
      * @param  array<string, mixed>  $data
@@ -112,15 +116,20 @@ class ModifierProfil extends EditProfile
         $adresse = User::normaliserEmail((string) ($data['email'] ?? $record->email));
         unset($data['email']);
 
+        if ($adresse !== $record->email) {
+            try {
+                app(DemanderUneNouvelleAdresseAction::class)->handle($record, $adresse);
+            } catch (LogicException $refus) {
+                throw ValidationException::withMessages(['data.email' => $refus->getMessage()]);
+            }
+
+            $this->adresseDemandee = $adresse;
+        }
+
         $record->update($data);
 
         if (array_key_exists('password', $data)) {
             app(SessionsDesComptes::class)->fermer($record, request()->hasSession() ? request()->session()->getId() : null);
-        }
-
-        if ($adresse !== $record->email) {
-            app(DemanderUneNouvelleAdresseAction::class)->handle($record, $adresse);
-            $this->adresseDemandee = $adresse;
         }
 
         return $record;

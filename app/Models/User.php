@@ -78,6 +78,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         'role_societe' => 'membre',
         'statut' => 'actif',
         'mot_de_passe_a_changer' => false,
+        'statut_decide_par_le_proprietaire' => false,
     ];
 
     /**
@@ -99,6 +100,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'password' => 'hashed',
             'role_societe' => RoleSociete::class,
             'statut' => StatutCompte::class,
+            'statut_decide_par_le_proprietaire' => 'boolean',
             'mot_de_passe_a_changer' => 'boolean',
             'mot_de_passe_provisoire_expire_le' => 'datetime',
             'nouvelle_adresse_expire_le' => 'datetime',
@@ -224,6 +226,64 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function doitChangerSonMotDePasse(): bool
     {
         return $this->mot_de_passe_a_changer;
+    }
+
+    /**
+     * Peut-il recevoir de cet auteur de nouveaux droits : un nouveau
+     * magasin, un rôle de responsable, une réintégration, un rôle
+     * d'administrateur ? Toujours s'il a choisi son mot de passe ; tant que
+     * son mot de passe est un provisoire, seulement de la personne qui a
+     * créé le compte, et seulement si c'est elle qui lui a donné ce
+     * provisoire (users.provisoire_donne_par) : qui connaît le provisoire
+     * ne profite jamais, par ce compte, de droits qu'il ne pourrait pas
+     * donner lui-même, même quand un autre que l'auteur du compte le lui a
+     * redonné (voir DonnerUnMotDePasseProvisoireAction).
+     */
+    public function recoitDeNouveauxDroitsDe(User $auteur): bool
+    {
+        return ! $this->doitChangerSonMotDePasse()
+            || ((int) $this->cree_par === (int) $auteur->getKey() && (int) $this->provisoire_donne_par === (int) $auteur->getKey());
+    }
+
+    /**
+     * Les colonnes d'un nouveau statut du compte, donné par cet auteur relu
+     * en base (le compte lui-même pour un refus ou la création de sa
+     * société) : qui l'a donné, et si c'était, à cet instant, le
+     * propriétaire (voir statutDecideParLeProprietaire()).
+     *
+     * @return array{statut: StatutCompte, statut_change_par: int, statut_decide_par_le_proprietaire: bool}
+     */
+    public function nouveauStatut(StatutCompte $statut, User $auteur): array
+    {
+        return [
+            'statut' => $statut,
+            'statut_change_par' => (int) $auteur->getKey(),
+            'statut_decide_par_le_proprietaire' => $auteur->estProprietaire(),
+        ];
+    }
+
+    /**
+     * Son statut actuel a-t-il été décidé par le propriétaire de la
+     * société, au moment du geste ? Un compte suspendu ou retiré par lui ne
+     * se réactive ni ne se réintègre que par le propriétaire, et un compte
+     * qu'il a suspendu ne se retire de la société que par le propriétaire
+     * (voir PorteeDesDroits) : la décision ne se perd pas quand son auteur
+     * transmet ensuite la propriété, et un geste d'un autre ne le devient
+     * jamais après coup.
+     */
+    public function statutDecideParLeProprietaire(): bool
+    {
+        return $this->statut_decide_par_le_proprietaire;
+    }
+
+    /**
+     * Son statut actuel vient-il de son propre refus (voir
+     * RefuserSonCompteAction) ? Il ne revient alors que par un
+     * rattachement qu'il accepte.
+     */
+    public function estRetireParSonRefus(): bool
+    {
+        return $this->estRetire() && (int) $this->statut_change_par === (int) $this->getKey();
     }
 
     /**

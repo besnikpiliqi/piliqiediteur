@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Enums\TypeClient;
@@ -52,6 +53,7 @@ class OuvrirLaDemonstrationAction
         private readonly JournalDesDroits $journalDesDroits,
         private readonly JournalAudit $journalAudit,
         private readonly CatalogueDeDemonstration $catalogue,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
@@ -64,11 +66,11 @@ class OuvrirLaDemonstrationAction
 
             $existante = $societe->demonstration()->first();
 
-            return match (true) {
+            return $this->operateur->pendant($auteur, fn (): Magasin => match (true) {
                 $existante === null => $this->creer($auteur, $societe),
                 $existante->statut === StatutMagasin::Ferme => $this->rouvrir($auteur, $existante),
                 default => $existante,
-            };
+            });
         });
     }
 

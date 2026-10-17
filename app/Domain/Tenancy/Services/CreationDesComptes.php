@@ -105,6 +105,7 @@ final class CreationDesComptes
                 'mot_de_passe_a_changer' => true,
                 'mot_de_passe_provisoire_expire_le' => now()->addHours(self::HEURES_DU_PROVISOIRE),
                 'cree_par' => $auteur->getKey(),
+                'provisoire_donne_par' => $auteur->getKey(),
                 'email_verified_at' => null,
             ]))->save();
         } catch (UniqueConstraintViolationException $doublon) {

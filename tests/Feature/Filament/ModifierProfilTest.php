@@ -4,11 +4,14 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Tenancy\Actions\ConfirmerNouvelleAdresseAction;
 use App\Domain\Tenancy\Actions\DemanderUneNouvelleAdresseAction;
+use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Mail\AdresseChangeeMail;
 use App\Domain\Tenancy\Mail\ConfirmationNouvelleAdresseMail;
+use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Models\User;
 use Closure;
@@ -170,6 +173,41 @@ class ModifierProfilTest extends TestCase
         $this->assertNull(ConfirmerNouvelleAdresseAction::compteEnAttente($jeton));
         $this->assertSame([], $this->entreesDAudit($vendeur->societe, ActionAuditee::AdresseDeConnexionChangee));
         Mail::assertNotSent(AdresseChangeeMail::class);
+    }
+
+    /**
+     * Le lien d'une nouvelle adresse compte au débit des e-mails de la
+     * personne, avec ceux qu'elle fait déjà partir (ici, des propositions
+     * de rattachement) : au-delà de 60 dans l'heure, son profil n'envoie
+     * rien et ne change rien, pas même son nom.
+     */
+    public function test_une_nouvelle_adresse_au_dela_du_debit_des_e_mails_est_refusee_sans_rien_changer(): void
+    {
+        Mail::fake();
+        $this->travelTo('2026-10-15 10:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $adresse = $proprietaire->email;
+        foreach (range(1, DebitDesEmails::PAR_HEURE_ET_PAR_PERSONNE) as $numero) {
+            app(ProposerUnRattachementAction::class)->handle($proprietaire, $magasin->societe, "inconnu{$numero}@example.test", RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
+        }
+        $this->actingAs($proprietaire);
+
+        $page = Livewire::test(ModifierProfil::class)
+            ->fillForm([
+                'name' => 'Jeanne Martin',
+                'email' => 'jeanne.martin@example.test',
+                'mot_de_passe_actuel' => 'password',
+            ])
+            ->call('save')
+            ->assertHasErrors(['data.email']);
+
+        $this->assertSame(['Trop d\'e-mails envoyés en une heure : réessayez dans 60 minute(s).'], $page->errors()->get('data.email'));
+
+        $proprietaire->refresh();
+        $this->assertNotSame('Jeanne Martin', $proprietaire->name);
+        $this->assertSame([$adresse, null], [$proprietaire->email, $proprietaire->nouvelle_adresse]);
+        Mail::assertNothingOutgoing();
     }
 
     public function test_changer_son_nom_et_son_adresse_sans_le_mot_de_passe_actuel_est_refuse(): void

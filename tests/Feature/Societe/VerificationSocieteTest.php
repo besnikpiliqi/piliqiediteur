@@ -148,6 +148,30 @@ class VerificationSocieteTest extends TestCase
 
     private const SECRET_DES_RAPPELS_D_ENVOI = 'secret-des-rappels-d-envoi-des-tests';
 
+    /**
+     * La validation suit la vérification, sans auteur : le propriétaire
+     * connecté qui la déclenche par sa vérification d'identité ne signe
+     * pas les droits implicites qu'elle inscrit au journal des événements
+     * de son magasin ; le système les signe.
+     */
+    public function test_la_validation_s_inscrit_aux_journaux_des_evenements_au_nom_du_systeme(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $this->actingAs($societe->proprietaire);
+        $dejaInscrits = EnregistrementFiscal::withoutGlobalScopes()->max('id') ?? 0;
+
+        $this->verifierLIdentiteDuProprietaire($societe);
+
+        $this->assertTrue($societe->fresh()->estValidee());
+        $inscrits = EnregistrementFiscal::withoutGlobalScopes()
+            ->whereIn('magasin_id', Magasin::query()->where('societe_id', $societe->id)->select('id'))
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('id', '>', $dejaInscrits)
+            ->get();
+        $this->assertContains((string) CodeEvenement::ModificationDesDroits->value, $inscrits->pluck('type')->map(fn (mixed $type): string => (string) $type)->all());
+        $this->assertSame([null], $inscrits->pluck('operateur_id')->unique()->values()->all());
+    }
+
     public function test_l_identite_verifiee_rapprochee_d_un_dirigeant_du_rne_valide_la_societe(): void
     {
         $societe = $this->inscrireUneSociete();

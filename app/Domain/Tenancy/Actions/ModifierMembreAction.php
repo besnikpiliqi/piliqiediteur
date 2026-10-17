@@ -144,7 +144,7 @@ class ModifierMembreAction
         $compte->effacerLesNotificationsDesMagasins($retires);
 
         if ($apres === []) {
-            $compte->forceFill(['statut' => StatutCompte::Retire, 'statut_change_par' => $auteur->getKey()])->save();
+            $compte->forceFill($compte->nouveauStatut(StatutCompte::Retire, $auteur))->save();
             $compte->effacerToutesSesNotifications();
             $this->sessions->fermer($compte);
         }

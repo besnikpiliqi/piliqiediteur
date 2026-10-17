@@ -65,7 +65,7 @@ class AnnulerUneNominationAction
                     $compteRelu->effacerLesNotificationsDesMagasins([$magasinId]);
 
                     if ($compteRelu->affectationsDeMembre()->isEmpty()) {
-                        $compteRelu->forceFill(['statut' => StatutCompte::Retire, 'statut_change_par' => $auteurRelu->getKey()])->save();
+                        $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Retire, $auteurRelu))->save();
                         $compteRelu->effacerToutesSesNotifications();
                         $this->sessions->fermer($compteRelu);
                     }

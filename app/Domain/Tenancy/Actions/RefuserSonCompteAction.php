@@ -75,8 +75,7 @@ class RefuserSonCompteAction
 
                 ChangerStatutCompteAction::retirerLesDroits($compteRelu);
                 $compteRelu->forceFill([
-                    'statut' => StatutCompte::Retire,
-                    'statut_change_par' => $compteRelu->getKey(),
+                    ...$compteRelu->nouveauStatut(StatutCompte::Retire, $compteRelu),
                     'password' => Str::random(64),
                     ...($consommerLeLien === null ? [] : ['email_verified_at' => now()]),
                 ])->save();

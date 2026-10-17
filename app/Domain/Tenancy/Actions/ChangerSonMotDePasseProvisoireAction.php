@@ -58,6 +58,7 @@ class ChangerSonMotDePasseProvisoireAction
                 'password' => $nouveauMotDePasse,
                 'mot_de_passe_a_changer' => false,
                 'mot_de_passe_provisoire_expire_le' => null,
+                'provisoire_donne_par' => null,
             ])->save();
             $this->sessions->fermer($relu, $sessionCourante);
         });

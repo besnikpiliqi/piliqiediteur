@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
@@ -85,6 +86,7 @@ class CorrigerSirenAvantValidationAction
         private readonly JournalAudit $journalAudit,
         private readonly PiecesDeVerification $pieces,
         private readonly AnnulationDesCodes $annulationDesCodes,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
@@ -135,7 +137,7 @@ class CorrigerSirenAvantValidationAction
                 $etablissements[$magasin->getKey()] = $consultation;
             }
 
-            return $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $societe, $siren, $magasins, $sirets, $unite, $identite, $etablissements): Societe {
+            return $this->operateur->pendant($auteur, fn (): Societe => $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $societe, $siren, $magasins, $sirets, $unite, $identite, $etablissements): Societe {
                 $enregistree = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
 
                 if ($enregistree->estValidee()) {
@@ -178,7 +180,7 @@ class CorrigerSirenAvantValidationAction
                 $this->annulerLesPreuvesEnCours($enregistree, $auteur);
 
                 return $enregistree;
-            });
+            }));
         });
     }
 

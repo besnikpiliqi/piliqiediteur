@@ -12,6 +12,7 @@ use App\Domain\Tenancy\Models\DemandeRattachement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\AffectationsDesMembres;
+use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
@@ -45,9 +46,16 @@ use LogicException;
  * actif ou suspendu dans une autre société, elle apprend seule qu'elle
  * doit d'abord en être retirée ; adresse inconnue, rien ne part. Le
  * journal d'audit retient l'adresse tapée, jamais ce qu'elle désigne.
+ * Chaque proposition compte au débit des e-mails de l'auteur (voir
+ * DebitDesEmails), qu'un e-mail parte ou non : la limite atteinte se dit
+ * de la même façon pour toute adresse, avant toute écriture, et ne
+ * révèle jamais lesquelles sont des comptes. Les noms qu'affiche l'e-mail
+ * (l'auteur, la société, ses magasins) n'y sont jamais mis en forme (voir
+ * AppServiceProvider::neJamaisMettreEnFormeLesTextesDesEmails()).
  * Le compte visé se lit hors de la société par son adresse, et seulement
- * son statut, son rôle, sa société et qui lui a donné son statut, sans
- * verrou : l'acceptation relit tout sous les siens.
+ * son statut, son rôle, sa société, qui lui a donné son statut et si
+ * c'était le propriétaire, sans verrou : l'acceptation relit tout sous les
+ * siens.
  */
 class ProposerUnRattachementAction
 {
@@ -62,6 +70,7 @@ class ProposerUnRattachementAction
         private readonly AffectationsDesMembres $affectations,
         private readonly PorteeDesDroits $portee,
         private readonly JournalAudit $journalAudit,
+        private readonly DebitDesEmails $debit,
     ) {}
 
     /**
@@ -79,6 +88,8 @@ class ProposerUnRattachementAction
             throw new LogicException(self::MESSAGE_EXPERT_SANS_MAGASIN);
         }
 
+        $this->debit->verifier($auteur);
+
         $envoi = $this->dansLaSociete($societe, PorteeDesDroits::REFUS, function () use ($auteur, $societe, $email, $role, $affectations): ?array {
             $demandees = $role === RoleSociete::Membre ? array_filter($this->affectations->lire($societe, $affectations)) : [];
 
@@ -88,7 +99,7 @@ class ProposerUnRattachementAction
                 }
 
                 $verifiees = $role === RoleSociete::Membre ? $this->affectations->verifierPourUnNouveauCompte($auteurRelu, $demandees) : [];
-                $compte = User::query()->where('email', $email)->first(['id', 'email', 'societe_id', 'role_societe', 'statut', 'statut_change_par']);
+                $compte = User::query()->where('email', $email)->first(['id', 'email', 'societe_id', 'role_societe', 'statut', 'statut_change_par', 'statut_decide_par_le_proprietaire']);
                 $envoi = match (true) {
                     $compte === null => null,
                     $this->portee->peutRecevoirUnRattachement($auteurRelu, $compte) => ['email' => $compte->email, 'mail' => $this->proposer($auteurRelu, $societe, $compte, $role, $verifiees)],
@@ -105,6 +116,8 @@ class ProposerUnRattachementAction
                 return $envoi;
             });
         });
+
+        $this->debit->compter($auteur);
 
         if ($envoi !== null) {
             Mail::to($envoi['email'])->send($envoi['mail']);

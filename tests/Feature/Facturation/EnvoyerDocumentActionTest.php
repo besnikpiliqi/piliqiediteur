@@ -26,6 +26,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -409,7 +410,7 @@ class EnvoyerDocumentActionTest extends TestCase
         $membre = $this->responsable($this->magasin());
         $facture = $this->emettreFacture(Client::factory()->create());
 
-        foreach (range(1, EnvoyerDocumentAction::ENVOIS_PAR_HEURE_ET_PAR_MEMBRE) as $numero) {
+        foreach (range(1, DebitDesEmails::PAR_HEURE_ET_PAR_PERSONNE) as $numero) {
             app(EnvoyerDocumentAction::class)->handle($membre, $facture, "client{$numero}@exemple.fr", null);
         }
 
@@ -440,7 +441,7 @@ class EnvoyerDocumentActionTest extends TestCase
         $facture = $this->emettreFacture(Client::factory()->create());
         $membres = array_map(fn (): User => $this->responsable($magasin), range(1, 5));
 
-        foreach (range(1, EnvoyerDocumentAction::ENVOIS_PAR_HEURE_ET_PAR_MAGASIN) as $numero) {
+        foreach (range(1, DebitDesEmails::PAR_HEURE_ET_PAR_MAGASIN) as $numero) {
             app(EnvoyerDocumentAction::class)->handle($membres[$numero % 4], $facture, 'client@exemple.fr', null);
         }
 

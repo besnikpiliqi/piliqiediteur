@@ -94,6 +94,7 @@ class HistoriqueAuNomFigeTest extends TestCase
      */
     private const HORS_HISTORIQUE = [
         'users.cree_par',
+        'users.provisoire_donne_par',
         'users.statut_change_par',
         'paniers_caisse.user_id',
         'affectations.user_id',

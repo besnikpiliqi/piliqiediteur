@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -80,6 +81,7 @@ class CreerEtablissementAction
         private readonly ControleSirene $controleSirene,
         private readonly MiseEnActiviteDesMagasins $miseEnActivite,
         private readonly JournalAudit $journalAudit,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
@@ -112,7 +114,7 @@ class CreerEtablissementAction
                 throw ValidationException::withMessages(['nic' => ControleSirene::MOTIF_TERRITOIRE_NON_GERE]);
             }
 
-            return DB::transaction(function () use ($auteur, $societe, $valides, $siret, $consultation, $etablissement): Magasin {
+            return $this->operateur->pendant($auteur, fn (): Magasin => DB::transaction(function () use ($auteur, $societe, $valides, $siret, $consultation, $etablissement): Magasin {
                 $verrouillee = Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
                 $magasin = Magasin::forceCreate([
                     'societe_id' => $societe->getKey(),
@@ -158,7 +160,7 @@ class CreerEtablissementAction
                 ], $magasin);
 
                 return $magasin;
-            });
+            }));
         });
     }
 

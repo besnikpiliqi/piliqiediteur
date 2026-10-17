@@ -27,9 +27,14 @@ use SensitiveParameter;
  * connaît jamais.
  *
  * Contrôlé sur l'auteur et le compte relus sous le verrou de leurs lignes.
- * Les sessions du compte se ferment, la personne est prévenue (sans le
- * mot de passe, remis de la main à la main) et le geste s'inscrit au
- * journal d'audit, jamais avec le mot de passe.
+ * L'auteur, qui connaît désormais ce provisoire, est noté sur le compte
+ * (users.provisoire_donne_par) : tant que la personne n'a pas choisi son
+ * mot de passe, le compte ne reçoit plus de nouveaux droits que de
+ * l'auteur du compte, s'il est aussi celui qui lui a donné ce provisoire
+ * (voir User::recoitDeNouveauxDroitsDe()). Les sessions du compte se
+ * ferment, la personne est prévenue (sans le mot de passe, remis de la
+ * main à la main) et le geste s'inscrit au journal d'audit, jamais avec
+ * le mot de passe.
  */
 class DonnerUnMotDePasseProvisoireAction
 {
@@ -63,6 +68,7 @@ class DonnerUnMotDePasseProvisoireAction
                 'password' => $motDePasseProvisoire,
                 'mot_de_passe_a_changer' => true,
                 'mot_de_passe_provisoire_expire_le' => now()->addHours(CreationDesComptes::HEURES_DU_PROVISOIRE),
+                'provisoire_donne_par' => $auteurRelu->getKey(),
             ])->save();
             $this->sessions->fermer($compteRelu);
             $this->journalAudit->inscrire(ActionAuditee::MotDePasseProvisoireDonne, $auteurRelu, null, null, [

@@ -37,12 +37,21 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
+use App\Domain\Tenancy\Actions\CreerEtablissementAction;
+use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
+use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
+use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
+use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Closure;
+use Database\Factories\MagasinFactory;
+use Database\Factories\SocieteFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -272,6 +281,57 @@ class LecteurDesDroitsTest extends TestCase
             $this->assertSame($vendeuse->id, $enregistrement->operateur_id);
             $this->assertSame($vendeuse->id, $enregistrement->contenuSigne()['donnees']['document']['cree_par'] ?? $enregistrement->contenuSigne()['donnees']['paiement']['cree_par']);
         }
+    }
+
+    /**
+     * Les actions de la société qui écrivent aux journaux des événements
+     * de ses magasins, chacune avec l'événement qu'elle doit y inscrire.
+     *
+     * @return array<string, array{0: string, 1: CodeEvenement}>
+     */
+    public static function actionsDeLaSociete(): array
+    {
+        return [
+            'régler l\'option pour les débits' => ['option pour les débits', CodeEvenement::ParametreDeConformite],
+            'effacer le n° de TVA' => ['n° de TVA', CodeEvenement::ParametreDeConformite],
+            'créer un magasin dans une société validée' => ['nouveau magasin', CodeEvenement::ModificationDesDroits],
+            'changer le SIRET d\'un magasin avant la validation' => ['SIRET', CodeEvenement::ParametreDeConformite],
+            'corriger le SIREN avant la validation' => ['SIREN', CodeEvenement::ParametreDeConformite],
+            'ouvrir la démonstration' => ['démonstration', CodeEvenement::EntreeEnModeDemonstration],
+        ];
+    }
+
+    /**
+     * Une personne d'une autre société est connectée ; l'action de la
+     * société reçoit le propriétaire : chaque événement qu'elle inscrit
+     * aux journaux des événements de ses magasins le désigne, jamais la
+     * personne connectée.
+     */
+    #[DataProvider('actionsDeLaSociete')]
+    public function test_les_actions_de_la_societe_inscrivent_leurs_evenements_au_nom_de_l_auteur_passe_a_l_action(string $action, CodeEvenement $attendu): void
+    {
+        $societe = in_array($action, ['SIRET', 'SIREN', 'démonstration'], true) ? $this->inscrireUneSociete() : $this->ouvrirUneSociete(['nom' => 'Lyon'])->societe;
+        $proprietaire = $societe->proprietaire()->firstOrFail();
+        $this->actingAs(User::factory()->create());
+        app(TenantContext::class)->clear();
+        $dejaInscrits = EnregistrementFiscal::withoutGlobalScopes()->max('id') ?? 0;
+
+        match ($action) {
+            'option pour les débits' => app(ModifierParametresFiscauxSocieteAction::class)->handle($proprietaire, $societe, ['option_debits_tva' => true]),
+            'n° de TVA' => app(ModifierIdentiteSocieteAction::class)->handle($proprietaire, $societe, ['numero_tva' => '', 'capital_social' => '1000']),
+            'nouveau magasin' => app(CreerEtablissementAction::class)->handle($proprietaire, $societe, ['nom' => 'Villeurbanne', 'nic' => MagasinFactory::nicLibre($societe)]),
+            'SIRET' => app(ModifierEtablissementAction::class)->handle($proprietaire, $societe->magasinsReels()->sole(), ['nic' => MagasinFactory::nicLibre($societe)]),
+            'SIREN' => app(CorrigerSirenAvantValidationAction::class)->handle($proprietaire, $societe, $siren = SocieteFactory::sirenFictif(), [$societe->magasinsReels()->sole()->id => substr(FauxRepertoireSirene::siretDuSiege($siren), 9)]),
+            'démonstration' => app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe),
+        };
+
+        $inscrits = EnregistrementFiscal::withoutGlobalScopes()
+            ->whereIn('magasin_id', Magasin::query()->where('societe_id', $societe->id)->select('id'))
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('id', '>', $dejaInscrits)
+            ->get();
+        $this->assertContains((string) $attendu->value, $inscrits->pluck('type')->map(fn (mixed $type): string => (string) $type)->all());
+        $this->assertSame([(int) $proprietaire->id], $inscrits->pluck('operateur_id')->map(fn (mixed $id): int => (int) $id)->unique()->values()->all());
     }
 
     /**

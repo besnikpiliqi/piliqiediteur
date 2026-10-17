@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Actions;
 
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
@@ -54,8 +55,11 @@ use Throwable;
  * autre (la session relayée à un dirigeant) valide la société, mais ne
  * passe pas au titulaire du compte : signer les attestations ou recevoir
  * la propriété exigent une qualité prouvée à son propre nom. La
- * validation s'inscrit au journal d'audit, avec la personne vérifiée. Un magasin réel fermé
- * n'est ni réservé ni ouvert. Si une autre société a validé ce SIREN, ou
+ * validation s'inscrit au journal d'audit, avec la personne vérifiée, sans
+ * auteur : elle suit la vérification, et les journaux des événements de
+ * ses magasins l'inscrivent au nom du système (voir OperateurCourant),
+ * même quand la personne connectée l'a déclenchée en saisissant un code.
+ * Un magasin réel fermé n'est ni réservé ni ouvert. Si une autre société a validé ce SIREN, ou
  * réservé l'un de ces SIRET, entre-temps, rien n'est écrit : la société
  * devient une réclamation possible, et l'éditeur en est prévenu, sans
  * rien en révéler à personne d'autre.
@@ -91,6 +95,7 @@ class ValiderLaSocieteAction
         private readonly JournalAudit $journalAudit,
         private readonly FermerLaDemonstrationAction $fermerLaDemonstration,
         private readonly AlerteEditeur $alerteEditeur,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
@@ -112,7 +117,7 @@ class ValiderLaSocieteAction
             }
 
             try {
-                $validation = $this->valider($societe, $editeur);
+                $validation = $this->operateur->pendantLeSysteme(fn (): ?array => $this->valider($societe, $editeur));
             } catch (ConflitDeValidationException) {
                 $this->signalerLaReclamation($societe);
 

@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -77,6 +78,7 @@ class ModifierIdentiteSocieteAction
     public function __construct(
         private readonly RegistreFiscal $registre,
         private readonly JournalAudit $journalAudit,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
@@ -98,7 +100,7 @@ class ModifierIdentiteSocieteAction
 
             $valides = array_map(fn (mixed $valeur): mixed => is_string($valeur) && trim($valeur) === '' ? null : $valeur, $this->valider($societe, $donnees));
 
-            return $this->registre->sousVerrouDesMagasins($societe->magasins()->orderBy('id')->get(), function () use ($auteur, $societe, $valides): Societe {
+            return $this->operateur->pendant($auteur, fn (): Societe => $this->registre->sousVerrouDesMagasins($societe->magasins()->orderBy('id')->get(), function () use ($auteur, $societe, $valides): Societe {
                 $enregistree = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
                 $avant = $enregistree->identiteAuditee();
 
@@ -107,7 +109,7 @@ class ModifierIdentiteSocieteAction
                 $this->journalAudit->inscrireLesChangements(ActionAuditee::IdentiteModifiee, $auteur, null, $avant, $enregistree->identiteAuditee(), $enregistree);
 
                 return $enregistree;
-            });
+            }));
         });
     }
 

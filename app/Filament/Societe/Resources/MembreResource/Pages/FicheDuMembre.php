@@ -228,7 +228,7 @@ class FicheDuMembre extends ViewRecord
         return Action::make('reintegrer')
             ->label('Réintégrer')
             ->icon('heroicon-o-arrow-path')
-            ->visible(fn (): bool => $this->gereLEquipe() && $this->compte()->estRetire() && $this->compte()->estMembre() && (int) $this->compte()->statut_change_par !== (int) $this->compte()->getKey())
+            ->visible(fn (): bool => $this->gereLEquipe() && $this->compte()->estRetire() && $this->compte()->estMembre() && ! $this->compte()->estRetireParSonRefus())
             ->form(fn (): array => $this->auteur()->estProprietaire()
                 ? [MembreResource::champAffectations()]
                 : [Select::make('magasin_id')->label('Responsable de')->options(fn (): array => MembreResource::magasinsDeLaPortee())->required()])
@@ -247,7 +247,7 @@ class FicheDuMembre extends ViewRecord
             ->label('Réintégrer comme expert-comptable')
             ->icon('heroicon-o-calculator')
             ->requiresConfirmation()
-            ->visible(fn (): bool => $this->gereLEquipe() && $this->auteur()->estProprietaire() && $this->compte()->estRetire() && (int) $this->compte()->statut_change_par !== (int) $this->compte()->getKey())
+            ->visible(fn (): bool => $this->gereLEquipe() && $this->auteur()->estProprietaire() && $this->compte()->estRetire() && ! $this->compte()->estRetireParSonRefus())
             ->action(function (): void {
                 $this->agir(fn () => app(ChangerStatutCompteAction::class)->reintegrerCommeExpertComptable($this->auteur(), $this->compte()));
             });

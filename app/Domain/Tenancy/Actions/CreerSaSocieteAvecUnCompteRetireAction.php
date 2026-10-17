@@ -80,8 +80,7 @@ class CreerSaSocieteAvecUnCompteRetireAction
                 $relu->forceFill([
                     'societe_id' => $nouvelle->getKey(),
                     'role_societe' => RoleSociete::Proprietaire,
-                    'statut' => StatutCompte::Actif,
-                    'statut_change_par' => $relu->getKey(),
+                    ...$relu->nouveauStatut(StatutCompte::Actif, $relu),
                     'qualite_verifiee_le' => null,
                 ])->save();
                 $this->sessions->fermer($relu);

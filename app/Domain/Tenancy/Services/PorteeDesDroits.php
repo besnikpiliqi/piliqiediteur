@@ -43,15 +43,23 @@ use LogicException;
  *   tous les magasins d'un vendeur ou d'un observateur ; pour une personne
  *   qui n'est que responsable de magasins tous dans sa portée, un
  *   administrateur autorisé, pour la retirer de la société ou lui envoyer
- *   un lien ; un compte suspendu par le propriétaire ne se réactive que par
- *   lui ;
+ *   un lien ;
+ * - un compte suspendu par le propriétaire ne se réactive, ni ne se retire
+ *   de la société (son dernier magasin compris), que par le propriétaire ;
+ *   retiré par lui, il ne se réintègre et ne reçoit de rattachement à la
+ *   même société que du propriétaire. La décision se lit sur le compte,
+ *   telle qu'elle a été prise (voir User::statutDecideParLeProprietaire()) :
+ *   elle tient après une transmission de la propriété, et le retrait d'un
+ *   compte suspendu ne sert jamais à lever sa suspension ;
  * - un nouveau mot de passe provisoire ne se donne qu'à un compte dont le
  *   mot de passe est encore un provisoire, par le propriétaire ou un
  *   responsable de tous ses magasins, jamais par un administrateur ;
  * - tant que son mot de passe est un provisoire, un compte ne reçoit un
  *   nouveau magasin, un rôle de responsable ou une réintégration que de la
- *   personne qui l'a créé : qui connaît le provisoire ne profite jamais,
- *   par ce compte, de droits qu'il ne pourrait pas donner lui-même ;
+ *   personne qui l'a créé, et seulement si c'est elle qui lui a donné ce
+ *   provisoire (voir User::recoitDeNouveauxDroitsDe()) : qui connaît le
+ *   provisoire ne profite jamais, par ce compte, de droits qu'il ne
+ *   pourrait pas donner lui-même ;
  * - ce qu'on coche pour quelqu'un dans un magasin reste inclus dans ses
  *   propres autorisations dans ce magasin : toutes pour le propriétaire et
  *   un responsable du magasin, aucune pour tout autre compte (voir
@@ -67,8 +75,6 @@ final class PorteeDesDroits
     public const REFUS_AU_DELA = 'Vous ne pouvez pas donner, dans ce magasin, une autorisation que vous n\'avez pas.';
 
     public const REFUS_PLUSIEURS_MAGASINS = 'Seul le propriétaire affecte une même personne à plusieurs magasins.';
-
-    public const REFUS_PROVISOIRE = 'Cette personne n\'a pas encore choisi son mot de passe : seule la personne qui a créé son compte peut lui donner un nouveau magasin, un rôle de responsable ou la réintégrer.';
 
     /**
      * Peut-il gérer l'équipe de sa société, dans la mesure de son rôle ? Un
@@ -164,7 +170,7 @@ final class PorteeDesDroits
 
         $actuelle = $compte?->affectationsDeMembre()->firstWhere('magasin_id', $magasin->getKey());
 
-        if ($compte !== null && ! $this->respecteLeProvisoire($auteur, $compte, $actuelle === null || ($role === RoleMagasin::Responsable && ! $actuelle->estDeResponsable()))) {
+        if ($compte !== null && ($actuelle === null || ($role === RoleMagasin::Responsable && ! $actuelle->estDeResponsable())) && ! $compte->recoitDeNouveauxDroitsDe($auteur)) {
             return false;
         }
 
@@ -235,37 +241,30 @@ final class PorteeDesDroits
             return true;
         }
 
-        if ($compte->estSuspendu() && $this->estUneDecisionDuProprietaire($compte)) {
-            return false;
-        }
-
-        return $this->gereLeCompte($auteur, $compte);
+        return ! $this->estSuspenduParLeProprietaire($compte) && $this->gereLeCompte($auteur, $compte);
     }
 
     /**
-     * Peut-il retirer ce compte de la société ? Le propriétaire ; un
-     * responsable de tous les magasins d'un vendeur ou d'un observateur ;
-     * un administrateur autorisé, pour une personne qui n'est que
-     * responsable de magasins tous dans sa portée.
+     * Peut-il retirer ce compte de la société ? Ceux qui touchent à tout le
+     * compte (voir toucheToutLeCompte()) ; un compte suspendu par le
+     * propriétaire, le propriétaire seul : retiré par un autre, puis
+     * réintégré par lui, il verrait sa suspension levée sans le
+     * propriétaire.
      */
     public function peutRetirerDeLaSociete(User $auteur, User $compte): bool
     {
-        if (! $this->estUneCible($auteur, $compte) || $compte->estRetire()) {
-            return false;
-        }
-
-        return $auteur->estProprietaire()
-            || $this->gereLeCompte($auteur, $compte)
-            || $this->nEstResponsableQueDansSaPortee($auteur, $compte);
+        return $this->toucheToutLeCompte($auteur, $compte)
+            && ($auteur->estProprietaire() || ! $this->estSuspenduParLeProprietaire($compte));
     }
 
     /**
      * Peut-il renouveler l'accès de ce compte par un lien envoyé à la
-     * personne ? Les mêmes que pour le retirer de la société.
+     * personne ? Ceux qui touchent à tout le compte (voir
+     * toucheToutLeCompte()) : un lien ne lève aucune suspension.
      */
     public function peutRenouvelerLAcces(User $auteur, User $compte): bool
     {
-        return $this->peutRetirerDeLaSociete($auteur, $compte);
+        return $this->toucheToutLeCompte($auteur, $compte);
     }
 
     /**
@@ -302,15 +301,11 @@ final class PorteeDesDroits
             return false;
         }
 
-        if ((int) $compte->statut_change_par === (int) $compte->getKey()) {
+        if ($compte->estRetireParSonRefus() || ($compte->statutDecideParLeProprietaire() && ! $auteur->estProprietaire())) {
             return false;
         }
 
-        if ($this->estUneDecisionDuProprietaire($compte) && ! $auteur->estProprietaire()) {
-            return false;
-        }
-
-        if (! $this->respecteLeProvisoire($auteur, $compte, true) || (count($roles) > 1 && ! $this->peutAffecterAPlusieursMagasins($auteur))) {
+        if (! $compte->recoitDeNouveauxDroitsDe($auteur) || (count($roles) > 1 && ! $this->peutAffecterAPlusieursMagasins($auteur))) {
             return false;
         }
 
@@ -332,17 +327,24 @@ final class PorteeDesDroits
      * administrateur ? Le propriétaire, qui en a été prévenu ; ou
      * l'administrateur qui l'a faite, s'il peut toujours nommer un
      * responsable dans ce magasin. Seulement tant que l'affectation est
-     * celle de cette nomination.
+     * celle de cette nomination. Une annulation qui retirerait la personne
+     * de la société (l'affectation créée par la nomination est son dernier
+     * magasin), seulement qui peut l'en retirer.
      */
     public function peutAnnulerLaNomination(User $auteur, Affectation $affectation): bool
     {
         $magasin = $affectation->magasin;
+        $compte = User::query()->find($affectation->user_id);
 
-        if ($affectation->nomme_par === null || ! $affectation->estDeResponsable() || $magasin === null || (int) $affectation->user_id === (int) $auteur->getKey()) {
+        if ($compte === null || $affectation->nomme_par === null || ! $affectation->estDeResponsable() || $magasin === null || $compte->is($auteur)) {
             return false;
         }
 
         if (! $this->gereSonEquipe($auteur) || (int) $magasin->societe_id !== (int) $auteur->societe_id) {
+            return false;
+        }
+
+        if ($affectation->avant_la_nomination === null && $compte->affectationsDeMembre()->count() === 1 && ! $this->peutRetirerDeLaSociete($auteur, $compte)) {
             return false;
         }
 
@@ -426,7 +428,8 @@ final class PorteeDesDroits
     /**
      * Les comptes qu'il peut nommer responsables de ce magasin : des
      * membres actifs, qui n'en sont pas déjà responsables, ont choisi leur
-     * mot de passe ou ont été créés par lui ; pour le propriétaire, tout
+     * mot de passe ou ont été créés par lui et ont reçu de lui leur
+     * provisoire (voir User::recoitDeNouveauxDroitsDe()) ; pour le propriétaire, tout
      * membre de la société ; pour un administrateur autorisé, un vendeur
      * ou un observateur de ce magasin, sans nouveau magasin. Jamais un
      * administrateur, un expert-comptable ni le propriétaire.
@@ -440,7 +443,7 @@ final class PorteeDesDroits
             ->where('users.role_societe', RoleSociete::Membre->value)
             ->where('users.statut', StatutCompte::Actif->value)
             ->whereKeyNot($auteur->getKey())
-            ->where(fn (Builder $comptes) => $comptes->where('users.mot_de_passe_a_changer', false)->orWhere('users.cree_par', $auteur->getKey()))
+            ->where(fn (Builder $comptes) => $comptes->where('users.mot_de_passe_a_changer', false)->orWhere(fn (Builder $deLui) => $deLui->where('users.cree_par', $auteur->getKey())->where('users.provisoire_donne_par', $auteur->getKey())))
             ->whereNotIn('users.id', Affectation::query()->where('magasin_id', $magasin->getKey())->where('role', RoleMagasin::Responsable->value)->select('user_id'));
 
         if (! $this->peutNommerUnResponsable($auteur, $magasin)) {
@@ -499,9 +502,9 @@ final class PorteeDesDroits
      * Ce compte peut-il recevoir de l'auteur une proposition de
      * rattachement à la société de l'auteur ? Seulement un compte retiré,
      * membre (un administrateur ou un expert-comptable retiré l'est
-     * redevenu) ; retiré par le propriétaire de cette même société, par lui
-     * seul. Un compte encore actif ou suspendu, dans cette société ou une
-     * autre, jamais : il doit d'abord en être retiré.
+     * redevenu) ; retiré par le propriétaire de cette même société, par le
+     * propriétaire seul. Un compte encore actif ou suspendu, dans cette
+     * société ou une autre, jamais : il doit d'abord en être retiré.
      */
     public function peutRecevoirUnRattachement(User $auteur, User $compte): bool
     {
@@ -510,8 +513,8 @@ final class PorteeDesDroits
         }
 
         return (int) $compte->societe_id !== (int) $auteur->societe_id
-            || (int) $compte->statut_change_par === (int) $compte->getKey()
-            || ! $this->estUneDecisionDuProprietaire($compte)
+            || $compte->estRetireParSonRefus()
+            || ! $compte->statutDecideParLeProprietaire()
             || $auteur->estProprietaire();
     }
 
@@ -544,6 +547,32 @@ final class PorteeDesDroits
     }
 
     /**
+     * Touche-t-il à tout ce compte (le retirer de la société, renouveler
+     * son accès) ? Le propriétaire ; un responsable de tous les magasins
+     * d'un vendeur ou d'un observateur ; un administrateur autorisé, pour
+     * une personne qui n'est que responsable de magasins tous dans sa
+     * portée.
+     */
+    private function toucheToutLeCompte(User $auteur, User $compte): bool
+    {
+        if (! $this->estUneCible($auteur, $compte) || $compte->estRetire()) {
+            return false;
+        }
+
+        return $auteur->estProprietaire()
+            || $this->gereLeCompte($auteur, $compte)
+            || $this->nEstResponsableQueDansSaPortee($auteur, $compte);
+    }
+
+    /**
+     * Le compte est-il suspendu, par une décision du propriétaire ?
+     */
+    private function estSuspenduParLeProprietaire(User $compte): bool
+    {
+        return $compte->estSuspendu() && $compte->statutDecideParLeProprietaire();
+    }
+
+    /**
      * Une personne qui n'est que responsable, de magasins tous dans la
      * portée d'un administrateur autorisé à nommer les responsables.
      */
@@ -559,25 +588,5 @@ final class PorteeDesDroits
             && $affectations->every(fn (Affectation $affectation): bool => $affectation->estDeResponsable()
                 && $affectation->magasin !== null
                 && $this->peutNommerUnResponsable($auteur, $affectation->magasin));
-    }
-
-    /**
-     * Le statut du compte a-t-il été donné par le propriétaire de la
-     * société ?
-     */
-    private function estUneDecisionDuProprietaire(User $compte): bool
-    {
-        return $compte->statut_change_par !== null
-            && User::query()->whereKey($compte->statut_change_par)->where('role_societe', RoleSociete::Proprietaire->value)->exists();
-    }
-
-    /**
-     * Un compte au mot de passe provisoire ne reçoit de nouveaux droits
-     * (un nouveau magasin, un rôle de responsable, une réintégration) que
-     * de la personne qui l'a créé.
-     */
-    private function respecteLeProvisoire(User $auteur, User $compte, bool $nouveauxDroits): bool
-    {
-        return ! $nouveauxDroits || ! $compte->doitChangerSonMotDePasse() || (int) $compte->cree_par === (int) $auteur->getKey();
     }
 }

@@ -30,16 +30,22 @@ use LogicException;
  *   requête suivante, ses sessions se ferment et ses notifications, qui ne
  *   le regardent plus, s'effacent ; il garde ses affectations ;
  * - réactiver : un compte suspendu par le propriétaire ne se réactive que
- *   par lui ;
+ *   par le propriétaire ;
  * - retirer de la société : ses affectations et ses autorisations de
  *   société disparaissent, un administrateur ou un expert-comptable
  *   repasse membre, ses notifications s'effacent, ses sessions se
- *   ferment ; le compte ne s'efface jamais et garde son adresse ;
+ *   ferment ; le compte ne s'efface jamais et garde son adresse. Un compte
+ *   suspendu par le propriétaire ne se retire que par le propriétaire ;
  * - réintégrer un compte retiré par la société, comme une création : comme
  *   membre (voir PorteeDesDroits::peutReintegrer()), ou comme
  *   expert-comptable par le propriétaire seul. Un compte retiré par le
- *   propriétaire ne se réintègre que par lui ; un compte retiré par son
- *   propre refus, jamais (seulement par un rattachement qu'il accepte).
+ *   propriétaire ne se réintègre que par le propriétaire ; un compte
+ *   retiré par son propre refus, jamais (seulement par un rattachement
+ *   qu'il accepte).
+ *
+ * Chaque nouveau statut note qui l'a donné, et si c'était alors le
+ * propriétaire (voir User::nouveauStatut()) : la décision du propriétaire
+ * tient après une transmission de la propriété.
  */
 class ChangerStatutCompteAction
 {
@@ -68,7 +74,7 @@ class ChangerStatutCompteAction
                 throw new AuthorizationException(PorteeDesDroits::REFUS);
             }
 
-            $compteRelu->forceFill(['statut' => StatutCompte::Suspendu, 'statut_change_par' => $auteurRelu->getKey()])->save();
+            $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Suspendu, $auteurRelu))->save();
             $compteRelu->effacerToutesSesNotifications();
             $this->sessions->fermer($compteRelu);
         });
@@ -88,7 +94,7 @@ class ChangerStatutCompteAction
                 throw new AuthorizationException(PorteeDesDroits::REFUS);
             }
 
-            $compteRelu->forceFill(['statut' => StatutCompte::Actif, 'statut_change_par' => $auteurRelu->getKey()])->save();
+            $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
         });
     }
 
@@ -103,7 +109,7 @@ class ChangerStatutCompteAction
             }
 
             self::retirerLesDroits($compteRelu);
-            $compteRelu->forceFill(['statut' => StatutCompte::Retire, 'statut_change_par' => $auteurRelu->getKey()])->save();
+            $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Retire, $auteurRelu))->save();
             $compteRelu->effacerToutesSesNotifications();
             $this->sessions->fermer($compteRelu);
         });
@@ -135,7 +141,7 @@ class ChangerStatutCompteAction
                 }
 
                 $verifiees = $this->affectations->verifierPourUnNouveauCompte($auteurRelu, $demandees);
-                $compteRelu->forceFill(['statut' => StatutCompte::Actif, 'statut_change_par' => $auteurRelu->getKey()])->save();
+                $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
 
                 foreach ($verifiees as $affectation) {
                     $ecrites[] = $this->affectations->ecrire($auteurRelu, $compteRelu, $affectation['magasin'], $affectation['role'], $affectation['autorisations']);
@@ -148,7 +154,10 @@ class ChangerStatutCompteAction
 
     /**
      * Réintègre comme expert-comptable un compte retiré par la société : le
-     * propriétaire seul.
+     * propriétaire seul, tant qu'il gère son équipe (pas dans une société
+     * révoquée, voir PorteeDesDroits::gereSonEquipe()) ; un compte au mot
+     * de passe provisoire, seulement s'il l'a créé et lui a donné ce
+     * provisoire (voir User::recoitDeNouveauxDroitsDe()).
      *
      * @throws AuthorizationException
      */
@@ -160,13 +169,12 @@ class ChangerStatutCompteAction
             $this->journalDesDroits->modifier($auteur, ActionAuditee::CompteReintegre, [$compte], Magasin::query()->where('societe_id', $societe->getKey())->get(), function (User $auteurRelu, array $relus): void {
                 [$compteRelu] = $relus;
 
-                if (! $auteurRelu->peutAgir() || ! $auteurRelu->estProprietaire() || (int) $compteRelu->societe_id !== (int) $auteurRelu->societe_id
-                    || ! $compteRelu->estRetire() || ! $compteRelu->estMembre() || (int) $compteRelu->statut_change_par === (int) $compteRelu->getKey()
-                    || ($compteRelu->doitChangerSonMotDePasse() && (int) $compteRelu->cree_par !== (int) $auteurRelu->getKey())) {
+                if (! $this->portee->gereSonEquipe($auteurRelu) || ! $auteurRelu->estProprietaire() || (int) $compteRelu->societe_id !== (int) $auteurRelu->societe_id
+                    || ! $compteRelu->estRetire() || ! $compteRelu->estMembre() || $compteRelu->estRetireParSonRefus() || ! $compteRelu->recoitDeNouveauxDroitsDe($auteurRelu)) {
                     throw new AuthorizationException(PorteeDesDroits::REFUS);
                 }
 
-                $compteRelu->forceFill(['role_societe' => RoleSociete::ExpertComptable, 'statut' => StatutCompte::Actif, 'statut_change_par' => $auteurRelu->getKey()])->save();
+                $compteRelu->forceFill(['role_societe' => RoleSociete::ExpertComptable, ...$compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu)])->save();
             });
         });
     }

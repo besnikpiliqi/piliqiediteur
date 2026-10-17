@@ -140,8 +140,7 @@ class AccepterUnRattachementAction
                 $compteRelu->forceFill([
                     'societe_id' => $societe->getKey(),
                     'role_societe' => $demandeRelue->role_societe,
-                    'statut' => StatutCompte::Actif,
-                    'statut_change_par' => $auteurRelu->getKey(),
+                    ...$compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu),
                     'email_verified_at' => now(),
                     ...($quittee === null ? [] : ['qualite_verifiee_le' => null]),
                 ])->save();

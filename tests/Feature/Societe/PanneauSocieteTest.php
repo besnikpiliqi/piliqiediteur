@@ -276,8 +276,9 @@ class PanneauSocieteTest extends TestCase
     /**
      * Une société révoquée (un usurpateur) garde son espace et son équipe
      * consultables, mais plus rien ne s'y gère, ni par l'écran ni par les
-     * actions : aucun compte créé, suspendu, nommé ou proposé, aucun
-     * administrateur ni expert-comptable, aucune propriété transmise.
+     * actions : aucun compte créé, suspendu, nommé, réintégré (comme
+     * membre ou comme expert-comptable) ou proposé, aucun administrateur ni
+     * expert-comptable, aucune propriété transmise.
      */
     public function test_une_societe_revoquee_ne_gere_plus_son_equipe(): void
     {
@@ -288,6 +289,10 @@ class PanneauSocieteTest extends TestCase
         $responsable = $this->responsable($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $administrateur = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $vendeurRetire = $this->membre($magasin, RoleMagasin::Vendeur);
+        $expertRetire = $this->expertComptable($magasin);
+        app(ChangerStatutCompteAction::class)->retirer($proprietaire, $vendeurRetire);
+        app(ChangerStatutCompteAction::class)->retirer($proprietaire, $expertRetire);
         $societe->forceFill(['statut' => StatutSociete::Revoquee])->save();
         app(TenantContext::class)->clear();
         $avant = User::query()->where('societe_id', $societe->id)->orderBy('id')->get(['id', 'role_societe', 'statut'])->toArray();
@@ -298,6 +303,8 @@ class PanneauSocieteTest extends TestCase
             fn () => app(CreerMembreAction::class)->handle($responsable, $societe, ['name' => 'Jean', 'email' => 'jean@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Vendeur]]),
             fn () => app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $vendeur),
             fn () => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, [$magasin->id => ['role' => RoleMagasin::Responsable]]),
+            fn () => app(ChangerStatutCompteAction::class)->reintegrer($proprietaire, $vendeurRetire, [$magasin->id => ['role' => RoleMagasin::Vendeur]]),
+            fn () => app(ChangerStatutCompteAction::class)->reintegrerCommeExpertComptable($proprietaire, $expertRetire),
             fn () => app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice', 'email' => 'alice@example.test'], self::MOT_DE_PASSE_PROVISOIRE, null, [], []),
             fn () => app(CreerExpertComptableAction::class)->handle($proprietaire, $societe, ['name' => 'Émile', 'email' => 'emile@example.test'], self::MOT_DE_PASSE_PROVISOIRE),
             fn () => app(ProposerUnRattachementAction::class)->handle($proprietaire, $societe, 'quelquun@example.test', RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur]]),

@@ -4,6 +4,7 @@ namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Tenancy\Actions\AnnulerUneNominationAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
@@ -149,6 +150,122 @@ class PorteeDesDroitsTest extends TestCase
     }
 
     /**
+     * Le mot de passe provisoire d'un compte créé par le propriétaire lui
+     * a été redonné par le responsable de son magasin, qui le connaît : le
+     * propriétaire, auteur du compte, ne lui ajoute plus de magasin ni ne
+     * le nomme responsable (le responsable en profiterait), jusqu'à ce que
+     * la personne choisisse son mot de passe, ou que le propriétaire lui
+     * redonne lui-même un provisoire.
+     */
+    public function test_un_provisoire_redonne_par_un_autre_que_l_auteur_du_compte_suspend_ses_nouveaux_droits(): void
+    {
+        Notification::fake();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Villeurbanne']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $responsable = $this->responsable($magasin);
+        $vendeur = app(CreerMembreAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Paul', 'email' => 'paul@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
+
+        app(DonnerUnMotDePasseProvisoireAction::class)->handle($responsable, $vendeur, 'connu-du-responsable');
+
+        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur->refresh(), [$autre->id => ['role' => RoleMagasin::Vendeur]]), AuthorizationException::class, PorteeDesDroits::REFUS);
+        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur->refresh(), [$magasin->id => ['role' => RoleMagasin::Responsable]]), AuthorizationException::class, PorteeDesDroits::REFUS);
+        $this->assertFalse(app(PorteeDesDroits::class)->candidatsResponsables($proprietaire, $magasin)->whereKey($vendeur->id)->exists());
+        $this->assertSame([[(int) $magasin->id, RoleMagasin::Vendeur]], Affectation::query()->where('user_id', $vendeur->id)->get()->map(fn (Affectation $affectation): array => [(int) $affectation->magasin_id, $affectation->role])->all());
+
+        app(DonnerUnMotDePasseProvisoireAction::class)->handle($proprietaire, $vendeur->refresh(), 'donne-par-le-proprietaire');
+        app(ModifierMembreAction::class)->handle($proprietaire, $vendeur->refresh(), [$autre->id => ['role' => RoleMagasin::Vendeur]]);
+
+        $this->assertSame(2, Affectation::query()->where('user_id', $vendeur->id)->count());
+    }
+
+    /**
+     * Un vendeur et un responsable suspendus par le propriétaire : ni le
+     * responsable du magasin, ni l'administrateur autorisé à nommer les
+     * responsables ne les retirent de la société, ni de leur dernier
+     * magasin, ni n'annulent la nomination qui les y a mis, ni ne leur
+     * proposent un rattachement. Retirés, ils seraient réintégrés par eux
+     * et leur suspension serait levée sans le propriétaire.
+     */
+    public function test_un_compte_suspendu_par_le_proprietaire_ne_se_retire_ni_ne_se_rattache_par_un_autre(): void
+    {
+        Notification::fake();
+        Mail::fake();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $responsableDuMagasin = $this->responsable($magasin);
+        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $nomme = $this->choisirSonMotDePasse(app(CreerMembreAction::class)->handle($administrateur, $magasin->societe, ['name' => 'Nina', 'email' => 'nina@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Responsable]]));
+        app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $vendeur);
+        app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $nomme);
+        $nomination = Affectation::query()->where('user_id', $nomme->id)->sole();
+
+        $gestes = [
+            fn () => app(ChangerStatutCompteAction::class)->retirer($responsableDuMagasin, $vendeur),
+            fn () => app(ModifierMembreAction::class)->handle($responsableDuMagasin, $vendeur, [$magasin->id => null]),
+            fn () => app(ChangerStatutCompteAction::class)->retirer($administrateur, $nomme),
+            fn () => app(ModifierMembreAction::class)->handle($administrateur, $nomme, [$magasin->id => null]),
+            fn () => app(AnnulerUneNominationAction::class)->handle($administrateur, $nomination),
+        ];
+        foreach ($gestes as $geste) {
+            $this->assertThrows($geste, AuthorizationException::class, PorteeDesDroits::REFUS);
+        }
+        app(ProposerUnRattachementAction::class)->handle($responsableDuMagasin, $magasin->societe, $vendeur->email, RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
+        app(ProposerUnRattachementAction::class)->handle($administrateur, $magasin->societe, $nomme->email, RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Responsable]]);
+
+        foreach ([$vendeur, $nomme] as $compte) {
+            $this->assertSame(StatutCompte::Suspendu, $compte->refresh()->statut);
+            $this->assertSame(1, Affectation::query()->where('user_id', $compte->id)->count());
+        }
+        $this->assertSame(0, DemandeRattachement::withoutGlobalScopes()->count());
+        Mail::assertNothingOutgoing();
+
+        app(AnnulerUneNominationAction::class)->handle($proprietaire, $nomination);
+        $this->assertSame(StatutCompte::Retire, $nomme->refresh()->statut);
+    }
+
+    /**
+     * Le propriétaire suspend un vendeur, en retire un autre, puis
+     * transmet la propriété à un administrateur : ses décisions tiennent.
+     * Ni le responsable du magasin ni l'ancien propriétaire ne les lèvent ;
+     * le nouveau propriétaire, si.
+     */
+    public function test_les_decisions_du_proprietaire_tiennent_apres_la_transmission_de_la_propriete(): void
+    {
+        Notification::fake();
+        Mail::fake();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $responsable = $this->responsable($magasin);
+        $successeur = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $suspendu = $this->membre($magasin, RoleMagasin::Vendeur);
+        $retire = $this->membre($magasin, RoleMagasin::Vendeur);
+        app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $suspendu);
+        app(ChangerStatutCompteAction::class)->retirer($proprietaire, $retire);
+
+        app(TransfererProprieteAction::class)->handle($proprietaire, $successeur, 'password');
+
+        $gestes = [
+            fn () => app(ChangerStatutCompteAction::class)->reactiver($responsable, $suspendu->refresh()),
+            fn () => app(ChangerStatutCompteAction::class)->retirer($responsable, $suspendu->refresh()),
+            fn () => app(ChangerStatutCompteAction::class)->reintegrer($responsable, $retire->refresh(), [$magasin->id => ['role' => RoleMagasin::Vendeur]]),
+            fn () => app(ChangerStatutCompteAction::class)->reactiver($proprietaire->refresh(), $suspendu->refresh()),
+        ];
+        foreach ($gestes as $geste) {
+            $this->assertThrows($geste, AuthorizationException::class, PorteeDesDroits::REFUS);
+        }
+        app(ProposerUnRattachementAction::class)->handle($responsable, $magasin->societe, $retire->email, RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
+        $this->assertSame([StatutCompte::Suspendu, StatutCompte::Retire], [$suspendu->refresh()->statut, $retire->refresh()->statut]);
+        $this->assertSame(0, DemandeRattachement::withoutGlobalScopes()->count());
+
+        app(ChangerStatutCompteAction::class)->reactiver($successeur->refresh(), $suspendu);
+        app(ChangerStatutCompteAction::class)->reintegrer($successeur, $retire, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
+
+        $this->assertSame([StatutCompte::Actif, StatutCompte::Actif], [$suspendu->refresh()->statut, $retire->refresh()->statut]);
+    }
+
+    /**
      * Chaque case des matrices A à J (avenant A4, 2.3), compléments de
      * l'éditeur compris : plusieurs experts-comptables par société, seul
      * le propriétaire affecte une même personne à plusieurs magasins, un
@@ -183,6 +300,8 @@ class PorteeDesDroitsTest extends TestCase
             ['B', 'suspendre', 'responsable de M', ['P' => true, 'A+' => false, 'A+ hors de M' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
             ['B', 'réactiver', 'responsable de M suspendu', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => false, 'V' => false, 'E' => false]],
             ['B', 'retirer de la société', 'responsable de M', ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
+            ['B', 'retirer de la société', 'responsable de M suspendu', ['P' => true, 'A+' => false]],
+            ['B', 'retirer M', 'responsable de M suspendu', ['P' => true, 'A+' => false]],
             ['B', 'renvoyer un lien', 'responsable de M', ['P' => true, 'A+' => true, 'A+ hors de M' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
             ['B', 'redonner un provisoire', 'responsable de M au provisoire', ['P' => true, 'A+' => false, 'A+ hors de M' => false, 'A-' => false, 'R(M)' => false, 'R(N)' => false, 'V' => false, 'E' => false]],
 
@@ -195,6 +314,10 @@ class PorteeDesDroitsTest extends TestCase
             ['C', 'réactiver', 'vendeur de M suspendu par R(M)', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],
             ['C', 'réactiver', 'vendeur de M suspendu par le propriétaire', ['P' => true, 'R(M)' => false]],
             ['C', 'retirer de la société', 'vendeur de M', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],
+            ['C', 'retirer de la société', 'vendeur de M suspendu par R(M)', ['P' => true, 'R(M)' => true]],
+            ['C', 'retirer de la société', 'vendeur de M suspendu par le propriétaire', ['P' => true, 'R(M)' => false]],
+            ['C', 'retirer M', 'vendeur de M suspendu par le propriétaire', ['P' => true, 'R(M)' => false]],
+            ['C', 'renvoyer un lien', 'vendeur de M suspendu par le propriétaire', ['P' => true, 'R(M)' => true]],
             ['C', 'renvoyer un lien', 'vendeur de M', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],
             ['C', 'redonner un provisoire', 'vendeur de M au provisoire', ['P' => true, 'A+' => false, 'A-' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],
 
@@ -231,6 +354,9 @@ class PorteeDesDroitsTest extends TestCase
             ['H', 'nommer administrateur', 'ancien vendeur retiré par R(M)', ['P' => true, 'A+' => false, 'R(M)' => false]],
             ['H', 'réintégrer comme vendeur de M', 'ancien vendeur retiré par le propriétaire', ['P' => true, 'R(M)' => false]],
             ['H', 'réintégrer comme responsable de M', 'ancien vendeur retiré par le propriétaire', ['P' => true, 'A+' => false]],
+            ['H', 'proposer un rattachement comme vendeur de M', 'ancien vendeur retiré par R(M)', ['P' => true, 'R(M)' => true]],
+            ['H', 'proposer un rattachement comme vendeur de M', 'ancien vendeur retiré par le propriétaire', ['P' => true, 'R(M)' => false]],
+            ['H', 'proposer un rattachement comme responsable de M', 'ancien vendeur retiré par le propriétaire', ['P' => true, 'A+' => false]],
             ['H', 'réintégrer comme vendeur de M', 'compte refusé', ['P' => false, 'R(M)' => false]],
             ['H', 'réintégrer comme responsable de M', 'compte refusé', ['P' => false, 'A+' => false]],
             ['H', 'proposer un rattachement comme vendeur de M', 'compte refusé', ['P' => true, 'A+' => false, 'R(M)' => true, 'R(N)' => false, 'V' => false, 'E' => false]],

@@ -56,6 +56,7 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Mail\Markdown;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
@@ -131,6 +132,21 @@ class AppServiceProvider extends ServiceProvider
         $this->garderLesChoixDuPanneauSociete();
         $this->nommerLesChampsDansLesMessages();
         $this->ecrireLesDatesEnFrancaisDansLesMessages();
+        $this->neJamaisMettreEnFormeLesTextesDesEmails();
+    }
+
+    /**
+     * Un texte qu'une personne a saisi (une raison sociale, un nom, un nom
+     * de magasin) et qu'un gabarit Markdown d'e-mail affiche par {{ }}
+     * arrive tel qu'il a été écrit : jamais un lien cliquable, une image ou
+     * une balise, envoyés depuis le domaine de l'éditeur, qui mèneraient
+     * ailleurs que ce qu'ils annoncent (« [Votre compte est bloqué](...) »
+     * dans une raison sociale). {{ }} n'échappe que le HTML ; Laravel
+     * échappe alors aussi les crochets du Markdown.
+     */
+    private function neJamaisMettreEnFormeLesTextesDesEmails(): void
+    {
+        Markdown::withSecuredEncoding();
     }
 
     /**

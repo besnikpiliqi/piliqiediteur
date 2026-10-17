@@ -22,6 +22,7 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\DemandeRattachement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Auth\PageDuLien;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
@@ -37,6 +38,7 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
+use LogicException;
 use Tests\TestCase;
 
 /**
@@ -155,6 +157,63 @@ class RattachementTest extends TestCase
      * suspendu entre-temps, ou un magasin sorti de sa portée, ne rattache
      * plus personne.
      */
+    /**
+     * Une société ne fait pas de PILIQI un relais d'envoi vers les comptes
+     * d'une autre : chaque proposition compte au débit des e-mails de son
+     * auteur, qu'un e-mail parte ou non, et la limite atteinte se dit de la
+     * même façon pour toute adresse, sans rien écrire ni envoyer ; elle se
+     * lève au bout d'une heure.
+     */
+    public function test_un_auteur_propose_au_plus_60_rattachements_par_heure_quelle_que_soit_l_adresse(): void
+    {
+        $this->travelTo('2026-10-15 10:00:00');
+        $this->compteRetireDUneAutreSociete('paul@example.test');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Nouvelle Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+
+        foreach (range(1, DebitDesEmails::PAR_HEURE_ET_PAR_PERSONNE) as $numero) {
+            $this->proposerCommeVendeur($proprietaire, $magasin, "inconnu{$numero}@example.test");
+        }
+
+        $this->assertThrows(fn () => $this->proposerCommeVendeur($proprietaire, $magasin, 'paul@example.test'), LogicException::class, 'Trop d\'e-mails envoyés en une heure : réessayez dans 60 minute(s).');
+        $this->assertSame(0, DemandeRattachement::withoutGlobalScopes()->count());
+        Mail::assertNothingOutgoing();
+
+        $this->travelTo('2026-10-15 11:00:01');
+        $this->proposerCommeVendeur($proprietaire, $magasin, 'paul@example.test');
+
+        Mail::assertSent(PropositionDeRattachementMail::class, 1);
+    }
+
+    /**
+     * Une raison sociale ou un nom écrits en Markdown arrivent tels quels
+     * dans les e-mails de rattachement : jamais un lien cliquable, envoyé
+     * depuis le domaine de l'éditeur, qui mènerait ailleurs que ce qu'il
+     * annonce.
+     */
+    public function test_les_noms_affiches_par_les_e_mails_de_rattachement_ne_sont_jamais_mis_en_forme(): void
+    {
+        $ailleurs = $this->ouvrirUneSociete(['nom' => 'Ailleurs']);
+        $this->membre($ailleurs, RoleMagasin::Vendeur, null, ['email' => 'actif@example.test']);
+        $this->compteRetire($ailleurs, 'retire@example.test');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Nouvelle Boutique']);
+        $magasin->societe->forceFill(['raison_sociale' => 'ACME [Votre compte est bloqué](https://pirate.example/connexion)'])->save();
+        $proprietaire = tap($this->proprietaireDe($magasin)->forceFill(['name' => 'Paul [Confirmez votre identité](https://pirate.example/identite)']))->save();
+
+        $this->proposerCommeVendeur($proprietaire, $magasin, 'actif@example.test');
+        $this->proposerCommeVendeur($proprietaire, $magasin, 'retire@example.test');
+
+        $rendus = [
+            Mail::sent(RattachementImpossibleMail::class)->sole()->render(),
+            Mail::sent(PropositionDeRattachementMail::class)->sole()->render(),
+        ];
+        foreach ($rendus as $html) {
+            $this->assertStringNotContainsString('href="https://pirate.example', $html);
+            $this->assertStringContainsString('ACME [Votre compte est bloqué](https://pirate.example/connexion)', $html);
+        }
+        $this->assertStringContainsString('Paul [Confirmez votre identité](https://pirate.example/identite)', $rendus[1]);
+    }
+
     public function test_l_acceptation_reverifie_l_auteur_et_les_magasins(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Nouvelle Boutique']);
@@ -428,7 +487,7 @@ class RattachementTest extends TestCase
         $this->assertThrows(fn () => $proposer(RoleSociete::Membre, [$autre->id => ['role' => RoleMagasin::Vendeur]]), AuthorizationException::class);
         $this->assertThrows(fn () => $proposer(RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur], $autre->id => ['role' => RoleMagasin::Vendeur]]), AuthorizationException::class);
         $this->assertThrows(fn () => $proposer(RoleSociete::ExpertComptable, []), AuthorizationException::class);
-        $this->assertThrows(fn () => $proposer(RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => ['autorisation.inventee']]]), \LogicException::class);
+        $this->assertThrows(fn () => $proposer(RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => ['autorisation.inventee']]]), LogicException::class);
         $this->assertSame(0, DemandeRattachement::withoutGlobalScopes()->count());
 
         $proposer(RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Observateur]]);

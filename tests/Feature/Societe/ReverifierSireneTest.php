@@ -2,6 +2,9 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
@@ -16,6 +19,7 @@ use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
+use App\Domain\Tenancy\Services\ReverificationSirene;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
@@ -85,6 +89,29 @@ class ReverifierSireneTest extends TestCase
             $entree->nouvelles_valeurs,
         );
         $this->assertSame(array_fill_keys(array_keys($entree->nouvelles_valeurs), null), $entree->anciennes_valeurs);
+    }
+
+    /**
+     * Le propriétaire connecté demande la reprise par le bouton
+     * « Revérifier » : le n° de TVA qu'elle complète s'inscrit au journal
+     * des événements de son magasin au nom du système, comme au journal
+     * d'audit, jamais au sien.
+     */
+    public function test_la_reprise_demandee_par_le_proprietaire_connecte_s_inscrit_au_nom_du_systeme(): void
+    {
+        $societe = $this->societeInscritePendantUnePanne();
+        $this->actingAs($societe->proprietaire);
+        $magasin = $societe->magasinsReels()->sole();
+
+        app(ReverificationSirene::class)->reprendre($societe, false);
+
+        $evenement = app(TenantContext::class)->runAs($magasin, fn (): EnregistrementFiscal => EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', (string) CodeEvenement::ParametreDeConformite->value)
+            ->sole());
+        $this->assertSame(['numero_tva', $societe->fresh()->numero_tva], [$evenement->contenuSigne()['donnees']['details']['parametre'], $evenement->contenuSigne()['donnees']['details']['nouvelle_valeur']]);
+        $this->assertNull($evenement->operateur_id);
+        $this->assertNull($evenement->contenuSigne()['operateur']);
     }
 
     /**

@@ -108,7 +108,6 @@ class ActionsHorsEcranTest extends TestCase
         PorteeDesDroits::REFUS,
         PorteeDesDroits::REFUS_AU_DELA,
         PorteeDesDroits::REFUS_PLUSIEURS_MAGASINS,
-        PorteeDesDroits::REFUS_PROVISOIRE,
         CreerAdministrateurAction::MESSAGE_PROPRIETAIRE_SEUL,
         CreerExpertComptableAction::MESSAGE_PROPRIETAIRE_SEUL,
         CreerEtablissementAction::MESSAGE_SANS_AUTORISATION,

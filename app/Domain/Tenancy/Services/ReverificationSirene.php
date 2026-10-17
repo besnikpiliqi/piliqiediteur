@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tenancy\Services;
 
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Actions\RefuserLaSocieteAction;
 use App\Domain\Tenancy\Actions\ValiderLaSocieteAction;
@@ -48,7 +49,9 @@ use Illuminate\Support\Facades\Log;
  *
  * Ce qui s'écrit sur la société (identité complétée, catégorie lue, refus)
  * s'inscrit à son journal d'audit, le système pour auteur, avec les
- * anciennes et les nouvelles valeurs.
+ * anciennes et les nouvelles valeurs ; les journaux des événements de ses
+ * magasins l'inscrivent aussi au nom du système (voir OperateurCourant),
+ * même quand le propriétaire l'a demandé par le bouton « Revérifier ».
  */
 class ReverificationSirene
 {
@@ -59,32 +62,35 @@ class ReverificationSirene
         private readonly AlerteEditeur $alerteEditeur,
         private readonly ValiderLaSocieteAction $validerLaSociete,
         private readonly RefuserLaSocieteAction $refuserLaSociete,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     public function reprendre(Societe $societe, bool $toutes): void
     {
-        app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $toutes): void {
-            $toutes = $toutes && $societe->estValidee();
+        $this->operateur->pendantLeSysteme(function () use ($societe, $toutes): void {
+            app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $toutes): void {
+                $toutes = $toutes && $societe->estValidee();
 
-            if ($toutes || self::dernierResultat($societe, null) === ResultatVerification::Indisponible) {
-                $this->reverifierLEntreprise($societe);
+                if ($toutes || self::dernierResultat($societe, null) === ResultatVerification::Indisponible) {
+                    $this->reverifierLEntreprise($societe);
+                }
+
+                $societe->magasinsReels()
+                    ->where('statut', StatutMagasin::Actif)
+                    ->orderBy('id')
+                    ->each(function (Magasin $magasin) use ($societe, $toutes): void {
+                        if ($toutes || ($magasin->etablissement_verifie_le === null && self::dernierResultat($societe, $magasin) === ResultatVerification::Indisponible)) {
+                            $this->reverifierLEtablissement($magasin);
+                        }
+                    });
+            });
+
+            $societe = $societe->fresh();
+
+            if (! $societe->estValidee() && ! $societe->estRefusee()) {
+                $this->validerLaSociete->siPossible($societe);
             }
-
-            $societe->magasinsReels()
-                ->where('statut', StatutMagasin::Actif)
-                ->orderBy('id')
-                ->each(function (Magasin $magasin) use ($societe, $toutes): void {
-                    if ($toutes || ($magasin->etablissement_verifie_le === null && self::dernierResultat($societe, $magasin) === ResultatVerification::Indisponible)) {
-                        $this->reverifierLEtablissement($magasin);
-                    }
-                });
         });
-
-        $societe = $societe->fresh();
-
-        if (! $societe->estValidee() && ! $societe->estRefusee()) {
-            $this->validerLaSociete->siPossible($societe);
-        }
     }
 
     /**

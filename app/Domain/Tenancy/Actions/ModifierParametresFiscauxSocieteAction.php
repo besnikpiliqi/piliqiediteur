@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RegimeTva;
@@ -33,7 +34,9 @@ use LogicException;
  * attend le changement de régime, ou le précède, et lit le régime
  * d'après (voir EmettreFactureAction). Si l'un des registres ne peut pas
  * l'inscrire, rien n'est enregistré, dans aucun magasin. Ce qui change
- * s'inscrit aussi au journal d'audit.
+ * s'inscrit aussi au journal d'audit. Le journal des événements l'inscrit
+ * au nom de l'auteur relu (voir OperateurCourant), jamais de la personne
+ * connectée à sa place.
  */
 class ModifierParametresFiscauxSocieteAction
 {
@@ -42,6 +45,7 @@ class ModifierParametresFiscauxSocieteAction
     public function __construct(
         private readonly RegistreFiscal $registre,
         private readonly JournalAudit $journalAudit,
+        private readonly OperateurCourant $operateur,
     ) {}
 
     /**
@@ -67,7 +71,7 @@ class ModifierParametresFiscauxSocieteAction
                 'mois_fin_exercice' => ['sometimes', 'required', 'integer', 'between:1,12'],
             ], attributes: ['regime_tva' => 'régime de TVA', 'mois_fin_exercice' => 'mois de fin d\'exercice'])->validate();
 
-            return $this->registre->sousVerrouDesMagasins($societe->magasins()->orderBy('id')->get(), function () use ($auteur, $societe, $valides): Societe {
+            return $this->operateur->pendant($auteur, fn (): Societe => $this->registre->sousVerrouDesMagasins($societe->magasins()->orderBy('id')->get(), function () use ($auteur, $societe, $valides): Societe {
                 $enregistree = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
                 $avant = self::valeursAuditees($enregistree);
 
@@ -76,7 +80,7 @@ class ModifierParametresFiscauxSocieteAction
                 $this->journalAudit->inscrireLesChangements(ActionAuditee::ParametresFiscauxModifies, $auteur, null, $avant, self::valeursAuditees($enregistree), $enregistree);
 
                 return $enregistree;
-            });
+            }));
         });
     }
 

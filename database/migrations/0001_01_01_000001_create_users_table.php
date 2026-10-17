@@ -38,9 +38,17 @@ return new class extends Migration
             $table->string('role_societe', 20)->default('membre');
             $table->string('statut', 20)->default('actif');
             // Qui a donné au compte son statut actuel (voir
-            // ChangerStatutCompteAction) : un compte suspendu ou retiré par
-            // le propriétaire ne se réintègre que par lui.
+            // User::nouveauStatut()) : lui-même pour un refus de son compte
+            // ou la création de sa propre société.
             $table->unsignedBigInteger('statut_change_par')->nullable();
+            // Ce statut a-t-il été décidé par le propriétaire de la
+            // société, au moment même du geste ? Un compte suspendu ou
+            // retiré par lui ne se réactive ni ne se réintègre que par le
+            // propriétaire, et un compte qu'il a suspendu ne se retire de
+            // la société que par le propriétaire (voir PorteeDesDroits) :
+            // la décision tient même quand son auteur transmet ensuite la
+            // propriété, et ne le devient jamais après coup.
+            $table->boolean('statut_decide_par_le_proprietaire')->default(false);
             $table->string('name');
             // En minuscules, sans espaces autour (voir
             // User::normaliserEmail()) : unique dans tout le logiciel.
@@ -68,6 +76,14 @@ return new class extends Migration
             // mot de passe est un provisoire ; nul pour le propriétaire
             // inscrit par son lien ; il ne change plus ensuite.
             $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
+            // Qui a donné au compte son mot de passe provisoire actuel, et
+            // le connaît donc : son auteur à la création, puis qui le lui a
+            // redonné (voir DonnerUnMotDePasseProvisoireAction) ; nul dès
+            // que la personne a choisi son mot de passe. Tant que le mot de
+            // passe est ce provisoire, le compte ne reçoit de nouveaux
+            // droits que de la personne qui l'a créé, et seulement si c'est
+            // elle qui le lui a donné (voir User::recoitDeNouveauxDroitsDe()).
+            $table->foreignId('provisoire_donne_par')->nullable()->constrained('users')->restrictOnDelete();
             // La nouvelle adresse de connexion demandée dans le profil, en
             // attente de la confirmation du lien envoyé à cette adresse
             // (24 heures) : SHA-256 du jeton du lien, jamais le jeton.

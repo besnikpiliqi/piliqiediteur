@@ -63,6 +63,7 @@ class ChoisirSonMotDePasseParLeLienAction
                 'password' => $nouveauMotDePasse,
                 'mot_de_passe_a_changer' => false,
                 'mot_de_passe_provisoire_expire_le' => null,
+                'provisoire_donne_par' => null,
                 'email_verified_at' => now(),
             ])->save();
             $this->sessions->fermer($relu);

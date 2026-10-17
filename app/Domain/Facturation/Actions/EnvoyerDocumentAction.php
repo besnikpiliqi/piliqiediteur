@@ -14,11 +14,11 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Validator;
 use InvalidArgumentException;
 use LogicException;
@@ -33,9 +33,9 @@ use LogicException;
  *
  * Tous les magasins envoient depuis le domaine de l'éditeur : les envois
  * demandés par un membre sont limités, par heure, pour lui et pour son
- * magasin, afin qu'aucun compte ne puisse en faire un relais d'envoi en
- * masse. Les relances automatiques, déjà bornées par les délais du
- * magasin, n'y sont pas soumises.
+ * magasin (voir DebitDesEmails), afin qu'aucun compte ne puisse en faire
+ * un relais d'envoi en masse. Les relances automatiques, déjà bornées par
+ * les délais du magasin, n'y sont pas soumises.
  *
  * Un magasin qui ne peut pas vendre n'écrit pas à ses clients (voir
  * Magasin::verifierQuIlPeutEcrireAuxClients()) : ni envoi ni relance tant
@@ -59,13 +59,10 @@ use LogicException;
  */
 class EnvoyerDocumentAction
 {
-    public const ENVOIS_PAR_HEURE_ET_PAR_MEMBRE = 60;
-
-    public const ENVOIS_PAR_HEURE_ET_PAR_MAGASIN = 200;
-
     public function __construct(
         private readonly EmettreDevisAction $emettreDevis,
         private readonly LecteurDesDroits $lecteur,
+        private readonly DebitDesEmails $debit,
     ) {}
 
     /**
@@ -237,41 +234,20 @@ class EnvoyerDocumentAction
      */
     private function verifierLeDebit(Model&DocumentEnvoyable $document, ?User $expediteur): void
     {
-        if ($expediteur === null) {
-            return;
-        }
-
-        foreach ($this->compteursDeDebit($document->magasin_id, $expediteur) as $cle => $maximum) {
-            if (RateLimiter::tooManyAttempts($cle, $maximum)) {
-                $minutes = (int) ceil(RateLimiter::availableIn($cle) / 60);
-
-                throw new LogicException("Trop d'e-mails envoyés en une heure : réessayez dans {$minutes} minute(s).");
-            }
+        if ($expediteur !== null) {
+            $this->debit->verifier($expediteur, (int) $document->magasin_id);
         }
     }
 
     private function programmer(EnvoiDocument $envoi, ?User $expediteur): EnvoiDocument
     {
         if ($expediteur !== null) {
-            foreach (array_keys($this->compteursDeDebit($envoi->magasin_id, $expediteur)) as $cle) {
-                RateLimiter::hit($cle, 3600);
-            }
+            $this->debit->compter($expediteur, (int) $envoi->magasin_id);
         }
 
         EnvoyerDocumentJob::dispatch($envoi->magasin_id, $envoi->id)->afterCommit();
 
         return $envoi;
-    }
-
-    /**
-     * @return array<string, int> le maximum d'envois par heure de chaque compteur
-     */
-    private function compteursDeDebit(int $magasinId, User $expediteur): array
-    {
-        return [
-            "envois-documents:membre:{$expediteur->getKey()}" => self::ENVOIS_PAR_HEURE_ET_PAR_MEMBRE,
-            "envois-documents:magasin:{$magasinId}" => self::ENVOIS_PAR_HEURE_ET_PAR_MAGASIN,
-        ];
     }
 
     /**

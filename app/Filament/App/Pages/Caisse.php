@@ -425,7 +425,8 @@ class Caisse extends Page implements HasForms
 
     /**
      * « Retour d'un ticket » ouvre la recherche par numéro de « Nouvel
-     * avoir » (voir AvoirResource), à qui peut créer un avoir ; la vente en
+     * avoir » (voir AvoirResource), à qui peut l'ouvrir et y retrouver ses
+     * tickets (voir AvoirResource::peutOuvrirLaRecherche()) ; la vente en
      * cours reste dans son panier, et la caisse la reprend à son retour.
      */
     protected function getHeaderActions(): array
@@ -435,7 +436,7 @@ class Caisse extends Page implements HasForms
                 ->label('Retour d\'un ticket')
                 ->icon('heroicon-o-receipt-refund')
                 ->color('gray')
-                ->visible(fn (): bool => auth()->user()->can(PermissionRegistry::AVOIR_CREER))
+                ->visible(fn (): bool => AvoirResource::peutOuvrirLaRecherche())
                 ->url(fn (): string => AvoirResource::getUrl('create')),
             Actions\Action::make('abandonnerLaVente')
                 ->label('Abandonner la vente')

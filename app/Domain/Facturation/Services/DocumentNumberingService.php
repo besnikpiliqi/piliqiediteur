@@ -46,6 +46,31 @@ use Illuminate\Support\Facades\DB;
  */
 class DocumentNumberingService
 {
+    /**
+     * Le nombre de chiffres, au moins, du rang d'un numéro : 000001 dans
+     * FAC-LYON1-2026-000001.
+     */
+    public const CHIFFRES_DU_RANG = 6;
+
+    /**
+     * Le numéro de document que désigne une saisie : sans espace autour, en
+     * majuscules, comme tout numéro s'écrit (le code du type, celui du
+     * magasin, voir CodeMagasin, l'année et le rang), et le rang complété
+     * par des zéros à gauche, comme suivant() l'écrit : « tk-lyon1-2026-12 »
+     * désigne TK-LYON1-2026-000012. Une saisie d'une autre forme reste telle
+     * quelle, en majuscules.
+     */
+    public static function numeroSaisi(string $saisie): string
+    {
+        $numero = mb_strtoupper(trim($saisie));
+
+        if (preg_match('/^([A-Z]+-[A-Z0-9]+-\d{4}-)(\d+)$/', $numero, $segments) !== 1) {
+            return $numero;
+        }
+
+        return $segments[1].str_pad(ltrim($segments[2], '0'), self::CHIFFRES_DU_RANG, '0', STR_PAD_LEFT);
+    }
+
     public function suivant(Magasin $magasin, TypeDocument $type, string $periodKey = ''): string
     {
         return DB::transaction(function () use ($magasin, $type, $periodKey) {
@@ -81,7 +106,7 @@ class DocumentNumberingService
         SequenceDocument::query()->createOrFirst($critere, [
             'prefixe' => $this->prefixe($magasin, $type, $periodKey),
             'prochain_numero' => 1,
-            'rembourrage' => 6,
+            'rembourrage' => self::CHIFFRES_DU_RANG,
         ]);
 
         // Re-sélection OBLIGATOIRE avec verrou : createOrFirst() ne pose

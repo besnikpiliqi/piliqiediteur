@@ -62,6 +62,32 @@ class DocumentNumberingServiceTest extends TestCase
     }
 
     /**
+     * @return array<string, array{string, string}>
+     */
+    public static function saisiesDeNumeros(): array
+    {
+        return [
+            'en minuscules, sans les zéros du rang' => ['tk-lyon1-2026-12', 'TK-LYON1-2026-000012'],
+            'complet, avec des espaces autour' => ['  fac-lyon1-2026-000012 ', 'FAC-LYON1-2026-000012'],
+            'avec un zéro de tête de trop' => ['FAC-LYON1-2026-0000012', 'FAC-LYON1-2026-000012'],
+            'au-delà du rang 999999' => ['fac-lyon1-2026-1000000', 'FAC-LYON1-2026-1000000'],
+            'un code de magasin en chiffres' => ['av-75011-2026-3', 'AV-75011-2026-000003'],
+            'autre chose qu\'un numéro de document' => [' Jeanne Sansachat ', 'JEANNE SANSACHAT'],
+        ];
+    }
+
+    /**
+     * Une saisie désigne le numéro tel que suivant() l'écrit : en
+     * majuscules, sans espace autour, le rang sur six chiffres au moins ;
+     * une saisie d'une autre forme reste telle quelle, en majuscules.
+     */
+    #[DataProvider('saisiesDeNumeros')]
+    public function test_une_saisie_designe_le_numero_tel_qu_il_s_ecrit(string $saisie, string $numero): void
+    {
+        $this->assertSame($numero, DocumentNumberingService::numeroSaisi($saisie));
+    }
+
+    /**
      * Une référence de produit n'est pas un numéro de document : ni code
      * de magasin ni année.
      */

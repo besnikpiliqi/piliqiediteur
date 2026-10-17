@@ -50,7 +50,8 @@ class ViewFacture extends ViewRecord
      * part de ce ticket ou de cette facture (voir CreateAvoir::afterFill()),
      * où d'autres documents du même client peuvent s'ajouter. Le bouton
      * apparaît comme l'action « Avoir » de la liste des factures (voir
-     * AvoirResource::peutCrediter()).
+     * AvoirResource::peutCrediter()), et seulement pour qui peut ouvrir
+     * cette page (voir AvoirResource::peutOuvrirLaRecherche()).
      */
     private function faireUnAvoir(): Actions\Action
     {
@@ -58,7 +59,7 @@ class ViewFacture extends ViewRecord
             ->label('Avoir')
             ->icon('heroicon-o-receipt-refund')
             ->color('danger')
-            ->visible(fn (Facture $record): bool => AvoirResource::peutCrediter($record))
+            ->visible(fn (Facture $record): bool => AvoirResource::peutCrediter($record) && AvoirResource::peutOuvrirLaRecherche())
             ->url(fn (Facture $record): string => AvoirResource::getUrl('create', ['document' => $record->numero]));
     }
 

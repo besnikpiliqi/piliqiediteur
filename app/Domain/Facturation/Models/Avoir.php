@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\ItemNotFoundException;
 
 /**
  * Rattaché à un CLIENT, jamais à une seule facture : un avoir peut
@@ -129,15 +130,29 @@ class Avoir extends Model implements DocumentEnvoyable
      * Le client tel que l'a figé le document qu'il corrige, et non la fiche
      * du client le jour de l'avoir : il corrige des documents d'un même
      * client, tous du même type (voir CreerAvoirAction), dont il prend déjà
-     * le type, et s'adresse à celui à qui ils ont été émis. S'il en corrige
-     * plusieurs, il prend la copie du plus récent.
+     * le type, et s'adresse à celui à qui ils ont été émis (voir
+     * documentQuiDonneLeClient()).
      */
     protected function clientAFiger(): CopieClient
     {
-        return $this->facturesConcernees()
+        return self::documentQuiDonneLeClient($this->facturesConcernees())->copieClient();
+    }
+
+    /**
+     * Parmi les documents qu'un avoir corrige, celui dont il prend la copie
+     * du client : le plus récent (date d'émission, puis identifiant). Le
+     * client annoncé avant l'émission, sur l'écran « Nouvel avoir » (voir
+     * AvoirResource), se lit sur le même document.
+     *
+     * @param  iterable<array-key, Facture>  $documents  au moins un
+     *
+     * @throws ItemNotFoundException sans aucun document
+     */
+    public static function documentQuiDonneLeClient(iterable $documents): Facture
+    {
+        return collect($documents)
             ->sortBy([['date_emission', 'desc'], ['id', 'desc']])
-            ->firstOrFail()
-            ->copieClient();
+            ->firstOrFail();
     }
 
     /**

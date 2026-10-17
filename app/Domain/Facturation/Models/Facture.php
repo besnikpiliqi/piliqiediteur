@@ -28,6 +28,7 @@ use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\CopieClient;
+use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -291,15 +292,15 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Le ticket ou la facture de ce numéro, saisi en majuscules ou en
-     * minuscules, avec ou sans espaces autour : un numéro s'écrit toujours
-     * en majuscules (le code du type, celui du magasin, voir CodeMagasin,
-     * l'année et la séquence, voir DocumentNumberingService), et se cherche
-     * donc tel quel en majuscules, dans le magasin actif (MagasinScope).
+     * Le ticket ou la facture de ce numéro, dans le magasin actif
+     * (MagasinScope), saisi en majuscules ou en minuscules, avec ou sans
+     * espaces autour ni les zéros de tête de son rang : « tk-lyon1-2026-12 »
+     * trouve TK-LYON1-2026-000012 (voir
+     * DocumentNumberingService::numeroSaisi()).
      */
     public function scopeDeNumero(Builder $query, string $numero): Builder
     {
-        return $query->where($query->qualifyColumn('numero'), mb_strtoupper(trim($numero)));
+        return $query->where($query->qualifyColumn('numero'), DocumentNumberingService::numeroSaisi($numero));
     }
 
     /**

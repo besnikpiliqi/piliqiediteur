@@ -33,6 +33,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -41,24 +42,27 @@ use InvalidArgumentException;
 /**
  * Un avoir part toujours du numéro d'un ticket ou d'une facture, jamais du
  * client (point 2 de la série 8) : « N° du ticket ou de la facture »
- * cherche, sans tenir compte des majuscules, parmi les documents émis du
- * magasin actif que la personne voit (un vendeur ne retrouve que ses
- * ventes) et qui ont encore une ligne à créditer ; le client s'affiche
- * ensuite d'après le document, tel qu'il l'a figé à son émission, avec les
- * lignes encore à rendre. D'autres tickets ou factures du même client s'y
- * ajoutent, s'ils peuvent entrer dans le même avoir (voir
- * CreerAvoirAction::incompatibilite()). Le client envoyé à l'émission est
- * celui du premier document, relu par le serveur (voir
- * clientDuPremierDocument()), jamais une valeur venue du navigateur.
+ * cherche, sans tenir compte des majuscules ni des zéros de tête du rang
+ * (voir Facture::scopeDeNumero()), parmi les documents émis du magasin
+ * actif que la personne voit (un vendeur ne retrouve que ses ventes) et qui
+ * ont encore une ligne à créditer ; le client s'affiche ensuite d'après le
+ * document, tel qu'il l'a figé à son émission, avec les lignes encore à
+ * rendre. D'autres tickets ou factures du même client s'y ajoutent, s'ils
+ * peuvent entrer dans le même avoir (voir
+ * CreerAvoirAction::incompatibilite()) ; le client affiché est alors celui
+ * que l'avoir figera (voir Avoir::documentQuiDonneLeClient()). Le client
+ * envoyé à l'émission est celui du premier document, relu par le serveur
+ * (voir clientDuPremierDocument()), jamais une valeur venue du navigateur.
  *
  * La même recherche s'ouvre depuis « Nouvel avoir », depuis la fiche d'un
  * ticket ou d'une facture, déjà lancée sur son numéro (voir ViewFacture et
  * CreateAvoir::afterFill()), et par « Retour d'un ticket » à la caisse
- * (voir Caisse). L'action rapide « Avoir » de la liste des factures (voir
- * FactureResource) crédite, elle, une seule facture, pré-remplie depuis
- * celle-ci. Toutes créent et émettent l'avoir d'un seul geste (voir
- * EnregistrerAvoirAction). Jamais de page edit : un avoir émis ne se
- * modifie ni ne se supprime jamais (voir AvoirPolicy).
+ * (voir Caisse), ces deux boutons seulement pour qui peut l'ouvrir (voir
+ * peutOuvrirLaRecherche()). L'action rapide « Avoir » de la liste des
+ * factures (voir FactureResource) crédite, elle, une seule facture,
+ * pré-remplie depuis celle-ci. Toutes créent et émettent l'avoir d'un seul
+ * geste (voir EnregistrerAvoirAction). Jamais de page edit : un avoir émis
+ * ne se modifie ni ne se supprime jamais (voir AvoirPolicy).
  */
 class AvoirResource extends Resource
 {
@@ -110,7 +114,7 @@ class AvoirResource extends Resource
             TextInput::make('recherche')
                 ->label(fn (Get $get): string => self::documentsDeLAvoir($get('lignes')) === [] ? 'N° du ticket ou de la facture' : 'Ajouter un autre ticket ou une autre facture')
                 ->placeholder('TK-... ou FAC-...')
-                ->helperText('Le numéro imprimé sur le ticket ou la facture, en majuscules ou en minuscules.')
+                ->helperText('Le numéro imprimé sur le ticket ou la facture, en majuscules ou en minuscules ; les zéros avant le rang peuvent s\'omettre (…-2026-12 pour …-2026-000012).')
                 ->maxLength(40)
                 ->autofocus()
                 // Entrée cherche le numéro au lieu d'émettre l'avoir.
@@ -179,12 +183,14 @@ class AvoirResource extends Resource
 
     /**
      * Les lignes de l'avoir, plus celles du ticket ou de la facture de ce
-     * numéro (voir Facture::scopeDeNumero()) encore à rendre, chacune à la
-     * quantité qui en reste : un document émis du magasin actif, que la
-     * personne voit (voir Facture::scopeVisiblesPar()), qui n'est pas déjà
-     * dans l'avoir, a encore une ligne à créditer, est du même client que
-     * le premier document de l'avoir et peut entrer dans le même avoir que
-     * lui (voir CreerAvoirAction::incompatibilite()).
+     * numéro (voir Facture::scopeDeNumero()) encore à rendre qui n'y sont
+     * pas déjà, chacune à la quantité qui en reste : un document émis du
+     * magasin actif, que la personne voit (voir Facture::scopeVisiblesPar()),
+     * qui a encore une ligne à créditer, est du même client que le premier
+     * document de l'avoir et peut entrer dans le même avoir que lui (voir
+     * CreerAvoirAction::incompatibilite()). Chercher de nouveau un document
+     * de l'avoir y remet ainsi une ligne retirée par erreur, sans doublon ;
+     * il n'est refusé que si toutes ses lignes à rendre y sont déjà.
      *
      * @return array<array-key, mixed>
      *
@@ -204,12 +210,19 @@ class AvoirResource extends Resource
             throw new InvalidArgumentException($refus);
         }
 
-        return [...$lignes, ...self::lignesARendre($document)];
+        $dejaDansLAvoir = self::identifiantsDesLignes($lignes)->all();
+        $lignesAAjouter = array_filter(self::lignesARendre($document), fn (array $ligne): bool => ! in_array($ligne['ligne_facture_id'], $dejaDansLAvoir, true));
+
+        if ($lignesAAjouter === []) {
+            throw new InvalidArgumentException(self::designation($document).' est déjà dans l\'avoir, avec toutes ses lignes à rendre.');
+        }
+
+        return [...$lignes, ...$lignesAAjouter];
     }
 
     /**
      * Pourquoi ce document ne s'ajoute pas à l'avoir qui corrige déjà
-     * $documents ; null s'il s'ajoute.
+     * $documents ; null s'il s'ajoute, ou s'il en est déjà.
      *
      * @param  list<Facture>  $documents
      */
@@ -219,18 +232,25 @@ class AvoirResource extends Resource
             return self::DOCUMENT_INTROUVABLE;
         }
 
-        [$designation, $credite, $pronom, $autre] = $document->serie() === TypeDocument::TicketCaisse
-            ? ["Le ticket {$document->numero}", 'crédité', 'il', 'celui']
-            : ["La facture {$document->numero}", 'créditée', 'elle', 'celle'];
+        $designation = self::designation($document);
+        [$credite, $pronom, $autre] = $document->serie() === TypeDocument::TicketCaisse ? ['crédité', 'il', 'celui'] : ['créditée', 'elle', 'celle'];
         $premier = $documents[0] ?? null;
 
         return match (true) {
-            collect($documents)->contains(fn (Facture $dejaAjoute): bool => $dejaAjoute->is($document)) => "{$designation} est déjà dans l'avoir.",
             ! $document->possedeDesLignesCreditables() => "{$designation} est déjà entièrement {$credite} : {$pronom} n'a plus rien à rendre.",
             $premier === null => null,
             (int) $document->client_id !== (int) $premier->client_id => "{$designation} est {$autre} d'un autre client : un avoir ne corrige que les documents d'un même client.",
             default => CreerAvoirAction::incompatibilite($premier, $document),
         };
+    }
+
+    /**
+     * « Le ticket TK-LYON1-2026-000001 » ou « La facture
+     * FAC-LYON1-2026-000001 », en tête d'un refus.
+     */
+    private static function designation(Facture $document): string
+    {
+        return ($document->serie() === TypeDocument::TicketCaisse ? 'Le ticket ' : 'La facture ').$document->numero;
     }
 
     /**
@@ -255,17 +275,14 @@ class AvoirResource extends Resource
     /**
      * Les documents émis dont l'avoir porte des lignes, dans l'ordre où ils
      * ont été ajoutés, relus en base parmi ceux que la personne voit : le
-     * premier est le client affiché, et la référence des documents qui
-     * s'ajoutent (voir refusDuDocument()).
+     * premier est la référence des documents qui s'ajoutent (voir
+     * refusDuDocument()).
      *
      * @return list<Facture>
      */
     public static function documentsDeLAvoir(mixed $lignes): array
     {
-        $identifiants = collect(is_array($lignes) ? $lignes : [])
-            ->map(fn (mixed $ligne): mixed => is_array($ligne) ? filter_var($ligne['ligne_facture_id'] ?? null, FILTER_VALIDATE_INT) : false)
-            ->filter(fn (mixed $identifiant): bool => is_int($identifiant))
-            ->values();
+        $identifiants = self::identifiantsDesLignes($lignes);
 
         if ($identifiants->isEmpty()) {
             return [];
@@ -287,21 +304,42 @@ class AvoirResource extends Resource
     }
 
     /**
+     * Les identifiants des lignes de facture que portent les lignes de
+     * l'avoir, dans leur ordre ; une valeur qui n'est pas un entier est
+     * ignorée.
+     *
+     * @return Collection<int, int>
+     */
+    private static function identifiantsDesLignes(mixed $lignes): Collection
+    {
+        return collect(is_array($lignes) ? $lignes : [])
+            ->map(fn (mixed $ligne): mixed => is_array($ligne) ? filter_var($ligne['ligne_facture_id'] ?? null, FILTER_VALIDATE_INT) : false)
+            ->filter(fn (mixed $identifiant): bool => is_int($identifiant))
+            ->values();
+    }
+
+    /**
      * « Client comptoir — ticket TK-LYON1-2026-000001 du 17/10/2026 à
-     * 10 h 32 » : le client tel que le premier document l'a figé à son
-     * émission, puis chaque document de l'avoir.
+     * 10 h 32 » : le client tel que l'avoir le figera, c'est-à-dire tel que
+     * l'a figé le plus récent de ses documents (voir
+     * Avoir::documentQuiDonneLeClient()), puis chaque document de l'avoir,
+     * dans l'ordre où il a été ajouté.
      *
      * @param  list<Facture>  $documents
      */
     private static function clientEtDocuments(array $documents): string
     {
+        if ($documents === []) {
+            return '';
+        }
+
         $designations = collect($documents)->map(function (Facture $document): string {
             $type = $document->serie() === TypeDocument::TicketCaisse ? 'ticket' : 'facture';
 
             return $type.' '.$document->numero.' du '.$document->date_emission->format('d/m/Y à H \\h i');
         });
 
-        return collect([($documents[0] ?? null)?->nomDuClient(), $designations->implode(', ')])->filter()->implode(' — ');
+        return collect([Avoir::documentQuiDonneLeClient($documents)->nomDuClient(), $designations->implode(', ')])->filter()->implode(' — ');
     }
 
     /**
@@ -327,14 +365,31 @@ class AvoirResource extends Resource
     /**
      * Un avoir se fait sur ce ticket ou cette facture : émis, avec encore
      * une ligne à créditer, par une personne qui peut créer un avoir. Le
-     * bouton « Avoir » de la liste des factures et celui de la fiche
-     * apparaissent ainsi.
+     * bouton « Avoir » de la liste des factures, une fenêtre qui ne quitte
+     * pas la liste, apparaît ainsi ; celui de la fiche, qui ouvre « Nouvel
+     * avoir », exige en plus peutOuvrirLaRecherche().
      */
     public static function peutCrediter(Facture $facture): bool
     {
         return $facture->statut !== StatutFacture::Brouillon
             && $facture->possedeDesLignesCreditables()
             && auth()->user()->can(PermissionRegistry::AVOIR_CREER);
+    }
+
+    /**
+     * La personne peut ouvrir « Nouvel avoir » et y retrouver un document :
+     * elle accède aux avoirs (toute page de la ressource l'exige, voir
+     * AvoirPolicy::viewAny()), peut en créer, et voit des tickets ou des
+     * factures (les siens, ou ceux de toute l'équipe, comme
+     * Facture::scopeVisiblesPar()). « Retour d'un ticket » à la caisse et
+     * « Avoir » sur la fiche d'un document n'apparaissent qu'ainsi : jamais
+     * vers une erreur 403, ni vers une recherche qui ne trouverait rien.
+     */
+    public static function peutOuvrirLaRecherche(): bool
+    {
+        return static::canAccess()
+            && static::canCreate()
+            && (auth()->user()->can(PermissionRegistry::FACTURE_VIEW) || auth()->user()->can(PermissionRegistry::FACTURE_VIEW_TOUTES));
     }
 
     /**

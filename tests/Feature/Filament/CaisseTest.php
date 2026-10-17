@@ -1713,6 +1713,30 @@ class CaisseTest extends TestCase
         Livewire::test(Caisse::class)->assertActionHidden('retourDUnTicket');
     }
 
+    /**
+     * « Retour d'un ticket » ne mène jamais à une erreur 403 ni à une
+     * recherche qui ne trouverait rien : un vendeur qui crée des avoirs sans
+     * pouvoir les voir, donc sans pouvoir ouvrir « Nouvel avoir », ou sans
+     * voir aucun ticket, n'a pas le bouton ; celui qui a les trois l'a.
+     */
+    public function test_le_bouton_retour_d_un_ticket_n_apparait_qu_a_qui_peut_ouvrir_la_recherche_et_y_trouver_ses_tickets(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $parDefaut = RoleMagasin::Vendeur->permissionsParDefaut();
+        $sansVoirLesAvoirs = $this->membre($magasin, RoleMagasin::Vendeur, [...$parDefaut, PermissionRegistry::AVOIR_CREER]);
+        $sansVoirLesTickets = $this->membre($magasin, RoleMagasin::Vendeur, [...array_diff($parDefaut, [PermissionRegistry::FACTURE_VIEW]), PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER]);
+        $avecLesTrois = $this->membre($magasin, RoleMagasin::Vendeur, [...$parDefaut, PermissionRegistry::AVOIR_VIEW, PermissionRegistry::AVOIR_CREER]);
+
+        $this->dansLeMagasin($magasin, $sansVoirLesAvoirs);
+        Livewire::test(Caisse::class)->assertActionHidden('retourDUnTicket');
+        $this->get(AvoirResource::getUrl('create'))->assertForbidden();
+        $this->dansLeMagasin($magasin, $sansVoirLesTickets);
+        Livewire::test(Caisse::class)->assertActionHidden('retourDUnTicket');
+        $this->dansLeMagasin($magasin, $avecLesTrois);
+        Livewire::test(Caisse::class)->assertActionVisible('retourDUnTicket');
+        $this->get(AvoirResource::getUrl('create'))->assertOk();
+    }
+
     private function ouvrirLaCaisseDUnMagasin(): Magasin
     {
         $proprietaire = User::factory()->create();

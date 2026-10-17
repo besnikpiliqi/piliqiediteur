@@ -203,6 +203,28 @@ class ControleSirene
     }
 
     /**
+     * Le répertoire a-t-il déjà confirmé l'établissement du magasin sous son
+     * SIRET actuel ? Un contrôle concluant de ce SIRET pour ce magasin est
+     * inscrit au registre des vérifications de sa société. Un établissement
+     * redevenu « à vérifier » par une réouverture faite sans réponse de
+     * l'INSEE l'a été ; un établissement créé, ou dont le NIC a été corrigé,
+     * pendant une panne, jamais : seul ce dernier reprend son adresse du
+     * répertoire à sa confirmation (voir RouvrirMagasinAction et
+     * ReverificationSirene), l'adresse qu'une société a enregistrée après
+     * une confirmation restant la sienne.
+     */
+    public static function etablissementDejaConfirme(Magasin $magasin): bool
+    {
+        return VerificationSociete::query()
+            ->where('societe_id', $magasin->societe_id)
+            ->where('magasin_id', $magasin->getKey())
+            ->where('type', TypeVerification::SireneEtablissement->value)
+            ->where('resultat', ResultatVerification::Concluante->value)
+            ->where('details->siret', $magasin->siret)
+            ->exists();
+    }
+
+    /**
      * L'adresse de l'établissement en une ligne, telle que le registre des
      * vérifications la retient : « 1 RUE DE LA REPUBLIQUE, 75001 PARIS ».
      */

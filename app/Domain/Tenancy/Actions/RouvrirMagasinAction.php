@@ -42,8 +42,11 @@ use SensitiveParameter;
  * magasin redevient vendable ; quand l'INSEE ne répond pas, il rouvre
  * « établissement à vérifier » et ne vend pas avant la reprise du contrôle
  * (voir app:reverifier-sirene). L'adresse ne se reprend du répertoire que
- * pour un établissement qui n'avait jamais été confirmé, comme à la
- * reprise du contrôle (voir ReverificationSirene).
+ * pour un établissement qu'il n'avait jamais confirmé sous ce SIRET (voir
+ * ControleSirene::etablissementDejaConfirme()), à la réouverture comme à
+ * la reprise du contrôle (voir ReverificationSirene) : celle qu'une
+ * société a enregistrée après une confirmation reste la sienne, que
+ * l'INSEE réponde ou non à la réouverture.
  *
  * En une transaction, le registre du magasin verrouillé en tête puis sa
  * ligne, relue pour refuser un magasin rouvert ou cédé entre-temps : son
@@ -131,7 +134,7 @@ class RouvrirMagasinAction
         self::verifierQuIlSeRouvre($verrouille);
 
         $etablissement = $consultation['etablissement'];
-        $jamaisConfirme = $verrouille->etablissement_verifie_le === null;
+        $jamaisConfirme = ! ControleSirene::etablissementDejaConfirme($verrouille);
         $verrouille->forceFill([
             'statut' => StatutMagasin::Actif,
             'etablissement_verifie_le' => $etablissement === null ? null : now(),

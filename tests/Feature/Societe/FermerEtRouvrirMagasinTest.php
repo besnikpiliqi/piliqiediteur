@@ -5,6 +5,8 @@ namespace Tests\Feature\Societe;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -15,11 +17,14 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\ChangerSiretAction;
+use App\Domain\Tenancy\Actions\ChoisirEtablissementPrincipalAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
+use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
@@ -40,6 +45,7 @@ use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
+use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -428,6 +434,83 @@ class FermerEtRouvrirMagasinTest extends TestCase
     }
 
     /**
+     * Le vendeur encaisse un ticket une seconde après l'appel de la
+     * fermeture, pendant qu'elle contrôle son auteur, juste avant qu'elle
+     * verrouille le registre : sa vente entre dans le ticket Z et dans le
+     * relevé de sa caisse fermée d'office, avec son encaissement, et aucune
+     * caisse ne reste ouverte.
+     */
+    public function test_une_vente_faite_avant_le_verrou_du_registre_entre_dans_le_releve_ferme_d_office(): void
+    {
+        $this->travelTo('2026-10-05 18:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $ticket = null;
+        $this->avantLeVerrouDuRegistre(function () use ($magasin, $vendeur, &$ticket): void {
+            $this->travel(1)->seconds();
+            $this->actingAs($vendeur);
+            $ticket = $this->vendre($magasin);
+            auth()->logout();
+        });
+
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+
+        app(TenantContext::class)->set($magasin);
+        $this->assertInstanceOf(Facture::class, $ticket);
+        $releve = ClotureCaissePersonnelle::query()->where('vendeur_id', $vendeur->id)->sole();
+        $this->assertSame([ModeFermetureCaisse::Automatique, [$ticket->id], 1], [$releve->mode_fermeture, $releve->factures->modelKeys(), $releve->paiements->count()]);
+        $this->assertSame([1, '12.00'], [ClotureCaisse::query()->sole()->nombre_ventes, ClotureCaisse::query()->sole()->total_ttc]);
+        $this->assertSame([], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(now())->all());
+    }
+
+    /**
+     * Le magasin cédé perd l'indication d'établissement principal, retrait
+     * noté avec sa fermeture au journal d'audit, et ne la reprend plus.
+     */
+    public function test_un_magasin_cede_perd_l_indication_d_etablissement_principal(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        app(ChoisirEtablissementPrincipalAction::class)->handle($proprietaire, $magasin->fresh(), true);
+
+        $this->fermer($magasin, MotifFermeture::Cession, confirmation: 'Ma Boutique');
+
+        $cede = $magasin->fresh();
+        $this->assertSame([true, false], [$cede->aEteCede(), $cede->est_etablissement_principal]);
+        $entree = $this->entreesDAudit($magasin->societe, ActionAuditee::MagasinFerme)[0];
+        $this->assertSame([true, false], [$entree->anciennes_valeurs['est_etablissement_principal'], $entree->nouvelles_valeurs['est_etablissement_principal']]);
+        $this->assertThrows(fn () => app(ChoisirEtablissementPrincipalAction::class)->handle($proprietaire, $magasin->fresh(), true), LogicException::class, ChoisirEtablissementPrincipalAction::MESSAGE_CEDE);
+        $this->assertFalse($magasin->fresh()->est_etablissement_principal);
+    }
+
+    /**
+     * Un établissement déjà confirmé, dont la société a corrigé l'adresse,
+     * rouvre sans réponse de l'INSEE : la reprise du contrôle le confirme
+     * et garde l'adresse que la société a enregistrée. Un établissement créé
+     * pendant la panne, jamais confirmé, reprend celle du répertoire.
+     */
+    public function test_une_reouverture_sans_reponse_de_l_insee_garde_l_adresse_enregistree_par_la_societe(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        app(ModifierEtablissementAction::class)->handle($proprietaire, $magasin->fresh(), ['adresse' => '12 rue Corrigée par la société', 'complement_adresse' => 'Bâtiment B']);
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+        $this->repertoire()->rendreInjoignable();
+        $this->rouvrir($magasin);
+        $creePendantLaPanne = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Boutique créée pendant la panne']);
+        $this->repertoire()->rendreInjoignable(false);
+        $this->assertSame([null, null], [$magasin->fresh()->etablissement_verifie_le, $creePendantLaPanne->fresh()->etablissement_verifie_le]);
+        app(TenantContext::class)->clear();
+
+        $this->artisan('app:reverifier-sirene')->assertSuccessful();
+
+        $rouvert = $magasin->fresh();
+        $nouveau = $creePendantLaPanne->fresh();
+        $this->assertSame([true, '12 rue Corrigée par la société', 'Bâtiment B', '75001'], [$rouvert->peutVendre(), $rouvert->adresse, $rouvert->complement_adresse, $rouvert->code_postal]);
+        $this->assertSame([true, '1 RUE DE LA REPUBLIQUE', null, '75001'], [$nouveau->peutVendre(), $nouveau->adresse, $nouveau->complement_adresse, $nouveau->code_postal]);
+    }
+
+    /**
      * Avant la validation de la société, un magasin n'a aucune activité à
      * céder, et un magasin fermé ne se rouvre pas : il se rouvrira, contrôlé
      * au répertoire Sirene, une fois la société validée.
@@ -483,6 +566,35 @@ class FermerEtRouvrirMagasinTest extends TestCase
         app(StockLedgerService::class)->ajuster($produit, $quantite, 'Inventaire d\'ouverture');
 
         return $produit;
+    }
+
+    /**
+     * Fait $avant juste avant que la prochaine opération ne verrouille le
+     * registre fiscal (voir RegistreFiscal::sousVerrou()), une seule fois :
+     * ce qui s'y fait passe avant elle, comme une vente qui tenait le
+     * registre pendant qu'elle contrôlait son auteur.
+     */
+    private function avantLeVerrouDuRegistre(Closure $avant): void
+    {
+        $this->app->instance(RegistreFiscal::class, new class(app(SignataireFiscal::class), $avant) extends RegistreFiscal
+        {
+            public function __construct(SignataireFiscal $signataire, private ?Closure $avant)
+            {
+                parent::__construct($signataire);
+            }
+
+            public function sousVerrou(Magasin $magasin, Closure $operation): mixed
+            {
+                $avant = $this->avant;
+                $this->avant = null;
+
+                if ($avant !== null) {
+                    $avant();
+                }
+
+                return parent::sousVerrou($magasin, $operation);
+            }
+        });
     }
 
     private function repertoire(): FauxRepertoireSirene

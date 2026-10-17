@@ -157,10 +157,11 @@ enum ActionAuditee: string implements HasLabel
             self::SocieteRefusee, self::ReclamationOuverte, self::DemonstrationOuverte, self::DemonstrationFermee => ['motif'],
             self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'etablissement_verifie'],
             self::SiretChange => ['siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'etablissement_verifie'],
-            // Pour une cession, la valeur hors taxe du stock sorti au coût
-            // moyen, le nombre de produits sortis et ceux restés en stock
-            // négatif, sans mouvement (voir FermerMagasinAction).
-            self::MagasinFerme => ['statut', 'motif', 'valeur_stock_sorti_ht', 'produits_sortis', 'produits_en_stock_negatif'],
+            // Pour une cession, l'indication d'établissement principal
+            // retirée, s'il la portait, la valeur hors taxe du stock sorti
+            // au coût moyen, le nombre de produits sortis et ceux restés en
+            // stock négatif, sans mouvement (voir FermerMagasinAction).
+            self::MagasinFerme => ['statut', 'motif', 'est_etablissement_principal', 'valeur_stock_sorti_ht', 'produits_sortis', 'produits_en_stock_negatif'],
             self::MagasinRouvert => ['statut', 'etablissement_verifie'],
             self::EtablissementPrincipalChoisi => ['etablissement_principal'],
             // Les droits de chaque compte touché, avant et après, avec son

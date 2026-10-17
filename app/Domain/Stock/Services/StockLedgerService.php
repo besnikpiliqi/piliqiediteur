@@ -21,7 +21,8 @@ use LogicException;
  * mouvements_stock directement. Les ventes, les avoirs, la validation des
  * factures d'achat et les avoirs fournisseur l'appellent par des listeners
  * de leurs événements ; la correction d'une facture d'achat déjà validée
- * l'appelle directement (voir ModifierFactureAchatAction).
+ * l'appelle directement (voir ModifierFactureAchatAction), et la cession
+ * d'un magasin sort tout son stock (voir sortirPourCession()).
  *
  * Le stock est valorisé au coût moyen unitaire pondéré (CMUP, voir
  * Produit::$cmup_ht), recalculé après chaque entrée achetée (voir
@@ -29,9 +30,8 @@ use LogicException;
  * de sa ligne d'achat (voir retournerAuFournisseur()) : toute autre sortie
  * (vente, ajustement) et toute autre entrée (retour client, ajustement) se
  * fait au CMUP du moment, qui ne change donc pas (la sortie de cession
- * garde ce CMUP dans son mouvement). Une réception corrigée
- * après coup rejoue tout le grand livre du produit (voir
- * corrigerUneReception()).
+ * garde ce CMUP dans son mouvement). Une réception corrigée après coup
+ * rejoue tout le grand livre du produit (voir corrigerUneReception()).
  *
  * Seul à voir chaque mouvement, il signale aussi le passage d'un produit
  * à son seuil d'alerte (voir StockPasseSousLeSeuilDAlerte).
@@ -194,6 +194,14 @@ class StockLedgerService
      * fera rentrer au même coût), et le CMUP ne change pas. Rien ne sort
      * d'un produit qui ne suit pas son stock, ni d'un stock vide ou
      * négatif, lu sous le verrou du produit : null.
+     *
+     * Rien ne bouge ensuite dans ce stock : une vente ou un avoir, qui
+     * verrouillent le registre fiscal du magasin, et une validation
+     * d'achat, une correction d'achat validé ou un avoir fournisseur, qui
+     * relisent la ligne du magasin sous un verrou partagé (voir
+     * ValiderFactureAchatAction, ModifierFactureAchatAction et
+     * EmettreAvoirFournisseurAction), attendent la fin de la cession, qui
+     * tient l'un et l'autre, puis sont refusés, le magasin étant fermé.
      */
     public function sortirPourCession(Produit $produit, Model $source, string $note): ?MouvementStock
     {

@@ -11,6 +11,7 @@ use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -45,7 +46,16 @@ use LogicException;
  * avant la facture d'achat (voir
  * ConstructeurLigneAchat::verrouillerLeRegistreSiUnTauxChange()).
  *
- * Son auteur est relu sous le verrou de sa ligne, après le registre et
+ * Un magasin suspendu ou fermé ne corrige plus ses factures d'achat (voir
+ * Magasin::verifierQuIlEstOuvert()) : comme à la validation (voir
+ * ValiderFactureAchatAction), sa ligne se relit sous un verrou partagé,
+ * après le registre et avant tout le reste, et la fermeture du magasin,
+ * qui verrouille le registre puis cette ligne (voir FermerMagasinAction),
+ * passe donc tout entière avant ou après la correction : une correction
+ * qui attendait une cession est refusée, et aucune réception corrigée
+ * n'entre dans le stock que la cession a sorti.
+ *
+ * Son auteur est relu sous le verrou de sa ligne, après le magasin et
  * avant la facture d'achat et ses produits : il doit pouvoir saisir les
  * factures d'achat ; puis, la facture relue verrouillée et encore
  * modifiable, pouvoir la modifier (voir LecteurDesDroits et
@@ -76,6 +86,7 @@ class ModifierFactureAchatAction
         return DB::transaction(function () use ($auteur, $factureAchat, $fournisseur, $lignes, $attributs) {
             $this->constructeurLignes->verrouillerLeRegistreSiUnTauxChange($lignes);
             $magasin = app(TenantContext::class)->magasin();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, FactureAchat::class);
 
             // Verrouillée comme à sa validation (voir

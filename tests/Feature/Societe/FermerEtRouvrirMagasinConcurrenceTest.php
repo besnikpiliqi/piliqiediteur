@@ -3,6 +3,7 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
+use App\Domain\Achats\Actions\ModifierFactureAchatAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
@@ -14,8 +15,12 @@ use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Stock\Enums\TypeMouvementStock;
+use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Tenancy\Actions\ChoisirEtablissementPrincipalAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -27,13 +32,13 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
- * Une vente à la caisse, ou une validation d'achat, et la fermeture du
- * magasin au même instant, chacune dans son processus, sur une vraie base
- * PostgreSQL : la seconde attend le verrou que tient la première (celui
- * du registre fiscal pour une vente, celui de la ligne du magasin pour un
- * achat). Une vente qui passe avant entre dans la dernière clôture de la
- * fermeture ; une vente ou un achat qui attendait la fermeture est refusé,
- * le magasin étant fermé.
+ * Une vente à la caisse, ou une validation ou une correction d'achat, et
+ * la fermeture du magasin au même instant, chacune dans son processus, sur
+ * une vraie base PostgreSQL : la seconde attend le verrou que tient la
+ * première (celui du registre fiscal pour une vente, celui de la ligne du
+ * magasin pour un achat). Une vente qui passe avant entre dans la dernière
+ * clôture de la fermeture ; une vente ou un achat qui attendait la
+ * fermeture est refusé, le magasin étant fermé.
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.
@@ -122,6 +127,82 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         $this->assertStringContainsString('Ce magasin est fermé : seules la consultation et les téléchargements restent possibles.', $resultat->errorOutput());
         app(TenantContext::class)->set($magasin);
         $this->assertSame([0, StatutFactureAchat::Brouillon], [$produit->fresh()->stock_quantite, $factureAchat->fresh()->statut]);
+    }
+
+    /**
+     * La correction d'une facture d'achat validée (5 articles reçus portés
+     * à 8) attend la cession du magasin, qui verrouille sa ligne : elle est
+     * ensuite refusée, le magasin étant fermé ; la facture garde ses 5
+     * articles et rien n'entre dans le stock que la cession a sorti.
+     */
+    public function test_une_correction_d_achat_valide_qui_attendait_la_cession_est_refusee(): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $produit = Produit::factory()->create(['cmup_ht' => 2, 'suivi_stock' => true, 'seuil_alerte' => 0]);
+        app(StockLedgerService::class)->ajuster($produit, 10, 'Inventaire d\'ouverture');
+        $fournisseur = Fournisseur::factory()->create();
+        $factureAchat = app(ValiderFactureAchatAction::class)->handle($proprietaire, app(CreerFactureAchatAction::class)->handle($proprietaire, $fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
+        ]));
+        $magasinId = $magasin->id;
+        $factureAchatId = $factureAchat->id;
+        $fournisseurId = $fournisseur->id;
+        $produitId = $produit->id;
+        $corriger = static function () use ($magasinId, $factureAchatId, $fournisseurId, $produitId): void {
+            $magasin = Magasin::query()->findOrFail($magasinId);
+            app(TenantContext::class)->set($magasin);
+            app(ModifierFactureAchatAction::class)->handle(
+                User::query()->whereKey($magasin->societe->proprietaire()->value('id'))->firstOrFail(),
+                FactureAchat::query()->findOrFail($factureAchatId),
+                Fournisseur::query()->findOrFail($fournisseurId),
+                [['produit_id' => $produitId, 'quantite' => 8, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20]],
+            );
+        };
+        $concurrente = null;
+        $this->concurrencerDesQueLeRegistreEstVerrouille($corriger, $concurrente);
+
+        app(FermerMagasinAction::class)->handle($proprietaire, $magasin, MotifFermeture::Cession, 'password', 'Ma Boutique');
+
+        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
+        $resultat = $concurrente->wait();
+        $this->assertTrue($resultat->failed());
+        $this->assertStringContainsString('Ce magasin est fermé : seules la consultation et les téléchargements restent possibles.', $resultat->errorOutput());
+        app(TenantContext::class)->set($magasin);
+        $this->assertSame([0, [5]], [$produit->fresh()->stock_quantite, $factureAchat->fresh()->lignes->pluck('quantite')->all()]);
+        $this->assertSame(
+            [[TypeMouvementStock::AjustementEntree, 10], [TypeMouvementStock::ReceptionAchat, 5], [TypeMouvementStock::SortieCession, 15]],
+            MouvementStock::query()->where('produit_id', $produit->id)->orderBy('id')->get()->map(fn (MouvementStock $mouvement): array => [$mouvement->type, $mouvement->quantite])->all(),
+        );
+    }
+
+    /**
+     * Le choix du magasin comme établissement principal attend sa cession,
+     * qui verrouille sa ligne : il est ensuite refusé, le magasin étant
+     * cédé, qui n'est pas indiqué comme établissement principal.
+     */
+    public function test_un_choix_d_etablissement_principal_qui_attendait_la_cession_est_refuse(): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $magasinId = $magasin->id;
+        $choisir = static function () use ($magasinId): void {
+            $magasin = Magasin::query()->findOrFail($magasinId);
+            app(ChoisirEtablissementPrincipalAction::class)->handle(User::query()->whereKey($magasin->societe->proprietaire()->value('id'))->firstOrFail(), $magasin, true);
+        };
+        $concurrente = null;
+        $this->concurrencerDesQueLeRegistreEstVerrouille($choisir, $concurrente);
+
+        app(FermerMagasinAction::class)->handle($proprietaire, $magasin, MotifFermeture::Cession, 'password', 'Ma Boutique');
+
+        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
+        $resultat = $concurrente->wait();
+        $this->assertTrue($resultat->failed());
+        $this->assertStringContainsString(ChoisirEtablissementPrincipalAction::MESSAGE_CEDE, $resultat->errorOutput());
+        $this->assertSame([true, false], [$magasin->fresh()->aEteCede(), $magasin->fresh()->est_etablissement_principal]);
+        $this->assertSame([], $this->entreesDAudit($magasin->societe, ActionAuditee::EtablissementPrincipalChoisi));
     }
 
     /**

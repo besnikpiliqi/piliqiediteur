@@ -24,13 +24,20 @@ use LogicException;
  * autorisé à les gérer (l'indication déplacée touche aussi le magasin qui
  * la portait), tant que la société n'est pas en lecture seule (voir
  * MagasinDeLaSocietePolicy::choisirCommePrincipal()) ; jamais pour un
- * magasin cédé.
+ * magasin cédé, qui perd l'indication à sa cession (voir
+ * FermerMagasinAction).
  *
  * En une transaction, sous le verrou de la ligne de la société (deux
- * choix simultanés passent l'un après l'autre, le dernier l'emportant) :
- * le magasin qui portait l'indication la perd, celui-ci la prend, et le
- * choix s'inscrit au journal d'audit, avec l'établissement principal
- * avant et après. Un choix qui ne change rien n'écrit rien.
+ * choix simultanés passent l'un après l'autre, le dernier l'emportant),
+ * puis celui de la ligne du magasin choisi et de celle du magasin qui
+ * portait l'indication, relues à jour : une cession qui les tient passe
+ * tout entière avant (le magasin cédé est refusé, ou n'a déjà plus
+ * l'indication) ou après (elle la lui retire). Le magasin qui portait
+ * l'indication la perd, celui-ci la prend, et le choix s'inscrit au
+ * journal d'audit, avec l'établissement principal avant et après. Un choix
+ * qui ne change rien n'écrit rien. La cession ne prend sur la ligne de la
+ * société qu'un verrou de clé partagé, compatible avec celui du choix :
+ * aucun interblocage.
  */
 class ChoisirEtablissementPrincipalAction
 {
@@ -58,13 +65,13 @@ class ChoisirEtablissementPrincipalAction
 
             DB::transaction(function () use ($auteur, $magasin, $societe, $principal): void {
                 Societe::query()->whereKey($societe->getKey())->lock('for no key update')->firstOrFail();
-                $choisi = Magasin::query()->whereKey($magasin->getKey())->firstOrFail();
+                $choisi = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
 
                 if ($principal && $choisi->aEteCede()) {
                     throw new LogicException(self::MESSAGE_CEDE);
                 }
 
-                $avant = Magasin::query()->where('societe_id', $societe->getKey())->where('est_etablissement_principal', true)->first();
+                $avant = Magasin::query()->where('societe_id', $societe->getKey())->where('est_etablissement_principal', true)->lockForUpdate()->first();
                 $apres = $principal ? $choisi : ($avant?->is($choisi) ? null : $avant);
 
                 if ($avant?->getKey() === $apres?->getKey()) {

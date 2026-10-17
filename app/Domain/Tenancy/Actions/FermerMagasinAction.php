@@ -48,25 +48,34 @@ use Throwable;
  * En une transaction, le registre du magasin verrouillé en tête puis sa
  * ligne : ses journées de caisse en attente se clôturent jusqu'au jour
  * même, au nom du système, comme à minuit (voir
- * CloturerLesJourneesAction::parLeSysteme()) ; une vente qui attendait le
- * registre passe donc avant, dans la dernière clôture, ou bien est
- * refusée ensuite (voir RegistreFiscal). Son statut passe à fermé (JET 270
- * statut_magasin) ; dans une société validée, sa période d'activité se
- * ferme avec ce motif (voir PeriodesDActivite) et l'événement MagasinFerme
- * part une fois la transaction validée (son abonnement s'arrête, étape
- * 12). Pour une cession, chaque produit qui suit son stock et en a sort
- * tout entier au coût moyen (voir StockLedgerService::sortirPourCession(),
- * dont la période close est la source) ; la valeur hors taxe de ce stock
- * s'inscrit au journal d'audit avec la fermeture, et un produit en stock
- * négatif y est seulement listé, sans mouvement. Rien d'autre ne suit :
- * factures, paiements et archives restent où ils sont.
+ * CloturerLesJourneesAction::parLeSysteme()), jusqu'à l'instant que donne
+ * le verrou du registre (voir RegistreFiscal::verrouiller()) ; une vente
+ * qui attendait le registre passe donc avant, dans la dernière clôture,
+ * ou bien est refusée ensuite (voir RegistreFiscal). Son statut passe à
+ * fermé (JET 270 statut_magasin) ; dans une société validée, sa période
+ * d'activité se ferme avec ce motif (voir PeriodesDActivite) et
+ * l'événement MagasinFerme part une fois la transaction validée (son
+ * abonnement s'arrête, étape 12). Pour une cession, chaque produit qui
+ * suit son stock et en a sort tout entier au coût moyen (voir
+ * StockLedgerService::sortirPourCession(), dont la période close est la
+ * source) ; la valeur hors taxe de ce stock s'inscrit au journal d'audit
+ * avec la fermeture, et un produit en stock négatif y est seulement
+ * listé, sans mouvement ; le magasin cédé perd aussi l'indication
+ * d'établissement principal qu'il portait (voir
+ * ChoisirEtablissementPrincipalAction), retrait noté dans la même entrée
+ * d'audit. Rien d'autre ne suit : factures, paiements et archives restent
+ * où ils sont.
  *
  * Après la transaction : les caisses personnelles restées ouvertes se
  * ferment d'office, au nom du système, « fermée automatiquement » (R5),
- * un échec étant signalé sans défaire la fermeture ; pour une cession, le
- * propriétaire reçoit la valeur du stock sorti, à rapprocher du prix de
- * cession. Les affectations de l'équipe restent : l'équipe d'un magasin
- * fermé reste gérable, et l'expert-comptable le lit toujours.
+ * jusqu'à ce même instant du verrou du registre, et non celui de l'appel :
+ * une vente faite pendant que la fermeture contrôlait son auteur ou
+ * attendait le registre entre dans le relevé comme dans le ticket Z, et
+ * aucune caisse ne reste ouverte ; un échec est signalé sans défaire la
+ * fermeture. Pour une cession, le propriétaire reçoit la valeur du stock
+ * sorti, à rapprocher du prix de cession. Les affectations de l'équipe
+ * restent : l'équipe d'un magasin fermé reste gérable, et
+ * l'expert-comptable le lit toujours.
  *
  * Fermé, le magasin passe en lecture seule et ne produit plus de ticket Z
  * (voir JourneesDeCaisse) ; il se rouvre, sauf après une cession (voir
@@ -113,9 +122,7 @@ class FermerMagasinAction
             throw new AuthorizationException(LecteurDesDroits::REFUS_DANS_LA_SOCIETE);
         }
 
-        $maintenant = CarbonImmutable::now();
-
-        $cession = $contexte->runAsSociete($societe, function () use ($auteur, $magasin, $societe, $motif, $motDePasse, $confirmation, $maintenant, $contexte): ?array {
+        $fermeture = $contexte->runAsSociete($societe, function () use ($auteur, $magasin, $societe, $motif, $motDePasse, $confirmation, $contexte): array {
             $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, $motif === MotifFermeture::Cession ? 'cederLeMagasin' : 'fermerLeMagasin', $societe, $magasin);
             MotDePasseRedemande::exiger($auteur, $motDePasse);
 
@@ -135,37 +142,39 @@ class FermerMagasinAction
                 throw new LogicException(self::MESSAGE_DEJA_FERME);
             }
 
-            return $contexte->runAs($magasin, fn (): ?array => $this->operateur->pendant($auteur, fn (): ?array => $this->registre->sousVerrou($magasin, fn (): ?array => $this->fermer($auteur, $magasin, $motif, $maintenant))));
+            return $contexte->runAs($magasin, fn (): array => $this->operateur->pendant($auteur, fn (): array => $this->registre->sousVerrou($magasin, fn (): array => $this->fermer($auteur, $magasin, $motif))));
         });
 
         try {
-            $contexte->runAs($magasin, fn () => $this->fermerLesCaisses->handle($magasin, $maintenant));
+            $contexte->runAs($magasin, fn () => $this->fermerLesCaisses->handle($magasin, $fermeture['instant']));
         } catch (Throwable $erreur) {
             report($erreur);
         }
 
-        if ($cession !== null) {
-            $societe->proprietaire()->firstOrFail()->notify(new StockDuMagasinCede($magasin->fresh(), $cession['valeur_ht'], $cession['produits_en_stock_negatif']));
+        if ($fermeture['cession'] !== null) {
+            $societe->proprietaire()->firstOrFail()->notify(new StockDuMagasinCede($magasin->fresh(), $fermeture['cession']['valeur_ht'], $fermeture['cession']['produits_en_stock_negatif']));
         }
     }
 
     /**
      * La fermeture elle-même, sous le verrou du registre du magasin actif.
      *
-     * @return array{valeur_ht: string, produits_en_stock_negatif: list<string>}|null pour une cession, la valeur du stock sorti et les produits restés en stock négatif
+     * @return array{instant: CarbonImmutable, cession: array{valeur_ht: string, produits_en_stock_negatif: list<string>}|null} l'instant du verrou du registre, jusqu'auquel se ferment les caisses personnelles, et, pour une cession, la valeur du stock sorti et les produits restés en stock négatif
      *
      * @throws LogicException
      */
-    private function fermer(User $auteur, Magasin $magasin, MotifFermeture $motif, CarbonImmutable $maintenant): ?array
+    private function fermer(User $auteur, Magasin $magasin, MotifFermeture $motif): array
     {
+        $instant = $this->registre->verrouiller($magasin)->utc;
         $verrouille = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
 
         if ($verrouille->estFerme()) {
             throw new LogicException(self::MESSAGE_DEJA_FERME);
         }
 
-        $this->cloturerLesJournees->parLeSysteme($verrouille, $maintenant);
-        $verrouille->forceFill(['statut' => StatutMagasin::Ferme])->save();
+        $principalRetire = $motif === MotifFermeture::Cession && $verrouille->est_etablissement_principal;
+        $this->cloturerLesJournees->parLeSysteme($verrouille, $instant);
+        $verrouille->forceFill(['statut' => StatutMagasin::Ferme, ...($principalRetire ? ['est_etablissement_principal' => false] : [])])->save();
         $this->registre->journaliser(CodeEvenement::ParametreDeConformite, [
             'parametre' => 'statut_magasin',
             'magasin' => ['id' => $verrouille->getKey(), 'nom' => $verrouille->nom],
@@ -176,9 +185,13 @@ class FermerMagasinAction
         $periode = $verrouille->societe->estValidee() ? $this->periodesDActivite->fermer($verrouille, $motif, $auteur) : null;
         $cession = $motif === MotifFermeture::Cession && $periode !== null ? $this->sortirLeStock($periode) : null;
 
-        $this->journalAudit->inscrire(ActionAuditee::MagasinFerme, $auteur, $verrouille, ['statut' => StatutMagasin::Actif->value], [
+        $this->journalAudit->inscrire(ActionAuditee::MagasinFerme, $auteur, $verrouille, [
+            'statut' => StatutMagasin::Actif->value,
+            ...($principalRetire ? ['est_etablissement_principal' => true] : []),
+        ], [
             'statut' => StatutMagasin::Ferme->value,
             'motif' => $motif->value,
+            ...($principalRetire ? ['est_etablissement_principal' => false] : []),
             ...($cession === null ? [] : [
                 'valeur_stock_sorti_ht' => $cession['valeur_ht'],
                 'produits_sortis' => $cession['produits_sortis'],
@@ -190,7 +203,10 @@ class FermerMagasinAction
             MagasinFerme::dispatch($verrouille, $periode);
         }
 
-        return $cession === null ? null : ['valeur_ht' => $cession['valeur_ht'], 'produits_en_stock_negatif' => $cession['produits_en_stock_negatif']];
+        return [
+            'instant' => $instant,
+            'cession' => $cession === null ? null : ['valeur_ht' => $cession['valeur_ht'], 'produits_en_stock_negatif' => $cession['produits_en_stock_negatif']],
+        ];
     }
 
     /**

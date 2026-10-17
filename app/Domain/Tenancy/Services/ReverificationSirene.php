@@ -33,9 +33,12 @@ use Illuminate\Support\Facades\Log;
  *   codes annulés, démonstration fermée, propriétaire prévenu).
  *   L'établissement d'un magasin réel actif « à vérifier » : il devient
  *   vérifié, et peut vendre, quand le répertoire le confirme, son adresse
- *   reprise de Sirene ; un contrôle négatif s'inscrit, et le magasin reste
- *   à vérifier. Une société que ces contrôles rendent validable est
- *   validée (voir ValiderLaSocieteAction) ;
+ *   reprise de Sirene s'il n'avait jamais été confirmé sous ce SIRET (créé
+ *   ou corrigé pendant la panne) ; rouvert pendant une panne après une
+ *   confirmation, il garde l'adresse que la société a enregistrée (voir
+ *   ControleSirene::etablissementDejaConfirme()). Un contrôle négatif
+ *   s'inscrit, et le magasin reste à vérifier. Une société que ces
+ *   contrôles rendent validable est validée (voir ValiderLaSocieteAction) ;
  * - avec $toutes, une société validée et ses magasins réels actifs. Rien
  *   de ce que la société a enregistré ne change : son identité reste celle
  *   qu'elle a saisie, même vidée (un n° de TVA retiré ne revient pas), et
@@ -158,11 +161,13 @@ class ReverificationSirene
         $etablissement = $consultation['etablissement'];
 
         DB::transaction(function () use ($magasin, $consultation, $etablissement): void {
+            $confirme = $magasin->etablissement_verifie_le === null && $consultation['resultat'] === ResultatVerification::Concluante && $etablissement !== null && ControleSirene::estDansUnTerritoireGere($etablissement);
+            $adresseDuRepertoire = $confirme && ! ControleSirene::etablissementDejaConfirme($magasin);
             $this->controle->noterEtablissement($magasin, $consultation);
 
-            if ($magasin->etablissement_verifie_le === null && $consultation['resultat'] === ResultatVerification::Concluante && $etablissement !== null && ControleSirene::estDansUnTerritoireGere($etablissement)) {
+            if ($confirme) {
                 Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail()
-                    ->forceFill(['etablissement_verifie_le' => now(), ...ControleSirene::adresseDe($etablissement), 'pays' => 'FR'])
+                    ->forceFill(['etablissement_verifie_le' => now(), ...($adresseDuRepertoire ? [...ControleSirene::adresseDe($etablissement), 'pays' => 'FR'] : [])])
                     ->save();
             }
         });

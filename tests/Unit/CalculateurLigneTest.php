@@ -1245,4 +1245,20 @@ class CalculateurLigneTest extends TestCase
         $this->assertSame('9999999999.99', $this->calculateur()->enDecimal(999999999999));
         $this->assertThrows(fn () => $this->calculateur()->enDecimal(PHP_INT_MIN), InvalidArgumentException::class, 'Montant hors limites.');
     }
+
+    /**
+     * L'écriture des montants des écrans en euros (l'alerte des factures à
+     * encaisser du magasin et les totaux de l'espace de la société) :
+     * milliers séparés par une espace, virgule décimale, toujours deux
+     * décimales, le signe devant.
+     */
+    public function test_des_centiemes_s_ecrivent_en_euros(): void
+    {
+        $this->assertSame('1 234,50 €', $this->calculateur()->enEuros(123450));
+        $this->assertSame('-0,05 €', $this->calculateur()->enEuros(-5));
+        $this->assertSame('0,00 €', $this->calculateur()->enEuros(0));
+        $this->assertSame('-1 234 567,08 €', $this->calculateur()->enEuros(-123456708));
+        $this->assertSame('9 999 999 999,99 €', $this->calculateur()->enEuros(999999999999));
+        $this->assertThrows(fn () => $this->calculateur()->enEuros(PHP_INT_MIN), InvalidArgumentException::class, 'Montant hors limites.');
+    }
 }

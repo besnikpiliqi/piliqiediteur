@@ -8,13 +8,13 @@
         @else
             <p class="font-semibold">
                 {{ trans_choice('{1} 1 facture à encaisser|[2,*] :count factures à encaisser', $totaux['nombre']) }}
-                · {{ $this->enEuros($totaux['restant_du']) }} restant dû
+                · {{ $calculateur->enEuros($totaux['restant_du']) }} restant dû
             </p>
 
             @if ($totaux['nombre_en_retard'] > 0)
                 <p class="font-semibold text-danger-600 dark:text-danger-400">
                     dont {{ trans_choice('{1} 1 en retard|[2,*] :count en retard', $totaux['nombre_en_retard']) }}
-                    · {{ $this->enEuros($totaux['restant_du_en_retard']) }}
+                    · {{ $calculateur->enEuros($totaux['restant_du_en_retard']) }}
                 </p>
             @endif
 
@@ -35,7 +35,7 @@
                                 <x-filament::link :href="\App\Filament\App\Resources\FactureResource::getUrl('view', ['record' => $facture])">{{ $facture->numero }}</x-filament::link>
                             </td>
                             <td class="py-1 pe-3">{{ $facture->nomDuClient() ?? '—' }}</td>
-                            <td class="py-1 pe-3 text-end">{{ $this->enEuros($facture->resteDuEnCentimes()) }}</td>
+                            <td class="py-1 pe-3 text-end">{{ $calculateur->enEuros($facture->resteDuEnCentimes()) }}</td>
                             <td @class(['py-1 pe-3', 'font-semibold text-danger-600 dark:text-danger-400' => $facture->estEchue()])>{{ $facture->date_echeance?->format('d/m/Y') ?? '—' }}</td>
                             <td class="py-1">
                                 @if ($facture->paiement_contre_passe)

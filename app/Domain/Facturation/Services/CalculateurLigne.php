@@ -567,6 +567,19 @@ class CalculateurLigne
     }
 
     /**
+     * Un montant en centimes tel qu'un écran l'écrit : 123450 s'écrit
+     * « 1 234,50 € », -5 s'écrit « -0,05 € » ; même borne qu'enDecimal().
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enEuros(int $centiemes): string
+    {
+        [$unites, $decimales] = explode('.', ltrim($this->enDecimal($centiemes), '-'));
+
+        return ($centiemes < 0 ? '-' : '').number_format((int) $unites, 0, ',', ' ').','.$decimales.' €';
+    }
+
+    /**
      * Une remise (ou un escompte) en centièmes de point : hors de 0-100 %,
      * elle n'existe pas.
      *

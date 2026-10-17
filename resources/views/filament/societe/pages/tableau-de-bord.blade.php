@@ -75,6 +75,7 @@
             <p>Aucun magasin pour le moment.</p>
         @else
             @php($aEncaisser = $this->facturesAEncaisser())
+            @php($calculateur = app(\App\Domain\Facturation\Services\CalculateurLigne::class))
             <table class="w-full text-start text-sm">
                 <thead>
                     <tr class="text-gray-500 dark:text-gray-400">
@@ -102,11 +103,11 @@
                                 <td class="py-1 text-end">—</td>
                             @else
                                 <td class="py-1 pe-3 text-end">
-                                    <x-filament::link :href="$this->urlDesFacturesAEncaisser($magasin)">{{ $totaux['nombre'] }}</x-filament::link>
+                                    <x-filament::link :href="\App\Filament\App\Resources\FactureResource::urlDesFacturesAEncaisser($magasin)">{{ $totaux['nombre'] }}</x-filament::link>
                                 </td>
-                                <td class="py-1 pe-3 text-end">{{ $this->enEuros($totaux['restant_du']) }}</td>
+                                <td class="py-1 pe-3 text-end">{{ $calculateur->enEuros($totaux['restant_du']) }}</td>
                                 <td @class(['py-1 text-end', 'font-semibold text-danger-600 dark:text-danger-400' => $totaux['nombre_en_retard'] > 0])>
-                                    {{ $totaux['nombre_en_retard'] }} · {{ $this->enEuros($totaux['restant_du_en_retard']) }}
+                                    {{ $totaux['nombre_en_retard'] }} · {{ $calculateur->enEuros($totaux['restant_du_en_retard']) }}
                                 </td>
                             @endif
                         </tr>

@@ -124,6 +124,23 @@ class FacturesAEncaisserTest extends TestCase
     }
 
     /**
+     * Un administrateur qui voit celles de toute l'équipe, mais dont la
+     * case « Factures : voir (les siennes) » est décochée, ne peut pas
+     * ouvrir la liste des factures : l'alerte, qui y mène, ne se montre
+     * pas.
+     */
+    public function test_un_administrateur_qui_ne_peut_pas_ouvrir_la_liste_des_factures_n_a_pas_l_alerte(): void
+    {
+        $magasin = $this->magasin();
+        $this->facture($this->proprietaireDe($magasin), 'Atelier Martin', 50);
+        $administrateur = $this->administrateur($magasin, autorisationsMagasin: array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::FACTURE_VIEW])));
+        $this->dansLeMagasin($magasin, $administrateur);
+
+        $this->assertFalse(FacturesAEncaisserApercu::canView());
+        $this->get(FactureResource::urlDesFacturesAEncaisser())->assertForbidden();
+    }
+
+    /**
      * Un vendeur qui n'est pas autorisé à contre-passer ne voit pas
      * l'alerte, même s'il voit les factures de toute l'équipe ; un
      * observateur suit la même règle.
@@ -155,6 +172,30 @@ class FacturesAEncaisserTest extends TestCase
         $this->assertTrue(FacturesAEncaisserApercu::canView());
         $alerte->assertSeeInOrder(['1 facture à encaisser', '50,00 € restant dû', $sienne->numero, 'Client du vendeur'])
             ->assertDontSee([$duProprietaire->numero, 'Client du propriétaire', '170,00 €']);
+    }
+
+    /**
+     * Un vendeur autorisé à contre-passer qui voit celles de toute l'équipe
+     * a toutes les factures du magasin dans l'alerte ; avec les mêmes
+     * cases, sauf « Factures : voir (les siennes) », un autre vendeur ne
+     * peut pas ouvrir la liste des factures et n'a pas l'alerte.
+     */
+    public function test_un_vendeur_qui_contre_passe_et_voit_celles_de_toute_l_equipe_les_voit_toutes_s_il_peut_ouvrir_leur_liste(): void
+    {
+        $magasin = $this->magasin();
+        $cases = [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PAIEMENT_CONTRE_PASSER, PermissionRegistry::FACTURE_VIEW_TOUTES];
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, $cases);
+        $sansLaListe = $this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff($cases, [PermissionRegistry::FACTURE_VIEW])));
+        $sienne = $this->facture($vendeur, 'Client du vendeur', 50);
+        $duProprietaire = $this->facture($this->proprietaireDe($magasin), 'Client du propriétaire', 120);
+
+        $this->dansLeMagasin($magasin, $vendeur);
+        $this->assertTrue(FacturesAEncaisserApercu::canView());
+        Livewire::test(FacturesAEncaisserApercu::class)->assertSeeInOrder(['2 factures à encaisser', '170,00 € restant dû', $sienne->numero, $duProprietaire->numero]);
+
+        $this->dansLeMagasin($magasin, $sansLaListe);
+        $this->assertFalse(FacturesAEncaisserApercu::canView());
+        $this->get(FactureResource::urlDesFacturesAEncaisser())->assertForbidden();
     }
 
     /**

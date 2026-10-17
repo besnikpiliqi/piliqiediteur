@@ -10,7 +10,6 @@ use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\EvaluateurDeVerification;
-use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MembreResource;
@@ -187,24 +186,6 @@ class TableauDeBord extends Dashboard
     public function facturesAEncaisser(): array
     {
         return app(FacturesAEncaisserDeLaSociete::class)->pour(auth()->user());
-    }
-
-    /**
-     * La liste des factures à encaisser de ce magasin, dans son panneau.
-     */
-    public function urlDesFacturesAEncaisser(Magasin $magasin): string
-    {
-        return FactureResource::urlDesFacturesAEncaisser($magasin);
-    }
-
-    /**
-     * « 1 234,50 € », depuis un montant en centimes.
-     */
-    public function enEuros(int $centimes): string
-    {
-        $absolu = abs($centimes);
-
-        return ($centimes < 0 ? '-' : '').number_format(intdiv($absolu, 100), 0, ',', ' ').','.str_pad((string) ($absolu % 100), 2, '0', STR_PAD_LEFT).' €';
     }
 
     /**

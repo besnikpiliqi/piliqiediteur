@@ -47,6 +47,8 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Livewire\Exceptions\MethodNotFoundException;
+use Livewire\Livewire;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Finder\SplFileInfo;
@@ -335,6 +337,28 @@ class IsolationDesSocietesTest extends TestCase
 
         $this->assertSame([$magasinA->id => ['nombre' => 1, 'restant_du' => 1200, 'nombre_en_retard' => 0, 'restant_du_en_retard' => 0]], $vuParA);
         $this->assertSame([$magasinB->id => ['nombre' => 1, 'restant_du' => 9900, 'nombre_en_retard' => 0, 'restant_du_en_retard' => 0]], $vuParB);
+    }
+
+    /**
+     * Le navigateur peut appeler toute méthode publique d'une page Livewire,
+     * avec les paramètres qu'il veut, et lit ce qu'elle rend : le tableau
+     * de bord de la société n'en a aucune qui rende l'adresse de la liste
+     * des factures d'un magasin désigné par son identifiant. Le propriétaire
+     * de A qui la demande pour le magasin de B est refusé, et l'uuid de B
+     * ne sort ni de cet appel ni de la page.
+     */
+    public function test_le_tableau_de_bord_de_la_societe_ne_rend_l_adresse_d_aucun_magasin_designe_par_le_navigateur(): void
+    {
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'A']);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'B']);
+        $this->dansLEspaceDeLaSociete($magasinA->societe, $this->proprietaireDe($magasinA));
+        $page = Livewire::test(TableauDeBord::class)
+            ->assertSee(htmlspecialchars(FactureResource::urlDesFacturesAEncaisser($magasinA)), escape: false)
+            ->assertDontSee($magasinB->uuid);
+
+        $this->expectException(MethodNotFoundException::class);
+
+        $page->call('urlDesFacturesAEncaisser', $magasinB->id);
     }
 
     /**

@@ -2,8 +2,8 @@
 
 namespace App\Filament\App\Widgets;
 
-use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource;
 use App\Models\User;
@@ -24,8 +24,9 @@ use Illuminate\Database\Eloquent\Builder;
  * depuis les imputations chargées avec les factures, jamais par une somme
  * que la base ferait sur une colonne décimale.
  *
- * Qui la voit (voir canView()), parmi les factures qu'il voit (voir
- * Facture::scopeVisiblesPar()) :
+ * Qui la voit (voir canView() et User::suitLesFacturesAEncaisserDans()),
+ * parmi les factures qu'il voit (voir Facture::scopeVisiblesPar()), et
+ * toujours quelqu'un qui peut ouvrir la liste où elle mène :
  * - le propriétaire, un responsable du magasin et un expert-comptable,
  *   qui voient toutes les factures du magasin ;
  * - un administrateur, seulement s'il voit celles de toute l'équipe ;
@@ -56,25 +57,7 @@ class FacturesAEncaisserApercu extends Widget
         $compte = auth()->user();
         $magasin = Filament::getTenant();
 
-        if (! $compte instanceof User || ! $magasin instanceof Magasin) {
-            return false;
-        }
-
-        $cochees = $compte->autorisationsDans($magasin);
-
-        return $compte->estMembre()
-            ? in_array(PermissionRegistry::PAIEMENT_CONTRE_PASSER, $cochees, true) && in_array(PermissionRegistry::FACTURE_VIEW, $cochees, true)
-            : in_array(PermissionRegistry::FACTURE_VIEW_TOUTES, $cochees, true);
-    }
-
-    /**
-     * « 1 234,50 € », depuis un montant en centimes.
-     */
-    public function enEuros(int $centimes): string
-    {
-        $absolu = abs($centimes);
-
-        return ($centimes < 0 ? '-' : '').number_format(intdiv($absolu, 100), 0, ',', ' ').','.str_pad((string) ($absolu % 100), 2, '0', STR_PAD_LEFT).' €';
+        return $compte instanceof User && $magasin instanceof Magasin && $compte->suitLesFacturesAEncaisserDans($magasin);
     }
 
     /**
@@ -96,6 +79,7 @@ class FacturesAEncaisserApercu extends Widget
             'totaux' => Facture::totauxAEncaisser($factures),
             'plusAnciennes' => $factures->take(self::NOMBRE_ENUMEREES),
             'urlDeLaListe' => FactureResource::urlDesFacturesAEncaisser(),
+            'calculateur' => app(CalculateurLigne::class),
         ];
     }
 }

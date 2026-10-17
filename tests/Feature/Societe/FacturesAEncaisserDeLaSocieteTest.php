@@ -106,6 +106,34 @@ class FacturesAEncaisserDeLaSocieteTest extends TestCase
     }
 
     /**
+     * Un administrateur des deux magasins qui voit celles de toute l'équipe
+     * à Villeurbanne, mais dont la case « Factures : voir (les siennes) »
+     * y est décochée, ne peut pas y ouvrir la liste des factures : le
+     * magasin n'a pas de ligne, et son tableau de bord ne mène qu'à la
+     * liste de Lyon.
+     */
+    public function test_un_magasin_dont_l_administrateur_ne_peut_pas_ouvrir_la_liste_des_factures_n_a_pas_de_ligne(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon Centre']);
+        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne Gratte-Ciel']);
+        $this->facture($lyon, 'Atelier Martin', 50);
+        $this->facture($villeurbanne, 'Garage Durand', 120, $this->responsable($villeurbanne));
+        $administrateur = $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], autorisationsMagasin: [
+            $lyon->id => PermissionRegistry::modeleDeLAdministrateur(),
+            $villeurbanne->id => array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::FACTURE_VIEW])),
+        ]);
+        $this->dansLEspaceDeLaSociete($lyon->societe, $administrateur);
+
+        $totaux = app(FacturesAEncaisserDeLaSociete::class)->pour($administrateur);
+
+        $this->assertSame([$lyon->id => ['nombre' => 1, 'restant_du' => 5000, 'nombre_en_retard' => 0, 'restant_du_en_retard' => 0]], $totaux);
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $lyon->societe))
+            ->assertSee(htmlspecialchars(FactureResource::urlDesFacturesAEncaisser($lyon)), escape: false)
+            ->assertDontSee(htmlspecialchars(FactureResource::urlDesFacturesAEncaisser($villeurbanne)), escape: false)
+            ->assertDontSee('120,00 €');
+    }
+
+    /**
      * La lecture ne rend que des totaux, et ne lit des factures et de leurs
      * imputations que les colonnes qu'elle somme : ni le nom du client, ni
      * le numéro, ni aucune autre colonne d'une facture.

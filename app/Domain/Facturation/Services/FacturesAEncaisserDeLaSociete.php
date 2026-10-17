@@ -2,7 +2,6 @@
 
 namespace App\Domain\Facturation\Services;
 
-use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
@@ -18,9 +17,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * Elle ne lit que les magasins réels de la portée de la personne (voir
  * User::magasinsDeSaPortee() : toute sa société pour le propriétaire, la
  * sélection d'un administrateur), jamais le magasin de démonstration ni
- * un magasin d'une autre société, et seulement ceux où la personne voit
- * toutes les factures (toujours pour le propriétaire, la case cochée pour
- * un administrateur). De chacun, elle ne rend que trois totaux : le nombre
+ * un magasin d'une autre société, et seulement ceux dont elle suit les
+ * factures à encaisser, comme l'alerte du tableau de bord du magasin (voir
+ * User::suitLesFacturesAEncaisserDans()) : ceux où elle voit les factures
+ * et celles de toute l'équipe (toujours pour le propriétaire, les cases
+ * cochées pour un administrateur), et dont elle peut donc ouvrir la liste
+ * où mène chaque ligne. De chacun, elle ne rend que trois totaux : le nombre
  * de ses factures à encaisser (voir Facture::scopeAEncaisser()), leur
  * restant dû, et ceux en retard ; aucun nom de client, aucun numéro,
  * aucune facture prise à part. Elle ne lit pour cela, de chaque facture,
@@ -44,7 +46,7 @@ final class FacturesAEncaisserDeLaSociete
             ->where('est_demonstration', false)
             ->orderBy('id')
             ->get()
-            ->filter(fn (Magasin $magasin): bool => in_array(PermissionRegistry::FACTURE_VIEW_TOUTES, $compte->autorisationsDans($magasin), true))
+            ->filter(fn (Magasin $magasin): bool => $compte->suitLesFacturesAEncaisserDans($magasin))
             ->values()
             ->modelKeys();
 

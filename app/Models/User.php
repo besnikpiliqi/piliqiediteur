@@ -504,6 +504,27 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
+     * Suit-il les factures à encaisser de ce magasin : l'alerte de son
+     * tableau de bord (voir FacturesAEncaisserApercu) et, dans l'espace de
+     * la société, les totaux de ce magasin (voir
+     * FacturesAEncaisserDeLaSociete) ? Une seule condition pour tous, celle
+     * des écrans où elles mènent : il voit les factures (la liste et « Mes
+     * ventes » l'exigent, voir FacturePolicy::viewAny()), et, pour un
+     * membre, il est autorisé à contre-passer un paiement (un responsable
+     * l'est toujours), pour le propriétaire, un administrateur ou un
+     * expert-comptable, il voit celles de toute l'équipe. Lue sur ses
+     * cases cochées dans ce magasin (voir autorisationsDans()), pas sur le
+     * droit d'agir du moment : dans un magasin en lecture seule, où plus
+     * rien ne se contre-passe, la facture reste due et l'alerte reste.
+     */
+    public function suitLesFacturesAEncaisserDans(Magasin $magasin): bool
+    {
+        $exigees = [PermissionRegistry::FACTURE_VIEW, $this->estMembre() ? PermissionRegistry::PAIEMENT_CONTRE_PASSER : PermissionRegistry::FACTURE_VIEW_TOUTES];
+
+        return array_diff($exigees, $this->autorisationsDans($magasin)) === [];
+    }
+
+    /**
      * Oublie les autorisations lues sur cette instance : après une écriture
      * de droits, elles se relisent en base.
      */

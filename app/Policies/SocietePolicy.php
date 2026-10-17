@@ -14,8 +14,11 @@ use App\Models\User;
  * - ses paramètres (identité légale, fiscalité) : le propriétaire et un
  *   administrateur de tous les magasins autorisé à les gérer, qui les
  *   consultent même en lecture seule et ne les modifient qu'en dehors ;
- * - ses magasins : qui est autorisé à les gérer, dans sa portée ; en créer,
- *   seulement avec tous les magasins (voir creerUnMagasin()) ;
+ * - ses magasins : qui est autorisé à les gérer, dans sa portée (les
+ *   modifier, changer leur SIRET, les fermer et les rouvrir, voir
+ *   MagasinDeLaSocietePolicy, qui y ajoute la portée et réserve la
+ *   cession au propriétaire) ; en créer, seulement avec tous les magasins
+ *   (voir creerUnMagasin()) ;
  * - réservés au propriétaire (voir les gestes ci-dessous) : corriger le
  *   SIREN tant que la société n'est pas validée, prouver sa qualité de
  *   représentant, transmettre la propriété ; ouvrir le magasin de
@@ -31,6 +34,8 @@ use App\Models\User;
  *
  * Les actions du domaine posent elles-mêmes ces questions (voir
  * CreerEtablissementAction, ModifierEtablissementAction,
+ * ChangerSiretAction, FermerMagasinAction, RouvrirMagasinAction,
+ * ChoisirEtablissementPrincipalAction,
  * ModifierIdentiteSocieteAction, ModifierParametresFiscauxSocieteAction,
  * CorrigerSirenAvantValidationAction, les actions de la vérification,
  * OuvrirLaDemonstrationAction et TransfererProprieteAction), en plus des
@@ -61,8 +66,10 @@ class SocietePolicy
     }
 
     /**
-     * Modifier les magasins de sa portée (voir aussi
-     * User::administreLeMagasin(), que l'action vérifie).
+     * Gérer les magasins de la société : l'autorisation, dans une société
+     * qui n'est pas en lecture seule ; la portée de l'administrateur
+     * s'ajoute pour chaque magasin (voir MagasinDeLaSocietePolicy et
+     * User::administreLeMagasin()).
      */
     public function gererLesMagasins(User $user, Societe $societe): bool
     {

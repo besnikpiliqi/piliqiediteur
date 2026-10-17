@@ -31,16 +31,20 @@ use LogicException;
  * Magasin::aNumeroteUnDocument()) ; son NIC, tant que la société n'est pas
  * validée, avec un nouveau contrôle Sirene synchrone (voir
  * CreerEtablissementAction) : une fois la société validée, le SIRET d'un
- * magasin ne change que par le registre des SIRET réservés.
+ * magasin ne change que par un changement de SIRET (voir
+ * ChangerSiretAction), qui passe par le registre des SIRET réservés.
  *
- * Réservé à qui gère les magasins de la société (voir SocietePolicy), dans
- * cette société et pour un magasin de sa portée (voir
- * User::administreLeMagasin()) ; le magasin de démonstration, à l'identité
- * fictive, ne se modifie pas. Tout se fait sous le verrou du registre du magasin, qui
- * reçoit un changement de SIRET à son journal des événements (JET 270), et
- * la ligne du magasin se relit verrouillée : un code devenu définitif
- * pendant la saisie n'est pas modifié, le reste l'est. Un code ou un
- * SIRET pris par un autre magasin de la société entre la validation et
+ * Réservé à qui gère les magasins de la société, pour un magasin réel de
+ * sa portée (voir MagasinDeLaSocietePolicy::update()), jamais un
+ * responsable ; le magasin de démonstration, à l'identité fictive, ne se
+ * modifie pas. Un magasin fermé, temporairement ou pour cessation, se
+ * modifie encore (il peut rouvrir) ; un magasin cédé ne se modifie plus
+ * (voir Magasin::aEteCede()). Tout se fait sous le verrou du registre du
+ * magasin, qui reçoit un changement de SIRET à son journal des événements
+ * (JET 270), et la ligne du magasin se relit verrouillée : un code devenu
+ * définitif pendant la saisie n'est pas modifié, le reste l'est ; un
+ * magasin cédé pendant la saisie n'est pas modifié. Un code ou un SIRET
+ * pris par un autre magasin de la société entre la validation et
  * l'enregistrement est refusé comme par la validation. La modification
  * s'inscrit au journal d'audit, avec les anciennes et les nouvelles
  * valeurs de ce qui a changé.
@@ -53,7 +57,7 @@ class ModifierEtablissementAction
 
     public const MESSAGE_SIRET_SOCIETE_VALIDEE = 'Le SIRET d\'un magasin d\'une société validée ne change que par un changement de SIRET.';
 
-    public const MESSAGE_DEMONSTRATION = 'Le magasin de démonstration, à l\'identité fictive, ne se modifie pas.';
+    public const MESSAGE_CEDE = 'Ce magasin a été cédé : il ne se modifie plus.';
 
     private const CHAMPS_DE_L_ADRESSE = ['adresse', 'complement_adresse', 'code_postal', 'ville', 'pays'];
 
@@ -80,14 +84,10 @@ class ModifierEtablissementAction
         }
 
         return $contexte->runAsSociete($societe, function () use ($auteur, $magasin, $societe, $donnees): Magasin {
-            $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'gererLesMagasins', $societe, $societe, new LogicException(self::MESSAGE_SANS_AUTORISATION));
+            $auteur = app(LecteurDesDroits::class)->exigerDansLaSociete($auteur, 'update', $societe, $magasin, new LogicException(self::MESSAGE_SANS_AUTORISATION));
 
-            if (! $auteur->administreLeMagasin($magasin)) {
-                throw new LogicException(self::MESSAGE_SANS_AUTORISATION);
-            }
-
-            if ($magasin->est_demonstration) {
-                throw new LogicException(self::MESSAGE_DEMONSTRATION);
+            if ($magasin->aEteCede()) {
+                throw new LogicException(self::MESSAGE_CEDE);
             }
 
             $valides = $this->valider($magasin, $donnees);
@@ -122,6 +122,11 @@ class ModifierEtablissementAction
     private function enregistrer(Magasin $magasin, array $valides, ?array $consultation, User $auteur): Magasin
     {
         $enregistre = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
+
+        if ($enregistre->aEteCede()) {
+            throw new LogicException(self::MESSAGE_CEDE);
+        }
+
         $avant = $this->valeursAuditees($enregistre);
         $territoire = $enregistre->territoireTva();
 

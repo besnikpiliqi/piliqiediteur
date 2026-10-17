@@ -15,10 +15,15 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Stock\Models\MouvementStock;
+use App\Domain\Tenancy\Actions\FermerMagasinAction;
+use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
@@ -28,6 +33,7 @@ use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\Societe\Resources\MagasinResource\Pages\ModifierMagasin;
 use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
 use App\Models\User;
@@ -113,6 +119,8 @@ class ActionsForgeesTest extends TestCase
             'créer un vendeur',
             'nommer un responsable',
             'créer l\'expert-comptable',
+            'fermer un magasin',
+            'rouvrir un magasin',
         ], array_map(static fn (string $nom): array => [$nom], $noms));
     }
 
@@ -192,6 +200,20 @@ class ActionsForgeesTest extends TestCase
                 $this->forgerLAction(Livewire::test(ListMembres::class)->assertActionHidden('creerUnExpertComptable'), 'creerUnExpertComptable', ['name' => 'Cabinet', 'email' => 'cabinet@example.test', 'mot_de_passe_provisoire' => self::MOT_DE_PASSE_PROVISOIRE]);
 
                 return fn (): bool => User::query()->where('role_societe', RoleSociete::ExpertComptable->value)->doesntExist();
+            })(),
+            'fermer un magasin' => (function () use ($magasin, $societe): Closure {
+                $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
+                $this->dansLEspaceDeLaSociete($societe, $administrateur);
+                $this->forgerLAction(Livewire::test(ModifierMagasin::class, ['record' => $magasin->getRouteKey()])->assertActionHidden('ceder'), 'ceder', ['confirmation' => 'Ma Boutique', 'mot_de_passe' => self::MOT_DE_PASSE_CHOISI]);
+
+                return fn (): bool => $magasin->fresh()->statut === StatutMagasin::Actif && app(TenantContext::class)->runAs($magasin, fn (): bool => MouvementStock::query()->doesntExist());
+            })(),
+            'rouvrir un magasin' => (function () use ($magasin, $societe): Closure {
+                app(FermerMagasinAction::class)->handle($this->proprietaireDe($magasin), $magasin, MotifFermeture::Cession, 'password', 'Ma Boutique');
+                $this->dansLEspaceDeLaSociete($societe, $this->proprietaireDe($magasin));
+                $this->forgerLAction(Livewire::test(ModifierMagasin::class, ['record' => $magasin->getRouteKey()])->assertActionHidden('rouvrir'), 'rouvrir', ['mot_de_passe' => 'password']);
+
+                return fn (): bool => $magasin->fresh()->aEteCede() && PeriodeActivite::query()->where('magasin_id', $magasin->id)->count() === 1;
             })(),
         };
 

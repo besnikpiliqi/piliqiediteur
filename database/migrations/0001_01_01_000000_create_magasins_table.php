@@ -43,11 +43,24 @@ return new class extends Migration
             $table->string('code_postal', 10)->nullable();
             $table->string('ville', 100)->nullable();
             $table->string('pays', 2)->default('FR');
+            // Les coordonnées et les références d'acheteur du magasin,
+            // réglées dans son panneau (voir CoordonneesMagasin) : les
+            // références qu'il donne à ses fournisseurs (n° de client, code
+            // d'acheteur...) servent, à l'étape 2, à proposer le magasin
+            // destinataire d'une facture reçue.
             $table->string('email', 150)->nullable();
             $table->string('telephone', 30)->nullable();
+            $table->json('references_acheteur')->nullable();
+            // L'établissement principal que la société indique, au plus un
+            // (voir ChoisirEtablissementPrincipalAction) : une simple
+            // information, sans aucun effet sur les réglages ni sur les
+            // documents ; aucun magasin n'a de privilège sur les autres.
+            $table->boolean('est_etablissement_principal')->default(false);
             // Actif ou fermé (voir StatutMagasin) : la société ferme et
-            // rouvre elle-même ses magasins ; fermé, il passe en lecture
-            // seule.
+            // rouvre elle-même ses magasins (voir FermerMagasinAction et
+            // RouvrirMagasinAction) ; fermé, il passe en lecture seule. Le
+            // motif de sa fermeture est celui de sa dernière période
+            // d'activité (voir PeriodeActivite).
             $table->string('statut', 20)->default('actif');
             // La suspension décidée par l'éditeur, indépendante de la
             // fermeture : jamais levée par une réouverture (voir
@@ -93,8 +106,10 @@ return new class extends Migration
             $table->index('statut');
         });
 
-        // Une seule démonstration par société.
+        // Une seule démonstration et un seul établissement principal par
+        // société.
         DB::statement('CREATE UNIQUE INDEX magasins_une_demonstration_par_societe ON magasins (societe_id) WHERE est_demonstration');
+        DB::statement('CREATE UNIQUE INDEX magasins_un_principal_par_societe ON magasins (societe_id) WHERE est_etablissement_principal');
 
         // Un magasin ne s'efface jamais : ses documents se conservent dix
         // ans et son SIRET reste réservé. La base refuse elle-même sa

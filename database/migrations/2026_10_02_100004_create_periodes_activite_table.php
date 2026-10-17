@@ -8,11 +8,13 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Les périodes d'activité d'un magasin (voir PeriodeActivite et
- * PeriodesDActivite) : de la validation de sa société, ou de sa création
- * dans une société validée, à sa fermeture. Les tickets Z ne se produisent
- * que pour les jours d'une période (voir CloturerLesJourneesAction), et
- * l'abonnement d'un magasin ne court que sur elles. Une période ne se
- * rouvre pas et ne s'efface pas : seule sa fin se pose, une fois.
+ * PeriodesDActivite) : de la validation de sa société, de sa création
+ * dans une société validée ou de sa réouverture, à sa fermeture, dont le
+ * motif dit si elle est temporaire, pour cessation ou pour cession. Les
+ * tickets Z ne se produisent que pour les jours d'une période (voir
+ * CloturerLesJourneesAction), et l'abonnement d'un magasin ne court que
+ * sur elles. Une période ne se rouvre pas et ne s'efface pas : seule sa
+ * fin se pose, une fois ; une réouverture en ouvre une nouvelle.
  */
 return new class extends Migration
 {

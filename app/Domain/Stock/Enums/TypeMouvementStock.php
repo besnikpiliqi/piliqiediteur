@@ -5,7 +5,9 @@ namespace App\Domain\Stock\Enums;
 /**
  * Chaque type dit à lui seul le sens du mouvement (voir estEntree()) : le
  * stock d'un produit se recalcule donc toujours depuis son grand livre,
- * sans lire la note d'aucun mouvement.
+ * sans lire la note d'aucun mouvement. La sortie de cession fait sortir,
+ * au coût moyen, le stock d'un magasin fermé pour cession (voir
+ * StockLedgerService::sortirPourCession()).
  */
 enum TypeMouvementStock: string
 {
@@ -15,6 +17,7 @@ enum TypeMouvementStock: string
     case RetourClient = 'retour_client';
     case AjustementEntree = 'ajustement_entree';
     case AjustementSortie = 'ajustement_sortie';
+    case SortieCession = 'sortie_cession';
 
     /**
      * true = entre en stock (+), false = sort du stock (-).
@@ -23,7 +26,7 @@ enum TypeMouvementStock: string
     {
         return match ($this) {
             self::ReceptionAchat, self::RetourClient, self::AjustementEntree => true,
-            self::Vente, self::RetourFournisseur, self::AjustementSortie => false,
+            self::Vente, self::RetourFournisseur, self::AjustementSortie, self::SortieCession => false,
         };
     }
 

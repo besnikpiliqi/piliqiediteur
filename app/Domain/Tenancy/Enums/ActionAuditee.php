@@ -31,6 +31,10 @@ enum ActionAuditee: string implements HasLabel
     case ReclamationOuverte = 'reclamation_ouverte';
     case MagasinCree = 'magasin_cree';
     case MagasinModifie = 'magasin_modifie';
+    case SiretChange = 'siret_change';
+    case MagasinFerme = 'magasin_ferme';
+    case MagasinRouvert = 'magasin_rouvert';
+    case EtablissementPrincipalChoisi = 'etablissement_principal_choisi';
     case DemonstrationOuverte = 'demonstration_ouverte';
     case DemonstrationFermee = 'demonstration_fermee';
     case MembreCree = 'membre_cree';
@@ -83,6 +87,10 @@ enum ActionAuditee: string implements HasLabel
             self::ReclamationOuverte => 'Réclamation ouverte',
             self::MagasinCree => 'Magasin créé',
             self::MagasinModifie => 'Magasin modifié',
+            self::SiretChange => 'SIRET du magasin changé',
+            self::MagasinFerme => 'Magasin fermé',
+            self::MagasinRouvert => 'Magasin rouvert',
+            self::EtablissementPrincipalChoisi => 'Établissement principal indiqué',
             self::DemonstrationOuverte => 'Magasin de démonstration ouvert',
             self::DemonstrationFermee => 'Magasin de démonstration fermé',
             self::MembreCree => 'Compte créé',
@@ -148,6 +156,13 @@ enum ActionAuditee: string implements HasLabel
             self::SocieteValidee => ['preuve', 'beneficiaire', 'personne_verifiee', 'qualite_du_titulaire', 'sirets'],
             self::SocieteRefusee, self::ReclamationOuverte, self::DemonstrationOuverte, self::DemonstrationFermee => ['motif'],
             self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'etablissement_verifie'],
+            self::SiretChange => ['siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'etablissement_verifie'],
+            // Pour une cession, la valeur hors taxe du stock sorti au coût
+            // moyen, le nombre de produits sortis et ceux restés en stock
+            // négatif, sans mouvement (voir FermerMagasinAction).
+            self::MagasinFerme => ['statut', 'motif', 'valeur_stock_sorti_ht', 'produits_sortis', 'produits_en_stock_negatif'],
+            self::MagasinRouvert => ['statut', 'etablissement_verifie'],
+            self::EtablissementPrincipalChoisi => ['etablissement_principal'],
             // Les droits de chaque compte touché, avant et après, avec son
             // nom au moment de l'opération (voir JournalDesDroits).
             self::MembreCree, self::AdministrateurCree, self::AdministrateurNomme, self::AdministrateurModifie, self::ExpertComptableCree, self::DroitsModifies,

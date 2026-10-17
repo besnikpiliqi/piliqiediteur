@@ -12,6 +12,7 @@ use App\Domain\Facturation\Enums\TerritoireTva;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Exceptions\IdentiteDeLaSocieteIncompleteException;
 use App\Domain\Facturation\Models\SequenceDocument;
+use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Services\CodeMagasin;
@@ -47,9 +48,9 @@ use LogicException;
  * Son SIRET touche la conformité de sa caisse : chaque changement
  * s'inscrit à son journal des événements (JET 270, voir
  * JournaliseSesParametresDeConformite). Une fois sa société validée, il
- * ne change que par le registre des SIRET réservés (voir
- * SiretsDesMagasins), et un SIRET réservé ne sert jamais à un autre
- * magasin.
+ * ne change que par un déménagement (voir ChangerSiretAction), qui passe
+ * par le registre des SIRET réservés (voir SiretsDesMagasins), et un
+ * SIRET réservé ne sert jamais à un autre magasin.
  *
  * Son code court (voir CodeMagasin) figure dans tous les numéros de ses
  * documents : unique dans la société, proposé depuis son nom s'il n'est
@@ -62,7 +63,11 @@ use LogicException;
  * (voir estEnLectureSeule()) ; il ne vend qu'une fois sa société validée
  * et son établissement confirmé par le répertoire Sirene (voir
  * peutVendre()). Un magasin ne se supprime jamais (voir delete() et le
- * déclencheur de la table magasins).
+ * déclencheur de la table magasins) : sa société le ferme et le rouvre
+ * (voir FermerMagasinAction et RouvrirMagasinAction), et un magasin cédé
+ * ne se rouvre plus (voir aEteCede()). La société peut indiquer l'un de
+ * ses magasins comme son établissement principal, une simple information
+ * (voir ChoisirEtablissementPrincipalAction).
  *
  * Le magasin de démonstration d'une société (est_demonstration, voir
  * OuvrirLaDemonstrationAction) est un magasin à part entière, avec son
@@ -116,6 +121,7 @@ class Magasin extends Model implements HasName
         'pays',
         'email',
         'telephone',
+        'references_acheteur',
         'prix_vente_automatique',
         'bareme_prix_vente',
         'relances_automatiques',
@@ -131,6 +137,8 @@ class Magasin extends Model implements HasName
         'est_demonstration' => 'boolean',
         'etablissement_verifie_le' => 'datetime',
         'suspendu_le' => 'datetime',
+        'references_acheteur' => 'array',
+        'est_etablissement_principal' => 'boolean',
         'prix_vente_automatique' => 'boolean',
         'bareme_prix_vente' => BaremePrixDeVente::class,
         'relances_automatiques' => 'boolean',
@@ -180,6 +188,7 @@ class Magasin extends Model implements HasName
             $magasin->code ??= CodeMagasin::proposer($magasin->societe, $magasin->nom);
             $magasin->statut ??= StatutMagasin::Actif;
             $magasin->pays ??= 'FR';
+            $magasin->est_etablissement_principal ??= false;
             $magasin->prix_vente_automatique ??= false;
             $magasin->bareme_prix_vente ??= BaremePrixDeVente::parDefaut();
             $magasin->relances_automatiques ??= false;
@@ -199,6 +208,10 @@ class Magasin extends Model implements HasName
         static::updating(function (Magasin $magasin) {
             if ($magasin->isDirty('est_demonstration')) {
                 throw new LogicException('Un magasin réel ne devient jamais le magasin de démonstration, ni l\'inverse.');
+            }
+
+            if ($magasin->est_etablissement_principal && $magasin->est_demonstration) {
+                throw new LogicException('Le magasin de démonstration n\'est jamais l\'établissement principal.');
             }
 
             if ($magasin->isDirty('code')) {
@@ -290,6 +303,46 @@ class Magasin extends Model implements HasName
     }
 
     /**
+     * Est-il fermé par sa société (voir FermerMagasinAction), ou, pour le
+     * magasin de démonstration, terminé ? Une suspension par l'éditeur
+     * n'est pas une fermeture (voir estEnLectureSeule()).
+     */
+    public function estFerme(): bool
+    {
+        return $this->statut === StatutMagasin::Ferme;
+    }
+
+    /**
+     * A-t-il été cédé ? Fermé pour cession (voir FermerMagasinAction), sa
+     * dernière période d'activité ayant pris fin pour ce motif : il ne se
+     * rouvre jamais et ne se modifie plus. Les périodes se lisent filtrées
+     * par magasin.
+     */
+    public function aEteCede(): bool
+    {
+        return $this->motifDeSaFermeture() === MotifFermeture::Cession;
+    }
+
+    /**
+     * Pourquoi il est fermé : le motif de la fin de sa dernière période
+     * d'activité ; null s'il est actif, ou fermé avant la validation de sa
+     * société, quand il n'avait encore aucune période.
+     */
+    public function motifDeSaFermeture(): ?MotifFermeture
+    {
+        if (! $this->estFerme()) {
+            return null;
+        }
+
+        return PeriodeActivite::query()
+            ->where('magasin_id', $this->getKey())
+            ->orderByDesc('debut')
+            ->orderByDesc('id')
+            ->first()
+            ?->motif_fin;
+    }
+
+    /**
      * Le magasin est-il en lecture seule ? Fermé par sa société, suspendu
      * par l'éditeur, ou parce que sa société n'est plus active ou a été
      * refusée (voir Societe::estEnLectureSeule()) : la consultation et les
@@ -314,7 +367,7 @@ class Magasin extends Model implements HasName
         $societe = $this->societe;
 
         return match (true) {
-            $this->statut === StatutMagasin::Ferme => "{$designation} est fermé",
+            $this->estFerme() => "{$designation} est fermé",
             $this->suspendu_le !== null => "{$designation} est suspendu",
             $societe->estRefusee() => "{$designation} est en lecture seule, l'inscription de votre société ayant été refusée",
             $societe->statut->estEnLectureSeule() => "{$designation} est en lecture seule, votre société étant ".mb_strtolower($societe->statut->getLabel()),

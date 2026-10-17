@@ -16,10 +16,12 @@ use Illuminate\Support\Facades\DB;
  * sirets_magasins_siret_reserve tranche deux réservations simultanées :
  * la seconde est refusée.
  *
- * Une réservation se fait à la validation de la société pour ses magasins
- * actifs, et à la création d'un magasin dans une société validée (voir
- * CreerEtablissementAction). Le message de refus ne dit rien du magasin
- * ni de la société qui a réservé ce SIRET.
+ * Une réservation se fait à la mise en activité d'un magasin d'une
+ * société validée (voir MiseEnActiviteDesMagasins : la validation de la
+ * société pour ses magasins actifs, la création d'un magasin dans une
+ * société validée, une réouverture) et à un changement de SIRET (voir
+ * remplacer()). Le message de refus ne dit rien du magasin ni de la
+ * société qui a réservé ce SIRET.
  */
 class SiretsDesMagasins
 {
@@ -56,6 +58,49 @@ class SiretsDesMagasins
                 'siret' => $magasin->siret,
                 'reserve_le' => now(),
             ]))->save());
+        } catch (UniqueConstraintViolationException) {
+            throw new SiretDejaReserveException;
+        }
+    }
+
+    /**
+     * Remplace le SIRET du magasin d'une société validée par un nouveau
+     * (voir ChangerSiretAction), dans un point de sauvegarde : son SIRET
+     * actuel au registre, s'il en a un, cesse de l'être mais reste réservé
+     * (retire_le) ; le nouveau se réserve ; puis il s'écrit sur le magasin,
+     * avec ces autres attributs, et s'inscrit à son journal des événements
+     * (voir JournaliseSesParametresDeConformite). Le magasin est relu
+     * verrouillé par l'appelant, sous le verrou de son registre. Un SIRET
+     * déjà réservé, ou pris entre-temps par un autre magasin de la
+     * société, est refusé sans rien changer.
+     *
+     * @param  array<string, mixed>  $attributs  ce qui change avec lui : l'adresse reprise du répertoire Sirene...
+     *
+     * @throws SiretDejaReserveException
+     */
+    public function remplacer(Magasin $magasin, string $siret, array $attributs = []): SiretMagasin
+    {
+        try {
+            return DB::transaction(function () use ($magasin, $siret, $attributs): SiretMagasin {
+                SiretMagasin::query()
+                    ->where('magasin_id', $magasin->getKey())
+                    ->whereNull('retire_le')
+                    ->whereNull('libere_le')
+                    ->lockForUpdate()
+                    ->get()
+                    ->each(fn (SiretMagasin $actuel): bool => $actuel->forceFill(['retire_le' => now()])->save());
+
+                $nouveau = tap((new SiretMagasin)->forceFill([
+                    'societe_id' => $magasin->societe_id,
+                    'magasin_id' => $magasin->getKey(),
+                    'siret' => $siret,
+                    'reserve_le' => now(),
+                ]))->save();
+
+                $magasin->forceFill([...$attributs, 'siret' => $siret])->save();
+
+                return $nouveau;
+            });
         } catch (UniqueConstraintViolationException) {
             throw new SiretDejaReserveException;
         }

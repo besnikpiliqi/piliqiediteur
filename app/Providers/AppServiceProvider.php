@@ -23,6 +23,7 @@ use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Http\Responses\ReponseDeConnexion;
@@ -160,7 +161,7 @@ class AppServiceProvider extends ServiceProvider
      * Le nom sous lequel un modèle s'écrit dans une colonne polymorphique
      * (document_type du registre fiscal et des envois, source_type du
      * grand livre du stock, transmissible_type, notifiable_type,
-     * model_type des rôles, cible_type du journal d'audit) : un alias stable plutôt que le nom de sa
+     * cible_type du journal d'audit) : un alias stable plutôt que le nom de sa
      * classe, qu'un déplacement de fichier changerait, alors que le
      * registre fiscal le signe (voir RegistreFiscal). Sans
      * enforceMorphMap() : un modèle absent de la liste garde le nom de sa
@@ -178,6 +179,7 @@ class AppServiceProvider extends ServiceProvider
             'ligne_avoir' => LigneAvoir::class,
             'magasin' => Magasin::class,
             'paiement' => Paiement::class,
+            'periode_activite' => PeriodeActivite::class,
             'produit' => Produit::class,
             'societe' => Societe::class,
             'soumission_ereporting' => SoumissionEReporting::class,

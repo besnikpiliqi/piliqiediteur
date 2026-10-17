@@ -12,8 +12,8 @@ use LogicException;
  * écrivain) : de sa validation, de sa création dans une société validée ou
  * de sa réouverture, à sa fermeture. Les tickets Z ne se produisent que
  * pour ses jours (voir CloturerLesJourneesAction). Une période ne se
- * corrige jamais : seule sa fin (fin, motif_fin, fermee_par) se pose, une
- * fois ; elle ne s'efface pas.
+ * corrige jamais : seule sa fin (fin, motif_fin, fermee_par et son nom
+ * figé) se pose, une fois ; elle ne s'efface pas.
  *
  * Sans scope global : toute requête filtre explicitement par magasin.
  */
@@ -43,9 +43,11 @@ class PeriodeActivite extends Model
     ];
 
     /**
-     * Les colonnes qui passent de null à une valeur, et elles seules.
+     * Les colonnes qui passent de null à une valeur, et elles seules : sa
+     * fin, son motif, et qui l'a fermée, avec son nom figé (voir
+     * FigeLeNomDeSesAuteurs).
      */
-    private const COLONNES_QUI_SE_POSENT = ['fin', 'motif_fin', 'fermee_par'];
+    private const COLONNES_QUI_SE_POSENT = ['fin', 'motif_fin', 'fermee_par', 'fermee_par_nom'];
 
     protected static function booted(): void
     {

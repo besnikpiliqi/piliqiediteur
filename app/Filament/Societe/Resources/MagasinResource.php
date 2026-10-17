@@ -2,6 +2,7 @@
 
 namespace App\Filament\Societe\Resources;
 
+use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\Societe\Resources\MagasinResource\Pages;
 use App\Filament\Societe\RessourceDuPanneauSociete;
@@ -15,10 +16,15 @@ use Illuminate\Database\Eloquent\Builder;
  * MagasinDeLaSocietePolicy) : la liste de ceux de la portée de la personne
  * connectée (tous pour le propriétaire et un administrateur de tous les
  * magasins, ceux de sa sélection pour un autre administrateur), chacun
- * avec son code, son SIRET, son établissement (vérifié ou à vérifier) et
- * son état ; et la création d'un magasin (voir CreerMagasin), pour qui peut
- * en créer. Le magasin de démonstration se trouve sur le tableau de bord.
- * Un magasin ne se supprime jamais.
+ * avec son code, son SIRET, son établissement (vérifié ou à vérifier),
+ * l'établissement principal indiqué et son état ; la création d'un magasin
+ * (voir CreerMagasin), pour qui peut en créer ; et, pour qui gère les
+ * magasins, chacun de ceux de sa portée (voir ModifierMagasin) : le
+ * modifier, changer son SIRET, le fermer, le rouvrir, le céder, l'indiquer
+ * comme établissement principal. Le magasin de démonstration se trouve sur
+ * le tableau de bord. Un magasin ne se supprime jamais. La suspension d'un
+ * magasin par l'éditeur se range à part de sa fermeture (suspendu_le) :
+ * l'état la montre, et aucune réouverture ne la lève.
  */
 class MagasinResource extends RessourceDuPanneauSociete
 {
@@ -51,7 +57,7 @@ class MagasinResource extends RessourceDuPanneauSociete
         $auteur = auth()->user();
 
         return $auteur instanceof User
-            ? $auteur->magasinsDeSaPortee()->where('est_demonstration', false)
+            ? $auteur->magasinsDeSaPortee()->where('est_demonstration', false)->with('societe')
             : Magasin::query()->whereRaw('1 = 0');
     }
 
@@ -68,12 +74,19 @@ class MagasinResource extends RessourceDuPanneauSociete
                     ->state(fn (Magasin $record): string => $record->etablissement_verifie_le === null ? 'à vérifier' : 'vérifié')
                     ->badge()
                     ->color(fn (string $state): string => $state === 'vérifié' ? 'success' : 'warning'),
+                Tables\Columns\TextColumn::make('principal')
+                    ->label('Principal')
+                    ->state(fn (Magasin $record): ?string => $record->est_etablissement_principal ? 'établissement principal' : null)
+                    ->badge()
+                    ->placeholder(''),
                 Tables\Columns\TextColumn::make('etat')
                     ->label('État')
-                    ->state(fn (Magasin $record): string => $record->motifDeLectureSeule() ?? 'ouvert')
+                    ->state(fn (Magasin $record): string => self::etat($record))
                     ->wrap(),
             ])
-            ->actions([])
+            ->actions([
+                Tables\Actions\EditAction::make()->label('Gérer'),
+            ])
             ->bulkActions([])
             ->emptyStateHeading('Aucun magasin pour le moment')
             ->emptyStateDescription('Créez votre premier magasin en choisissant son établissement parmi ceux de votre SIREN au répertoire Sirene.')
@@ -85,6 +98,26 @@ class MagasinResource extends RessourceDuPanneauSociete
         return [
             'index' => Pages\ListMagasins::route('/'),
             'create' => Pages\CreerMagasin::route('/creer'),
+            'edit' => Pages\ModifierMagasin::route('/{record}'),
         ];
+    }
+
+    /**
+     * L'état du magasin tel que la société le lit : ouvert ; en lecture
+     * seule, suspendu par l'éditeur ou à cause de sa société (voir
+     * Magasin::motifDeLectureSeule()) ; fermé, avec le motif de sa
+     * fermeture, et la suspension de l'éditeur qui reste en place.
+     */
+    public static function etat(Magasin $magasin): string
+    {
+        $etat = match ($magasin->estFerme() ? $magasin->motifDeSaFermeture() : false) {
+            false => $magasin->motifDeLectureSeule() ?? 'Ouvert',
+            MotifFermeture::Cession => 'Cédé',
+            MotifFermeture::Cessation => 'Fermé : cessation d\'activité',
+            MotifFermeture::Temporaire => 'Fermé temporairement',
+            default => 'Fermé',
+        };
+
+        return $magasin->estFerme() && $magasin->suspendu_le !== null ? "{$etat} ; suspendu par l'éditeur" : $etat;
     }
 }

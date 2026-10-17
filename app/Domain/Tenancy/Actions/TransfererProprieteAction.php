@@ -13,18 +13,19 @@ use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PorteeDesAdministrateurs;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Facades\Hash;
 use LogicException;
 use SensitiveParameter;
 
 /**
  * Le propriétaire, et lui seul, transmet la propriété de sa société, en
- * redonnant son mot de passe, à un administrateur actif de la société dont
- * la qualité de représentant légal ou de mandataire est prouvée à son nom
- * (voir User::aSaQualiteVerifiee()) ; jamais à un expert-comptable, à un
+ * redonnant son mot de passe (voir MotDePasseRedemande), à un
+ * administrateur actif de la société dont la qualité de représentant
+ * légal ou de mandataire est prouvée à son nom (voir
+ * User::aSaQualiteVerifiee()) ; jamais à un expert-comptable, à un
  * membre, à un compte suspendu, retiré ou d'une autre société.
  *
  * Dans cet ordre, à cause des gardes de la base et de l'index d'un seul
@@ -42,8 +43,6 @@ class TransfererProprieteAction
     use AgitDansLaSociete;
 
     public const MESSAGE_PROPRIETAIRE_SEUL = 'Seul le propriétaire transmet la propriété de sa société.';
-
-    public const MESSAGE_MOT_DE_PASSE = 'Votre mot de passe est incorrect.';
 
     public const MESSAGE_ADMINISTRATEUR = 'La propriété ne se transmet qu\'à un administrateur actif de la société.';
 
@@ -65,9 +64,7 @@ class TransfererProprieteAction
         $this->dansLaSociete($societe, self::MESSAGE_PROPRIETAIRE_SEUL, function () use ($auteur, $nouveau, $societe, $motDePasse): void {
             self::exigerLeProprietaire($auteur, $societe);
 
-            if (! Hash::check($motDePasse, (string) User::query()->whereKey($auteur->getKey())->value('password'))) {
-                throw new LogicException(self::MESSAGE_MOT_DE_PASSE);
-            }
+            MotDePasseRedemande::exiger($auteur, $motDePasse);
 
             $magasins = Magasin::query()->where('societe_id', $societe->getKey())->orderBy('id')->get();
 

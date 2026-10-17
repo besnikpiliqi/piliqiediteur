@@ -23,7 +23,10 @@ use LogicException;
  * reçoit son numéro qu'à l'émission, moment où le stock est décrémenté
  * (voir AvoirFournisseurEmis/DecrementerStockApresEmissionAvoirFournisseur).
  * Un magasin suspendu ou fermé n'en émet plus (voir
- * Magasin::verifierQuIlEstOuvert()).
+ * Magasin::verifierQuIlEstOuvert()) : sa ligne se relit sous un verrou
+ * partagé, premier verrou de la transaction, et la fermeture du magasin,
+ * qui la verrouille (voir FermerMagasinAction), passe donc tout entière
+ * avant ou après l'émission.
  *
  * Il fait sortir du stock et recalcule le coût moyen, comme une
  * validation d'achat : son auteur est relu sous le verrou de sa ligne,
@@ -47,7 +50,7 @@ class EmettreAvoirFournisseurAction
     {
         return DB::transaction(function () use ($auteur, $avoirFournisseur) {
             $magasin = app(TenantContext::class)->magasin();
-            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlEstOuvert();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, AvoirFournisseur::class);
 
             return $this->operateur->pendant($compte, fn (): AvoirFournisseur => $this->emettre($avoirFournisseur));

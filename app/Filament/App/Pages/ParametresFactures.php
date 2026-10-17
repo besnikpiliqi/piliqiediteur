@@ -22,8 +22,9 @@ use Filament\Pages\Page;
  * frais de recouvrement et de l'escompte (B9, art. L441-9 du Code de
  * commerce), que chaque magasin reçoit à sa création et règle ici.
  *
- * Comme l'identité du magasin, ces réglages engagent le magasin envers ses
- * clients : ils se règlent avec « Paramètres du magasin »
+ * Comme ses coordonnées (voir CoordonneesMagasin), ces réglages engagent
+ * le magasin envers ses clients : ils se règlent avec « Paramètres du
+ * magasin »
  * (PermissionRegistry::PARAMETRES_GERER). Seul le magasin actif est lu et
  * modifié.
  */

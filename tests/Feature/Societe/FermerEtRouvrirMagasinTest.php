@@ -1,0 +1,492 @@
+<?php
+
+namespace Tests\Feature\Societe;
+
+use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Enums\ModeFermetureCaisse;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Stock\Enums\TypeMouvementStock;
+use App\Domain\Stock\Models\MouvementStock;
+use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Tenancy\Actions\ChangerSiretAction;
+use App\Domain\Tenancy\Actions\FermerMagasinAction;
+use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
+use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\MotifFermeture;
+use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Events\MagasinFerme;
+use App\Domain\Tenancy\Events\MagasinOuvert;
+use App\Domain\Tenancy\Events\MagasinRouvert;
+use App\Domain\Tenancy\Events\SocieteValidee;
+use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
+use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PeriodeActivite;
+use App\Domain\Tenancy\Notifications\StockDuMagasinCede;
+use App\Domain\Tenancy\Services\ControleSirene;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\MotDePasseRedemande;
+use App\Integrations\Sirene\Contracts\RepertoireSirene;
+use App\Integrations\Sirene\FauxRepertoireSirene;
+use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Notification;
+use LogicException;
+use Tests\TestCase;
+
+/**
+ * Le cycle de vie d'un magasin réel (voir FermerMagasinAction et
+ * RouvrirMagasinAction) : la société le ferme, temporairement, pour
+ * cessation ou pour cession, et le rouvre, avec ce que la caisse
+ * sécurisée en attend (journées clôturées à la fermeture, aucun ticket Z
+ * pendant la fermeture, même registre, mêmes séries et mêmes grands totaux
+ * à la réouverture), le contrôle Sirene de la réouverture, la suspension de
+ * l'éditeur qui reste, la sortie du stock d'un magasin cédé et les
+ * événements des abonnements.
+ */
+class FermerEtRouvrirMagasinTest extends TestCase
+{
+    use RefreshDatabase;
+
+    /**
+     * Le mot de passe du propriétaire des sociétés des tests (voir
+     * UserFactory).
+     */
+    private const MOT_DE_PASSE_DU_PROPRIETAIRE = 'password';
+
+    public function test_la_fermeture_exige_l_autorisation_dans_la_portee_et_le_mot_de_passe(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']);
+        $sansLAutorisation = $this->administrateur($magasin);
+        $horsDeSaPortee = $this->administrateur($magasin, [$autre->id], [AutorisationsSociete::MAGASINS_GERER]);
+        $autorise = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::MAGASINS_GERER]);
+
+        $this->assertThrows(fn () => $this->fermer($magasin, MotifFermeture::Temporaire, $sansLAutorisation, self::MOT_DE_PASSE_CHOISI), AuthorizationException::class);
+        $this->assertThrows(fn () => $this->fermer($magasin, MotifFermeture::Temporaire, $horsDeSaPortee, self::MOT_DE_PASSE_CHOISI), AuthorizationException::class);
+        $this->assertThrows(fn () => $this->fermer($magasin, MotifFermeture::Temporaire, $autorise, 'devine-au-hasard'), LogicException::class, MotDePasseRedemande::MESSAGE);
+        $this->assertSame(StatutMagasin::Actif, $magasin->fresh()->statut);
+
+        $this->fermer($magasin, MotifFermeture::Temporaire, $autorise, self::MOT_DE_PASSE_CHOISI);
+
+        $this->assertSame([StatutMagasin::Ferme, StatutMagasin::Actif], [$magasin->fresh()->statut, $autre->fresh()->statut]);
+    }
+
+    /**
+     * Les journées en attente, jusqu'au jour même, se clôturent au nom du
+     * système ; le changement de statut s'inscrit au journal des
+     * événements du magasin (JET 270) au nom de qui le ferme, sa période
+     * d'activité se ferme avec le motif, et la fermeture s'inscrit au
+     * journal d'audit.
+     */
+    public function test_la_fermeture_cloture_les_journees_en_attente_et_s_inscrit_au_jet_270(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $this->vendre($magasin);
+        $this->travelTo('2026-10-07 15:00:00');
+
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+
+        app(TenantContext::class)->set($magasin);
+        $this->assertSame(
+            [['2026-10-05', 1, null], ['2026-10-06', 0, null], ['2026-10-07', 0, null]],
+            ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture->toDateString(), $cloture->nombre_ventes, $cloture->cree_par])->all(),
+        );
+        $evenement = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->where('type', '270')->orderByDesc('sequence')->first()->contenuSigne();
+        $this->assertSame(
+            [['parametre' => 'statut_magasin', 'magasin' => ['id' => $magasin->id, 'nom' => 'Ma Boutique'], 'ancienne_valeur' => 'actif', 'nouvelle_valeur' => 'ferme'], $proprietaire->id],
+            [$evenement['donnees']['details'], $evenement['operateur']['id']],
+        );
+        $periode = PeriodeActivite::query()->where('magasin_id', $magasin->id)->sole();
+        $this->assertSame(['2026-10-07 15:00:00', MotifFermeture::Temporaire, $proprietaire->id, $proprietaire->name], [$periode->fin->format('Y-m-d H:i:s'), $periode->motif_fin, (int) $periode->fermee_par, $periode->fermee_par_nom]);
+        $entree = $this->entreesDAudit($magasin->societe, ActionAuditee::MagasinFerme)[0];
+        $this->assertSame([['statut' => 'actif'], ['motif' => 'temporaire', 'statut' => 'ferme'], $proprietaire->id], [$entree->anciennes_valeurs, $entree->nouvelles_valeurs, (int) $entree->auteur_id]);
+    }
+
+    public function test_un_magasin_ferme_passe_en_lecture_seule_et_ne_produit_plus_de_ticket_z(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->vendre($magasin);
+        $this->fermer($magasin, MotifFermeture::Cessation);
+        $this->travelTo('2026-10-09 01:00:00');
+
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+
+        $ferme = $magasin->fresh();
+        $this->assertSame([true, 'Ce magasin est fermé'], [$ferme->estEnLectureSeule(), $ferme->motifDeLectureSeule()]);
+        $this->assertThrows(fn () => $this->vendre($magasin), VenteNonAutoriseeException::class, 'Ce magasin est fermé : seules la consultation et les téléchargements restent possibles.');
+        app(TenantContext::class)->set($magasin);
+        $this->assertSame(['2026-10-05'], ClotureCaisse::query()->pluck('date_cloture')->map->toDateString()->all());
+        $this->assertSame(1, Facture::query()->count());
+    }
+
+    public function test_la_reouverture_reprend_le_meme_registre_les_memes_series_et_les_memes_grands_totaux(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $premier = $this->vendre($magasin);
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+        $this->travelTo('2026-10-08 09:00:00');
+
+        $this->rouvrir($magasin);
+
+        $second = $this->vendre($magasin);
+        $this->assertSame(['TK-MABOUT-2026-000001', 'TK-MABOUT-2026-000002'], [$premier->numero, $second->numero]);
+        app(TenantContext::class)->set($magasin);
+        $ventes = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Vente->value)->orderBy('sequence')->get()->map(fn (EnregistrementFiscal $vente): array => [$vente->sequence, $vente->contenuSigne()['gt']['perpetuel_reel']])->all();
+        $this->assertSame([[1, 1200], [2, 2400]], $ventes);
+        $evenements = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->orderBy('sequence')->get();
+        $this->assertSame(1, $evenements->where('type', '260')->count());
+        $this->assertSame(range(1, $evenements->count()), $evenements->pluck('sequence')->all());
+        $this->assertSame(
+            ['parametre' => 'statut_magasin', 'magasin' => ['id' => $magasin->id, 'nom' => 'Ma Boutique'], 'ancienne_valeur' => 'ferme', 'nouvelle_valeur' => 'actif'],
+            $evenements->where('type', '270')->last()->contenuSigne()['donnees']['details'],
+        );
+        $this->assertSame(2, PeriodeActivite::query()->where('magasin_id', $magasin->id)->count());
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
+    }
+
+    public function test_aucun_ticket_z_n_est_produit_pour_les_jours_de_fermeture(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->vendre($magasin);
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+        $this->travelTo('2026-10-09 09:00:00');
+        $this->rouvrir($magasin);
+        $this->travelTo('2026-10-11 01:00:00');
+
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+
+        app(TenantContext::class)->set($magasin);
+        $this->assertSame(
+            [['2026-10-05', 'Z-MABOUT-2026-000001'], ['2026-10-09', 'Z-MABOUT-2026-000002'], ['2026-10-10', 'Z-MABOUT-2026-000003']],
+            ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): array => [$cloture->date_cloture->toDateString(), $cloture->numero])->all(),
+        );
+    }
+
+    public function test_le_premier_ticket_z_apres_la_reouverture_est_celui_du_premier_jour_non_cloture(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->vendre($magasin);
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+        $this->travelTo('2026-10-07 09:00:00');
+        $this->rouvrir($magasin);
+        $this->vendre($magasin);
+        app(TenantContext::class)->set($magasin);
+
+        $enAttente = app(CloturerLesJourneesAction::class)->journeesEnAttente(now());
+
+        $this->assertSame(['2026-10-07'], $enAttente->all());
+        $this->travelTo('2026-10-07 19:00:00');
+        $cloture = app(CloturerLesJourneesAction::class)->parUnePersonne($this->proprietaireDe($magasin), $magasin, now())['clotures']->sole();
+        $this->assertSame(['2026-10-07', 'Z-MABOUT-2026-000002', 1], [$cloture->date_cloture->toDateString(), $cloture->numero, $cloture->nombre_ventes]);
+    }
+
+    /**
+     * La journée de la fermeture est déjà clôturée : rouvert le même jour,
+     * le magasin ne vend qu'à partir du lendemain, et cette journée n'a
+     * qu'un ticket Z.
+     */
+    public function test_fermer_et_rouvrir_le_meme_jour_ne_produit_qu_un_z_et_reprend_les_ventes_le_lendemain(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->vendre($magasin);
+        $this->travelTo('2026-10-05 11:00:00');
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+        $this->travelTo('2026-10-05 12:00:00');
+
+        $this->rouvrir($magasin);
+
+        $this->assertThrows(fn () => $this->vendre($magasin), LogicException::class, 'La journée du 05/10/2026 est clôturée : les ventes reprennent demain.');
+        app(TenantContext::class)->set($magasin);
+        $this->assertSame([], app(CloturerLesJourneesAction::class)->journeesEnAttente(now())->all());
+        $this->travelTo('2026-10-06 09:00:00');
+        $this->assertSame('TK-MABOUT-2026-000002', $this->vendre($magasin)->numero);
+        $this->assertSame(['2026-10-05'], ClotureCaisse::query()->pluck('date_cloture')->map->toDateString()->all());
+    }
+
+    /**
+     * Le stock d'un produit suivi sort tout entier au coût moyen, son coût
+     * moyen inchangé ; la valeur hors taxe (10 x 2,50 + 3 x 1,25 = 28,75 €)
+     * s'inscrit au journal d'audit et va au propriétaire ; un produit en
+     * stock négatif est seulement listé, un produit non suivi ne bouge pas.
+     */
+    public function test_une_fermeture_pour_cession_sort_le_stock_au_cout_moyen_et_remet_la_valeur_hors_taxe(): void
+    {
+        Notification::fake();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $carnet = $this->produitEnStock('CARNET', 'Carnet', 10, '2.50');
+        $stylo = $this->produitEnStock('STYLO', 'Stylo', 3, '1.25');
+        $gomme = $this->produitEnStock('GOMME', 'Gomme', -2, '0.80');
+        $service = Produit::factory()->create(['reference' => 'LIVRAISON', 'suivi_stock' => false, 'cmup_ht' => 5]);
+
+        $this->fermer($magasin, MotifFermeture::Cession, confirmation: 'Ma Boutique');
+
+        app(TenantContext::class)->set($magasin);
+        $periode = PeriodeActivite::query()->where('magasin_id', $magasin->id)->sole();
+        $this->assertSame(
+            [[$carnet->id, 10, '2.5000', 'periode_activite', $periode->id, $proprietaire->id], [$stylo->id, 3, '1.2500', 'periode_activite', $periode->id, $proprietaire->id]],
+            MouvementStock::query()->where('type', TypeMouvementStock::SortieCession->value)->orderBy('produit_id')->get()
+                ->map(fn (MouvementStock $sortie): array => [$sortie->produit_id, $sortie->quantite, $sortie->cout_unitaire_ht, $sortie->source_type, (int) $sortie->source_id, (int) $sortie->cree_par])->all(),
+        );
+        $this->assertSame([[0, '2.5000'], [0, '1.2500'], [-2, '0.8000'], [0, '5.0000']], array_map(fn (Produit $produit): array => [$produit->fresh()->stock_quantite, $produit->fresh()->cmup_ht], [$carnet, $stylo, $gomme, $service]));
+        $this->assertSame(
+            ['motif' => 'cession', 'produits_en_stock_negatif' => ["GOMME {$gomme->nom} (-2)"], 'produits_sortis' => 2, 'statut' => 'ferme', 'valeur_stock_sorti_ht' => '28.75'],
+            $this->entreesDAudit($magasin->societe, ActionAuditee::MagasinFerme)[0]->nouvelles_valeurs,
+        );
+        Notification::assertSentTo($proprietaire, StockDuMagasinCede::class, fn (StockDuMagasinCede $avis): bool => $avis->valeurHt === '28.75' && $avis->produitsEnStockNegatif === ["GOMME {$gomme->nom} (-2)"]);
+        $this->assertStringContainsString('Valeur du stock au coût moyen : 28,75 € HT', (new StockDuMagasinCede($magasin, '28.75', []))->toDatabase($proprietaire)['body']);
+        $this->assertTrue($magasin->fresh()->aEteCede());
+    }
+
+    public function test_seul_le_proprietaire_cede_un_magasin_en_retapant_son_nom(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
+
+        $this->assertThrows(fn () => $this->fermer($magasin, MotifFermeture::Cession, $administrateur, self::MOT_DE_PASSE_CHOISI, 'Ma Boutique'), AuthorizationException::class);
+        $this->assertThrows(fn () => $this->fermer($magasin, MotifFermeture::Cession, confirmation: 'Ma boutique'), LogicException::class, FermerMagasinAction::MESSAGE_CONFIRMATION);
+        $this->assertSame(StatutMagasin::Actif, $magasin->fresh()->statut);
+
+        $this->fermer($magasin, MotifFermeture::Cession, confirmation: 'Ma Boutique');
+
+        $this->assertTrue($magasin->fresh()->aEteCede());
+    }
+
+    public function test_un_magasin_cede_ne_se_rouvre_pas(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->fermer($magasin, MotifFermeture::Cession, confirmation: 'Ma Boutique');
+
+        $this->assertThrows(fn () => $this->rouvrir($magasin), LogicException::class, RouvrirMagasinAction::MESSAGE_CEDE);
+
+        $this->assertSame([StatutMagasin::Ferme, 1], [$magasin->fresh()->statut, PeriodeActivite::query()->where('magasin_id', $magasin->id)->count()]);
+    }
+
+    public function test_la_reouverture_d_un_siret_ferme_a_l_insee_est_refusee(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+        $this->repertoire()->fermer((string) $magasin->siret);
+
+        $this->assertThrows(fn () => $this->rouvrir($magasin), LogicException::class, ControleSirene::MOTIF_ETABLISSEMENT_FERME);
+
+        $this->assertSame([StatutMagasin::Ferme, 1], [$magasin->fresh()->statut, PeriodeActivite::query()->where('magasin_id', $magasin->id)->count()]);
+    }
+
+    /**
+     * L'INSEE ne répond pas : le magasin rouvre « établissement à
+     * vérifier » et ne vend pas ; la reprise horaire du contrôle le rend
+     * vendable dès que le répertoire confirme son établissement.
+     */
+    public function test_la_reouverture_attend_la_confirmation_sirene_si_l_insee_ne_repond_pas(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+        $this->repertoire()->rendreInjoignable();
+
+        $this->rouvrir($magasin);
+
+        $rouvert = $magasin->fresh();
+        $this->assertSame([StatutMagasin::Actif, null, false], [$rouvert->statut, $rouvert->etablissement_verifie_le, $rouvert->peutVendre()]);
+        $this->assertThrows(fn () => $this->vendre($magasin), VenteNonAutoriseeException::class);
+        $this->repertoire()->rendreInjoignable(false);
+        app(TenantContext::class)->clear();
+        $this->artisan('app:reverifier-sirene')->assertSuccessful();
+        $this->assertTrue($magasin->fresh()->peutVendre());
+        $this->assertSame('TK-MABOUT-2026-000001', $this->vendre($magasin)->numero);
+    }
+
+    public function test_une_reouverture_ne_leve_jamais_la_suspension_de_l_editeur(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $magasin->forceFill(['suspendu_le' => now()])->save();
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+
+        $this->rouvrir($magasin);
+
+        $rouvert = $magasin->fresh();
+        $this->assertSame(StatutMagasin::Actif, $rouvert->statut);
+        $this->assertNotNull($rouvert->suspendu_le);
+        $this->assertSame([true, 'Ce magasin est suspendu'], [$rouvert->estEnLectureSeule(), $rouvert->motifDeLectureSeule()]);
+        $this->assertThrows(fn () => $this->vendre($magasin), VenteNonAutoriseeException::class);
+    }
+
+    public function test_un_magasin_suspendu_peut_etre_ferme_et_reste_suspendu(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $suspendu = now()->subDay()->startOfSecond();
+        $magasin->forceFill(['suspendu_le' => $suspendu])->save();
+
+        $this->fermer($magasin, MotifFermeture::Cessation);
+
+        $ferme = $magasin->fresh();
+        $this->assertSame([StatutMagasin::Ferme, MotifFermeture::Cessation, $suspendu->toDateTimeString()], [$ferme->statut, $ferme->motifDeSaFermeture(), $ferme->suspendu_le->toDateTimeString()]);
+    }
+
+    /**
+     * L'abonnement d'un magasin suit ses périodes d'activité (étape 12) :
+     * la validation émet SocieteValidee et MagasinOuvert pour chaque
+     * magasin actif, la fermeture MagasinFerme et la réouverture
+     * MagasinRouvert, chacun avec sa période ; un magasin fermé avant la
+     * validation n'émet rien à sa fermeture, et MagasinOuvert à sa
+     * réouverture, sa première période.
+     */
+    public function test_les_evenements_de_fermeture_et_de_reouverture_sont_emis_pour_les_abonnements(): void
+    {
+        Event::fake([SocieteValidee::class, MagasinOuvert::class, MagasinFerme::class, MagasinRouvert::class]);
+        $societe = $this->inscrireUneSociete();
+        $siege = $this->creerLeMagasinDuSiege($societe);
+        $boutique = $this->creerLeMagasinDuSiege($societe, 'Boutique', substr(FauxRepertoireSirene::siretDeLaBoutique($societe->siren), 9));
+        $proprietaire = $societe->proprietaire;
+        $this->fermer($boutique, MotifFermeture::Temporaire, $proprietaire, self::MOT_DE_PASSE_CHOISI);
+        Event::assertNotDispatched(MagasinFerme::class);
+
+        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->fermer($siege, MotifFermeture::Temporaire, $proprietaire, self::MOT_DE_PASSE_CHOISI);
+        $this->rouvrir($siege, $proprietaire, self::MOT_DE_PASSE_CHOISI);
+        $this->rouvrir($boutique, $proprietaire, self::MOT_DE_PASSE_CHOISI);
+
+        Event::assertDispatchedTimes(SocieteValidee::class, 1);
+        Event::assertDispatched(SocieteValidee::class, fn (SocieteValidee $evenement): bool => $evenement->societe->is($societe));
+        [$premiere, $seconde] = PeriodeActivite::query()->where('magasin_id', $siege->id)->orderBy('id')->get()->all();
+        $periodeDeLaBoutique = PeriodeActivite::query()->where('magasin_id', $boutique->id)->sole();
+        $this->assertSame(
+            [[$siege->id, $premiere->id], [$boutique->id, $periodeDeLaBoutique->id]],
+            Event::dispatched(MagasinOuvert::class)->map(fn (array $appel): array => [$appel[0]->magasin->id, $appel[0]->periode->id])->all(),
+        );
+        $this->assertSame([[$siege->id, $premiere->id, MotifFermeture::Temporaire]], Event::dispatched(MagasinFerme::class)->map(fn (array $appel): array => [$appel[0]->magasin->id, $appel[0]->periode->id, $appel[0]->periode->motif_fin])->all());
+        $this->assertSame([[$siege->id, $seconde->id]], Event::dispatched(MagasinRouvert::class)->map(fn (array $appel): array => [$appel[0]->magasin->id, $appel[0]->periode->id])->all());
+    }
+
+    /**
+     * Le responsable n'agit jamais sur le cycle de vie de son magasin,
+     * l'expert-comptable non plus : ni fermeture, ni cession, ni
+     * réouverture, ni changement de SIRET, même avec leur bon mot de passe.
+     */
+    public function test_ni_un_responsable_ni_l_expert_comptable_ne_ferment_ne_rouvrent_ni_ne_cedent_un_magasin(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $ferme = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Boutique fermée']);
+        $this->fermer($ferme, MotifFermeture::Temporaire);
+        $responsable = $this->responsable($magasin, $ferme);
+        $expert = $this->expertComptable($magasin);
+
+        foreach ([$responsable, $expert] as $compte) {
+            $this->assertThrows(fn () => $this->fermer($magasin, MotifFermeture::Temporaire, $compte, self::MOT_DE_PASSE_CHOISI), AuthorizationException::class);
+            $this->assertThrows(fn () => $this->fermer($magasin, MotifFermeture::Cession, $compte, self::MOT_DE_PASSE_CHOISI, 'Ma Boutique'), AuthorizationException::class);
+            $this->assertThrows(fn () => $this->rouvrir($ferme, $compte, self::MOT_DE_PASSE_CHOISI), AuthorizationException::class);
+            $this->assertThrows(fn () => app(ChangerSiretAction::class)->handle($compte, $magasin->fresh(), '00099', self::MOT_DE_PASSE_CHOISI), AuthorizationException::class);
+        }
+
+        $this->assertSame([StatutMagasin::Actif, StatutMagasin::Ferme], [$magasin->fresh()->statut, $ferme->fresh()->statut]);
+    }
+
+    /**
+     * Les caisses personnelles restées ouvertes se ferment d'office
+     * (« fermée automatiquement ») ; l'équipe garde ses affectations, et
+     * reste gérable dans le magasin fermé.
+     */
+    public function test_la_fermeture_ferme_d_office_les_caisses_personnelles_et_garde_l_equipe(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        $ticket = $this->vendre($magasin);
+        auth()->logout();
+        $affectations = Affectation::query()->where('magasin_id', $magasin->id)->count();
+        $this->travelTo('2026-10-05 18:00:00');
+
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+
+        app(TenantContext::class)->set($magasin);
+        $releve = ClotureCaissePersonnelle::query()->where('vendeur_id', $vendeur->id)->sole();
+        $this->assertSame([ModeFermetureCaisse::Automatique, [$ticket->id]], [$releve->mode_fermeture, $releve->factures->modelKeys()]);
+        $this->assertSame($affectations, Affectation::query()->where('magasin_id', $magasin->id)->count());
+        $this->assertTrue($vendeur->fresh()->peutOuvrir($magasin->fresh()));
+    }
+
+    /**
+     * Avant la validation de la société, un magasin n'a aucune activité à
+     * céder, et un magasin fermé ne se rouvre pas : il se rouvrira, contrôlé
+     * au répertoire Sirene, une fois la société validée.
+     */
+    public function test_avant_la_validation_un_magasin_ne_se_cede_ni_ne_se_rouvre(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
+
+        $this->assertThrows(fn () => $this->fermer($magasin, MotifFermeture::Cession, confirmation: 'Ma Boutique'), LogicException::class, FermerMagasinAction::MESSAGE_CESSION_AVANT_VALIDATION);
+        $this->fermer($magasin, MotifFermeture::Cessation);
+        $this->assertThrows(fn () => $this->rouvrir($magasin), LogicException::class, RouvrirMagasinAction::MESSAGE_SOCIETE_A_VERIFIER);
+
+        $this->assertSame([StatutMagasin::Ferme, 0], [$magasin->fresh()->statut, PeriodeActivite::query()->where('magasin_id', $magasin->id)->count()]);
+    }
+
+    /**
+     * La société ferme le magasin, par son propriétaire à défaut d'un autre
+     * auteur, qui redonne son mot de passe.
+     */
+    private function fermer(Magasin $magasin, MotifFermeture $motif, ?User $auteur = null, string $motDePasse = self::MOT_DE_PASSE_DU_PROPRIETAIRE, ?string $confirmation = null): void
+    {
+        app(FermerMagasinAction::class)->handle($auteur ?? $this->proprietaireDe($magasin), $magasin->fresh(), $motif, $motDePasse, $confirmation);
+    }
+
+    private function rouvrir(Magasin $magasin, ?User $auteur = null, string $motDePasse = self::MOT_DE_PASSE_DU_PROPRIETAIRE): void
+    {
+        app(RouvrirMagasinAction::class)->handle($auteur ?? $this->proprietaireDe($magasin), $magasin->fresh(), $motDePasse);
+    }
+
+    /**
+     * Un ticket de 12,00 € TTC au comptoir du magasin, payé en espèces, par
+     * la personne connectée ou le propriétaire.
+     */
+    private function vendre(Magasin $magasin): Facture
+    {
+        app(TenantContext::class)->set($magasin->fresh());
+
+        return app(EnregistrerVenteCaisseAction::class)->handle(
+            self::auteur(),
+            Client::query()->where('est_comptoir', true)->sole(),
+            [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]],
+            ModePaiement::Especes,
+        );
+    }
+
+    /**
+     * Un produit suivi en stock du magasin actif, à ce coût moyen, amené à
+     * cette quantité par un ajustement d'inventaire.
+     */
+    private function produitEnStock(string $reference, string $nom, int $quantite, string $coutMoyen): Produit
+    {
+        $produit = Produit::factory()->create(['reference' => $reference, 'nom' => $nom, 'cmup_ht' => $coutMoyen, 'suivi_stock' => true, 'seuil_alerte' => 0]);
+        app(StockLedgerService::class)->ajuster($produit, $quantite, 'Inventaire d\'ouverture');
+
+        return $produit;
+    }
+
+    private function repertoire(): FauxRepertoireSirene
+    {
+        return app(RepertoireSirene::class);
+    }
+}

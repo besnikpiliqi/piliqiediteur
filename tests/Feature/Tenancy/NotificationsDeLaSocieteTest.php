@@ -11,6 +11,7 @@ use App\Domain\Stock\Notifications\StockSousLeSeuilDAlerte;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Notifications\AvisDeVerification;
 use App\Domain\Tenancy\Notifications\ResponsableNommeParUnAdministrateur;
+use App\Domain\Tenancy\Notifications\StockDuMagasinCede;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\File;
@@ -48,6 +49,7 @@ class NotificationsDeLaSocieteTest extends TestCase
             EnvoiDocumentEchoue::class => new EnvoiDocumentEchoue($envoi),
             FacturesPasseesEnRetard::class => new FacturesPasseesEnRetard($magasin, ['FAC-MABOUT-2026-000001']),
             StockSousLeSeuilDAlerte::class => new StockSousLeSeuilDAlerte(Produit::factory()->create()),
+            StockDuMagasinCede::class => new StockDuMagasinCede($magasin, '28.75', []),
         ];
 
         $this->assertEqualsCanonicalizing(array_keys($notifications), $this->notificationsEnBase());
@@ -56,7 +58,7 @@ class NotificationsDeLaSocieteTest extends TestCase
             $donnee = $proprietaire->notifications()->where('type', $classe)->sole()->data;
             $this->assertSame((int) $societe->id, (int) $donnee['societe_id'], $classe);
         }
-        foreach ([EnvoiDocumentEchoue::class, FacturesPasseesEnRetard::class, StockSousLeSeuilDAlerte::class] as $classe) {
+        foreach ([EnvoiDocumentEchoue::class, FacturesPasseesEnRetard::class, StockSousLeSeuilDAlerte::class, StockDuMagasinCede::class] as $classe) {
             $this->assertSame((int) $magasin->id, (int) $proprietaire->notifications()->where('type', $classe)->sole()->data['magasin_id'], $classe);
         }
     }

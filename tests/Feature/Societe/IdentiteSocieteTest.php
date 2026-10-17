@@ -473,6 +473,9 @@ class IdentiteSocieteTest extends TestCase
      * L'identité et la fiscalité sont celles de la société, une seule
      * fois : aucun magasin ne les porte ni n'en décide, et chacun imprime
      * la même identité légale, avec son propre SIRET et sa propre adresse.
+     * Le seul « principal » d'un magasin est l'établissement principal que
+     * la société peut indiquer, une simple information (voir
+     * MagasinResourceTest::test_l_etablissement_principal_n_a_aucun_effet_sur_les_reglages).
      */
     public function test_aucun_magasin_n_a_de_privilege_sur_les_reglages(): void
     {
@@ -490,7 +493,7 @@ class IdentiteSocieteTest extends TestCase
         $this->assertSame([$lyon->siret, $villeurbanne->siret], $emetteurs->map(fn (Emetteur $emetteur): string => $emetteur->siret)->all());
         $this->assertFalse(Schema::hasColumns('magasins', ['raison_sociale']));
         $this->assertFalse(Schema::hasColumns('magasins', ['regime_tva']));
-        $this->assertSame([], preg_grep('/principal/', Schema::getColumnListing('magasins')));
+        $this->assertSame(['est_etablissement_principal'], array_values(preg_grep('/principal/', Schema::getColumnListing('magasins'))));
     }
 
     /**

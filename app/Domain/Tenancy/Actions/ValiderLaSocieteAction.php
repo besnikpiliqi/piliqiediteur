@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Enums\TypeVerification;
+use App\Domain\Tenancy\Events\SocieteValidee;
 use App\Domain\Tenancy\Exceptions\ConflitDeValidationException;
 use App\Domain\Tenancy\Exceptions\SiretDejaReserveException;
 use App\Domain\Tenancy\Jobs\EnvoyerLaLettreDInformationJob;
@@ -59,10 +60,14 @@ use Throwable;
  * auteur : elle suit la vérification, et les journaux des événements de
  * ses magasins l'inscrivent au nom du système (voir OperateurCourant),
  * même quand la personne connectée l'a déclenchée en saisissant un code.
- * Un magasin réel fermé n'est ni réservé ni ouvert. Si une autre société a validé ce SIREN, ou
- * réservé l'un de ces SIRET, entre-temps, rien n'est écrit : la société
- * devient une réclamation possible, et l'éditeur en est prévenu, sans
- * rien en révéler à personne d'autre.
+ * L'événement SocieteValidee part une fois la transaction validée, après
+ * le MagasinOuvert de chaque magasin mis en activité (étape 12 : les
+ * abonnements). Un magasin réel fermé n'est ni réservé ni ouvert : sa
+ * réouverture le mettra en activité (voir RouvrirMagasinAction). Si une
+ * autre société a validé ce SIREN, ou réservé l'un de ces SIRET,
+ * entre-temps, rien n'est écrit : la société devient une réclamation
+ * possible, et l'éditeur en est prévenu, sans rien en révéler à personne
+ * d'autre.
  *
  * Aucune autre inscription du même SIREN n'est refusée : celles qui ont
  * déjà prouvé leur qualité de représentant voient leur propriétaire
@@ -75,10 +80,6 @@ use Throwable;
 class ValiderLaSocieteAction
 {
     /**
-     * Ce que lit le propriétaire dont la qualité n'est pas notée à son nom,
-     * l'identité vérifiée (%s) étant celle d'un autre.
-     */
-    /**
      * Combien de fois la validation reprend quand la liste des magasins
      * réels actifs change sous elle ; ce qu'elle rend alors.
      */
@@ -86,6 +87,10 @@ class ValiderLaSocieteAction
 
     private const MAGASINS_CHANGES = 'magasins_changes';
 
+    /**
+     * Ce que lit le propriétaire dont la qualité n'est pas notée à son nom,
+     * l'identité vérifiée (%s) étant celle d'un autre.
+     */
     public const MESSAGE_QUALITE_D_UN_AUTRE = 'Votre qualité de représentant n\'est pas notée à votre nom : l\'identité vérifiée, celle de %s, n\'est pas celle que nomme votre compte. Signer les attestations de la caisse ou recevoir la propriété de la société exigera une qualité prouvée à votre propre nom.';
 
     public function __construct(
@@ -213,6 +218,7 @@ class ValiderLaSocieteAction
                 'qualite_du_titulaire' => $qualiteDuTitulaire,
                 'sirets' => $magasins->map(fn (Magasin $magasin): string => (string) $magasin->siret)->values()->all(),
             ], $enregistree, $editeur);
+            SocieteValidee::dispatch($enregistree);
 
             return ['etat' => $etat, 'proprietaire' => $proprietaire, 'personne' => $personneVerifiee?->nomComplet() ?? $proprietaire->name, 'qualite_du_titulaire' => $qualiteDuTitulaire];
         });

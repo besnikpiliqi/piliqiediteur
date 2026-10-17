@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Filament\Societe\Resources\MembreResource;
 use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Models\User;
@@ -101,7 +102,7 @@ class TransfererProprieteTest extends TestCase
             ->assertHasActionErrors(['mot_de_passe' => 'required']);
         Livewire::test(FicheDuMembre::class, ['record' => $administrateur->getRouteKey()])
             ->callAction('transmettreLaPropriete', ['mot_de_passe' => 'devine-au-hasard'])
-            ->assertNotified(TransfererProprieteAction::MESSAGE_MOT_DE_PASSE);
+            ->assertNotified(MotDePasseRedemande::MESSAGE);
 
         $this->assertTrue($this->proprietaireDe($magasin)->is($proprietaire));
         $this->assertSame(RoleSociete::Administrateur, $administrateur->refresh()->role_societe);

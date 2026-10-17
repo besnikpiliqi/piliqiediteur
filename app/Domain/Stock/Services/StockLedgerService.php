@@ -28,7 +28,8 @@ use LogicException;
  * receptionner()) et après chaque retour au fournisseur, qui sort au coût
  * de sa ligne d'achat (voir retournerAuFournisseur()) : toute autre sortie
  * (vente, ajustement) et toute autre entrée (retour client, ajustement) se
- * fait au CMUP du moment, qui ne change donc pas. Une réception corrigée
+ * fait au CMUP du moment, qui ne change donc pas (la sortie de cession
+ * garde ce CMUP dans son mouvement). Une réception corrigée
  * après coup rejoue tout le grand livre du produit (voir
  * corrigerUneReception()).
  *
@@ -186,10 +187,33 @@ class StockLedgerService
     }
 
     /**
+     * Sortie de tout le stock d'un produit d'un magasin fermé pour cession
+     * ($source : la période d'activité close pour ce motif, voir
+     * FermerMagasinAction) : ses articles sortent au CMUP du moment, gardé
+     * dans le mouvement (une annulation de la cession par l'éditeur les
+     * fera rentrer au même coût), et le CMUP ne change pas. Rien ne sort
+     * d'un produit qui ne suit pas son stock, ni d'un stock vide ou
+     * négatif, lu sous le verrou du produit : null.
+     */
+    public function sortirPourCession(Produit $produit, Model $source, string $note): ?MouvementStock
+    {
+        return DB::transaction(function () use ($produit, $source, $note): ?MouvementStock {
+            $produitVerrouille = $this->verrouiller($produit);
+
+            if (! $produitVerrouille->suivi_stock || $produitVerrouille->stock_quantite <= 0) {
+                return null;
+            }
+
+            return $this->appliquer($produit, TypeMouvementStock::SortieCession, $produitVerrouille->stock_quantite, $source, $note, (float) $produitVerrouille->cmup_ht);
+        });
+    }
+
+    /**
      * Enregistre un mouvement typé (vente, réception, retour client...) et
      * met à jour le cache produits.stock_quantite de façon atomique. Un
      * retour fournisseur, qui sort à son propre coût, passe par
-     * retournerAuFournisseur().
+     * retournerAuFournisseur(), une sortie de cession par
+     * sortirPourCession().
      */
     public function enregistrer(
         Produit $produit,
@@ -200,6 +224,10 @@ class StockLedgerService
     ): MouvementStock {
         if ($type === TypeMouvementStock::RetourFournisseur) {
             throw new InvalidArgumentException('Un retour fournisseur passe par retournerAuFournisseur(), avec le coût de sa ligne d\'achat.');
+        }
+
+        if ($type === TypeMouvementStock::SortieCession) {
+            throw new InvalidArgumentException('Une sortie de cession passe par sortirPourCession(), avec tout le stock au coût moyen.');
         }
 
         $this->verifierLeMouvement($produit, $quantite);
@@ -243,7 +271,7 @@ class StockLedgerService
     }
 
     /**
-     * @param  float|null  $coutUnitaireHt  le coût de sortie d'un retour fournisseur (voir retournerAuFournisseur())
+     * @param  float|null  $coutUnitaireHt  le coût de sortie d'un retour fournisseur (voir retournerAuFournisseur()) ou d'une sortie de cession (voir sortirPourCession())
      */
     private function appliquer(
         Produit $produit,
@@ -275,8 +303,9 @@ class StockLedgerService
             $produit->setAttribute('stock_quantite', $nouvelleQuantite)->syncOriginalAttribute('stock_quantite');
 
             // Une seule alerte au passage du seuil, pas une à chaque vente
-            // tant que le stock reste bas.
-            if (! $etaitEnAlerte && $produitVerrouille->enAlerteStock()) {
+            // tant que le stock reste bas ; aucune pour le stock d'un
+            // magasin cédé, qui ne se réapprovisionne plus.
+            if ($type !== TypeMouvementStock::SortieCession && ! $etaitEnAlerte && $produitVerrouille->enAlerteStock()) {
                 StockPasseSousLeSeuilDAlerte::dispatch($produitVerrouille);
             }
 

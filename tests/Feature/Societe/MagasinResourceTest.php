@@ -3,38 +3,67 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
+use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerDevisAction;
+use App\Domain\Facturation\Actions\EmettreDevisAction;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\Emetteur;
+use App\Domain\Tenancy\Actions\ChangerSiretAction;
+use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\MotifFermeture;
+use App\Domain\Tenancy\Enums\RegimeTva;
+use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
+use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\SiretMagasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Rules\CodeMagasinLibre;
 use App\Domain\Tenancy\Rules\SiretValide;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MagasinResource\Pages\CreerMagasin;
 use App\Filament\Societe\Resources\MagasinResource\Pages\ListMagasins;
+use App\Filament\Societe\Resources\MagasinResource\Pages\ModifierMagasin;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\EtablissementsActifs;
 use App\Integrations\Sirene\EtablissementSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Database\Factories\SocieteFactory;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
  * Les magasins dans l'espace de la société (voir MagasinResource) : leur
- * liste, limitée à la portée de la personne connectée, et la création d'un
+ * liste, limitée à la portée de la personne connectée ; la création d'un
  * magasin (voir CreerMagasin) : la liste des établissements actifs de son
- * SIREN, lue au répertoire Sirene factice ; le choix d'un établissement qui
- * préremplit NIC, nom, adresse et code ; la saisie du NIC quand la liste ne
- * suffit pas ; et, pour tout magasin, les contrôles de
- * CreerEtablissementAction.
+ * SIREN, lue au répertoire Sirene factice, le choix d'un établissement qui
+ * préremplit NIC, nom, adresse et code, la saisie du NIC quand la liste ne
+ * suffit pas, et les contrôles de CreerEtablissementAction ; la fiche d'un
+ * magasin (voir ModifierMagasin) : sa modification (voir
+ * ModifierEtablissementAction), son changement de SIRET (voir
+ * ChangerSiretAction), l'établissement principal et les gestes de son
+ * cycle de vie, que FermerEtRouvrirMagasinTest détaille.
  */
 class MagasinResourceTest extends TestCase
 {
@@ -45,6 +74,12 @@ class MagasinResourceTest extends TestCase
      * nom et le code de son magasin, ou une marque sur son établissement.
      */
     private const TRACES_DE_L_AUTRE_SOCIETE = ['Concurrente', 'concurrente', 'CONCUR', CreerMagasin::MARQUE_DEJA_UN_MAGASIN];
+
+    /**
+     * Le mot de passe du propriétaire des sociétés des tests (voir
+     * UserFactory).
+     */
+    private const MOT_DE_PASSE_DU_PROPRIETAIRE = 'password';
 
     /**
      * La liste des magasins ne montre que les magasins réels de la portée
@@ -432,6 +467,527 @@ class MagasinResourceTest extends TestCase
         $societe->forceFill(['statut' => StatutSociete::Suspendue])->save();
         $this->dansLEspaceDeLaSociete($societe->fresh(), $this->proprietaireDe($magasin));
         Livewire::test(CreerMagasin::class)->assertForbidden();
+    }
+
+    /**
+     * La création ne demande que le NIC : le SIREN est celui de la
+     * société, que la page affiche sans le laisser saisir, et le SIRET du
+     * magasin commence toujours par lui.
+     */
+    public function test_la_creation_se_fait_par_le_nic_apres_le_siren_fixe(): void
+    {
+        $societe = $this->inscrireUneSociete();
+
+        $this->ouvrirLaCreation($societe)
+            ->assertSeeText("Les établissements actifs de votre SIREN {$societe->siren}")
+            ->assertFormFieldDoesNotExist('siren')
+            ->fillForm(['etablissement' => CreerMagasin::AUTRE_ETABLISSEMENT, 'nic' => substr($this->boutique($societe), 9), 'nom' => 'Ma Boutique'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame($societe->siren.substr($this->boutique($societe), 9), Magasin::query()->where('societe_id', $societe->id)->sole()->siret);
+    }
+
+    /**
+     * Le magasin réenregistre son propre SIRET sans se le voir refuser.
+     */
+    public function test_le_magasin_reenregistre_son_propre_siret(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
+
+        $this->ouvrirLaFiche($magasin)
+            ->fillForm(['nom' => 'Ma Boutique de Lyon', 'nic' => substr($magasin->siret, 9)])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame(['Ma Boutique de Lyon', $magasin->siret], [$magasin->fresh()->nom, $magasin->fresh()->siret]);
+    }
+
+    public function test_le_code_saisi_en_minuscules_s_enregistre_en_majuscules(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+
+        $this->ouvrirLaFiche($magasin)->fillForm(['code' => 'lyon1'])->call('save')->assertHasNoFormErrors();
+
+        $this->assertSame('LYON1', $magasin->fresh()->code);
+    }
+
+    public function test_le_pays_saisi_en_minuscules_s_enregistre_en_majuscules(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+
+        $this->ouvrirLaFiche($magasin)->fillForm(['pays' => 'fr', 'code_postal' => '13002', 'ville' => 'Marseille'])->call('save')->assertHasNoFormErrors();
+
+        $this->assertSame(['FR', '13002'], [$magasin->fresh()->pays, $magasin->fresh()->code_postal]);
+    }
+
+    /**
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function codesRefuses(): array
+    {
+        return [
+            'code d\'une lettre' => ['L', CodeMagasinLibre::MESSAGE],
+            'code avec un tiret' => ['LYON-1', CodeMagasinLibre::MESSAGE],
+            'code d\'un autre magasin de la société' => ['LYON1', CodeMagasinLibre::MESSAGE_DEJA_UTILISE],
+            'code d\'un magasin fermé de la société' => ['ANCIEN', CodeMagasinLibre::MESSAGE_DEJA_UTILISE],
+        ];
+    }
+
+    /**
+     * Un code n'appartient qu'à un seul magasin de la société, même fermé ;
+     * refusé, il n'est pas enregistré.
+     */
+    #[DataProvider('codesRefuses')]
+    public function test_un_code_refuse_n_est_pas_enregistre(string $code, string $message): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Lyon', 'code' => 'LYON1']);
+        $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Ancien', 'code' => 'ANCIEN'])->forceFill(['statut' => StatutMagasin::Ferme])->save();
+
+        $this->ouvrirLaFiche($magasin)
+            ->fillForm(['code' => $code])
+            ->call('save')
+            ->assertHasFormErrors(['code' => fn (array $reglesEnEchec, array $messages): bool => $messages === [$message]]);
+
+        $this->assertSame('MABOUT', $magasin->fresh()->code);
+    }
+
+    /**
+     * Dès le premier document numéroté, le code figure dans les numéros :
+     * la fiche ne le laisse plus saisir, et le modèle refuse tout
+     * changement.
+     */
+    public function test_le_code_se_verrouille_au_premier_document_numerote(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->numeroterUnPremierDevis($magasin);
+
+        $this->ouvrirLaFiche($magasin)
+            ->assertFormFieldIsDisabled('code')
+            ->assertSeeText('Il figure déjà dans les numéros des documents du magasin : il ne change plus.');
+
+        $this->assertThrows(fn () => $magasin->fresh()->update(['code' => 'AUTRE']), LogicException::class, 'Le code du magasin figure déjà dans les numéros de ses documents : il ne change plus.');
+        $this->assertSame('MABOUT', $magasin->fresh()->code);
+        $this->assertTrue($magasin->fresh()->aNumeroteUnDocument());
+    }
+
+    /**
+     * Une référence de produit (PRD-000001) ne porte pas le code : le
+     * premier produit ne le verrouille pas.
+     */
+    public function test_un_premier_produit_ne_verrouille_pas_le_code(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        Produit::factory()->create(['reference' => null]);
+
+        $this->ouvrirLaFiche($magasin)->assertFormFieldIsEnabled('code')->fillForm(['code' => 'LYON1'])->call('save')->assertHasNoFormErrors();
+
+        $this->assertSame('LYON1', $magasin->fresh()->code);
+    }
+
+    /**
+     * Un premier document numéroté pendant que la fiche est ouverte : le
+     * code saisi n'est pas enregistré, le reste l'est ; l'action le refuse
+     * aussi sous son verrou, quelle que soit la requête qui le lui donne.
+     */
+    public function test_un_code_devenu_definitif_pendant_la_saisie_n_est_pas_enregistre(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $fiche = $this->ouvrirLaFiche($magasin)->assertFormFieldIsEnabled('code');
+        $this->numeroterUnPremierDevis($magasin);
+
+        $fiche->fillForm(['code' => 'AUTRE', 'nom' => 'Ma Boutique de Lyon'])->call('save')->assertHasNoFormErrors()->assertFormSet(['code' => 'MABOUT']);
+        app(ModifierEtablissementAction::class)->handle($this->proprietaireDe($magasin), $magasin->fresh(), ['code' => 'AUTRE', 'nom' => 'Lyon Centre']);
+
+        $this->assertSame(['MABOUT', 'Lyon Centre'], [$magasin->fresh()->code, $magasin->fresh()->nom]);
+    }
+
+    /**
+     * Un magasin qui n'a encore rien vendu ne numérote aucun document la
+     * nuit, ni clôture de caisse ni déclaration d'e-reporting : son code
+     * reste modifiable jusqu'à son premier document.
+     */
+    public function test_un_magasin_sans_vente_garde_son_code_modifiable_apres_les_commandes_de_la_nuit(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'regime_tva' => RegimeTva::ReelSimplifie]);
+        $this->travelTo('2026-10-10 01:00:00');
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+        $this->artisan('app:soumettre-ereporting-periodique')->assertSuccessful();
+
+        $this->ouvrirLaFiche($magasin)->fillForm(['code' => 'LYON1'])->call('save')->assertHasNoFormErrors();
+
+        $this->assertSame('LYON1', $magasin->fresh()->code);
+    }
+
+    /**
+     * Seuls les documents du magasin rendent son code définitif : le
+     * premier document d'un autre magasin de la société ne le verrouille
+     * pas.
+     */
+    public function test_le_premier_document_d_un_autre_magasin_ne_rend_pas_le_code_definitif(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre boutique']);
+        $this->numeroterUnPremierDevis($autre);
+
+        $this->ouvrirLaFiche($magasin)->fillForm(['code' => 'LYON3'])->call('save')->assertHasNoFormErrors();
+
+        $this->assertSame('LYON3', $magasin->fresh()->code);
+        $this->assertTrue($autre->fresh()->aNumeroteUnDocument());
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function valeursPrisesPendantLEnregistrement(): array
+    {
+        return [
+            'code' => ['code'],
+            'SIRET' => ['nic'],
+        ];
+    }
+
+    /**
+     * Un code ou un SIRET, libre à la validation, pris par un autre magasin
+     * de la société juste avant l'enregistrement : refusé comme par la
+     * validation, sur son champ, sans erreur du serveur, et rien n'est
+     * enregistré.
+     */
+    #[DataProvider('valeursPrisesPendantLEnregistrement')]
+    public function test_une_valeur_prise_pendant_l_enregistrement_est_refusee_comme_par_la_validation(string $champ): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
+        $siret = IdentifiantsInsee::avecSaCle($magasin->societe->siren.'0005');
+        $saisie = ['code' => ['code' => 'LYON1'], 'nic' => ['nic' => substr($siret, 9)]][$champ];
+        $fiche = $this->ouvrirLaFiche($magasin);
+        $concurrentEnCours = false;
+        Magasin::updating(function () use ($magasin, $siret, $saisie, &$concurrentEnCours): void {
+            if (! $concurrentEnCours) {
+                $concurrentEnCours = true;
+                Magasin::factory()->for($magasin->societe)->create(isset($saisie['code']) ? ['code' => 'LYON1'] : ['siret' => $siret]);
+            }
+        });
+
+        $fiche->fillForm([...$saisie, 'nom' => 'Ma Boutique de Lyon'])
+            ->call('save')
+            ->assertHasFormErrors([$champ => fn (array $reglesEnEchec, array $messages): bool => $messages === [$champ === 'code' ? CodeMagasinLibre::MESSAGE_DEJA_UTILISE : SiretsDesMagasins::MESSAGE_SIRET_RESERVE]]);
+
+        $this->assertSame(['MABOUT', 'Ma Boutique'], [$magasin->fresh()->code, $magasin->fresh()->nom]);
+    }
+
+    /**
+     * Un doublon qui n'est ni celui du code ni celui du SIRET n'est
+     * attribué à aucun champ : le refus ne dit pas à tort « Ce code est
+     * déjà utilisé », et rien n'est enregistré.
+     */
+    public function test_un_autre_doublon_n_est_pas_attribue_au_code(): void
+    {
+        $autre = Magasin::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $fiche = $this->ouvrirLaFiche($magasin)->fillForm(['nom' => 'Ma Boutique de Lyon']);
+        Magasin::updating(fn (Magasin $enregistre) => $enregistre->forceFill(['uuid' => $autre->uuid]));
+
+        $this->assertThrows(fn () => $fiche->call('save'), UniqueConstraintViolationException::class);
+
+        $this->assertSame('Ma Boutique', $magasin->fresh()->nom);
+    }
+
+    /**
+     * Une adresse, ou un nouvel établissement, qui change le territoire de
+     * TVA du magasin (son taux par défaut et ses règles de vente) est
+     * refusé : un tel déménagement passe par un nouveau magasin.
+     */
+    public function test_un_changement_d_adresse_qui_change_le_territoire_de_tva_est_refuse(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $fortDeFrance = IdentifiantsInsee::avecSaCle($magasin->societe->siren.'0007');
+        $this->repertoire()->deplacer($fortDeFrance, '97200', 'FORT-DE-FRANCE');
+
+        $this->ouvrirLaFiche($magasin)
+            ->fillForm(['code_postal' => '97200', 'ville' => 'Fort-de-France'])
+            ->call('save')
+            ->assertHasFormErrors(['code_postal' => fn (array $reglesEnEchec, array $messages): bool => $messages === [ModifierEtablissementAction::MESSAGE_TERRITOIRE_CHANGE]])
+            ->callAction('changerLeSiret', ['nic' => substr($fortDeFrance, 9), 'mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])
+            ->assertNotified(ChangerSiretAction::MESSAGE_TERRITOIRE_CHANGE);
+
+        $this->assertSame(['75001', $magasin->siret], [$magasin->fresh()->code_postal, $magasin->fresh()->siret]);
+    }
+
+    /**
+     * Le NIC se corrige tant que la société n'est pas validée, contrôlé au
+     * répertoire Sirene, et le changement de SIRET s'inscrit au journal des
+     * événements du magasin ; une fois la société validée, la fiche ne le
+     * propose plus et l'action le refuse.
+     */
+    public function test_le_nic_se_corrige_avant_la_validation_seulement(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
+        $ancien = $magasin->siret;
+        $nic = substr(IdentifiantsInsee::avecSaCle($magasin->societe->siren.'0005'), 9);
+
+        $this->ouvrirLaFiche($magasin)->fillForm(['nic' => $nic])->call('save')->assertHasNoFormErrors();
+
+        $this->assertSame($magasin->societe->siren.$nic, $magasin->fresh()->siret);
+        $this->assertSame(
+            [['parametre' => 'siret', 'magasin' => ['id' => $magasin->id, 'nom' => 'Ma Boutique'], 'ancienne_valeur' => $ancien, 'nouvelle_valeur' => $magasin->societe->siren.$nic]],
+            $this->changementsDeSiret($magasin),
+        );
+        $magasin->societe->forceFill(['validee_le' => now()])->save();
+        $this->ouvrirLaFiche($magasin->fresh())->assertFormFieldIsHidden('nic');
+        $this->assertThrows(
+            fn () => app(ModifierEtablissementAction::class)->handle($this->proprietaireDe($magasin), $magasin->fresh(), ['nic' => substr($ancien, 9)]),
+            LogicException::class,
+            ModifierEtablissementAction::MESSAGE_SIRET_SOCIETE_VALIDEE,
+        );
+    }
+
+    /**
+     * Ce qui change, et seulement cela, s'inscrit au journal d'audit, avec
+     * l'ancienne et la nouvelle valeur.
+     */
+    public function test_la_modification_s_inscrit_au_journal_d_audit(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+
+        $this->ouvrirLaFiche($magasin)->fillForm(['nom' => 'Ma Boutique de Lyon', 'code' => 'MABOUT'])->call('save')->assertHasNoFormErrors();
+
+        $entree = $this->entreesDAudit($magasin->societe, ActionAuditee::MagasinModifie)[0];
+        $this->assertSame([['nom' => 'Ma Boutique'], ['nom' => 'Ma Boutique de Lyon'], $magasin->id], [$entree->anciennes_valeurs, $entree->nouvelles_valeurs, (int) $entree->magasin_id]);
+    }
+
+    /**
+     * Le magasin déménage : le mot de passe est redemandé, le répertoire
+     * Sirene doit confirmer le nouvel établissement (fermé ou INSEE
+     * injoignable : refusé, rien ne change) ; le magasin garde ses
+     * documents, son code et son identifiant, prend l'adresse du
+     * répertoire, et son ancien SIRET reste réservé : aucun autre magasin
+     * ne le reprend.
+     */
+    public function test_changer_le_siret_exige_sirene_garde_le_magasin_et_reserve_l_ancien(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $ticket = $this->vendre($magasin);
+        $ancien = (string) $magasin->siret;
+        $ferme = IdentifiantsInsee::avecSaCle($magasin->societe->siren.'9005');
+        $nouveau = IdentifiantsInsee::avecSaCle($magasin->societe->siren.'0007');
+        $this->repertoire()->deplacer($nouveau, '75011', 'PARIS');
+        $fiche = $this->ouvrirLaFiche($magasin);
+
+        $fiche->callAction('changerLeSiret', ['nic' => substr($nouveau, 9), 'mot_de_passe' => 'devine-au-hasard'])->assertNotified(MotDePasseRedemande::MESSAGE);
+        $fiche->callAction('changerLeSiret', ['nic' => substr($ferme, 9), 'mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])->assertNotified(ControleSirene::MOTIF_ETABLISSEMENT_FERME);
+        $this->repertoire()->rendreInjoignable();
+        $fiche->callAction('changerLeSiret', ['nic' => substr($nouveau, 9), 'mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])->assertNotified(ChangerSiretAction::MESSAGE_INSEE_INJOIGNABLE);
+        $this->assertSame($ancien, $magasin->fresh()->siret);
+        $this->repertoire()->rendreInjoignable(false);
+        $fiche->callAction('changerLeSiret', ['nic' => substr($nouveau, 9), 'mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])->assertNotified("Le SIRET du magasin est désormais {$nouveau}.");
+
+        $demenage = $magasin->fresh();
+        $this->assertSame([$nouveau, 'MABOUT', '75011', 'PARIS'], [$demenage->siret, $demenage->code, $demenage->code_postal, $demenage->ville]);
+        $this->assertNotNull($demenage->etablissement_verifie_le);
+        $this->assertSame([$ticket->id], app(TenantContext::class)->runAs($demenage, fn (): array => Facture::query()->pluck('id')->all()));
+        $this->assertSame(
+            [[$ancien, true, false], [$nouveau, false, false]],
+            SiretMagasin::query()->where('magasin_id', $magasin->id)->orderBy('id')->get()->map(fn (SiretMagasin $ligne): array => [$ligne->siret, $ligne->retire_le !== null, $ligne->libere_le !== null])->all(),
+        );
+        $this->assertTrue(SiretsDesMagasins::estReserve($ancien));
+        $this->assertThrows(fn () => $this->ouvrirUnAutreMagasin($magasin, ['nic' => substr($ancien, 9)]), fn (ValidationException $refus): bool => $refus->errors() === ['nic' => [SiretsDesMagasins::MESSAGE_SIRET_RESERVE]]);
+    }
+
+    /**
+     * Le changement de SIRET s'inscrit au journal des événements du
+     * magasin (JET 270) et au journal d'audit ; les documents émis gardent
+     * l'ancien SIRET qu'ils ont signé, les suivants portent le nouveau.
+     */
+    public function test_un_changement_de_siret_s_inscrit_au_jet_270_et_les_documents_emis_gardent_l_ancien(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $avant = $this->vendre($magasin);
+        $ancien = (string) $magasin->siret;
+        $nouveau = IdentifiantsInsee::avecSaCle($magasin->societe->siren.'0007');
+
+        $this->ouvrirLaFiche($magasin)->callAction('changerLeSiret', ['nic' => substr($nouveau, 9), 'mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE]);
+
+        $this->assertSame([['parametre' => 'siret', 'magasin' => ['id' => $magasin->id, 'nom' => 'Ma Boutique'], 'ancienne_valeur' => $ancien, 'nouvelle_valeur' => $nouveau]], $this->changementsDeSiret($magasin));
+        $entree = $this->entreesDAudit($magasin->societe, ActionAuditee::SiretChange)[0];
+        $this->assertSame([$ancien, $nouveau], [$entree->anciennes_valeurs['siret'], $entree->nouvelles_valeurs['siret']]);
+        $apres = $this->vendre($magasin);
+        app(TenantContext::class)->runAs($magasin, function () use ($magasin, $avant, $apres, $ancien, $nouveau): void {
+            $this->assertSame([$ancien, $ancien], [$avant->fresh()->emetteur()->siret, $avant->fresh()->enregistrementDeVente->contenuSigne()['magasin']['siret']]);
+            $this->assertSame([$nouveau, $nouveau], [$apres->fresh()->emetteur()->siret, $apres->fresh()->enregistrementDeVente->contenuSigne()['magasin']['siret']]);
+            $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
+        });
+    }
+
+    /**
+     * L'établissement principal n'est qu'une indication : au plus un par
+     * société, il passe d'un magasin à l'autre, s'inscrit au journal
+     * d'audit, et ne change ni les réglages de la société ni l'émetteur
+     * d'aucun magasin ; un administrateur d'une sélection ne le déplace
+     * pas.
+     */
+    public function test_l_etablissement_principal_n_a_aucun_effet_sur_les_reglages(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
+        $dUneSelection = $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], [AutorisationsSociete::MAGASINS_GERER]);
+        $reglages = $lyon->societe->fresh()->only(['regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'raison_sociale']);
+        $emetteurs = [Emetteur::duMagasin($lyon->fresh()), Emetteur::duMagasin($villeurbanne->fresh())];
+
+        $this->ouvrirLaFiche($lyon)->callAction('choisirCommePrincipal');
+        $this->ouvrirLaFiche($villeurbanne)->callAction('choisirCommePrincipal');
+
+        $this->assertSame([false, true], [$lyon->fresh()->est_etablissement_principal, $villeurbanne->fresh()->est_etablissement_principal]);
+        $this->assertSame($reglages, $lyon->societe->fresh()->only(['regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'raison_sociale']));
+        $this->assertEquals($emetteurs, [Emetteur::duMagasin($lyon->fresh()), Emetteur::duMagasin($villeurbanne->fresh())]);
+        $this->assertSame(
+            [[null, 'Lyon'], ['Lyon', 'Villeurbanne']],
+            array_map(fn (EntreeAudit $entree): array => [$entree->anciennes_valeurs['etablissement_principal']['nom'] ?? null, $entree->nouvelles_valeurs['etablissement_principal']['nom']], $this->entreesDAudit($lyon->societe, ActionAuditee::EtablissementPrincipalChoisi)),
+        );
+        $this->ouvrirLaFiche($lyon, $dUneSelection)->assertActionHidden('choisirCommePrincipal');
+        $this->ouvrirLaFiche($villeurbanne, $dUneSelection)->assertActionHidden('retirerCommePrincipal');
+        $this->ouvrirLaFiche($villeurbanne)->callAction('retirerCommePrincipal');
+        $this->assertSame(0, Magasin::query()->where('societe_id', $lyon->societe_id)->where('est_etablissement_principal', true)->count());
+    }
+
+    /**
+     * La fiche d'un magasin d'une autre société, ou hors de la portée de
+     * l'administrateur, n'existe pas pour lui : 404, sans rien en dire.
+     */
+    public function test_le_magasin_d_une_autre_societe_repond_404(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $horsSelection = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Hors sélection']);
+        $ailleurs = $this->ouvrirUneSociete(['nom' => 'Boutique ailleurs']);
+        $administrateur = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::MAGASINS_GERER]);
+
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+        $this->get(MagasinResource::getUrl('edit', ['record' => $ailleurs, 'tenant' => $magasin->societe]))->assertNotFound();
+        $this->get(MagasinResource::getUrl('edit', ['record' => $magasin, 'tenant' => $magasin->societe]))->assertOk();
+
+        $this->dansLEspaceDeLaSociete($magasin->societe, $administrateur);
+        $this->get(MagasinResource::getUrl('edit', ['record' => $horsSelection, 'tenant' => $magasin->societe]))->assertNotFound();
+        $this->get(MagasinResource::getUrl('edit', ['record' => $magasin, 'tenant' => $magasin->societe]))->assertOk();
+    }
+
+    /**
+     * La fiche ne s'ouvre qu'à qui gère les magasins de sa portée, tant que
+     * la société n'est pas en lecture seule ; la liste ne propose « Gérer »
+     * qu'à lui.
+     */
+    public function test_seul_qui_gere_les_magasins_ouvre_la_fiche_d_un_magasin(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $sansLAutorisation = $this->administrateur($magasin);
+
+        $this->dansLEspaceDeLaSociete($magasin->societe, $sansLAutorisation);
+        Livewire::test(ListMagasins::class)->assertTableActionHidden('edit', $magasin);
+        Livewire::test(ModifierMagasin::class, ['record' => $magasin->getRouteKey()])->assertForbidden();
+
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+        Livewire::test(ListMagasins::class)->assertTableActionVisible('edit', $magasin);
+        $magasin->societe->forceFill(['statut' => StatutSociete::Suspendue])->save();
+        $this->dansLEspaceDeLaSociete($magasin->societe->fresh(), $this->proprietaireDe($magasin));
+        Livewire::test(ModifierMagasin::class, ['record' => $magasin->getRouteKey()])->assertForbidden();
+    }
+
+    /**
+     * Les gestes du cycle de vie ne s'offrent que selon le compte et l'état
+     * du magasin : fermer et céder un magasin ouvert, céder pour le seul
+     * propriétaire ; rouvrir un magasin fermé, jamais un magasin cédé, dont
+     * la fiche ne s'enregistre plus. Fermé depuis la fiche, le magasin le
+     * dit dans son état.
+     */
+    public function test_les_gestes_du_cycle_de_vie_s_offrent_selon_le_compte_et_l_etat_du_magasin(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $cede = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Boutique cédée']);
+        $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER]);
+
+        $this->ouvrirLaFiche($magasin, $administrateur)
+            ->assertActionVisible('fermer')
+            ->assertActionHidden('ceder')
+            ->assertActionHidden('rouvrir');
+        $this->ouvrirLaFiche($magasin)
+            ->assertActionVisible('ceder')
+            ->callAction('fermer', ['motif' => MotifFermeture::Temporaire->value, 'mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])
+            ->assertNotified('Le magasin Ma Boutique est fermé.')
+            ->assertActionHidden('fermer')
+            ->assertActionHidden('ceder')
+            ->assertActionVisible('rouvrir')
+            ->assertSeeText('Fermé temporairement');
+        $this->ouvrirLaFiche($cede)
+            ->callAction('ceder', ['confirmation' => 'Boutique cédée', 'mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])
+            ->assertActionHidden('rouvrir')
+            ->assertActionHidden('changerLeSiret')
+            ->assertActionHidden('save')
+            ->assertFormFieldIsDisabled('nom')
+            ->assertSeeText('Cédé');
+
+        $this->assertSame([StatutMagasin::Ferme, true], [$magasin->fresh()->statut, $cede->fresh()->aEteCede()]);
+        $this->ouvrirLaFiche($magasin)
+            ->callAction('rouvrir', ['mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])
+            ->assertNotified('Le magasin Ma Boutique est rouvert.');
+        $this->assertSame(StatutMagasin::Actif, $magasin->fresh()->statut);
+    }
+
+    /**
+     * La fiche du magasin, ouverte dans l'espace de sa société par ce
+     * compte, le propriétaire à défaut.
+     */
+    private function ouvrirLaFiche(Magasin $magasin, ?User $compte = null): Testable
+    {
+        $this->dansLEspaceDeLaSociete($magasin->societe()->firstOrFail(), $compte ?? $this->proprietaireDe($magasin));
+
+        return Livewire::test(ModifierMagasin::class, ['record' => $magasin->getRouteKey()]);
+    }
+
+    /**
+     * Le premier devis du magasin, numéroté par son propriétaire : son code
+     * figure désormais dans un numéro.
+     */
+    private function numeroterUnPremierDevis(Magasin $magasin): void
+    {
+        app(TenantContext::class)->runAs($magasin, function () use ($magasin): void {
+            $proprietaire = $this->proprietaireDe($magasin);
+            $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
+            $devis = app(CreerDevisAction::class)->handle($proprietaire, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+            app(EmettreDevisAction::class)->handle($proprietaire, $devis);
+        });
+    }
+
+    /**
+     * Un ticket de 12,00 € TTC au comptoir du magasin, vendu par son
+     * propriétaire.
+     */
+    private function vendre(Magasin $magasin): Facture
+    {
+        return app(TenantContext::class)->runAs($magasin->fresh(), fn (): Facture => app(EnregistrerVenteCaisseAction::class)->handle(
+            $this->proprietaireDe($magasin),
+            Client::query()->where('est_comptoir', true)->sole(),
+            [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]],
+            ModePaiement::Especes,
+        ));
+    }
+
+    /**
+     * Les changements de SIRET que le journal des événements du magasin a
+     * inscrits (JET 270), dans l'ordre.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function changementsDeSiret(Magasin $magasin): array
+    {
+        return app(TenantContext::class)->runAs($magasin, fn (): array => EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', '270')
+            ->orderBy('sequence')
+            ->get()
+            ->map(fn (EnregistrementFiscal $evenement): array => $evenement->contenuSigne()['donnees']['details'])
+            ->filter(fn (array $details): bool => $details['parametre'] === 'siret')
+            ->values()
+            ->all());
     }
 
     /**

@@ -30,7 +30,11 @@ use LogicException;
  * vente manquant, référence prise entre-temps) annule toute la validation,
  * sans consommer ni numéro de facture d'achat ni référence de produit. Un
  * magasin suspendu ou fermé ne valide plus d'achat (voir
- * Magasin::verifierQuIlEstOuvert()).
+ * Magasin::verifierQuIlEstOuvert()) : sa ligne se relit sous un verrou
+ * partagé, premier verrou de la transaction, et la fermeture du magasin,
+ * qui la verrouille (voir FermerMagasinAction), passe donc tout entière
+ * avant ou après la validation ; une cession ne laisse aucune réception
+ * entrer dans le stock qu'elle a sorti.
  *
  * Son auteur est relu sous le verrou de sa ligne, avant la facture d'achat
  * et ses produits (voir LecteurDesDroits) : il doit pouvoir la valider ;
@@ -54,7 +58,7 @@ class ValiderFactureAchatAction
     {
         return DB::transaction(function () use ($auteur, $factureAchat) {
             $magasin = app(TenantContext::class)->magasin();
-            Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlEstOuvert();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'valider', $magasin, $factureAchat);
 
             return $this->operateur->pendant($compte, fn (): FactureAchat => $this->valider($factureAchat));

@@ -123,10 +123,12 @@ final class PermissionRegistry
     public const RELANCES_REGLER = 'relances.regler';
 
     /**
-     * Régler les paramètres du magasin : le délai de paiement et les
+     * Régler les paramètres du magasin : ses coordonnées et ses références
+     * d'acheteur (CoordonneesMagasin), le délai de paiement et les
      * mentions entre professionnels de ses factures (ParametresFactures).
-     * L'identité légale et la TVA sont celles de la société, réglées dans
-     * son administration. Le propriétaire et les responsables du magasin
+     * L'identité légale et la TVA sont celles de la société, son nom, son
+     * adresse et son SIRET ceux que la société gère, dans son
+     * administration. Le propriétaire et les responsables du magasin
      * l'ont toujours ; aucun modèle ne la coche d'office, pas même celui
      * de l'administrateur : le propriétaire ou un responsable la coche
      * pour qui il veut. L'équipe du magasin se gère par son responsable et
@@ -350,7 +352,7 @@ final class PermissionRegistry
             self::FACTURE_EMETTRE => 'Factures : émettre',
             self::FACTURE_ENVOYER => 'Factures : envoyer par e-mail et relancer',
             self::RELANCES_REGLER => 'Relances : régler les relances automatiques',
-            self::PARAMETRES_GERER => 'Paramètres du magasin : échéance et mentions des factures',
+            self::PARAMETRES_GERER => 'Paramètres du magasin : coordonnées, références d\'acheteur, échéance et mentions des factures',
             self::PAIEMENT_VIEW => 'Paiements : voir',
             self::PAIEMENT_CREER => 'Paiements : enregistrer',
             self::PAIEMENT_CONTRE_PASSER => 'Paiements : contre-passer une saisie erronée',

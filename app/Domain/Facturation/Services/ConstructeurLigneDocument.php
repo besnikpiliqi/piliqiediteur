@@ -124,11 +124,10 @@ class ConstructeurLigneDocument
      * TTC saisi, sinon le prix de vente TTC enregistré sur la fiche du
      * produit ; son PU HT en est la conversion au centime, la même que sur
      * la fiche. Une ligne de service (voir Service) prend le PU TTC saisi,
-     * sinon son prix de référence, sans sa TVA hors de la TVA française
-     * (voir Service::prixDeReferenceDans()) ; sans prix de référence, elle
-     * doit en saisir un. Seule une personne autorisée met un autre prix
-     * que celui de la fiche ou de la référence, ou vend un service qui n'en
-     * a pas (voir DerogationsDePrix). Un PU TTC n'est jamais négatif : une
+     * sinon son prix de référence TTC ; sans prix de référence, elle doit
+     * en saisir un. Seule une personne autorisée met un autre prix que
+     * celui de la fiche ou de la référence, ou vend un service qui n'en a
+     * pas (voir DerogationsDePrix). Un PU TTC n'est jamais négatif : une
      * vente ne rembourse rien, c'est le rôle d'un avoir.
      *
      * Vendue à un particulier, ou en franchise en base, la ligne a ici
@@ -152,8 +151,10 @@ class ConstructeurLigneDocument
      * produit comprend encore la TVA de sa fiche (taux_tva_du_prix), d'où
      * se déduit son PU HT, le prix payé par article -- 1 000 x 1,00 € TTC à
      * 20 % : 830,00 € pour un particulier, à 0,83 € l'article ; 833,33 €
-     * depuis le HT de la ligne pour un professionnel. Le prix d'un service,
-     * saisi, est déjà sans TVA.
+     * depuis le HT de la ligne pour un professionnel. Un service à son prix
+     * de référence se calcule de même, depuis ce prix TTC et son taux (voir
+     * Service::vendAuPrixDeReferenceSansTva()) ; un autre prix saisi pour un
+     * service y est déjà sans TVA.
      *
      * @param  array{produit_id?: int|string|null, service_id?: int|string|null, quantite: int|string, prix_unitaire_ttc?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}  $donnees
      * @param  Collection<int, Produit>  $produits  les produits des lignes, archivés compris (voir catalogue())
@@ -181,19 +182,23 @@ class ConstructeurLigneDocument
             throw new InvalidArgumentException('Une ligne vend un produit ou un service du catalogue.');
         }
 
+        $auPrixDeReferenceSansTva = $service?->vendAuPrixDeReferenceSansTva($donnees['prix_unitaire_ttc'] ?? null, $contexte) ?? false;
+        $prixSaisi = $auPrixDeReferenceSansTva ? null : ($donnees['prix_unitaire_ttc'] ?? null);
+
         $tauxTvaDuPrix = match (true) {
             $contexte->franchiseEnBase => 0.0,
             $produit !== null => (float) $produit->taux_tva,
+            $auPrixDeReferenceSansTva => (float) $service->taux_tva,
             $contexte->retireLaTvaDuPrix() => 0.0,
-            default => (float) (filled($donnees['taux_tva'] ?? null) ? $donnees['taux_tva'] : ($service->tauxDeReferenceDans($contexte) ?? $contexte->tauxTvaParDefaut)),
+            default => (float) (filled($donnees['taux_tva'] ?? null) ? $donnees['taux_tva'] : ($service->taux_tva ?? $contexte->tauxTvaParDefaut)),
         };
         $tauxTva = $contexte->exonere() ? 0.0 : $tauxTvaDuPrix;
 
         $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
 
-        $prixUnitaireTtc = $this->calculateur->arrondirAuCentime((float) (filled($donnees['prix_unitaire_ttc'] ?? null)
-            ? $donnees['prix_unitaire_ttc']
-            : ($produit?->prix_vente_ttc ?? $service->prixDeReferenceDans($contexte) ?? throw new InvalidArgumentException("Le prix du service « {$service->nom} » n'est pas fixé : demandez à un responsable."))));
+        $prixUnitaireTtc = $this->calculateur->arrondirAuCentime((float) (filled($prixSaisi)
+            ? $prixSaisi
+            : ($produit?->prix_vente_ttc ?? $service->prix_ttc ?? throw new InvalidArgumentException("Le prix du service « {$service->nom} » n'est pas fixé : demandez à un responsable."))));
 
         if ($prixUnitaireTtc < 0) {
             throw new InvalidArgumentException('Le PU TTC d\'une ligne ne peut pas être négatif.');

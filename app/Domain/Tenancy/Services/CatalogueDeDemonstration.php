@@ -15,10 +15,11 @@ use LogicException;
 /**
  * Le catalogue fictif d'un magasin de démonstration, à son ouverture (voir
  * OuvrirLaDemonstrationAction) : un fournisseur, une facture d'achat
- * validée qui crée trois produits et leur stock, deux services et deux
- * clients, un particulier et une entreprise, tous fictifs, pour vendre,
- * encaisser et clôturer tout de suite. Rien ne vient d'un magasin réel, et
- * rien n'y va.
+ * validée qui crée trois produits et leur stock, deux services à prix de
+ * référence, au taux du territoire du magasin, et deux clients, un
+ * particulier et une entreprise, tous fictifs, pour vendre, encaisser et
+ * clôturer tout de suite, même sans l'autorisation de fixer les prix (voir
+ * DerogationsDePrix). Rien ne vient d'un magasin réel, et rien n'y va.
  */
 class CatalogueDeDemonstration
 {
@@ -48,8 +49,8 @@ class CatalogueDeDemonstration
             ['produit' => ['nom' => 'Tasse en céramique', 'reference' => 'DEMO-TASSE', 'prix_vente_ttc' => '9.90', 'taux_tva' => $taux, 'suivi_stock' => true, 'seuil_alerte' => 2], 'quantite' => 10, 'prix_unitaire_ht' => '3.20'],
         ]));
 
-        Service::query()->create(['nom' => 'Emballage cadeau', 'actif' => true]);
-        Service::query()->create(['nom' => 'Livraison à domicile', 'actif' => true]);
+        Service::query()->create(['nom' => 'Emballage cadeau', 'prix_ttc' => '3.00', 'taux_tva' => $taux, 'actif' => true]);
+        Service::query()->create(['nom' => 'Livraison à domicile', 'prix_ttc' => '5.90', 'taux_tva' => $taux, 'actif' => true]);
 
         Client::query()->create(['nom' => 'Marie Martin (cliente fictive)', 'type_client' => TypeClient::Particulier, 'pays' => 'FR']);
         Client::query()->create(['nom' => 'Entreprise cliente de démonstration', 'type_client' => TypeClient::Professionnel, 'siren' => '000000018', 'adresse' => '1 rue de l\'Exemple', 'code_postal' => '75001', 'ville' => 'Paris', 'pays' => 'FR']);

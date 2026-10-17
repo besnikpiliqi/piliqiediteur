@@ -9,6 +9,7 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -24,22 +25,26 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Tenancy\Actions\AccepterUnRattachementAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Mail\PropositionDeRattachementMail;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\DemandeRattachement;
+use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CreationDesComptes;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Services\VerificateurJournalAudit;
 use App\Models\User;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -282,6 +287,109 @@ class DroitsConcurrenceTest extends TestCase
 
         $this->assertStringContainsString(LecteurDesDroits::REFUS, $this->attendreLEchec($concurrente));
         $this->assertSame([StatutFactureAchat::Brouillon, null, 0], [$factureAchat->fresh()->statut, $factureAchat->fresh()->numero, $produit->fresh()->stock_quantite]);
+    }
+
+    /**
+     * Deux ventes sans stock confirmées au même instant, dans deux magasins
+     * de la même société, chacune dans son processus (R1) : la vente du
+     * magasin B va jusqu'au bout pendant que celle du magasin A tient encore
+     * tous ses verrous, la tête de la chaîne d'audit de son magasin, prise
+     * en dernier, comprise. Une vente ne verrouille jamais la ligne de la
+     * société, et l'audit de chacune s'inscrit dans la chaîne de son
+     * magasin : deux magasins ne s'attendent jamais, et chaque chaîne reste
+     * intacte.
+     */
+    public function test_deux_ventes_sans_stock_dans_deux_magasins_ne_se_bloquent_pas_sur_la_societe(): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $paris = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Paris']);
+        $cableDeParis = self::cableSansStock();
+        app(TenantContext::class)->set($lyon);
+        $cableDeLyon = self::cableSansStock();
+        $responsableDeLyon = $this->responsable($lyon);
+        [$parisId, $responsableDeParisId, $cableDeParisId] = [$paris->id, $this->responsable($paris)->id, $cableDeParis->id];
+        app(TenantContext::class)->set($lyon);
+        $concurrente = null;
+        $termineeSansAttendre = false;
+        $this->concurrencerDesQueLAuditDuMagasinEstVerrouille(static function () use ($parisId, $responsableDeParisId, $cableDeParisId): void {
+            app(TenantContext::class)->set(Magasin::query()->findOrFail($parisId));
+            self::vendreSansStock(User::query()->findOrFail($responsableDeParisId), $cableDeParisId);
+        }, $concurrente, $termineeSansAttendre);
+
+        self::vendreSansStock($responsableDeLyon, $cableDeLyon->id);
+
+        $this->assertTrue($termineeSansAttendre, 'La vente de Paris a attendu un verrou que tenait la vente de Lyon.');
+        $this->attendreLaReussite($concurrente);
+        $this->assertEqualsCanonicalizing([(int) $lyon->id, (int) $paris->id], array_map(fn (EntreeAudit $entree): int => (int) $entree->magasin_id, $this->entreesDAudit($lyon->societe, ActionAuditee::VenteSansStock)));
+        $this->assertSame([], app(VerificateurJournalAudit::class)->verifier($lyon->societe));
+
+        foreach ([$lyon, $paris] as $magasin) {
+            app(TenantContext::class)->set($magasin);
+            $this->assertSame([-1, 1], [Produit::query()->sole()->stock_quantite, Facture::query()->whereNotNull('numero')->count()]);
+            $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
+        }
+    }
+
+    /**
+     * Un câble du magasin actif, suivi en stock, qui n'en a plus.
+     */
+    private static function cableSansStock(): Produit
+    {
+        return Produit::factory()->create(['nom' => 'Câble USB', 'reference' => 'CABLE-USB', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true]);
+    }
+
+    /**
+     * Le câble vendu au comptoir du magasin actif, après l'avertissement
+     * confirmé d'un stock qui passe à -1.
+     */
+    private static function vendreSansStock(User $vendeur, int $produitId): Facture
+    {
+        return app(EnregistrerVenteCaisseAction::class)->handle(
+            $vendeur,
+            Client::query()->where('est_comptoir', true)->sole(),
+            [['produit_id' => $produitId, 'quantite' => 1]],
+            ModePaiement::Especes,
+            confirmation: new ConfirmationVenteSansStock([$produitId => -1]),
+        );
+    }
+
+    /**
+     * Démarre l'opération concurrente dès que l'opération du test tient la
+     * tête de la chaîne d'audit de son magasin, son dernier verrou, puis la
+     * laisse aller jusqu'au bout, vingt secondes au plus, avant que le test
+     * ne poursuive : $termineeSansAttendre dit si elle a fini pendant que
+     * le test tenait encore tous ses verrous.
+     *
+     * @param  Closure(): void  $operationConcurrente
+     */
+    private function concurrencerDesQueLAuditDuMagasinEstVerrouille(Closure $operationConcurrente, ?InvokedProcess &$concurrente, bool &$termineeSansAttendre): void
+    {
+        $connexionDuTest = DB::getDefaultConnection();
+        $verrouTenu = false;
+
+        DB::listen(function (QueryExecuted $requete) use (&$concurrente, &$verrouTenu, &$termineeSansAttendre, $operationConcurrente, $connexionDuTest): void {
+            if ($concurrente !== null || $requete->connectionName !== $connexionDuTest) {
+                return;
+            }
+
+            if (str_contains($requete->sql, '"tetes_journal_audit"')) {
+                $verrouTenu = $verrouTenu || str_ends_with($requete->sql, 'for update');
+
+                return;
+            }
+
+            if ($verrouTenu) {
+                $concurrente = $this->demarrerUnProcessusConcurrent($operationConcurrente);
+                $limite = microtime(true) + 20;
+
+                while ($concurrente->running() && microtime(true) < $limite) {
+                    usleep(20_000);
+                }
+
+                $termineeSansAttendre = ! $concurrente->running();
+            }
+        });
     }
 
     /**

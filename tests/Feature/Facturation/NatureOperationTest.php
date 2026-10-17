@@ -25,12 +25,15 @@ use App\Domain\Facturation\Exceptions\NatureOperationRefuseeException;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\AvoirPdfGenerator;
+use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Enums\RegimeTva;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use LogicException;
@@ -172,6 +175,36 @@ class NatureOperationTest extends TestCase
         $this->assertMatchesRegularExpression('#<td class="montant">1</td>\s*<td class="montant">15,00 €</td>\s*<td class="montant">—</td>\s*<td class="montant">—</td>\s*<td class="montant">0 %</td>\s*<td class="montant">15,00 €</td>#', $pdf);
         $this->assertStringContainsString('HT de chaque ligne de produit = quantité × prix catalogue TTC ÷ (1 + TVA retirée), arrondi une fois', $pdf);
         $this->assertStringNotContainsString('PU TTC', $pdf);
+    }
+
+    /**
+     * Un service à son prix de référence, 50,00 € TTC à 20 %, se calcule
+     * sans TVA française comme un produit au même prix : 3 x 50,00 ÷ 1,20
+     * = 125,00 € HT pour un professionnel, arrondi une fois, et non 3 x
+     * 41,67 € = 125,01 €. Le vendeur, qui ne fixe aucun prix, le vend ainsi,
+     * son prix laissé vide comme celui que l'écran montre, 41,67 € ; il ne
+     * met pas un autre prix sans TVA. Le PDF imprime, comme pour le
+     * produit, le prix catalogue TTC et la TVA retirée.
+     */
+    public function test_un_service_a_son_prix_de_reference_se_calcule_sans_tva_francaise_comme_un_produit(): void
+    {
+        $magasin = $this->magasin();
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $conseil = Service::factory()->auPrixDe('50.00', '20')->create(['nom' => 'Conseil']);
+        $prestation = fn (array $ligne): Facture => app(CreerFactureAction::class)->handle($vendeur, $this->clientAmericain(), [['service_id' => $conseil->id, 'quantite' => 3, ...$ligne]], ['nature_operation' => NatureOperation::PrestationHorsUe]);
+
+        $prixVide = $prestation([]);
+        $prixMontre = $prestation(['prix_unitaire_ttc' => '41.67']);
+        $export = app(CreerFactureAction::class)->handle($vendeur, $this->clientAmericain(), [['produit_id' => $this->produit('50.00')->id, 'quantite' => 3]], ['nature_operation' => NatureOperation::ExportHorsUe, ...self::LIVRAISON_NEW_YORK]);
+
+        foreach ([$prixVide, $prixMontre] as $facture) {
+            $ligne = $facture->lignes->sole();
+            $this->assertSame(['50.00', '20.00', '41.67', '0.00', '125.00'], [$ligne->prix_unitaire_ttc, $ligne->taux_tva_du_prix, $ligne->prix_unitaire_ht, $ligne->taux_tva, $ligne->montant_ht]);
+            $this->assertSame(['125.00', '0.00', '125.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        }
+        $this->assertSame('125.00', $export->total_ht);
+        $this->assertThrows(fn () => $prestation(['prix_unitaire_ttc' => '40.00']), AuthorizationException::class, 'Vendre « Conseil » à 40,00 € au lieu de 41,67 €, son prix de référence, '.DerogationsDePrix::AUTORISATION.'.');
+        $this->assertMatchesRegularExpression('#<td class="montant">3</td>\s*<td class="montant">41,67 €</td>\s*<td class="montant">50,00 €</td>\s*<td class="montant">20 %</td>\s*<td class="montant">0 %</td>\s*<td class="montant">125,00 €</td>#', $this->pdf(app(EmettreFactureAction::class)->handle(self::auteur(), $prixVide)));
     }
 
     public function test_un_export_a_un_particulier_se_paie_0_83_euro_l_article(): void

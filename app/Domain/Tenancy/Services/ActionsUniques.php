@@ -40,6 +40,12 @@ use LogicException;
  * jeton) arrête en plus toute course : la demande qui perd est annulée en
  * entier, puis relit le jeton et renvoie le résultat de l'autre. Une
  * action qui échoue n'inscrit rien : son jeton resservira.
+ *
+ * Une action faite en plusieurs transactions, une par étape (la clôture
+ * des journées en retard, chacune dans la sienne), cherche le jeton à
+ * chaque étape et ne l'inscrit qu'avec la dernière (voir
+ * executerParEtapes()) : une erreur laisse faites les étapes qui la
+ * précèdent, et la demande répétée reprend à l'étape en échec.
  */
 class ActionsUniques
 {
@@ -56,8 +62,6 @@ class ActionsUniques
     public const CONTRE_PASSER_PAIEMENT = 'paiement.contre_passer';
 
     public const ENREGISTRER_AVOIR = 'avoir.enregistrer';
-
-    public const EMETTRE_AVOIR = 'avoir.emettre';
 
     public const ENVOYER_DOCUMENT = 'document.envoyer';
 
@@ -109,29 +113,67 @@ class ActionsUniques
                     return $this->resultatDeja($traitee, $action, $auteur, $empreinte);
                 }
 
-                $resultat = $operation();
-
-                (new ActionTraitee)->forceFill([
-                    'jeton' => $jeton,
-                    'action' => $action,
-                    'user_id' => $auteur->getKey(),
-                    'empreinte_demande' => $empreinte,
-                    'resultat_type' => $resultat?->getMorphClass(),
-                    'resultat_id' => $resultat?->getKey(),
-                    'created_at' => now(),
-                ])->save();
-
-                return $resultat;
+                return $this->inscrire($jeton, $action, $auteur, $empreinte, $operation());
             });
         } catch (UniqueConstraintViolationException $doublon) {
-            $traitee = $this->traitee($jeton);
-
-            if ($traitee === null) {
-                throw $doublon;
-            }
-
-            return $this->resultatDeja($traitee, $action, $auteur, $empreinte);
+            return $this->resultatApresUneCourse($doublon, $jeton, $action, $auteur, $empreinte);
         }
+    }
+
+    /**
+     * Comme executer(), pour une action faite en plusieurs transactions,
+     * une par étape : chaque étape prend le premier verrou de l'action,
+     * cherche le jeton, puis se fait ; seule la dernière inscrit le jeton,
+     * avec son résultat, dans sa propre transaction. Une erreur laisse
+     * faites les étapes qui la précèdent, sans inscrire le jeton : la
+     * demande répétée reprend à l'étape en échec. Deux demandes du même
+     * jeton se suivent étape par étape, et celle qui arrive après la
+     * dernière étape de l'autre en rend le résultat, sans rien refaire.
+     *
+     * @template TResultat of Model|null
+     *
+     * @param  string|null  $jeton  null pour une action du système ou des tests, qui ne consomme aucun jeton
+     * @param  array<array-key, mixed>  $parametres  le contenu de la demande, ce qui la distingue d'une autre
+     * @param  Closure(): mixed  $verrou  le premier verrou de l'action, pris au début de chaque étape
+     * @param  Closure(): array{0: TResultat, 1: bool}  $etape  une étape, dans sa transaction : son résultat, et si elle est la dernière
+     * @return array{resultat: TResultat, deja_enregistree: bool} le résultat de la dernière étape, et si la demande l'avait déjà obtenu
+     *
+     * @throws InvalidArgumentException quand le jeton n'est pas un identifiant unique
+     * @throws LogicException quand une demande différente a déjà été enregistrée sous ce jeton
+     */
+    public function executerParEtapes(?string $jeton, string $action, User $auteur, array $parametres, Closure $verrou, Closure $etape): array
+    {
+        if ($jeton !== null && ! Str::isUuid($jeton)) {
+            throw new InvalidArgumentException('Cette demande ne porte pas de jeton valable : rechargez la page, puis recommencez.');
+        }
+
+        $empreinte = self::empreinte($parametres);
+
+        do {
+            try {
+                [$resultat, $derniere, $dejaEnregistree] = DB::transaction(function () use ($jeton, $action, $auteur, $empreinte, $verrou, $etape): array {
+                    $verrou();
+
+                    $traitee = $jeton === null ? null : $this->traitee($jeton);
+
+                    if ($traitee !== null) {
+                        return [$this->resultatDeja($traitee, $action, $auteur, $empreinte), true, true];
+                    }
+
+                    [$resultat, $derniere] = $etape();
+
+                    return [$derniere && $jeton !== null ? $this->inscrire($jeton, $action, $auteur, $empreinte, $resultat) : $resultat, $derniere, false];
+                });
+            } catch (UniqueConstraintViolationException $doublon) {
+                if ($jeton === null) {
+                    throw $doublon;
+                }
+
+                [$resultat, $derniere, $dejaEnregistree] = [$this->resultatApresUneCourse($doublon, $jeton, $action, $auteur, $empreinte), true, true];
+            }
+        } while (! $derniere);
+
+        return ['resultat' => $resultat, 'deja_enregistree' => $dejaEnregistree];
     }
 
     /**
@@ -188,6 +230,48 @@ class ActionsUniques
     private function traitee(string $jeton): ?ActionTraitee
     {
         return ActionTraitee::query()->where('jeton', $jeton)->first();
+    }
+
+    /**
+     * Inscrit la demande et son résultat sous son jeton, dans la
+     * transaction de l'action, et rend ce résultat.
+     *
+     * @template TResultat of Model|null
+     *
+     * @param  TResultat  $resultat
+     * @return TResultat
+     */
+    private function inscrire(string $jeton, string $action, User $auteur, string $empreinte, ?Model $resultat): ?Model
+    {
+        (new ActionTraitee)->forceFill([
+            'jeton' => $jeton,
+            'action' => $action,
+            'user_id' => $auteur->getKey(),
+            'empreinte_demande' => $empreinte,
+            'resultat_type' => $resultat?->getMorphClass(),
+            'resultat_id' => $resultat?->getKey(),
+            'created_at' => now(),
+        ])->save();
+
+        return $resultat;
+    }
+
+    /**
+     * Une autre demande du même jeton a été inscrite pendant celle-ci,
+     * annulée : le résultat de l'autre, pourvu qu'elle soit la même.
+     *
+     * @throws UniqueConstraintViolationException quand l'index unique a arrêté autre chose que le jeton
+     * @throws LogicException
+     */
+    private function resultatApresUneCourse(UniqueConstraintViolationException $doublon, string $jeton, string $action, User $auteur, string $empreinte): ?Model
+    {
+        $traitee = $this->traitee($jeton);
+
+        if ($traitee === null) {
+            throw $doublon;
+        }
+
+        return $this->resultatDeja($traitee, $action, $auteur, $empreinte);
     }
 
     /**

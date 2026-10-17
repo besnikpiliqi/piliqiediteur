@@ -26,6 +26,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
+use App\Filament\App\Resources\FactureResource\Pages\EditFacture;
 use App\Filament\App\Resources\ServiceResource\Pages\ManageServices;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -278,6 +279,95 @@ class RemisesEtPrixTest extends TestCase
         $facture = app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 1, 'remise_pourcentage' => 10]]);
 
         $this->assertSame('10.80', $facture->total_ttc);
+    }
+
+    /**
+     * Le prix d'une fiche, ou le prix de référence d'un service, change
+     * pendant qu'une vente est au panier : la caisse rouverte par le
+     * vendeur, qui ne fixe aucun prix, reprend les prix du catalogue
+     * d'aujourd'hui, et la vente s'encaisse à ces prix.
+     */
+    public function test_un_vendeur_encaisse_aux_nouveaux_prix_du_catalogue_la_vente_reprise_apres_leur_changement(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $cable = $this->produit('Câble USB', '12.00', suiviDuStock: false);
+        $pose = Service::factory()->auPrixDe('30.00', '20')->create(['nom' => 'Pose de verre trempé']);
+        $this->actingAs($vendeur);
+        Filament::setTenant($magasin);
+        Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $cable->id, 'quantite' => 1],
+            ['service_id' => $pose->id, 'description' => 'Pose de verre trempé', 'quantite' => 1, 'prix_unitaire_ttc' => '30.00', 'taux_tva' => '20'],
+        ]]);
+        $cable->update(['prix_vente_ttc' => '15.00']);
+        $pose->update(['prix_ttc' => '35.00', 'taux_tva' => '10']);
+
+        Livewire::test(Caisse::class)->call('encaisser')->assertHasNoFormErrors();
+
+        $facture = Facture::query()->sole();
+        $this->assertSame([['Câble USB', '15.00', '20.00'], ['Pose de verre trempé', '35.00', '10.00']], $facture->lignes->sortBy('ordre')->map(fn (LigneFacture $ligne): array => [$ligne->description, $ligne->prix_unitaire_ttc, $ligne->taux_tva])->values()->all());
+        $this->assertSame([StatutFacture::Payee, '50.00'], [$facture->statut, $facture->total_ttc]);
+    }
+
+    /**
+     * Rouvert par un vendeur, un brouillon garde le prix et la remise
+     * qu'un responsable y a accordés, et le prix qu'avait la fiche à sa
+     * saisie ; la ligne dont le vendeur change la quantité prend le prix
+     * de la fiche d'aujourd'hui (Q1).
+     */
+    public function test_un_vendeur_rouvre_un_brouillon_sans_perdre_les_prix_accordes_et_vend_au_prix_du_jour_la_ligne_dont_il_change_la_quantite(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsable($magasin);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
+        $cable = $this->produit('Câble USB', '12.00', suiviDuStock: false);
+        $chargeur = $this->produit('Chargeur', '20.00', suiviDuStock: false);
+        $brouillon = app(CreerFactureAction::class)->handle($responsable, Client::factory()->create(), [
+            ['produit_id' => $cable->id, 'quantite' => 1],
+            ['produit_id' => $chargeur->id, 'quantite' => 1, 'prix_unitaire_ttc' => '18.00', 'remise_pourcentage' => 10],
+        ]);
+        $cable->update(['prix_vente_ttc' => '15.00']);
+        $this->actingAs($vendeur);
+        Filament::setTenant($magasin);
+
+        $page = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()]);
+        [$ligneDuCable, $ligneDuChargeur] = array_keys($page->get('data.lignes'));
+        $page->assertSet("data.lignes.{$ligneDuCable}.prix_unitaire_ttc", '12.00')
+            ->assertSet("data.lignes.{$ligneDuChargeur}.prix_unitaire_ttc", '18.00')
+            ->set("data.lignes.{$ligneDuCable}.quantite", 2)
+            ->assertSet("data.lignes.{$ligneDuCable}.prix_unitaire_ttc", '15.00')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $this->assertSame([[2, '15.00', '0.00'], [1, '18.00', '10.00']], $brouillon->fresh()->lignes->sortBy('ordre')->map(fn (LigneFacture $ligne): array => [$ligne->quantite, $ligne->prix_unitaire_ttc, $ligne->remise_pourcentage])->values()->all());
+    }
+
+    /**
+     * Le prix, la remise et le taux d'un service, verrouillés pour qui n'a
+     * pas l'autorisation, disent pourquoi et à qui s'adresser.
+     */
+    public function test_un_vendeur_lit_pourquoi_le_prix_la_remise_et_le_taux_d_un_service_sont_verrouilles(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $cable = $this->produit('Câble USB', '12.00');
+        $pose = Service::factory()->auPrixDe('30.00', '20')->create(['nom' => 'Pose de verre trempé']);
+        $lignes = ['lignes' => [
+            ['produit_id' => $cable->id, 'quantite' => 1],
+            ['service_id' => $pose->id, 'description' => 'Pose de verre trempé', 'quantite' => 1, 'prix_unitaire_ttc' => '30.00', 'taux_tva' => '20'],
+        ]];
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur));
+        Filament::setTenant($magasin);
+        Livewire::test(CreateFacture::class)
+            ->fillForm($lignes)
+            ->assertSee('Prix de la fiche du produit. Un autre prix '.DerogationsDePrix::AUTORISATION.' : demandez à un responsable.')
+            ->assertSee('Prix de référence du service. Un autre prix '.DerogationsDePrix::AUTORISATION.' : demandez à un responsable.')
+            ->assertSee('Taux du prix de référence du service. Un autre taux '.DerogationsDePrix::AUTORISATION.' : demandez à un responsable.')
+            ->assertSee('Une remise '.DerogationsDePrix::AUTORISATION.' : demandez à un responsable.');
+
+        $this->actingAs($this->responsable($magasin));
+        Livewire::test(CreateFacture::class)
+            ->fillForm($lignes)
+            ->assertDontSee(DerogationsDePrix::AUTORISATION);
     }
 
     private function produit(string $nom, string $prixTtc, bool $suiviDuStock = true): Produit

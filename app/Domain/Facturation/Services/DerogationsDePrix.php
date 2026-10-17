@@ -13,12 +13,12 @@ use Illuminate\Support\Facades\Gate;
  * Les remises et les prix dérogatoires d'une vente (R2) : une ligne
  * remisée, une ligne de produit à un autre prix TTC que celui de sa
  * fiche, une ligne de service à un autre prix ou un autre taux que son
- * prix de référence (voir Service::prixDeReferenceDans()), ou d'un service
- * qui n'en a pas. Seule une personne autorisée à « accorder des remises et
- * fixer le prix d'un service » dans le magasin en introduit une (voir
- * PermissionRegistry::VENTE_REMISES_ET_PRIX) ; sans elle, une ligne de
- * produit prend le prix de sa fiche, une ligne de service son prix de
- * référence, et un service sans prix de référence ne se vend pas.
+ * prix de référence (voir Service::estASonPrixDeReference()), ou d'un
+ * service qui n'en a pas. Seule une personne autorisée à « accorder des
+ * remises et fixer le prix d'un service » dans le magasin en introduit
+ * une (voir PermissionRegistry::VENTE_REMISES_ET_PRIX) ; sans elle, une
+ * ligne de produit prend le prix de sa fiche, une ligne de service son
+ * prix de référence, et un service sans prix de référence ne se vend pas.
  *
  * Une ligne qui porte une dérogation et que l'enregistrement reprend
  * strictement telle quelle (même article, même quantité, même prix, même
@@ -46,7 +46,7 @@ class DerogationsDePrix
      * pas l'autorisation dans le magasin actif.
      *
      * @param  iterable<array<string, mixed>>  $lignesAvant  les lignes déjà enregistrées du document, aucune pour un nouveau
-     * @param  list<array<string, mixed>>  $lignesApres  les lignes construites à enregistrer (voir ConstructeurLigneDocument)
+     * @param  array<array-key, array<string, mixed>>  $lignesApres  les lignes construites à enregistrer (voir ConstructeurLigneDocument)
      *
      * @throws AuthorizationException
      */
@@ -61,12 +61,15 @@ class DerogationsDePrix
 
     /**
      * Les dérogations que les lignes à enregistrer introduisent, une
-     * phrase pour chacune, dans l'ordre des lignes ; aucune quand chaque
-     * ligne dérogatoire reprend telle quelle une ligne déjà enregistrée.
+     * phrase pour chacune, par clé de ligne, dans l'ordre des lignes ;
+     * aucune quand chaque ligne dérogatoire reprend telle quelle une ligne
+     * déjà enregistrée. L'écran les lit aussi, pour remettre au prix du
+     * catalogue les lignes qu'une personne sans l'autorisation ne pourrait
+     * pas enregistrer (voir AjouteDesLignesDeVente::lignesAuxPrixPermis()).
      *
      * @param  iterable<array<string, mixed>>  $lignesAvant
-     * @param  list<array<string, mixed>>  $lignesApres
-     * @return list<string>
+     * @param  array<array-key, array<string, mixed>>  $lignesApres
+     * @return array<array-key, string>
      */
     public function introduites(iterable $lignesAvant, array $lignesApres, ContexteDeVente $contexte): array
     {
@@ -81,7 +84,7 @@ class DerogationsDePrix
         $services = Service::query()->whereKey(array_filter(array_column($lignesApres, 'service_id')))->get()->keyBy('id');
         $introduites = [];
 
-        foreach ($lignesApres as $ligne) {
+        foreach ($lignesApres as $cleDeLigne => $ligne) {
             $derogation = $this->derogation($ligne, $produits->get((int) $ligne['produit_id']), $services->get((int) $ligne['service_id']), $contexte);
 
             if ($derogation === null) {
@@ -96,7 +99,7 @@ class DerogationsDePrix
                 continue;
             }
 
-            $introduites[] = $derogation;
+            $introduites[$cleDeLigne] = $derogation;
         }
 
         return $introduites;
@@ -124,23 +127,20 @@ class DerogationsDePrix
             return "Vendre « {$article} » à ".self::euros($prix).' au lieu de '.self::euros((float) $produit->prix_vente_ttc).', le prix de sa fiche, '.self::AUTORISATION.'.';
         }
 
-        if ($service === null) {
+        if ($service === null || $service->estASonPrixDeReference($prix, (float) $ligne['taux_tva_du_prix'], $contexte)) {
             return null;
         }
 
+        // Le prix de la ligne et celui de référence tels que l'écran les
+        // montre : sans TVA hors de la TVA française.
+        $prixMontre = $this->calculateur->arrondirAuCentime((float) ($contexte->retireLaTvaDuPrix() ? $ligne['prix_unitaire_ht'] : $ligne['prix_unitaire_ttc']));
         $prixDeReference = $this->calculateur->arrondirAuCentime((float) $service->prixDeReferenceDans($contexte));
 
-        if ($prix !== $prixDeReference) {
-            return "Vendre « {$article} » à ".self::euros($prix).' au lieu de '.self::euros($prixDeReference).', son prix de référence, '.self::AUTORISATION.'.';
+        if ($prixMontre !== $prixDeReference) {
+            return "Vendre « {$article} » à ".self::euros($prixMontre).' au lieu de '.self::euros($prixDeReference).', son prix de référence, '.self::AUTORISATION.'.';
         }
 
-        $tauxDeReference = $service->tauxDeReferenceDans($contexte);
-
-        if ($tauxDeReference !== null && round((float) $ligne['taux_tva_du_prix'], 2) !== round($tauxDeReference, 2)) {
-            return "Vendre « {$article} » à ".self::pourcentage($ligne['taux_tva_du_prix']).' % de TVA au lieu de '.self::pourcentage($tauxDeReference).' %, le taux de son prix de référence, '.self::AUTORISATION.'.';
-        }
-
-        return null;
+        return "Vendre « {$article} » à ".self::pourcentage($ligne['taux_tva_du_prix']).' % de TVA au lieu de '.self::pourcentage($service->taux_tva).' %, le taux de son prix de référence, '.self::AUTORISATION.'.';
     }
 
     /**

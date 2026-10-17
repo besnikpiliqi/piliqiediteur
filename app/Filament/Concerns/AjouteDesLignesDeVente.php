@@ -15,6 +15,7 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -60,13 +61,17 @@ use WeakMap;
  *
  * Remises et prix (R2) : sans l'autorisation « accorder des remises et
  * fixer le prix d'un service », la remise, le prix d'une ligne et le taux
- * d'un service sont affichés sans pouvoir se changer (voir
- * peutAccorderDesRemises()) : une ligne de produit prend le prix de sa
- * fiche, une ligne de service son prix de référence, et un service sans
- * prix de référence n'est pas proposé. Ces valeurs partent tout de même
- * avec le formulaire : une ligne remisée par un responsable et reprise
- * telle quelle garde sa remise, et le serveur refuse toute valeur changée
- * (voir DerogationsDePrix).
+ * d'un service sont affichés sans pouvoir se changer, avec une aide qui dit
+ * pourquoi (voir peutAccorderDesRemises()) : une ligne de produit prend le
+ * prix de sa fiche, une ligne de service son prix de référence, et un
+ * service sans prix de référence n'est pas proposé. Ces valeurs partent
+ * tout de même avec le formulaire : une ligne remisée par un responsable
+ * et reprise telle quelle garde sa remise, et le serveur refuse toute
+ * valeur changée (voir DerogationsDePrix). Une ligne que la personne ne
+ * pourrait pas enregistrer telle quelle reprend le prix du catalogue à la
+ * réouverture du panier ou du document (voir lignesAuxPrixPermis()), et
+ * une ligne dont elle change la quantité, le prix du catalogue d'aujourd'hui
+ * (Q1) : un prix de fiche changé depuis ne la bloque jamais.
  */
 trait AjouteDesLignesDeVente
 {
@@ -165,27 +170,37 @@ trait AjouteDesLignesDeVente
      * tel qu'il a été saisi -- sauf sur un document enregistré en
      * franchise en base ou sans TVA française, où son 0 % n'a pas été
      * saisi mais imposé (voir ConstructeurLigneDocument) : la ligne propose
-     * alors le taux du territoire du magasin, celui qu'elle prend si le
-     * magasin est sorti de la franchise ou la vente revenue en France
-     * depuis, son prix sans TVA converti à ce taux (voir
-     * ChoisitLaNatureDeLOperation::natureARouvrir()). Sinon, le champ reste
-     * caché et la ligne à 0 %.
+     * alors le taux retiré de son prix (celui de son prix de référence, voir
+     * Service::vendAuPrixDeReferenceSansTva()), sinon celui du prix de
+     * référence de son service, sinon le taux du territoire du magasin :
+     * celui qu'elle prend si le magasin est sorti de la franchise ou la
+     * vente revenue en France depuis, son prix sans TVA converti à ce taux
+     * (voir ChoisitLaNatureDeLOperation::natureARouvrir()). Sinon, le champ
+     * reste caché.
+     *
+     * Sans TVA française, le prix d'un service se montre sans TVA : son PU
+     * HT, son prix de référence sans sa TVA compris.
      *
      * @return list<array<string, mixed>>
      */
     public static function lignesARouvrir(Facture|Devis $document): array
     {
-        return $document->lignes->map(fn (LigneFacture|LigneDevis $ligne): array => [
+        $tauxImpose = $document->franchise_en_base || $document->nature_operation->exonere();
+        $prixSansTva = ContexteDeVente::documentRetireLaTvaDuPrix($document);
+
+        return $document->lignes->loadMissing('service')->map(fn (LigneFacture|LigneDevis $ligne): array => [
             'produit_id' => $ligne->produit_id,
             'service_id' => $ligne->service_id,
             'description' => $ligne->description,
             'reference' => $ligne->reference,
             'quantite' => $ligne->quantite,
             'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
-            'prix_unitaire_ttc' => $ligne->prix_unitaire_ttc,
-            'taux_tva' => self::pourcentageEnTexte(($document->franchise_en_base || $document->nature_operation->exonere()) && $ligne->service_id !== null
-                ? self::magasin()->tauxTvaParDefaut()
-                : $ligne->taux_tva),
+            'prix_unitaire_ttc' => $prixSansTva && $ligne->service_id !== null ? $ligne->prix_unitaire_ht : $ligne->prix_unitaire_ttc,
+            'taux_tva' => self::pourcentageEnTexte(match (true) {
+                ! $tauxImpose || $ligne->service_id === null => $ligne->taux_tva,
+                (float) $ligne->taux_tva_du_prix > 0 => $ligne->taux_tva_du_prix,
+                default => $ligne->service?->taux_tva ?? self::magasin()->tauxTvaParDefaut(),
+            }),
             'remise_pourcentage' => self::pourcentageEnTexte($ligne->remise_pourcentage),
         ])->all();
     }
@@ -244,7 +259,27 @@ trait AjouteDesLignesDeVente
             // live() et non live(onBlur: true) sur tous les champs de la
             // ligne : le total (et, dans la Caisse, la monnaie à rendre) se
             // met à jour pendant la saisie, pas seulement au clic ailleurs.
-            TextInput::make('quantite')->integer()->minValue(1)->required()->default(1)->saisieEnDirect(),
+            TextInput::make('quantite')
+                ->integer()
+                ->minValue(1)
+                ->required()
+                ->default(1)
+                ->saisieEnDirect()
+                // Sans l'autorisation de fixer les prix, la ligne dont la
+                // quantité change prend le prix du catalogue d'aujourd'hui
+                // (Q1) : le prix d'une fiche changé depuis sa saisie, que
+                // l'enregistrement refuserait, ne la bloque pas.
+                ->afterStateUpdated(function (Get $get, Set $set): void {
+                    if (self::peutAccorderDesRemises()) {
+                        return;
+                    }
+
+                    $ligne = self::ligneAuPrixDuCatalogue(self::ligneSaisie($get), self::contexteDeVente($get('../../client_id'), NatureOperation::depuisSaisie($get('../../nature_operation'))));
+
+                    foreach (['prix_unitaire_ttc', 'prix_unitaire_ht', 'taux_tva'] as $champ) {
+                        $set($champ, $ligne[$champ]);
+                    }
+                }),
             ...self::champsPrixDeLigne(),
             TextInput::make('remise_pourcentage')
                 ->label('Remise %')
@@ -254,7 +289,8 @@ trait AjouteDesLignesDeVente
                 ->default(0)
                 ->saisieEnDirect()
                 ->disabled(fn (): bool => ! self::peutAccorderDesRemises())
-                ->dehydrated(),
+                ->dehydrated()
+                ->helperText(fn (): ?string => self::peutAccorderDesRemises() ? null : self::aideSansAutorisation('Une remise')),
             self::totalDeLigne(),
         ];
     }
@@ -301,7 +337,7 @@ trait AjouteDesLignesDeVente
                 ->required()
                 ->disabled(fn (): bool => ! self::peutAccorderDesRemises())
                 ->dehydrated()
-                ->helperText(fn (Get $get): ?string => self::peutAccorderDesRemises() ? null : (self::estUneLigneDeService($get) ? 'Prix de référence du service' : 'Prix de la fiche du produit'))
+                ->helperText(fn (Get $get): ?string => self::peutAccorderDesRemises() ? null : (self::estUneLigneDeService($get) ? 'Prix de référence du service. ' : 'Prix de la fiche du produit. ').self::aideSansAutorisation('Un autre prix'))
                 // Le PU HT d'une ligne de produit suit le PU TTC saisi, au
                 // taux affiché ; une ligne de service n'en montre pas, son
                 // HT figure sous son total (voir totalDeLigne()).
@@ -329,6 +365,7 @@ trait AjouteDesLignesDeVente
                 ->helperText(fn (Get $get): ?string => match (true) {
                     self::magasin()->societe->estEnFranchiseDeTva() => 'TVA non applicable',
                     self::venteSansTvaFrancaise($get) => 'Retirée du prix : aucune TVA facturée',
+                    self::estUneLigneDeService($get) && ! self::peutAccorderDesRemises() => 'Taux du prix de référence du service. '.self::aideSansAutorisation('Un autre taux'),
                     default => null,
                 })
                 ->saisieEnDirect()
@@ -346,6 +383,87 @@ trait AjouteDesLignesDeVente
                         self::appliquerLeTauxDuProduit($produit, $get, $set);
                     }
                 }),
+        ];
+    }
+
+    /**
+     * L'aide d'un champ que verrouille l'absence de l'autorisation de fixer
+     * les prix (R2) : ce qu'elle demande, et à qui s'adresser.
+     */
+    private static function aideSansAutorisation(string $geste): string
+    {
+        return "{$geste} ".DerogationsDePrix::AUTORISATION.' : demandez à un responsable.';
+    }
+
+    /**
+     * Pour une personne qui n'est pas autorisée à fixer les prix (R2), les
+     * lignes que l'enregistrement refuserait comme une dérogation qu'elle
+     * introduit (voir DerogationsDePrix) reprennent le prix du catalogue,
+     * sans remise (voir ligneAuPrixDuCatalogue()) : celles du panier de la
+     * caisse dont la fiche a changé de prix depuis leur saisie, ou dont
+     * l'autorisation a été retirée entre-temps, celles d'un brouillon qui ne
+     * se reprendraient plus telles quelles (le prix de référence de leur
+     * service a changé, hors de la TVA française). Les lignes d'un
+     * brouillon que l'enregistrement reprendrait telles quelles, remise ou
+     * prix déjà accordés par un responsable compris, ne changent pas. Rien
+     * ne change pour une personne autorisée.
+     *
+     * @param  array<array-key, mixed>  $lignes  les lignes du formulaire
+     * @param  Facture|Devis|null  $document  le brouillon rouvert ; aucun pour le panier de la caisse
+     * @return array<array-key, mixed>
+     */
+    public static function lignesAuxPrixPermis(array $lignes, mixed $clientId, mixed $nature = null, Facture|Devis|null $document = null): array
+    {
+        if (self::peutAccorderDesRemises()) {
+            return $lignes;
+        }
+
+        $contexte = self::contexteDeVente($clientId, NatureOperation::depuisSaisie($nature));
+        $refusees = app(DerogationsDePrix::class)->introduites(
+            $document?->lignes->map(fn (LigneFacture|LigneDevis $ligne): array => $ligne->attributesToArray())->all() ?? [],
+            app(ConstructeurLigneDocument::class)->apercu($lignes, $contexte),
+            $contexte,
+        );
+
+        foreach (array_keys($refusees) as $cle) {
+            $lignes[$cle] = [...self::ligneAuPrixDuCatalogue($lignes[$cle], $contexte), 'remise_pourcentage' => '0'];
+        }
+
+        return $lignes;
+    }
+
+    /**
+     * La ligne au prix du catalogue dans cette vente : le prix de la fiche
+     * de son produit et le PU HT qui en découle, ou le prix de référence de
+     * son service, tel que l'écran le montre, et son taux. Une ligne de
+     * service sans prix de référence reste telle quelle : elle ne se vend
+     * pas sans l'autorisation.
+     *
+     * @param  array<string, mixed>  $ligne
+     * @return array<string, mixed>
+     */
+    private static function ligneAuPrixDuCatalogue(array $ligne, ContexteDeVente $contexte): array
+    {
+        $produit = filled($ligne['produit_id'] ?? null) ? Produit::withTrashed()->find($ligne['produit_id']) : null;
+
+        if ($produit !== null) {
+            return [
+                ...$ligne,
+                'prix_unitaire_ttc' => self::prixEnTexte((float) $produit->prix_vente_ttc),
+                'prix_unitaire_ht' => self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $produit->prix_vente_ttc, $contexte->franchiseEnBase ? 0.0 : (float) $produit->taux_tva)),
+            ];
+        }
+
+        $service = filled($ligne['service_id'] ?? null) ? Service::query()->find($ligne['service_id']) : null;
+
+        if ($service === null || ! $service->aUnPrixDeReference()) {
+            return $ligne;
+        }
+
+        return [
+            ...$ligne,
+            'prix_unitaire_ttc' => self::prixEnTexte((float) $service->prixDeReferenceDans($contexte)),
+            'taux_tva' => self::pourcentageEnTexte($service->taux_tva),
         ];
     }
 

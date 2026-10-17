@@ -18,12 +18,13 @@ use InvalidArgumentException;
  * créés, et en crée un nouveau quand il manque (voir
  * TrouverOuCreerServiceAction). Un nom et, s'il est fixé, un prix de
  * référence TTC avec son taux de TVA (R2) : une ligne de ce service le
- * prend, converti sans TVA hors de la TVA française (voir
- * prixDeReferenceDans()), et seule une personne autorisée à fixer le prix
- * d'un service en met un autre, ou vend un service qui n'en a pas (voir
- * DerogationsDePrix) ; la ligne garde une copie figée de son prix (voir
- * ConstructeurLigneDocument). Prix et taux se fixent ensemble : sans prix,
- * pas de taux. Deux
+ * prend et se calcule comme une ligne de produit, depuis ce prix TTC et
+ * son taux, que la vente retire hors de la TVA française (voir
+ * estASonPrixDeReference()) ; seule une personne autorisée à fixer le
+ * prix d'un service en met un autre, ou vend un service qui n'en a pas
+ * (voir DerogationsDePrix) ; la ligne garde une copie figée de son prix
+ * (voir ConstructeurLigneDocument). Prix et taux se fixent ensemble : sans
+ * prix, pas de taux. Deux
  * marques disent ce qu'une vente hors de France en fait (voir
  * ControleNatureOperation) : des frais accessoires (port, emballage,
  * assurance) suivent la livraison des biens qu'ils accompagnent ; un
@@ -86,11 +87,12 @@ class Service extends Model
     }
 
     /**
-     * Le prix que prend une ligne de ce service dans cette vente, null sans
-     * prix de référence : son prix TTC, et, hors de la TVA française, ce
-     * prix sans sa TVA, au centime, comme le convertit l'écran (voir
-     * ChoisitLaNatureDeLOperation). En franchise en base, le client paie
-     * le même prix TTC, sans TVA.
+     * Le prix de référence tel que l'écran le montre et le saisit dans
+     * cette vente, null sans prix de référence : son prix TTC, et, hors de
+     * la TVA française, où le prix d'un service se saisit sans TVA, ce prix
+     * sans sa TVA, au centime, comme le PU HT d'un produit (voir
+     * ChoisitLaNatureDeLOperation). En franchise en base, le client paie le
+     * même prix TTC, sans TVA.
      */
     public function prixDeReferenceDans(ContexteDeVente $contexte): ?float
     {
@@ -104,18 +106,36 @@ class Service extends Model
     }
 
     /**
-     * Le taux de TVA que prend une ligne de ce service dans cette vente,
-     * null quand la vente le fixe d'elle-même (franchise en base, vente
-     * sans TVA française, toutes deux à 0 %) ou qu'il n'a pas de prix de
-     * référence.
+     * Hors de la TVA française, la ligne de ce service est-elle vendue à
+     * son prix de référence : son prix laissé vide, ou égal à ce prix sans
+     * sa TVA, tel que l'écran le montre (voir prixDeReferenceDans()) ?
+     * Elle se calcule alors comme une ligne de produit, depuis ce prix TTC
+     * et son taux, que la vente retire (voir ConstructeurLigneDocument) :
+     * trois services à 50,00 € TTC à 20 % font 125,00 € HT pour un
+     * professionnel, 3 x 50,00 ÷ 1,20 arrondi une fois, et non 3 x 41,67 €.
+     * Un autre prix saisi y est un prix sans TVA.
      */
-    public function tauxDeReferenceDans(ContexteDeVente $contexte): ?float
+    public function vendAuPrixDeReferenceSansTva(mixed $prixSaisi, ContexteDeVente $contexte): bool
     {
-        if (! $this->aUnPrixDeReference() || $contexte->franchiseEnBase || $contexte->retireLaTvaDuPrix()) {
-            return null;
+        if (! $this->aUnPrixDeReference() || ! $contexte->retireLaTvaDuPrix()) {
+            return false;
         }
 
-        return (float) $this->taux_tva;
+        return blank($prixSaisi) || (is_numeric($prixSaisi) && round((float) $prixSaisi, 2) === round((float) $this->prixDeReferenceDans($contexte), 2));
+    }
+
+    /**
+     * Une ligne construite (voir ConstructeurLigneDocument) est-elle au
+     * prix de référence de ce service dans cette vente : son PU TTC, au
+     * taux de ce prix ? En franchise en base, ce taux est 0 % : le client
+     * paie le prix TTC sans TVA ; hors de la TVA française, c'est le taux
+     * que la vente retire du prix, comme pour un produit.
+     */
+    public function estASonPrixDeReference(float $prixUnitaireTtc, float $tauxTvaDuPrix, ContexteDeVente $contexte): bool
+    {
+        return $this->aUnPrixDeReference()
+            && round($prixUnitaireTtc, 2) === round((float) $this->prix_ttc, 2)
+            && round($tauxTvaDuPrix, 2) === round($contexte->franchiseEnBase ? 0.0 : (float) $this->taux_tva, 2);
     }
 
     /**

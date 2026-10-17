@@ -21,9 +21,11 @@ use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use LogicException;
 use RuntimeException;
 use Tests\TestCase;
@@ -152,6 +154,44 @@ class CloturerLesJourneesActionTest extends TestCase
         $reprise = app(CloturerLesJourneesAction::class)->parLeSysteme($magasin, now());
 
         $this->assertSame(['2026-10-07', '2026-10-08'], $reprise->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->toDateString())->all());
+    }
+
+    /**
+     * Le bouton porte un jeton (R3) : chaque journée se clôture tout de même
+     * dans sa propre transaction. Une erreur laisse clôturées celles qui la
+     * précèdent ; la même demande, répétée, reprend à la journée en échec,
+     * puis, répétée encore, rend la dernière clôture sans rien refaire.
+     */
+    public function test_une_erreur_a_une_journee_du_bouton_laisse_cloturees_les_precedentes_et_la_demande_repetee_reprend_a_cette_journee(): void
+    {
+        $magasin = $this->magasin();
+        $this->travelTo('2026-10-05 10:00:00');
+        $this->vendreUnTicket();
+        $this->travelTo('2026-10-08 19:00:00');
+        $jeton = (string) Str::uuid();
+        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), app(LecteurDesDroits::class), app(OperateurCourant::class)) extends CloturerCaisseAction
+        {
+            public function handle(User $auteur, Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
+            {
+                if (CarbonImmutable::parse($date)->toDateString() === '2026-10-07') {
+                    throw new RuntimeException('Panne du serveur de base de données.');
+                }
+
+                return parent::handle($auteur, $magasin, $date);
+            }
+        });
+        $journees = fn (): array => ClotureCaisse::query()->orderBy('date_cloture')->get()->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->toDateString())->all();
+
+        $this->assertThrows(fn () => app(CloturerLesJourneesAction::class)->parUnePersonne(self::auteur(), $magasin, now(), $jeton), RuntimeException::class, 'Panne du serveur de base de données.');
+        $this->assertSame(['2026-10-05', '2026-10-06'], $journees());
+
+        $this->app->forgetInstance(CloturerCaisseAction::class);
+        $reprise = app(CloturerLesJourneesAction::class)->parUnePersonne(self::auteur(), $magasin, now(), $jeton);
+        $repetee = app(CloturerLesJourneesAction::class)->parUnePersonne(self::auteur(), $magasin, now(), $jeton);
+
+        $this->assertSame(['2026-10-07', '2026-10-08'], $reprise['clotures']->map(fn (ClotureCaisse $cloture): string => $cloture->date_cloture->toDateString())->all());
+        $this->assertSame([$reprise['clotures']->last()->id], $repetee['clotures']->map(fn (ClotureCaisse $cloture): int => $cloture->id)->all());
+        $this->assertSame(['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08'], $journees());
     }
 
     /**

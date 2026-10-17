@@ -174,9 +174,17 @@ class Caisse extends Page implements HasForms
      * s'inscrit au journal des événements (voir PanierDeCaisse). Si le
      * journal ne s'écrit pas, le vendeur en lit la raison et retrouve le
      * panier enregistré : aucun retrait n'échappe au journal.
+     *
+     * Pour un vendeur qui n'est pas autorisé à fixer les prix, chaque ligne
+     * que l'encaissement refuserait reprend d'abord le prix du catalogue
+     * (voir AjouteDesLignesDeVente::lignesAuxPrixPermis()) : un panier
+     * repris après un changement du prix d'une fiche s'encaisse au nouveau
+     * prix, qu'il voit avant d'encaisser.
      */
     public function rendering(): void
     {
+        $this->data['lignes'] = DevisResource::lignesAuxPrixPermis($this->data['lignes'] ?? [], $this->data['client_id'] ?? null);
+
         try {
             $this->enregistrerLePanier();
         } catch (LogicException|RefusFiscalException $refus) {

@@ -237,15 +237,18 @@ trait ChoisitLaNatureDeLOperation
      * le client paie sans TVA (voir natureARouvrir()).
      *
      * Le taux d'un service vendu sans TVA française est caché : c'est celui
-     * qu'il avait en France, ou le taux du territoire du magasin pour une
-     * ligne ajoutée ou rouverte hors de France (voir
-     * AjouteDesLignesDeVente::lignesARouvrir()).
+     * qu'il avait en France, ou, pour une ligne ajoutée ou rouverte hors de
+     * France, celui de son prix de référence, sinon le taux du territoire
+     * du magasin (voir AjouteDesLignesDeVente::lignesARouvrir()).
      *
-     * Une ligne vendue au prix de référence de son service, à son taux
-     * (R2, voir Service), prend directement ce prix de référence dans la
+     * Une ligne vendue au prix de référence de son service (R2, voir
+     * Service) prend directement ce prix de référence et son taux dans la
      * nouvelle nature, sans l'arrondi d'un aller-retour : elle reste au
      * prix de référence, que peut vendre une personne qui n'est pas
-     * autorisée à fixer les prix (voir DerogationsDePrix).
+     * autorisée à fixer les prix (voir DerogationsDePrix). Hors de la TVA
+     * française, son prix seul la reconnaît, comme à l'enregistrement
+     * (voir Service::vendAuPrixDeReferenceSansTva()) ; en France, son prix
+     * et son taux.
      *
      * @param  mixed  $lignes  les lignes du formulaire
      * @return array<array-key, mixed>|null les lignes, prix des services convertis ; null si aucun n'a changé
@@ -261,21 +264,29 @@ trait ChoisitLaNatureDeLOperation
         $converties = false;
 
         foreach ($lignes as $cle => $ligne) {
-            if (! is_array($ligne) || blank($ligne['service_id'] ?? null) || ! is_numeric($ligne['prix_unitaire_ttc'] ?? null) || ! is_numeric($ligne['taux_tva'] ?? null)) {
+            if (! is_array($ligne) || blank($ligne['service_id'] ?? null) || ! is_numeric($ligne['prix_unitaire_ttc'] ?? null)) {
+                continue;
+            }
+
+            $taux = is_numeric($ligne['taux_tva'] ?? null) ? (float) $ligne['taux_tva'] : null;
+            $reference = self::prixDeReferenceConverti($services->get((int) $ligne['service_id']), (float) $ligne['prix_unitaire_ttc'], $taux, $sansTvaAvant, $sansTvaApres);
+
+            if ($reference === null && $taux === null) {
                 continue;
             }
 
             try {
-                $prix = self::prixDeReferenceConverti($services->get((int) $ligne['service_id']), (float) $ligne['prix_unitaire_ttc'], (float) $ligne['taux_tva'], $sansTvaAvant, $sansTvaApres)
-                    ?? ($sansTvaApres
-                        ? $calculateur->prixUnitaireHtDepuisTtc((float) $ligne['prix_unitaire_ttc'], (float) $ligne['taux_tva'])
-                        : $calculateur->prixUnitaireTtcDepuisHt((float) $ligne['prix_unitaire_ttc'], (float) $ligne['taux_tva']));
+                [$prix, $taux] = $reference ?? [$sansTvaApres
+                    ? $calculateur->prixUnitaireHtDepuisTtc((float) $ligne['prix_unitaire_ttc'], $taux)
+                    : $calculateur->prixUnitaireTtcDepuisHt((float) $ligne['prix_unitaire_ttc'], $taux), $taux];
             } catch (InvalidArgumentException) {
                 continue;
             }
 
-            // Présenté comme un prix relu en base (cast decimal:2) : "15.00".
+            // Présentés comme un prix relu en base (cast decimal:2), "15.00",
+            // et un taux tel qu'on l'écrit dans le champ, "20".
             $lignes[$cle]['prix_unitaire_ttc'] = number_format($prix, 2, '.', '');
+            $lignes[$cle]['taux_tva'] = (string) $taux;
             $converties = true;
         }
 
@@ -283,24 +294,28 @@ trait ChoisitLaNatureDeLOperation
     }
 
     /**
-     * Le prix de référence du service dans la nouvelle nature, quand la
-     * ligne était à son prix de référence, à son taux, dans l'ancienne :
+     * Le prix de référence du service dans la nouvelle nature, avec son
+     * taux, quand la ligne était à son prix de référence dans l'ancienne :
      * TTC en France, sans TVA hors de France ; null sinon.
+     *
+     * @return array{0: float, 1: float}|null
      */
-    private static function prixDeReferenceConverti(?Service $service, float $prix, float $taux, bool $sansTvaAvant, bool $sansTvaApres): ?float
+    private static function prixDeReferenceConverti(?Service $service, float $prix, ?float $taux, bool $sansTvaAvant, bool $sansTvaApres): ?array
     {
-        if ($service === null || ! $service->aUnPrixDeReference() || round($taux, 2) !== round((float) $service->taux_tva, 2)) {
+        if ($service === null || ! $service->aUnPrixDeReference()) {
             return null;
         }
 
-        $calculateur = app(CalculateurLigne::class);
-        $prixSansTva = $calculateur->prixUnitaireHtDepuisTtc((float) $service->prix_ttc, (float) $service->taux_tva);
+        $prixSansTva = app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $service->prix_ttc, (float) $service->taux_tva);
+        $auPrixDeReference = $sansTvaAvant
+            ? round($prix, 2) === round($prixSansTva, 2)
+            : round($prix, 2) === round((float) $service->prix_ttc, 2) && $taux !== null && round($taux, 2) === round((float) $service->taux_tva, 2);
 
-        if (round($prix, 2) !== round($sansTvaAvant ? $prixSansTva : (float) $service->prix_ttc, 2)) {
+        if (! $auPrixDeReference) {
             return null;
         }
 
-        return $sansTvaApres ? $prixSansTva : (float) $service->prix_ttc;
+        return [$sansTvaApres ? $prixSansTva : (float) $service->prix_ttc, (float) $service->taux_tva];
     }
 
     /**

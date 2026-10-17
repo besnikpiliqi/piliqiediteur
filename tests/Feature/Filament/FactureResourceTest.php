@@ -1938,6 +1938,46 @@ class FactureResourceTest extends TestCase
     }
 
     /**
+     * @return array<string, array{bool}>
+     */
+    public static function vendeurOuProprietaire(): array
+    {
+        return ['un vendeur' => [true], 'le propriétaire' => [false]];
+    }
+
+    /**
+     * Un service au prix de référence de 11,00 € TTC à 10 %, vendu 10,00 €
+     * sans TVA en prestation hors UE : le brouillon rouvert garde ce prix et
+     * le taux de sa référence, et revenu en vente en France, la ligne
+     * reprend 11,00 € à 10 % -- pas 12,00 € au taux du territoire, que le
+     * vendeur ne pourrait ni enregistrer ni corriger.
+     */
+    #[DataProvider('vendeurOuProprietaire')]
+    public function test_un_service_a_prix_de_reference_rouvert_hors_de_la_tva_francaise_revient_en_france_a_son_prix_et_a_son_taux(bool $parUnVendeur): void
+    {
+        $magasin = $this->magasinQuiVendHorsDeFrance();
+        $auteur = $parUnVendeur ? $this->membre($magasin, RoleMagasin::Vendeur) : $this->proprietaireDe($magasin);
+        $this->actingAs($auteur);
+        Filament::setTenant($magasin);
+        $travaux = Service::factory()->auPrixDe('11.00', '10')->create(['nom' => 'Travaux']);
+        $brouillon = app(CreerFactureAction::class)->handle($auteur, $this->clientAmericain(), [['service_id' => $travaux->id, 'quantite' => 1]], ['nature_operation' => NatureOperation::PrestationHorsUe]);
+
+        $page = Livewire::test(EditFacture::class, ['record' => $brouillon->getRouteKey()]);
+        $cle = array_key_first($page->get('data.lignes'));
+        $page->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '10.00')
+            ->assertSet("data.lignes.{$cle}.taux_tva", '10')
+            ->set('data.nature_operation', NatureOperation::VenteEnFrance->value)
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '11.00')
+            ->assertSet("data.lignes.{$cle}.taux_tva", '10')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        $brouillon->refresh();
+        $ligne = $brouillon->lignes->sole();
+        $this->assertSame([NatureOperation::VenteEnFrance, '11.00', '10.00', '11.00'], [$brouillon->nature_operation, $ligne->prix_unitaire_ttc, $ligne->taux_tva, $brouillon->total_ttc]);
+    }
+
+    /**
      * Choisir un particulier ramène une prestation hors UE à la vente en
      * France : le prix de son service, saisi 15,00 € sans TVA, devient
      * 18,00 € TTC à 20 %.

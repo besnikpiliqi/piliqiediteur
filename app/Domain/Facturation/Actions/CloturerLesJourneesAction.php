@@ -15,7 +15,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
-use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Collection;
 use LogicException;
@@ -55,12 +54,12 @@ use Throwable;
  * système les ferment eux-mêmes, après leur propre transaction.
  *
  * La clôture demandée par une personne (le bouton) porte un jeton (R3,
- * voir ActionsUniques) : ses journées se clôturent alors dans une seule
- * transaction, ouverte par le verrou du registre sous lequel le jeton se
- * cherche, chacune dans la sienne à l'intérieur ; une erreur n'en laisse
- * aucune clôturée, et le bouton suivant les reprend toutes, dans l'ordre.
- * Répétée après une réponse perdue, la demande rend la dernière clôture
- * déjà faite, sans rien refaire.
+ * voir ActionsUniques::executerParEtapes()) : chaque journée, toujours dans
+ * sa propre transaction, cherche ce jeton sous le verrou du registre, et
+ * la dernière l'inscrit avec sa clôture. Une erreur laisse clôturées les
+ * journées qui la précèdent, et la même demande, répétée, reprend à la
+ * journée en échec ; répétée après une réponse perdue, elle rend la
+ * dernière clôture déjà faite, sans rien refaire.
  */
 class CloturerLesJourneesAction
 {
@@ -108,22 +107,31 @@ class CloturerLesJourneesAction
      */
     public function parUnePersonne(User $auteur, Magasin $magasin, CarbonInterface $jour, ?string $jeton = null): array
     {
-        $clotures = null;
-        $derniere = $this->actionsUniques->executer(
+        $this->verifierQueLeMagasinEstActif($magasin);
+        $clotures = new Collection;
+
+        $demande = $this->actionsUniques->executerParEtapes(
             $jeton,
             ActionsUniques::CLOTURER_LA_JOURNEE,
             $auteur,
             ['jour' => CarbonImmutable::instance($jour)->setTimezone(config('app.timezone'))->toDateString()],
             fn () => $this->registre->verrouiller($magasin),
-            function () use ($auteur, $magasin, $jour, &$clotures): ?ClotureCaisse {
-                $clotures = $this->cloturer($magasin, $jour, fn (string $journee): ClotureCaisse => $this->cloturerCaisse->handle($auteur, $magasin, $journee));
+            function () use ($auteur, $magasin, $jour, $clotures): array {
+                $journees = $this->journeesEnAttente($jour);
 
-                return $clotures->last();
+                if ($journees->isEmpty()) {
+                    return [null, true];
+                }
+
+                $cloture = $this->cloturerCaisse->handle($auteur, $magasin, $journees->first());
+                $clotures->push($cloture);
+
+                return [$cloture, $journees->count() === 1];
             },
         );
 
-        if ($clotures === null) {
-            return ['clotures' => new Collection($derniere === null ? [] : [$derniere]), 'caisses_fermees' => new Collection];
+        if ($demande['deja_enregistree']) {
+            return ['clotures' => new Collection($demande['resultat'] === null ? [] : [$demande['resultat']]), 'caisses_fermees' => new Collection];
         }
 
         return [
@@ -146,22 +154,21 @@ class CloturerLesJourneesAction
      */
     public function parLeSysteme(Magasin $magasin, CarbonInterface $jour): Collection
     {
-        return $this->operateur->pendantLeSysteme(fn (): Collection => $this->cloturer($magasin, $jour, fn (string $journee): ClotureCaisse => $this->cloturerCaisse->parLeSysteme($magasin, $journee)));
+        $this->verifierQueLeMagasinEstActif($magasin);
+
+        return $this->operateur->pendantLeSysteme(fn (): Collection => $this->journeesEnAttente($jour)
+            ->map(fn (string $journee): ClotureCaisse => $this->cloturerCaisse->parLeSysteme($magasin, $journee))
+            ->values());
     }
 
     /**
-     * @param  Closure(string): ClotureCaisse  $cloturerUneJournee
-     * @return Collection<int, ClotureCaisse>
-     *
      * @throws LogicException
      */
-    private function cloturer(Magasin $magasin, CarbonInterface $jour, Closure $cloturerUneJournee): Collection
+    private function verifierQueLeMagasinEstActif(Magasin $magasin): void
     {
         if (app(TenantContext::class)->id() !== $magasin->getKey()) {
             throw new LogicException('Les journées d\'un magasin ne se clôturent que depuis ce magasin.');
         }
-
-        return $this->journeesEnAttente($jour)->map($cloturerUneJournee)->values();
     }
 
     /**

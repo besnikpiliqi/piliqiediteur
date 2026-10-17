@@ -32,28 +32,10 @@ use Illuminate\Support\Facades\Gate;
 class VerificateurDeStock
 {
     /**
-     * Les manques de la facture, lus tels que le stock est maintenant ;
-     * sous les verrous de l'émission (voir verifier()), le stock qui
-     * décide.
-     *
-     * @return list<ManqueDeStock>
-     */
-    public function manques(Facture $facture): array
-    {
-        $quantites = $this->quantitesParProduit($facture);
-
-        if ($quantites === []) {
-            return [];
-        }
-
-        return $this->manquesParmi(Produit::withTrashed()->whereKey(array_keys($quantites))->orderBy('id')->get(), $quantites);
-    }
-
-    /**
      * Verrouille, par identifiant croissant, les produits de la facture
      * (un produit qui se mettrait à suivre son stock entre-temps ne sort
-     * donc pas sans contrôle), puis exige, s'il y a des manques, que le compte, relu sous
-     * le verrou de sa ligne par l'émission (voir
+     * donc pas sans contrôle), puis exige, s'il y a des manques, que le
+     * compte, relu sous le verrou de sa ligne par l'émission (voir
      * LecteurDesDroits::exigerSousVerrou()), soit autorisé à vendre sans
      * stock dans le magasin actif et ait confirmé l'avertissement pour ces
      * manques. À appeler dans la transaction de l'émission, après les

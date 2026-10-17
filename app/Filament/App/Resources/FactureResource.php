@@ -514,7 +514,9 @@ class FactureResource extends Resource
         $estUnAchat = $document instanceof FactureAchat || $document instanceof AvoirFournisseur;
         $estUneVente = $document instanceof Facture || $document instanceof Avoir || $document instanceof Devis;
         $sansTvaFrancaise = $estUneVente && ContexteDeVente::documentRetireLaTvaDuPrix($document);
-        $produitSansTvaFrancaise = fn (Model $ligne): bool => $sansTvaFrancaise && $ligne->nature === NatureLigne::Bien;
+        // Un produit, ou un service à son prix de référence : un prix du
+        // catalogue dont la TVA est retirée (voir lignes.blade.php).
+        $prixCatalogueSansTvaFrancaise = fn (Model $ligne): bool => $sansTvaFrancaise && ($ligne->nature === NatureLigne::Bien || (float) $ligne->taux_tva_du_prix > 0);
 
         return RepeatableEntry::make('lignes')
             ->label('')
@@ -526,13 +528,13 @@ class FactureResource extends Resource
                 TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
                 TextEntry::make('prix_unitaire_ttc')
                     ->label($sansTvaFrancaise ? 'Prix catalogue TTC' : 'PU TTC')
-                    ->state(fn (Model $record): mixed => ! $sansTvaFrancaise || $produitSansTvaFrancaise($record) ? $record->prix_unitaire_ttc : null)
+                    ->state(fn (Model $record): mixed => ! $sansTvaFrancaise || $prixCatalogueSansTvaFrancaise($record) ? $record->prix_unitaire_ttc : null)
                     ->placeholder('—')
                     ->money('EUR')
                     ->hidden($estUnAchat),
                 TextEntry::make('taux_tva_du_prix')
                     ->label('TVA retirée')
-                    ->state(fn (Model $record): mixed => $produitSansTvaFrancaise($record) ? $record->taux_tva_du_prix : null)
+                    ->state(fn (Model $record): mixed => $prixCatalogueSansTvaFrancaise($record) ? $record->taux_tva_du_prix : null)
                     ->placeholder('—')
                     ->numeric(maxDecimalPlaces: 2)
                     ->suffix(' %')

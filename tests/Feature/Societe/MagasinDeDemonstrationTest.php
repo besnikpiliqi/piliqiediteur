@@ -40,9 +40,12 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
+use App\Filament\App\Pages\Caisse;
+use Filament\Facades\Filament;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
+use Livewire\Livewire;
 use LogicException;
 use RuntimeException;
 use Tests\TestCase;
@@ -140,6 +143,32 @@ class MagasinDeDemonstrationTest extends TestCase
             0,
             EnregistrementFiscal::withoutGlobalScope(MagasinScope::class)->where('magasin_id', $reel->id)->where('chaine', '!=', ChaineFiscale::Evenement->value)->count(),
         );
+    }
+
+    /**
+     * Les services du catalogue fictif ont un prix de référence : un
+     * vendeur, qui ne fixe aucun prix, les voit à la caisse et les vend.
+     */
+    public function test_un_vendeur_de_la_demonstration_vend_ses_services_a_leur_prix_de_reference(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
+        $vendeur = $this->membre($demonstration, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        Filament::setTenant($demonstration);
+
+        Livewire::test(Caisse::class)
+            ->mountFormComponentAction('ajouterUnServiceAction', 'ajouterUnService')
+            ->assertSee('Emballage cadeau')
+            ->assertSee('Livraison à domicile');
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($vendeur,
+            Client::query()->where('est_comptoir', true)->sole(),
+            Service::query()->orderBy('nom')->pluck('id')->map(fn (int $service): array => ['service_id' => $service, 'quantite' => 1])->all(),
+            ModePaiement::Especes,
+        );
+
+        $this->assertSame([['Emballage cadeau', '3.00', '20.00'], ['Livraison à domicile', '5.90', '20.00']], $ticket->lignes->sortBy('ordre')->map(fn ($ligne): array => [$ligne->description, $ligne->prix_unitaire_ttc, $ligne->taux_tva])->values()->all());
+        $this->assertSame(['8.90', 'payee'], [$ticket->total_ttc, $ticket->statut->value]);
     }
 
     public function test_ses_numeros_portent_le_code_demo_et_ne_touchent_aucune_serie_reelle(): void

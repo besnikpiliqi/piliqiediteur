@@ -114,6 +114,22 @@ class CreerFactureActionTest extends TestCase
         ]);
     }
 
+    /**
+     * Un prix trop grand pour être lu (« 1e400 ») est refusé, jamais
+     * enregistré à 0,00 € TTC.
+     */
+    public function test_un_prix_illisible_est_refuse_plutot_que_vendu_a_zero(): void
+    {
+        $client = Client::factory()->create();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20]);
+
+        $this->assertThrows(fn () => app(CreerFactureAction::class)->handle(self::auteur(), $client, [
+            ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ttc' => '1e400'],
+        ]), InvalidArgumentException::class, 'Montant hors limites.');
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
     public function test_une_facture_sans_lignes_leve_une_exception(): void
     {
         $client = Client::factory()->create();

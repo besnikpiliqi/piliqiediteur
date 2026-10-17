@@ -312,7 +312,7 @@ class Caisse extends Page implements HasForms
 
             Section::make('Produits et services')->schema([
                 ...DevisResource::lignesDeVente(),
-                DevisResource::totauxDuDocument(),
+                DevisResource::totauxDuDocument(parTaux: true),
             ]),
 
             Section::make('Paiement')->schema([

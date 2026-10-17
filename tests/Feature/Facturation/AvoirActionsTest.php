@@ -594,6 +594,7 @@ class AvoirActionsTest extends TestCase
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
 
+        $this->assertSame(['66.67', '13.33', '80.00'], [$ligneFacture->montant_ht, $ligneFacture->montant_tva, $ligneFacture->montant_ttc]);
         $this->assertSame(['33.33', '6.67', '40.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
         $this->assertSame(['33.34', '6.66', '40.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
     }

@@ -228,6 +228,55 @@ class FactureAchatResourceTest extends TestCase
             ->assertSee('Total HT 11,80 € · TVA 2,36 € · Total TTC 14,16 €');
     }
 
+    /**
+     * Une quantité absurde, dont le montant dépasse ce que le calcul
+     * accepte, n'efface pas les autres lignes : le montant payé au
+     * fournisseur de la ligne valable et les totaux restent affichés
+     * (3 x 10,01 € HT = 30,03 € HT + 6,01 € de TVA).
+     */
+    public function test_une_ligne_de_quantite_absurde_ne_remet_pas_a_zero_les_autres_lignes(): void
+    {
+        $this->connecterLeProprietaire();
+        $coque = Produit::factory()->create(['taux_tva' => 20]);
+        $ecran = Produit::factory()->create(['taux_tva' => 20]);
+
+        $facture = Livewire::test(CreateFactureAchat::class)->fillForm([
+            'fournisseur_id' => Fournisseur::factory()->create()->id,
+            'lignes' => [
+                ['produit_id' => $coque->id, 'quantite' => 3, 'prix_unitaire_ht' => '10.01', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ['produit_id' => $ecran->id, 'quantite' => 999999999999, 'prix_unitaire_ht' => '10.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+            ],
+        ]);
+
+        $facture->assertSee('36,04 € TTC')
+            ->assertSee('3 x 10,01 € HT = 30,03 € HT + 6,01 € de TVA')
+            ->assertSee('Total HT 30,03 € · TVA 6,01 € · Total TTC 36,04 €');
+    }
+
+    /**
+     * Seuls les écrans de vente détaillent leurs totaux par taux : une
+     * facture d'achat à 20 % et à 5,5 % n'affiche que son total (30,03 €
+     * HT + 6,01 € de TVA, et 10,00 € HT + 0,55 €).
+     */
+    public function test_les_totaux_d_une_facture_d_achat_a_deux_taux_tiennent_en_une_rangee(): void
+    {
+        $this->connecterLeProprietaire();
+        $coque = Produit::factory()->create(['taux_tva' => 20]);
+        $livre = Produit::factory()->create(['taux_tva' => 5.5]);
+
+        $facture = Livewire::test(CreateFactureAchat::class)->fillForm([
+            'fournisseur_id' => Fournisseur::factory()->create()->id,
+            'lignes' => [
+                ['produit_id' => $coque->id, 'quantite' => 3, 'prix_unitaire_ht' => '10.01', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ['produit_id' => $livre->id, 'quantite' => 1, 'prix_unitaire_ht' => '10.00', 'taux_tva' => '5.5', 'remise_pourcentage' => 0],
+            ],
+        ]);
+
+        $facture->assertSee('Total HT 40,03 € · TVA 6,56 € · Total TTC 46,59 €')
+            ->assertDontSee('À 20 %')
+            ->assertDontSee('À 5,5 %');
+    }
+
     public function test_choisir_un_produit_du_catalogue_reprend_sa_fiche_et_son_dernier_prix_dachat(): void
     {
         $this->connecterLeProprietaire();
@@ -640,6 +689,29 @@ class FactureAchatResourceTest extends TestCase
         $this->assertSame(StatutFactureAchat::Brouillon, $factureAchat->statut);
         $this->assertSame('INV-2026-42', $factureAchat->numero_fournisseur);
         $this->assertSame('100.00', $factureAchat->total_ht);
+    }
+
+    /**
+     * Un prix d'achat trop grand pour être lu (« 1e400 ») est refusé,
+     * jamais enregistré à 0,00 € HT : il fausserait le coût moyen à la
+     * validation.
+     */
+    public function test_un_prix_d_achat_illisible_est_refuse_plutot_qu_enregistre_a_zero(): void
+    {
+        $this->connecterLeProprietaire();
+        $produit = Produit::factory()->create(['taux_tva' => 20]);
+
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm([
+                'fournisseur_id' => Fournisseur::factory()->create()->id,
+                'lignes' => [
+                    ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => '1e400', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ],
+            ])
+            ->call('create')
+            ->assertNotified('Montant hors limites.');
+
+        $this->assertSame(0, FactureAchat::query()->count());
     }
 
     public function test_lescompte_saisi_sur_la_facture_dachat_est_enregistre(): void

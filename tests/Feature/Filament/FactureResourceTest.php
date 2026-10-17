@@ -366,6 +366,25 @@ class FactureResourceTest extends TestCase
     }
 
     /**
+     * La fiche d'une facture montre chaque paiement reçu en entier : sa
+     * date, son mode et sa référence, pas seulement son montant.
+     */
+    public function test_la_fiche_montre_la_date_le_mode_et_la_reference_de_chaque_paiement(): void
+    {
+        $this->travelTo('2026-10-14 10:00:00');
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $cable = Produit::factory()->create(['prix_vente_ttc' => '10.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $cable->id, 'quantite' => 1]], ModePaiement::CarteBancaire, 'REF-XYZ-123');
+
+        $fiche = Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()]);
+
+        $fiche->assertSeeInOrder(['Paiements reçus', '14/10/2026', 'Carte bancaire', 'REF-XYZ-123']);
+    }
+
+    /**
      * La main-d'œuvre se facture comme à la caisse : par le bouton
      * « Ajouter un service ».
      */

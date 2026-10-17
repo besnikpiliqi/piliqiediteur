@@ -1229,6 +1229,32 @@ class CaisseTest extends TestCase
         $this->assertTrue(app(VerificateurIntegrite::class)->verifier($magasin)->estConforme());
     }
 
+    /**
+     * Une quantité absurde, dont le montant dépasse ce que le calcul
+     * accepte, n'efface pas les autres lignes : l'écran montre le total
+     * des lignes valables, et l'abandon l'inscrit au journal, jamais 0 €.
+     */
+    public function test_une_ligne_de_quantite_absurde_ne_remet_a_zero_ni_l_ecran_ni_le_total_de_l_abandon(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+            ['produit_id' => $cable->id, 'description' => $cable->nom, 'quantite' => 2, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+            ['produit_id' => $cable->id, 'description' => $cable->nom, 'quantite' => 999999999999, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+
+        $caisse->assertSee('Total HT 60,00 € · TVA 12,00 € · Total TTC 72,00 €');
+        $caisse->callAction('abandonnerLaVente');
+
+        $this->assertSame([
+            ['260', []],
+            ['320', ['origine' => 'caisse', 'nombre_lignes' => 3, 'total_ttc' => 7200]],
+        ], $this->journalDesEvenements($magasin));
+        $this->assertTrue(app(VerificateurIntegrite::class)->verifier($magasin)->estConforme());
+    }
+
     public function test_retirer_une_ligne_renseignee_du_panier_l_inscrit_au_journal(): void
     {
         $magasin = $this->ouvrirLaCaisseDUnMagasin();

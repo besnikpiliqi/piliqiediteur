@@ -767,6 +767,44 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
+     * 2 000 factures de vente ou d'achat de 1 à 20 lignes tirées au hasard,
+     * de taux mêlés, chiffrées par chiffrerUneVente() ou chiffrerUnAchat()
+     * puis écrites comme leurs colonnes (« 41.67 ») : totaliser(), qui fait
+     * les totaux d'un avoir et, par cumuler() et deduire(), ceux des
+     * clôtures, rend exactement la somme de leurs HT, de leurs TVA et de
+     * leurs TTC, et HT + TVA = TTC.
+     */
+    public function test_2000_factures_aleatoires_totalisent_exactement_leurs_lignes(): void
+    {
+        $hasard = new Randomizer(new Mt19937(self::GRAINE + 3));
+        $calculateur = $this->calculateur();
+
+        for ($i = 0; $i < 2000; $i++) {
+            $vente = $hasard->getInt(0, 1) === 0;
+            $lignes = [];
+
+            for ($n = $hasard->getInt(1, 20); $n > 0; $n--) {
+                $ligne = $this->ligneAleatoire($hasard);
+                $lignes[] = $vente
+                    ? self::ligneDeVente($ligne['prix'], $ligne['quantite'], $this->centiemes($ligne['taux']), $ligne['remise'])
+                    : self::ligneDAchat($ligne['prix'], $ligne['quantite'], $this->centiemes($ligne['taux']), $ligne['remise']);
+            }
+
+            $montants = ($vente ? $calculateur->chiffrerUneVente($lignes) : $calculateur->chiffrerUnAchat($lignes))['lignes'];
+            $cas = ($vente ? 'vente' : 'achat')." n° {$i}";
+
+            $totaux = $calculateur->totaliser(array_map(fn (array $montantsDeLigne): array => array_map($calculateur->enDecimal(...), $montantsDeLigne), $montants));
+
+            $this->assertSame([
+                array_sum(array_column($montants, 'montant_ht')),
+                array_sum(array_column($montants, 'montant_tva')),
+                array_sum(array_column($montants, 'montant_ttc')),
+            ], [$this->enCentimes($totaux['total_ht']), $this->enCentimes($totaux['total_tva']), $this->enCentimes($totaux['total_ttc'])], $cas);
+            $this->assertSame($this->enCentimes($totaux['total_ttc']), $this->enCentimes($totaux['total_ht']) + $this->enCentimes($totaux['total_tva']), $cas);
+        }
+    }
+
+    /**
      * 2 000 lignes de ventes (de 1 à 5 lignes du même taux, une vente sur
      * cinq sans TVA française), rendues en retours successifs de quantités
      * tirées au hasard : tant que la ligne n'est pas toute rendue, le TTC

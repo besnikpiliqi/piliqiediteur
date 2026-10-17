@@ -93,12 +93,9 @@ class FactureResource extends Resource
      */
     public static function getEloquentQuery(): Builder
     {
-        // Les imputations chargées avec les factures, sommées en centimes
-        // par la colonne « Payé » (jamais une somme que la base ferait sur
-        // une colonne décimale), sans une requête par facture.
         return parent::getEloquentQuery()
             ->visiblesPar(auth()->user())
-            ->with(['client', 'allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,avoir_id,montant_alloue']);
+            ->with('client');
     }
 
     /**
@@ -161,7 +158,7 @@ class FactureResource extends Resource
                 // FacturePolicy::update()), qui n'a aucune existence légale
                 // à préserver.
                 ...DevisResource::lignesDeVente(),
-                DevisResource::totauxDuDocument(),
+                DevisResource::totauxDuDocument(parTaux: true),
             ]),
         ]);
     }
@@ -617,8 +614,8 @@ class FactureResource extends Resource
 
     /**
      * Ce que la facture a reçu, paiements et crédit d'avoir compris, écrit
-     * comme sa colonne (« 12.50 ») : ses imputations, chargées avec elle
-     * (voir getEloquentQuery()), sommées en centimes.
+     * comme sa colonne (« 12.50 ») : ses imputations, chargées avec les
+     * factures de la liste (voir table()), sommées en centimes.
      */
     private static function paye(Facture $facture): string
     {
@@ -632,6 +629,13 @@ class FactureResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            // Les montants imputés, chargés avec les factures de la liste
+            // et sommés en centimes par la colonne « Payé » (jamais une
+            // somme que la base ferait sur une colonne décimale), sans une
+            // requête par facture. La fiche, qui montre la date, le mode et
+            // la référence de chaque paiement, lit ses imputations en
+            // entier.
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,montant_alloue']))
             ->columns([
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->placeholder('Brouillon')->rechercheSansAccents(),
                 self::clientColumn(),

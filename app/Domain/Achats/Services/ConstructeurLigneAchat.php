@@ -269,9 +269,10 @@ class ConstructeurLigneAchat
      * Les lignes d'achat telles qu'elles sont saisies à l'écran, calculées
      * comme à l'enregistrement (voir chiffrer()), par clé de ligne : une
      * ligne pas encore valable (PU HT ou quantité à saisir, taux ou remise
-     * hors de 0-100 %, prix négatif) est ignorée, et les autres se
-     * calculent ensemble, sans elle. Des montants si absurdes que leur
-     * total ne se calcule plus ne donnent aucun aperçu.
+     * hors de 0-100 %, prix négatif) ou dont les montants ne se calculent
+     * pas, même seule (une quantité absurde), est ignorée, et les autres
+     * se calculent ensemble, sans elle. Seules des lignes valables dont le
+     * total dépasse ce que le calcul accepte ne donnent aucun aperçu.
      *
      * @param  array<array-key, mixed>  $lignesSaisies
      */
@@ -279,21 +280,24 @@ class ConstructeurLigneAchat
     {
         $lignes = [];
 
-        foreach ($lignesSaisies as $cle => $ligne) {
-            if (! is_array($ligne)) {
+        foreach ($lignesSaisies as $cle => $saisie) {
+            if (! is_array($saisie)) {
                 continue;
             }
 
             try {
-                $lignes[$cle] = $this->prixDeLaLigne(
-                    filled($ligne['prix_unitaire_ht'] ?? null) ? $ligne['prix_unitaire_ht'] : throw new InvalidArgumentException('PU HT à saisir.'),
-                    $ligne['quantite'] ?? null,
-                    filled($ligne['taux_tva'] ?? null) ? $ligne['taux_tva'] : 0,
-                    $ligne['remise_pourcentage'] ?? null,
+                $ligne = $this->prixDeLaLigne(
+                    filled($saisie['prix_unitaire_ht'] ?? null) ? $saisie['prix_unitaire_ht'] : throw new InvalidArgumentException('PU HT à saisir.'),
+                    $saisie['quantite'] ?? null,
+                    filled($saisie['taux_tva'] ?? null) ? $saisie['taux_tva'] : 0,
+                    $saisie['remise_pourcentage'] ?? null,
                 );
+                $this->chiffrer([$ligne]);
             } catch (InvalidArgumentException) {
                 continue;
             }
+
+            $lignes[$cle] = $ligne;
         }
 
         try {

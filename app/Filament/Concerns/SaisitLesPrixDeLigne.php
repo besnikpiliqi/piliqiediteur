@@ -24,18 +24,19 @@ trait SaisitLesPrixDeLigne
 
     /**
      * Totaux du document en cours de saisie, tels que le calcul les donne
-     * (voir DocumentChiffre), précédés d'une rangée par taux dès qu'il y en
-     * a plusieurs : HT, TVA et TTC de chaque taux, sommes exactes de ses
-     * lignes.
+     * (voir DocumentChiffre). Une vente (caisse, facture, devis) les fait
+     * précéder d'une rangée par taux dès qu'il y en a plusieurs ($parTaux) :
+     * HT, TVA et TTC de chaque taux, sommes exactes de ses lignes ; une
+     * facture d'achat n'en montre que le total.
      */
-    public static function totauxDuDocument(): Placeholder
+    public static function totauxDuDocument(bool $parTaux = false): Placeholder
     {
         return Placeholder::make('totaux_document')
             ->label('Totaux')
             ->columnSpanFull()
-            ->content(function (Get $get): HtmlString {
+            ->content(function (Get $get) use ($parTaux): HtmlString {
                 $document = self::documentDesLignesSaisies($get);
-                $rangees = count($document->parTaux) > 1
+                $rangees = $parTaux && count($document->parTaux) > 1
                     ? array_map(
                         fn (string $taux, array $montants): string => 'À '.str_replace('.', ',', self::pourcentageEnTexte($taux)).' % : '.self::montantEnTexte($montants['montant_ht']).' HT + '.self::montantEnTexte($montants['montant_tva']).' de TVA = '.self::montantEnTexte($montants['montant_ttc']).' TTC',
                         array_keys($document->parTaux),

@@ -43,8 +43,16 @@ final class SaisieDecimale
                 throw new InvalidArgumentException("« {$texte} » n'est pas un nombre.");
             }
 
-            // Notation scientifique (« 1e3 ») : son écriture décimale.
-            $texte = sprintf('%.6F', (float) $texte);
+            // Notation scientifique (« 1e3 ») : son écriture décimale. Un
+            // nombre trop grand pour un flottant (« 1e400 ») n'en a pas, et
+            // sprintf l'écrirait « INF », qui se lirait zéro.
+            $nombre = (float) $texte;
+
+            if (! is_finite($nombre)) {
+                throw new InvalidArgumentException('Montant hors limites.');
+            }
+
+            $texte = sprintf('%.6F', $nombre);
         }
 
         [$entiers, $decimales] = array_pad(explode('.', ltrim($texte, '-')), 2, '');

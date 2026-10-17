@@ -73,13 +73,15 @@ class ConstructeurLigneDocument
      * Les lignes telles qu'elles sont saisies à l'écran, ou gardées dans un
      * panier de la caisse, calculées comme à l'enregistrement, par clé de
      * ligne : une ligne pas encore complète (aucun produit ni service
-     * choisi, prix ou quantité à saisir, valeur hors limites) est ignorée,
-     * plutôt que comptée pour un montant faux, et les lignes complètes se
-     * calculent ensemble, sans elle. Une ligne dont le produit a été
-     * archivé depuis compte pour son montant : seul son enregistrement la
-     * refuse (voir construireToutes()), et le total d'une vente abandonnée
-     * la compte (voir PanierDeCaisse). Des montants si absurdes que leur
-     * total ne se calcule plus ne donnent aucun aperçu.
+     * choisi, prix ou quantité à saisir, valeur hors limites) ou dont les
+     * montants ne se calculent pas, même seule (une quantité absurde), est
+     * ignorée, plutôt que comptée pour un montant faux ou faisant tomber
+     * tout le document à zéro, et les autres lignes se calculent ensemble,
+     * sans elle. Une ligne dont le produit a été archivé depuis compte
+     * pour son montant : seul son enregistrement la refuse (voir
+     * construireToutes()), et le total d'une vente abandonnée la compte
+     * (voir PanierDeCaisse). Seules des lignes valables dont le total
+     * dépasse ce que le calcul accepte ne donnent aucun aperçu.
      *
      * @param  array<array-key, mixed>  $lignesSaisies
      */
@@ -92,10 +94,13 @@ class ConstructeurLigneDocument
 
         foreach ($lignesSaisies as $cle => $donnees) {
             try {
-                $lignes[$cle] = $this->construire($donnees, $ordre++, $contexte, $produits, $services);
+                $ligne = $this->construire($donnees, $ordre++, $contexte, $produits, $services);
+                $this->chiffrer([$ligne]);
             } catch (InvalidArgumentException|ModelNotFoundException) {
                 continue;
             }
+
+            $lignes[$cle] = $ligne;
         }
 
         try {

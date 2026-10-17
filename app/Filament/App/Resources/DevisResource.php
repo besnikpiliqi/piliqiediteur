@@ -82,7 +82,7 @@ class DevisResource extends Resource
                 // modifiable (voir Devis::estModifiable() et
                 // DevisPolicy::update()), lignes comprises.
                 ...self::lignesDeVente(),
-                self::totauxDuDocument(),
+                self::totauxDuDocument(parTaux: true),
             ]),
         ]);
     }

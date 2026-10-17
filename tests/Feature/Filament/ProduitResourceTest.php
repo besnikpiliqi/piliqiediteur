@@ -34,7 +34,8 @@ use Tests\TestCase;
  * Le prix de vente d'un produit se saisit et s'enregistre en TTC (voir
  * ProduitResource::prixVenteTtcSchema()) : c'est le prix affiché au client,
  * et c'est lui qu'une ligne de vente reprend. Le HT n'en est que la
- * conversion au centime (voir Produit::synchroniserPrixDeVente()).
+ * conversion au centime, affichée sans être enregistrée (voir
+ * ProduitResource::detailPrixDeVente()).
  */
 class ProduitResourceTest extends TestCase
 {

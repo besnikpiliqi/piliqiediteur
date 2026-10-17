@@ -120,8 +120,9 @@ class ProduitResource extends Resource
      * Prix de vente saisi et enregistré en TTC, pas HT (contrairement au
      * prix d'achat) : c'est le prix affiché au client qui compte pour un
      * vendeur qui fixe un tarif, et c'est lui qu'une ligne de vente reprend
-     * tel quel. Le HT correspondant est déduit par le modèle à
-     * l'enregistrement (voir Produit::synchroniserPrixDeVente()).
+     * tel quel. C'est le seul prix de vente enregistré, arrondi une fois au
+     * centime (voir Produit::arrondirLePrixDeVente()) ; son HT n'est
+     * qu'affiché (voir detailPrixDeVente()).
      *
      * @return array<Field>
      */

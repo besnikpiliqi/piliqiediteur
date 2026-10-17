@@ -48,9 +48,11 @@ use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
+use App\Domain\Tenancy\Models\ActionTraitee;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\AvoirFournisseurResource;
 use App\Filament\App\Resources\AvoirResource;
@@ -131,17 +133,19 @@ class TenantIsolationTest extends TestCase
     /**
      * Modèles de magasin qui n'ont pas de fabrique : les documents fiscaux
      * et le registre ne s'écrivent que signés, par leurs actions, la trace
-     * d'un événement technique qu'avec lui, et une vérification VIES, une
-     * preuve d'exonération ou un bordereau de détaxe, que par la sienne.
-     * Avoir, AvoirAllocation, BordereauDetaxe, ConsultationVies,
-     * EnregistrementFiscal, Paiement, PaiementAllocation, PreuveOperation,
-     * SoumissionEReporting, TeteRegistreFiscal et TraceEvenement sont aussi
-     * dans modelesCrees(), écrits directement par ces tests (voir
-     * creerEnregistrement()).
+     * d'un événement technique qu'avec lui, une vérification VIES, une
+     * preuve d'exonération ou un bordereau de détaxe, que par la sienne, et
+     * le jeton d'une demande traitée, que par ActionsUniques.
+     * ActionTraitee, Avoir, AvoirAllocation, BordereauDetaxe,
+     * ConsultationVies, EnregistrementFiscal, Paiement, PaiementAllocation,
+     * PreuveOperation, SoumissionEReporting, TeteRegistreFiscal et
+     * TraceEvenement sont aussi dans modelesCrees(), écrits directement par
+     * ces tests (voir creerEnregistrement()).
      *
      * @var list<class-string<Model>>
      */
     private const MODELES_SANS_FABRIQUE = [
+        ActionTraitee::class,
         Avoir::class,
         AvoirAllocation::class,
         BordereauDetaxe::class,
@@ -202,7 +206,7 @@ class TenantIsolationTest extends TestCase
                 $modele,
                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
             ]])
-            ->merge(collect([Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, SoumissionEReporting::class, TeteRegistreFiscal::class, TraceEvenement::class])
+            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, SoumissionEReporting::class, TeteRegistreFiscal::class, TraceEvenement::class])
                 ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
                     $modele,
                     static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
@@ -503,6 +507,13 @@ class TenantIsolationTest extends TestCase
     private static function creerEnregistrement(string $modele, array $attributs = []): Model
     {
         $exiges = match ($modele) {
+            ActionTraitee::class => [
+                'jeton' => (string) Str::uuid(),
+                'action' => ActionsUniques::EMETTRE_FACTURE,
+                'user_id' => User::factory()->create()->getKey(),
+                'empreinte_demande' => str_repeat('0', 64),
+                'created_at' => CarbonImmutable::parse('2026-10-09 08:00:00', 'UTC'),
+            ],
             Avoir::class => ['client_id' => Client::factory()->create()->getKey(), 'type_client' => TypeClient::Particulier],
             AvoirAllocation::class => [
                 'avoir_id' => self::creerEnregistrement(Avoir::class)->getKey(),

@@ -33,10 +33,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * static::envoyerParEmail(Tables\Actions\Action::make('envoyer_par_email'))
  * dans la liste, FactureResource::envoyerParEmail(Actions\Action::make(...))
  * dans ViewFacture. La ressource qui l'utilise utilise aussi
- * GereLesExceptionsMetier, qui en affiche les refus.
+ * GereLesExceptionsMetier, qui en affiche les refus. Un envoi et une
+ * relance portent le jeton de leur fenêtre (R3, voir PorteUnJeton) : un
+ * envoi renvoyé après une réponse perdue ne part qu'une fois.
  */
 trait EnvoieLesDocuments
 {
+    use PorteUnJeton;
+
     /**
      * Dès que le document a son numéro : un brouillon n'a encore aucune
      * existence pour le client. Le PDF se produit avant le téléchargement :
@@ -101,6 +105,7 @@ trait EnvoieLesDocuments
             ->visible(fn (Model&DocumentEnvoyable $record): bool => $record->peutEtreEnvoye() && ! $record->magasin->est_demonstration && auth()->user()->can('envoyer', $record))
             ->fillForm(fn (Model&DocumentEnvoyable $record): array => ['destinataire' => $record->client->email])
             ->form([
+                static::champDuJeton(),
                 static::champDestinataire(),
                 Textarea::make('message')
                     ->label('Message (facultatif)')
@@ -110,7 +115,7 @@ trait EnvoieLesDocuments
                     ->validationMessages(['max' => 'Un message de 2 000 caractères au plus.']),
             ])
             ->action(fn (Model&DocumentEnvoyable $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
-                $envoi = app(EnvoyerDocumentAction::class)->handle(auth()->user(), $record, $data['destinataire'], $data['message'] ?? null);
+                $envoi = app(EnvoyerDocumentAction::class)->handle(auth()->user(), $record, $data['destinataire'], $data['message'] ?? null, $data['jeton']);
 
                 static::confirmerLEnvoi($envoi, $record);
             }));
@@ -136,9 +141,9 @@ trait EnvoieLesDocuments
             ->modalSubmitActionLabel('Relancer')
             ->visible(fn (Facture $record): bool => $record->estEchueEtImpayee() && ! $record->magasin->est_demonstration && auth()->user()->can('envoyer', $record))
             ->fillForm(fn (Facture $record): array => ['destinataire' => $record->client->email])
-            ->form([static::champDestinataire()])
+            ->form([static::champDuJeton(), static::champDestinataire()])
             ->action(fn (Facture $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
-                $envoi = app(EnvoyerDocumentAction::class)->relancer(auth()->user(), $record, $data['destinataire']);
+                $envoi = app(EnvoyerDocumentAction::class)->relancer(auth()->user(), $record, $data['destinataire'], $data['jeton']);
 
                 static::confirmerLEnvoi($envoi, $record);
             }));

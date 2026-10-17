@@ -22,6 +22,7 @@ class PanierCaisseFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
+            'jeton' => fn (): string => (string) Str::uuid(),
             'lignes' => fn (): array => self::lignesDu(Produit::factory()->create(), 1),
         ];
     }

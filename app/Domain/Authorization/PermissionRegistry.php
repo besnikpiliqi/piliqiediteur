@@ -70,10 +70,21 @@ final class PermissionRegistry
     public const PRODUIT_ARCHIVER = 'produit.archiver';
 
     /**
-     * Gérer le stock du magasin : reçoit les alertes de stock bas (voir
-     * NotifierLeStockSousLeSeuilDAlerte).
+     * Gérer le stock du magasin : reçoit les alertes de stock bas ou
+     * négatif (voir NotifierLeStockSousLeSeuilDAlerte et
+     * NotifierLeStockNegatif).
      */
     public const PRODUIT_AJUSTER_STOCK = 'produit.ajuster_stock';
+
+    /**
+     * Vendre au-delà du stock disponible (R1, voir VerificateurDeStock) :
+     * après un avertissement, qui se renouvelle si le stock a encore
+     * baissé. Le propriétaire et les responsables du magasin l'ont
+     * toujours ; aucun modèle ne la coche d'office, pas même celui de
+     * l'administrateur (voir modeleDeLAdministrateur()), et un
+     * expert-comptable ne l'a jamais (elle n'est pas une consultation).
+     */
+    public const STOCK_VENDRE_SANS_STOCK = 'stock.vendre_sans_stock';
 
     // Un vendeur voit le prix/stock de chaque produit (nécessaire pour
     // vendre), mais pas la valorisation globale du stock du magasin --
@@ -87,6 +98,17 @@ final class PermissionRegistry
      * BaremePrixDeVente) : il fixe les prix de tout le magasin.
      */
     public const PRIX_VENTE_REGLER = 'prix_vente.regler';
+
+    /**
+     * Accorder une remise, fixer le prix d'un service (son prix de
+     * référence au catalogue comme celui d'une ligne) et mettre sur une
+     * ligne de produit un prix différent de sa fiche (R2, voir
+     * DerogationsDePrix). Le propriétaire et les responsables du magasin
+     * l'ont toujours ; le modèle de l'administrateur la précoche, aucun
+     * modèle de vendeur ou d'observateur ; un expert-comptable ne l'a
+     * jamais.
+     */
+    public const VENTE_REMISES_ET_PRIX = 'vente.remises_et_prix';
 
     // Devis
     public const DEVIS_VIEW = 'devis.view';
@@ -200,6 +222,7 @@ final class PermissionRegistry
             self::CLIENT_VIEW, self::CLIENT_CREATE, self::CLIENT_UPDATE, self::CLIENT_ARCHIVER,
             self::FOURNISSEUR_VIEW, self::FOURNISSEUR_CREATE, self::FOURNISSEUR_UPDATE, self::FOURNISSEUR_ARCHIVER,
             self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_ARCHIVER, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK, self::PRIX_VENTE_REGLER,
+            self::STOCK_VENDRE_SANS_STOCK, self::VENTE_REMISES_ET_PRIX,
             self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
             self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ENVOYER, self::RELANCES_REGLER,
             self::PARAMETRES_GERER,
@@ -261,14 +284,14 @@ final class PermissionRegistry
     /**
      * Le modèle des autorisations de magasin d'un nouvel administrateur,
      * que le propriétaire décoche à son gré (voir
-     * CreerAdministrateurAction) : toutes, sauf les paramètres du magasin,
-     * qu'il coche pour qui il veut.
+     * CreerAdministrateurAction) : toutes, sauf les paramètres du magasin
+     * et la vente sans stock, qu'il coche pour qui il veut.
      *
      * @return list<string>
      */
     public static function modeleDeLAdministrateur(): array
     {
-        return array_values(array_diff(self::toutes(), [self::PARAMETRES_GERER]));
+        return array_values(array_diff(self::toutes(), [self::PARAMETRES_GERER, self::STOCK_VENDRE_SANS_STOCK]));
     }
 
     /**
@@ -339,9 +362,11 @@ final class PermissionRegistry
             self::PRODUIT_CREATE => 'Produits et services : créer',
             self::PRODUIT_UPDATE => 'Produits et services : modifier',
             self::PRODUIT_ARCHIVER => 'Produits : archiver et restaurer',
-            self::PRODUIT_AJUSTER_STOCK => 'Produits : gérer le stock (alertes de stock bas)',
+            self::PRODUIT_AJUSTER_STOCK => 'Produits : gérer le stock (alertes de stock bas ou négatif)',
             self::PRODUIT_VOIR_VALEUR_STOCK => 'Produits : voir la valeur totale du stock',
             self::PRIX_VENTE_REGLER => 'Prix de vente : régler le barème automatique',
+            self::STOCK_VENDRE_SANS_STOCK => 'Stock : vendre sans stock, après un avertissement',
+            self::VENTE_REMISES_ET_PRIX => 'Ventes : accorder des remises et fixer le prix d\'un service',
             self::DEVIS_VIEW => 'Devis : voir',
             self::DEVIS_CREATE => 'Devis : créer',
             self::DEVIS_UPDATE => 'Devis : modifier, et supprimer un brouillon jamais envoyé',

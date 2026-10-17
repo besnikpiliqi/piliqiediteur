@@ -19,6 +19,7 @@ use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -64,6 +65,12 @@ use LogicException;
  * siennes). Il n'encaisse que dans un magasin à la fois (voir
  * VerificateurCaissesPersonnelles). C'est lui que le paiement enregistre
  * et que le registre signe.
+ *
+ * Le paiement demandé par une personne porte un jeton (R3, voir
+ * ActionsUniques), cherché sous le verrou du registre : répété après une
+ * réponse perdue, il rend le paiement déjà enregistré, sans second
+ * encaissement ; le même jeton pour un autre montant est refusé. Une vente
+ * au comptoir l'appelle sans jeton : la vente porte le sien.
  */
 class EnregistrerPaiementAction
 {
@@ -74,18 +81,20 @@ class EnregistrerPaiementAction
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
         private readonly VerificateurCaissesPersonnelles $caissesPersonnelles,
+        private readonly ActionsUniques $actionsUniques,
     ) {}
 
     /**
      * @param  array{mode_paiement: string, montant: float|string, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement
      * @param  array<int, array{facture_id: int|string, montant: float|string}>  $allocations
+     * @param  string|null  $jeton  le jeton de la demande (R3), null quand une autre action l'appelle
      *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(User $auteur, Client $client, array $donneesPaiement, array $allocations): Paiement
+    public function handle(User $auteur, Client $client, array $donneesPaiement, array $allocations, ?string $jeton = null): Paiement
     {
         if (Carbon::parse($donneesPaiement['recu_le'])->startOfDay()->gt(today())) {
             throw new LogicException('Un paiement ne peut pas être reçu à une date future.');
@@ -103,8 +112,14 @@ class EnregistrerPaiementAction
             throw new LogicException(sprintf('Le montant reçu (%s) doit être égal au total imputé sur les factures (%s).', self::enEuros($montant), self::enEuros($totalImpute)));
         }
 
-        return DB::transaction(function () use ($auteur, $client, $donneesPaiement, $montant, $imputations) {
-            $magasin = app(TenantContext::class)->magasin();
+        $magasin = app(TenantContext::class)->magasin();
+        $parametres = [
+            'client_id' => $client->getKey(),
+            'paiement' => $donneesPaiement,
+            'imputations' => array_map(fn (float $montantImpute): string => number_format($montantImpute, 2, '.', ''), $imputations),
+        ];
+
+        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_PAIEMENT, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $client, $donneesPaiement, $montant, $imputations, $magasin) {
             $this->registre->verrouiller($magasin);
             Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Paiement::class);
@@ -115,7 +130,7 @@ class EnregistrerPaiementAction
             }
 
             return $this->operateur->pendant($compte, fn (): Paiement => $this->enregistrer($compte, $magasin, $client, $donneesPaiement, $montant, $imputations));
-        });
+        }));
     }
 
     /**

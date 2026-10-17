@@ -10,6 +10,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\AvoirEmis;
@@ -19,6 +20,7 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -49,7 +51,9 @@ use LogicException;
  *     un avoir sur des tickets, que compte la clôture de sa journée (voir
  *     Avoir::corrigeDesTickets()), n'est plus émis une fois cette journée
  *     clôturée, jusqu'à minuit (voir
- *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
+ *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ; ses
+ *     produits se verrouillent, par identifiant croissant, avant la
+ *     numérotation (voir Produit::verrouillerPourLeStock()) ;
  *  3. AvoirEmis rend le stock et impute l'avoir sur ses factures, puis
  *     sur les autres factures impayées de son client (voir
  *     ImputerAvoirSurSesFacturesAction) ;
@@ -61,6 +65,11 @@ use LogicException;
  *     ticket au journal des événements (JET 190).
  * Sans clé de signature, ou si l'horloge du serveur a reculé, rien de tout
  * cela n'a lieu.
+ *
+ * L'émission demandée par une personne porte un jeton (R3, voir
+ * ActionsUniques), cherché sous le verrou du registre : répétée après une
+ * réponse perdue, elle rend l'avoir déjà émis. Un avoir enregistré (voir
+ * EnregistrerAvoirAction) l'appelle sans jeton : il porte le sien.
  */
 class EmettreAvoirAction
 {
@@ -71,24 +80,28 @@ class EmettreAvoirAction
         private readonly ContenuFiscal $contenuFiscal,
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
+        private readonly ActionsUniques $actionsUniques,
     ) {}
 
     /**
+     * @param  string|null  $jeton  le jeton de la demande (R3), null quand une autre action l'appelle
+     *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(User $auteur, Avoir $avoir): Avoir
+    public function handle(User $auteur, Avoir $avoir, ?string $jeton = null): Avoir
     {
-        return DB::transaction(function () use ($auteur, $avoir) {
-            $magasin = app(TenantContext::class)->magasin();
+        $magasin = app(TenantContext::class)->magasin();
+
+        return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_AVOIR, $auteur, ['avoir_id' => $avoir->getKey()], fn () => $this->registre->verrouiller($magasin), fn (): Avoir => DB::transaction(function () use ($auteur, $avoir, $magasin) {
             $instant = $this->registre->verrouiller($magasin);
             Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Avoir::class);
 
             return $this->operateur->pendant($compte, fn (): Avoir => $this->emettre($avoir, $instant));
-        });
+        }));
     }
 
     /**
@@ -117,6 +130,7 @@ class EmettreAvoirAction
         }
 
         $this->arreterLesMontants($avoir);
+        Produit::verrouillerPourLeStock($avoir->lignes->pluck('produit_id'));
 
         $numero = $this->numerotation->suivant($avoir->magasin, TypeDocument::Avoir, $instant->enHeureLocale()->format('Y'));
 

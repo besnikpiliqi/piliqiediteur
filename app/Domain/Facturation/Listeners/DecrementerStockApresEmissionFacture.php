@@ -11,7 +11,12 @@ use App\Domain\Stock\Services\StockLedgerService;
  * StockLedgerService directement, elle se contente d'émettre FactureEmise.
  * Écouteur SYNCHRONE (pas de ShouldQueue) : doit s'exécuter dans la même
  * transaction que l'émission pour rester atomique avec elle (voir le
- * commentaire sur FactureEmise).
+ * commentaire sur FactureEmise), sur les produits que l'émission a déjà
+ * verrouillés et dont elle a contrôlé le stock (voir VerificateurDeStock).
+ *
+ * Le mouvement d'une ligne qui fait passer son produit sous zéro, une
+ * vente sans stock confirmée après l'avertissement (R1), le dit dans sa
+ * note.
  */
 class DecrementerStockApresEmissionFacture
 {
@@ -23,12 +28,14 @@ class DecrementerStockApresEmissionFacture
             $produit = $ligne->produit;
 
             if ($produit !== null && $produit->suivi_stock) {
+                $sansStock = $produit->stock_quantite - $ligne->quantite < 0;
+
                 $this->stock->enregistrer(
                     produit: $produit,
                     type: TypeMouvementStock::Vente,
                     quantite: $ligne->quantite,
                     source: $event->facture,
-                    note: "Vente facture {$event->facture->numero}",
+                    note: "Vente facture {$event->facture->numero}".($sansStock ? ' (vente sans stock confirmée : stock négatif à régulariser)' : ''),
                 );
             }
         }

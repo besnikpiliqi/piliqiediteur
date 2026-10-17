@@ -242,14 +242,14 @@ class AvoirActionsTest extends TestCase
     public function test_des_retours_successifs_rendent_au_stock_ce_que_la_vente_en_a_sorti(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 3]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $ligneFacture = $facture->lignes->firstOrFail();
 
         $premier = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]]));
         $second = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 2]]));
 
-        $this->assertSame(0, $produit->fresh()->stock_quantite);
+        $this->assertSame(3, $produit->fresh()->stock_quantite);
         $this->assertSame(0, $facture->quantiteSortieDuStock($produit));
         $this->assertSame(
             [[$premier->lignes->sole()->id, 1], [$second->lignes->sole()->id, 2]],

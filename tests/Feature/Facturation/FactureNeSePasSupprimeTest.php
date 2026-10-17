@@ -32,7 +32,7 @@ class FactureNeSePasSupprimeTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create();
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -50,7 +50,7 @@ class FactureNeSePasSupprimeTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create();
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -85,7 +85,7 @@ class FactureNeSePasSupprimeTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create();
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);

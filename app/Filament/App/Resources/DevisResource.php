@@ -158,8 +158,9 @@ class DevisResource extends Resource
                     ->modalDescription(fn (Devis $record): string => $record->numero === null
                         ? 'Le devis reçoit son numéro et passe au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.'
                         : "Le devis garde son numéro {$record->numero} et repasse au statut « Envoyé », sans e-mail : pour un devis remis en main propre, par exemple.")
+                    ->form([self::champDuJeton()])
                     ->visible(fn (Devis $record) => $record->statut === StatutDevis::Brouillon && auth()->user()->can('envoyer', $record))
-                    ->action(fn (Devis $record) => static::executerSansCasser(fn () => app(EmettreDevisAction::class)->handle(auth()->user(), $record))),
+                    ->action(fn (Devis $record, array $data) => static::executerSansCasser(fn () => app(EmettreDevisAction::class)->handle(auth()->user(), $record, $data['jeton']))),
                 // Masquée une fois la date de validité dépassée (voir
                 // DevisPolicy::accepter()).
                 Tables\Actions\Action::make('accepter')

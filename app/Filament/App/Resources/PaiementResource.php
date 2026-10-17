@@ -13,6 +13,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\PaiementResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\PorteUnJeton;
 use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Placeholder;
@@ -42,6 +43,7 @@ use InvalidArgumentException;
 class PaiementResource extends Resource
 {
     use GereLesExceptionsMetier;
+    use PorteUnJeton;
 
     protected static ?string $model = Paiement::class;
 
@@ -74,6 +76,9 @@ class PaiementResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
+            // Le jeton du paiement (R3) : renvoyé après une réponse perdue,
+            // il n'est enregistré qu'une fois (voir CreatePaiement).
+            self::champDuJeton(),
             Section::make('Paiement')->schema([
                 Select::make('client_id')
                     ->label('Client')
@@ -365,6 +370,7 @@ class PaiementResource extends Resource
                     ->icon('heroicon-o-arrow-uturn-left')
                     ->color('danger')
                     ->form([
+                        self::champDuJeton(),
                         Textarea::make('motif')->label('Motif')->required()->maxLength(1000),
                     ])
                     ->requiresConfirmation()
@@ -376,7 +382,7 @@ class PaiementResource extends Resource
                         $record->creditsImputes()->exists() ? ' ; le crédit d\'avoir qu\'il y avait imputé redeviendra disponible' : '',
                     ))
                     ->visible(fn (Paiement $record): bool => auth()->user()->can('contrePasser', $record))
-                    ->action(fn (Paiement $record, array $data) => static::executerSansCasser(fn () => app(ContrePasserPaiementAction::class)->handle(auth()->user(), $record, $data['motif']))),
+                    ->action(fn (Paiement $record, array $data) => static::executerSansCasser(fn () => app(ContrePasserPaiementAction::class)->handle(auth()->user(), $record, $data['motif'], $data['jeton']))),
             ])
             ->bulkActions([]);
     }

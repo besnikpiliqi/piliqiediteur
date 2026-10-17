@@ -9,6 +9,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -33,12 +34,18 @@ use LogicException;
  * recalculé : le client accepterait un prix que la facture tirée du devis
  * ne reprendrait pas (voir ContexteDeVente::refuserSiLeTypeDeClientAChange()
  * et ContexteDeVente::refuserSiLeRegimeAChange()).
+ *
+ * L'émission demandée par une personne porte un jeton (R3, voir
+ * ActionsUniques), cherché sous le verrou de la ligne de son auteur :
+ * répétée après une réponse perdue, elle rend le devis déjà émis. Un envoi
+ * (voir EnvoyerDocumentAction) l'appelle sans jeton : il porte le sien.
  */
 class EmettreDevisAction
 {
     public function __construct(
         private readonly DocumentNumberingService $numerotation,
         private readonly LecteurDesDroits $lecteur,
+        private readonly ActionsUniques $actionsUniques,
     ) {}
 
     /**
@@ -46,12 +53,14 @@ class EmettreDevisAction
      * sous le verrou de sa ligne avant celui du devis (voir
      * LecteurDesDroits), doit pouvoir envoyer ce devis.
      *
+     * @param  string|null  $jeton  le jeton de la demande (R3), null quand une autre action l'appelle
+     *
      * @throws AuthorizationException
      * @throws LogicException
      */
-    public function handle(User $auteur, Devis $devis): Devis
+    public function handle(User $auteur, Devis $devis, ?string $jeton = null): Devis
     {
-        return DB::transaction(function () use ($auteur, $devis) {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_DEVIS, $auteur, ['devis_id' => $devis->getKey()], ActionsUniques::verrouDe($auteur), fn (): Devis => DB::transaction(function () use ($auteur, $devis) {
             $magasin = Magasin::query()->findOrFail(app(TenantContext::class)->id());
             $magasin->verifierQuIlPeutVendre();
             $this->lecteur->exigerSousVerrou($auteur, 'envoyer', $magasin, $devis);
@@ -79,6 +88,6 @@ class EmettreDevisAction
             ])->save();
 
             return $devis;
-        });
+        }));
     }
 }

@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\Schema;
  * qu'il se remplit (voir PanierDeCaisse) : une vente commencée survit au
  * rechargement de la page, et ne disparaît qu'encaissée ou inscrite au
  * journal des événements. Pas un document fiscal : la ligne s'efface à
- * l'encaissement ou à l'abandon de la vente.
+ * l'encaissement ou à l'abandon de la vente. Il porte le jeton de la vente
+ * (R3, voir ActionsUniques) : une vente répétée après une réponse perdue
+ * ne fait pas un second ticket.
  */
 return new class extends Migration
 {
@@ -24,6 +26,9 @@ return new class extends Migration
             // clôture de sa journée.
             $table->foreignId('user_id')->constrained('users')->restrictOnDelete();
             $table->foreignId('client_id')->nullable()->constrained('clients')->nullOnDelete();
+            // Le jeton de la vente en cours, créé par la page de la caisse
+            // avec le panier, nouveau pour chaque vente.
+            $table->uuid('jeton');
             // Les lignes où un produit ou un service est choisi, par clé du
             // répéteur de la caisse, telles que le vendeur les voit.
             $table->json('lignes');

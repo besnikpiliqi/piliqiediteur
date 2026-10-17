@@ -39,6 +39,7 @@ class CreateAvoir extends CreateRecord
             Client::withTrashed()->findOrFail($data['client_id']),
             $data['lignes'],
             $data['motif'],
+            $data['jeton'],
         ));
     }
 }

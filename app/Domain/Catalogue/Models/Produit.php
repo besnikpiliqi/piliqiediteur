@@ -411,4 +411,47 @@ class Produit extends Model
     {
         return $this->suivi_stock && $this->stock_quantite <= $this->seuil_alerte;
     }
+
+    /**
+     * Verrouille ces produits du magasin actif, archivés compris, par
+     * identifiant croissant (SELECT ... FOR UPDATE), et les rend. Une
+     * opération qui fait bouger le stock (une vente, un retour, une
+     * réception, un retour au fournisseur) les verrouille ainsi après ses
+     * documents et avant sa numérotation, dans l'ordre des verrous de
+     * l'application (voir RegistreFiscal) : les mouvements de stock qui
+     * suivent les retrouvent verrouillés (voir StockLedgerService), et deux
+     * opérations sur les mêmes produits ne s'attendent jamais l'une
+     * l'autre en sens inverse.
+     *
+     * @param  iterable<int|string|null>  $identifiants
+     * @return Collection<int, Produit>
+     */
+    public static function verrouillerPourLeStock(iterable $identifiants): Collection
+    {
+        $identifiants = collect($identifiants)->filter()->map(fn (int|string $identifiant): int => (int) $identifiant)->unique()->sort()->values();
+
+        return $identifiants->isEmpty()
+            ? new Collection
+            : self::withTrashed()->whereKey($identifiants->all())->orderBy('id')->lockForUpdate()->get();
+    }
+
+    /**
+     * Son stock suivi est négatif : une vente sans stock (R1) l'a fait
+     * passer sous zéro, et sa quantité reste à régulariser par un achat,
+     * une réception ou un inventaire (voir ProduitResource).
+     */
+    public function estEnStockNegatif(): bool
+    {
+        return $this->suivi_stock && $this->stock_quantite < 0;
+    }
+
+    /**
+     * Les produits dont le stock suivi est négatif, à régulariser.
+     *
+     * @param  Builder<Produit>  $query
+     */
+    public function scopeEnStockNegatif(Builder $query): void
+    {
+        $query->where('suivi_stock', true)->where('stock_quantite', '<', 0);
+    }
 }

@@ -5,10 +5,12 @@ namespace App\Domain\Facturation\Actions;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
+use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\JourneesDeCaisse;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -51,6 +53,14 @@ use Throwable;
  * automatiquement », et un échec de ces fermetures, signalé au journal de
  * l'application, ne défait aucune clôture. Les appelants de l'entrée du
  * système les ferment eux-mêmes, après leur propre transaction.
+ *
+ * La clôture demandée par une personne (le bouton) porte un jeton (R3,
+ * voir ActionsUniques) : ses journées se clôturent alors dans une seule
+ * transaction, ouverte par le verrou du registre sous lequel le jeton se
+ * cherche, chacune dans la sienne à l'intérieur ; une erreur n'en laisse
+ * aucune clôturée, et le bouton suivant les reprend toutes, dans l'ordre.
+ * Répétée après une réponse perdue, la demande rend la dernière clôture
+ * déjà faite, sans rien refaire.
  */
 class CloturerLesJourneesAction
 {
@@ -59,6 +69,8 @@ class CloturerLesJourneesAction
         private readonly JourneesDeCaisse $journeesDeCaisse,
         private readonly FermerLesCaissesPersonnellesAction $fermerLesCaisses,
         private readonly OperateurCourant $operateur,
+        private readonly ActionsUniques $actionsUniques,
+        private readonly RegistreFiscal $registre,
     ) {}
 
     /**
@@ -83,8 +95,10 @@ class CloturerLesJourneesAction
     /**
      * Clôture, au nom de son auteur, les journées en attente du magasin,
      * qui doit être le magasin actif, puis ferme d'office les caisses
-     * personnelles restées ouvertes.
+     * personnelles restées ouvertes. Une demande répétée sous le même
+     * jeton rend la dernière clôture déjà faite, et ne ferme rien.
      *
+     * @param  string|null  $jeton  le jeton de la demande (R3)
      * @return array{clotures: Collection<int, ClotureCaisse>, caisses_fermees: Collection<int, ClotureCaissePersonnelle>} les clôtures créées, dans l'ordre des journées, et les relevés des caisses fermées d'office
      *
      * @throws AuthorizationException
@@ -92,9 +106,25 @@ class CloturerLesJourneesAction
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function parUnePersonne(User $auteur, Magasin $magasin, CarbonInterface $jour): array
+    public function parUnePersonne(User $auteur, Magasin $magasin, CarbonInterface $jour, ?string $jeton = null): array
     {
-        $clotures = $this->cloturer($magasin, $jour, fn (string $journee): ClotureCaisse => $this->cloturerCaisse->handle($auteur, $magasin, $journee));
+        $clotures = null;
+        $derniere = $this->actionsUniques->executer(
+            $jeton,
+            ActionsUniques::CLOTURER_LA_JOURNEE,
+            $auteur,
+            ['jour' => CarbonImmutable::instance($jour)->setTimezone(config('app.timezone'))->toDateString()],
+            fn () => $this->registre->verrouiller($magasin),
+            function () use ($auteur, $magasin, $jour, &$clotures): ?ClotureCaisse {
+                $clotures = $this->cloturer($magasin, $jour, fn (string $journee): ClotureCaisse => $this->cloturerCaisse->handle($auteur, $magasin, $journee));
+
+                return $clotures->last();
+            },
+        );
+
+        if ($clotures === null) {
+            return ['clotures' => new Collection($derniere === null ? [] : [$derniere]), 'caisses_fermees' => new Collection];
+        }
 
         return [
             'clotures' => $clotures,

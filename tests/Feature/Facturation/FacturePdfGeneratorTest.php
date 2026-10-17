@@ -36,7 +36,7 @@ class FacturePdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 42, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ht' => 42, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 2],
         ]);
@@ -140,7 +140,7 @@ class FacturePdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['option_debits_tva' => $optionDebits])->create());
         $client = Client::factory()->professionnel()->create();
-        $produit = Produit::factory()->create();
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
@@ -333,7 +333,7 @@ class FacturePdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
         $client = Client::factory()->professionnel()->create();
-        $produit = Produit::factory()->create();
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -356,7 +356,7 @@ class FacturePdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
         $client = Client::factory()->create(); // particulier par défaut
-        $produit = Produit::factory()->create();
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -479,7 +479,7 @@ class FacturePdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
         $client = Client::factory()->professionnel()->create();
-        $produit = Produit::factory()->create();
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);

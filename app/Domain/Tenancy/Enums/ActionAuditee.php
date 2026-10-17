@@ -58,6 +58,7 @@ enum ActionAuditee: string implements HasLabel
     case SocieteCreeeParUnCompteRetire = 'societe_creee_par_un_compte_retire';
     case ProprieteTransferee = 'propriete_transferee';
     case AdresseDeConnexionChangee = 'adresse_de_connexion_changee';
+    case VenteSansStock = 'vente_sans_stock';
 
     /**
      * Les mots qui, dans un nom de champ (entre ses traits de soulignement,
@@ -114,6 +115,7 @@ enum ActionAuditee: string implements HasLabel
             self::SocieteCreeeParUnCompteRetire => 'Société créée par un compte retiré',
             self::ProprieteTransferee => 'Propriété transférée',
             self::AdresseDeConnexionChangee => 'Adresse de connexion changée',
+            self::VenteSansStock => 'Vente au-delà du stock',
         };
     }
 
@@ -172,6 +174,10 @@ enum ActionAuditee: string implements HasLabel
             self::MotDePasseProvisoireDonne, self::LienDAccesEnvoye, self::AdresseDeConnexionChangee => ['compte'],
             self::RattachementPropose => ['compte', 'role_societe', 'magasins'],
             self::SocieteCreeeParUnCompteRetire => ['compte', 'siren', 'societe_quittee'],
+            // Le numéro de la vente et, pour chaque produit qu'elle a fait
+            // passer sous zéro, sa référence, son stock avant la vente et
+            // la quantité vendue (voir EmettreFactureAction).
+            self::VenteSansStock => ['vente', 'produits'],
         };
     }
 }

@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -35,6 +36,11 @@ use LogicException;
  * Son auteur est relu sous le verrou de sa ligne, après celui du registre
  * (voir LecteurDesDroits) : il doit pouvoir créer un avoir ; la création
  * et l'émission reçoivent ce même auteur relu.
+ *
+ * La demande porte un jeton (R3, voir ActionsUniques), cherché sous le
+ * verrou du registre : répétée après une réponse perdue, elle rend l'avoir
+ * déjà émis, sans second avoir ni second retour en stock. L'émission
+ * qu'elle compose n'en consomme aucun.
  */
 class EnregistrerAvoirAction
 {
@@ -43,20 +49,28 @@ class EnregistrerAvoirAction
         private readonly CreerAvoirAction $creerAvoir,
         private readonly EmettreAvoirAction $emettreAvoir,
         private readonly LecteurDesDroits $lecteur,
+        private readonly ActionsUniques $actionsUniques,
     ) {}
 
     /**
      * @param  list<array{ligne_facture_id: int|string, quantite: int|string}>  $lignesSelectionnees
+     * @param  string|null  $jeton  le jeton de la demande (R3)
      *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(User $auteur, Client $client, array $lignesSelectionnees, ?string $motif = null): Avoir
+    public function handle(User $auteur, Client $client, array $lignesSelectionnees, ?string $motif = null, ?string $jeton = null): Avoir
     {
-        return DB::transaction(function () use ($auteur, $client, $lignesSelectionnees, $motif): Avoir {
-            $magasin = app(TenantContext::class)->magasin();
+        $magasin = app(TenantContext::class)->magasin();
+        $parametres = [
+            'client_id' => $client->getKey(),
+            'lignes' => array_values($lignesSelectionnees),
+            'motif' => $motif,
+        ];
+
+        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_AVOIR, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Avoir => DB::transaction(function () use ($auteur, $client, $lignesSelectionnees, $motif, $magasin): Avoir {
             $this->registre->verrouiller($magasin);
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Avoir::class);
 
@@ -65,6 +79,6 @@ class EnregistrerAvoirAction
             }
 
             return $this->emettreAvoir->handle($compte, $this->creerAvoir->handle($compte, $client, $lignesSelectionnees, $motif));
-        });
+        }));
     }
 }

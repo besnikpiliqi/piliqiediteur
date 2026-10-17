@@ -2,6 +2,8 @@
 
 namespace App\Domain\Catalogue\Models;
 
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Database\Factories\ServiceFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -14,9 +16,14 @@ use InvalidArgumentException;
  * Un service que le magasin réalise (remplacement d'écran, main-d'œuvre,
  * pose de protection...) : la caisse propose en cases à cocher ceux déjà
  * créés, et en crée un nouveau quand il manque (voir
- * TrouverOuCreerServiceAction). Un nom, sans prix : le prix se saisit à
- * chaque vente, TTC en France, sans TVA hors de la TVA française, et la
- * ligne en garde une copie figée (voir ConstructeurLigneDocument). Deux
+ * TrouverOuCreerServiceAction). Un nom et, s'il est fixé, un prix de
+ * référence TTC avec son taux de TVA (R2) : une ligne de ce service le
+ * prend, converti sans TVA hors de la TVA française (voir
+ * prixDeReferenceDans()), et seule une personne autorisée à fixer le prix
+ * d'un service en met un autre, ou vend un service qui n'en a pas (voir
+ * DerogationsDePrix) ; la ligne garde une copie figée de son prix (voir
+ * ConstructeurLigneDocument). Prix et taux se fixent ensemble : sans prix,
+ * pas de taux. Deux
  * marques disent ce qu'une vente hors de France en fait (voir
  * ControleNatureOperation) : des frais accessoires (port, emballage,
  * assurance) suivent la livraison des biens qu'ils accompagnent ; un
@@ -40,12 +47,16 @@ class Service extends Model
 
     protected $fillable = [
         'nom',
+        'prix_ttc',
+        'taux_tva',
         'actif',
         'frais_accessoires',
         'lieu_specifique',
     ];
 
     protected $casts = [
+        'prix_ttc' => 'decimal:2',
+        'taux_tva' => 'decimal:2',
         'actif' => 'boolean',
         'frais_accessoires' => 'boolean',
         'lieu_specifique' => 'boolean',
@@ -61,7 +72,72 @@ class Service extends Model
             }
 
             $service->nom_normalise = self::normaliserNom($service->nom);
+            $service->verifierSonPrixDeReference();
         });
+    }
+
+    /**
+     * A-t-il un prix de référence ? Sans, seule une personne autorisée à
+     * fixer le prix d'un service le vend (voir DerogationsDePrix).
+     */
+    public function aUnPrixDeReference(): bool
+    {
+        return $this->prix_ttc !== null;
+    }
+
+    /**
+     * Le prix que prend une ligne de ce service dans cette vente, null sans
+     * prix de référence : son prix TTC, et, hors de la TVA française, ce
+     * prix sans sa TVA, au centime, comme le convertit l'écran (voir
+     * ChoisitLaNatureDeLOperation). En franchise en base, le client paie
+     * le même prix TTC, sans TVA.
+     */
+    public function prixDeReferenceDans(ContexteDeVente $contexte): ?float
+    {
+        if (! $this->aUnPrixDeReference()) {
+            return null;
+        }
+
+        return $contexte->retireLaTvaDuPrix()
+            ? app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $this->prix_ttc, (float) $this->taux_tva)
+            : (float) $this->prix_ttc;
+    }
+
+    /**
+     * Le taux de TVA que prend une ligne de ce service dans cette vente,
+     * null quand la vente le fixe d'elle-même (franchise en base, vente
+     * sans TVA française, toutes deux à 0 %) ou qu'il n'a pas de prix de
+     * référence.
+     */
+    public function tauxDeReferenceDans(ContexteDeVente $contexte): ?float
+    {
+        if (! $this->aUnPrixDeReference() || $contexte->franchiseEnBase || $contexte->retireLaTvaDuPrix()) {
+            return null;
+        }
+
+        return (float) $this->taux_tva;
+    }
+
+    /**
+     * Prix et taux se fixent ensemble : sans prix, le taux ne s'enregistre
+     * pas ; un prix sans taux est refusé. Un prix n'est jamais négatif, un
+     * taux reste entre 0 et 100 %.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function verifierSonPrixDeReference(): void
+    {
+        if ($this->prix_ttc === null) {
+            $this->taux_tva = null;
+        }
+
+        if ($this->prix_ttc !== null && $this->taux_tva === null) {
+            throw new InvalidArgumentException('Le prix de référence d\'un service et son taux de TVA se fixent ensemble.');
+        }
+
+        if ($this->prix_ttc !== null && ((float) $this->prix_ttc < 0 || (float) $this->taux_tva < 0 || (float) $this->taux_tva > 100)) {
+            throw new InvalidArgumentException('Le prix de référence d\'un service n\'est jamais négatif, et son taux de TVA reste entre 0 et 100 %.');
+        }
     }
 
     /**

@@ -123,9 +123,13 @@ class ConstructeurLigneDocument
      * Une vente part toujours d'un prix TTC (voir CalculateurLigne) : le PU
      * TTC saisi, sinon le prix de vente TTC enregistré sur la fiche du
      * produit ; son PU HT en est la conversion au centime, la même que sur
-     * la fiche. Une ligne de service (voir Service) n'a pas de prix
-     * catalogue : son PU TTC est toujours saisi. Un PU TTC n'est jamais
-     * négatif : une vente ne rembourse rien, c'est le rôle d'un avoir.
+     * la fiche. Une ligne de service (voir Service) prend le PU TTC saisi,
+     * sinon son prix de référence, sans sa TVA hors de la TVA française
+     * (voir Service::prixDeReferenceDans()) ; sans prix de référence, elle
+     * doit en saisir un. Seule une personne autorisée met un autre prix
+     * que celui de la fiche ou de la référence, ou vend un service qui n'en
+     * a pas (voir DerogationsDePrix). Un PU TTC n'est jamais négatif : une
+     * vente ne rembourse rien, c'est le rôle d'un avoir.
      *
      * Vendue à un particulier, ou en franchise en base, la ligne a ici
      * tous ses montants, article par article ; vendue à un professionnel
@@ -135,8 +139,9 @@ class ConstructeurLigneDocument
      * affichage : 1 000 x 0,83 € ne font pas les 833,33 € HT de la ligne.
      *
      * Le taux d'une ligne de produit est celui de sa fiche, quel que soit
-     * celui envoyé (C15, C40) ; celui d'une ligne de service se saisit
-     * librement, sinon le taux du territoire du magasin (B2). En franchise
+     * celui envoyé (C15, C40) ; celui d'une ligne de service se saisit,
+     * sinon celui de son prix de référence, sinon le taux du territoire du
+     * magasin (B2). En franchise
      * en base, toute ligne est à 0 % : son PU HT est son PU TTC, et le
      * client, particulier ou professionnel, paie le même prix TTC sans TVA
      * (B10).
@@ -180,7 +185,7 @@ class ConstructeurLigneDocument
             $contexte->franchiseEnBase => 0.0,
             $produit !== null => (float) $produit->taux_tva,
             $contexte->retireLaTvaDuPrix() => 0.0,
-            default => (float) (filled($donnees['taux_tva'] ?? null) ? $donnees['taux_tva'] : $contexte->tauxTvaParDefaut),
+            default => (float) (filled($donnees['taux_tva'] ?? null) ? $donnees['taux_tva'] : ($service->tauxDeReferenceDans($contexte) ?? $contexte->tauxTvaParDefaut)),
         };
         $tauxTva = $contexte->exonere() ? 0.0 : $tauxTvaDuPrix;
 
@@ -188,7 +193,7 @@ class ConstructeurLigneDocument
 
         $prixUnitaireTtc = $this->calculateur->arrondirAuCentime((float) (filled($donnees['prix_unitaire_ttc'] ?? null)
             ? $donnees['prix_unitaire_ttc']
-            : ($produit?->prix_vente_ttc ?? throw new InvalidArgumentException('Une ligne de service doit fournir prix_unitaire_ttc.'))));
+            : ($produit?->prix_vente_ttc ?? $service->prixDeReferenceDans($contexte) ?? throw new InvalidArgumentException("Le prix du service « {$service->nom} » n'est pas fixé : demandez à un responsable."))));
 
         if ($prixUnitaireTtc < 0) {
             throw new InvalidArgumentException('Le PU TTC d\'une ligne ne peut pas être négatif.');

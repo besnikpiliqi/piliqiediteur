@@ -11,6 +11,7 @@ use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\CaissesPersonnellesOuvertesApercu;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\VentesEnAttenteApercu;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\PorteUnJeton;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Filament\Actions;
@@ -37,10 +38,14 @@ use Livewire\Attributes\Locked;
  * la fenêtre nomme les caisses qu'elle fermera d'office, et elles se
  * ferment après la clôture, avec la mention « Fermée automatiquement »
  * (voir FermerLesCaissesPersonnellesAction).
+ *
+ * La fenêtre porte le jeton de sa demande (R3, voir PorteUnJeton) : une
+ * clôture renvoyée après une réponse perdue rend la clôture déjà faite.
  */
 class ListClotureCaisses extends ListRecords
 {
     use GereLesExceptionsMetier;
+    use PorteUnJeton;
 
     protected static string $resource = ClotureCaisseResource::class;
 
@@ -104,10 +109,11 @@ class ListClotureCaisses extends ListRecords
                 ->modalHeading("Clôturer la journée du {$enClair} ?")
                 ->modalDescription(fn (): HtmlString => $this->descriptionDeLaConfirmation($this->journeesACloturer()))
                 ->modalSubmitActionLabel('Oui, clôturer définitivement')
+                ->form([self::champDuJeton()])
                 ->visible(fn (): bool => auth()->user()->can('cloturer', ClotureCaisse::class)
                     && $this->journeesACloturer()->isNotEmpty())
-                ->action(fn () => static::executerSansCasser(function () use ($journeeVisee, $enClair): void {
-                    ['clotures' => $clotures, 'caisses_fermees' => $caissesFermees] = app(CloturerLesJourneesAction::class)->parUnePersonne(auth()->user(), Filament::getTenant(), $journeeVisee);
+                ->action(fn (array $data) => static::executerSansCasser(function () use ($journeeVisee, $enClair, $data): void {
+                    ['clotures' => $clotures, 'caisses_fermees' => $caissesFermees] = app(CloturerLesJourneesAction::class)->parUnePersonne(auth()->user(), Filament::getTenant(), $journeeVisee, $data['jeton']);
                     $this->journeesEnAttente = $this->vendeursEnAttente = null;
 
                     if ($clotures->isEmpty()) {

@@ -30,8 +30,10 @@ use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\MentionsFiscales;
 use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Recherche\RechercheSansAccents;
+use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\FactureResource\Pages;
+use App\Filament\Concerns\AvertitDUneVenteSansStock;
 use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -60,9 +62,11 @@ use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 
 class FactureResource extends Resource
 {
+    use AvertitDUneVenteSansStock;
     use ChoisitLaNatureDeLOperation;
     use EnvoieLesDocuments;
     use GereLesExceptionsMetier;
@@ -656,22 +660,13 @@ class FactureResource extends Resource
                 Tables\Actions\DeleteAction::make()
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon)
                     ->using(fn (Facture $record): ?bool => static::executerOuInterrompre(fn (): ?bool => $record->delete())),
-                Tables\Actions\Action::make('emettre')
-                    ->label('Émettre')
-                    ->icon('heroicon-o-paper-airplane')
-                    ->color('success')
-                    ->requiresConfirmation()
-                    ->modalDescription('Un numéro définitif sera attribué, l\'échéance fixée et le stock décrémenté. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
-                    ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && auth()->user()->can('emettre', $record))
-                    ->action(fn (Facture $record) => static::executerSansCasser(function () use ($record): void {
-                        self::verifierLeNumeroTvaSurViesSiBesoin($record);
-                        app(EmettreFactureAction::class)->handle(auth()->user(), $record);
-                    })),
+                self::emettre(),
                 Tables\Actions\Action::make('encaisser')
                     ->label('Encaisser')
                     ->icon('heroicon-o-banknotes')
                     ->color('success')
                     ->form([
+                        self::champDuJeton(),
                         // Le mode de paiement préféré du client est
                         // présélectionné (B8).
                         Select::make('mode_paiement')
@@ -712,7 +707,7 @@ class FactureResource extends Resource
                         'recu_le' => $data['recu_le'],
                     ], [
                         ['facture_id' => $record->id, 'montant' => $data['montant']],
-                    ]))),
+                    ], $data['jeton']))),
                 self::telechargerLePdf(Tables\Actions\Action::make('telecharger_pdf')),
                 self::envoyerParEmail(Tables\Actions\Action::make('envoyer_par_email')),
                 self::relancer(Tables\Actions\Action::make('relancer')),
@@ -721,6 +716,7 @@ class FactureResource extends Resource
                     ->icon('heroicon-o-receipt-refund')
                     ->color('danger')
                     ->form(fn (Facture $record) => [
+                        self::champDuJeton(),
                         // Sélection des lignes/quantités à créditer plutôt
                         // qu'un crédit total forcé : un avoir partiel est
                         // légal (voir le docblock de CreerAvoirAction).
@@ -760,7 +756,7 @@ class FactureResource extends Resource
                         && auth()->user()->can(PermissionRegistry::AVOIR_CREER))
                     ->action(function (Facture $record, array $data): void {
                         AvoirResource::autoriserLesLignesACrediter($data['lignes']);
-                        static::executerSansCasser(fn () => app(EnregistrerAvoirAction::class)->handle(auth()->user(), $record->client, $data['lignes'], $data['motif']));
+                        static::executerSansCasser(fn () => app(EnregistrerAvoirAction::class)->handle(auth()->user(), $record->client, $data['lignes'], $data['motif'], $data['jeton']));
                     }),
             ])
             // Seuls les brouillons partent : une facture déjà émise se
@@ -770,6 +766,53 @@ class FactureResource extends Resource
                     static::suppressionEnMasse(),
                 ]),
             ]);
+    }
+
+    /**
+     * Émettre un brouillon. Une vente au-delà du stock (R1) garde la
+     * fenêtre ouverte et y montre l'avertissement que renvoie l'émission
+     * (« Le stock de Câble USB passera à −2 : confirmer la vente ? »), avec
+     * la confirmation qui l'accepte, que la personne autorisée valide ;
+     * renouvelé si le stock a encore baissé entre-temps. La fenêtre porte
+     * le jeton de la demande (R3) : une émission renvoyée après une réponse
+     * perdue rend la facture déjà émise.
+     */
+    private static function emettre(): Tables\Actions\Action
+    {
+        return Tables\Actions\Action::make('emettre')
+            ->label('Émettre')
+            ->icon('heroicon-o-paper-airplane')
+            ->color('success')
+            ->requiresConfirmation()
+            ->modalHeading(fn (array $arguments): string => filled($arguments['avertissements'] ?? null) ? 'Vendre sans stock ?' : 'Émettre')
+            ->modalDescription(fn (array $arguments): string|HtmlString => filled($arguments['avertissements'] ?? null)
+                ? static::descriptionDeLAvertissement($arguments)
+                : 'Un numéro définitif sera attribué, l\'échéance fixée et le stock décrémenté. Cette action est irréversible : une facture émise ne se corrige plus que par un avoir.')
+            ->form([self::champDuJeton()])
+            ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon && auth()->user()->can('emettre', $record))
+            ->action(function (Facture $record, array $data, array $arguments, Tables\Actions\Action $action): void {
+                $avertissement = null;
+
+                static::executerSansCasser(function () use ($record, $data, $arguments, &$avertissement): void {
+                    self::verifierLeNumeroTvaSurViesSiBesoin($record);
+
+                    try {
+                        app(EmettreFactureAction::class)->handle(auth()->user(), $record, confirmation: static::confirmationDesArguments($arguments), jeton: $data['jeton']);
+                    } catch (ConfirmationVenteSansStockRequiseException $exception) {
+                        $avertissement = $exception;
+                    }
+                });
+
+                if ($avertissement === null) {
+                    return;
+                }
+
+                $nouveaux = static::argumentsDeLAvertissement($avertissement);
+                $liste = $action->getLivewire();
+                $liste->mountedTableActionsArguments[array_key_last($liste->mountedTableActionsArguments)] = $nouveaux;
+                $action->arguments($nouveaux);
+                $action->halt();
+            });
     }
 
     /**

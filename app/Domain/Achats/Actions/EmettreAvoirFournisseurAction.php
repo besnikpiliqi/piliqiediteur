@@ -31,7 +31,11 @@ use LogicException;
  * Il fait sortir du stock et recalcule le coût moyen, comme une
  * validation d'achat : son auteur est relu sous le verrou de sa ligne,
  * avant l'avoir et ses produits (voir LecteurDesDroits), et doit pouvoir
- * créer un avoir fournisseur.
+ * créer un avoir fournisseur. Ses produits se verrouillent, par
+ * identifiant croissant, avant la numérotation, quand leur stock se relit
+ * (voir AvoirFournisseur::verifierQueLeStockSuffit()). L'écran ne l'appelle
+ * qu'avec la création de l'avoir, dans la même transaction (voir
+ * EnregistrerAvoirFournisseurAction).
  */
 class EmettreAvoirFournisseurAction
 {

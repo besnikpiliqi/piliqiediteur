@@ -81,6 +81,9 @@ class AvoirResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
+            // Le jeton de l'avoir (R3) : renvoyé après une réponse perdue,
+            // il n'est émis qu'une fois (voir CreateAvoir).
+            self::champDuJeton(),
             Select::make('client_id')
                 ->label('Client')
                 // Archivé, un client n'est plus proposé pour une vente, mais

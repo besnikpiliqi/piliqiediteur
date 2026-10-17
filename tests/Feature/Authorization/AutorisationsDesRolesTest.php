@@ -47,8 +47,8 @@ class AutorisationsDesRolesTest extends TestCase
 
     /**
      * Le modèle d'un nouvel administrateur coche toutes les autorisations
-     * de magasin, sauf les paramètres du magasin, que le propriétaire coche
-     * pour qui il veut.
+     * de magasin, sauf la vente sans stock et les paramètres du magasin,
+     * que le propriétaire coche pour qui il veut.
      */
     public function test_le_modele_de_l_administrateur_coche_tout_sauf_les_parametres_et_la_vente_sans_stock(): void
     {
@@ -56,7 +56,7 @@ class AutorisationsDesRolesTest extends TestCase
 
         $administrateur = $this->administrateur($magasin);
 
-        $this->assertSame([PermissionRegistry::PARAMETRES_GERER], array_values(array_diff(PermissionRegistry::toutes(), $administrateur->autorisationsDans($magasin))));
+        $this->assertSame([PermissionRegistry::STOCK_VENDRE_SANS_STOCK, PermissionRegistry::PARAMETRES_GERER], array_values(array_diff(PermissionRegistry::toutes(), $administrateur->autorisationsDans($magasin))));
         $this->assertEqualsCanonicalizing(PermissionRegistry::modeleDeLAdministrateur(), $administrateur->autorisationsDans($magasin));
     }
 

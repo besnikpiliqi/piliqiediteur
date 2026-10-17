@@ -2,6 +2,7 @@
 
 namespace App\Filament\Concerns;
 
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\TransportPar;
@@ -240,6 +241,12 @@ trait ChoisitLaNatureDeLOperation
      * ligne ajoutée ou rouverte hors de France (voir
      * AjouteDesLignesDeVente::lignesARouvrir()).
      *
+     * Une ligne vendue au prix de référence de son service, à son taux
+     * (R2, voir Service), prend directement ce prix de référence dans la
+     * nouvelle nature, sans l'arrondi d'un aller-retour : elle reste au
+     * prix de référence, que peut vendre une personne qui n'est pas
+     * autorisée à fixer les prix (voir DerogationsDePrix).
+     *
      * @param  mixed  $lignes  les lignes du formulaire
      * @return array<array-key, mixed>|null les lignes, prix des services convertis ; null si aucun n'a changé
      */
@@ -250,6 +257,7 @@ trait ChoisitLaNatureDeLOperation
         }
 
         $calculateur = app(CalculateurLigne::class);
+        $services = Service::query()->whereKey(collect($lignes)->filter(fn (mixed $ligne): bool => is_array($ligne))->pluck('service_id')->filter(fn (mixed $id): bool => is_numeric($id))->all())->get()->keyBy('id');
         $converties = false;
 
         foreach ($lignes as $cle => $ligne) {
@@ -258,9 +266,10 @@ trait ChoisitLaNatureDeLOperation
             }
 
             try {
-                $prix = $sansTvaApres
-                    ? $calculateur->prixUnitaireHtDepuisTtc((float) $ligne['prix_unitaire_ttc'], (float) $ligne['taux_tva'])
-                    : $calculateur->prixUnitaireTtcDepuisHt((float) $ligne['prix_unitaire_ttc'], (float) $ligne['taux_tva']);
+                $prix = self::prixDeReferenceConverti($services->get((int) $ligne['service_id']), (float) $ligne['prix_unitaire_ttc'], (float) $ligne['taux_tva'], $sansTvaAvant, $sansTvaApres)
+                    ?? ($sansTvaApres
+                        ? $calculateur->prixUnitaireHtDepuisTtc((float) $ligne['prix_unitaire_ttc'], (float) $ligne['taux_tva'])
+                        : $calculateur->prixUnitaireTtcDepuisHt((float) $ligne['prix_unitaire_ttc'], (float) $ligne['taux_tva']));
             } catch (InvalidArgumentException) {
                 continue;
             }
@@ -271,6 +280,27 @@ trait ChoisitLaNatureDeLOperation
         }
 
         return $converties ? $lignes : null;
+    }
+
+    /**
+     * Le prix de référence du service dans la nouvelle nature, quand la
+     * ligne était à son prix de référence, à son taux, dans l'ancienne :
+     * TTC en France, sans TVA hors de France ; null sinon.
+     */
+    private static function prixDeReferenceConverti(?Service $service, float $prix, float $taux, bool $sansTvaAvant, bool $sansTvaApres): ?float
+    {
+        if ($service === null || ! $service->aUnPrixDeReference() || round($taux, 2) !== round((float) $service->taux_tva, 2)) {
+            return null;
+        }
+
+        $calculateur = app(CalculateurLigne::class);
+        $prixSansTva = $calculateur->prixUnitaireHtDepuisTtc((float) $service->prix_ttc, (float) $service->taux_tva);
+
+        if (round($prix, 2) !== round($sansTvaAvant ? $prixSansTva : (float) $service->prix_ttc, 2)) {
+            return null;
+        }
+
+        return $sansTvaApres ? $prixSansTva : (float) $service->prix_ttc;
     }
 
     /**

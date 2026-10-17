@@ -86,7 +86,8 @@ class HistoriqueAuNomFigeTest extends TestCase
 
     /**
      * Les colonnes vers un compte qui ne sont pas de l'historique : des
-     * droits actuels, un panier en cours, un lien interne jamais affiché,
+     * droits actuels, un panier en cours, le jeton d'une demande traitée,
+     * un lien interne jamais affiché,
      * ou un nom déjà porté ailleurs (le contenu signé, le libellé de
      * l'audit).
      *
@@ -97,6 +98,7 @@ class HistoriqueAuNomFigeTest extends TestCase
         'users.provisoire_donne_par',
         'users.statut_change_par',
         'paniers_caisse.user_id',
+        'actions_traitees.user_id',
         'affectations.user_id',
         'affectations.nomme_par',
         'autorisations_societe.user_id',

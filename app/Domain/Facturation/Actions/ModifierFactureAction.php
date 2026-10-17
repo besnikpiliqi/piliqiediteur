@@ -15,6 +15,7 @@ use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Facturation\Services\LignesRetirees;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -50,7 +51,10 @@ use LogicException;
  *
  * Son auteur, relu en base après le verrou du brouillon, doit pouvoir le
  * modifier (voir FacturePolicy::update() et LecteurDesDroits) ; le
- * journal des événements l'inscrit à son nom.
+ * journal des événements l'inscrit à son nom. Une remise ou un prix
+ * dérogatoire qu'il introduit, ligne nouvelle ou changée, exige qu'il soit
+ * autorisé à accorder des remises et fixer les prix ; une ligne reprise
+ * telle quelle garde l'accord déjà donné (R2, voir DerogationsDePrix).
  */
 class ModifierFactureAction
 {
@@ -61,6 +65,7 @@ class ModifierFactureAction
         private readonly LignesRetirees $lignesRetirees,
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
+        private readonly DerogationsDePrix $derogations,
     ) {}
 
     /**
@@ -83,7 +88,7 @@ class ModifierFactureAction
 
             $compte = $this->lecteur->exiger($auteur, 'update', $facture->magasin, $facture);
 
-            return $this->operateur->pendant($compte, fn (): Facture => $this->modifier($facture, $client, $lignes, $attributs));
+            return $this->operateur->pendant($compte, fn (): Facture => $this->modifier($compte, $facture, $client, $lignes, $attributs));
         });
     }
 
@@ -91,22 +96,23 @@ class ModifierFactureAction
      * @param  list<array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs
      *
+     * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    private function modifier(Facture $facture, Client $client, array $lignes, array $attributs): Facture
+    private function modifier(User $compte, Facture $facture, Client $client, array $lignes, array $attributs): Facture
     {
         $avant = $facture->lignes
             ->map(fn (LigneFacture $ligne): array => $this->lignesRetirees->comparable($ligne->produit_id, $ligne->service_id, $ligne->description, $ligne->quantite, $ligne->prix_unitaire_ttc))
             ->all();
 
         $contexte = ContexteDeVente::pourEnregistrer($client, $facture->magasin, $facture->fill($attributs)->noterSaNatureDOperation($attributs));
+        $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
+        $this->derogations->exiger($compte, $facture->lignes->map(fn (LigneFacture $ligne): array => $ligne->attributesToArray())->all(), $lignesConstruites, $contexte);
         $facture->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
 
         $facture->lignes()->delete();
-
-        $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
 
         foreach ($lignesConstruites as $ligne) {
             $facture->lignes()->create($ligne);

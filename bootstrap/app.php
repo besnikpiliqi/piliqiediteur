@@ -5,6 +5,7 @@ use App\Console\Commands\EffacerPiecesVerification;
 use App\Console\Commands\ExpirerDevis;
 use App\Console\Commands\FermerDemonstrationsInactives;
 use App\Console\Commands\MarquerFacturesEnRetard;
+use App\Console\Commands\PurgerActionsTraitees;
 use App\Console\Commands\PurgerDemandesInscription;
 use App\Console\Commands\PurgerJournalAudit;
 use App\Console\Commands\PurgerTraces;
@@ -74,6 +75,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // chaque chaîne (voir PurgerJournalAudit).
         $schedule->command(PurgerTraces::class)->dailyAt('04:00');
         $schedule->command(PurgerJournalAudit::class)->dailyAt('04:15');
+        // À 4 h 30 : les jetons des demandes traitées depuis plus de 30
+        // jours s'effacent (voir PurgerActionsTraitees).
+        $schedule->command(PurgerActionsTraitees::class)->dailyAt('04:30');
         // À 4 h 45, les magasins de démonstration inactifs depuis trente
         // jours, ou d'une société validée ou refusée, se ferment (voir
         // FermerDemonstrationsInactives).

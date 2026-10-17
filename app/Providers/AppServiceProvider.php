@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\Paiement;
@@ -161,7 +162,8 @@ class AppServiceProvider extends ServiceProvider
      * Le nom sous lequel un modèle s'écrit dans une colonne polymorphique
      * (document_type du registre fiscal et des envois, source_type du
      * grand livre du stock, transmissible_type, notifiable_type,
-     * cible_type du journal d'audit) : un alias stable plutôt que le nom de sa
+     * cible_type du journal d'audit, resultat_type des demandes déjà
+     * traitées) : un alias stable plutôt que le nom de sa
      * classe, qu'un déplacement de fichier changerait, alors que le
      * registre fiscal le signe (voir RegistreFiscal). Sans
      * enforceMorphMap() : un modèle absent de la liste garde le nom de sa
@@ -173,7 +175,9 @@ class AppServiceProvider extends ServiceProvider
             'avoir' => Avoir::class,
             'avoir_fournisseur' => AvoirFournisseur::class,
             'cloture_caisse' => ClotureCaisse::class,
+            'cloture_caisse_personnelle' => ClotureCaissePersonnelle::class,
             'devis' => Devis::class,
+            'envoi_document' => EnvoiDocument::class,
             'facture' => Facture::class,
             'facture_achat' => FactureAchat::class,
             'ligne_avoir' => LigneAvoir::class,

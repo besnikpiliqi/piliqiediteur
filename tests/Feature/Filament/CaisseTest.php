@@ -854,14 +854,14 @@ class CaisseTest extends TestCase
     /**
      * Créer un service, même depuis la caisse, demande l'autorisation de
      * créer des produits et des services : le vendeur aux autorisations par
-     * défaut coche les services du magasin, sans champ pour en créer un, et
-     * l'action appelée directement le refuse.
+     * défaut coche les services du magasin à prix de référence (R2), sans
+     * champ pour en créer un, et l'action appelée directement le refuse.
      */
     public function test_un_vendeur_avec_les_permissions_par_defaut_ne_cree_pas_de_service_depuis_la_caisse(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        Service::factory()->create(['nom' => 'Diagnostic']);
+        Service::factory()->auPrixDe('30.00')->create(['nom' => 'Diagnostic']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, [
             'name' => 'Paul', 'email' => 'paul@example.test',
         ]);

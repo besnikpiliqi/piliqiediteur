@@ -8,10 +8,12 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 
 /**
@@ -31,6 +33,12 @@ use InvalidArgumentException;
  * Toutes ces écritures se font sous le verrou du registre fiscal du
  * magasin, puis du panier : un panier ouvert dans deux onglets ne perd
  * rien entre les deux sans trace.
+ *
+ * Le panier porte le jeton de sa vente (R3, voir ActionsUniques), que la
+ * page de la caisse lui donne à sa création et reprend de lui ensuite :
+ * l'encaissement le consomme. Un panier ne se recrée jamais sous un jeton
+ * déjà consommé : après une réponse perdue, la caisse qui renvoie la même
+ * vente retrouve le ticket déjà enregistré, au lieu d'en faire un second.
  */
 class PanierDeCaisse
 {
@@ -39,6 +47,7 @@ class PanierDeCaisse
         private readonly LignesRetirees $lignesRetirees,
         private readonly CalculateurLigne $calculateur,
         private readonly ConstructeurLigneDocument $constructeurLigne,
+        private readonly ActionsUniques $actionsUniques,
     ) {}
 
     /**
@@ -59,25 +68,36 @@ class PanierDeCaisse
      * garde celle qu'avait la ligne : elle ne retire rien tant qu'elle
      * n'est pas un nombre d'articles.
      *
-     * @param  array<array-key, mixed>  $lignes  les lignes du formulaire de la caisse, par clé du répéteur
+     * Un nouveau panier prend le jeton que donne la caisse, sauf si ce
+     * jeton a déjà été consommé : sa vente est encaissée, et le panier ne
+     * se recrée pas.
      *
+     * @param  string  $jeton  le jeton de la vente que montre la caisse
+     * @param  array<array-key, mixed>  $lignes  les lignes du formulaire de la caisse, par clé du répéteur
+     * @return PanierCaisse|null le panier enregistré, dont la caisse reprend le jeton ; null sans panier
+     *
+     * @throws InvalidArgumentException quand le jeton n'est pas un identifiant unique
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function enregistrer(User $vendeur, mixed $clientId, array $lignes): void
+    public function enregistrer(User $vendeur, string $jeton, mixed $clientId, array $lignes): ?PanierCaisse
     {
+        if (! Str::isUuid($jeton)) {
+            throw new InvalidArgumentException('La caisse a perdu le jeton de sa vente : rechargez la page.');
+        }
+
         $enCours = $this->enCours($vendeur);
         $clientId = $this->clientDuMagasin($clientId);
 
         if ($enCours !== null && $enCours->client_id === $clientId && $enCours->lignes === $this->lignesAEnregistrer($lignes, $enCours->lignes)) {
-            return;
+            return $enCours;
         }
 
-        if ($enCours === null && $this->lignesAEnregistrer($lignes, []) === []) {
-            return;
+        if ($enCours === null && ($this->lignesAEnregistrer($lignes, []) === [] || $this->actionsUniques->aServi($jeton))) {
+            return null;
         }
 
-        $this->registre->sousVerrou(app(TenantContext::class)->magasin(), function () use ($vendeur, $clientId, $lignes): void {
+        return $this->registre->sousVerrou(app(TenantContext::class)->magasin(), function () use ($vendeur, $jeton, $clientId, $lignes): ?PanierCaisse {
             $panier = PanierCaisse::query()->where('user_id', $vendeur->getKey())->lockForUpdate()->first();
             $nouvelles = $this->lignesAEnregistrer($lignes, $panier->lignes ?? []);
 
@@ -88,11 +108,15 @@ class PanierDeCaisse
             if ($nouvelles === []) {
                 $panier?->delete();
 
-                return;
+                return null;
             }
 
-            ($panier ?? (new PanierCaisse)->forceFill(['user_id' => $vendeur->getKey()]))
-                ->forceFill(['client_id' => $clientId, 'lignes' => $nouvelles])
+            if ($panier === null && $this->actionsUniques->aServi($jeton)) {
+                return null;
+            }
+
+            return tap(($panier ?? (new PanierCaisse)->forceFill(['user_id' => $vendeur->getKey(), 'jeton' => $jeton]))
+                ->forceFill(['client_id' => $clientId, 'lignes' => $nouvelles]))
                 ->save();
         });
     }
@@ -103,15 +127,16 @@ class PanierDeCaisse
      * puis son abandon, avec son nombre de lignes et son total TTC en
      * centimes (JET 320). Le panier s'efface.
      *
+     * @param  string  $jeton  le jeton de la vente que montre la caisse
      * @param  array<array-key, mixed>  $lignes  les lignes du formulaire de la caisse, par clé du répéteur
      *
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function abandonner(User $vendeur, mixed $clientId, array $lignes): void
+    public function abandonner(User $vendeur, string $jeton, mixed $clientId, array $lignes): void
     {
-        $this->registre->sousVerrou(app(TenantContext::class)->magasin(), function () use ($vendeur, $clientId, $lignes): void {
-            $this->enregistrer($vendeur, $clientId, $lignes);
+        $this->registre->sousVerrou(app(TenantContext::class)->magasin(), function () use ($vendeur, $jeton, $clientId, $lignes): void {
+            $this->enregistrer($vendeur, $jeton, $clientId, $lignes);
 
             $panier = PanierCaisse::query()->where('user_id', $vendeur->getKey())->lockForUpdate()->first();
 

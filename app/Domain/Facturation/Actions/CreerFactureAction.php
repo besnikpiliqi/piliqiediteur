@@ -9,6 +9,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -28,7 +29,10 @@ use Illuminate\Support\Facades\DB;
  *
  * Son auteur, relu en base au moment où elle écrit, doit pouvoir créer une
  * facture dans le magasin actif (voir LecteurDesDroits) : c'est lui que le
- * brouillon enregistre comme auteur, avec son nom figé.
+ * brouillon enregistre comme auteur, avec son nom figé. Une ligne remisée,
+ * ou à un autre prix que celui de la fiche du produit ou du prix de
+ * référence du service, exige en plus qu'il soit autorisé à accorder des
+ * remises et fixer les prix (R2, voir DerogationsDePrix).
  */
 class CreerFactureAction
 {
@@ -37,13 +41,14 @@ class CreerFactureAction
         private readonly CalculateurLigne $calculateurLigne,
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
+        private readonly DerogationsDePrix $derogations,
     ) {}
 
     /**
      * @param  list<array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $attributs  conditions_paiement, notes, et la nature et la livraison (voir NoteSaNatureDOperation::noterSaNatureDOperation())
      *
-     * @throws AuthorizationException
+     * @throws AuthorizationException quand l'auteur ne peut pas créer de facture, ou introduit une remise ou un prix sans y être autorisé
      */
     public function handle(User $auteur, Client $client, array $lignes, array $attributs = []): Facture
     {
@@ -63,9 +68,9 @@ class CreerFactureAction
     {
         $facture = new Facture($attributs);
         $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $facture->noterSaNatureDOperation($attributs));
-        $facture->forceFill(['client_id' => $client->getKey(), 'cree_par' => $compte->getKey(), ...$contexte->colonnes()])->save();
-
         $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
+        $this->derogations->exiger($compte, [], $lignesConstruites, $contexte);
+        $facture->forceFill(['client_id' => $client->getKey(), 'cree_par' => $compte->getKey(), ...$contexte->colonnes()])->save();
 
         foreach ($lignesConstruites as $ligne) {
             $facture->lignes()->create($ligne);

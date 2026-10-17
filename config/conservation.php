@@ -49,4 +49,19 @@ return [
 
     'journal_audit_acces_en_annees' => (int) env('CONSERVATION_AUDIT_ACCES_EN_ANNEES', 5),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Jetons des demandes répétées
+    |--------------------------------------------------------------------------
+    |
+    | Le jeton unique de chaque demande traitée (R3, voir ActionsUniques),
+    | avec l'empreinte de son contenu et son résultat : table technique sans
+    | valeur fiscale, gardée 30 jours, le temps qu'une demande répétée après
+    | une réponse perdue retrouve son résultat. Effacée chaque nuit une fois
+    | cette durée passée (voir app:purger-actions-traitees).
+    |
+    */
+
+    'actions_traitees_en_jours' => (int) env('CONSERVATION_ACTIONS_TRAITEES_EN_JOURS', 30),
+
 ];

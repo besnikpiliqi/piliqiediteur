@@ -10,6 +10,7 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\FactureEmise;
@@ -22,7 +23,16 @@ use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
+use App\Domain\Stock\Events\StockDevenuNegatif;
+use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
+use App\Domain\Stock\Exceptions\StockInsuffisantException;
+use App\Domain\Stock\Services\ConfirmationVenteSansStock;
+use App\Domain\Stock\Services\ManqueDeStock;
+use App\Domain\Stock\Services\VerificateurDeStock;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ActionsUniques;
+use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -70,12 +80,25 @@ use LogicException;
  * alors, s'il le faut, la vérification sur VIES du n° de TVA de son client
  * qui la justifie.
  *
+ * Une vente qui ferait passer sous zéro un produit qui suit son stock
+ * n'est émise que par une personne autorisée à vendre sans stock dans ce
+ * magasin, après l'avertissement qu'elle a confirmé (R1, voir
+ * VerificateurDeStock) : sinon rien n'est numéroté ni signé. Confirmée,
+ * elle s'inscrit au journal d'audit de la société, dans la chaîne du
+ * magasin, et chaque produit devenu négatif est signalé (voir
+ * StockDevenuNegatif).
+ *
+ * L'émission demandée par une personne porte un jeton (R3, voir
+ * ActionsUniques) : répétée après une réponse perdue, elle rend la
+ * facture déjà émise, sans second numéro. Une vente à la caisse l'appelle
+ * sans jeton : la vente porte le sien.
+ *
  * Tout se fait dans une seule transaction, dans cet ordre (art. 286 I-3°
  * bis du CGI) :
  *  1. le registre fiscal du magasin actif est verrouillé, avant toute
  *     lecture, la facture et la numérotation (voir RegistreFiscal) ; il
- *     donne l'instant de l'émission ; le magasin, relu, doit pouvoir
- *     vendre ;
+ *     donne l'instant de l'émission ; le jeton se cherche sous ce verrou ;
+ *     le magasin, relu, doit pouvoir vendre ;
  *  2. l'auteur est relu sous le verrou de sa ligne (voir
  *     LecteurDesDroits::exigerSousVerrou()) : il doit pouvoir émettre
  *     cette facture, et, pour une vente au comptoir réglée à l'émission,
@@ -93,9 +116,11 @@ use LogicException;
  *     du magasin (B7, voir Magasin::delaiDePaiementPour()), jamais dans le
  *     passé : un brouillon n'en a pas. Un ticket n'est plus émis une fois
  *     sa journée clôturée, jusqu'à minuit (voir
- *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()) ;
- *  4. FactureEmise sort le stock, applique le crédit d'avoir du client et
- *     prépare la transmission PDP ;
+ *     ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee()). Ses
+ *     produits se verrouillent, par identifiant croissant, et leur stock se
+ *     contrôle avant la numérotation (voir VerificateurDeStock) ;
+ *  4. FactureEmise sort le stock des produits déjà verrouillés, applique
+ *     le crédit d'avoir du client et prépare la transmission PDP ;
  *  5. le règlement comptant d'une vente au comptoir impute d'abord le
  *     bon d'avoir présenté, s'il y en a un, sur ce que le crédit du client
  *     laisse dû (voir imputerLeBonDAvoir()) ;
@@ -107,7 +132,9 @@ use LogicException;
  *     chaîne des encaissements) ;
  *  6. le document, tel qu'il est alors en base, est signé dans la chaîne
  *     des ventes (voir ContenuFiscal) : client figé, règlement, crédit et
- *     bon d'avoir compris.
+ *     bon d'avoir compris ;
+ *  7. une vente sans stock s'inscrit au journal d'audit, dont la tête de
+ *     la chaîne du magasin se verrouille en dernier ; puis le jeton.
  * Sans clé de signature, ou si l'horloge du serveur a reculé, rien de tout
  * cela n'a lieu : la facture reste un brouillon.
  */
@@ -122,20 +149,31 @@ class EmettreFactureAction
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
         private readonly VerificateurCaissesPersonnelles $caissesPersonnelles,
+        private readonly VerificateurDeStock $stock,
+        private readonly JournalAudit $journalAudit,
+        private readonly ActionsUniques $actionsUniques,
     ) {}
 
     /**
      * @param  ReglementComptant|null  $reglement  le règlement d'une vente au comptoir, encaissé à l'émission
+     * @param  ConfirmationVenteSansStock|null  $confirmation  l'avertissement d'une vente sans stock, confirmé (R1)
+     * @param  string|null  $jeton  le jeton de la demande (R3), null quand une autre action l'appelle
      *
      * @throws AuthorizationException
      * @throws LogicException
+     * @throws StockInsuffisantException
+     * @throws ConfirmationVenteSansStockRequiseException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(User $auteur, Facture $facture, ?ReglementComptant $reglement = null): Facture
+    public function handle(User $auteur, Facture $facture, ?ReglementComptant $reglement = null, ?ConfirmationVenteSansStock $confirmation = null, ?string $jeton = null): Facture
     {
-        return DB::transaction(function () use ($auteur, $facture, $reglement) {
-            $magasin = app(TenantContext::class)->magasin();
+        $magasin = app(TenantContext::class)->magasin();
+
+        return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_FACTURE, $auteur, [
+            'facture_id' => $facture->getKey(),
+            'reglement' => $reglement === null ? null : [$reglement->mode->value, $reglement->reference, $reglement->bonDAvoir?->numero],
+        ], fn () => $this->registre->verrouiller($magasin), fn (): Facture => DB::transaction(function () use ($auteur, $facture, $reglement, $confirmation, $magasin) {
             $instant = $this->registre->verrouiller($magasin);
             Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'emettre', $magasin, $facture);
@@ -146,16 +184,18 @@ class EmettreFactureAction
 
             $this->caissesPersonnelles->refuserSiSaCaisseEstOuverteAilleurs($compte, $magasin);
 
-            return $this->operateur->pendant($compte, fn (): Facture => $this->emettre($compte, $facture, $reglement, $instant));
-        });
+            return $this->operateur->pendant($compte, fn (): Facture => $this->emettre($compte, $facture, $reglement, $confirmation, $instant));
+        }));
     }
 
     /**
      * @throws LogicException
+     * @throws StockInsuffisantException
+     * @throws ConfirmationVenteSansStockRequiseException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    private function emettre(User $compte, Facture $facture, ?ReglementComptant $reglement, InstantFiscal $instant): Facture
+    private function emettre(User $compte, Facture $facture, ?ReglementComptant $reglement, ?ConfirmationVenteSansStock $confirmation, InstantFiscal $instant): Facture
     {
         $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
 
@@ -180,6 +220,7 @@ class EmettreFactureAction
             ClotureCaisse::refuserUneVenteSiLaJourneeEstCloturee($facture->magasin, $instant);
         }
 
+        $manques = $this->stock->verifier($compte, $facture, $confirmation);
         $consultationVies = $this->controleNatureOperation->verifier($facture, $instant->enHeureLocale());
         $numero = $this->numerotation->suivant($facture->magasin, $typeDocument, $instant->enHeureLocale()->format('Y'));
 
@@ -217,7 +258,36 @@ class EmettreFactureAction
             $facture,
         );
 
+        if ($manques !== []) {
+            $this->journaliserLaVenteSansStock($compte, $facture, $manques);
+        }
+
         return $facture;
+    }
+
+    /**
+     * La vente sans stock, confirmée, s'inscrit au journal d'audit de la
+     * société, dans la chaîne du magasin : son numéro et, pour chaque
+     * produit qu'elle a fait passer sous zéro, sa référence, son stock
+     * avant la vente et la quantité vendue. Chaque produit devenu négatif
+     * est signalé une fois la vente validée (voir NotifierLeStockNegatif).
+     *
+     * @param  list<ManqueDeStock>  $manques
+     */
+    private function journaliserLaVenteSansStock(User $compte, Facture $facture, array $manques): void
+    {
+        $this->journalAudit->inscrire(ActionAuditee::VenteSansStock, $compte, $facture->magasin, null, [
+            'vente' => $facture->numero,
+            'produits' => array_map(fn (ManqueDeStock $manque): array => [
+                'reference' => $manque->reference,
+                'stock_avant' => $manque->stockActuel,
+                'quantite' => $manque->quantiteVendue,
+            ], $manques),
+        ], $facture);
+
+        foreach (Produit::withTrashed()->whereKey(array_map(fn (ManqueDeStock $manque): int => $manque->produitId, $manques))->orderBy('id')->get() as $produit) {
+            StockDevenuNegatif::dispatch($produit, $facture->numero);
+        }
     }
 
     /**

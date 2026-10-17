@@ -381,7 +381,9 @@ class InalterabiliteTest extends TestCase
     public function test_une_fiche_que_reference_une_facture_emise_ne_se_supprime_pas_definitivement(Closure $fiche): void
     {
         $magasin = app(TenantContext::class)->magasin();
-        $service = Service::factory()->create();
+        // À son prix de référence : un vendeur ne fixe pas le prix d'un
+        // service (R2).
+        $service = Service::factory()->auPrixDe('30.00', '20')->create();
         $brouillon = app(CreerFactureAction::class)->handle($this->membre($magasin, RoleMagasin::Vendeur), Client::factory()->create(), [
             ['produit_id' => $this->produit()->id, 'quantite' => 1],
             ['service_id' => $service->id, 'quantite' => 1, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20],

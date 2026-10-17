@@ -2,6 +2,7 @@
 
 namespace App\Filament\Concerns;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Actions\TrouverOuCreerServiceAction;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
@@ -56,6 +57,16 @@ use WeakMap;
  * TVA se calculant sur le total de son taux (voir totalDeLigne()). Une
  * vente sans TVA française affiche ses lignes sans TVA, et le prix d'un
  * service s'y saisit sans TVA.
+ *
+ * Remises et prix (R2) : sans l'autorisation « accorder des remises et
+ * fixer le prix d'un service », la remise, le prix d'une ligne et le taux
+ * d'un service sont affichés sans pouvoir se changer (voir
+ * peutAccorderDesRemises()) : une ligne de produit prend le prix de sa
+ * fiche, une ligne de service son prix de référence, et un service sans
+ * prix de référence n'est pas proposé. Ces valeurs partent tout de même
+ * avec le formulaire : une ligne remisée par un responsable et reprise
+ * telle quelle garde sa remise, et le serveur refuse toute valeur changée
+ * (voir DerogationsDePrix).
  */
 trait AjouteDesLignesDeVente
 {
@@ -217,6 +228,12 @@ trait AjouteDesLignesDeVente
                     $set('reference', $produit->reference);
                     $set('prix_unitaire_ttc', self::prixEnTexte((float) $produit->prix_vente_ttc));
                     self::appliquerLeTauxDuProduit($produit, $get, $set);
+
+                    // Sans l'autorisation, changer le produit d'une ligne
+                    // remisée en retire la remise, qu'il ne peut accorder.
+                    if (! self::peutAccorderDesRemises()) {
+                        $set('remise_pourcentage', '0');
+                    }
                 }),
             TextInput::make('description')
                 ->label(fn (Get $get): string => self::estUneLigneDeService($get) ? 'Service' : 'Description')
@@ -229,7 +246,15 @@ trait AjouteDesLignesDeVente
             // met à jour pendant la saisie, pas seulement au clic ailleurs.
             TextInput::make('quantite')->integer()->minValue(1)->required()->default(1)->saisieEnDirect(),
             ...self::champsPrixDeLigne(),
-            TextInput::make('remise_pourcentage')->label('Remise %')->numeric()->minValue(0)->maxValue(100)->default(0)->saisieEnDirect(),
+            TextInput::make('remise_pourcentage')
+                ->label('Remise %')
+                ->numeric()
+                ->minValue(0)
+                ->maxValue(100)
+                ->default(0)
+                ->saisieEnDirect()
+                ->disabled(fn (): bool => ! self::peutAccorderDesRemises())
+                ->dehydrated(),
             self::totalDeLigne(),
         ];
     }
@@ -247,8 +272,10 @@ trait AjouteDesLignesDeVente
      * Le taux d'une ligne de produit est celui de sa fiche (voir
      * ConstructeurLigneDocument) : affiché, il ne se modifie pas et ne
      * part pas avec le formulaire. Celui d'une ligne de service se saisit,
-     * le taux du territoire du magasin par défaut (voir
-     * Magasin::tauxTvaParDefaut()). En franchise en base, toute ligne est à
+     * celui de son prix de référence, sinon le taux du territoire du
+     * magasin, par défaut (voir Magasin::tauxTvaParDefaut()) ; sans
+     * l'autorisation de fixer les prix, le prix et le taux sont affichés
+     * sans se changer (voir peutAccorderDesRemises()). En franchise en base, toute ligne est à
      * 0 % : le taux d'un produit affiche 0, celui d'un service ne se saisit
      * pas. Sans TVA française, le taux d'un produit reste affiché, celui
      * qui est retiré de son prix TTC, et le prix d'un service se saisit
@@ -272,6 +299,9 @@ trait AjouteDesLignesDeVente
                 ->minValue(0)
                 ->saisieEnDirect()
                 ->required()
+                ->disabled(fn (): bool => ! self::peutAccorderDesRemises())
+                ->dehydrated()
+                ->helperText(fn (Get $get): ?string => self::peutAccorderDesRemises() ? null : (self::estUneLigneDeService($get) ? 'Prix de référence du service' : 'Prix de la fiche du produit'))
                 // Le PU HT d'une ligne de produit suit le PU TTC saisi, au
                 // taux affiché ; une ligne de service n'en montre pas, son
                 // HT figure sous son total (voir totalDeLigne()).
@@ -293,7 +323,8 @@ trait AjouteDesLignesDeVente
                 ->maxValue(100)
                 ->required(fn (Get $get): bool => self::estUneLigneDeService($get))
                 ->default(fn (): string => self::pourcentageEnTexte(self::magasin()->tauxTvaParDefaut()))
-                ->disabled(fn (Get $get): bool => ! self::estUneLigneDeService($get))
+                ->disabled(fn (Get $get): bool => ! self::estUneLigneDeService($get) || ! self::peutAccorderDesRemises())
+                ->dehydrated(fn (Get $get): bool => self::estUneLigneDeService($get))
                 ->hidden(fn (Get $get): bool => self::estUneLigneDeService($get) && (self::magasin()->societe->estEnFranchiseDeTva() || self::venteSansTvaFrancaise($get)))
                 ->helperText(fn (Get $get): ?string => match (true) {
                     self::magasin()->societe->estEnFranchiseDeTva() => 'TVA non applicable',
@@ -443,10 +474,12 @@ trait AjouteDesLignesDeVente
 
     /**
      * Cases à cocher des services que le magasin a déjà créés ; un service
-     * qui n'y est pas encore se crée ici et y sera proposé la prochaine
-     * fois (voir TrouverOuCreerServiceAction). Chaque service coché devient
-     * une ligne dont le vendeur saisit le prix, TTC en France, sans TVA
-     * sinon (voir champsPrixDeLigne()). La recherche passe par
+     * qui n'y est pas encore se crée ici, avec son prix de référence pour
+     * qui peut le fixer, et y sera proposé la prochaine fois (voir
+     * TrouverOuCreerServiceAction). Chaque service coché devient une ligne
+     * à son prix de référence, ou, sans prix de référence, dont la personne
+     * autorisée saisit le prix, TTC en France, sans TVA sinon (voir
+     * champsPrixDeLigne()). La recherche passe par
      * le serveur, sans casse ni accents (voir servicesProposes()) : celle
      * d'une liste de cases à cocher de Filament, faite dans le navigateur,
      * tiendrait compte des accents.
@@ -467,18 +500,19 @@ trait AjouteDesLignesDeVente
             ->modalDescription('Cochez les services réalisés : chacun devient une ligne dont vous saisissez le prix.')
             ->modalSubmitActionLabel('Ajouter')
             ->modalWidth(MaxWidth::Large)
-            ->visible(fn (): bool => Service::query()->actifs()->exists() || self::peutCreerUnService())
+            ->visible(fn (): bool => self::servicesVendables()->exists() || self::peutCreerUnService())
             ->form([
                 TextInput::make('recherche')
                     ->label('Rechercher un service')
                     ->placeholder('Ex. : ecran')
                     ->live(debounce: 300)
                     ->dehydrated(false)
-                    ->visible(fn (): bool => Service::query()->actifs()->exists()),
+                    ->visible(fn (): bool => self::servicesVendables()->exists()),
                 CheckboxList::make('services')
                     ->label('Services du magasin')
                     ->options(fn (Get $get): array => self::servicesProposes($get('recherche'), $get('services')))
-                    ->visible(fn (): bool => Service::query()->actifs()->exists())
+                    ->helperText(fn (): ?string => self::peutAccorderDesRemises() ? null : 'Les services dont le prix n\'est pas fixé ne sont pas proposés : demandez à un responsable.')
+                    ->visible(fn (): bool => self::servicesVendables()->exists())
                     ->required(fn (Get $get): bool => blank($get('nouveau_service')))
                     // Pas d'astérisque quand un nouveau service tapé plus
                     // bas dispense de cocher.
@@ -489,13 +523,17 @@ trait AjouteDesLignesDeVente
                     ->content('Aucun service ne correspond.')
                     ->visible(fn (Get $get): bool => filled($get('recherche')) && self::servicesProposes($get('recherche'), $get('services')) === []),
                 TextInput::make('nouveau_service')
-                    ->label(fn (): string => Service::query()->actifs()->exists() ? 'Le service n\'est pas dans la liste ?' : 'Nom du service')
+                    ->label(fn (): string => self::servicesVendables()->exists() ? 'Le service n\'est pas dans la liste ?' : 'Nom du service')
                     ->placeholder('Ex. : Remplacement écran')
                     ->helperText('Il sera ajouté à la liste : la prochaine fois, il suffira de le cocher.')
                     ->maxLength(Service::LONGUEUR_MAXIMALE_NOM)
                     ->rule(fn (): Closure => ServiceResource::regleNomRempli())
-                    ->required(fn (): bool => ! Service::query()->actifs()->exists())
+                    ->required(fn (): bool => ! self::servicesVendables()->exists())
+                    ->live(onBlur: true)
                     ->visible(fn (): bool => self::peutCreerUnService()),
+                ...ServiceResource::champsDuPrixDeReference()
+                    ->map(fn (TextInput $champ): TextInput => $champ->visible(fn (Get $get): bool => self::peutCreerUnService() && self::peutAccorderDesRemises() && filled($get('nouveau_service'))))
+                    ->all(),
             ])
             ->action(fn (array $data, HasForms $livewire) => self::ajouterLesServices($livewire, $data));
     }
@@ -506,11 +544,22 @@ trait AjouteDesLignesDeVente
     }
 
     /**
+     * La personne connectée est-elle autorisée, dans le magasin actif, à
+     * accorder des remises et fixer le prix d'un service (R2) ? Sans, la
+     * remise, le prix et le taux d'une ligne s'affichent sans se changer.
+     */
+    public static function peutAccorderDesRemises(): bool
+    {
+        return auth()->user()?->can(PermissionRegistry::VENTE_REMISES_ET_PRIX) ?? false;
+    }
+
+    /**
      * Les services actifs du magasin (MagasinScope) dont le nom contient
      * le terme cherché, sans casse ni accents (« ecran » trouve
      * « Remplacement écran ») ; ceux déjà cochés restent proposés même
      * s'ils ne correspondent plus au terme, pour rester visibles et
-     * décochables.
+     * décochables. Sans l'autorisation de fixer les prix, seuls ceux qui
+     * ont un prix de référence : un service sans prix fixé ne se vend pas.
      *
      * @return array<int, string>
      */
@@ -519,8 +568,7 @@ trait AjouteDesLignesDeVente
         $recherche = is_string($recherche) ? trim($recherche) : '';
         $coches = array_map('intval', is_array($coches) ? $coches : []);
 
-        return Service::query()
-            ->actifs()
+        return self::servicesVendables()
             ->when($recherche !== '', fn (Builder $services): Builder => $services->where(
                 fn (Builder $services): Builder => RechercheSansAccents::appliquer($services, $recherche, ['nom'])->orWhereKey($coches),
             ))
@@ -531,7 +579,21 @@ trait AjouteDesLignesDeVente
     }
 
     /**
-     * @param  array{services?: list<int|string>|null, nouveau_service?: string|null}  $data
+     * Les services actifs que la personne connectée peut vendre : tous, ou,
+     * sans l'autorisation de fixer les prix, ceux qui ont un prix de
+     * référence.
+     *
+     * @return Builder<Service>
+     */
+    private static function servicesVendables(): Builder
+    {
+        return Service::query()
+            ->actifs()
+            ->when(! self::peutAccorderDesRemises(), fn (Builder $services): Builder => $services->whereNotNull('prix_ttc'));
+    }
+
+    /**
+     * @param  array{services?: list<int|string>|null, nouveau_service?: string|null, prix_ttc?: string|null, taux_tva?: string|null}  $data
      */
     private static function ajouterLesServices(HasForms $livewire, array $data): void
     {
@@ -540,7 +602,7 @@ trait AjouteDesLignesDeVente
 
         if ($nouveauService !== '') {
             try {
-                $nouveau = app(TrouverOuCreerServiceAction::class)->handle(auth()->user(), $nouveauService);
+                $nouveau = app(TrouverOuCreerServiceAction::class)->handle(auth()->user(), $nouveauService, $data['prix_ttc'] ?? null, $data['taux_tva'] ?? null);
             } catch (InvalidArgumentException|AuthorizationException $exception) {
                 Notification::make()->title($exception->getMessage())->danger()->send();
 
@@ -550,7 +612,9 @@ trait AjouteDesLignesDeVente
             if ($nouveau->wasRecentlyCreated) {
                 Notification::make()
                     ->title("Service « {$nouveau->nom} » ajouté à la liste")
-                    ->body('La prochaine fois, il suffira de le cocher.')
+                    ->body($nouveau->aUnPrixDeReference() || self::peutAccorderDesRemises()
+                        ? 'La prochaine fois, il suffira de le cocher.'
+                        : 'Son prix n\'est pas fixé : demandez à un responsable de le fixer pour pouvoir le vendre.')
                     ->success()
                     ->send();
             } elseif ($nouveau->wasChanged('actif')) {
@@ -563,15 +627,27 @@ trait AjouteDesLignesDeVente
             $identifiants[] = $nouveau->id;
         }
 
-        $services = Service::query()->whereKey($identifiants)->get()->keyBy('id');
+        // Seulement ceux que la personne peut vendre : un identifiant envoyé
+        // sans passer par les cases à cocher n'ajoute rien.
+        $services = self::servicesVendables()->whereKey($identifiants)->get()->keyBy('id');
+        $etat = $livewire->getForm('form')->getRawState();
+        $contexte = self::contexteDeVente($etat['client_id'] ?? null, NatureOperation::depuisSaisie($etat['nature_operation'] ?? null));
 
         // Dans l'ordre où le vendeur les a cochés ; le nouveau service en
-        // dernier, une seule fois même s'il était déjà coché.
+        // dernier, une seule fois même s'il était déjà coché. Un service à
+        // prix de référence arrive à ce prix et à son taux.
         foreach (array_unique($identifiants) as $identifiant) {
             $service = $services->get($identifiant);
 
             if ($service !== null) {
-                self::ajouterUneLigne($livewire, ['service_id' => $service->id, 'description' => $service->nom]);
+                self::ajouterUneLigne($livewire, [
+                    'service_id' => $service->id,
+                    'description' => $service->nom,
+                    ...($service->aUnPrixDeReference() ? [
+                        'prix_unitaire_ttc' => self::prixEnTexte((float) $service->prixDeReferenceDans($contexte)),
+                        'taux_tva' => self::pourcentageEnTexte($service->taux_tva),
+                    ] : []),
+                ]);
             }
         }
     }

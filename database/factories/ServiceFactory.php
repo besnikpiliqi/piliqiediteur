@@ -20,6 +20,14 @@ class ServiceFactory extends Factory
         ];
     }
 
+    /**
+     * Un service dont le prix de référence TTC et son taux sont fixés.
+     */
+    public function auPrixDe(string $prixTtc, string $tauxTva = '20'): static
+    {
+        return $this->state(['prix_ttc' => $prixTtc, 'taux_tva' => $tauxTva]);
+    }
+
     public function archive(): static
     {
         return $this->state(['actif' => false]);

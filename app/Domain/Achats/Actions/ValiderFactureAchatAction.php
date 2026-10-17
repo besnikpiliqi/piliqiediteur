@@ -8,9 +8,11 @@ use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -39,7 +41,14 @@ use LogicException;
  * Son auteur est relu sous le verrou de sa ligne, avant la facture d'achat
  * et ses produits (voir LecteurDesDroits) : il doit pouvoir la valider ;
  * un droit retiré pendant que son écran restait ouvert est vu. Les
- * mouvements de stock de la réception notent son nom.
+ * mouvements de stock de la réception notent son nom. Ses produits
+ * existants se verrouillent, par identifiant croissant, après la facture
+ * d'achat et avant la numérotation (voir Produit::verrouillerPourLeStock()).
+ *
+ * La validation demandée par une personne porte un jeton (R3, voir
+ * ActionsUniques), cherché sous le verrou de la ligne de son auteur :
+ * répétée après une réponse perdue, elle rend la facture d'achat déjà
+ * validée, sans faire entrer le stock une seconde fois.
  */
 class ValiderFactureAchatAction
 {
@@ -48,21 +57,29 @@ class ValiderFactureAchatAction
         private readonly ConstructeurLigneAchat $constructeurLignes,
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
+        private readonly ActionsUniques $actionsUniques,
     ) {}
 
     /**
+     * @param  string|null  $jeton  le jeton de la demande (R3)
+     *
      * @throws AuthorizationException
      * @throws LogicException
      */
-    public function handle(User $auteur, FactureAchat $factureAchat): FactureAchat
+    public function handle(User $auteur, FactureAchat $factureAchat, ?string $jeton = null): FactureAchat
     {
-        return DB::transaction(function () use ($auteur, $factureAchat) {
-            $magasin = app(TenantContext::class)->magasin();
+        $magasin = app(TenantContext::class)->magasin();
+        $verrou = function () use ($magasin, $auteur): void {
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail();
+            ActionsUniques::verrouDe($auteur)();
+        };
+
+        return $this->actionsUniques->executer($jeton, ActionsUniques::VALIDER_FACTURE_ACHAT, $auteur, ['facture_achat_id' => $factureAchat->getKey()], $verrou, fn (): FactureAchat => DB::transaction(function () use ($auteur, $factureAchat, $magasin) {
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'valider', $magasin, $factureAchat);
 
             return $this->operateur->pendant($compte, fn (): FactureAchat => $this->valider($factureAchat));
-        });
+        }));
     }
 
     /**
@@ -84,6 +101,7 @@ class ValiderFactureAchatAction
             throw new LogicException("Le produit « {$produitArchive->nom} » a été archivé : restaurez-le depuis le catalogue, ou retirez-le de la facture, avant de la valider.");
         }
 
+        Produit::verrouillerPourLeStock($factureAchat->lignes()->pluck('produit_id'));
         $this->constructeurLignes->creerLesNouveauxProduits($factureAchat);
 
         $numero = $this->numerotation->suivant($factureAchat->magasin, TypeDocument::FactureAchat, now()->format('Y'));

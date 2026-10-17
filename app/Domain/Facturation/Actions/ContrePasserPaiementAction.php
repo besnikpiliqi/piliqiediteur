@@ -15,6 +15,7 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -55,6 +56,10 @@ use LogicException;
  * PaiementPolicy::contrePasser()), et n'encaisse que dans un magasin à la
  * fois (voir VerificateurCaissesPersonnelles). C'est lui que la
  * contre-passation enregistre et que le registre signe.
+ *
+ * La demande porte un jeton (R3, voir ActionsUniques), cherché sous le
+ * verrou du registre : répétée après une réponse perdue, elle rend la
+ * contre-passation déjà enregistrée.
  */
 class ContrePasserPaiementAction
 {
@@ -64,15 +69,18 @@ class ContrePasserPaiementAction
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
         private readonly VerificateurCaissesPersonnelles $caissesPersonnelles,
+        private readonly ActionsUniques $actionsUniques,
     ) {}
 
     /**
+     * @param  string|null  $jeton  le jeton de la demande (R3)
+     *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(User $auteur, Paiement $paiementErrone, string $motif): Paiement
+    public function handle(User $auteur, Paiement $paiementErrone, string $motif, ?string $jeton = null): Paiement
     {
         $motif = trim($motif);
 
@@ -80,8 +88,9 @@ class ContrePasserPaiementAction
             throw new LogicException('Indiquez le motif de la contre-passation.');
         }
 
-        return DB::transaction(function () use ($auteur, $paiementErrone, $motif) {
-            $magasin = app(TenantContext::class)->magasin();
+        $magasin = app(TenantContext::class)->magasin();
+
+        return $this->actionsUniques->executer($jeton, ActionsUniques::CONTRE_PASSER_PAIEMENT, $auteur, ['paiement_id' => $paiementErrone->getKey(), 'motif' => $motif], fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $paiementErrone, $motif, $magasin) {
             $journee = $this->registre->verrouiller($magasin)->enHeureLocale();
             $original = Paiement::query()->whereKey($paiementErrone->getKey())->firstOrFail();
 
@@ -99,7 +108,7 @@ class ContrePasserPaiementAction
             $this->caissesPersonnelles->refuserSiSaCaisseEstOuverteAilleurs($compte, $magasin);
 
             return $this->operateur->pendant($compte, fn (): Paiement => $this->contrePasser($compte, $original, $motif, $journee));
-        });
+        }));
     }
 
     /**

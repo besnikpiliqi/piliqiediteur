@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
 use App\Domain\Facturation\Notifications\FacturesPasseesEnRetard;
+use App\Domain\Stock\Notifications\StockNegatif;
 use App\Domain\Stock\Notifications\StockSousLeSeuilDAlerte;
 use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Notifications\AvisDeVerification;
@@ -49,6 +50,7 @@ class NotificationsDeLaSocieteTest extends TestCase
             EnvoiDocumentEchoue::class => new EnvoiDocumentEchoue($envoi),
             FacturesPasseesEnRetard::class => new FacturesPasseesEnRetard($magasin, ['FAC-MABOUT-2026-000001']),
             StockSousLeSeuilDAlerte::class => new StockSousLeSeuilDAlerte(Produit::factory()->create()),
+            StockNegatif::class => new StockNegatif(Produit::factory()->create(), 'T-MABOUT-2026-000001'),
             StockDuMagasinCede::class => new StockDuMagasinCede($magasin, '28.75', []),
         ];
 
@@ -58,7 +60,7 @@ class NotificationsDeLaSocieteTest extends TestCase
             $donnee = $proprietaire->notifications()->where('type', $classe)->sole()->data;
             $this->assertSame((int) $societe->id, (int) $donnee['societe_id'], $classe);
         }
-        foreach ([EnvoiDocumentEchoue::class, FacturesPasseesEnRetard::class, StockSousLeSeuilDAlerte::class, StockDuMagasinCede::class] as $classe) {
+        foreach ([EnvoiDocumentEchoue::class, FacturesPasseesEnRetard::class, StockSousLeSeuilDAlerte::class, StockNegatif::class, StockDuMagasinCede::class] as $classe) {
             $this->assertSame((int) $magasin->id, (int) $proprietaire->notifications()->where('type', $classe)->sole()->data['magasin_id'], $classe);
         }
     }

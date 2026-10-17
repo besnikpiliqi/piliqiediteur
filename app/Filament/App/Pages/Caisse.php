@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Exceptions\RefusFiscalException;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
@@ -14,9 +15,13 @@ use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Recherche\RechercheSansAccents;
+use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
+use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
+use App\Filament\Concerns\AvertitDUneVenteSansStock;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Closure;
 use Filament\Actions;
@@ -38,8 +43,10 @@ use Filament\Support\Enums\MaxWidth;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
 use InvalidArgumentException;
+use Livewire\Attributes\Locked;
 use LogicException;
 
 /**
@@ -83,10 +90,24 @@ use LogicException;
  * son crédit restant est déduit de ce que le crédit d'avoir du client
  * laisse à payer, puis imputé sur la facture à l'encaissement, qui relit
  * le bon sous le verrou du registre (voir EnregistrerVenteCaisseAction).
+ *
+ * Une vente au-delà du stock (R1) est refusée à qui n'est pas autorisé à
+ * vendre sans stock ; à qui l'est, la caisse montre d'abord
+ * l'avertissement que renvoie l'encaissement (« Le stock de Câble USB
+ * passera à −2 : confirmer la vente ? »), et n'encaisse qu'après sa
+ * confirmation, renouvelée si le stock a encore baissé entre-temps (voir
+ * confirmerLaVenteSansStockAction()).
+ *
+ * La vente porte le jeton de son panier (R3, voir PanierDeCaisse et
+ * ActionsUniques), que la page garde ($jetonDeLaVente) : un encaissement
+ * renvoyé après une réponse perdue retrouve le ticket déjà enregistré, et
+ * la caisse rechargée, vide, rappelle la dernière vente enregistrée (voir
+ * derniereVenteEnregistree()). Chaque nouvelle vente, encaissée ou
+ * abandonnée, prend un nouveau jeton.
  */
 class Caisse extends Page implements HasForms
 {
-    use GereLesExceptionsMetier, InteractsWithForms;
+    use AvertitDUneVenteSansStock, GereLesExceptionsMetier, InteractsWithForms;
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
 
@@ -110,6 +131,14 @@ class Caisse extends Page implements HasForms
      */
     public array $data = [];
 
+    /**
+     * Le jeton de la vente en cours (R3) : celui du panier enregistré, ou
+     * celui que prendra le prochain panier. Jamais envoyé par le
+     * navigateur : la page seule le change.
+     */
+    #[Locked]
+    public string $jetonDeLaVente = '';
+
     public static function canAccess(): bool
     {
         return auth()->user()?->can([
@@ -127,6 +156,7 @@ class Caisse extends Page implements HasForms
     {
         $panier = app(PanierDeCaisse::class)->enCours(auth()->user());
 
+        $this->jetonDeLaVente = $panier->jeton ?? (string) Str::uuid();
         $this->remplirFormulaire($panier);
 
         if ($panier !== null) {
@@ -162,12 +192,47 @@ class Caisse extends Page implements HasForms
     }
 
     /**
+     * Le panier s'enregistre tel que le vendeur le voit, et la page reprend
+     * le jeton du panier enregistré.
+     *
      * @throws LogicException
      * @throws RefusFiscalException
      */
     private function enregistrerLePanier(): void
     {
-        app(PanierDeCaisse::class)->enregistrer(auth()->user(), $this->data['client_id'] ?? null, $this->data['lignes'] ?? []);
+        $panier = app(PanierDeCaisse::class)->enregistrer(auth()->user(), $this->jetonDeLaVente, $this->data['client_id'] ?? null, $this->data['lignes'] ?? []);
+
+        if ($panier !== null) {
+            $this->jetonDeLaVente = $panier->jeton;
+        }
+    }
+
+    /**
+     * La caisse passe à une nouvelle vente, sous un nouveau jeton : le
+     * formulaire se vide.
+     */
+    private function commencerUneNouvelleVente(): void
+    {
+        $this->jetonDeLaVente = (string) Str::uuid();
+        $this->remplirFormulaire(null);
+    }
+
+    /**
+     * « Dernière vente enregistrée : ticket N° T-... », la dernière vente
+     * que le vendeur a encaissée dans ce magasin (voir
+     * ActionsUniques::dernierResultat()) : la caisse rechargée après une
+     * réponse perdue, son panier vidé par l'encaissement, dit ainsi que la
+     * vente est faite. Null s'il n'en a encaissé aucune depuis 30 jours.
+     */
+    public function derniereVenteEnregistree(): ?string
+    {
+        $facture = app(ActionsUniques::class)->dernierResultat(ActionsUniques::VENDRE_A_LA_CAISSE, auth()->user());
+
+        if (! $facture instanceof Facture) {
+            return null;
+        }
+
+        return 'Dernière vente enregistrée : '.($facture->serie() === TypeDocument::TicketCaisse ? 'ticket' : 'facture')." N° {$facture->numero}";
     }
 
     /**
@@ -363,18 +428,56 @@ class Caisse extends Page implements HasForms
                 ->visible(fn (): bool => $this->lignesRenseignees() !== [])
                 ->action(function (): void {
                     try {
-                        app(PanierDeCaisse::class)->abandonner(auth()->user(), $this->data['client_id'] ?? null, $this->data['lignes'] ?? []);
+                        app(PanierDeCaisse::class)->abandonner(auth()->user(), $this->jetonDeLaVente, $this->data['client_id'] ?? null, $this->data['lignes'] ?? []);
                     } catch (LogicException|RefusFiscalException $refus) {
                         static::notifierLeRefus($refus);
 
                         return;
                     }
 
-                    $this->remplirFormulaire(null);
+                    $this->commencerUneNouvelleVente();
 
                     Notification::make()->title('Vente abandonnée')->success()->send();
                 }),
         ];
+    }
+
+    /**
+     * L'avertissement d'une vente sans stock (R1), ouvert par encaisser()
+     * avec les manques que l'encaissement a trouvés et la confirmation qui
+     * les accepte ; confirmé, la vente s'encaisse avec cette confirmation.
+     * Le serveur revérifie l'autorisation et le stock : une confirmation
+     * devenue insuffisante garde la fenêtre ouverte, avec le stock du
+     * moment.
+     */
+    public function confirmerLaVenteSansStockAction(): Actions\Action
+    {
+        return Actions\Action::make('confirmerLaVenteSansStock')
+            ->modalHeading('Vendre sans stock ?')
+            ->modalIcon('heroicon-o-exclamation-triangle')
+            ->modalIconColor('warning')
+            ->modalDescription(fn (array $arguments): HtmlString => static::descriptionDeLAvertissement($arguments))
+            ->modalSubmitActionLabel('Confirmer la vente')
+            ->action(function (array $arguments, Actions\Action $action): void {
+                try {
+                    $confirmation = static::confirmationDesArguments($arguments);
+                } catch (InvalidArgumentException $illisible) {
+                    static::notifierLeRefus($illisible);
+
+                    return;
+                }
+
+                $avertissement = $this->vendre($confirmation);
+
+                if ($avertissement === null) {
+                    return;
+                }
+
+                $nouveaux = static::argumentsDeLAvertissement($avertissement);
+                $this->mountedActionsArguments[array_key_last($this->mountedActionsArguments)] = $nouveaux;
+                $action->arguments($nouveaux);
+                $action->halt();
+            });
     }
 
     /**
@@ -435,11 +538,27 @@ class Caisse extends Page implements HasForms
      * Filament revérifie canAccess() à chaque requête, et la caisse le
      * revérifie elle-même avant d'émettre et d'encaisser, sans dépendre de
      * ce comportement du panneau ; de même pour la journée clôturée, qui
-     * ne fait pas que désactiver le bouton. Le panier s'enregistre juste
-     * avant la vente : ce qu'il a perdu dans la même requête s'inscrit au
-     * journal des événements avant d'être encaissé.
+     * ne fait pas que désactiver le bouton. Une vente au-delà du stock
+     * n'est encaissée qu'après l'avertissement confirmé (voir
+     * confirmerLaVenteSansStockAction()).
      */
     public function encaisser(): void
+    {
+        $avertissement = $this->vendre(null);
+
+        if ($avertissement !== null) {
+            $this->mountAction('confirmerLaVenteSansStock', static::argumentsDeLAvertissement($avertissement));
+        }
+    }
+
+    /**
+     * Encaisse la vente du panier, avec la confirmation d'un avertissement
+     * de vente sans stock s'il y en a une. Le panier s'enregistre juste
+     * avant la vente : ce qu'il a perdu dans la même requête s'inscrit au
+     * journal des événements avant d'être encaissé. Un refus s'affiche ;
+     * un avertissement est rendu, pour que la fenêtre le montre.
+     */
+    private function vendre(?ConfirmationVenteSansStock $confirmation): ?ConfirmationVenteSansStockRequiseException
     {
         abort_unless(static::canAccess(), 403);
 
@@ -448,7 +567,7 @@ class Caisse extends Page implements HasForms
         if ($journeeCloturee !== null) {
             Notification::make()->title($journeeCloturee)->danger()->send();
 
-            return;
+            return null;
         }
 
         $data = $this->form->getState();
@@ -465,11 +584,15 @@ class Caisse extends Page implements HasForms
                 $modePaiement,
                 $data['reference'] ?? null,
                 $data['bon_d_avoir'] ?? null,
+                $confirmation,
+                $this->jetonDeLaVente,
             );
+        } catch (ConfirmationVenteSansStockRequiseException $avertissement) {
+            return $avertissement;
         } catch (LogicException|AuthorizationException|RefusFiscalException $exception) {
             static::notifierLeRefus($exception);
 
-            return;
+            return null;
         }
 
         Notification::make()
@@ -478,7 +601,9 @@ class Caisse extends Page implements HasForms
             ->success()
             ->send();
 
-        $this->remplirFormulaire(null);
+        $this->commencerUneNouvelleVente();
+
+        return null;
     }
 
     /**

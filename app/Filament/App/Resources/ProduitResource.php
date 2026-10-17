@@ -273,11 +273,16 @@ class ProduitResource extends Resource
                 Tables\Columns\TextColumn::make('nom')->rechercheSansAccents()->sortable(),
                 Tables\Columns\TextColumn::make('prix_vente_ttc')->label('PV TTC')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('taux_tva')->label('TVA')->numeric(maxDecimalPlaces: 2)->suffix(' %'),
+                // Une quantité négative, laissée par une vente sans stock
+                // (R1), reste en rouge, « À régulariser », jusqu'à un achat,
+                // une réception ou un inventaire qui la ramène à zéro ou
+                // au-dessus.
                 Tables\Columns\TextColumn::make('stock_quantite')
                     ->label('Stock')
                     ->formatStateUsing(fn (Produit $record) => $record->suivi_stock
                         ? Number::format($record->stock_quantite, locale: config('app.locale'))
                         : '—')
+                    ->description(fn (Produit $record): ?string => $record->estEnStockNegatif() ? 'À régulariser' : null)
                     ->badge()
                     ->color(fn (Produit $record) => ! $record->suivi_stock
                         ? 'gray'
@@ -296,10 +301,12 @@ class ProduitResource extends Resource
                     ->options([
                         'en_stock' => 'En stock',
                         'epuise' => 'Épuisé',
+                        'negatif' => 'Stock négatif',
                     ])
                     ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
                         'en_stock' => $query->where('suivi_stock', true)->where('stock_quantite', '>', 0),
                         'epuise' => $query->where('suivi_stock', true)->where('stock_quantite', '<=', 0),
+                        'negatif' => $query->enStockNegatif(),
                         default => $query,
                     }),
                 static::filtreDesArchives(),

@@ -26,7 +26,9 @@ use Illuminate\Support\Facades\Gate;
  * hors des choix proposés (voir PaiementResource). La page elle-même
  * exige l'autorisation d'enregistrer un paiement (voir
  * PaiementPolicy::create()). Ce qui reste dû de chaque facture se
- * vérifie ensuite sous verrou par l'action, avec son message.
+ * vérifie ensuite sous verrou par l'action, avec son message. Le paiement
+ * porte le jeton du formulaire (R3) : renvoyé après une réponse perdue,
+ * il n'est enregistré qu'une fois.
  */
 class CreatePaiement extends CreateRecord
 {
@@ -62,6 +64,6 @@ class CreatePaiement extends CreateRecord
             'reference' => $data['reference'] ?? null,
             'notes' => $data['notes'] ?? null,
             'recu_le' => $data['recu_le'],
-        ], $allocations));
+        ], $allocations, $data['jeton']));
     }
 }

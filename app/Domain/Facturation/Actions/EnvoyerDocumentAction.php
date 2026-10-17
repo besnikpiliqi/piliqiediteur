@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -56,6 +57,11 @@ use LogicException;
  * au moment de partir, il le peut encore (voir EnvoyerDocumentJob). La
  * relance automatique (relanceAutomatique()) est celle du système, sans
  * auteur.
+ *
+ * Un envoi ou une relance demandé par une personne porte un jeton (R3,
+ * voir ActionsUniques), cherché sous le verrou de la ligne de son auteur :
+ * répété après une réponse perdue, il rend l'envoi déjà noté, et
+ * l'e-mail ne part qu'une fois.
  */
 class EnvoyerDocumentAction
 {
@@ -63,6 +69,7 @@ class EnvoyerDocumentAction
         private readonly EmettreDevisAction $emettreDevis,
         private readonly LecteurDesDroits $lecteur,
         private readonly DebitDesEmails $debit,
+        private readonly ActionsUniques $actionsUniques,
     ) {}
 
     /**
@@ -72,16 +79,18 @@ class EnvoyerDocumentAction
      * « envoyée », sans qu'aucun autre statut ne change.
      *
      * @param  Facture|Devis|Avoir  $document
+     * @param  string|null  $jeton  le jeton de la demande (R3)
      *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws DocumentSansEnregistrementSigneException
      */
-    public function handle(User $auteur, DocumentEnvoyable $document, string $destinataire, ?string $message): EnvoiDocument
+    public function handle(User $auteur, DocumentEnvoyable $document, string $destinataire, ?string $message, ?string $jeton = null): EnvoiDocument
     {
         $destinataire = $this->destinataireValide($destinataire);
+        $parametres = ['document' => [$document->getMorphClass(), $document->getKey()], 'destinataire' => $destinataire, 'message' => $message];
 
-        return DB::transaction(function () use ($auteur, $document, $destinataire, $message) {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::ENVOYER_DOCUMENT, $auteur, $parametres, ActionsUniques::verrouDe($auteur), fn (): EnvoiDocument => DB::transaction(function () use ($auteur, $document, $destinataire, $message) {
             $expediteur = $this->expediteur($auteur, $document);
             $document = $this->verrouiller($document);
             $this->verifierLeDebit($document, $expediteur);
@@ -107,7 +116,7 @@ class EnvoyerDocumentAction
             ]);
 
             return $this->programmer($envoi, $expediteur);
-        });
+        }));
     }
 
     /**
@@ -122,15 +131,17 @@ class EnvoyerDocumentAction
      *
      * Demandée par une personne, à l'adresse qu'elle donne.
      *
+     * @param  string|null  $jeton  le jeton de la demande (R3)
+     *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws DocumentSansEnregistrementSigneException
      */
-    public function relancer(User $auteur, Facture $facture, string $destinataire): EnvoiDocument
+    public function relancer(User $auteur, Facture $facture, string $destinataire, ?string $jeton = null): EnvoiDocument
     {
         $destinataire = $this->destinataireValide($destinataire);
 
-        return DB::transaction(fn (): EnvoiDocument => $this->relance($facture, $destinataire, $this->expediteur($auteur, $facture)));
+        return $this->actionsUniques->executer($jeton, ActionsUniques::RELANCER_FACTURE, $auteur, ['facture_id' => $facture->getKey(), 'destinataire' => $destinataire], ActionsUniques::verrouDe($auteur), fn (): EnvoiDocument => DB::transaction(fn (): EnvoiDocument => $this->relance($facture, $destinataire, $this->expediteur($auteur, $facture))));
     }
 
     /**

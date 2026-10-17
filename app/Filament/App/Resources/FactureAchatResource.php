@@ -2,8 +2,7 @@
 
 namespace App\Filament\App\Resources;
 
-use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
-use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
+use App\Domain\Achats\Actions\EnregistrerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutFactureAchat;
@@ -14,6 +13,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDAchat;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\PorteUnJeton;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
@@ -45,6 +45,7 @@ class FactureAchatResource extends Resource
 {
     use AjouteDesLignesDAchat;
     use GereLesExceptionsMetier;
+    use PorteUnJeton;
     use SaisitUneQuantiteRetournee;
     use SupprimeEnMasseLigneParLigne;
 
@@ -191,13 +192,15 @@ class FactureAchatResource extends Resource
                     ->color('success')
                     ->requiresConfirmation()
                     ->modalDescription('Un numéro définitif sera attribué et le stock des produits sera incrémenté. Cette action est irréversible.')
+                    ->form([self::champDuJeton()])
                     ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Brouillon && auth()->user()->can('valider', $record))
-                    ->action(fn (FactureAchat $record) => static::executerSansCasser(fn () => app(ValiderFactureAchatAction::class)->handle(auth()->user(), $record))),
+                    ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(fn () => app(ValiderFactureAchatAction::class)->handle(auth()->user(), $record, $data['jeton']))),
                 Tables\Actions\Action::make('avoir_fournisseur')
                     ->label('Avoir fournisseur')
                     ->icon('heroicon-o-arrow-uturn-left')
                     ->color('danger')
                     ->form(fn (FactureAchat $record) => [
+                        self::champDuJeton(),
                         // Sélection des lignes/quantités à retourner : un
                         // produit déjà vendu est automatiquement exclu, voir
                         // LigneAchat::quantiteRetournableRestante().
@@ -223,10 +226,7 @@ class FactureAchatResource extends Resource
                     ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Validee
                         && $record->possedeDesLignesRetournables()
                         && auth()->user()->can(PermissionRegistry::AVOIR_FOURNISSEUR_CREER))
-                    ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(function () use ($record, $data) {
-                        $avoir = app(CreerAvoirFournisseurAction::class)->handle(auth()->user(), $record, $data['lignes'], $data['motif']);
-                        app(EmettreAvoirFournisseurAction::class)->handle(auth()->user(), $avoir);
-                    })),
+                    ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(fn () => app(EnregistrerAvoirFournisseurAction::class)->handle(auth()->user(), $record, $data['lignes'], $data['motif'], $data['jeton']))),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

@@ -38,7 +38,7 @@ class TransmissionPdpTest extends TestCase
 
     private function emettreFacturePour(Client $client): Facture
     {
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);

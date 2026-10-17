@@ -13,8 +13,10 @@ use Illuminate\Database\Eloquent\Model;
  * répéteur de la caisse. Écrit seulement par PanierDeCaisse, qui inscrit
  * au journal des événements tout ce que le panier perd avant
  * l'encaissement. Pas un document fiscal : il s'efface quand la vente est
- * encaissée ou abandonnée.
+ * encaissée ou abandonnée. Son jeton est celui de la vente (R3, voir
+ * ActionsUniques).
  *
+ * @property string $jeton
  * @property array<string, array{produit_id: int|null, service_id: int|null, description: string|null, reference: string|null, quantite: int, prix_unitaire_ht: string|null, prix_unitaire_ttc: string|null, taux_tva: string|null, remise_pourcentage: string|null}> $lignes
  */
 class PanierCaisse extends Model

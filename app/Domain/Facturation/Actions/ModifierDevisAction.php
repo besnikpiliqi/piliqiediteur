@@ -6,9 +6,11 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -30,7 +32,10 @@ use LogicException;
  * Comme CreerDevisAction, elle reçoit le client déjà résolu par une
  * requête limitée au magasin, jamais un client_id brut venu du formulaire,
  * et note de nouveau son type, le régime de TVA du magasin et la nature de
- * l'opération, avec lesquels les lignes se recalculent.
+ * l'opération, avec lesquels les lignes se recalculent. Une remise ou un
+ * prix dérogatoire que son auteur introduit exige qu'il soit autorisé à
+ * accorder des remises et fixer les prix ; une ligne reprise telle quelle
+ * garde l'accord déjà donné (R2, voir DerogationsDePrix).
  */
 class ModifierDevisAction
 {
@@ -38,6 +43,7 @@ class ModifierDevisAction
         private readonly ConstructeurLigneDocument $constructeurLigne,
         private readonly CalculateurLigne $calculateurLigne,
         private readonly LecteurDesDroits $lecteur,
+        private readonly DerogationsDePrix $derogations,
     ) {}
 
     /**
@@ -60,17 +66,17 @@ class ModifierDevisAction
                 });
             }
 
-            $this->lecteur->exiger($auteur, 'update', $devis->magasin, $devis);
+            $compte = $this->lecteur->exiger($auteur, 'update', $devis->magasin, $devis);
 
             $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $devis->fill($attributs)->noterSaNatureDOperation($attributs));
+            $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
+            $this->derogations->exiger($compte, $devis->lignes->map(fn (LigneDevis $ligne): array => $ligne->attributesToArray())->all(), $lignesConstruites, $contexte);
             $devis->forceFill([
                 'client_id' => $client->getKey(),
                 ...$contexte->colonnes(),
                 'statut' => StatutDevis::Brouillon,
             ])->save();
             $devis->lignes()->delete();
-
-            $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
 
             foreach ($lignesConstruites as $ligne) {
                 $devis->lignes()->create($ligne);

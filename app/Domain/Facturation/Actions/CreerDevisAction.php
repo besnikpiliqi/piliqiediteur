@@ -8,6 +8,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -22,7 +23,9 @@ use Illuminate\Support\Facades\DB;
  * NoteSaNatureDOperation), que reprend la facture qui en est tirée (voir
  * CreerFactureDepuisDevisAction). Son auteur, relu en base au moment où
  * elle écrit, doit pouvoir créer un devis dans le magasin actif (voir
- * LecteurDesDroits).
+ * LecteurDesDroits), et être autorisé à accorder des remises et fixer les
+ * prix pour une ligne remisée ou à un autre prix que celui de la fiche du
+ * produit ou du prix de référence du service (R2, voir DerogationsDePrix).
  */
 class CreerDevisAction
 {
@@ -30,6 +33,7 @@ class CreerDevisAction
         private readonly ConstructeurLigneDocument $constructeurLigne,
         private readonly CalculateurLigne $calculateurLigne,
         private readonly LecteurDesDroits $lecteur,
+        private readonly DerogationsDePrix $derogations,
     ) {}
 
     /**
@@ -41,12 +45,12 @@ class CreerDevisAction
     public function handle(User $auteur, Client $client, array $lignes, array $attributs = []): Devis
     {
         return DB::transaction(function () use ($auteur, $client, $lignes, $attributs) {
-            $this->lecteur->exiger($auteur, 'create', app(TenantContext::class)->magasin(), Devis::class);
+            $compte = $this->lecteur->exiger($auteur, 'create', app(TenantContext::class)->magasin(), Devis::class);
             $devis = new Devis($attributs);
             $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $devis->noterSaNatureDOperation($attributs));
-            $devis->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
-
             $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
+            $this->derogations->exiger($compte, [], $lignesConstruites, $contexte);
+            $devis->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
 
             foreach ($lignesConstruites as $ligne) {
                 $devis->lignes()->create($ligne);

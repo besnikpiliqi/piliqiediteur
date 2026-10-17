@@ -9,6 +9,7 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -73,20 +74,26 @@ class FermerSaCaisseAction
     public function __construct(
         private readonly CalculateurLigne $calculateur,
         private readonly LecteurDesDroits $lecteur,
+        private readonly ActionsUniques $actionsUniques,
     ) {}
 
     /**
      * L'auteur ferme sa propre caisse, ou celle d'un autre vendeur pour
      * lui s'il est autorisé à clôturer la journée : tout ce qui n'est pas
-     * encore compté jusqu'à maintenant.
+     * encore compté jusqu'à maintenant. La demande porte un jeton (R3,
+     * voir ActionsUniques), cherché sous le verrou des lignes de l'auteur
+     * et du vendeur : répétée après une réponse perdue, elle rend le relevé
+     * déjà fermé, au lieu d'en fermer un second, à zéro.
+     *
+     * @param  string|null  $jeton  le jeton de la demande (R3)
      *
      * @throws AuthorizationException quand l'auteur n'est pas, ou plus, autorisé à fermer cette caisse
      */
-    public function handle(User $auteur, User $vendeur): ClotureCaissePersonnelle
+    public function handle(User $auteur, User $vendeur, ?string $jeton = null): ClotureCaissePersonnelle
     {
         $saPropreCaisse = $auteur->is($vendeur);
 
-        return DB::transaction(function () use ($auteur, $vendeur, $saPropreCaisse): ClotureCaissePersonnelle {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::FERMER_UNE_CAISSE, $auteur, ['vendeur_id' => $vendeur->getKey()], ActionsUniques::verrouDe($auteur, $vendeur), fn (): ClotureCaissePersonnelle => DB::transaction(function () use ($auteur, $vendeur, $saPropreCaisse): ClotureCaissePersonnelle {
             User::query()->whereKey([$auteur->getKey(), $vendeur->getKey()])->orderBy('id')->lock('for no key update')->get();
             $magasin = app(TenantContext::class)->magasin();
             $compte = $saPropreCaisse
@@ -94,7 +101,7 @@ class FermerSaCaisseAction
                 : $this->lecteur->exigerSousVerrou($auteur, 'fermerLaCaisseDe', $magasin, [ClotureCaissePersonnelle::class, $vendeur]);
 
             return $this->fermer($vendeur, $saPropreCaisse ? ModeFermetureCaisse::Vendeur : ModeFermetureCaisse::Responsable, $compte, CarbonImmutable::now(), memeAZero: true);
-        });
+        }));
     }
 
     /**

@@ -40,7 +40,7 @@ class FacturesApercuWidgetTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
         foreach (range(1, 2) as $_) {
             Livewire::test(CreateFacture::class)->fillForm([
                 'client_id' => $client->id,

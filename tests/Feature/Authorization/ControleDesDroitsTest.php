@@ -84,6 +84,8 @@ class ControleDesDroitsTest extends TestCase
             PermissionRegistry::PRODUIT_ARCHIVER,
             PermissionRegistry::PRODUIT_AJUSTER_STOCK,
             PermissionRegistry::PRIX_VENTE_REGLER,
+            PermissionRegistry::STOCK_VENDRE_SANS_STOCK,
+            PermissionRegistry::VENTE_REMISES_ET_PRIX,
             PermissionRegistry::DEVIS_CREATE,
             PermissionRegistry::DEVIS_UPDATE,
             PermissionRegistry::DEVIS_ENVOYER,

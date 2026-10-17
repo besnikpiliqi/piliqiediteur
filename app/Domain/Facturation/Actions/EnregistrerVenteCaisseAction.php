@@ -13,7 +13,11 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
+use App\Domain\Stock\Exceptions\StockInsuffisantException;
+use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -51,7 +55,16 @@ use LogicException;
  * du registre (voir LecteurDesDroits) : il doit pouvoir créer et émettre
  * une facture et enregistrer un paiement dans ce magasin. Les actions
  * qu'elle compose reçoivent ce même auteur, relu : c'est lui que la vente
- * enregistre et que le registre signe.
+ * enregistre et que le registre signe. Une ligne remisée, ou à un autre
+ * prix que celui de sa fiche, exige qu'il soit autorisé à accorder des
+ * remises et fixer les prix (R2, voir CreerFactureAction), et une vente
+ * au-delà du stock qu'il soit autorisé à vendre sans stock et ait
+ * confirmé l'avertissement (R1, voir EmettreFactureAction).
+ *
+ * La vente porte le jeton de son panier (R3, voir ActionsUniques et
+ * PanierDeCaisse) : répétée après une réponse perdue, elle rend le ticket
+ * déjà enregistré, sans second ticket ni second encaissement. L'émission
+ * et le paiement qu'elle compose n'en consomment aucun.
  */
 class EnregistrerVenteCaisseAction
 {
@@ -61,21 +74,46 @@ class EnregistrerVenteCaisseAction
         private readonly EmettreFactureAction $emettreFacture,
         private readonly PanierDeCaisse $panierDeCaisse,
         private readonly LecteurDesDroits $lecteur,
+        private readonly ActionsUniques $actionsUniques,
     ) {}
 
     /**
      * @param  list<array<string, mixed>>  $lignes
      * @param  string|null  $bonDAvoir  le numéro du bon d'avoir présenté (AV-...)
+     * @param  ConfirmationVenteSansStock|null  $confirmation  l'avertissement d'une vente sans stock, confirmé (R1)
+     * @param  string|null  $jeton  le jeton du panier (R3)
+     *
+     * @throws AuthorizationException
+     * @throws LogicException
+     * @throws StockInsuffisantException
+     * @throws ConfirmationVenteSansStockRequiseException
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function handle(User $auteur, Client $client, array $lignes, ModePaiement $modePaiement, ?string $reference = null, ?string $bonDAvoir = null, ?ConfirmationVenteSansStock $confirmation = null, ?string $jeton = null): Facture
+    {
+        $magasin = app(TenantContext::class)->magasin();
+
+        return $this->actionsUniques->executer($jeton, ActionsUniques::VENDRE_A_LA_CAISSE, $auteur, [
+            'client_id' => $client->getKey(),
+            'lignes' => self::lignesCanoniques($lignes),
+            'mode_paiement' => $modePaiement->value,
+            'reference' => $reference,
+            'bon_d_avoir' => $bonDAvoir,
+        ], fn () => $this->registre->verrouiller($magasin), fn (): Facture => $this->vendre($auteur, $magasin, $client, $lignes, $modePaiement, $reference, $bonDAvoir, $confirmation));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $lignes
      *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(User $auteur, Client $client, array $lignes, ModePaiement $modePaiement, ?string $reference = null, ?string $bonDAvoir = null): Facture
+    private function vendre(User $auteur, Magasin $magasin, Client $client, array $lignes, ModePaiement $modePaiement, ?string $reference, ?string $bonDAvoir, ?ConfirmationVenteSansStock $confirmation): Facture
     {
-        return DB::transaction(function () use ($auteur, $client, $lignes, $modePaiement, $reference, $bonDAvoir) {
-            $magasin = app(TenantContext::class)->magasin();
+        return DB::transaction(function () use ($auteur, $magasin, $client, $lignes, $modePaiement, $reference, $bonDAvoir, $confirmation) {
             $this->registre->verrouiller($magasin);
             Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
             $vendeur = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::FACTURE_CREATE, $magasin);
@@ -93,12 +131,32 @@ class EnregistrerVenteCaisseAction
                 $vendeur,
                 $this->creerFacture->handle($vendeur, $client, $lignes),
                 new ReglementComptant($modePaiement, $reference, $bon),
+                $confirmation,
             );
 
             $this->panierDeCaisse->vider($vendeur);
 
             return $facture->fresh('lignes');
         });
+    }
+
+    /**
+     * Les lignes de la vente telles qu'elles la distinguent d'une autre :
+     * l'article, la quantité, le prix, le taux et la remise saisis, en
+     * texte, dans leur ordre.
+     *
+     * @param  list<array<string, mixed>>  $lignes
+     * @return list<list<string|null>>
+     */
+    private static function lignesCanoniques(array $lignes): array
+    {
+        return array_map(
+            fn (mixed $ligne): array => array_map(
+                fn (string $champ): ?string => is_array($ligne) && is_scalar($ligne[$champ] ?? null) && (string) $ligne[$champ] !== '' ? trim((string) $ligne[$champ]) : null,
+                ['produit_id', 'service_id', 'quantite', 'prix_unitaire_ttc', 'taux_tva', 'remise_pourcentage'],
+            ),
+            array_values($lignes),
+        );
     }
 
     /**

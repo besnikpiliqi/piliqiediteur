@@ -7,8 +7,10 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Les services (main-d'œuvre, réparations...) que le magasin a déjà
- * réalisés : la caisse les propose en cases à cocher (voir Caisse). Un
- * simple nom, sans prix : le vendeur saisit le TTC à chaque vente.
+ * réalisés : la caisse les propose en cases à cocher (voir Caisse). Un nom
+ * et, s'il est fixé, un prix de référence TTC avec son taux de TVA, que
+ * prend toute ligne de ce service vendue par une personne qui n'est pas
+ * autorisée à fixer le prix d'un service (R2, voir DerogationsDePrix).
  */
 return new class extends Migration
 {
@@ -21,6 +23,14 @@ return new class extends Migration
             // Clé de doublon calculée en PHP (voir Service::normaliserNom()),
             // que PostgreSQL et SQLite comparent octet par octet.
             $table->string('nom_normalise', Service::LONGUEUR_MAXIMALE_CLE);
+
+            // Le prix de référence TTC et son taux, fixés ensemble par une
+            // personne autorisée à fixer le prix d'un service (voir
+            // ServiceResource et TrouverOuCreerServiceAction), ou tous deux
+            // vides (voir Service) : sans prix de référence, seule une
+            // personne autorisée vend ce service, au prix qu'elle saisit.
+            $table->decimal('prix_ttc', 12, 2)->nullable();
+            $table->decimal('taux_tva', 5, 2)->nullable();
 
             // Des frais qui accompagnent la livraison de biens (port,
             // emballage, assurance) : ils suivent la nature de la vente, et

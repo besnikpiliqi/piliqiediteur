@@ -25,7 +25,7 @@ class VentesEnAttenteApercuTest extends TestCase
 
     private function emettreFactureParticulier(Client $client): Facture
     {
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,

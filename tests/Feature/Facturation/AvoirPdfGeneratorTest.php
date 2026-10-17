@@ -33,7 +33,7 @@ class AvoirPdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['option_debits_tva' => true])->create());
         $client = Client::factory()->professionnel()->create();
-        $produit = Produit::factory()->create();
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
@@ -62,7 +62,7 @@ class AvoirPdfGeneratorTest extends TestCase
             'ville' => 'Marseille',
         ]));
         $client = Client::factory()->professionnel()->create();
-        $produit = Produit::factory()->create();
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));

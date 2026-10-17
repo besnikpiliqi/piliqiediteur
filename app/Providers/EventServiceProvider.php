@@ -16,7 +16,9 @@ use App\Domain\Facturation\Listeners\DeclencherTransmissionPdpApresSoumissionERe
 use App\Domain\Facturation\Listeners\DecrementerStockApresEmissionFacture;
 use App\Domain\Facturation\Listeners\ImputerAvoirSurSesFacturesApresEmission;
 use App\Domain\Facturation\Listeners\RestaurerStockApresEmissionAvoir;
+use App\Domain\Stock\Events\StockDevenuNegatif;
 use App\Domain\Stock\Events\StockPasseSousLeSeuilDAlerte;
+use App\Domain\Stock\Listeners\NotifierLeStockNegatif;
 use App\Domain\Stock\Listeners\NotifierLeStockSousLeSeuilDAlerte;
 use Illuminate\Auth\Events\CurrentDeviceLogout;
 use Illuminate\Auth\Events\Logout;
@@ -43,6 +45,7 @@ class EventServiceProvider extends ServiceProvider
         Event::listen(FactureAchatValidee::class, IncrementerStockApresValidationFactureAchat::class);
         Event::listen(AvoirFournisseurEmis::class, DecrementerStockApresEmissionAvoirFournisseur::class);
         Event::listen(StockPasseSousLeSeuilDAlerte::class, NotifierLeStockSousLeSeuilDAlerte::class);
+        Event::listen(StockDevenuNegatif::class, NotifierLeStockNegatif::class);
         Event::listen(Logout::class, JournaliserFinDeSession::class);
         Event::listen(CurrentDeviceLogout::class, JournaliserFinDeSession::class);
     }

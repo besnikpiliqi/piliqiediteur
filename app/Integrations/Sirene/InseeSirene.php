@@ -3,6 +3,7 @@
 namespace App\Integrations\Sirene;
 
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -13,16 +14,26 @@ use Throwable;
 /**
  * L'API Sirene de l'INSEE (version 3.11, voir config/services.php) : GET
  * /siren/{siren} pour une unité légale, GET /siret/{siret} pour un
- * établissement, avec la clé d'intégration de l'éditeur dans l'en-tête
- * X-INSEE-Api-Key-Integration (INSEE_SIRENE_CLE). L'API accepte 30
- * requêtes par minute : au-delà, le répertoire est tenu pour
- * indisponible, sans appel, et le contrôle se reprend plus tard.
+ * établissement, et la recherche multicritère GET /siret pour les
+ * établissements actifs d'une entreprise, avec la clé d'intégration de
+ * l'éditeur dans l'en-tête X-INSEE-Api-Key-Integration (INSEE_SIRENE_CLE).
+ * L'API accepte 30 requêtes par minute : au-delà, le répertoire est tenu
+ * pour indisponible, sans appel, et le contrôle se reprend plus tard.
+ *
+ * La recherche des établissements actifs demande ceux du SIREN dont l'état
+ * administratif (variable historisée, d'où periode()) est « A » à la date
+ * du jour (paramètre date), au plus ETABLISSEMENTS_PAR_RECHERCHE en une
+ * fois ; chaque établissement rendu se relit ensuite comme une
+ * consultation d'un SIRET (période en cours active, rattaché au SIREN),
+ * et un établissement qui ne l'est pas n'est jamais proposé, quelle que
+ * soit la lecture que l'API fait du critère.
  *
  * La réponse se lit avec tolérance : un champ absent ou d'un autre type ne
- * fait jamais croire à une entreprise active.
+ * fait jamais croire à une entreprise ou à un établissement actif.
  * - 200 : la période en cours (la première de periodesUniteLegale ou de
  *   periodesEtablissement) dit l'état administratif, « A » pour actif ;
- * - 404 : le répertoire ne connaît pas ce numéro ;
+ * - 404 : le répertoire ne connaît pas ce numéro, ou aucun établissement
+ *   ne répond à la recherche ;
  * - toute autre réponse, une réponse illisible, ou un service injoignable
  *   après une nouvelle tentative : SireneIndisponibleException.
  * Le journal de l'application note le statut HTTP d'une consultation
@@ -31,6 +42,12 @@ use Throwable;
 class InseeSirene implements RepertoireSirene
 {
     public const REQUETES_PAR_MINUTE = 30;
+
+    /**
+     * Le nombre d'établissements que la recherche demande en une fois, le
+     * plus grand que l'API accepte.
+     */
+    public const ETABLISSEMENTS_PAR_RECHERCHE = 1000;
 
     public function unite(string $siren): ?UniteSirene
     {
@@ -63,7 +80,54 @@ class InseeSirene implements RepertoireSirene
             return null;
         }
 
-        $etablissement = is_array($corps['etablissement'] ?? null) ? $corps['etablissement'] : throw $this->illisible('siret');
+        return $this->lireEtablissement(is_array($corps['etablissement'] ?? null) ? $corps['etablissement'] : throw $this->illisible('siret'), $siret);
+    }
+
+    public function etablissementsActifs(string $siren): EtablissementsActifs
+    {
+        $corps = $this->consulter('siret', [
+            'q' => "siren:{$siren} AND periode(etatAdministratifEtablissement:A)",
+            'date' => CarbonImmutable::now('Europe/Paris')->toDateString(),
+            'nombre' => self::ETABLISSEMENTS_PAR_RECHERCHE,
+        ]);
+
+        if ($corps === null) {
+            return new EtablissementsActifs([], true);
+        }
+
+        $lignes = is_array($corps['etablissements'] ?? null) && array_is_list($corps['etablissements']) ? $corps['etablissements'] : throw $this->illisible('recherche');
+        $total = is_array($corps['header'] ?? null) && is_int($corps['header']['total'] ?? null) ? $corps['header']['total'] : count($lignes);
+        $actifs = [];
+
+        foreach ($lignes as $ligne) {
+            $siret = is_array($ligne) ? $this->texte($ligne, 'siret') : null;
+
+            if ($siret === null || preg_match('/^\d{14}$/', $siret) !== 1) {
+                throw $this->illisible('recherche');
+            }
+
+            $etablissement = $this->lireEtablissement($ligne, $siret);
+
+            if ($etablissement->actif && $etablissement->estRattacheA($siren)) {
+                $actifs[$siret] = $etablissement;
+            }
+        }
+
+        usort($actifs, static fn (EtablissementSirene $un, EtablissementSirene $autre): int => [! $un->estSiege, $un->nic()] <=> [! $autre->estSiege, $autre->nic()]);
+
+        return new EtablissementsActifs($actifs, $total <= count($lignes));
+    }
+
+    /**
+     * Un établissement tel que le répertoire le décrit, dans une
+     * consultation de son SIRET comme dans une recherche.
+     *
+     * @param  array<mixed>  $etablissement
+     *
+     * @throws SireneIndisponibleException
+     */
+    private function lireEtablissement(array $etablissement, string $siret): EtablissementSirene
+    {
         $periode = $this->periodeEnCours($etablissement['periodesEtablissement'] ?? null) ?? throw $this->illisible('siret');
         $adresse = is_array($etablissement['adresseEtablissement'] ?? null) ? $etablissement['adresseEtablissement'] : [];
         $voie = trim(implode(' ', array_filter([
@@ -82,17 +146,21 @@ class InseeSirene implements RepertoireSirene
             codePostal: $this->texte($adresse, 'codePostalEtablissement'),
             ville: $this->texte($adresse, 'libelleCommuneEtablissement'),
             diffusionPartielle: ($etablissement['statutDiffusionEtablissement'] ?? null) === 'P',
+            enseigne: $this->texte($periode, 'enseigne1Etablissement') ?? $this->texte($periode, 'denominationUsuelleEtablissement'),
+            estSiege: ($etablissement['etablissementSiege'] ?? null) === true,
         );
     }
 
     /**
-     * Le corps de la réponse, null pour un numéro inconnu (404).
+     * Le corps de la réponse, null pour un numéro inconnu ou une recherche
+     * sans résultat (404).
      *
+     * @param  array<string, string|int>  $parametres
      * @return array<mixed>|null
      *
      * @throws SireneIndisponibleException
      */
-    private function consulter(string $chemin): ?array
+    private function consulter(string $chemin, array $parametres = []): ?array
     {
         $cle = config('services.sirene.cle');
 
@@ -113,7 +181,7 @@ class InseeSirene implements RepertoireSirene
                 ->connectTimeout(5)
                 ->acceptJson()
                 ->retry(2, 500, static fn (Throwable $erreur): bool => $erreur instanceof ConnectionException, throw: false)
-                ->get($chemin);
+                ->get($chemin, $parametres);
         } catch (ConnectionException) {
             Log::warning('Sirene : le répertoire de l\'INSEE est injoignable.');
 

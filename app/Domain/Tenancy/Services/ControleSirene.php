@@ -19,7 +19,9 @@ use App\Models\User;
  * Les contrôles d'une société et de ses magasins au répertoire public
  * Sirene de l'INSEE (voir RepertoireSirene) : l'entreprise existe et n'est
  * pas cessée ; l'établissement d'un magasin existe, est actif et est
- * rattaché au SIREN de la société. Chaque consultation rend son résultat
+ * rattaché au SIREN de la société ; et la liste des établissements actifs
+ * de l'entreprise, que propose la création d'un magasin (voir
+ * etablissementsActifs()). Chaque consultation rend son résultat
  * (concluant, négatif avec son motif, ou impossible quand l'INSEE ne
  * répond pas) sans rien écrire ; noterUnite() et noterEtablissement()
  * l'inscrivent ensuite au registre des vérifications de la société (voir
@@ -106,6 +108,27 @@ class ControleSirene
             ! $etablissement->actif => ['resultat' => ResultatVerification::Negative, 'etablissement' => $etablissement, 'motif' => self::MOTIF_ETABLISSEMENT_FERME],
             default => ['resultat' => ResultatVerification::Concluante, 'etablissement' => $etablissement, 'motif' => null],
         };
+    }
+
+    /**
+     * Les établissements actifs de l'entreprise de ce SIREN, tels que le
+     * répertoire les liste, pour proposer celui d'un nouveau magasin (voir
+     * CreerMagasin) : une proposition, qui n'inscrit rien au registre des
+     * vérifications ; l'établissement choisi se contrôle encore à la
+     * création du magasin (voir CreerEtablissementAction). Quand l'INSEE ne
+     * répond pas, aucun n'est proposé et le NIC se saisit.
+     *
+     * @return array{resultat: ResultatVerification, etablissements: list<EtablissementSirene>, complete: bool}
+     */
+    public function etablissementsActifs(string $siren): array
+    {
+        try {
+            $liste = $this->repertoire->etablissementsActifs($siren);
+        } catch (SireneIndisponibleException) {
+            return ['resultat' => ResultatVerification::Indisponible, 'etablissements' => [], 'complete' => false];
+        }
+
+        return ['resultat' => ResultatVerification::Concluante, 'etablissements' => $liste->etablissements, 'complete' => $liste->complete];
     }
 
     /**

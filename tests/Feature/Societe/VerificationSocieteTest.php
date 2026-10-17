@@ -21,6 +21,7 @@ use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\ExaminerLesPiecesAction;
 use App\Domain\Tenancy\Actions\LeverUnSignalAction;
+use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\OuvrirUneReclamationAction;
 use App\Domain\Tenancy\Actions\RecevoirResultatIdentiteAction;
 use App\Domain\Tenancy\Actions\RefuserLaSocieteAction;
@@ -157,6 +158,7 @@ class VerificationSocieteTest extends TestCase
     public function test_la_validation_s_inscrit_aux_journaux_des_evenements_au_nom_du_systeme(): void
     {
         $societe = $this->inscrireUneSociete();
+        $this->creerLeMagasinDuSiege($societe);
         $this->actingAs($societe->proprietaire);
         $dejaInscrits = EnregistrementFiscal::withoutGlobalScopes()->max('id') ?? 0;
 
@@ -912,7 +914,7 @@ class VerificationSocieteTest extends TestCase
     public function test_la_validation_reserve_le_siren_et_les_siret_des_magasins_actifs_et_ouvre_leurs_periodes(): void
     {
         $societe = $this->inscrireUneSociete();
-        $premier = $societe->magasinsReels()->sole();
+        $premier = $this->creerLeMagasinDuSiege($societe);
         $second = app(CreerEtablissementAction::class)->handle($societe->proprietaire, $societe, ['nom' => 'Second magasin', 'nic' => MagasinFactory::nicLibre($societe)]);
         app(TenantContext::class)->clear();
         $this->assertSame([0, 0], [SiretMagasin::query()->count(), PeriodeActivite::query()->count()]);
@@ -937,6 +939,33 @@ class VerificationSocieteTest extends TestCase
     }
 
     /**
+     * Une société se valide sans aucun magasin : son SIREN seul se réserve,
+     * aucun SIRET, et aucune période d'activité ne s'ouvre hors de sa
+     * démonstration, qui se ferme à la validation : aucun magasin ne peut
+     * alors vendre. Son premier magasin, créé ensuite, se met aussitôt en
+     * activité.
+     */
+    public function test_la_societe_se_valide_sans_aucun_magasin_et_ne_vend_rien_avant_son_premier_magasin(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $proprietaire = $societe->proprietaire()->firstOrFail();
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
+
+        $this->verifierLIdentiteDuProprietaire($societe);
+
+        $this->assertTrue($societe->fresh()->estValidee());
+        $this->assertSame([0, 0], [$societe->magasinsReels()->count(), SiretMagasin::query()->count()]);
+        $this->assertSame([$demonstration->id], array_map(intval(...), PeriodeActivite::query()->pluck('magasin_id')->unique()->values()->all()));
+        $this->assertFalse($proprietaire->refresh()->magasinsAccessibles()->contains(fn (Magasin $magasin): bool => $magasin->peutVendre()));
+
+        $premier = $this->creerLeMagasinDuSiege($societe->fresh());
+
+        $this->assertSame([$premier->id], SiretMagasin::query()->pluck('magasin_id')->all());
+        $this->assertNull(PeriodeActivite::query()->where('magasin_id', $premier->id)->sole()->fin);
+        $this->assertTrue($premier->fresh()->peutVendre());
+    }
+
+    /**
      * Un magasin réel fermé avant la validation, même dont l'établissement
      * n'a jamais été confirmé, ne compte pas : la société est validée, et
      * lui n'est ni réservé ni ouvert.
@@ -944,6 +973,7 @@ class VerificationSocieteTest extends TestCase
     public function test_un_magasin_ferme_avant_la_validation_ne_bloque_pas_la_validation(): void
     {
         $societe = $this->inscrireUneSociete();
+        $ouvert = $this->creerLeMagasinDuSiege($societe);
         $this->repertoire()->rendreInjoignable();
         $ferme = app(CreerEtablissementAction::class)->handle($societe->proprietaire, $societe, ['nom' => 'Fermé', 'nic' => MagasinFactory::nicLibre($societe)]);
         $this->repertoire()->rendreInjoignable(false);
@@ -954,7 +984,7 @@ class VerificationSocieteTest extends TestCase
         $this->verifierLIdentiteDuProprietaire($societe);
 
         $this->assertTrue($societe->fresh()->estValidee());
-        $this->assertSame([$societe->magasinsReels()->where('statut', StatutMagasin::Actif->value)->sole()->id], SiretMagasin::query()->pluck('magasin_id')->all());
+        $this->assertSame([$ouvert->id], SiretMagasin::query()->pluck('magasin_id')->all());
         $this->assertSame(0, PeriodeActivite::query()->where('magasin_id', $ferme->id)->count());
     }
 
@@ -1197,6 +1227,7 @@ class VerificationSocieteTest extends TestCase
         $this->rne()->dirigeants($nouveau, [new RepresentantRne('MARTIN', null, ['Paul'], '1975-06', 'Président', true, null, '2015-01-01')]);
         $this->repertoire()->rendreInjoignable();
         $societe = $this->inscrireUneSociete($ancien);
+        $magasin = $this->creerLeMagasinDuSiege($societe);
         $this->repertoire()->rendreInjoignable(false);
         $proprietaire = $societe->proprietaire;
         $this->verifierLIdentiteDuProprietaire($societe);
@@ -1214,7 +1245,7 @@ class VerificationSocieteTest extends TestCase
         $etat = $this->etat($societe);
         $this->assertSame([false, EtatDeVerification::PREUVE_IDENTITE_RAPPROCHEE, true], [$etat->entrepriseEtEtablissements, $etat->preuveDeQualite, $etat->adresseControlee]);
 
-        app(CorrigerSirenAvantValidationAction::class)->handle($proprietaire, $societe->fresh(), $nouveau, [$societe->magasinsReels()->sole()->id => substr(FauxRepertoireSirene::siretDuSiege($nouveau), 9)]);
+        app(CorrigerSirenAvantValidationAction::class)->handle($proprietaire, $societe->fresh(), $nouveau, [$magasin->id => substr(FauxRepertoireSirene::siretDuSiege($nouveau), 9)]);
         app(ReverificationSirene::class)->reprendre($societe->fresh(), false);
 
         $etat = $this->etat($societe);
@@ -1253,10 +1284,11 @@ class VerificationSocieteTest extends TestCase
         $nouveau = SocieteFactory::sirenFictif();
         $this->repertoire()->rendreInjoignable();
         $societe = $this->inscrireUneSociete(null, 'Luc Bernard');
+        $magasin = $this->creerLeMagasinDuSiege($societe);
         $this->repertoire()->rendreInjoignable(false);
         $this->envoyerUnCourrierParLEditeur($societe);
         $this->assertTrue($this->saisirLeCode($societe));
-        app(CorrigerSirenAvantValidationAction::class)->handle($societe->proprietaire, $societe->fresh(), $nouveau, [$societe->magasinsReels()->sole()->id => substr(FauxRepertoireSirene::siretDuSiege($nouveau), 9)]);
+        app(CorrigerSirenAvantValidationAction::class)->handle($societe->proprietaire, $societe->fresh(), $nouveau, [$magasin->id => substr(FauxRepertoireSirene::siretDuSiege($nouveau), 9)]);
         app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe, TypePiece::Kbis, 'Extrait Kbis de la nouvelle entreprise');
 
         $code = app(ExaminerLesPiecesAction::class)->handle($societe->fresh(), self::editeur());

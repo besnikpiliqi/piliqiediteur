@@ -4,6 +4,7 @@ namespace App\Filament\App\Pages\Auth;
 
 use App\Domain\Tenancy\Actions\ChangerSonMotDePasseProvisoireAction;
 use App\Domain\Tenancy\Actions\RefuserSonCompteAction;
+use App\Http\Middleware\MenerUnCompteSansMagasin;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -51,7 +52,7 @@ class ChangerMotDePasseProvisoire extends SimplePage
     public function mount(): void
     {
         if (! $this->compte()->doitChangerSonMotDePasse()) {
-            $this->redirect(Filament::getUrl());
+            $this->redirect(MenerUnCompteSansMagasin::accueil());
 
             return;
         }
@@ -102,7 +103,7 @@ class ChangerMotDePasseProvisoire extends SimplePage
         session()->put(['password_hash_'.Filament::getAuthGuard() => $compte->refresh()->getAuthPassword()]);
         Notification::make()->title('Votre mot de passe est enregistré.')->success()->send();
 
-        $this->redirect(Filament::getUrl());
+        $this->redirect(MenerUnCompteSansMagasin::accueil());
     }
 
     /**

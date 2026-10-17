@@ -26,8 +26,8 @@ use App\Domain\Tenancy\Services\DebitDesEmails;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Auth\PageDuLien;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
+use App\Filament\Societe\Pages\TableauDeBord;
 use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
-use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Database\Factories\SocieteFactory;
 use Filament\Facades\Filament;
@@ -379,16 +379,17 @@ class RattachementTest extends TestCase
     }
 
     /**
-     * Retiré par sa société, le compte crée sa propre société, dont il
-     * devient le propriétaire, après avoir confirmé son adresse en
-     * choisissant son mot de passe par un lien.
+     * Retiré par sa société, le compte crée sa propre société, sans
+     * magasin comme toute société qui s'inscrit, dont il devient le
+     * propriétaire, après avoir confirmé son adresse en choisissant son mot
+     * de passe par un lien ; il arrive dans l'espace de sa société.
      */
     public function test_un_compte_retire_cree_sa_propre_societe_avec_le_meme_compte(): void
     {
         $quittee = $this->ouvrirUneSociete(['nom' => 'Quittée']);
         $compte = $this->compteRetire($quittee, 'paul@example.test');
         $siren = SocieteFactory::sirenFictif();
-        $creation = ['email' => 'paul@example.test', 'siren' => $siren, 'nom' => 'Ma Propre Boutique', 'nic' => substr(FauxRepertoireSirene::siretDuSiege($siren), 9)];
+        $creation = ['email' => 'paul@example.test', 'siren' => $siren];
 
         $this->post(route('societe.creer.enregistrer'), [...$creation, 'password' => self::MOT_DE_PASSE_CHOISI])
             ->assertStatus(422)
@@ -401,14 +402,15 @@ class RattachementTest extends TestCase
             ->call('choisir')
             ->assertRedirect(route('societe.creer'));
 
-        $this->post(route('societe.creer.enregistrer'), [...$creation, 'password' => 'mon-propre-mot-de-passe'])->assertRedirect();
+        $reponse = $this->post(route('societe.creer.enregistrer'), [...$creation, 'password' => 'mon-propre-mot-de-passe']);
 
         $compte->refresh();
         $nouvelle = Societe::query()->where('siren', $siren)->sole();
+        $reponse->assertRedirect(TableauDeBord::getUrl(panel: 'societe', tenant: $nouvelle));
         $this->assertAuthenticatedAs($compte);
         $this->assertSame([(int) $nouvelle->id, RoleSociete::Proprietaire, StatutCompte::Actif], [(int) $compte->societe_id, $compte->role_societe, $compte->statut]);
         $this->assertNull($compte->qualite_verifiee_le);
-        $this->assertSame('Ma Propre Boutique', Magasin::query()->where('societe_id', $nouvelle->id)->sole()->nom);
+        $this->assertSame(0, Magasin::query()->where('societe_id', $nouvelle->id)->count());
         $this->assertCount(1, $this->entreesDAudit($nouvelle, ActionAuditee::SocieteCreeeParUnCompteRetire));
         [$depart] = $this->entreesDAudit($quittee->societe, ActionAuditee::SocieteCreeeParUnCompteRetire);
         $this->assertArrayNotHasKey('siren', $depart->nouvelles_valeurs);
@@ -429,7 +431,7 @@ class RattachementTest extends TestCase
         foreach ([$vendeur, $proprietaire] as $compte) {
             $siren = SocieteFactory::sirenFictif();
             $this->assertThrows(
-                fn () => app(CreerSaSocieteAvecUnCompteRetireAction::class)->handle($compte->email, self::MOT_DE_PASSE_CHOISI, ['siren' => $siren], ['nom' => 'Seconde', 'nic' => substr(FauxRepertoireSirene::siretDuSiege($siren), 9)]),
+                fn () => app(CreerSaSocieteAvecUnCompteRetireAction::class)->handle($compte->email, self::MOT_DE_PASSE_CHOISI, ['siren' => $siren]),
                 ValidationException::class,
                 CreerSaSocieteAvecUnCompteRetireAction::MESSAGE_PAS_RETIRE,
             );

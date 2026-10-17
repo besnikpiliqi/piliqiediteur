@@ -485,6 +485,7 @@ class EmetteurFigeTest extends TestCase
     public function test_un_document_de_demonstration_n_imprime_aucune_identite_reelle(): void
     {
         $societe = $this->inscrireUneSociete();
+        $reel = $this->creerLeMagasinDuSiege($societe);
         app(TenantContext::class)->runAsSociete($societe, fn (): bool => $societe->forceFill([
             'raison_sociale' => 'Martin et Fils',
             'forme_juridique' => FormeJuridique::Sarl,
@@ -507,7 +508,7 @@ class EmetteurFigeTest extends TestCase
         }
         $this->assertSame('DÉMONSTRATION — SANS VALEUR', $emetteur->filigrane());
         $this->assertEquals($emetteur, Emetteur::duContenuSigne($signe));
-        $this->assertNull(Emetteur::duMagasin($societe->magasinsReels()->sole())->filigrane());
+        $this->assertNull(Emetteur::duMagasin($reel->fresh())->filigrane());
     }
 
     /**

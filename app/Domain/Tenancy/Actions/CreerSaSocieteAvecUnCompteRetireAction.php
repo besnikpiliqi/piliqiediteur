@@ -5,7 +5,6 @@ namespace App\Domain\Tenancy\Actions;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
-use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\SessionsDesComptes;
@@ -28,7 +27,7 @@ use SensitiveParameter;
  * qui ne sert plus, n'ouvre rien ; la personne choisit d'abord le sien par
  * le lien « Mot de passe oublié ». Le compte, relu verrouillé dans la
  * transaction de la création, devient le propriétaire, actif, de la
- * société nouvelle et de son premier magasin, comme à une inscription (voir
+ * société nouvelle, sans magasin, comme à une inscription (voir
  * CreerSocieteAction::creer()) ; la qualité de représentant prouvée pour
  * une autre société ne le suit pas, et ses sessions se ferment. Son départ
  * s'inscrit au journal de la société qu'il quitte, sans rien dire de la
@@ -50,11 +49,10 @@ class CreerSaSocieteAvecUnCompteRetireAction
 
     /**
      * @param  array{siren?: mixed}  $societe
-     * @param  array{nom?: mixed, code?: mixed, nic?: mixed}  $premierMagasin
      *
      * @throws ValidationException
      */
-    public function handle(string $email, #[SensitiveParameter] string $motDePasse, array $societe, array $premierMagasin): Societe
+    public function handle(string $email, #[SensitiveParameter] string $motDePasse, array $societe): Societe
     {
         $compte = User::query()->where('email', User::normaliserEmail($email))->first();
 
@@ -67,7 +65,6 @@ class CreerSaSocieteAvecUnCompteRetireAction
 
         $nouvelle = $this->creerSociete->creer(
             $societe,
-            $premierMagasin,
             function (Societe $nouvelle) use ($compte, $motDePasse, &$quittee): User {
                 $relu = User::query()->whereKey($compte->getKey())->lockForUpdate()->firstOrFail();
                 self::verifier($relu);
@@ -87,7 +84,7 @@ class CreerSaSocieteAvecUnCompteRetireAction
 
                 return $relu;
             },
-            function (Societe $nouvelle, User $proprietaire, Magasin $magasin) use (&$quittee): void {
+            function (Societe $nouvelle, User $proprietaire) use (&$quittee): void {
                 $this->journalAudit->inscrire(ActionAuditee::SocieteCreeeParUnCompteRetire, $proprietaire, null, null, [
                     'compte' => ['id' => $proprietaire->getKey(), 'nom' => $proprietaire->name],
                     'siren' => $nouvelle->siren,

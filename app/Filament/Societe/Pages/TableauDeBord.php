@@ -3,10 +3,15 @@
 namespace App\Filament\Societe\Pages;
 
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\EvaluateurDeVerification;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Societe\Resources\MagasinResource;
+use App\Filament\Societe\Resources\MembreResource;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Pages\Dashboard;
@@ -14,19 +19,30 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
- * Le tableau de bord de la société : où en est sa vérification, ce qui
- * manque à son identité pour facturer un professionnel, ses magasins
- * réels de la portée de la personne connectée (tous pour le propriétaire
- * et un administrateur de tous les magasins, ceux de sa sélection pour un
- * autre administrateur), chacun avec son SIRET, son établissement (vérifié
- * ou à vérifier) et son état, et son magasin de démonstration, ouvert ici
- * tant que la société est en cours de vérification (voir
- * OuvrirLaDemonstrationAction). Les magasins se lisent par la portée, dans
- * la société affichée : ceux d'aucune autre société.
+ * Le tableau de bord de la société, où arrive son propriétaire après le
+ * lien de son inscription : la liste de ses premières étapes, chacune avec
+ * son état et l'écran qui la fait (voir etapes()), tant qu'il en reste une
+ * à faire ; où en est sa vérification ; ce qui manque à son identité pour
+ * facturer un professionnel ; ses magasins réels de la portée de la
+ * personne connectée (tous pour le propriétaire et un administrateur de
+ * tous les magasins, ceux de sa sélection pour un autre administrateur),
+ * chacun avec son SIRET, son établissement (vérifié ou à vérifier) et son
+ * état ; et son magasin de démonstration, ouvert ici tant que la société
+ * est en cours de vérification (voir OuvrirLaDemonstrationAction). Les
+ * magasins et les comptes se lisent dans la société affichée : ceux
+ * d'aucune autre société.
  */
 class TableauDeBord extends Dashboard
 {
     use GereLesExceptionsMetier;
+
+    public const ETAPE_VERIFIER = 'Vérifier votre société';
+
+    public const ETAPE_PREMIER_MAGASIN = 'Créer votre premier magasin';
+
+    public const ETAPE_EQUIPE = 'Ajouter votre équipe';
+
+    public const ETAPE_DEMONSTRATION = 'Essayer le magasin de démonstration';
 
     protected static ?string $navigationIcon = 'heroicon-o-home';
 
@@ -62,8 +78,72 @@ class TableauDeBord extends Dashboard
         return match (true) {
             $societe->estRefusee() => 'L\'inscription de votre société a été refusée.',
             $societe->estValidee() => 'Votre société est validée depuis le '.$societe->validee_le->setTimezone(config('app.timezone'))->format('d/m/Y').'.',
-            default => 'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà configurer vos magasins : catalogue, équipe, paramètres et achats, et vous essayer dans le magasin de démonstration.',
+            default => 'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà créer vos magasins et les configurer : catalogue, équipe, paramètres et achats, et vous essayer dans le magasin de démonstration.',
         };
+    }
+
+    /**
+     * Les premières étapes de la société, dans l'ordre : vérifier la
+     * société, créer son premier magasin, ajouter son équipe, essayer le
+     * magasin de démonstration. Chacune dit si elle est faite, où elle en
+     * est, et mène à l'écran qui la fait quand la personne connectée peut
+     * l'ouvrir ; l'essai de la démonstration se fait par le bouton de
+     * l'étape (voir ouvrirLaDemonstrationAction()). L'essai ne se fait plus
+     * une fois la société validée : l'étape compte alors comme faite.
+     *
+     * @return list<array{titre: string, faite: bool, etat: string, url: string|null}>
+     */
+    public function etapes(): array
+    {
+        $societe = $this->societe();
+        $magasins = $societe->magasinsReels()->count();
+        $comptes = $societe->membres()->where('role_societe', '!=', RoleSociete::Proprietaire->value)->where('statut', '!=', StatutCompte::Retire->value)->count();
+        $demonstration = $societe->demonstration()->first();
+
+        return [
+            [
+                'titre' => self::ETAPE_VERIFIER,
+                'faite' => $societe->estValidee(),
+                'etat' => $this->prochaineEtapeDeLaVerification(),
+                'url' => VerificationSociete::getUrl(),
+            ],
+            [
+                'titre' => self::ETAPE_PREMIER_MAGASIN,
+                'faite' => $magasins > 0,
+                'etat' => $magasins > 0 ? trans_choice('{1} 1 magasin|[2,*] :count magasins', $magasins) : 'Choisissez son établissement dans la liste de ceux de votre SIREN.',
+                'url' => match (true) {
+                    MagasinResource::canCreate() && $magasins === 0 => MagasinResource::getUrl('create'),
+                    MagasinResource::canViewAny() => MagasinResource::getUrl('index'),
+                    default => null,
+                },
+            ],
+            [
+                'titre' => self::ETAPE_EQUIPE,
+                'faite' => $comptes > 0,
+                'etat' => $comptes > 0 ? trans_choice('{1} 1 compte en plus du vôtre|[2,*] :count comptes en plus du vôtre', $comptes) : 'Créez les comptes de vos administrateurs, responsables, vendeurs et experts-comptables.',
+                'url' => MembreResource::canViewAny() ? MembreResource::getUrl('index') : null,
+            ],
+            [
+                'titre' => self::ETAPE_DEMONSTRATION,
+                'faite' => $demonstration !== null || $societe->estValidee(),
+                'etat' => match (true) {
+                    $demonstration?->statut === StatutMagasin::Actif => 'Ouvert : vendez, encaissez et clôturez pour vous entraîner.',
+                    $demonstration !== null => 'Terminé.',
+                    $societe->estValidee() => 'Plus disponible : votre société est validée.',
+                    default => 'Un magasin d\'entraînement, sans valeur, à essayer avant la validation.',
+                },
+                'url' => $demonstration?->statut === StatutMagasin::Actif && auth()->user()->peutOuvrir($demonstration) ? Dashboard::getUrl(panel: 'app', tenant: $demonstration) : null,
+            ],
+        ];
+    }
+
+    /**
+     * Reste-t-il une première étape à faire ? La liste ne se montre que
+     * tant qu'il en reste une.
+     */
+    public function resteDesEtapes(): bool
+    {
+        return collect($this->etapes())->contains(fn (array $etape): bool => ! $etape['faite']);
     }
 
     /**
@@ -84,13 +164,10 @@ class TableauDeBord extends Dashboard
         return auth()->user()->administreTousLesMagasins() ? $this->societe()->demonstration()->first() : null;
     }
 
-    protected function getHeaderActions(): array
-    {
-        return [$this->ouvrirLaDemonstrationAction()];
-    }
-
     /**
-     * Ouvre, ou rouvre, le magasin de démonstration, puis y mène.
+     * Ouvre, ou rouvre, le magasin de démonstration, puis y mène : le
+     * bouton de l'étape de l'essai tant qu'il n'a jamais été ouvert, puis
+     * celui de la section de la démonstration quand il est fermé.
      */
     public function ouvrirLaDemonstrationAction(): Action
     {
@@ -108,5 +185,30 @@ class TableauDeBord extends Dashboard
 
                 return $demonstration === null ? null : redirect()->to(Dashboard::getUrl(panel: 'app', tenant: $demonstration));
             });
+    }
+
+    /**
+     * Où en est la vérification, et ce qu'il reste à faire, tel que la
+     * société le voit (voir EtatDeVerification::vuParLaSociete()).
+     */
+    private function prochaineEtapeDeLaVerification(): string
+    {
+        $societe = $this->societe();
+
+        if ($societe->estValidee()) {
+            return 'Validée le '.$societe->validee_le->setTimezone(config('app.timezone'))->format('d/m/Y').'.';
+        }
+
+        $etat = app(EvaluateurDeVerification::class)->evaluer($societe)->vuParLaSociete();
+
+        return match (true) {
+            $etat->refusee => 'Refusée.',
+            $etat->reclamationPossible() => 'En cours d\'examen par l\'éditeur.',
+            ! $etat->entrepriseEtEtablissements => 'En cours : le répertoire Sirene de l\'INSEE doit encore confirmer votre entreprise ou l\'établissement d\'un magasin.',
+            $etat->attendUnCourrier() => 'Prochaine étape : recevoir le code du courrier recommandé et le saisir.',
+            $etat->preuveDeQualite === null => 'Prochaine étape : prouver votre qualité de représentant de l\'entreprise.',
+            $etat->signauxActifs !== [] => 'Prochaine étape : lever les points signalés.',
+            default => 'En cours.',
+        };
     }
 }

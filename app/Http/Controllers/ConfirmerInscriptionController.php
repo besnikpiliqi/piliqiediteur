@@ -30,8 +30,10 @@ use Illuminate\Validation\ValidationException;
  * se font dans la même transaction : une création refusée (le répertoire
  * Sirene ayant entre-temps déclaré l'entreprise cessée, l'adresse
  * entre-temps prise par un compte...) laisse le lien valable et dit
- * pourquoi. Créée, la société attend sa vérification ; son propriétaire
- * est connecté, et arrive dans l'espace de sa société.
+ * pourquoi. Créée sans magasin, la société attend sa vérification ; son
+ * propriétaire, dont le lien suivi a confirmé l'adresse, est connecté et
+ * arrive dans l'espace de sa société, sur la liste de ses premières étapes
+ * (voir TableauDeBord).
  */
 class ConfirmerInscriptionController
 {
@@ -61,7 +63,6 @@ class ConfirmerInscriptionController
 
                 return $creerSociete->handle(
                     ['siren' => $donnees['siren']],
-                    ['nom' => $donnees['nom_magasin'], 'code' => $donnees['code'], 'nic' => $donnees['nic'], 'email' => $demande->email],
                     ['name' => $donnees['nom'], 'email' => $demande->email, 'password' => $donnees['mot_de_passe']],
                 );
             });

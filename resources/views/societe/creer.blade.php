@@ -1,7 +1,7 @@
 {{--
     La création de sa propre société avec un compte retiré (voir
     CreerSaSocieteController) : l'adresse et le mot de passe du compte sont
-    redemandés, avec le SIREN et le premier magasin.
+    redemandés, avec le SIREN de l'entreprise.
 --}}
 <!DOCTYPE html>
 <html lang="fr">
@@ -26,7 +26,7 @@
 <main>
     <h1>Créer votre société sur {{ config('app.name') }}</h1>
 
-    <p>Votre compte n'appartient plus à aucune société : créez la vôtre avec lui. Votre société sera vérifiée avant toute vente réelle.</p>
+    <p>Votre compte n'appartient plus à aucune société : créez la vôtre avec lui. Votre société sera vérifiée avant toute vente réelle ; vous créerez ensuite vos magasins dans son espace, en choisissant leurs établissements.</p>
 
     @foreach ($refus as $message)
         <p class="refus">{{ $message }}</p>
@@ -40,15 +40,9 @@
         <label for="password">Mot de passe</label>
         <input id="password" name="password" type="password" autocomplete="current-password" required>
 
-        <h2>Votre société et son premier magasin</h2>
+        <h2>Votre société</h2>
         <label for="siren">SIREN de la société</label>
         <input id="siren" name="siren" inputmode="numeric" value="{{ $saisie['siren'] ?? '' }}" required>
-        <label for="nom">Nom du magasin</label>
-        <input id="nom" name="nom" value="{{ $saisie['nom'] ?? '' }}" required>
-        <label for="nic">NIC du magasin (les 5 derniers chiffres de son SIRET)</label>
-        <input id="nic" name="nic" inputmode="numeric" value="{{ $saisie['nic'] ?? '' }}" required>
-        <label for="code">Code court du magasin (facultatif)</label>
-        <input id="code" name="code" value="{{ $saisie['code'] ?? '' }}">
 
         <button type="submit">Créer ma société</button>
     </form>

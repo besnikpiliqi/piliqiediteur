@@ -13,10 +13,11 @@ use Illuminate\Validation\ValidationException;
 /**
  * La création de sa propre société par une personne dont le compte a été
  * retiré de sa société (voir CreerSaSocieteAvecUnCompteRetireAction) : le
- * formulaire de l'inscription (SIREN, premier magasin), avec l'adresse et
- * le mot de passe du compte, redemandés dans la requête qui crée, sans
- * qu'aucune session ne suffise. Créée, la société attend sa vérification ;
- * son propriétaire est connecté et arrive dans l'espace de sa société.
+ * SIREN de l'entreprise, avec l'adresse et le mot de passe du compte,
+ * redemandés dans la requête qui crée, sans qu'aucune session ne suffise.
+ * Créée sans magasin, la société attend sa vérification ; son propriétaire
+ * est connecté et arrive dans l'espace de sa société, sur la liste de ses
+ * premières étapes (voir TableauDeBord).
  */
 class CreerSaSocieteController
 {
@@ -31,15 +32,12 @@ class CreerSaSocieteController
             'email' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
             'siren' => ['required', 'string', 'max:20'],
-            'nom' => ['required', 'string', 'max:255'],
-            'code' => ['nullable', 'string', 'max:20'],
-            'nic' => ['required', 'string', 'max:10'],
         ]);
 
         try {
-            $societe = $creer->handle($donnees['email'], $donnees['password'], ['siren' => $donnees['siren']], ['nom' => $donnees['nom'], 'code' => $donnees['code'] ?? null, 'nic' => $donnees['nic']]);
+            $societe = $creer->handle($donnees['email'], $donnees['password'], ['siren' => $donnees['siren']]);
         } catch (ValidationException $refus) {
-            return $this->page(collect($refus->errors())->flatten()->all(), $requete->only(['email', 'siren', 'nom', 'code', 'nic']));
+            return $this->page(collect($refus->errors())->flatten()->all(), $requete->only(['email', 'siren']));
         }
 
         Auth::login($societe->proprietaire);

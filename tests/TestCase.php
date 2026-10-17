@@ -153,11 +153,11 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * Une société inscrite comme par la confirmation de son lien (voir
-     * CreerSocieteAction), en cours de vérification : son entreprise et son
-     * premier magasin, son siège, contrôlés au répertoire Sirene factice, son
-     * propriétaire Jeanne Dupont, la présidente que donnent le registre
-     * national factice et la vérification d'identité factice. Aucun
-     * magasin n'est le magasin actif.
+     * CreerSocieteAction), en cours de vérification et sans magasin : son
+     * entreprise contrôlée au répertoire Sirene factice, son propriétaire
+     * Jeanne Dupont, la présidente que donnent le registre national factice
+     * et la vérification d'identité factice. Aucun magasin n'est le magasin
+     * actif.
      */
     protected function inscrireUneSociete(?string $siren = null, string $nomDuProprietaire = 'Jeanne Dupont'): Societe
     {
@@ -166,9 +166,24 @@ abstract class TestCase extends BaseTestCase
 
         return app(CreerSocieteAction::class)->handle(
             ['siren' => $siren],
-            ['nom' => 'Ma Boutique', 'nic' => substr(FauxRepertoireSirene::siretDuSiege($siren), 9)],
             ['name' => $nomDuProprietaire, 'email' => fake()->unique()->safeEmail(), 'password' => 'mot-de-passe-sur'],
         );
+    }
+
+    /**
+     * Le magasin que le propriétaire crée dans l'espace de sa société (voir
+     * CreerEtablissementAction), sur l'établissement de son siège au
+     * répertoire Sirene factice, ou sur ce NIC. Aucun magasin n'est le
+     * magasin actif ensuite.
+     */
+    protected function creerLeMagasinDuSiege(Societe $societe, string $nom = 'Ma Boutique', ?string $nic = null): Magasin
+    {
+        app(TenantContext::class)->clear();
+
+        return app(CreerEtablissementAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe, [
+            'nom' => $nom,
+            'nic' => $nic ?? substr(FauxRepertoireSirene::siretDuSiege($societe->siren), 9),
+        ]);
     }
 
     /**

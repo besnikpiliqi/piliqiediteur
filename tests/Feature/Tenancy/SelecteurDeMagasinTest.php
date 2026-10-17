@@ -63,7 +63,7 @@ class SelecteurDeMagasinTest extends TestCase
     public function test_l_expert_comptable_voit_tous_les_magasins_reels_et_pas_la_demonstration(): void
     {
         $societe = $this->inscrireUneSociete();
-        $lyon = $societe->magasinsReels()->sole();
+        $lyon = $this->creerLeMagasinDuSiege($societe, 'Lyon');
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
         $expert = $this->expertComptable($lyon);

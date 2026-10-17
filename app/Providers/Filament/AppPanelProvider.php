@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Domain\Tenancy\Models\Magasin;
+use App\Filament\App\Pages\AucunMagasin;
 use App\Filament\App\Pages\Auth\ChangerMotDePasseProvisoire;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\DemandeDeLien;
@@ -13,6 +14,7 @@ use App\Filament\Societe\Pages\TableauDeBord;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
 use App\Http\Middleware\ExigerUnMotDePasseDefinitif;
 use App\Http\Middleware\JournaliserOuvertureDeSession;
+use App\Http\Middleware\MenerUnCompteSansMagasin;
 use Filament\Facades\Filament;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -51,7 +53,9 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * JournaliserOuvertureDeSession le suit : une fois le magasin actif
  * positionné, il inscrit l'ouverture de session (JET 80) au journal des
  * événements de ce magasin. Avant tout cela, ExigerUnMotDePasseDefinitif
- * mène un compte au mot de passe provisoire à son changement.
+ * mène un compte au mot de passe provisoire à son changement, puis
+ * MenerUnCompteSansMagasin mène un compte qui n'a encore aucun magasin à
+ * l'espace de sa société ou à la page qui le lui dit (voir AucunMagasin).
  */
 class AppPanelProvider extends PanelProvider
 {
@@ -70,7 +74,10 @@ class AppPanelProvider extends PanelProvider
             // de changer son nom, son adresse de connexion et son mot de
             // passe (voir ModifierProfil).
             ->passwordReset(DemandeDeLien::class, PageDuLien::class)
-            ->authenticatedRoutes(fn () => ChangerMotDePasseProvisoire::registerRoutes())
+            ->authenticatedRoutes(function (): void {
+                ChangerMotDePasseProvisoire::registerRoutes();
+                AucunMagasin::registerRoutes();
+            })
             ->profile(ModifierProfil::class)
             ->tenant(Magasin::class, slugAttribute: 'uuid')
             ->tenantMiddleware([
@@ -116,6 +123,7 @@ class AppPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
                 ExigerUnMotDePasseDefinitif::class,
+                MenerUnCompteSansMagasin::class,
             ], isPersistent: true)
             // Avant les scripts de Filament/Livewire : le script doit
             // s'abonner à "livewire:init" avant que Livewire ne démarre.

@@ -23,7 +23,7 @@
     <h1>{{ config('app.name') }}</h1>
 
     @if ($valable)
-        <p>Confirmez l'inscription de votre société : votre compte et votre premier magasin seront créés, et vous serez connecté.</p>
+        <p>Confirmez l'inscription de votre société : votre société et votre compte seront créés, et vous serez connecté à l'espace de votre société, où vous créerez vos magasins.</p>
 
         @if ($refus !== null)
             <p class="refus">{{ $refus }}</p>

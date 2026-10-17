@@ -31,8 +31,8 @@ class CodeMagasin
     public const LONGUEUR_MAXIMALE = 10;
 
     /**
-     * Le nombre de lettres ou de chiffres du nom que reprend le code tiré
-     * d'un nom.
+     * Le nombre de lettres ou de chiffres d'un nom que reprend le code
+     * qu'il tire.
      */
     private const LONGUEUR_PROPOSEE = 6;
 
@@ -42,38 +42,19 @@ class CodeMagasin
     private const CODE_SANS_NOM = 'MAG';
 
     /**
-     * Le code que tire un nom : ses six premières lettres ou chiffres, sans
-     * accent, en majuscules (« Ma Boutique » donne MABOUT, « Été 2026 »
-     * ETE202), ou MAG quand le nom en compte moins de deux. Il ne lit pas
-     * la base : la page d'inscription, ouverte à tous, le propose sans rien
-     * révéler des codes d'une autre société (voir InscriptionSociete).
-     */
-    public static function depuisLeNom(string $nom): string
-    {
-        $code = substr((string) preg_replace('/[^A-Z0-9]/', '', Str::upper(Str::ascii($nom))), 0, self::LONGUEUR_PROPOSEE);
-
-        return strlen($code) < 2 ? self::CODE_SANS_NOM : $code;
-    }
-
-    /**
-     * Le code d'un magasin créé sans code choisi (voir Magasin::booted()) :
-     * celui que tire son nom, rendu libre dans la société (voir
-     * premierLibre()) : un second « Piliqi Store » reçoit PILIQI2.
+     * Le code proposé pour un magasin : celui que tire ce nom (le nom du
+     * magasin, ou la commune de son établissement à la création, voir
+     * CreerMagasin), rendu libre dans la société. Le nom donne ses six
+     * premières lettres ou chiffres, sans accent, en majuscules (« Ma
+     * Boutique » donne MABOUT, « Été 2026 » ETE202), ou MAG quand il en
+     * compte moins de deux ; déjà pris dans la société, le code reçoit le
+     * premier suffixe libre, 2, 3..., raccourci au besoin pour tenir en dix
+     * caractères : un second magasin à Paris reçoit PARIS2.
      */
     public static function proposer(Societe $societe, string $nom): string
     {
-        return self::premierLibre($societe, self::depuisLeNom($nom));
-    }
-
-    /**
-     * Ce code s'il est libre dans la société, sinon le même avec le
-     * premier suffixe libre, 2, 3..., raccourci au besoin pour tenir en
-     * dix caractères. Le premier magasin d'une société qui s'inscrit le
-     * reçoit pour le code saisi à la demande, que seul un magasin d'une
-     * société révoquée du même SIREN peut porter (voir CreerSocieteAction).
-     */
-    public static function premierLibre(Societe $societe, string $base): string
-    {
+        $base = substr((string) preg_replace('/[^A-Z0-9]/', '', Str::upper(Str::ascii($nom))), 0, self::LONGUEUR_PROPOSEE);
+        $base = strlen($base) < 2 ? self::CODE_SANS_NOM : $base;
         $code = $base;
 
         for ($suffixe = 2; self::estReserve($code) || self::estPris($societe, $code); $suffixe++) {
@@ -112,8 +93,7 @@ class CodeMagasin
      * $saufPour, ou d'un magasin d'une société révoquée du même SIREN ?
      * Seule lecture hors de la société (liste fermée des lectures hors du
      * périmètre courant), limitée à l'existence de ce code : la réponse ne
-     * dit rien du magasin qui le porte. Elle ne se fait jamais à
-     * l'inscription, ouverte à tous (voir CodeMagasinAuFormat).
+     * dit rien du magasin qui le porte.
      */
     public static function estPris(Societe $societe, string $code, ?Magasin $saufPour = null): bool
     {

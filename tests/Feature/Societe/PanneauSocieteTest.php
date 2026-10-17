@@ -3,6 +3,7 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
@@ -11,6 +12,7 @@ use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
 use App\Domain\Tenancy\Actions\TransfererProprieteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -26,6 +28,8 @@ use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\ParametresFiscauxSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\Societe\Pages\VerificationSociete;
+use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MembreResource;
 use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
@@ -36,6 +40,7 @@ use Database\Factories\MagasinFactory;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Select;
+use Filament\Pages\Dashboard;
 use Filament\Pages\Page;
 use Filament\Resources\Resource;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -348,6 +353,48 @@ class PanneauSocieteTest extends TestCase
             ->assertOk()
             ->assertSeeText('Lyon Centre')
             ->assertSeeText('Villeurbanne Gratte-Ciel');
+    }
+
+    /**
+     * Le tableau de bord coche chaque première étape faite : le premier
+     * magasin créé, un compte ajouté à l'équipe, la démonstration essayée,
+     * la société validée ; chacune mène à son écran (la création du premier
+     * magasin pour qui peut le créer, la liste des magasins pour un
+     * administrateur qui ne le peut pas), et la liste disparaît quand tout
+     * est fait.
+     */
+    public function test_le_tableau_de_bord_coche_chaque_premiere_etape_faite(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $proprietaire = $societe->proprietaire()->firstOrFail();
+        $administrateur = $this->choisirSonMotDePasse(app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice Martin', 'email' => 'alice@example.test'], self::MOT_DE_PASSE_PROVISOIRE, null, PermissionRegistry::modeleDeLAdministrateur(), []));
+        $etapes = function (User $compte) use ($societe): array {
+            $this->dansLEspaceDeLaSociete($societe->fresh(), $compte);
+
+            return collect(Livewire::test(TableauDeBord::class)->instance()->etapes())->mapWithKeys(fn (array $etape): array => [$etape['titre'] => [$etape['faite'], $etape['url']]])->all();
+        };
+
+        $this->assertSame([
+            TableauDeBord::ETAPE_VERIFIER => [false, VerificationSociete::getUrl(panel: 'societe', tenant: $societe)],
+            TableauDeBord::ETAPE_PREMIER_MAGASIN => [false, MagasinResource::getUrl('create', panel: 'societe', tenant: $societe)],
+            TableauDeBord::ETAPE_EQUIPE => [true, MembreResource::getUrl('index', panel: 'societe', tenant: $societe)],
+            TableauDeBord::ETAPE_DEMONSTRATION => [false, null],
+        ], $etapes($proprietaire));
+        $this->assertSame([false, MagasinResource::getUrl('index', panel: 'societe', tenant: $societe)], $etapes($administrateur)[TableauDeBord::ETAPE_PREMIER_MAGASIN]);
+
+        $magasin = $this->creerLeMagasinDuSiege($societe);
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe->fresh());
+
+        $this->assertSame(
+            [[false, VerificationSociete::getUrl(panel: 'societe', tenant: $societe)], [true, MagasinResource::getUrl('index', panel: 'societe', tenant: $societe)], [true, Dashboard::getUrl(panel: 'app', tenant: $demonstration)]],
+            array_values(array_intersect_key($etapes($proprietaire), array_flip([TableauDeBord::ETAPE_VERIFIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_DEMONSTRATION]))),
+        );
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertSeeText('Vos premières étapes');
+
+        $this->verifierLIdentiteDuProprietaire($societe->fresh());
+
+        $this->assertSame([true, true, true, true], array_column(array_values($etapes($proprietaire)), 0));
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertOk()->assertDontSeeText('Vos premières étapes')->assertSeeText($magasin->nom);
     }
 
     /**

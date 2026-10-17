@@ -132,7 +132,7 @@ enum ActionAuditee: string implements HasLabel
     public function champsAudites(): array
     {
         return match ($this) {
-            self::SocieteInscrite => ['siren', 'raison_sociale', 'forme_juridique', 'proprietaire', 'premier_magasin'],
+            self::SocieteInscrite => ['siren', 'raison_sociale', 'forme_juridique', 'proprietaire'],
             self::IdentiteModifiee => Societe::CHAMPS_DE_L_IDENTITE,
             self::ParametresFiscauxModifies => ['regime_tva', 'option_debits_tva', 'mois_fin_exercice'],
             self::SirenCorrigeAvantValidation => ['siren', 'sirets', ...Societe::CHAMPS_DE_L_IDENTITE],

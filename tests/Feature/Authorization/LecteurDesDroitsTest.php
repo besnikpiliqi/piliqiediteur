@@ -311,6 +311,7 @@ class LecteurDesDroitsTest extends TestCase
     public function test_les_actions_de_la_societe_inscrivent_leurs_evenements_au_nom_de_l_auteur_passe_a_l_action(string $action, CodeEvenement $attendu): void
     {
         $societe = in_array($action, ['SIRET', 'SIREN', 'démonstration'], true) ? $this->inscrireUneSociete() : $this->ouvrirUneSociete(['nom' => 'Lyon'])->societe;
+        $magasinAVerifier = in_array($action, ['SIRET', 'SIREN'], true) ? $this->creerLeMagasinDuSiege($societe) : null;
         $proprietaire = $societe->proprietaire()->firstOrFail();
         $this->actingAs(User::factory()->create());
         app(TenantContext::class)->clear();
@@ -320,8 +321,8 @@ class LecteurDesDroitsTest extends TestCase
             'option pour les débits' => app(ModifierParametresFiscauxSocieteAction::class)->handle($proprietaire, $societe, ['option_debits_tva' => true]),
             'n° de TVA' => app(ModifierIdentiteSocieteAction::class)->handle($proprietaire, $societe, ['numero_tva' => '', 'capital_social' => '1000']),
             'nouveau magasin' => app(CreerEtablissementAction::class)->handle($proprietaire, $societe, ['nom' => 'Villeurbanne', 'nic' => MagasinFactory::nicLibre($societe)]),
-            'SIRET' => app(ModifierEtablissementAction::class)->handle($proprietaire, $societe->magasinsReels()->sole(), ['nic' => MagasinFactory::nicLibre($societe)]),
-            'SIREN' => app(CorrigerSirenAvantValidationAction::class)->handle($proprietaire, $societe, $siren = SocieteFactory::sirenFictif(), [$societe->magasinsReels()->sole()->id => substr(FauxRepertoireSirene::siretDuSiege($siren), 9)]),
+            'SIRET' => app(ModifierEtablissementAction::class)->handle($proprietaire, $magasinAVerifier, ['nic' => MagasinFactory::nicLibre($societe)]),
+            'SIREN' => app(CorrigerSirenAvantValidationAction::class)->handle($proprietaire, $societe, $siren = SocieteFactory::sirenFictif(), [$magasinAVerifier->id => substr(FauxRepertoireSirene::siretDuSiege($siren), 9)]),
             'démonstration' => app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe),
         };
 

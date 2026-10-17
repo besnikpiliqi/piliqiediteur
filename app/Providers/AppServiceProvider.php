@@ -25,6 +25,7 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
+use App\Http\Responses\ReponseDeConnexion;
 use App\Models\User;
 use App\Policies\AffectationPolicy;
 use App\Policies\AvoirFournisseurPolicy;
@@ -49,6 +50,7 @@ use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Http\Responses\Auth\Contracts\LoginResponse;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Eloquent\Builder;
@@ -77,11 +79,16 @@ class AppServiceProvider extends ServiceProvider
      *
      * Chaque connexion SQLite reçoit la fonction des recherches sans casse
      * ni accents (voir ConnecteurSqlite).
+     *
+     * Une connexion réussie mène à l'accueil du panneau, même pour un
+     * compte qui n'a encore aucun magasin (voir ReponseDeConnexion), à la
+     * place de la réponse de Filament.
      */
     public function register(): void
     {
         $this->app->scoped(RegistreFiscal::class);
         $this->app->bind('db.connector.sqlite', ConnecteurSqlite::class);
+        $this->app->bind(LoginResponse::class, ReponseDeConnexion::class);
     }
 
     /**

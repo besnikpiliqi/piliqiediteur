@@ -6,10 +6,8 @@ use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
-use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Rules\SirenValide;
-use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -27,9 +25,10 @@ use Illuminate\Validation\ValidationException;
  * répertoire Sirene de l'INSEE (raison sociale, forme juridique tirée de
  * la catégorie juridique, siège, n° de TVA proposé) ; le compte de son
  * propriétaire, son adresse déjà confirmée par le lien de l'inscription ;
- * son premier magasin (voir CreerEtablissementAction) ; les contrôles
- * Sirene au registre des vérifications ; l'inscription au journal
- * d'audit.
+ * le contrôle Sirene de l'entreprise au registre des vérifications ;
+ * l'inscription au journal d'audit. La société naît sans aucun magasin :
+ * ni SIRET réservé, ni registre, ni série ; tous ses magasins se créent
+ * ensuite dans son espace d'administration (voir CreerEtablissementAction).
  *
  * Que ce SIREN soit libre, en attente dans une autre inscription ou déjà
  * validé par une autre société, la société est créée de la même façon, à
@@ -51,7 +50,6 @@ class CreerSocieteAction
 
     public function __construct(
         private readonly ControleSirene $controleSirene,
-        private readonly CreerEtablissementAction $creerEtablissement,
         private readonly JournalAudit $journalAudit,
     ) {}
 
@@ -60,12 +58,11 @@ class CreerSocieteAction
      * propriétaire, créé ici.
      *
      * @param  array{siren?: mixed}  $societe
-     * @param  array{nom?: mixed, code?: mixed, nic?: mixed}  $premierMagasin
      * @param  array{name?: mixed, email?: mixed, password?: mixed}  $proprietaire  le mot de passe en clair, ou déjà haché par la demande d'inscription (voir InscriptionSociete), qui l'a contrôlé
      *
      * @throws ValidationException
      */
-    public function handle(array $societe, array $premierMagasin, array $proprietaire): Societe
+    public function handle(array $societe, array $proprietaire): Societe
     {
         $compte = Validator::make($proprietaire, [
             'name' => ['required', 'string', 'max:255'],
@@ -80,7 +77,6 @@ class CreerSocieteAction
         try {
             return $this->creer(
                 $societe,
-                $premierMagasin,
                 fn (Societe $nouvelle): User => tap((new User([
                     'name' => $compte['name'],
                     'email' => $compte['email'],
@@ -91,12 +87,11 @@ class CreerSocieteAction
                     'statut' => StatutCompte::Actif,
                     'email_verified_at' => now(),
                 ]))->save(),
-                fn (Societe $nouvelle, User $proprietaire, Magasin $magasin) => $this->journalAudit->inscrire(ActionAuditee::SocieteInscrite, $proprietaire, null, null, [
+                fn (Societe $nouvelle, User $proprietaire) => $this->journalAudit->inscrire(ActionAuditee::SocieteInscrite, $proprietaire, null, null, [
                     'siren' => $nouvelle->siren,
                     'raison_sociale' => $nouvelle->raison_sociale,
                     'forme_juridique' => JournalAudit::valeur($nouvelle->forme_juridique),
                     'proprietaire' => ['id' => $proprietaire->getKey(), 'nom' => $proprietaire->name],
-                    'premier_magasin' => ['id' => $magasin->getKey(), 'nom' => $magasin->nom, 'siret' => $magasin->siret],
                 ], $nouvelle),
             );
         } catch (UniqueConstraintViolationException $doublon) {
@@ -111,21 +106,20 @@ class CreerSocieteAction
     }
 
     /**
-     * La société et son premier magasin, en une transaction, le
-     * propriétaire posé par $proprietaire dans la société nouvelle, puis
-     * l'inscription au journal d'audit par $inscrire ; une entreprise
-     * cessée ou inconnue du répertoire est refusée avant toute écriture.
-     * Partagée par l'inscription et par la création de sa société par un
-     * compte retiré (voir CreerSaSocieteAvecUnCompteRetireAction).
+     * La société, sans magasin, en une transaction, le propriétaire posé
+     * par $proprietaire dans la société nouvelle, puis l'inscription au
+     * journal d'audit par $inscrire ; une entreprise cessée ou inconnue du
+     * répertoire est refusée avant toute écriture. Partagée par
+     * l'inscription et par la création de sa société par un compte retiré
+     * (voir CreerSaSocieteAvecUnCompteRetireAction).
      *
      * @param  array{siren?: mixed}  $societe
-     * @param  array{nom?: mixed, code?: mixed, nic?: mixed}  $premierMagasin
      * @param  Closure(Societe): User  $proprietaire
-     * @param  Closure(Societe, User, Magasin): mixed  $inscrire
+     * @param  Closure(Societe, User): mixed  $inscrire
      *
      * @throws ValidationException
      */
-    public function creer(array $societe, array $premierMagasin, Closure $proprietaire, Closure $inscrire): Societe
+    public function creer(array $societe, Closure $proprietaire, Closure $inscrire): Societe
     {
         $siren = Validator::make($societe, ['siren' => ['required', 'string', new SirenValide]])->validate()['siren'];
         $consultation = $this->controleSirene->unite($siren);
@@ -136,18 +130,14 @@ class CreerSocieteAction
 
         $identite = $consultation['unite'] === null ? [] : $this->controleSirene->identiteDepuisSirene($consultation['unite']);
 
-        return DB::transaction(function () use ($siren, $identite, $premierMagasin, $proprietaire, $inscrire, $consultation): Societe {
+        return DB::transaction(function () use ($siren, $identite, $proprietaire, $inscrire, $consultation): Societe {
             $nouvelle = tap((new Societe)->forceFill(['siren' => $siren, ...$identite]))->save();
 
-            return app(TenantContext::class)->runAsSociete($nouvelle, function () use ($nouvelle, $premierMagasin, $proprietaire, $inscrire, $consultation): Societe {
+            return app(TenantContext::class)->runAsSociete($nouvelle, function () use ($nouvelle, $proprietaire, $inscrire, $consultation): Societe {
                 $compte = $proprietaire($nouvelle);
-                $code = filled($premierMagasin['code'] ?? null) && is_string($premierMagasin['code'])
-                    ? CodeMagasin::premierLibre($nouvelle, CodeMagasin::normaliser($premierMagasin['code']))
-                    : null;
-                $magasin = $this->creerEtablissement->handle($compte, $nouvelle, [...$premierMagasin, 'code' => $code]);
 
                 $this->controleSirene->noterUnite($nouvelle, $consultation, $compte);
-                $inscrire($nouvelle, $compte, $magasin);
+                $inscrire($nouvelle, $compte);
 
                 return $nouvelle;
             });

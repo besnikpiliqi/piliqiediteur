@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
  * heures, ne sert qu'une fois, et s'efface 48 heures après son expiration
  * (voir app:purger-demandes-inscription).
  *
- * @property array{siren: string, nic: string, nom_magasin: string, code: string, nom: string, mot_de_passe: string} $donnees
+ * @property array{siren: string, nom: string, mot_de_passe: string} $donnees
  */
 class DemandeInscription extends Model
 {

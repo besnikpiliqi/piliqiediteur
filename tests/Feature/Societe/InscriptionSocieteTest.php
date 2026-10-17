@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
@@ -14,16 +16,18 @@ use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
 use App\Domain\Tenancy\Models\DemandeInscription;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PeriodeActivite;
+use App\Domain\Tenancy\Models\SiretMagasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Rules\SirenValide;
-use App\Domain\Tenancy\Rules\SiretValide;
 use App\Domain\Tenancy\Services\ControleSirene;
-use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
 use App\Filament\App\Pages\Auth\PageDuLien;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\Societe\Pages\VerificationSociete as PageDeVerification;
+use App\Filament\Societe\Resources\MagasinResource;
 use App\Http\Controllers\ConfirmerInscriptionController;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
@@ -47,20 +51,19 @@ use Tests\TestCase;
  * L'inscription d'une société en deux temps (voir InscriptionSociete et
  * ConfirmerInscriptionController) : la demande, contrôlée au répertoire
  * Sirene factice, n'envoie qu'un lien ; sa confirmation crée la société à
- * vérifier, son premier magasin et son propriétaire. Aucune requête ne
- * sort des tests (répertoire factice, voir FauxRepertoireSirene).
+ * vérifier et son propriétaire, sans aucun magasin, et mène le propriétaire
+ * à la liste de ses premières étapes. Aucune requête ne sort des tests
+ * (répertoire factice, voir FauxRepertoireSirene).
  */
 class InscriptionSocieteTest extends TestCase
 {
     use RefreshDatabase;
 
     /**
-     * Un SIREN fictif valide, et le NIC d'un établissement actif à Paris
-     * dans le répertoire factice : SIRET 10000000900017.
+     * Un SIREN fictif valide, d'une entreprise active dans le répertoire
+     * factice.
      */
     private const SIREN = '100000009';
-
-    private const NIC = '00017';
 
     public function test_la_demande_envoie_un_lien_et_ne_cree_rien_avant_sa_confirmation(): void
     {
@@ -78,7 +81,32 @@ class InscriptionSocieteTest extends TestCase
         $this->assertGuest();
     }
 
-    public function test_la_confirmation_cree_la_societe_a_verifier_son_premier_magasin_et_son_proprietaire_en_une_fois(): void
+    /**
+     * La demande ne porte que le SIREN et le compte du propriétaire : aucun
+     * champ de magasin (nom, code, NIC), et rien d'un magasin dans la
+     * demande enregistrée.
+     */
+    public function test_la_demande_ne_demande_ni_nom_ni_code_ni_nic_de_magasin(): void
+    {
+        Mail::fake();
+
+        $this->demander()
+            ->assertFormFieldExists('siren')
+            ->assertFormFieldExists('name')
+            ->assertFormFieldExists('email')
+            ->assertFormFieldDoesNotExist('nom_magasin')
+            ->assertFormFieldDoesNotExist('code')
+            ->assertFormFieldDoesNotExist('nic');
+
+        $this->assertSame(['mot_de_passe', 'nom', 'siren'], collect(DemandeInscription::query()->sole()->donnees)->keys()->sort()->values()->all());
+    }
+
+    /**
+     * La confirmation crée la société à vérifier et son propriétaire, dont
+     * le lien suivi confirme l'adresse, sans aucun magasin : ni SIRET
+     * réservé, ni registre, ni série de numérotation.
+     */
+    public function test_la_confirmation_cree_la_societe_a_verifier_et_son_proprietaire_sans_aucun_magasin(): void
     {
         Mail::fake();
         $this->demander();
@@ -88,23 +116,41 @@ class InscriptionSocieteTest extends TestCase
 
         $societe = Societe::query()->sole();
         $proprietaire = User::query()->sole();
-        $magasin = Magasin::query()->sole();
         $reponse->assertRedirect(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertHeader('Referrer-Policy', 'no-referrer');
         $this->assertSame([self::SIREN, false, false], [$societe->siren, $societe->estValidee(), $societe->estRefusee()]);
         $this->assertSame(
             ['Jeanne Dupont', 'jeanne@maboutique.fr', RoleSociete::Proprietaire, $societe->id],
             [$proprietaire->name, $proprietaire->email, $proprietaire->role_societe, (int) $proprietaire->societe_id],
         );
-        $this->assertNotNull($proprietaire->email_verified_at);
+        $this->assertTrue($proprietaire->aConfirmeSonAdresse());
         $this->assertSame(
-            ['Ma Boutique', 'MABOUT', self::SIREN.self::NIC, $societe->id],
-            [$magasin->nom, $magasin->code, $magasin->siret, (int) $magasin->societe_id],
+            [0, 0, 0, 0, 0],
+            [Magasin::query()->count(), SiretMagasin::query()->count(), EnregistrementFiscal::withoutGlobalScopes()->count(), SequenceDocument::withoutGlobalScopes()->count(), PeriodeActivite::query()->count()],
         );
         $this->assertAuthenticatedAs($proprietaire);
         $this->assertNotNull(DemandeInscription::query()->sole()->consommee_le);
     }
 
-    public function test_l_identite_et_les_adresses_sont_preremplies_depuis_sirene(): void
+    /**
+     * Après son lien, le propriétaire arrive sur le tableau de bord de
+     * l'espace de sa société, avec la liste de ses premières étapes, chacune
+     * menant à son écran, aucune encore cochée : vérifier la société, créer
+     * le premier magasin, ajouter l'équipe, essayer la démonstration.
+     */
+    public function test_apres_le_lien_le_proprietaire_arrive_sur_la_liste_de_ses_premieres_etapes(): void
+    {
+        Mail::fake();
+        $this->demander();
+
+        $this->followingRedirects()->post($this->lienEnvoye())
+            ->assertOk()
+            ->assertSeeTextInOrder(['Vos premières étapes', TableauDeBord::ETAPE_VERIFIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_EQUIPE, TableauDeBord::ETAPE_DEMONSTRATION])
+            ->assertSee([PageDeVerification::getUrl(panel: 'societe', tenant: Societe::query()->sole()), MagasinResource::getUrl('create', panel: 'societe', tenant: Societe::query()->sole())], false)
+            ->assertSeeText('Prochaine étape : prouver votre qualité de représentant de l\'entreprise.')
+            ->assertSeeText('Ouvrir le magasin de démonstration');
+    }
+
+    public function test_l_identite_et_l_adresse_du_siege_sont_preremplies_depuis_sirene(): void
     {
         Mail::fake();
         $this->demander();
@@ -112,7 +158,6 @@ class InscriptionSocieteTest extends TestCase
         $this->post($this->lienEnvoye());
 
         $societe = Societe::query()->sole();
-        $magasin = Magasin::query()->sole();
         $this->assertSame([
             'raison_sociale' => 'SOCIETE FICTIVE 100000009',
             'categorie_juridique_insee' => '5710',
@@ -124,39 +169,34 @@ class InscriptionSocieteTest extends TestCase
             'capital_social' => null,
             'immatriculation' => null,
         ], $societe->only(['raison_sociale', 'categorie_juridique_insee', 'forme_juridique', 'numero_tva', 'siege_adresse', 'siege_code_postal', 'siege_ville', 'capital_social', 'immatriculation']));
-        $this->assertSame(['1 RUE DE LA REPUBLIQUE', '75001', 'PARIS'], [$magasin->adresse, $magasin->code_postal, $magasin->ville]);
-        $this->assertNotNull($magasin->etablissement_verifie_le);
         $this->assertSame(
-            [[TypeVerification::SireneEtablissement, ResultatVerification::Concluante], [TypeVerification::SireneUnite, ResultatVerification::Concluante]],
+            [[TypeVerification::SireneUnite, ResultatVerification::Concluante]],
             app(TenantContext::class)->runAsSociete($societe, fn (): array => VerificationSociete::query()->orderBy('id')->get()->map(fn (VerificationSociete $verification): array => [$verification->type, $verification->resultat])->all()),
         );
     }
 
     /**
-     * @return array<string, array{0: string, 1: Closure(string): string, 2: string, 3: string}>
+     * @return array<string, array{0: string, 1: string}>
      */
     public static function refusDuRepertoire(): array
     {
         return [
-            'entreprise cessée' => [FauxRepertoireSirene::SIREN_CESSEE, static fn (string $siren): string => self::nicActif($siren), 'siren', ControleSirene::MOTIF_ENTREPRISE_CESSEE],
-            'SIREN inconnu' => [FauxRepertoireSirene::SIREN_INCONNU, static fn (string $siren): string => self::nicActif($siren), 'siren', ControleSirene::MOTIF_ENTREPRISE_INCONNUE],
-            'établissement fermé' => [self::SIREN, static fn (string $siren): string => substr(IdentifiantsInsee::avecSaCle($siren.'9000'), 9), 'nic', ControleSirene::MOTIF_ETABLISSEMENT_FERME],
+            'entreprise cessée' => [FauxRepertoireSirene::SIREN_CESSEE, ControleSirene::MOTIF_ENTREPRISE_CESSEE],
+            'SIREN inconnu' => [FauxRepertoireSirene::SIREN_INCONNU, ControleSirene::MOTIF_ENTREPRISE_INCONNUE],
         ];
     }
 
     /**
      * Le répertoire public est consulté tout de suite : son refus se dit
      * avec son motif, et rien n'est demandé ni envoyé.
-     *
-     * @param  Closure(string): string  $nic
      */
     #[DataProvider('refusDuRepertoire')]
-    public function test_une_entreprise_cessee_un_etablissement_ferme_ou_un_numero_inconnu_est_refuse(string $siren, Closure $nic, string $champ, string $motif): void
+    public function test_une_entreprise_cessee_ou_un_numero_inconnu_est_refuse(string $siren, string $motif): void
     {
         Mail::fake();
 
-        $this->demander(['siren' => $siren, 'nic' => $nic($siren)])
-            ->assertHasFormErrors([$champ => fn (array $reglesEnEchec, array $messages): bool => $messages === [$motif]]);
+        $this->demander(['siren' => $siren])
+            ->assertHasFormErrors(['siren' => fn (array $reglesEnEchec, array $messages): bool => $messages === [$motif]]);
 
         $this->assertSame(0, DemandeInscription::query()->count());
         Mail::assertNothingSent();
@@ -164,9 +204,8 @@ class InscriptionSocieteTest extends TestCase
 
     /**
      * L'INSEE qui ne répond pas n'empêche ni la demande ni sa
-     * confirmation : la société, sans identité préremplie, et son magasin
-     * « établissement à vérifier » attendent ; le contrôle repris
-     * complète l'identité et vérifie l'établissement, qui peut alors vendre.
+     * confirmation : la société attend, sans identité préremplie ; le
+     * contrôle repris complète son identité.
      */
     public function test_l_insee_injoignable_n_empeche_pas_l_inscription_et_le_controle_reprend(): void
     {
@@ -176,17 +215,14 @@ class InscriptionSocieteTest extends TestCase
         $this->demander()->assertHasNoFormErrors();
         $this->post($this->lienEnvoye());
         $societe = Societe::query()->sole();
-        $this->assertSame([null, null], [$societe->raison_sociale, Magasin::query()->sole()->etablissement_verifie_le]);
+        $this->assertNull($societe->raison_sociale);
         $repertoire->rendreInjoignable(false);
 
         $this->artisan('app:reverifier-sirene')->assertSuccessful();
 
-        $magasin = Magasin::query()->sole();
         $this->assertSame(['SOCIETE FICTIVE 100000009', FormeJuridique::Sas, '1 RUE DE LA REPUBLIQUE'], [$societe->fresh()->raison_sociale, $societe->fresh()->forme_juridique, $societe->fresh()->siege_adresse]);
-        $this->assertNotNull($magasin->etablissement_verifie_le);
-        $this->assertSame(['1 RUE DE LA REPUBLIQUE', '75001', 'PARIS'], [$magasin->adresse, $magasin->code_postal, $magasin->ville]);
         $this->assertSame(
-            [ResultatVerification::Indisponible, ResultatVerification::Indisponible, ResultatVerification::Concluante, ResultatVerification::Concluante],
+            [ResultatVerification::Indisponible, ResultatVerification::Concluante],
             app(TenantContext::class)->runAsSociete($societe, fn (): array => VerificationSociete::query()->orderBy('id')->pluck('resultat')->all()),
         );
     }
@@ -199,7 +235,7 @@ class InscriptionSocieteTest extends TestCase
         return [
             'tout est libre' => [static fn (): mixed => null],
             'SIREN d\'une société validée' => [static fn (): mixed => Magasin::factory()->avecLaSociete(['siren' => self::SIREN])->create(['siret' => '10000000900025'])],
-            'SIRET réservé' => [static fn (): mixed => Magasin::factory()->avecLaSociete(['siren' => self::SIREN])->create(['siret' => self::SIREN.self::NIC])],
+            'SIRET réservé' => [static fn (): mixed => Magasin::factory()->avecLaSociete(['siren' => self::SIREN])->create(['siret' => FauxRepertoireSirene::siretDuSiege(self::SIREN)])],
             'adresse d\'un compte' => [static fn (): mixed => User::factory()->create(['email' => 'jeanne@maboutique.fr'])],
         ];
     }
@@ -228,12 +264,12 @@ class InscriptionSocieteTest extends TestCase
     /**
      * Le vrai titulaire d'un SIREN déjà validé par une autre société
      * s'inscrit comme tout le monde : sa société est créée à vérifier, sans
-     * rien apprendre de l'autre, qui ne change pas.
+     * magasin, sans rien apprendre de l'autre, qui ne change pas.
      */
     public function test_la_confirmation_d_un_siren_deja_valide_ne_revele_rien_et_cree_une_societe_a_verifier(): void
     {
         Mail::fake();
-        $dejaValidee = Magasin::factory()->avecLaSociete(['siren' => self::SIREN])->create(['siret' => self::SIREN.self::NIC])->societe;
+        $dejaValidee = Magasin::factory()->avecLaSociete(['siren' => self::SIREN])->create(['siret' => FauxRepertoireSirene::siretDuSiege(self::SIREN)])->societe;
         app(TenantContext::class)->clear();
         $this->demander();
 
@@ -242,7 +278,7 @@ class InscriptionSocieteTest extends TestCase
         $nouvelle = Societe::query()->whereKeyNot($dejaValidee->id)->sole();
         $reponse->assertRedirect(TableauDeBord::getUrl(panel: 'societe', tenant: $nouvelle));
         $this->assertSame([self::SIREN, false], [$nouvelle->siren, $nouvelle->estValidee()]);
-        $this->assertSame(self::SIREN.self::NIC, Magasin::query()->where('societe_id', $nouvelle->id)->sole()->siret);
+        $this->assertSame(0, Magasin::query()->where('societe_id', $nouvelle->id)->count());
         $this->assertTrue($dejaValidee->fresh()->estValidee());
     }
 
@@ -303,8 +339,8 @@ class InscriptionSocieteTest extends TestCase
     /**
      * Le propriétaire que crée la confirmation de son lien, et non la
      * fabrique, agit dès son inscription : son adresse est confirmée, son
-     * mot de passe est le sien, et il ouvre l'espace de sa société et son
-     * premier magasin.
+     * mot de passe est le sien, il ouvre l'espace de sa société et peut y
+     * créer son premier magasin.
      */
     public function test_le_proprietaire_inscrit_par_son_lien_peut_agir_des_son_inscription(): void
     {
@@ -314,8 +350,8 @@ class InscriptionSocieteTest extends TestCase
         $this->assertTrue($proprietaire->peutAgir());
         $this->assertTrue($proprietaire->aConfirmeSonAdresse());
         $this->assertFalse($proprietaire->peutRefuserSonCompte());
-        $this->assertTrue($proprietaire->peutOuvrir(Magasin::query()->where('societe_id', $societe->id)->sole()));
         $this->assertTrue($proprietaire->canAccessPanel(Filament::getPanel('societe')));
+        $this->assertTrue($proprietaire->can('creerUnMagasin', $societe));
     }
 
     /**
@@ -355,9 +391,10 @@ class InscriptionSocieteTest extends TestCase
     }
 
     /**
-     * Les entrées du journal d'audit de l'inscription (contrôles Sirene,
-     * premier magasin, société) ont pour auteur la personne qui l'a
-     * confirmée, bien qu'elle ne soit connectée qu'ensuite.
+     * Les entrées du journal d'audit de l'inscription (contrôle Sirene de
+     * l'entreprise, société) ont pour auteur la personne qui l'a confirmée,
+     * bien qu'elle ne soit connectée qu'ensuite ; aucune ne parle d'un
+     * magasin.
      */
     public function test_les_entrees_d_audit_de_l_inscription_ont_le_proprietaire_pour_auteur(): void
     {
@@ -370,8 +407,6 @@ class InscriptionSocieteTest extends TestCase
         $proprietaire = User::query()->sole();
         $this->assertSame(
             [
-                ['verification_enregistree', 'membre', $proprietaire->id, 'Jeanne Dupont'],
-                ['magasin_cree', 'membre', $proprietaire->id, 'Jeanne Dupont'],
                 ['verification_enregistree', 'membre', $proprietaire->id, 'Jeanne Dupont'],
                 ['societe_inscrite', 'membre', $proprietaire->id, 'Jeanne Dupont'],
             ],
@@ -421,7 +456,7 @@ class InscriptionSocieteTest extends TestCase
         $societes = Societe::query()->orderBy('id')->get();
         $this->assertSame([self::SIREN, self::SIREN], $societes->pluck('siren')->all());
         $this->assertSame([false, false], $societes->map(fn (Societe $societe): bool => $societe->estValidee())->all());
-        $this->assertSame([self::SIREN.self::NIC, self::SIREN.self::NIC], Magasin::query()->orderBy('id')->pluck('siret')->all());
+        $this->assertSame(0, Magasin::query()->count());
     }
 
     public function test_le_lien_expire_apres_24_heures(): void
@@ -544,98 +579,9 @@ class InscriptionSocieteTest extends TestCase
     }
 
     /**
-     * Les établissements de La Poste (SIREN 356000000) ne suivent pas la
-     * clé de Luhn : la somme de leurs chiffres est un multiple de 5.
-     */
-    public function test_un_siret_de_la_poste_se_controle_par_la_somme_de_ses_chiffres(): void
-    {
-        Mail::fake();
-
-        $this->demander(['siren' => '356000000', 'nic' => '00002'])
-            ->assertHasFormErrors(['nic' => fn (array $reglesEnEchec, array $messages): bool => $messages === [SiretValide::MESSAGE]]);
-        $this->travel(61)->seconds();
-        $this->demander(['siren' => '356000000', 'nic' => '00001'])->assertHasNoFormErrors();
-
-        $this->assertSame(['siren' => '356000000', 'nic' => '00001'], array_intersect_key(DemandeInscription::query()->sole()->donnees, ['siren' => true, 'nic' => true]));
-    }
-
-    /**
-     * Le code proposé depuis le nom se modifie avant l'inscription ; saisi
-     * en minuscules, il s'enregistre en majuscules.
-     */
-    public function test_le_code_propose_se_modifie_avant_l_inscription(): void
-    {
-        Mail::fake();
-
-        Livewire::test(InscriptionSociete::class)
-            ->fillForm(['nom_magasin' => 'Ma Boutique'])
-            ->assertFormSet(['code' => 'MABOUT'])
-            ->fillForm($this->inscription(['code' => 'lyon1']))
-            ->call('register')
-            ->assertHasNoFormErrors();
-        $this->post($this->lienEnvoye());
-
-        $this->assertSame('LYON1', Magasin::query()->sole()->code);
-    }
-
-    /**
-     * Le code proposé suit le nom tant que la personne ne l'a pas changé ;
-     * un code saisi n'est jamais écrasé.
-     */
-    public function test_le_code_propose_suit_le_nom_sans_ecraser_un_code_saisi(): void
-    {
-        Livewire::test(InscriptionSociete::class)
-            ->fillForm(['nom_magasin' => 'Ma Boutique'])
-            ->fillForm(['nom_magasin' => 'Piliqi Store'])
-            ->assertFormSet(['code' => 'PILIQI'])
-            ->fillForm(['code' => 'LYON1'])
-            ->fillForm(['nom_magasin' => 'Boutique de Lyon'])
-            ->assertFormSet(['code' => 'LYON1']);
-    }
-
-    /**
-     * La page est ouverte à tous : ni le code proposé ni la validation du
-     * champ seul ne disent qu'une autre société porte déjà ce code, que la
-     * nouvelle société reçoit tel quel.
-     */
-    public function test_ni_la_proposition_ni_la_validation_du_code_ne_revelent_les_codes_d_une_autre_societe(): void
-    {
-        Mail::fake();
-        Magasin::factory()->create(['code' => 'MABOUT']);
-        app(TenantContext::class)->clear();
-
-        Livewire::test(InscriptionSociete::class)
-            ->fillForm(['nom_magasin' => 'Ma Boutique'])
-            ->assertFormSet(['code' => 'MABOUT'])
-            ->call('validateOnly', 'data.code')
-            ->assertHasNoErrors(['data.code']);
-        $this->demander();
-        $this->post($this->lienEnvoye());
-
-        $this->assertSame(['MABOUT', 'MABOUT'], Magasin::query()->orderBy('id')->pluck('code')->all());
-    }
-
-    /**
-     * Un code mal formé est refusé à la demande, avec le message de
-     * l'identité du magasin : refusé, il n'envoie rien.
-     */
-    public function test_un_code_refuse_n_envoie_aucune_demande(): void
-    {
-        Mail::fake();
-
-        $this->demander(['code' => 'LYON-1'])
-            ->assertHasFormErrors(['code'])
-            ->assertSee('Le code compte 2 à 10 lettres ou chiffres, sans espace ni tiret.');
-
-        $this->assertSame(0, DemandeInscription::query()->count());
-        Mail::assertNothingSent();
-    }
-
-    /**
      * Une adresse prise par un compte entre la demande et sa confirmation
      * (une autre demande confirmée avant) : la confirmation est refusée, le
-     * lien reste valable, et rien n'est créé, ni société, ni compte, ni
-     * magasin.
+     * lien reste valable, et rien n'est créé, ni société, ni compte.
      */
     public function test_une_confirmation_refusee_ne_laisse_ni_societe_ni_compte(): void
     {
@@ -643,14 +589,14 @@ class InscriptionSocieteTest extends TestCase
         $this->demander();
         $premierLien = $this->lienEnvoye();
         $this->travel(61)->seconds();
-        $this->demander(['siren' => '200000008', 'nic' => '00017']);
+        $this->demander(['siren' => '200000008']);
         $secondLien = $this->lienEnvoye();
         $this->post($premierLien);
         auth()->logout();
 
         $this->post($secondLien)->assertOk()->assertSee('Cette adresse e-mail ne peut pas être utilisée.');
 
-        $this->assertSame([1, 1, 1], [Societe::query()->count(), User::query()->count(), Magasin::query()->count()]);
+        $this->assertSame([1, 1, 0], [Societe::query()->count(), User::query()->count(), Magasin::query()->count()]);
         $this->assertNull(DemandeInscription::query()->where('jeton_hache', DemandeInscription::empreinte(basename(parse_url($secondLien, PHP_URL_PATH))))->sole()->consommee_le);
         $this->assertGuest();
     }
@@ -699,9 +645,6 @@ class InscriptionSocieteTest extends TestCase
     {
         return [
             'siren' => self::SIREN,
-            'nom_magasin' => 'Ma Boutique',
-            'code' => 'MABOUT',
-            'nic' => self::NIC,
             'name' => 'Jeanne Dupont',
             'email' => 'jeanne@maboutique.fr',
             'password' => 'mot-de-passe-sur',
@@ -728,14 +671,5 @@ class InscriptionSocieteTest extends TestCase
     private function lienEnvoye(): string
     {
         return Mail::sent(DemandeInscriptionMail::class)->last()->lien;
-    }
-
-    /**
-     * Le NIC d'un établissement actif de ce SIREN dans le répertoire
-     * factice.
-     */
-    private static function nicActif(string $siren): string
-    {
-        return substr(IdentifiantsInsee::avecSaCle($siren.'0001'), 9);
     }
 }

@@ -10,7 +10,13 @@ use App\Integrations\Sirene\Contracts\RepertoireSirene;
  * requête (voir VerificationServiceProvider) : toute entreprise d'un SIREN
  * valide y est active, une société par actions simplifiée, et tout
  * établissement d'un SIRET valide y est actif, rattaché à son SIREN, à
- * Paris. Font exception, pour essayer les refus :
+ * Paris ; celui du NIC 0001 est son siège. Ses établissements actifs
+ * (voir etablissementsActifs()) sont son siège et, sauf pour un
+ * entrepreneur individuel, sa boutique (NIC 0002, enseigne
+ * ENSEIGNE_DE_LA_BOUTIQUE), avec ceux qu'un test y ajoute, sans ceux qui
+ * sont fermés, oubliés ou rattachés à une autre entreprise ; aucun pour
+ * une entreprise cessée ou inconnue.
+ * Font exception, pour essayer les refus :
  * - SIREN_CESSEE, une entreprise cessée ;
  * - SIREN_INCONNU, une entreprise que le répertoire ne connaît pas ;
  * - SIREN_INJOIGNABLE, pour laquelle le répertoire ne répond pas ;
@@ -19,8 +25,8 @@ use App\Integrations\Sirene\Contracts\RepertoireSirene;
  * - tout établissement dont le NIC commence par 9, fermé.
  *
  * Un test règle en plus ses propres réponses (voir fermer(), cesser(),
- * oublier(), deplacer(), nommer(), rendreInjoignable()) sur l'instance du
- * conteneur.
+ * oublier(), deplacer(), nommer(), ajouterUnEtablissement(), rattacherA(),
+ * listerEnPartie(), rendreInjoignable()) sur l'instance du conteneur.
  */
 class FauxRepertoireSirene implements RepertoireSirene
 {
@@ -34,7 +40,11 @@ class FauxRepertoireSirene implements RepertoireSirene
 
     public const SIREN_ENTREPRENEUR_INDIVIDUEL = '000000950';
 
+    public const ENSEIGNE_DE_LA_BOUTIQUE = 'BOUTIQUE REPUBLIQUE';
+
     private bool $injoignable = false;
+
+    private bool $enPartie = false;
 
     /** @var array<string, true> */
     private array $cessees = [];
@@ -50,6 +60,12 @@ class FauxRepertoireSirene implements RepertoireSirene
 
     /** @var array<string, string> */
     private array $denominations = [];
+
+    /** @var array<string, string|null> l'enseigne de chaque établissement ajouté, par SIRET */
+    private array $ajoutes = [];
+
+    /** @var array<string, string> le SIREN auquel le répertoire rattache ces établissements, par SIRET */
+    private array $rattachements = [];
 
     public function unite(string $siren): ?UniteSirene
     {
@@ -90,14 +106,44 @@ class FauxRepertoireSirene implements RepertoireSirene
 
         return new EtablissementSirene(
             siret: $siret,
-            siren: $siren,
+            siren: $this->rattachements[$siret] ?? $siren,
             actif: ! str_starts_with(substr($siret, 9), '9') && ! isset($this->fermes[$siret]),
             adresse: $diffusionPartielle ? null : '1 RUE DE LA REPUBLIQUE',
             complementAdresse: null,
             codePostal: $diffusionPartielle ? null : ($this->adresses[$siret][0] ?? '75001'),
             ville: $this->adresses[$siret][1] ?? 'PARIS',
             diffusionPartielle: $diffusionPartielle,
+            enseigne: match (true) {
+                array_key_exists($siret, $this->ajoutes) => $this->ajoutes[$siret],
+                $siret === self::siretDeLaBoutique($siren) => self::ENSEIGNE_DE_LA_BOUTIQUE,
+                default => null,
+            },
+            estSiege: $siret === self::siretDuSiege($siren),
         );
+    }
+
+    public function etablissementsActifs(string $siren): EtablissementsActifs
+    {
+        $unite = $this->unite($siren);
+
+        if ($unite === null || ! $unite->active) {
+            return new EtablissementsActifs([], true);
+        }
+
+        $sirets = [
+            self::siretDuSiege($siren),
+            ...($siren === self::SIREN_ENTREPRENEUR_INDIVIDUEL ? [] : [self::siretDeLaBoutique($siren)]),
+            ...array_filter(array_keys($this->ajoutes), static fn (string $siret): bool => str_starts_with($siret, $siren)),
+        ];
+        $actifs = array_values(array_filter(
+            array_map($this->etablissement(...), array_unique($sirets)),
+            static fn (?EtablissementSirene $etablissement): bool => $etablissement !== null && $etablissement->actif && $etablissement->estRattacheA($siren),
+        ));
+        usort($actifs, static fn (EtablissementSirene $un, EtablissementSirene $autre): int => [! $un->estSiege, $un->nic()] <=> [! $autre->estSiege, $autre->nic()]);
+
+        return $this->enPartie
+            ? new EtablissementsActifs(array_slice($actifs, 0, 1), false)
+            : new EtablissementsActifs($actifs, true);
     }
 
     /**
@@ -107,6 +153,15 @@ class FauxRepertoireSirene implements RepertoireSirene
     public static function siretDuSiege(string $siren): string
     {
         return IdentifiantsInsee::avecSaCle($siren.'0001');
+    }
+
+    /**
+     * Le SIRET de la boutique d'une entreprise fictive : son SIREN suivi
+     * du NIC 0002 et de sa clé.
+     */
+    public static function siretDeLaBoutique(string $siren): string
+    {
+        return IdentifiantsInsee::avecSaCle($siren.'0002');
     }
 
     public function fermer(string $siret): void
@@ -128,6 +183,34 @@ class FauxRepertoireSirene implements RepertoireSirene
     public function nommer(string $siren, string $denomination): void
     {
         $this->denominations[$siren] = $denomination;
+    }
+
+    /**
+     * Un établissement de plus parmi les établissements actifs de son
+     * entreprise, avec cette enseigne.
+     */
+    public function ajouterUnEtablissement(string $siret, ?string $enseigne): void
+    {
+        $this->ajoutes[$siret] = $enseigne;
+    }
+
+    /**
+     * Un établissement que le répertoire rattache à une autre entreprise
+     * que celle de son SIREN.
+     */
+    public function rattacherA(string $siret, string $siren): void
+    {
+        $this->rattachements[$siret] = $siren;
+    }
+
+    /**
+     * Le répertoire ne rend plus que le premier des établissements actifs
+     * d'une entreprise, comme pour une entreprise qui en compte plus qu'il
+     * n'en rend en une fois.
+     */
+    public function listerEnPartie(bool $enPartie = true): void
+    {
+        $this->enPartie = $enPartie;
     }
 
     public function cesser(string $siren): void

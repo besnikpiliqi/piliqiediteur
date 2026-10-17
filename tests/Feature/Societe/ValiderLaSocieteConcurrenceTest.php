@@ -48,7 +48,9 @@ class ValiderLaSocieteConcurrenceTest extends TestCase
         $this->exigerUnServeurDeBaseDeDonnees();
         $siren = SocieteFactory::sirenFictif();
         $premiere = $this->inscrireUneSociete($siren);
+        $magasinDeLaPremiere = $this->creerLeMagasinDuSiege($premiere)->id;
         $seconde = $this->inscrireUneSociete($siren);
+        $this->creerLeMagasinDuSiege($seconde);
         $this->rendreValidable($premiere, $seconde);
         $this->assertSame([true, true], [$this->evaluer($premiere)->estValidable(), $this->evaluer($seconde)->estValidable()]);
         $secondeId = $seconde->id;
@@ -69,7 +71,6 @@ class ValiderLaSocieteConcurrenceTest extends TestCase
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $this->assertSame([true, false], [$premiere->fresh()->estValidee(), $seconde->fresh()->estValidee()]);
         $this->assertTrue($this->evaluer($seconde)->reclamationPossible());
-        $magasinDeLaPremiere = $premiere->magasinsReels()->sole()->id;
         $this->assertSame([$magasinDeLaPremiere], SiretMagasin::query()->pluck('magasin_id')->all());
         $this->assertSame([$magasinDeLaPremiere], PeriodeActivite::query()->pluck('magasin_id')->all());
         $this->assertNull($seconde->proprietaire->fresh()->qualite_verifiee_le);
@@ -87,6 +88,7 @@ class ValiderLaSocieteConcurrenceTest extends TestCase
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         $societe = $this->inscrireUneSociete();
+        $this->creerLeMagasinDuSiege($societe);
         $editeur = new InterventionDeLEditeur('Doute levé après examen du dossier', 'DOSSIER-2026-0003', ['alice']);
         app(LeverUnSignalAction::class)->signalerUnDoute($societe, $editeur);
         $this->verifierLIdentiteDuProprietaire($societe);

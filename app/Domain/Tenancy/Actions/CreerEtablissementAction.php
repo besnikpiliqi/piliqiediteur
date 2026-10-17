@@ -13,6 +13,7 @@ use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Rules\CodeMagasinLibre;
 use App\Domain\Tenancy\Rules\NicValide;
 use App\Domain\Tenancy\Rules\SiretValide;
+use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\MiseEnActiviteDesMagasins;
@@ -27,8 +28,10 @@ use LogicException;
 
 /**
  * Point d'entrée unique pour la création d'un magasin, établissement d'une
- * société : à l'inscription de la société (voir CreerSocieteAction), puis
- * pour chacun des suivants.
+ * société : une société s'inscrit sans magasin (voir CreerSocieteAction),
+ * et chacun de ses magasins, le premier compris, se crée ici, depuis son
+ * espace d'administration (voir CreerMagasin, qui propose les
+ * établissements actifs de son SIREN lus au répertoire Sirene).
  *
  * Contrôles, avant toute écriture :
  * - le propriétaire de la société, ou un administrateur de tous ses
@@ -40,9 +43,10 @@ use LogicException;
  *   réservé, même autrefois (voir SiretsDesMagasins) : le refus ne dit
  *   rien de qui l'a. Avant la validation, rien n'est réservé pour la
  *   société et rien ne lui dit qu'un SIRET l'est par une autre : la
- *   réservation se joue à la validation, et une inscription n'est jamais
- *   refusée parce qu'une autre société a réservé ce SIRET ; le code,
- *   libre dans la société (voir CodeMagasinLibre), ou proposé depuis le
+ *   réservation se joue à la validation, et une société en cours de
+ *   vérification ne se voit jamais refuser un magasin parce qu'une autre
+ *   société a réservé ce SIRET ; le code, libre dans la société (voir
+ *   CodeMagasinLibre) et enregistré en majuscules, ou proposé depuis le
  *   nom s'il n'est pas choisi ;
  * - le répertoire Sirene de l'INSEE, consulté tout de suite (voir
  *   ControleSirene) : un établissement fermé, inconnu ou rattaché à une
@@ -119,7 +123,7 @@ class CreerEtablissementAction
                 $magasin = Magasin::forceCreate([
                     'societe_id' => $societe->getKey(),
                     'nom' => $valides['nom'],
-                    'code' => filled($valides['code'] ?? null) ? $valides['code'] : null,
+                    'code' => filled($valides['code'] ?? null) ? CodeMagasin::normaliser($valides['code']) : null,
                     'email' => filled($valides['email'] ?? null) ? $valides['email'] : null,
                     'siret' => $siret,
                     'etablissement_verifie_le' => $etablissement === null ? null : now(),

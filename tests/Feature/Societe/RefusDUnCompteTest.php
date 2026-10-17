@@ -33,7 +33,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Auth\ChangerMotDePasseProvisoire;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\PageDuLien;
-use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Database\Factories\SocieteFactory;
 use Filament\Facades\Filament;
@@ -317,13 +316,13 @@ class RefusDUnCompteTest extends TestCase
         $compte = $this->membre($magasin, RoleMagasin::Vendeur, null, ['email' => 'paul@example.test']);
         app(RefuserSonCompteAction::class)->handle($compte);
         app(TenantContext::class)->clear();
-        [$societe, $premierMagasin] = $this->nouvelleSociete();
+        $societe = ['siren' => SocieteFactory::sirenFictif()];
 
-        $this->assertThrows(fn () => app(CreerSaSocieteAvecUnCompteRetireAction::class)->handle('paul@example.test', self::MOT_DE_PASSE_CHOISI, $societe, $premierMagasin), ValidationException::class, CreerSaSocieteAvecUnCompteRetireAction::MESSAGE_IDENTIFIANTS);
+        $this->assertThrows(fn () => app(CreerSaSocieteAvecUnCompteRetireAction::class)->handle('paul@example.test', self::MOT_DE_PASSE_CHOISI, $societe), ValidationException::class, CreerSaSocieteAvecUnCompteRetireAction::MESSAGE_IDENTIFIANTS);
         $this->assertSame((int) $magasin->societe_id, (int) $compte->refresh()->societe_id);
 
         app(ChoisirSonMotDePasseParLeLienAction::class)->handle($compte, Password::broker()->createToken($compte), 'mon-propre-mot-de-passe');
-        $nouvelle = app(CreerSaSocieteAvecUnCompteRetireAction::class)->handle('paul@example.test', 'mon-propre-mot-de-passe', $societe, $premierMagasin);
+        $nouvelle = app(CreerSaSocieteAvecUnCompteRetireAction::class)->handle('paul@example.test', 'mon-propre-mot-de-passe', $societe);
 
         $compte->refresh();
         $this->assertSame([(int) $nouvelle->id, RoleSociete::Proprietaire, StatutCompte::Actif], [(int) $compte->societe_id, $compte->role_societe, $compte->statut]);
@@ -366,14 +365,14 @@ class RefusDUnCompteTest extends TestCase
         $this->ouvrirUneSessionAilleurs($compte);
         app(RefuserSonCompteAction::class)->handle($compte);
         app(TenantContext::class)->clear();
-        [$societe, $premierMagasin] = $this->nouvelleSociete();
+        $siren = SocieteFactory::sirenFictif();
         $societes = Societe::query()->count();
 
-        $this->post(route('societe.creer.enregistrer'), ['email' => 'paul@example.test', 'password' => self::MOT_DE_PASSE_CHOISI, 'siren' => $societe['siren'], 'nom' => $premierMagasin['nom'], 'nic' => $premierMagasin['nic']])
+        $this->post(route('societe.creer.enregistrer'), ['email' => 'paul@example.test', 'password' => self::MOT_DE_PASSE_CHOISI, 'siren' => $siren])
             ->assertStatus(422)
             ->assertSeeText(CreerSaSocieteAvecUnCompteRetireAction::MESSAGE_IDENTIFIANTS);
         $this->actingAs($compte)
-            ->post(route('societe.creer.enregistrer'), ['email' => 'paul@example.test', 'password' => self::MOT_DE_PASSE_PROVISOIRE, 'siren' => $societe['siren'], 'nom' => $premierMagasin['nom'], 'nic' => $premierMagasin['nic']])
+            ->post(route('societe.creer.enregistrer'), ['email' => 'paul@example.test', 'password' => self::MOT_DE_PASSE_PROVISOIRE, 'siren' => $siren])
             ->assertStatus(422);
 
         $this->assertSame($societes, Societe::query()->count());
@@ -425,19 +424,6 @@ class RefusDUnCompteTest extends TestCase
             ->call('authenticate')
             ->assertHasErrors(['data.email']);
         $this->assertGuest();
-    }
-
-    /**
-     * Le SIREN et le premier magasin d'une nouvelle société, connus du
-     * répertoire Sirene factice.
-     *
-     * @return array{0: array{siren: string}, 1: array{nom: string, nic: string}}
-     */
-    private function nouvelleSociete(): array
-    {
-        $siren = SocieteFactory::sirenFictif();
-
-        return [['siren' => $siren], ['nom' => 'Ma Propre Boutique', 'nic' => substr(FauxRepertoireSirene::siretDuSiege($siren), 9)]];
     }
 
     /**

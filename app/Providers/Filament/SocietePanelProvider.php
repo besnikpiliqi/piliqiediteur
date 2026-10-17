@@ -30,10 +30,11 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 /**
  * L'espace d'administration d'une société (URL
  * /societe/{societe:uuid}/...) : son tableau de bord, sa vérification, son
- * identité légale et ses paramètres fiscaux, ses comptes (voir
- * MembreResource), ouverts à son propriétaire et à ses administrateurs
- * actifs, selon leurs autorisations et leur portée, jamais à un membre ni à
- * un expert-comptable (voir User::canAccessPanel(), SocietePolicy et
+ * identité légale et ses paramètres fiscaux, ses magasins (voir
+ * MagasinResource), ses comptes (voir MembreResource), ouverts à son
+ * propriétaire et à ses administrateurs actifs, selon leurs autorisations
+ * et leur portée, jamais à un membre ni à un expert-comptable (voir
+ * User::canAccessPanel(), SocietePolicy, MagasinDeLaSocietePolicy et
  * MembrePolicy). Un compte au mot de passe provisoire y est d'abord mené à
  * son changement (voir ExigerUnMotDePasseDefinitif). La tenancy Filament y est
  * branchée sur Societe, sans menu de changement (un compte n'appartient
@@ -66,10 +67,13 @@ class SocietePanelProvider extends PanelProvider
             ])
             ->databaseNotifications()
             ->userMenuItems([
+                // Seulement pour qui a un magasin à ouvrir : sans magasin,
+                // le panneau des magasins le ramènerait ici.
                 MenuItem::make()
                     ->label('Mes magasins')
                     ->icon('heroicon-o-building-storefront')
-                    ->url(fn (): string => route('filament.app.tenant')),
+                    ->url(fn (): string => route('filament.app.tenant'))
+                    ->visible(fn (): bool => auth()->user()?->magasinsAccessibles()->isNotEmpty() ?? false),
             ])
             ->discoverResources(in: app_path('Filament/Societe/Resources'), for: 'App\\Filament\\Societe\\Resources')
             ->discoverPages(in: app_path('Filament/Societe/Pages'), for: 'App\\Filament\\Societe\\Pages')

@@ -729,18 +729,21 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * Sans cette implémentation explicite, Filament se rabat sur
      * `config('app.env') === 'local'` pour autoriser l'accès à un panneau :
      * l'accès ne doit jamais dépendre de l'environnement. Le panneau des
-     * magasins s'ouvre à un compte actif qui a au moins un magasin à
-     * ouvrir ; celui de l'administration de la société, à son propriétaire
-     * et à ses administrateurs actifs. Un compte au mot de passe provisoire
-     * n'y voit que le changement de son mot de passe (voir
-     * ExigerUnMotDePasseDefinitif). Tout autre panneau reste fermé, jusqu'à
-     * ce que l'administration de l'éditeur (étape 13 de la feuille de
-     * route) définisse le sien.
+     * magasins s'ouvre à tout compte actif : celui qui n'a encore aucun
+     * magasin à ouvrir y est mené à l'espace de sa société, s'il peut
+     * l'administrer, sinon à une page qui le lui dit (voir
+     * MenerUnCompteSansMagasin), et aucun magasin ne s'ouvre hors de ceux
+     * que lui donne canAccessTenant(). Celui de l'administration de la
+     * société s'ouvre à son propriétaire et à ses administrateurs actifs. Un
+     * compte au mot de passe provisoire n'y voit que le changement de son
+     * mot de passe (voir ExigerUnMotDePasseDefinitif). Tout autre panneau
+     * reste fermé, jusqu'à ce que l'administration de l'éditeur (étape 13
+     * de la feuille de route) définisse le sien.
      */
     public function canAccessPanel(Panel $panel): bool
     {
         return match ($panel->getId()) {
-            'app' => $this->magasinsAccessibles()->isNotEmpty(),
+            'app' => $this->estActif(),
             'societe' => $this->peutAdministrer(),
             default => false,
         };

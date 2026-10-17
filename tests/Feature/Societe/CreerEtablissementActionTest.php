@@ -22,11 +22,13 @@ use App\Domain\Tenancy\Models\SiretMagasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Rules\CodeMagasinLibre;
+use App\Domain\Tenancy\Rules\SiretValide;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
+use App\Models\User;
 use Closure;
 use Database\Factories\MagasinFactory;
 use Illuminate\Database\QueryException;
@@ -186,6 +188,26 @@ class CreerEtablissementActionTest extends TestCase
         $this->assertSame(1, Magasin::query()->count());
         $this->assertSame(1, Client::query()->withoutGlobalScopes()->count());
         $this->assertSame($entrees, $this->nombreDEntreesAudit($premier->societe));
+    }
+
+    /**
+     * Les établissements de La Poste (SIREN 356000000) ne suivent pas la
+     * clé de Luhn : la somme de leurs chiffres est un multiple de 5. Le NIC
+     * saisi pour un magasin se contrôle ainsi.
+     */
+    public function test_un_siret_de_la_poste_se_controle_par_la_somme_de_ses_chiffres(): void
+    {
+        $proprietaire = User::factory()->for(Societe::factory()->state(['siren' => '356000000']))->create();
+        $societe = $proprietaire->societe;
+        app(TenantContext::class)->clear();
+
+        $this->assertThrows(
+            fn () => app(CreerEtablissementAction::class)->handle($proprietaire, $societe, ['nom' => 'Bureau de poste', 'nic' => '00002']),
+            fn (ValidationException $refus): bool => $refus->errors() === ['nic' => [SiretValide::MESSAGE]],
+        );
+        $magasin = app(CreerEtablissementAction::class)->handle($proprietaire, $societe, ['nom' => 'Bureau de poste', 'nic' => '00001']);
+
+        $this->assertSame('35600000000001', $magasin->siret);
     }
 
     /**

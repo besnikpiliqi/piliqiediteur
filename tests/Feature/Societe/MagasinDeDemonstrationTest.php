@@ -62,6 +62,7 @@ class MagasinDeDemonstrationTest extends TestCase
     public function test_le_proprietaire_ouvre_une_seule_demonstration_avant_la_validation(): void
     {
         $societe = $this->inscrireUneSociete();
+        $reel = $this->creerLeMagasinDuSiege($societe);
         $proprietaire = $societe->proprietaire;
 
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
@@ -82,13 +83,32 @@ class MagasinDeDemonstrationTest extends TestCase
             $this->dansUnPointDeSauvegarde(fn () => Magasin::forceCreate(['societe_id' => $societe->id, 'nom' => 'Seconde', 'code' => 'DEMO2', 'est_demonstration' => true, 'siret' => null])),
             QueryException::class,
         );
-        $vendeur = $this->membre($societe->magasinsReels()->sole(), RoleMagasin::Vendeur);
+        $vendeur = $this->membre($reel, RoleMagasin::Vendeur);
         $this->assertThrows(fn () => app(OuvrirLaDemonstrationAction::class)->handle($vendeur, $societe), VerificationRefuseeException::class, OuvrirLaDemonstrationAction::MESSAGE_SANS_AUTORISATION);
+    }
+
+    /**
+     * Une société qui n'a encore aucun magasin réel s'essaie dans sa
+     * démonstration comme une autre : elle l'ouvre, y vend, y encaisse et y
+     * clôture sa journée, et aucun magasin réel n'apparaît.
+     */
+    public function test_la_demonstration_fonctionne_sans_aucun_magasin_reel(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
+
+        $ticket = $this->vendre();
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $demonstration, now());
+
+        $this->assertSame(['payee', 1], [$ticket->fresh()->statut->value, ClotureCaisse::query()->count()]);
+        $this->assertSame(0, $societe->magasinsReels()->count());
+        $this->assertSame([$demonstration->id], $societe->proprietaire->magasinsAccessibles()->modelKeys());
     }
 
     public function test_l_ouverture_et_la_fin_de_la_demonstration_s_inscrivent_en_jet_100_et_105(): void
     {
         $societe = $this->inscrireUneSociete();
+        $reel = $this->creerLeMagasinDuSiege($societe);
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
 
         $this->verifierLIdentiteDuProprietaire($societe);
@@ -96,8 +116,8 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->assertSame(['260', '100', '130', '105', '270'], $this->codesDuJournal($demonstration));
         $statut = app(TenantContext::class)->runAs($demonstration, fn () => EnregistrementFiscal::query()->where('type', '270')->sole()->contenuSigne()['donnees']['details']);
         $this->assertSame(['parametre' => 'statut_magasin', 'magasin' => ['id' => $demonstration->id, 'nom' => 'Démonstration'], 'ancienne_valeur' => 'actif', 'nouvelle_valeur' => 'ferme'], $statut);
-        $this->assertNotContains('100', $this->codesDuJournal($societe->magasinsReels()->sole()));
-        $this->assertNotContains('105', $this->codesDuJournal($societe->magasinsReels()->sole()));
+        $this->assertNotContains('100', $this->codesDuJournal($reel));
+        $this->assertNotContains('105', $this->codesDuJournal($reel));
         $this->assertSame(
             [ActionAuditee::DemonstrationOuverte, ActionAuditee::DemonstrationFermee],
             app(TenantContext::class)->runAsSociete($societe, fn () => EntreeAudit::query()->where('magasin_id', $demonstration->id)->orderBy('id')->pluck('action')->all()),
@@ -107,7 +127,7 @@ class MagasinDeDemonstrationTest extends TestCase
     public function test_la_demonstration_vend_encaisse_et_cloture_dans_son_propre_registre(): void
     {
         $societe = $this->inscrireUneSociete();
-        $reel = $societe->magasinsReels()->sole();
+        $reel = $this->creerLeMagasinDuSiege($societe);
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
 
         $ticket = $this->vendre();
@@ -125,7 +145,7 @@ class MagasinDeDemonstrationTest extends TestCase
     public function test_ses_numeros_portent_le_code_demo_et_ne_touchent_aucune_serie_reelle(): void
     {
         $societe = $this->inscrireUneSociete();
-        $reel = $societe->magasinsReels()->sole();
+        $reel = $this->creerLeMagasinDuSiege($societe);
         $this->ouvrirLaDemonstrationEtYEntrer($societe);
 
         $ticket = $this->vendre();
@@ -157,6 +177,7 @@ class MagasinDeDemonstrationTest extends TestCase
     public function test_ses_documents_portent_une_identite_fictive_et_le_filigrane(): void
     {
         $societe = $this->inscrireUneSociete();
+        $reel = $this->creerLeMagasinDuSiege($societe);
         $this->ouvrirLaDemonstrationEtYEntrer($societe);
         $ticket = $this->vendre();
         $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::query()->where('type_client', 'professionnel')->sole(), [['produit_id' => Produit::query()->where('reference', 'DEMO-STYLO')->value('id'), 'quantite' => 3]]);
@@ -170,7 +191,7 @@ class MagasinDeDemonstrationTest extends TestCase
             $this->assertStringContainsString('DÉMONSTRATION — SANS VALEUR', $pdf);
             $this->assertStringContainsString('ENTREPRISE DE DÉMONSTRATION', $pdf);
             $this->assertStringNotContainsString($societe->siren, $pdf);
-            $this->assertStringNotContainsString($societe->magasinsReels()->sole()->siret, $pdf);
+            $this->assertStringNotContainsString((string) $reel->siret, $pdf);
             $this->assertStringNotContainsString((string) $societe->raison_sociale, $pdf);
         }
     }
@@ -197,7 +218,7 @@ class MagasinDeDemonstrationTest extends TestCase
     public function test_rien_ne_passe_du_magasin_de_demonstration_aux_magasins_reels(): void
     {
         $societe = $this->inscrireUneSociete();
-        $reel = $societe->magasinsReels()->sole();
+        $reel = $this->creerLeMagasinDuSiege($societe);
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
         $this->vendre();
 
@@ -301,7 +322,7 @@ class MagasinDeDemonstrationTest extends TestCase
     public function test_aucun_pdf_d_un_magasin_reel_ne_se_telecharge_avant_la_validation(): void
     {
         $societe = $this->inscrireUneSociete();
-        $reel = $societe->magasinsReels()->sole();
+        $reel = $this->creerLeMagasinDuSiege($societe);
         app(TenantContext::class)->set($reel);
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::query()->sole(), [['service_id' => Service::factory()->create()->id, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'quantite' => 1]]);
         $this->ouvrirLaDemonstrationEtYEntrer($societe);

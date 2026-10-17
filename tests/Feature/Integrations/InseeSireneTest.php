@@ -46,6 +46,7 @@ class InseeSireneTest extends TestCase
             self::URL.'/siret/00000001800012' => Http::response(['etablissement' => [
                 'siren' => '000000018',
                 'statutDiffusionEtablissement' => 'O',
+                'etablissementSiege' => true,
                 'adresseEtablissement' => [
                     'numeroVoieEtablissement' => '7',
                     'indiceRepetitionEtablissement' => 'B',
@@ -55,13 +56,13 @@ class InseeSireneTest extends TestCase
                     'codePostalEtablissement' => '69003',
                     'libelleCommuneEtablissement' => 'LYON',
                 ],
-                'periodesEtablissement' => [['etatAdministratifEtablissement' => 'F'], ['etatAdministratifEtablissement' => 'A']],
+                'periodesEtablissement' => [['etatAdministratifEtablissement' => 'F', 'enseigne1Etablissement' => 'LES LILAS'], ['etatAdministratifEtablissement' => 'A']],
             ]]),
         ]);
         $repertoire = new InseeSirene;
 
         $this->assertEquals(new UniteSirene('000000018', true, 'SOCIETE FICTIVE', '5710', '00012', false), $repertoire->unite('000000018'));
-        $this->assertEquals(new EtablissementSirene('00000001800012', '000000018', false, '7 B RUE DES LILAS', 'BATIMENT C', '69003', 'LYON', false), $repertoire->etablissement('00000001800012'));
+        $this->assertEquals(new EtablissementSirene('00000001800012', '000000018', false, '7 B RUE DES LILAS', 'BATIMENT C', '69003', 'LYON', false, 'LES LILAS', true), $repertoire->etablissement('00000001800012'));
         Http::assertSentCount(2);
         Http::assertSent(fn (Request $requete): bool => $requete->url() === self::URL.'/siren/000000018' && $requete->hasHeader('X-INSEE-Api-Key-Integration', self::CLE));
     }
@@ -92,7 +93,77 @@ class InseeSireneTest extends TestCase
 
         $this->assertEquals(new UniteSirene('000000026', true, 'JEANNE DUPONT', '1000', '00015', false), $repertoire->unite('000000026'));
         $this->assertEquals(new UniteSirene('000000034', true, null, '5710', '00010', true), $repertoire->unite('000000034'));
-        $this->assertEquals(new EtablissementSirene('00000003400010', '000000034', true, null, null, null, 'NANTES', true), $repertoire->etablissement('00000003400010'));
+        $this->assertEquals(new EtablissementSirene('00000003400010', '000000034', true, null, null, null, 'NANTES', true, null, false), $repertoire->etablissement('00000003400010'));
+    }
+
+    /**
+     * Les établissements actifs d'une entreprise se cherchent en une
+     * requête : ceux du SIREN dont l'état administratif est actif à la date
+     * du jour. Chaque établissement rendu se relit dans sa période en
+     * cours : un établissement fermé depuis, ou rattaché à une autre
+     * entreprise, n'est pas proposé ; le siège vient d'abord, puis l'ordre
+     * des NIC ; l'enseigne, à défaut la dénomination usuelle, le nomme.
+     */
+    public function test_les_etablissements_actifs_d_une_entreprise_se_lisent_par_une_recherche(): void
+    {
+        $this->travelTo('2026-10-17 00:30:00');
+        $etablissement = fn (string $siret, bool $siege, string $etat, array $periode = [], string $siren = '000000018'): array => [
+            'siren' => $siren,
+            'siret' => $siret,
+            'etablissementSiege' => $siege,
+            'statutDiffusionEtablissement' => 'O',
+            'adresseEtablissement' => ['numeroVoieEtablissement' => '3', 'typeVoieEtablissement' => 'RUE', 'libelleVoieEtablissement' => 'DU PORT', 'codePostalEtablissement' => '13002', 'libelleCommuneEtablissement' => 'MARSEILLE'],
+            'periodesEtablissement' => [['etatAdministratifEtablissement' => $etat, ...$periode], ['etatAdministratifEtablissement' => 'A']],
+        ];
+        Http::fake([self::URL.'/siret?*' => Http::response([
+            'header' => ['statut' => 200, 'total' => 4, 'debut' => 0, 'nombre' => 4],
+            'etablissements' => [
+                $etablissement('00000001800038', false, 'A', ['denominationUsuelleEtablissement' => 'COMPTOIR DU PORT']),
+                $etablissement('00000001800020', false, 'F', ['enseigne1Etablissement' => 'FERME DEPUIS']),
+                $etablissement('00000001800012', true, 'A'),
+                $etablissement('00000002600011', false, 'A', [], '000000026'),
+            ],
+        ])]);
+
+        $liste = (new InseeSirene)->etablissementsActifs('000000018');
+
+        $this->assertTrue($liste->complete);
+        $this->assertEquals([
+            new EtablissementSirene('00000001800012', '000000018', true, '3 RUE DU PORT', null, '13002', 'MARSEILLE', false, null, true),
+            new EtablissementSirene('00000001800038', '000000018', true, '3 RUE DU PORT', null, '13002', 'MARSEILLE', false, 'COMPTOIR DU PORT', false),
+        ], $liste->etablissements);
+        Http::assertSent(function (Request $requete): bool {
+            parse_str((string) parse_url($requete->url(), PHP_URL_QUERY), $parametres);
+
+            return str_starts_with($requete->url(), self::URL.'/siret?')
+                && $requete->hasHeader('X-INSEE-Api-Key-Integration', self::CLE)
+                && $parametres === ['q' => 'siren:000000018 AND periode(etatAdministratifEtablissement:A)', 'date' => '2026-10-17', 'nombre' => (string) InseeSirene::ETABLISSEMENTS_PAR_RECHERCHE];
+        });
+    }
+
+    /**
+     * Une recherche sans résultat (404) ne rend aucun établissement ; une
+     * entreprise qui en compte plus que la recherche n'en rend est listée
+     * en partie ; une réponse illisible rend le répertoire indisponible.
+     */
+    public function test_une_recherche_vide_partielle_ou_illisible_se_lit_sans_rien_inventer(): void
+    {
+        Http::fake([
+            self::URL.'/siret?q=siren%3A000000018*' => Http::response(['header' => ['statut' => 404]], 404),
+            self::URL.'/siret?q=siren%3A000000026*' => Http::response([
+                'header' => ['statut' => 200, 'total' => 1200, 'debut' => 0, 'nombre' => 1],
+                'etablissements' => [['siren' => '000000026', 'siret' => '00000002600011', 'etablissementSiege' => true, 'periodesEtablissement' => [['etatAdministratifEtablissement' => 'A']]]],
+            ]),
+            self::URL.'/siret?q=siren%3A000000034*' => Http::response(['header' => ['statut' => 200, 'total' => 1], 'etablissements' => [['siret' => 'pas un siret']]]),
+        ]);
+        $repertoire = new InseeSirene;
+
+        $vide = $repertoire->etablissementsActifs('000000018');
+        $partielle = $repertoire->etablissementsActifs('000000026');
+
+        $this->assertSame([[], true], [$vide->etablissements, $vide->complete]);
+        $this->assertSame([['00000002600011'], false], [array_map(fn (EtablissementSirene $etablissement): string => $etablissement->siret, $partielle->etablissements), $partielle->complete]);
+        $this->assertThrows(fn () => $repertoire->etablissementsActifs('000000034'), SireneIndisponibleException::class);
     }
 
     public function test_un_numero_inconnu_du_repertoire_ne_rend_rien(): void

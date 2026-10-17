@@ -6,7 +6,6 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
@@ -38,7 +37,6 @@ class CreerFactureAction
 {
     public function __construct(
         private readonly ConstructeurLigneDocument $constructeurLigne,
-        private readonly CalculateurLigne $calculateurLigne,
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
         private readonly DerogationsDePrix $derogations,
@@ -68,15 +66,15 @@ class CreerFactureAction
     {
         $facture = new Facture($attributs);
         $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $facture->noterSaNatureDOperation($attributs));
-        $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
-        $this->derogations->exiger($compte, [], $lignesConstruites, $contexte);
+        $document = $this->constructeurLigne->construireToutes($lignes, $contexte);
+        $this->derogations->exiger($compte, [], $document->lignes, $contexte);
         $facture->forceFill(['client_id' => $client->getKey(), 'cree_par' => $compte->getKey(), ...$contexte->colonnes()])->save();
 
-        foreach ($lignesConstruites as $ligne) {
+        foreach ($document->lignes as $ligne) {
             $facture->lignes()->create($ligne);
         }
 
-        $facture->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
+        $facture->forceFill($document->totaux)->save();
 
         return $facture->fresh('lignes');
     }

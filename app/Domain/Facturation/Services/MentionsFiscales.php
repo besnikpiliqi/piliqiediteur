@@ -34,9 +34,8 @@ use App\Domain\Tenancy\Enums\RegimeTva;
  *   réimprimé après un changement de l'option, il garde la mention de
  *   son émission.
  *
- * S'y ajoute, sous les lignes d'un document à un professionnel ou d'une
- * vente sans TVA française, l'explication de son calcul (voir calcul()),
- * qui ne se signe pas, et,
+ * S'y ajoute, sous les lignes de tout document hors franchise en base,
+ * l'explication de son calcul (voir calcul()), qui ne se signe pas, et,
  * sur l'avoir d'un client comptoir, la mention de son bon d'avoir (voir
  * bonDAvoir()).
  */
@@ -44,15 +43,13 @@ class MentionsFiscales
 {
     private const OPTION_DEBITS = 'Option pour le paiement de la taxe d\'après les débits';
 
-    private const CALCUL_VENTE_PROFESSIONNELLE = 'Client professionnel : HT de chaque ligne = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA calculée sur le total HT de chaque taux.';
+    private const CALCUL_VENTE = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence.';
 
-    private const CALCUL_RETOUR_PROFESSIONNEL = 'Client professionnel : chaque retour se calcule comme sa facture, pour tous les articles rendus jusqu\'ici (HT = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA sur ce HT, dans la limite de celle de la ligne), déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.';
+    private const CALCUL_RETOUR = 'Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 + taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.';
 
-    private const CALCUL_SANS_TVA = 'Vente sans TVA française : PU HT de chaque produit = prix catalogue TTC ÷ (1 + TVA retirée), au centime, comme celui d\'un service à son prix de référence ; un autre service se facture à son prix sans TVA.';
+    private const CALCUL_SANS_TVA = 'Vente sans TVA française : chaque produit, et chaque service à son prix de référence, se vend à son prix catalogue TTC sans la TVA française de son taux (HT de chaque taux = TTC du catalogue ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes) ; un autre service, à son prix sans TVA.';
 
-    private const CALCUL_VENTE_PROFESSIONNELLE_SANS_TVA = 'Client professionnel, vente sans TVA française : HT de chaque ligne de produit = quantité × prix catalogue TTC ÷ (1 + TVA retirée), arrondi une fois, comme celui d\'un service à son prix de référence ; un autre service se facture à son prix sans TVA.';
-
-    private const CALCUL_RETOUR_PROFESSIONNEL_SANS_TVA = 'Client professionnel, vente sans TVA française : chaque retour se calcule comme sa facture, pour tous les articles rendus jusqu\'ici (HT d\'un produit = quantité × prix catalogue TTC ÷ (1 + TVA retirée), arrondi une fois, comme celui d\'un service à son prix de référence ; d\'un autre service, quantité × son prix sans TVA), déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.';
+    private const CALCUL_RETOUR_SANS_TVA = 'Vente sans TVA française : chaque retour rend, pour tous les articles d\'une ligne rendus jusqu\'ici, le calcul de la vente sur cette quantité, sans dépasser le HT de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.';
 
     /**
      * @param  Emetteur  $emetteur  celui qu'imprime le document : signé une fois émis (voir FigeSonEmetteur::emetteur()), la société et le magasin d'aujourd'hui pour un brouillon ou un devis, et pour le document qu'on émet (voir ContenuFiscal)
@@ -100,36 +97,30 @@ class MentionsFiscales
     }
 
     /**
-     * L'explication du calcul d'un document à un professionnel, que les
-     * PDF impriment sous ses lignes et que sa fiche affiche : depuis le HT
-     * de chaque ligne, PU HT x quantité peut différer du HT de la ligne
-     * (1 000 x 0,83 € pour 833,33 €, voir CalculateurLigne). Un avoir
-     * reprend le calcul de sa facture, par différence avec les avoirs déjà
-     * émis sur la même ligne (K2, voir
-     * CalculateurLigne::retourDeLigneProfessionnelle()) : sa TVA ne dépasse
-     * jamais celle de la ligne facturée, sa part de la TVA de son taux,
-     * qui peut différer d'un centime de la TVA de son propre HT, et le
-     * dernier retour reprend ce qui reste de la ligne. Une vente sans TVA
-     * française (K3, voir ContexteDeVente::documentRetireLaTvaDuPrix()) dit
-     * que ses produits, et ses services à leur prix de référence, se
-     * comptent au prix de leur catalogue sans la TVA de leur taux, deux
-     * données que ses PDF et sa fiche impriment sous ces noms (« Prix
-     * catalogue TTC », « TVA retirée ») à côté de leur taux de 0 %, et ses
-     * autres services à leur prix sans TVA. Rien pour un particulier en
-     * France, ni en franchise en base, où la vente se calcule article par
-     * article à son prix TTC (voir
-     * ContexteDeVente::documentCalculeDepuisLeHtDeLigne()). Une
-     * explication, pas une mention : elle ne se signe pas avec le document
-     * (voir ContenuFiscal).
+     * L'explication du calcul d'un document, que les PDF impriment sous ses
+     * lignes et que sa fiche affiche : toute vente soumise à la TVA
+     * française se calcule taux par taux depuis ses prix TTC (voir
+     * CalculateurLigne::chiffrerUneVente()), si bien que deux lignes
+     * identiques peuvent avoir des HT qui diffèrent d'un centime ; un avoir
+     * rend le calcul de la vente sur les articles rendus, dans la limite
+     * de la ligne (voir CalculateurLigne::retourDeLigne()). Une vente sans
+     * TVA française (K3, voir ContexteDeVente::documentRetireLaTvaDuPrix())
+     * dit que ses produits, et ses services à leur prix de référence, se
+     * comptent au prix de leur catalogue sans la TVA de leur taux, et ses
+     * autres services à leur prix sans TVA. Rien en franchise en base, où
+     * le HT est le prix TTC, sans TVA. Une explication, pas une mention :
+     * elle ne se signe pas avec le document (voir ContenuFiscal).
      */
     public function calcul(Facture|Avoir|Devis $document): ?string
     {
-        $sansTva = ContexteDeVente::documentRetireLaTvaDuPrix($document);
+        if ($document->franchise_en_base) {
+            return null;
+        }
 
-        return match (true) {
-            ! ContexteDeVente::documentCalculeDepuisLeHtDeLigne($document) => $sansTva ? self::CALCUL_SANS_TVA : null,
-            $document instanceof Avoir => $sansTva ? self::CALCUL_RETOUR_PROFESSIONNEL_SANS_TVA : self::CALCUL_RETOUR_PROFESSIONNEL,
-            default => $sansTva ? self::CALCUL_VENTE_PROFESSIONNELLE_SANS_TVA : self::CALCUL_VENTE_PROFESSIONNELLE,
-        };
+        if (ContexteDeVente::documentRetireLaTvaDuPrix($document)) {
+            return $document instanceof Avoir ? self::CALCUL_RETOUR_SANS_TVA : self::CALCUL_SANS_TVA;
+        }
+
+        return $document instanceof Avoir ? self::CALCUL_RETOUR : self::CALCUL_VENTE;
     }
 }

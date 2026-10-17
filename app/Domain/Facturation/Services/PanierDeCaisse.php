@@ -294,19 +294,13 @@ class PanierDeCaisse
     /**
      * Le total TTC des lignes du panier, calculé comme à l'écran de la
      * caisse et à l'encaissement (voir ConstructeurLigneDocument::apercu()),
-     * pour son client, en centimes.
+     * pour son client, en centimes ; zéro quand aucune ligne n'est complète.
      */
-    private function totalTtcEnCentimes(PanierCaisse $panier): ?int
+    private function totalTtcEnCentimes(PanierCaisse $panier): int
     {
         $contexte = ContexteDeVente::pour(Client::withTrashed()->find($panier->client_id), app(TenantContext::class)->magasin());
 
-        try {
-            $total = $this->calculateur->totaliser($this->constructeurLigne->apercu($panier->lignes, $contexte))['total_ttc'];
-
-            return $this->calculateur->enCentiemes(number_format($total, 2, '.', ''));
-        } catch (InvalidArgumentException) {
-            return null;
-        }
+        return $this->calculateur->enCentiemes($this->constructeurLigne->apercu($panier->lignes, $contexte)->totaux['total_ttc']);
     }
 
     private static function identifiant(mixed $valeur): ?int

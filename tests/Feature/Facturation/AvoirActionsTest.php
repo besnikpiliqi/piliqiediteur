@@ -48,7 +48,7 @@ class AvoirActionsTest extends TestCase
     public function test_creer_un_avoir_total_reprend_toutes_les_lignes_et_totaux_de_la_facture(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $ligneFacture = $facture->lignes->firstOrFail();
 
@@ -77,8 +77,8 @@ class AvoirActionsTest extends TestCase
     public function test_creer_un_avoir_couvrant_deux_factures_differentes_du_meme_client(): void
     {
         $client = Client::factory()->create();
-        $produitA = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $produitB = Produit::factory()->create(['prix_vente_ht' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produitA = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produitB = Produit::factory()->create(['prix_vente_ttc' => 36, 'taux_tva' => 20, 'suivi_stock' => false]);
         $factureA = $this->emettreFacture($client, $produitA, 2);
         $factureB = $this->emettreFacture($client, $produitB, 1);
 
@@ -102,7 +102,7 @@ class AvoirActionsTest extends TestCase
     {
         $clientA = Client::factory()->create();
         $clientB = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $factureDeB = $this->emettreFacture($clientB, $produit);
 
         $this->expectException(InvalidArgumentException::class);
@@ -120,7 +120,7 @@ class AvoirActionsTest extends TestCase
     public function test_creer_un_avoir_partiel_ne_credite_que_la_quantite_demandee(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $ligneFacture = $facture->lignes->firstOrFail();
 
@@ -144,7 +144,7 @@ class AvoirActionsTest extends TestCase
     public function test_creer_un_avoir_ne_touche_pas_encore_au_stock(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $this->assertSame(7, $produit->fresh()->stock_quantite);
 
@@ -156,7 +156,7 @@ class AvoirActionsTest extends TestCase
     public function test_emettre_un_avoir_lui_attribue_un_numero_et_restaure_le_stock(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 3);
 
         $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
@@ -175,7 +175,7 @@ class AvoirActionsTest extends TestCase
     public function test_emettre_un_avoir_restaure_le_stock_d_un_produit_archive_depuis_la_vente(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $produit->delete();
 
@@ -192,7 +192,7 @@ class AvoirActionsTest extends TestCase
     public function test_emettre_un_avoir_partiel_ne_restaure_que_la_quantite_creditee(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $ligneFacture = $facture->lignes->firstOrFail();
 
@@ -207,7 +207,7 @@ class AvoirActionsTest extends TestCase
     public function test_emettre_un_avoir_ne_touche_pas_au_stock_dun_produit_sans_suivi(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit, 3);
 
         $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
@@ -224,7 +224,7 @@ class AvoirActionsTest extends TestCase
     public function test_le_retour_d_un_article_vendu_sans_suivi_du_stock_ne_le_fait_pas_entrer(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $produit->update(['suivi_stock' => true]);
 
@@ -242,7 +242,7 @@ class AvoirActionsTest extends TestCase
     public function test_des_retours_successifs_rendent_au_stock_ce_que_la_vente_en_a_sorti(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 3]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 3]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $ligneFacture = $facture->lignes->firstOrFail();
 
@@ -260,7 +260,7 @@ class AvoirActionsTest extends TestCase
     public function test_impossible_de_creer_un_avoir_sur_une_facture_en_brouillon(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -276,7 +276,7 @@ class AvoirActionsTest extends TestCase
     public function test_impossible_de_creer_un_avoir_sur_une_facture_deja_corrigee_par_un_avoir_total(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit);
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture), 'Erreur de saisie');
 
@@ -294,7 +294,7 @@ class AvoirActionsTest extends TestCase
     public function test_un_avoir_melangeant_ticket_et_facture_est_refuse(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $ticket = $this->emettreFacture($client, $produit);
         $client->update(['type_client' => TypeClient::Professionnel, 'siret' => '10000000900017']);
         $facture = $this->emettreFacture($client->fresh(), $produit);
@@ -319,7 +319,7 @@ class AvoirActionsTest extends TestCase
     public function test_impossible_de_crediter_plus_que_la_quantite_facturee(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $ligneFacture = $facture->lignes->firstOrFail();
 
@@ -337,7 +337,7 @@ class AvoirActionsTest extends TestCase
     public function test_un_second_avoir_peut_crediter_le_reliquat_dune_ligne_deja_partiellement_creditee(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $ligneFacture = $facture->lignes->firstOrFail();
 
@@ -369,7 +369,7 @@ class AvoirActionsTest extends TestCase
     public function test_un_avoir_encore_en_brouillon_nempeche_pas_den_creer_un_nouveau(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit);
 
         // Un brouillon jamais émis (numéro jamais attribué) n'a aucune
@@ -385,7 +385,7 @@ class AvoirActionsTest extends TestCase
     public function test_impossible_demettre_deux_fois_le_meme_avoir(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit);
 
         $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
@@ -424,7 +424,7 @@ class AvoirActionsTest extends TestCase
     public function test_un_avoir_ne_credite_jamais_une_ligne_creditee_entre_temps_par_un_autre(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 1);
         $premier = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
         $second = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
@@ -442,17 +442,18 @@ class AvoirActionsTest extends TestCase
 
     /**
      * Garde d'EmettreAvoirAction appelée directement, hors
-     * EnregistrerAvoirAction : les deux brouillons d'une ligne remisée sont
-     * créés avant toute émission et valent chacun 30,00 € HT, mais celui
-     * qui est émis en dernier finit de créditer la ligne et en prend le
-     * solde exact (29,99 € HT), comme s'il avait été créé après le premier.
+     * EnregistrerAvoirAction : les deux brouillons d'une ligne de 2 x 40 €
+     * TTC (66,67 € HT) sont créés avant toute émission et valent chacun
+     * 33,33 € HT, mais celui qui est émis en dernier finit de créditer la
+     * ligne et en prend le solde exact (33,34 € HT), comme s'il avait été
+     * créé après le premier.
      */
     public function test_le_dernier_avoir_emis_sur_une_ligne_en_credite_le_solde_exact_meme_saisi_avant(): void
     {
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
-            ['produit_id' => $produit->id, 'quantite' => 2, 'remise_pourcentage' => 10],
+            ['produit_id' => $produit->id, 'quantite' => 2],
         ]));
         $ligneFacture = $facture->lignes->firstOrFail();
         $premier = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
@@ -467,8 +468,9 @@ class AvoirActionsTest extends TestCase
 
         $dernier = $dernier->fresh('lignes');
         $ligneAvoir = $dernier->lignes->firstOrFail();
-        $this->assertSame(['29.99', '6.01', '36.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
-        $this->assertSame(['29.99', '6.01', '36.00'], [$ligneAvoir->montant_ht, $ligneAvoir->montant_tva, $ligneAvoir->montant_ttc]);
+        $this->assertSame(['33.33', '6.67', '40.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
+        $this->assertSame(['33.34', '6.66', '40.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+        $this->assertSame(['33.34', '6.66', '40.00'], [$ligneAvoir->montant_ht, $ligneAvoir->montant_tva, $ligneAvoir->montant_ttc]);
     }
 
     /**
@@ -480,7 +482,7 @@ class AvoirActionsTest extends TestCase
     public function test_un_brouillon_d_avoir_ne_s_emet_plus_apres_la_correction_totale_de_sa_facture(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 1);
         $brouillon = app(CreerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture));
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture), 'Erreur de saisie');
@@ -498,7 +500,7 @@ class AvoirActionsTest extends TestCase
     public function test_enregistrer_un_avoir_le_cree_et_l_emet_d_un_seul_geste(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 3);
 
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, $this->toutesLesLignes($facture), 'Produit défectueux');
@@ -521,7 +523,7 @@ class AvoirActionsTest extends TestCase
     {
         $this->travelTo('2026-10-09 10:00:00');
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $tentatives = 0;
         Event::listen(AvoirEmis::class, function () use (&$tentatives): void {
@@ -575,8 +577,8 @@ class AvoirActionsTest extends TestCase
 
     /**
      * Deux retours d'un article sur une ligne de 2 x 40 € TTC créditent
-     * exactement la ligne facturée : 66,66 € HT, 13,34 € de TVA, 80,00 €
-     * TTC (le dernier retour en prenant le solde exact).
+     * exactement la ligne facturée : 66,67 € HT, 13,33 € de TVA, 80,00 €
+     * TTC (le dernier retour en prenant le solde exact, 33,34 € HT).
      */
     public function test_le_dernier_retour_dune_ligne_ttc_en_credite_le_solde_exact(): void
     {
@@ -593,28 +595,27 @@ class AvoirActionsTest extends TestCase
         ]);
 
         $this->assertSame(['33.33', '6.67', '40.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
-        $this->assertSame(['33.33', '6.67', '40.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
-        $this->assertSame('66.66', number_format((float) $premier->total_ht + (float) $dernier->total_ht, 2, '.', ''));
-        $this->assertSame('13.34', number_format((float) $premier->total_tva + (float) $dernier->total_tva, 2, '.', ''));
+        $this->assertSame(['33.34', '6.66', '40.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
     }
 
     /**
      * Avec une remise, un article rendu seul ne vaut pas la moitié de la
-     * ligne : 2 x 40 € TTC remisés de 10 % = 59,99 € HT (6,666 € de remise
-     * -> 6,67 €), mais un article seul vaut 30,00 € HT. Le dernier retour
-     * crédite donc le solde (29,99 € HT, 6,01 € de TVA), jamais un second
-     * recalcul qui créditerait 60,00 € HT au total.
+     * ligne : 2 x 9,99 € TTC remisés de 15 % = 16,98 € TTC (2,997 € de
+     * remise -> 3,00 €), 14,15 € HT ; un article seul vaut 8,49 € TTC
+     * (1,4985 € de remise -> 1,50 €), 7,075 -> 7,08 € HT. Le dernier retour
+     * crédite donc le solde (7,07 € HT, 1,42 € de TVA), jamais un second
+     * recalcul qui créditerait 14,16 € HT au total.
      */
     public function test_le_dernier_retour_dune_ligne_remisee_en_credite_le_solde_exact(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '9.99', 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
-            ['produit_id' => $produit->id, 'quantite' => 2, 'remise_pourcentage' => 10],
+            ['produit_id' => $produit->id, 'quantite' => 2, 'remise_pourcentage' => 15],
         ]));
         $ligneFacture = $facture->lignes->firstOrFail();
 
-        $this->assertSame(['59.99', '12.01', '72.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(['14.15', '2.83', '16.98'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
 
         $premier = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
@@ -623,8 +624,8 @@ class AvoirActionsTest extends TestCase
             ['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1],
         ]);
 
-        $this->assertSame(['30.00', '6.00', '36.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
-        $this->assertSame(['29.99', '6.01', '36.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+        $this->assertSame(['7.08', '1.41', '8.49'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
+        $this->assertSame(['7.07', '1.42', '8.49'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
     }
 
     /**
@@ -670,11 +671,12 @@ class AvoirActionsTest extends TestCase
     }
 
     /**
-     * Trois lignes de 0,10 € à 20 % vendues à un professionnel : la
-     * deuxième n'a pris que 0,01 € de la TVA du taux (0,08 € HT). Son
-     * retour crédite exactement cette ligne, 0,09 €.
+     * Trois lignes de 0,10 € à 20 % vendues à un professionnel : le HT du
+     * taux, 0,30 ÷ 1,2 = 0,25 €, se répartit 0,08, 0,09 et 0,08 €, si bien
+     * que la deuxième n'a que 0,01 € de TVA. Son retour crédite exactement
+     * cette ligne, 0,09 € HT et 0,01 € de TVA, 0,10 € TTC.
      */
-    public function test_le_retour_d_une_ligne_professionnelle_credite_sa_part_de_la_tva_de_son_taux(): void
+    public function test_le_retour_d_une_ligne_credite_sa_part_du_ht_de_son_taux(): void
     {
         $client = Client::factory()->professionnel()->create();
         $produits = Produit::factory()->count(3)->create(['prix_vente_ttc' => '0.10', 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -684,8 +686,8 @@ class AvoirActionsTest extends TestCase
 
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes[1]->id, 'quantite' => 1]]);
 
-        $this->assertSame(['0.08', '0.01', '0.09'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
-        $this->assertSame(['0.08', '0.01', '0.09'], [$avoir->lignes->sole()->montant_ht, $avoir->lignes->sole()->montant_tva, $avoir->lignes->sole()->montant_ttc]);
+        $this->assertSame(['0.09', '0.01', '0.10'], [$avoir->total_ht, $avoir->total_tva, $avoir->total_ttc]);
+        $this->assertSame(['0.09', '0.01', '0.10'], [$avoir->lignes->sole()->montant_ht, $avoir->lignes->sole()->montant_tva, $avoir->lignes->sole()->montant_ttc]);
     }
 
     public function test_une_quantite_a_crediter_non_entiere_est_refusee(): void

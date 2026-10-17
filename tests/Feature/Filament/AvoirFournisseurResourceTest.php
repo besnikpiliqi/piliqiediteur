@@ -82,7 +82,7 @@ class AvoirFournisseurResourceTest extends TestCase
 
         $client = Client::factory()->create();
         $fournisseur = Fournisseur::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'cmup_ht' => 20, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'cmup_ht' => 20, 'taux_tva' => 20, 'suivi_stock' => true]);
         $factureAchat = $this->receptionnerAchatDepuisLePanneau($fournisseur, $produit, 5);
         $ligneAchat = $factureAchat->lignes->firstOrFail();
 

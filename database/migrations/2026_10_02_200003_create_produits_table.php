@@ -31,11 +31,10 @@ return new class extends Migration
             // fournisseur, un arrondi au centime à chaque fois finirait par
             // dériver.
             $table->decimal('cmup_ht', 14, 4)->default(0);
-            // Le prix de vente est saisi et enregistré en TTC, tel que
-            // l'affiche le magasin ; le HT n'en est que la conversion au
-            // centime (voir Produit::synchroniserPrixDeVente()).
+            // Le seul prix de vente enregistré, en TTC, tel que l'affiche le
+            // magasin ; son HT n'est qu'une conversion affichée (voir
+            // Produit::arrondirLePrixDeVente()).
             $table->decimal('prix_vente_ttc', 12, 2)->default(0);
-            $table->decimal('prix_vente_ht', 12, 2)->default(0);
             // Toujours donné à la création : le taux par défaut dépend du
             // territoire du magasin (voir Magasin::tauxTvaParDefaut()).
             $table->decimal('taux_tva', 5, 2);

@@ -34,7 +34,7 @@ class MarquerFacturesEnRetardTest extends TestCase
         app(TenantContext::class)->set($magasin);
 
         $client = Client::factory()->create(['delai_paiement_jours' => $delaiDuClient]);
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);

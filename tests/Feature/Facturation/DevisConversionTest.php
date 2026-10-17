@@ -47,7 +47,7 @@ class DevisConversionTest extends TestCase
     public function test_accepter_un_devis_envoye_change_son_statut(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
 
         $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $devis);
@@ -58,7 +58,7 @@ class DevisConversionTest extends TestCase
     public function test_refuser_un_devis_envoye_change_son_statut(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
 
         $devis = app(RefuserDevisAction::class)->handle(self::auteur(), $devis);
@@ -130,7 +130,7 @@ class DevisConversionTest extends TestCase
     public function test_impossible_daccepter_un_devis_encore_en_brouillon(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -140,12 +140,12 @@ class DevisConversionTest extends TestCase
     }
 
     /**
-     * Le type du client décide du calcul d'un devis (E1) : enregistré pour
-     * un particulier, 1 000 x 1,00 € à 20 % font 830,00 € HT + 170,00 € de
-     * TVA, quand la facture d'un professionnel ferait 833,33 € + 166,67 €.
-     * Si la fiche du client devient professionnelle avant l'envoi, le devis
-     * ne part pas, n'est pas numéroté et garde ses montants ; réenregistré,
-     * il se recalcule pour un professionnel et part avec le premier numéro
+     * Le type du client est noté sur le devis : enregistré pour un
+     * particulier, 1 000 x 1,00 € à 20 % font 833,33 € HT + 166,67 € de
+     * TVA, les mêmes montants que pour un professionnel. Si la fiche du
+     * client devient professionnelle avant l'envoi, le devis ne part pas,
+     * n'est pas numéroté et garde ses montants ; réenregistré pour un
+     * professionnel, il part avec les mêmes montants et le premier numéro
      * de la série, qu'aucun envoi refusé n'a consommé.
      */
     public function test_un_devis_dont_le_client_a_change_de_type_ne_part_qu_une_fois_reenregistre(): void
@@ -163,7 +163,7 @@ class DevisConversionTest extends TestCase
 
         $devis->refresh();
         $this->assertSame([StatutDevis::Brouillon, null, null, TypeClient::Particulier], [$devis->statut, $devis->numero, $devis->date_emission, $devis->type_client]);
-        $this->assertSame(['830.00', '170.00', '1000.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
+        $this->assertSame(['833.33', '166.67', '1000.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
         $this->assertDatabaseCount('sequences_documents', 0);
 
         $envoye = app(EmettreDevisAction::class)->handle(self::auteur(), app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client->fresh(), $lignes));
@@ -181,7 +181,7 @@ class DevisConversionTest extends TestCase
     public function test_la_facture_tiree_du_devis_prend_son_type_de_client_et_son_emission_signale_le_changement(): void
     {
         $client = Client::factory()->create();
-        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $this->envoyerDevis($client, Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20])));
+        $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $this->envoyerDevis($client, Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20])));
         $client->update(['type_client' => TypeClient::Professionnel, 'siren' => '111222333']);
 
         $facture = app(CreerFactureDepuisDevisAction::class)->handle(self::auteur(), $devis);
@@ -197,7 +197,7 @@ class DevisConversionTest extends TestCase
     public function test_convertir_un_devis_accepte_copie_ses_lignes_dans_une_facture_brouillon(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
         $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $devis);
 
@@ -283,7 +283,7 @@ class DevisConversionTest extends TestCase
     public function test_impossible_de_convertir_un_devis_pas_encore_accepte(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
 
         $this->expectException(LogicException::class);
@@ -293,7 +293,7 @@ class DevisConversionTest extends TestCase
     public function test_impossible_de_convertir_deux_fois_le_meme_devis(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
         $devis = app(AccepterDevisAction::class)->handle(self::auteur(), $devis);
 

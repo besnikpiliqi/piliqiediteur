@@ -11,32 +11,30 @@ use InvalidArgumentException;
 use LogicException;
 
 /**
- * Construit le tableau d'attributs d'une ligne (devis ou facture) prêt
- * pour `$document->lignes()->create($ligne)`, en figeant un snapshot :
- * si un produit catalogue est fourni, ses valeurs ACTUELLES sont copiées
- * une fois pour toutes -- la ligne ne référence plus jamais le produit
- * pour ses montants après coup.
+ * Construit les lignes d'un devis ou d'une facture, chacune prête pour
+ * `$document->lignes()->create($ligne)`, en figeant un snapshot : si un
+ * produit catalogue est fourni, ses valeurs ACTUELLES sont copiées une
+ * fois pour toutes -- la ligne ne référence plus jamais le produit pour
+ * ses montants après coup.
  *
  * Partagé entre les actions qui enregistrent un devis ou une facture et
  * les écrans qui en montrent les montants pendant la saisie (voir
  * apercu()) : l'écran ne peut jamais afficher un centime différent de ce
  * qui sera enregistré.
  *
- * Une vente à un particulier se calcule ligne par ligne, article par
- * article ; une vente à un professionnel, depuis le HT de chaque ligne,
- * puis la TVA de chaque taux sur le total HT de ses lignes, répartie entre
- * elles (E1, voir repartirLaTvaParTaux()) : ses lignes ne se calculent
- * qu'ensemble. En franchise en base, toute vente se calcule article par
- * article, quel que soit le client (voir
- * ContexteDeVente::calculeDepuisLeHtDeLigne()). Hors de la vente en
- * France, elle se calcule de même, sans TVA (voir construire()).
+ * Toute vente, à un particulier comme à un professionnel, se calcule en
+ * une fois, depuis les prix TTC de ses lignes (voir
+ * CalculateurLigne::chiffrerUneVente()) : le HT de chaque taux, arrondi une
+ * fois, se répartit entre ses lignes, qui ne se calculent donc
+ * qu'ensemble (voir chiffrer()). Un même panier a les mêmes montants pour
+ * tout client.
  */
 class ConstructeurLigneDocument
 {
     public function __construct(private readonly CalculateurLigne $calculateur) {}
 
     /**
-     * Les lignes d'un document, dans leur ordre.
+     * Les lignes d'un document, dans leur ordre, calculées ensemble.
      *
      * Un produit archivé ne se vend plus (voir ProduitResource) : la ligne
      * qui le porte est refusée avec un message, plutôt qu'une page
@@ -44,13 +42,12 @@ class ConstructeurLigneDocument
      * repasser par ici, et le sort du stock (voir LigneFacture::produit()).
      *
      * @param  list<array<string, mixed>>  $lignesDonnees
-     * @return list<array<string, mixed>>
      *
      * @throws InvalidArgumentException
      * @throws LogicException
      * @throws ModelNotFoundException
      */
-    public function construireToutes(array $lignesDonnees, ContexteDeVente $contexte): array
+    public function construireToutes(array $lignesDonnees, ContexteDeVente $contexte): DocumentChiffre
     {
         if ($lignesDonnees === []) {
             throw new InvalidArgumentException('Un document doit contenir au moins une ligne.');
@@ -69,7 +66,7 @@ class ConstructeurLigneDocument
             $lignes[] = $this->construire($donnees, $index, $contexte, $produits, $services);
         }
 
-        return $contexte->calculeDepuisLeHtDeLigne() ? $this->repartirLaTvaParTaux($lignes) : $lignes;
+        return $this->chiffrer($lignes);
     }
 
     /**
@@ -77,18 +74,16 @@ class ConstructeurLigneDocument
      * panier de la caisse, calculées comme à l'enregistrement, par clé de
      * ligne : une ligne pas encore complète (aucun produit ni service
      * choisi, prix ou quantité à saisir, valeur hors limites) est ignorée,
-     * plutôt que comptée pour un montant faux. Une ligne dont le produit a
-     * été archivé depuis compte pour son montant : seul son enregistrement
-     * la refuse (voir construireToutes()), et le total d'une vente
-     * abandonnée la compte (voir PanierDeCaisse). La TVA d'une vente à un
-     * professionnel se répartit entre les seules lignes complètes ; des
-     * montants si absurdes que la TVA de leur total ne se calcule plus ne
-     * donnent aucun aperçu.
+     * plutôt que comptée pour un montant faux, et les lignes complètes se
+     * calculent ensemble, sans elle. Une ligne dont le produit a été
+     * archivé depuis compte pour son montant : seul son enregistrement la
+     * refuse (voir construireToutes()), et le total d'une vente abandonnée
+     * la compte (voir PanierDeCaisse). Des montants si absurdes que leur
+     * total ne se calcule plus ne donnent aucun aperçu.
      *
      * @param  array<array-key, mixed>  $lignesSaisies
-     * @return array<array-key, array<string, mixed>>
      */
-    public function apercu(array $lignesSaisies, ContexteDeVente $contexte): array
+    public function apercu(array $lignesSaisies, ContexteDeVente $contexte): DocumentChiffre
     {
         $lignesSaisies = array_filter($lignesSaisies, 'is_array');
         [$produits, $services] = $this->catalogue($lignesSaisies);
@@ -103,60 +98,72 @@ class ConstructeurLigneDocument
             }
         }
 
-        if (! $contexte->calculeDepuisLeHtDeLigne()) {
-            return $lignes;
-        }
-
         try {
-            return $this->repartirLaTvaParTaux($lignes);
+            return $this->chiffrer($lignes);
         } catch (InvalidArgumentException) {
-            return [];
+            return DocumentChiffre::vide();
         }
+    }
+
+    /**
+     * Les montants des lignes construites, calculés ensemble depuis leurs
+     * prix TTC (voir CalculateurLigne::chiffrerUneVente()), dans leur ordre.
+     *
+     * @param  array<array-key, array<string, mixed>>  $lignes  voir construire()
+     *
+     * @throws InvalidArgumentException
+     */
+    private function chiffrer(array $lignes): DocumentChiffre
+    {
+        return DocumentChiffre::depuisLeCalcul($lignes, $this->calculateur->chiffrerUneVente(array_values(array_map(
+            fn (array $ligne): array => [
+                'prix_unitaire_ttc' => $this->calculateur->enCentiemes($ligne['prix_unitaire_ttc']),
+                'quantite' => $ligne['quantite'],
+                'remise_pourcentage' => $this->calculateur->enCentiemes($ligne['remise_pourcentage']),
+                'taux_tva_du_prix' => $this->calculateur->enCentiemes($ligne['taux_tva_du_prix']),
+                'taux_tva' => $this->calculateur->enCentiemes($ligne['taux_tva']),
+            ],
+            $lignes,
+        ))), $this->calculateur);
     }
 
     /**
      * Une ligne vend un produit du catalogue (un bien) ou un service du
      * magasin (un service, voir NatureLigne), jamais une ligne libre : sa
      * description et sa référence en sont la copie, elles ne se corrigent
-     * que dans la fiche du produit ou du service.
+     * que dans la fiche du produit ou du service. Ses prix, taux et remise
+     * s'écrivent comme leurs colonnes (« 25.00 », « 20.00 ») ; ses
+     * montants se calculent avec les autres lignes du document (voir
+     * chiffrer()).
      *
      * Une vente part toujours d'un prix TTC (voir CalculateurLigne) : le PU
      * TTC saisi, sinon le prix de vente TTC enregistré sur la fiche du
      * produit ; son PU HT en est la conversion au centime, la même que sur
-     * la fiche. Une ligne de service (voir Service) prend le PU TTC saisi,
-     * sinon son prix de référence TTC ; sans prix de référence, elle doit
-     * en saisir un. Seule une personne autorisée met un autre prix que
-     * celui de la fiche ou de la référence, ou vend un service qui n'en a
-     * pas (voir DerogationsDePrix). Un PU TTC n'est jamais négatif : une
-     * vente ne rembourse rien, c'est le rôle d'un avoir.
-     *
-     * Vendue à un particulier, ou en franchise en base, la ligne a ici
-     * tous ses montants, article par article ; vendue à un professionnel
-     * hors franchise, seulement son HT, quantité x PU TTC ÷ (1 + taux)
-     * arrondi une fois -- sa TVA et son TTC attendent les autres lignes de
-     * son taux (voir repartirLaTvaParTaux()). Son PU HT n'est alors qu'un
-     * affichage : 1 000 x 0,83 € ne font pas les 833,33 € HT de la ligne.
+     * la fiche, un affichage qui ne compte dans aucun montant. Une ligne de
+     * service (voir Service) prend le PU TTC saisi, sinon son prix de
+     * référence TTC ; sans prix de référence, elle doit en saisir un. Seule
+     * une personne autorisée met un autre prix que celui de la fiche ou de
+     * la référence, ou vend un service qui n'en a pas (voir
+     * DerogationsDePrix). Un PU TTC n'est jamais négatif : une vente ne
+     * rembourse rien, c'est le rôle d'un avoir.
      *
      * Le taux d'une ligne de produit est celui de sa fiche, quel que soit
      * celui envoyé (C15, C40) ; celui d'une ligne de service se saisit,
      * sinon celui de son prix de référence, sinon le taux du territoire du
-     * magasin (B2). En franchise
-     * en base, toute ligne est à 0 % : son PU HT est son PU TTC, et le
-     * client, particulier ou professionnel, paie le même prix TTC sans TVA
-     * (B10).
+     * magasin (B2). En franchise en base, toute ligne est à 0 % : son PU HT
+     * est son PU TTC, et le client, particulier ou professionnel, paie le
+     * même prix TTC sans TVA (B10).
      *
      * Hors de la vente en France (K3, voir
      * ContexteDeVente::retireLaTvaDuPrix()), toute ligne est aussi à 0 %,
      * mais le client paie le prix sans la TVA française : le PU TTC d'un
-     * produit comprend encore la TVA de sa fiche (taux_tva_du_prix), d'où
-     * se déduit son PU HT, le prix payé par article -- 1 000 x 1,00 € TTC à
-     * 20 % : 830,00 € pour un particulier, à 0,83 € l'article ; 833,33 €
-     * depuis le HT de la ligne pour un professionnel. Un service à son prix
-     * de référence se calcule de même, depuis ce prix TTC et son taux (voir
-     * Service::vendAuPrixDeReferenceSansTva()) ; un autre prix saisi pour un
-     * service y est déjà sans TVA.
+     * produit comprend encore la TVA de sa fiche (taux_tva_du_prix), que le
+     * calcul retire, taux par taux -- 2 x 40,00 € TTC à 20 % font 66,67 €.
+     * Un service à son prix de référence se calcule de même, depuis ce prix
+     * TTC et son taux (voir Service::vendAuPrixDeReferenceSansTva()) ; un
+     * autre prix saisi pour un service y est déjà sans TVA.
      *
-     * @param  array{produit_id?: int|string|null, service_id?: int|string|null, quantite: int|string, prix_unitaire_ttc?: float|string|null, taux_tva?: float|string|null, remise_pourcentage?: float|string|null}  $donnees
+     * @param  array{produit_id?: int|string|null, service_id?: int|string|null, quantite: int|string, prix_unitaire_ttc?: float|int|string|null, taux_tva?: float|int|string|null, remise_pourcentage?: float|int|string|null}  $donnees
      * @param  Collection<int, Produit>  $produits  les produits des lignes, archivés compris (voir catalogue())
      * @param  Collection<int, Service>  $services  les services des lignes
      * @return array<string, mixed>
@@ -186,29 +193,29 @@ class ConstructeurLigneDocument
         $prixSaisi = $auPrixDeReferenceSansTva ? null : ($donnees['prix_unitaire_ttc'] ?? null);
 
         $tauxTvaDuPrix = match (true) {
-            $contexte->franchiseEnBase => 0.0,
-            $produit !== null => (float) $produit->taux_tva,
-            $auPrixDeReferenceSansTva => (float) $service->taux_tva,
-            $contexte->retireLaTvaDuPrix() => 0.0,
-            default => (float) (filled($donnees['taux_tva'] ?? null) ? $donnees['taux_tva'] : ($service->taux_tva ?? $contexte->tauxTvaParDefaut)),
+            $contexte->franchiseEnBase => 0,
+            $produit !== null => $this->calculateur->enCentiemes($produit->taux_tva),
+            $auPrixDeReferenceSansTva => $this->calculateur->enCentiemes($service->taux_tva),
+            $contexte->retireLaTvaDuPrix() => 0,
+            default => SaisieDecimale::enCentiemes(filled($donnees['taux_tva'] ?? null) ? $donnees['taux_tva'] : ($service->taux_tva ?? $contexte->tauxTvaParDefaut)),
         };
-        $tauxTva = $contexte->exonere() ? 0.0 : $tauxTvaDuPrix;
+        $tauxTva = $contexte->exonere() ? 0 : $tauxTvaDuPrix;
 
         $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
 
-        $prixUnitaireTtc = $this->calculateur->arrondirAuCentime((float) (filled($prixSaisi)
-            ? $prixSaisi
-            : ($produit?->prix_vente_ttc ?? $service->prix_ttc ?? throw new InvalidArgumentException("Le prix du service « {$service->nom} » n'est pas fixé : demandez à un responsable."))));
+        $prixUnitaireTtc = filled($prixSaisi)
+            ? SaisieDecimale::enCentiemes($prixSaisi)
+            : $this->calculateur->enCentiemes($produit?->prix_vente_ttc ?? $service->prix_ttc ?? throw new InvalidArgumentException("Le prix du service « {$service->nom} » n'est pas fixé : demandez à un responsable."));
 
         if ($prixUnitaireTtc < 0) {
             throw new InvalidArgumentException('Le PU TTC d\'une ligne ne peut pas être négatif.');
         }
 
-        $prixUnitaireHt = $this->calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, $tauxTvaDuPrix);
-        // Le PU TTC que paie le client : sans la TVA retirée du prix, c'est
-        // son PU HT.
-        $prixUnitaireTtcPaye = $contexte->retireLaTvaDuPrix() ? $prixUnitaireHt : $prixUnitaireTtc;
-        $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
+        $remise = filled($donnees['remise_pourcentage'] ?? null) ? SaisieDecimale::enCentiemes($donnees['remise_pourcentage']) : 0;
+
+        if ($remise < 0 || $remise > 10000) {
+            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
+        }
 
         return [
             'produit_id' => $produit?->id,
@@ -217,48 +224,13 @@ class ConstructeurLigneDocument
             'description' => $produit?->nom ?? $service->nom,
             'reference' => $produit?->reference,
             'quantite' => $quantite,
-            'prix_unitaire_ht' => $prixUnitaireHt,
-            'prix_unitaire_ttc' => $prixUnitaireTtc,
-            'taux_tva' => $tauxTva,
-            'taux_tva_du_prix' => $tauxTvaDuPrix,
-            'remise_pourcentage' => $remise,
+            'prix_unitaire_ht' => $this->calculateur->enDecimal($this->calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, $tauxTvaDuPrix)),
+            'prix_unitaire_ttc' => $this->calculateur->enDecimal($prixUnitaireTtc),
+            'taux_tva' => $this->calculateur->enDecimal($tauxTva),
+            'taux_tva_du_prix' => $this->calculateur->enDecimal($tauxTvaDuPrix),
+            'remise_pourcentage' => $this->calculateur->enDecimal($remise),
             'ordre' => $ordre,
-            ...($contexte->calculeDepuisLeHtDeLigne()
-                ? ['montant_ht' => $this->calculateur->montantHtDeLigneProfessionnelle($prixUnitaireTtc, $tauxTvaDuPrix, $quantite, $remise)]
-                : $this->calculateur->montantsDeVente($prixUnitaireHt, $prixUnitaireTtcPaye, $quantite, $remise)),
         ];
-    }
-
-    /**
-     * Vente à un professionnel (E1) : la TVA de chaque taux se calcule une
-     * seule fois sur le total HT de ses lignes, puis se répartit entre
-     * elles, dans leur ordre (voir CalculateurLigne::repartirLaTva()) ; le
-     * TTC de chaque ligne est son HT plus sa part de TVA. Le total TVA du
-     * document est donc, taux par taux, la TVA de son total HT.
-     *
-     * @param  array<array-key, array<string, mixed>>  $lignes  les lignes construites, avec leur seul HT, dans leur ordre
-     * @return array<array-key, array<string, mixed>>
-     *
-     * @throws InvalidArgumentException
-     */
-    private function repartirLaTvaParTaux(array $lignes): array
-    {
-        $clesParTaux = [];
-
-        foreach ($lignes as $cle => $ligne) {
-            $clesParTaux[number_format($ligne['taux_tva'], 2, '.', '')][] = $cle;
-        }
-
-        foreach ($clesParTaux as $tauxTva => $cles) {
-            $parts = $this->calculateur->repartirLaTva(array_map(fn (int|string $cle): float => $lignes[$cle]['montant_ht'], $cles), (float) $tauxTva);
-
-            foreach ($cles as $index => $cle) {
-                $lignes[$cle]['montant_tva'] = $parts[$index];
-                $lignes[$cle]['montant_ttc'] = $this->calculateur->sommer([$lignes[$cle]['montant_ht'], $parts[$index]]);
-            }
-        }
-
-        return $lignes;
     }
 
     /**

@@ -4,9 +4,10 @@
     n'apparaît que si une ligne en a une : elle explique alors pourquoi
     PU x quantité diffère du total de la ligne.
 
-    Sur un document à un professionnel, PU HT x quantité peut différer du
-    HT de la ligne (1 000 x 0,83 € pour 833,33 €) : la note de calcul sous
-    les lignes l'explique (voir MentionsFiscales::calcul()).
+    Le HT de chaque taux se calcule sur son TTC et se répartit sur les
+    lignes : PU HT x quantité peut différer du HT de la ligne (1 000 x
+    0,83 € pour 833,33 €), ce que la note de calcul sous les lignes
+    explique (voir MentionsFiscales::calcul()).
 
     Une vente sans TVA française n'imprime pas de PU TTC : le client paie
     le PU HT, sans la TVA française que comprend le prix du catalogue (voir
@@ -14,7 +15,7 @@
     le prix TTC du catalogue de chaque produit, et de chaque service à son
     prix de référence, et la TVA qui en est retirée, à côté de son taux de
     0 % : les deux données que cite la note de calcul (3 x 7,00 € ÷ 1,20 =
-    17,50 € HT pour un professionnel, quand 3 x 5,83 € font 17,49 €). Un
+    17,50 € HT, quand 3 x 5,83 € font 17,49 €). Un
     autre service, saisi sans TVA, n'a ni l'un ni l'autre.
 
     @param \Illuminate\Support\Collection $lignes

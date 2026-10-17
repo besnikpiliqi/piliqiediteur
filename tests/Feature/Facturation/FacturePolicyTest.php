@@ -36,7 +36,7 @@ class FacturePolicyTest extends TestCase
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 10, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
 
         $this->actingAs($vendeurA);
         $contexte->set($magasin);
@@ -68,7 +68,7 @@ class FacturePolicyTest extends TestCase
         $expert = $this->expertComptable($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 10, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
 
         $this->actingAs($vendeur);
         $contexte->set($magasin);

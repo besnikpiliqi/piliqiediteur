@@ -123,16 +123,15 @@ class AvoirPdfGeneratorTest extends TestCase
     }
 
     /**
-     * Un avoir sur une facture à un professionnel reprend son calcul, par
+     * Un avoir rend le calcul de sa vente sur les articles rendus, par
      * différence avec les avoirs déjà émis sur la même ligne, le dernier
-     * retour soldant la ligne (K2) : une note sous les lignes le dit tel
-     * qu'il est fait. Sur trois lignes de 0,10 € à 20 % (0,08 € HT
-     * chacune, TVA du total répartie en 0,02 €, 0,01 € et 0,02 €), le
-     * retour de la deuxième crédite ce qui reste de la ligne, 0,08 € +
-     * 0,01 €, et non 20 % de 0,08 € : la note l'annonce. Un avoir sur un
-     * ticket n'en a pas.
+     * retour soldant la ligne : une note sous les lignes le dit tel qu'il
+     * est fait, sur une facture comme sur un ticket. Sur trois lignes de
+     * 0,10 € à 20 % (0,25 € HT au taux, répartis 0,08, 0,09 et 0,08 €), le
+     * retour de la deuxième crédite toute la ligne, 0,09 € + 0,01 €, et non
+     * 0,08 € + 0,02 € comme une ligne seule : la note l'annonce.
      */
-    public function test_lavoir_sur_une_facture_professionnelle_explique_le_calcul_de_ses_lignes(): void
+    public function test_un_avoir_explique_le_calcul_de_ses_lignes(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
         $professionnel = Client::factory()->professionnel()->create();
@@ -143,14 +142,11 @@ class AvoirPdfGeneratorTest extends TestCase
         $avoirProfessionnel = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $professionnel, [['ligne_facture_id' => $facture->lignes[1]->id, 'quantite' => 1]]);
         $avoirSurTicket = $this->crediter($particulier, $this->emettreUneFacture($particulier));
 
-        $this->assertSame(['0.08', '0.01', '0.09'], [$avoirProfessionnel->total_ht, $avoirProfessionnel->total_tva, $avoirProfessionnel->total_ttc]);
+        $this->assertSame(['0.09', '0.01', '0.10'], [$avoirProfessionnel->total_ht, $avoirProfessionnel->total_tva, $avoirProfessionnel->total_ttc]);
         $rendu = $this->compacte($this->rendu($avoirProfessionnel));
-        $this->assertStringContainsString('<td class="montant">0,08 €</td><td class="montant">0,01 €</td><td class="montant">0,09 €</td>', $rendu);
-        $this->assertStringContainsString(
-            '<div class="note-calcul">Client professionnel : chaque retour se calcule comme sa facture, pour tous les articles rendus jusqu&#039;ici (HT = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA sur ce HT, dans la limite de celle de la ligne), déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.</div>',
-            $rendu,
-        );
-        $this->assertStringNotContainsString('Client professionnel :', $this->rendu($avoirSurTicket));
+        $this->assertStringContainsString('<td class="montant">0,09 €</td><td class="montant">0,01 €</td><td class="montant">0,10 €</td>', $rendu);
+        $this->assertStringContainsString('<div class="note-calcul">Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d&#039;une ligne rendus jusqu&#039;ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 + taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.</div>', $rendu);
+        $this->assertStringContainsString('<div class="note-calcul">Montants calculés depuis les prix TTC : chaque retour rend, pour tous les articles d&#039;une ligne rendus jusqu&#039;ici, le calcul de la vente sur cette quantité (HT = TTC ÷ (1 + taux), arrondi une fois au centime ; TVA = la différence), sans dépasser le HT ni la TVA de la ligne, déduction faite des avoirs déjà émis sur la même ligne ; le dernier retour solde la ligne au centime.</div>', $this->compacte($this->rendu($avoirSurTicket)));
     }
 
     /**

@@ -28,13 +28,14 @@ return new class extends Migration
             $table->string('reference', 60)->nullable();
             // Nombre entier d'articles (voir QuantiteEntiere).
             $table->unsignedInteger('quantite');
-            // Une vente part de son PU TTC ; son PU HT en est la
-            // conversion au centime, article par article (voir
-            // CalculateurLigne::montantsDeVente()), au taux que comprend ce
-            // prix (taux_tva_du_prix) : celui de la ligne (taux_tva), sauf
-            // pour un produit vendu hors de la TVA française, dont la ligne
-            // est à 0 % et le PU TTC du catalogue comprend encore la TVA,
-            // retirée du prix payé (voir ContexteDeVente).
+            // Une vente part de son PU TTC, au taux que comprend ce prix
+            // (taux_tva_du_prix) : celui de la ligne (taux_tva), sauf pour un
+            // produit vendu hors de la TVA française, dont la ligne est à
+            // 0 % et le PU TTC du catalogue comprend encore la TVA, retirée
+            // du prix payé (voir ContexteDeVente). Son PU HT en est la
+            // conversion au centime, affichée ; ses montants se calculent
+            // taux par taux sur le TTC des lignes du document (voir
+            // CalculateurLigne::chiffrerUneVente()).
             $table->decimal('prix_unitaire_ht', 12, 2);
             $table->decimal('prix_unitaire_ttc', 12, 2);
             $table->decimal('taux_tva', 5, 2);

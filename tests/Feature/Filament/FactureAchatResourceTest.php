@@ -145,7 +145,7 @@ class FactureAchatResourceTest extends TestCase
         $produit = Produit::query()->sole();
         $this->assertSame('Câble USB-C', $produit->nom);
         $this->assertSame($fournisseur->id, $produit->fournisseur_id);
-        $this->assertSame(['0.4700', '10.00', '8.33'], [$produit->cmup_ht, $produit->prix_vente_ttc, $produit->prix_vente_ht]);
+        $this->assertSame(['0.4700', '10.00'], [$produit->cmup_ht, $produit->prix_vente_ttc]);
 
         $ligneAchat = FactureAchat::query()->sole()->lignes->sole();
         $this->assertSame(['0.47', '1.41'], [$ligneAchat->prix_unitaire_ht, $ligneAchat->montant_ht]);
@@ -802,9 +802,8 @@ class FactureAchatResourceTest extends TestCase
                 'nom' => 'Ecran Iphone 17 Pro',
                 'quantite' => 2,
                 'prix_unitaire_ht' => '80',
-                // 180 € TTC à 20 % de TVA = 150 € HT (voir
-                // ProduitResource::prixVenteTtcSchema() : seul le TTC est
-                // saisi, le HT en est dérivé).
+                // Seul le TTC est saisi et enregistré (voir
+                // ProduitResource::prixVenteTtcSchema()).
                 'prix_vente_ttc' => '180',
                 'taux_tva' => '20',
                 'suivi_stock' => true,
@@ -821,7 +820,7 @@ class FactureAchatResourceTest extends TestCase
             'nom' => 'Ecran Iphone 17 Pro',
             'fournisseur_id' => $fournisseur->id,
             'cmup_ht' => 80,
-            'prix_vente_ht' => 150,
+            'prix_vente_ttc' => 180,
             'seuil_alerte' => 1,
         ]);
     }

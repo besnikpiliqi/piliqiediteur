@@ -44,10 +44,10 @@ class FermerSaCaisseActionTest extends TestCase
         app(TenantContext::class)->set($this->magasin);
     }
 
-    private function emettreFacturePour(User $vendeur, Client $client, float $prixUnitaireHt = 100): void
+    private function emettreFacturePour(User $vendeur, Client $client, float $prixUnitaireTtc = 120): void
     {
         $this->actingAs($vendeur);
-        $produit = Produit::factory()->create(['prix_vente_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => $prixUnitaireTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -58,7 +58,7 @@ class FermerSaCaisseActionTest extends TestCase
     {
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
         $client = Client::factory()->professionnel()->create(); // même un pro compte ici, contrairement à ClotureCaisse
-        $this->emettreFacturePour($vendeur, $client, 100); // 120 TTC
+        $this->emettreFacturePour($vendeur, $client, 120); // 120 TTC
 
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
@@ -76,7 +76,7 @@ class FermerSaCaisseActionTest extends TestCase
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
         $client = Client::factory()->create();
         $this->travelTo('2026-10-07 18:00:00');
-        $this->emettreFacturePour($vendeur, $client, 100);
+        $this->emettreFacturePour($vendeur, $client, 120);
 
         $this->travelTo('2026-10-08 10:00:00');
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
@@ -125,7 +125,7 @@ class FermerSaCaisseActionTest extends TestCase
         $this->travelTo('2026-10-08 09:00:00');
         app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         $this->travelTo('2026-10-08 10:00:00');
-        $this->emettreFacturePour($vendeur, $client, 100);
+        $this->emettreFacturePour($vendeur, $client, 120);
 
         $this->travelTo('2026-10-08 11:00:00');
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
@@ -139,7 +139,7 @@ class FermerSaCaisseActionTest extends TestCase
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
         $client = Client::factory()->create();
 
-        $this->emettreFacturePour($vendeur, $client, 100);
+        $this->emettreFacturePour($vendeur, $client, 120);
         $premiere = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         $this->assertSame(1, $premiere->nombre_ventes);
 
@@ -149,7 +149,7 @@ class FermerSaCaisseActionTest extends TestCase
         $this->assertSame(0, $seconde->nombre_ventes);
         $this->assertSame('0.00', $seconde->total_ttc);
 
-        $this->emettreFacturePour($vendeur, $client, 50);
+        $this->emettreFacturePour($vendeur, $client, 60);
         $troisieme = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         $this->assertSame(1, $troisieme->nombre_ventes);
         $this->assertSame('60.00', $troisieme->total_ttc);
@@ -161,8 +161,8 @@ class FermerSaCaisseActionTest extends TestCase
         $vendeurB = $this->vendeurDeLaPremiereHeure($this->magasin);
         $client = Client::factory()->create();
 
-        $this->emettreFacturePour($vendeurA, $client, 100);
-        $this->emettreFacturePour($vendeurB, $client, 200);
+        $this->emettreFacturePour($vendeurA, $client, 120);
+        $this->emettreFacturePour($vendeurB, $client, 240);
 
         $clotureA = app(FermerSaCaisseAction::class)->handle($vendeurA, $vendeurA);
 
@@ -174,7 +174,7 @@ class FermerSaCaisseActionTest extends TestCase
     {
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin);
         $client = Client::factory()->create();
-        $this->emettreFacturePour($vendeur, $client, 100);
+        $this->emettreFacturePour($vendeur, $client, 120);
 
         app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 
@@ -193,9 +193,9 @@ class FermerSaCaisseActionTest extends TestCase
         $client = Client::factory()->create();
         $this->actingAs($vendeur);
 
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
-        $this->emettreFacturePour($vendeur, $client, 100);
+        $this->emettreFacturePour($vendeur, $client, 120);
 
         $premiere = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
         $this->assertSame(1, $premiere->nombre_ventes);
@@ -224,12 +224,12 @@ class FermerSaCaisseActionTest extends TestCase
     {
         $vendeur = $this->vendeurDeLaPremiereHeure($this->magasin, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_CREER]);
         $client = Client::factory()->create();
-        $this->emettreFacturePour($vendeur, $client, 100);
+        $this->emettreFacturePour($vendeur, $client, 120);
         $venteCorrigee = Facture::query()->firstOrFail();
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteCorrigee->lignes->firstOrFail()->id, 'quantite' => 1],
         ], 'Erreur de saisie');
-        $this->emettreFacturePour($vendeur, $client, 50);
+        $this->emettreFacturePour($vendeur, $client, 60);
 
         $cloture = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
 

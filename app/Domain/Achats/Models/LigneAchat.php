@@ -113,29 +113,37 @@ class LigneAchat extends Model
 
     /**
      * Montants d'un retour de $quantite articles de cette ligne au
-     * fournisseur : la ligne calculée pour tout ce qui en a été retourné
-     * jusqu'ici, moins ce que les avoirs fournisseur déjà émis ont crédité
-     * (voir CalculateurLigne::retourCumule()). Le dernier retour retombe
-     * ainsi exactement sur la ligne achetée.
+     * fournisseur, écrits comme leurs colonnes : le HT de tout ce qui en a
+     * été retourné jusqu'ici et la TVA de ce HT, sans dépasser celle de la
+     * ligne, moins ce que les avoirs fournisseur déjà émis ont crédité (voir
+     * CalculateurLigne::retourDAchat()). Le dernier retour retombe ainsi
+     * exactement sur la ligne achetée.
      *
-     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     * @return array{montant_ht: string, montant_tva: string, montant_ttc: string}
      */
     public function montantsDuRetour(int $quantite): array
     {
         $calculateur = app(CalculateurLigne::class);
         $avoirsEmis = $this->lignesAvoirFournisseur()
             ->whereHas('avoirFournisseur', fn ($query) => $query->where('statut', StatutAvoirFournisseur::Emise))
-            ->get(['quantite', 'montant_ht', 'montant_tva', 'montant_ttc']);
+            ->get(['quantite', 'montant_ht', 'montant_tva']);
+        $centiemes = fn (string $colonne): int => $calculateur->enCentiemes($this->getAttribute($colonne));
 
-        return $calculateur->retourCumule(
-            $calculateur->montantsDAchat(
-                (float) $this->prix_unitaire_ht,
-                (float) $this->taux_tva,
-                (int) $avoirsEmis->sum('quantite') + $quantite,
-                (float) $this->remise_pourcentage,
-            ),
-            $avoirsEmis->toArray(),
-        );
+        return array_map($calculateur->enDecimal(...), $calculateur->retourDAchat(
+            [
+                'prix_unitaire_ht' => $centiemes('prix_unitaire_ht'),
+                'quantite' => $this->quantite,
+                'remise_pourcentage' => $centiemes('remise_pourcentage'),
+                'taux_tva' => $centiemes('taux_tva'),
+                'montant_ht' => $centiemes('montant_ht'),
+                'montant_tva' => $centiemes('montant_tva'),
+            ],
+            (int) $avoirsEmis->sum('quantite') + $quantite,
+            [
+                'montant_ht' => $avoirsEmis->sum(fn (LigneAvoirFournisseur $ligne): int => $calculateur->enCentiemes($ligne->montant_ht)),
+                'montant_tva' => $avoirsEmis->sum(fn (LigneAvoirFournisseur $ligne): int => $calculateur->enCentiemes($ligne->montant_tva)),
+            ],
+        ));
     }
 
     /**

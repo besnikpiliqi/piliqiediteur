@@ -7,7 +7,8 @@ use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
-use App\Domain\Facturation\Services\QuantiteEntiere;
+use App\Domain\Facturation\Services\DocumentChiffre;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ProduitResource;
 use Closure;
@@ -46,8 +47,6 @@ use InvalidArgumentException;
 trait AjouteDesLignesDAchat
 {
     use SaisitLesPrixDeLigne;
-
-    private const AUCUN_MONTANT = ['montant_ht' => 0.0, 'montant_tva' => 0.0, 'montant_ttc' => 0.0];
 
     private const PRODUIT_EXISTANT = 'existant';
 
@@ -104,19 +103,21 @@ trait AjouteDesLignesDAchat
 
     /**
      * Ce que la ligne coûte au magasin : le prix d'achat x la quantité,
-     * TVA comprise -- jamais un montant de vente.
+     * TVA comprise -- jamais un montant de vente. Sa TVA est sa part de
+     * celle de son taux, calculée sur le total HT des lignes de ce taux
+     * (voir ConstructeurLigneAchat::apercu()).
      */
     private static function montantPayeAuFournisseur(): Placeholder
     {
         return Placeholder::make('montant_paye_au_fournisseur')
             ->label('Montant payé au fournisseur')
             ->columnSpan(2)
-            ->content(fn (Get $get): string => self::montantEnTexte(self::montantsDeLigneSaisie(self::ligneSaisie($get))['montant_ttc']).' TTC')
-            ->helperText(function (Get $get): string {
-                $montants = self::montantsDeLigneSaisie(self::ligneSaisie($get));
+            ->content(fn (Get $get, Placeholder $component): string => self::montantEnTexte(self::montantsDeLaLigneDAchat($get, $component)['montant_ttc']).' TTC')
+            ->helperText(function (Get $get, Placeholder $component): string {
+                $montants = self::montantsDeLaLigneDAchat($get, $component);
 
-                return ($get('quantite') ?? 0).' x '.self::montantEnTexte((float) $get('prix_unitaire_ht')).' HT'
-                    .((float) $get('remise_pourcentage') > 0 ? ' remisé de '.self::pourcentageEnTexte($get('remise_pourcentage')).' %' : '')
+                return ($get('quantite') ?? 0).' x '.self::montantEnTexte($get('prix_unitaire_ht') ?? '0').' HT'
+                    .(filled($get('remise_pourcentage')) && (float) $get('remise_pourcentage') > 0 ? ' remisé de '.self::pourcentageEnTexte($get('remise_pourcentage')).' %' : '')
                     .' = '.self::montantEnTexte($montants['montant_ht']).' HT + '.self::montantEnTexte($montants['montant_tva']).' de TVA';
             });
     }
@@ -145,7 +146,7 @@ trait AjouteDesLignesDAchat
                 try {
                     $calculateur = app(CalculateurLigne::class);
                     $benefice = $calculateur->beneficeUnitaire(
-                        $calculateur->prixUnitaireHtDepuisTtc((float) $get('produit.prix_vente_ttc'), $tauxTva),
+                        (float) $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($get('produit.prix_vente_ttc')), SaisieDecimale::enCentiemes($tauxTva))),
                         self::prixDAchatNet($get),
                     );
                 } catch (InvalidArgumentException) {
@@ -368,7 +369,7 @@ trait AjouteDesLignesDAchat
         try {
             $calculateur = app(CalculateurLigne::class);
             $benefice = $calculateur->beneficeUnitaire(
-                $calculateur->prixUnitaireHtDepuisTtc((float) $get('prix_vente_ttc'), $tauxTva),
+                (float) $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($get('prix_vente_ttc')), SaisieDecimale::enCentiemes($tauxTva))),
                 self::prixDAchatNet($get),
             );
         } catch (InvalidArgumentException) {
@@ -378,38 +379,28 @@ trait AjouteDesLignesDAchat
         return $detail.' · bénéfice '.number_format($benefice, 2, ',', ' ').' € HT par article';
     }
 
-    /**
-     * @return list<array{montant_ht: float, montant_tva: float, montant_ttc: float}>
-     */
-    protected static function montantsDesLignesSaisies(Get $get): array
+    protected static function documentDesLignesSaisies(Get $get): DocumentChiffre
     {
-        return array_values(array_map(
-            fn (mixed $ligne): array => is_array($ligne) ? self::montantsDeLigneSaisie($ligne) : self::AUCUN_MONTANT,
-            $get('lignes') ?? [],
-        ));
+        return app(ConstructeurLigneAchat::class)->apercu($get('lignes') ?? []);
     }
 
     /**
-     * Une ligne d'achat en cours de saisie, calculée comme à
-     * l'enregistrement (voir ConstructeurLigneAchat) : depuis son PU HT,
-     * la TVA sur le HT de la ligne. Une saisie pas encore valable ne donne
-     * aucun montant.
+     * La ligne du champ, lue par sa clé dans le répéteur dans l'aperçu de
+     * toutes les lignes de la facture d'achat (voir
+     * documentDesLignesSaisies()) ; aucun montant tant qu'elle n'est pas
+     * valable.
      *
-     * @param  array<string, mixed>  $ligne
-     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     * @return array{montant_ht: string, montant_tva: string, montant_ttc: string}
      */
-    private static function montantsDeLigneSaisie(array $ligne): array
+    private static function montantsDeLaLigneDAchat(Get $get, Placeholder $champ): array
     {
-        try {
-            return app(CalculateurLigne::class)->montantsDAchat(
-                (float) (filled($ligne['prix_unitaire_ht'] ?? null) ? $ligne['prix_unitaire_ht'] : throw new InvalidArgumentException('PU HT à saisir.')),
-                (float) ($ligne['taux_tva'] ?? 0),
-                QuantiteEntiere::depuisSaisie($ligne['quantite'] ?? null),
-                (float) ($ligne['remise_pourcentage'] ?? 0),
-            );
-        } catch (InvalidArgumentException) {
-            return self::AUCUN_MONTANT;
-        }
+        $ligne = app(ConstructeurLigneAchat::class)->apercu($get('../../lignes') ?? [])->lignes[$champ->getContainer()->getStatePath(isAbsolute: false)] ?? [];
+
+        return [
+            'montant_ht' => $ligne['montant_ht'] ?? '0.00',
+            'montant_tva' => $ligne['montant_tva'] ?? '0.00',
+            'montant_ttc' => $ligne['montant_ttc'] ?? '0.00',
+        ];
     }
 
     /**

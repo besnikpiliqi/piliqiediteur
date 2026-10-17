@@ -34,7 +34,7 @@ class ModifierDevisActionTest extends TestCase
     {
         $client = Client::factory()->create();
         $autreClient = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);

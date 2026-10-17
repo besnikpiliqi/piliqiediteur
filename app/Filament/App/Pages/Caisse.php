@@ -653,12 +653,7 @@ class Caisse extends Page implements HasForms
      */
     private function totalTtc(Get $get): float
     {
-        try {
-            return app(CalculateurLigne::class)->totaliser(DevisResource::apercuDesLignes($get('lignes') ?? [], $get('client_id')))['total_ttc'];
-        } catch (InvalidArgumentException) {
-            // Montant absurde en cours de frappe : la validation le refusera.
-            return 0.0;
-        }
+        return (float) DevisResource::apercuDesLignes($get('lignes') ?? [], $get('client_id'))->totaux['total_ttc'];
     }
 
     /**

@@ -161,7 +161,7 @@ class FactureAchatActionsTest extends TestCase
 
         $produit = Produit::query()->sole();
         $this->assertSame(['Câble USB-C', 'CBL-USBC', $fournisseur->id, 2], [$produit->nom, $produit->reference, $produit->fournisseur_id, $produit->seuil_alerte]);
-        $this->assertSame(['0.4700', '10.00', '8.33', 3], [$produit->cmup_ht, $produit->prix_vente_ttc, $produit->prix_vente_ht, $produit->stock_quantite]);
+        $this->assertSame(['0.4700', '10.00', 3], [$produit->cmup_ht, $produit->prix_vente_ttc, $produit->stock_quantite]);
         $ligne = $factureAchat->lignes()->sole();
         $this->assertSame([$produit->id, 'CBL-USBC', null], [$ligne->produit_id, $ligne->reference, $ligne->nouveau_produit]);
     }

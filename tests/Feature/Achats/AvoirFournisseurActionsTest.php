@@ -183,7 +183,7 @@ class AvoirFournisseurActionsTest extends TestCase
     {
         $fournisseur = Fournisseur::factory()->create();
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => true]);
 
         // Réception de 5 unités.
         $factureAchat = $this->receptionnerAchat($fournisseur, $produit, 5);

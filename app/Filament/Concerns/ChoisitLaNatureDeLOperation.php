@@ -10,6 +10,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Services\TenantContext;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Radio;
@@ -268,25 +269,26 @@ trait ChoisitLaNatureDeLOperation
                 continue;
             }
 
-            $taux = is_numeric($ligne['taux_tva'] ?? null) ? (float) $ligne['taux_tva'] : null;
-            $reference = self::prixDeReferenceConverti($services->get((int) $ligne['service_id']), (float) $ligne['prix_unitaire_ttc'], $taux, $sansTvaAvant, $sansTvaApres);
-
-            if ($reference === null && $taux === null) {
-                continue;
-            }
-
             try {
-                [$prix, $taux] = $reference ?? [$sansTvaApres
-                    ? $calculateur->prixUnitaireHtDepuisTtc((float) $ligne['prix_unitaire_ttc'], $taux)
-                    : $calculateur->prixUnitaireTtcDepuisHt((float) $ligne['prix_unitaire_ttc'], $taux), $taux];
+                $prix = SaisieDecimale::enCentiemes($ligne['prix_unitaire_ttc']);
+                $taux = is_numeric($ligne['taux_tva'] ?? null) ? SaisieDecimale::enCentiemes($ligne['taux_tva']) : null;
+                $reference = self::prixDeReferenceConverti($services->get((int) $ligne['service_id']), $prix, $taux, $sansTvaAvant, $sansTvaApres);
+
+                if ($reference === null && $taux === null) {
+                    continue;
+                }
+
+                [$prixConverti, $tauxConverti] = $reference ?? [$sansTvaApres
+                    ? $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc($prix, $taux))
+                    : number_format($calculateur->prixUnitaireTtcDepuisHt((float) $calculateur->enDecimal($prix), (float) $calculateur->enDecimal($taux)), 2, '.', ''), $calculateur->enDecimal($taux)];
             } catch (InvalidArgumentException) {
                 continue;
             }
 
             // Présentés comme un prix relu en base (cast decimal:2), "15.00",
             // et un taux tel qu'on l'écrit dans le champ, "20".
-            $lignes[$cle]['prix_unitaire_ttc'] = number_format($prix, 2, '.', '');
-            $lignes[$cle]['taux_tva'] = (string) $taux;
+            $lignes[$cle]['prix_unitaire_ttc'] = $prixConverti;
+            $lignes[$cle]['taux_tva'] = (string) (float) $tauxConverti;
             $converties = true;
         }
 
@@ -295,27 +297,32 @@ trait ChoisitLaNatureDeLOperation
 
     /**
      * Le prix de référence du service dans la nouvelle nature, avec son
-     * taux, quand la ligne était à son prix de référence dans l'ancienne :
-     * TTC en France, sans TVA hors de France ; null sinon.
+     * taux, écrits comme leurs colonnes, quand la ligne était à son prix de
+     * référence dans l'ancienne : TTC en France, sans TVA hors de France ;
+     * null sinon. Prix et taux se comparent en centimes et en centièmes de
+     * point.
      *
-     * @return array{0: float, 1: float}|null
+     * @return array{0: string, 1: string}|null
      */
-    private static function prixDeReferenceConverti(?Service $service, float $prix, ?float $taux, bool $sansTvaAvant, bool $sansTvaApres): ?array
+    private static function prixDeReferenceConverti(?Service $service, int $prix, ?int $taux, bool $sansTvaAvant, bool $sansTvaApres): ?array
     {
         if ($service === null || ! $service->aUnPrixDeReference()) {
             return null;
         }
 
-        $prixSansTva = app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $service->prix_ttc, (float) $service->taux_tva);
+        $calculateur = app(CalculateurLigne::class);
+        $prixDeReference = $calculateur->enCentiemes($service->prix_ttc);
+        $tauxDeReference = $calculateur->enCentiemes($service->taux_tva);
+        $prixSansTva = $calculateur->prixUnitaireHtDepuisTtc($prixDeReference, $tauxDeReference);
         $auPrixDeReference = $sansTvaAvant
-            ? round($prix, 2) === round($prixSansTva, 2)
-            : round($prix, 2) === round((float) $service->prix_ttc, 2) && $taux !== null && round($taux, 2) === round((float) $service->taux_tva, 2);
+            ? $prix === $prixSansTva
+            : $prix === $prixDeReference && $taux === $tauxDeReference;
 
         if (! $auPrixDeReference) {
             return null;
         }
 
-        return [$sansTvaApres ? $prixSansTva : (float) $service->prix_ttc, (float) $service->taux_tva];
+        return [$calculateur->enDecimal($sansTvaApres ? $prixSansTva : $prixDeReference), $service->taux_tva];
     }
 
     /**

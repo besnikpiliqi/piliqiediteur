@@ -16,6 +16,8 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
+use App\Domain\Facturation\Services\DocumentChiffre;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -49,15 +51,16 @@ use WeakMap;
  * du catalogue ou un service du magasin, jamais une ligne libre (voir
  * ConstructeurLigneDocument). Deux boutons sous les lignes les ajoutent.
  *
- * Les montants affichés pendant la saisie passent par le même
+ * Les totaux affichés pendant la saisie passent par le même
  * constructeur que l'enregistrement réel, avec le client choisi, la nature
  * de l'opération (voir ChoisitLaNatureDeLOperation) et le régime de TVA du
  * magasin (voir apercuDesLignes()) : l'écran ne peut jamais afficher un
- * centime différent de ce qui sera enregistré. Pour un client
- * professionnel, hors franchise en base, chaque ligne affiche son HT, la
- * TVA se calculant sur le total de son taux (voir totalDeLigne()). Une
- * vente sans TVA française affiche ses lignes sans TVA, et le prix d'un
- * service s'y saisit sans TVA.
+ * centime différent de ce qui sera enregistré. Une ligne ne montre aucun
+ * total sous elle : ses montants dépendent des autres lignes de son taux
+ * (voir CalculateurLigne::chiffrerUneVente()), et seuls les totaux du
+ * document, par taux dès qu'il y en a plusieurs, s'affichent (voir
+ * totauxDuDocument()). Une vente sans TVA française se calcule sans TVA,
+ * et le prix d'un service s'y saisit sans TVA.
  *
  * Remises et prix (R2) : sans l'autorisation « accorder des remises et
  * fixer le prix d'un service », la remise, le prix d'une ligne et le taux
@@ -113,24 +116,24 @@ trait AjouteDesLignesDeVente
      * Les lignes saisies, calculées comme à leur enregistrement pour ce
      * client et cette nature d'opération, la vente en France sans nature
      * (la Caisse), (voir ConstructeurLigneDocument::apercu()), par clé de
-     * ligne ; une ligne pas encore complète n'y est pas.
+     * ligne, avec les totaux par taux et du document ; une ligne pas encore
+     * complète n'y est pas.
      *
-     * Le total de chaque ligne, celui du document et ceux de la Caisse
-     * (reste à payer, monnaie à rendre) lisent tous ce même aperçu : il ne
-     * se calcule, client et catalogue lus, qu'une fois par requête de la
-     * page pour les mêmes lignes, le même client et la même nature, quel
-     * que soit le nombre de lignes.
+     * Les totaux du document et ceux de la Caisse (reste à payer, monnaie
+     * à rendre) lisent tous ce même aperçu : il ne se calcule, client et
+     * catalogue lus, qu'une fois par requête de la page pour les mêmes
+     * lignes, le même client et la même nature, quel que soit le nombre de
+     * lignes.
      *
      * @param  array<array-key, mixed>  $lignes
-     * @return array<array-key, array<string, mixed>>
      */
-    public static function apercuDesLignes(array $lignes, mixed $clientId, mixed $nature = null): array
+    public static function apercuDesLignes(array $lignes, mixed $clientId, mixed $nature = null): DocumentChiffre
     {
         $nature = NatureOperation::depuisSaisie($nature);
 
         return self::calculUneFoisParRequete(
             'apercu:'.hash('xxh128', serialize([$lignes, $clientId, $nature->value])),
-            fn (): array => app(ConstructeurLigneDocument::class)->apercu($lignes, self::contexteDeVente($clientId, $nature)),
+            fn (): DocumentChiffre => app(ConstructeurLigneDocument::class)->apercu($lignes, self::contexteDeVente($clientId, $nature)),
         );
     }
 
@@ -198,7 +201,7 @@ trait AjouteDesLignesDeVente
             'prix_unitaire_ttc' => $prixSansTva && $ligne->service_id !== null ? $ligne->prix_unitaire_ht : $ligne->prix_unitaire_ttc,
             'taux_tva' => self::pourcentageEnTexte(match (true) {
                 ! $tauxImpose || $ligne->service_id === null => $ligne->taux_tva,
-                (float) $ligne->taux_tva_du_prix > 0 => $ligne->taux_tva_du_prix,
+                app(CalculateurLigne::class)->enCentiemes($ligne->taux_tva_du_prix) > 0 => $ligne->taux_tva_du_prix,
                 default => $ligne->service?->taux_tva ?? self::magasin()->tauxTvaParDefaut(),
             }),
             'remise_pourcentage' => self::pourcentageEnTexte($ligne->remise_pourcentage),
@@ -241,7 +244,7 @@ trait AjouteDesLignesDeVente
 
                     $set('description', $produit->nom);
                     $set('reference', $produit->reference);
-                    $set('prix_unitaire_ttc', self::prixEnTexte((float) $produit->prix_vente_ttc));
+                    $set('prix_unitaire_ttc', $produit->prix_vente_ttc);
                     self::appliquerLeTauxDuProduit($produit, $get, $set);
 
                     // Sans l'autorisation, changer le produit d'une ligne
@@ -291,7 +294,6 @@ trait AjouteDesLignesDeVente
                 ->disabled(fn (): bool => ! self::peutAccorderDesRemises())
                 ->dehydrated()
                 ->helperText(fn (): ?string => self::peutAccorderDesRemises() ? null : self::aideSansAutorisation('Une remise')),
-            self::totalDeLigne(),
         ];
     }
 
@@ -339,18 +341,13 @@ trait AjouteDesLignesDeVente
                 ->dehydrated()
                 ->helperText(fn (Get $get): ?string => self::peutAccorderDesRemises() ? null : (self::estUneLigneDeService($get) ? 'Prix de référence du service. ' : 'Prix de la fiche du produit. ').self::aideSansAutorisation('Un autre prix'))
                 // Le PU HT d'une ligne de produit suit le PU TTC saisi, au
-                // taux affiché ; une ligne de service n'en montre pas, son
-                // HT figure sous son total (voir totalDeLigne()).
+                // taux affiché ; une ligne de service n'en montre pas.
                 ->afterStateUpdated(function (?string $state, Get $get, Set $set) {
                     if (blank($state) || self::estUneLigneDeService($get)) {
                         return;
                     }
 
-                    try {
-                        $set('prix_unitaire_ht', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $state, (float) $get('taux_tva'))));
-                    } catch (InvalidArgumentException) {
-                        // Prix hors limites (voir sa validation) : rien à convertir.
-                    }
+                    self::suivreLePrixUnitaireHt($state, $get('taux_tva'), $set);
                 }),
             TextInput::make('taux_tva')
                 ->label('TVA %')
@@ -362,12 +359,7 @@ trait AjouteDesLignesDeVente
                 ->disabled(fn (Get $get): bool => ! self::estUneLigneDeService($get) || ! self::peutAccorderDesRemises())
                 ->dehydrated(fn (Get $get): bool => self::estUneLigneDeService($get))
                 ->hidden(fn (Get $get): bool => self::estUneLigneDeService($get) && (self::magasin()->societe->estEnFranchiseDeTva() || self::venteSansTvaFrancaise($get)))
-                ->helperText(fn (Get $get): ?string => match (true) {
-                    self::magasin()->societe->estEnFranchiseDeTva() => 'TVA non applicable',
-                    self::venteSansTvaFrancaise($get) => 'Retirée du prix : aucune TVA facturée',
-                    self::estUneLigneDeService($get) && ! self::peutAccorderDesRemises() => 'Taux du prix de référence du service. '.self::aideSansAutorisation('Un autre taux'),
-                    default => null,
-                })
+                ->helperText(fn (Get $get): ?string => self::aideDuTaux($get))
                 ->saisieEnDirect()
                 // Une ligne de produit rouverte (brouillon, devis, panier de
                 // la caisse) reprend le taux de sa fiche et le régime du
@@ -384,6 +376,52 @@ trait AjouteDesLignesDeVente
                     }
                 }),
         ];
+    }
+
+    /**
+     * L'aide du taux d'une ligne : en franchise en base, aucune TVA ; sans
+     * TVA française, celle du produit est retirée de son prix ; pour un
+     * service, un taux qui n'est pas en vigueur sur le territoire du
+     * magasin est signalé, sans être refusé (X8), et, sans l'autorisation
+     * de fixer les prix, le taux reste celui de son prix de référence.
+     */
+    private static function aideDuTaux(Get $get): ?string
+    {
+        if (self::magasin()->societe->estEnFranchiseDeTva()) {
+            return 'TVA non applicable';
+        }
+
+        if (self::venteSansTvaFrancaise($get)) {
+            return 'Sans TVA française : retirée du prix, aucune TVA facturée';
+        }
+
+        if (! self::estUneLigneDeService($get)) {
+            return null;
+        }
+
+        $aides = array_filter([
+            self::magasin()->territoireTva()?->aideSiTauxInhabituel($get('taux_tva')),
+            self::peutAccorderDesRemises() ? null : 'Taux du prix de référence du service. '.self::aideSansAutorisation('Un autre taux'),
+        ]);
+
+        return $aides === [] ? null : implode(' ', $aides);
+    }
+
+    /**
+     * Le PU HT d'une ligne de produit, affiché à côté de son PU TTC : sa
+     * conversion au centime au taux de la ligne (voir
+     * CalculateurLigne::prixUnitaireHtDepuisTtc()). Une saisie qui n'est
+     * pas encore un prix ou un taux valable ne change rien.
+     */
+    private static function suivreLePrixUnitaireHt(mixed $prixUnitaireTtc, mixed $tauxTva, Set $set): void
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        try {
+            $set('prix_unitaire_ht', $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($prixUnitaireTtc), SaisieDecimale::enCentiemes($tauxTva))));
+        } catch (InvalidArgumentException) {
+            // Prix ou taux hors limites (voir leur validation) : rien à convertir.
+        }
     }
 
     /**
@@ -421,7 +459,7 @@ trait AjouteDesLignesDeVente
         $contexte = self::contexteDeVente($clientId, NatureOperation::depuisSaisie($nature));
         $refusees = app(DerogationsDePrix::class)->introduites(
             $document?->lignes->map(fn (LigneFacture|LigneDevis $ligne): array => $ligne->attributesToArray())->all() ?? [],
-            app(ConstructeurLigneDocument::class)->apercu($lignes, $contexte),
+            app(ConstructeurLigneDocument::class)->apercu($lignes, $contexte)->lignes,
             $contexte,
         );
 
@@ -447,10 +485,15 @@ trait AjouteDesLignesDeVente
         $produit = filled($ligne['produit_id'] ?? null) ? Produit::withTrashed()->find($ligne['produit_id']) : null;
 
         if ($produit !== null) {
+            $calculateur = app(CalculateurLigne::class);
+
             return [
                 ...$ligne,
-                'prix_unitaire_ttc' => self::prixEnTexte((float) $produit->prix_vente_ttc),
-                'prix_unitaire_ht' => self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $produit->prix_vente_ttc, $contexte->franchiseEnBase ? 0.0 : (float) $produit->taux_tva)),
+                'prix_unitaire_ttc' => $produit->prix_vente_ttc,
+                'prix_unitaire_ht' => $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc(
+                    $calculateur->enCentiemes($produit->prix_vente_ttc),
+                    $contexte->franchiseEnBase ? 0 : $calculateur->enCentiemes($produit->taux_tva),
+                )),
             ];
         }
 
@@ -462,7 +505,7 @@ trait AjouteDesLignesDeVente
 
         return [
             ...$ligne,
-            'prix_unitaire_ttc' => self::prixEnTexte((float) $service->prixDeReferenceDans($contexte)),
+            'prix_unitaire_ttc' => $service->prixDeReferenceDans($contexte),
             'taux_tva' => self::pourcentageEnTexte($service->taux_tva),
         ];
     }
@@ -473,62 +516,13 @@ trait AjouteDesLignesDeVente
      */
     private static function appliquerLeTauxDuProduit(Produit $produit, Get $get, Set $set): void
     {
-        $tauxTva = self::magasin()->societe->estEnFranchiseDeTva() ? 0.0 : (float) $produit->taux_tva;
+        $tauxTva = self::magasin()->societe->estEnFranchiseDeTva() ? '0' : $produit->taux_tva;
 
         $set('taux_tva', self::pourcentageEnTexte($tauxTva));
 
-        if (blank($get('prix_unitaire_ttc'))) {
-            return;
+        if (filled($get('prix_unitaire_ttc'))) {
+            self::suivreLePrixUnitaireHt($get('prix_unitaire_ttc'), $tauxTva, $set);
         }
-
-        try {
-            $set('prix_unitaire_ht', self::prixEnTexte(app(CalculateurLigne::class)->prixUnitaireHtDepuisTtc((float) $get('prix_unitaire_ttc'), $tauxTva)));
-        } catch (InvalidArgumentException) {
-            // Prix hors limites (voir sa validation) : rien à convertir.
-        }
-    }
-
-    /**
-     * Le HT et la TVA de la ligne à côté de son TTC, comme le ticket. Pour
-     * un client professionnel, hors franchise en base (voir
-     * calculeDepuisLeHtDeLigne()), la ligne affiche son HT, quantité x PU
-     * TTC ÷ (1 + taux) arrondi une fois : sa TVA se calcule sur le total HT
-     * de son taux (E1, voir ConstructeurLigneDocument), dans les totaux du
-     * document. Une ligne vendue sans TVA française affiche son HT, sans
-     * TVA. Un taux de service qui n'est pas en vigueur sur le territoire du
-     * magasin est signalé, sans être refusé (X8).
-     */
-    private static function totalDeLigne(): Placeholder
-    {
-        return Placeholder::make('total_ligne')
-            ->label(fn (Get $get): string => self::calculeDepuisLeHtDeLigne($get) || self::venteSansTvaFrancaise($get) ? 'Total HT' : 'Total TTC')
-            ->columnSpanFull()
-            ->content(fn (Get $get, Placeholder $component): string => self::montantEnTexte((float) (self::montantsDeLaLigne($get, $component)[self::calculeDepuisLeHtDeLigne($get) ? 'montant_ht' : 'montant_ttc'] ?? 0)))
-            ->helperText(function (Get $get, Placeholder $component): string {
-                if (self::venteSansTvaFrancaise($get)) {
-                    return 'Sans TVA française';
-                }
-
-                $montants = self::montantsDeLaLigne($get, $component);
-                $detail = self::calculeDepuisLeHtDeLigne($get)
-                    ? 'TVA calculée sur le total'
-                    : self::montantEnTexte((float) ($montants['montant_ht'] ?? 0)).' HT + '.self::montantEnTexte((float) ($montants['montant_tva'] ?? 0)).' de TVA';
-                $aide = self::estUneLigneDeService($get) && ! self::magasin()->societe->estEnFranchiseDeTva()
-                    ? self::magasin()->territoireTva()?->aideSiTauxInhabituel($get('taux_tva'))
-                    : null;
-
-                return $aide === null ? $detail : "{$detail} · {$aide}";
-            });
-    }
-
-    /**
-     * La ligne du champ est vendue à un professionnel, hors franchise en
-     * base (voir ContexteDeVente::calculeDepuisLeHtDeLigne()) : en
-     * franchise, elle se calcule et s'affiche comme celle d'un particulier.
-     */
-    private static function calculeDepuisLeHtDeLigne(Get $get): bool
-    {
-        return self::contexteDeVente($get('../../client_id'), NatureOperation::depuisSaisie($get('../../nature_operation')))->calculeDepuisLeHtDeLigne();
     }
 
     /**
@@ -541,24 +535,9 @@ trait AjouteDesLignesDeVente
         return self::contexteDeVente($get('../../client_id'), NatureOperation::depuisSaisie($get('../../nature_operation')))->retireLaTvaDuPrix();
     }
 
-    /**
-     * @return iterable<array<string, mixed>>
-     */
-    protected static function montantsDesLignesSaisies(Get $get): iterable
+    protected static function documentDesLignesSaisies(Get $get): DocumentChiffre
     {
         return self::apercuDesLignes($get('lignes') ?? [], $get('client_id'), $get('nature_operation'));
-    }
-
-    /**
-     * La ligne du champ, lue par sa clé dans le répéteur dans l'aperçu de
-     * toutes les lignes du document (voir apercuDesLignes()) ; vide tant
-     * qu'elle n'est pas complète.
-     *
-     * @return array<string, mixed>
-     */
-    private static function montantsDeLaLigne(Get $get, Placeholder $champ): array
-    {
-        return self::apercuDesLignes($get('../../lignes') ?? [], $get('../../client_id'), $get('../../nature_operation'))[$champ->getContainer()->getStatePath(isAbsolute: false)] ?? [];
     }
 
     /**
@@ -762,7 +741,7 @@ trait AjouteDesLignesDeVente
                     'service_id' => $service->id,
                     'description' => $service->nom,
                     ...($service->aUnPrixDeReference() ? [
-                        'prix_unitaire_ttc' => self::prixEnTexte((float) $service->prixDeReferenceDans($contexte)),
+                        'prix_unitaire_ttc' => $service->prixDeReferenceDans($contexte),
                         'taux_tva' => self::pourcentageEnTexte($service->taux_tva),
                     ] : []),
                 ]);

@@ -43,8 +43,9 @@ class DevisResourceTest extends TestCase
 
     /**
      * La nature d'un devis et sa livraison s'enregistrent avec lui, et ses
-     * lignes se calculent sans TVA : la facture qui en sera tirée les
-     * reprend (voir CreerFactureDepuisDevisAction).
+     * lignes se calculent sans TVA, au HT de leur prix catalogue : 3 x
+     * 49,90 € TTC à 20 % font 149,70 ÷ 1,2 = 124,75 €. La facture qui en
+     * sera tirée les reprend (voir CreerFactureDepuisDevisAction).
      */
     public function test_creer_un_devis_de_livraison_vers_un_dom_via_le_formulaire(): void
     {
@@ -69,7 +70,7 @@ class DevisResourceTest extends TestCase
 
         $devis = Devis::query()->sole();
         $this->assertSame([NatureOperation::LivraisonDom, '97200', TransportPar::Magasin], [$devis->nature_operation, $devis->livraison_code_postal, $devis->transport_par]);
-        $this->assertSame(['124.74', '0.00', '124.74'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
+        $this->assertSame(['124.75', '0.00', '124.75'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
     }
 
     public function test_creer_un_devis_avec_des_lignes_via_le_formulaire(): void
@@ -80,7 +81,7 @@ class DevisResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
 
         Livewire::test(CreateDevis::class)
             ->fillForm([
@@ -112,7 +113,7 @@ class DevisResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $facture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
@@ -172,7 +173,7 @@ class DevisResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
 
         Livewire::test(CreateDevis::class)
             ->fillForm([
@@ -256,7 +257,7 @@ class DevisResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
 
         Livewire::test(ListDevis::class)->callTableAction('accepter', $devis);
@@ -272,7 +273,7 @@ class DevisResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
 
         Livewire::test(ListDevis::class)->callTableAction('refuser', $devis);
@@ -288,7 +289,7 @@ class DevisResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
         Livewire::test(ListDevis::class)->callTableAction('accepter', $devis);
 
@@ -308,7 +309,7 @@ class DevisResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
         Livewire::test(ListDevis::class)->callTableAction('accepter', $devis);
         Livewire::test(ListDevis::class)->callTableAction('convertir', $devis->fresh());
@@ -324,7 +325,7 @@ class DevisResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
 
         Livewire::test(ListDevis::class)->assertTableActionHidden('convertir', $devis->fresh());
@@ -344,7 +345,7 @@ class DevisResourceTest extends TestCase
 
         $client = Client::factory()->create();
         $autreClient = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
         Livewire::test(ListDevis::class)->callTableAction('accepter', $devis);
 
@@ -490,7 +491,7 @@ class DevisResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
         $devis = $this->envoyerDevis($client, $produit);
         Livewire::test(ListDevis::class)->callTableAction('accepter', $devis);
 
@@ -622,9 +623,7 @@ class DevisResourceTest extends TestCase
 
         $this->assertSame(12.0, (float) $component->get("data.lignes.{$cle}.prix_unitaire_ttc"));
         // 12,00 / 1,055 = 11,374... -> 11,37 € HT, au centime.
-        $component
-            ->assertSee('11,37 € HT + 0,63 € de TVA')
-            ->assertSee('Total HT 11,37 € · TVA 0,63 € · Total TTC 12,00 €');
+        $component->assertSee('Total HT 11,37 € · TVA 0,63 € · Total TTC 12,00 €');
     }
 
     /**
@@ -668,13 +667,13 @@ class DevisResourceTest extends TestCase
             ['produit_id' => $cable->id, 'quantite' => 1],
         ]);
 
-        $this->assertSame(['76.66', '13.34', '90.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
+        $this->assertSame(['76.67', '13.33', '90.00'], [$devis->total_ht, $devis->total_tva, $devis->total_ttc]);
 
         Livewire::test(ViewDevis::class, ['record' => $devis->getRouteKey()])
             ->assertSuccessful()
-            ->assertSee('66,66')
-            ->assertSee('13,34')
-            ->assertSee('76,66')
+            ->assertSee('66,67')
+            ->assertSee('13,33')
+            ->assertSee('76,67')
             ->assertSee('TVA par taux')
             ->assertSee('20 %')
             ->assertSee('0 %');

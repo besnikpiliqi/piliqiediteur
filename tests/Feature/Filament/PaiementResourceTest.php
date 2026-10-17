@@ -37,18 +37,18 @@ class PaiementResourceTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * Crée une facture émise (total TTC 120, via un produit à 100 € HT et
+     * Crée une facture émise (total TTC 120, via un produit à 120 € TTC et
      * 20 % de TVA) depuis le panneau, pour servir de base aux tests
      * d'encaissement.
      */
-    private function emettreFactureDepuisLePanneau(Client $client, float $prixUnitaireHt = 100): Facture
+    private function emettreFactureDepuisLePanneau(Client $client, float $prixUnitaireTtc = 120): Facture
     {
-        $produit = Produit::factory()->create(['prix_vente_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => $prixUnitaireTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,
             'lignes' => [
-                ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+                ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => $prixUnitaireTtc, 'taux_tva' => 20, 'remise_pourcentage' => 0],
             ],
         ])->call('create');
 
@@ -180,8 +180,8 @@ class PaiementResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $factureA = $this->emettreFactureDepuisLePanneau($client, 100); // total 120
-        $factureB = $this->emettreFactureDepuisLePanneau($client, 50 / 1.2); // total 50
+        $factureA = $this->emettreFactureDepuisLePanneau($client, 120); // total 120
+        $factureB = $this->emettreFactureDepuisLePanneau($client, 50); // total 50
 
         Livewire::test(CreatePaiement::class)
             ->fillForm([
@@ -631,8 +631,8 @@ class PaiementResourceTest extends TestCase
     {
         $this->connecterLeProprietaire();
         $client = Client::factory()->create(['nom' => 'Société Archivée']);
-        $factureA = $this->emettreFactureDepuisLePanneau($client, 100);
-        $factureB = $this->emettreFactureDepuisLePanneau($client, 50 / 1.2);
+        $factureA = $this->emettreFactureDepuisLePanneau($client, 120);
+        $factureB = $this->emettreFactureDepuisLePanneau($client, 50);
         $client->delete();
 
         Livewire::test(CreatePaiement::class)
@@ -664,7 +664,7 @@ class PaiementResourceTest extends TestCase
     {
         $this->connecterLeProprietaire();
         $client = Client::factory()->create();
-        $facture = $this->emettreFactureDepuisLePanneau($client, 100);
+        $facture = $this->emettreFactureDepuisLePanneau($client, 120);
         Livewire::test(ListFactures::class)->callTableAction('encaisser', $facture, data: [
             'mode_paiement' => ModePaiement::Especes->value,
             'montant' => 120,

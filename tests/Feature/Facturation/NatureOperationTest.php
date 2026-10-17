@@ -173,7 +173,7 @@ class NatureOperationTest extends TestCase
         $this->assertMatchesRegularExpression('#<th class="montant">PU HT</th>\s*<th class="montant">Prix catalogue TTC</th>\s*<th class="montant">TVA retirée</th>\s*<th class="montant">Taux TVA</th>#', $pdf);
         $this->assertMatchesRegularExpression('#<td class="montant">3</td>\s*<td class="montant">5,83 €</td>\s*<td class="montant">7,00 €</td>\s*<td class="montant">20 %</td>\s*<td class="montant">0 %</td>\s*<td class="montant">17,50 €</td>#', $pdf);
         $this->assertMatchesRegularExpression('#<td class="montant">1</td>\s*<td class="montant">15,00 €</td>\s*<td class="montant">—</td>\s*<td class="montant">—</td>\s*<td class="montant">0 %</td>\s*<td class="montant">15,00 €</td>#', $pdf);
-        $this->assertStringContainsString('HT de chaque ligne de produit = quantité × prix catalogue TTC ÷ (1 + TVA retirée), arrondi une fois', $pdf);
+        $this->assertStringContainsString('HT de chaque taux = TTC du catalogue ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes', $pdf);
         $this->assertStringNotContainsString('PU TTC', $pdf);
     }
 
@@ -207,7 +207,13 @@ class NatureOperationTest extends TestCase
         $this->assertMatchesRegularExpression('#<td class="montant">3</td>\s*<td class="montant">41,67 €</td>\s*<td class="montant">50,00 €</td>\s*<td class="montant">20 %</td>\s*<td class="montant">0 %</td>\s*<td class="montant">125,00 €</td>#', $this->pdf(app(EmettreFactureAction::class)->handle(self::auteur(), $prixVide)));
     }
 
-    public function test_un_export_a_un_particulier_se_paie_0_83_euro_l_article(): void
+    /**
+     * Un particulier qui achète à l'export paie, comme un professionnel, le
+     * HT de son panier : 1 000 articles à 1,00 € TTC à 20 % font 1 000 ÷
+     * 1,20 = 833,33 €, sans TVA ; le PU HT imprimé, 0,83 €, n'en est que
+     * la conversion au centime.
+     */
+    public function test_un_export_a_un_particulier_se_paie_au_ht_de_son_panier(): void
     {
         $this->magasin();
 
@@ -215,7 +221,7 @@ class NatureOperationTest extends TestCase
 
         $this->assertSame('TK-LYON1-2026-000001', $ticket->numero);
         $this->assertSame('0.83', $ticket->lignes->sole()->prix_unitaire_ht);
-        $this->assertSame(['830.00', '0.00', '830.00'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
+        $this->assertSame(['833.33', '0.00', '833.33'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
     }
 
     /**
@@ -304,7 +310,7 @@ class NatureOperationTest extends TestCase
         $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon(Client::factory()->create(), [['produit_id' => $this->produit('49.90')->id, 'quantite' => 3]], NatureOperation::LivraisonDom, self::LIVRAISON_FORT_DE_FRANCE));
 
         $this->assertSame('41.58', $ticket->lignes->sole()->prix_unitaire_ht);
-        $this->assertSame(['124.74', '0.00', '124.74'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
+        $this->assertSame(['124.75', '0.00', '124.75'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
         $this->assertStringContainsString('Exonération de TVA en application de l&#039;article 294 du Code général des impôts', $this->pdf($ticket));
     }
 
@@ -623,12 +629,12 @@ class NatureOperationTest extends TestCase
     }
 
     /**
-     * L'avoir d'un export à un particulier se calcule à son PU HT, le prix
-     * qu'il a payé : 1 000 articles à 1,00 € TTC à 20 % vendus 830,00 €,
-     * 500 rendus créditent 415,00 €, sans TVA, et les 500 derniers les
-     * 415,00 € qui restent, la ligne soldée au centime.
+     * L'avoir d'un export à un particulier se calcule comme sa vente :
+     * 1 000 articles à 1,00 € TTC à 20 % vendus 833,33 €, 500 rendus
+     * créditent 500 ÷ 1,20 = 416,67 €, sans TVA, et les 500 derniers les
+     * 416,66 € qui restent, la ligne soldée au centime.
      */
-    public function test_l_avoir_d_un_export_a_un_particulier_se_calcule_a_son_pu_ht(): void
+    public function test_l_avoir_d_un_export_a_un_particulier_se_calcule_comme_sa_vente(): void
     {
         $this->magasin();
         $client = Client::factory()->create();
@@ -638,8 +644,8 @@ class NatureOperationTest extends TestCase
         $premier = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]], 'Retour partiel');
         $dernier = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ligne->id, 'quantite' => 500]], 'Retour du reste');
 
-        $this->assertSame(['415.00', '0.00', '415.00'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
-        $this->assertSame(['415.00', '0.00', '415.00'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
+        $this->assertSame(['416.67', '0.00', '416.67'], [$premier->total_ht, $premier->total_tva, $premier->total_ttc]);
+        $this->assertSame(['416.66', '0.00', '416.66'], [$dernier->total_ht, $dernier->total_tva, $dernier->total_ttc]);
         $this->assertSame(0, $ligne->fresh()->quantiteCreditableRestante());
     }
 

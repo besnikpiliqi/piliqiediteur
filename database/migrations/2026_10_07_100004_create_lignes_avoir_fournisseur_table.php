@@ -24,9 +24,9 @@ return new class extends Migration
             $table->string('reference', 60)->nullable();
             // Nombre entier d'articles (voir QuantiteEntiere).
             $table->unsignedInteger('quantite');
-            // Un achat part du PU HT du fournisseur, sans PU TTC : la TVA se
-            // calcule sur le HT de la ligne (voir
-            // CalculateurLigne::montantsDAchat()).
+            // Un achat part du PU HT du fournisseur, sans PU TTC : la TVA de
+            // chaque taux se calcule sur le total HT de ses lignes, puis se
+            // répartit entre elles (voir CalculateurLigne::chiffrerUnAchat()).
             $table->decimal('prix_unitaire_ht', 12, 2);
             $table->decimal('taux_tva', 5, 2);
             $table->decimal('remise_pourcentage', 5, 2)->default(0);

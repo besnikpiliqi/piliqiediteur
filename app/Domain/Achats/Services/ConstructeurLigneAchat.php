@@ -9,7 +9,9 @@ use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\DocumentChiffre;
 use App\Domain\Facturation\Services\QuantiteEntiere;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -116,7 +118,8 @@ class ConstructeurLigneAchat
 
     /**
      * Enregistre les lignes de la facture d'achat, à la place de celles
-     * qu'elle avait, puis ses totaux. La fiche de chaque nouveau produit
+     * qu'elle avait, calculées ensemble (voir chiffrer()), puis ses
+     * totaux, sommes exactes de ses lignes. La fiche de chaque nouveau produit
      * est vérifiée une fois toutes les lignes enregistrées (voir
      * verifierLesNouveauxProduits()). Une facture déjà validée crée tout
      * de suite ses nouveaux produits (voir creerLesNouveauxProduits()).
@@ -139,18 +142,18 @@ class ConstructeurLigneAchat
             ->all();
         $factureAchat->lignes()->delete();
 
-        $lignesEnregistrees = [];
+        $lignesPreparees = [];
 
         foreach (array_values($lignes) as $ordre => $donnees) {
-            $lignesEnregistrees[] = $this->enregistrerUneLigne($auteur, $factureAchat, $donnees, $ordre);
+            $lignesPreparees[] = $this->preparerUneLigne($auteur, $factureAchat, $donnees, $ordre);
         }
+
+        $document = $this->chiffrer($lignesPreparees);
+        $lignesEnregistrees = array_map(fn (array $ligne): LigneAchat => $factureAchat->lignes()->create($ligne), array_values($document->lignes));
 
         $this->verifierLesNouveauxProduits($auteur, $lignesEnregistrees, $fichesDejaSaisies);
 
-        $factureAchat->forceFill($this->calculateur->totaliser(array_map(
-            fn (LigneAchat $ligne): array => $ligne->only(['montant_ht', 'montant_tva', 'montant_ttc']),
-            $lignesEnregistrees,
-        )))->save();
+        $factureAchat->forceFill($document->totaux)->save();
 
         // Sa marchandise est déjà reçue : le nouveau produit d'une
         // correction naît tout de suite, pour entrer en stock avec elle
@@ -263,20 +266,122 @@ class ConstructeurLigneAchat
     }
 
     /**
-     * @param  array<string, mixed>  $donnees
+     * Les lignes d'achat telles qu'elles sont saisies à l'écran, calculées
+     * comme à l'enregistrement (voir chiffrer()), par clé de ligne : une
+     * ligne pas encore valable (PU HT ou quantité à saisir, taux ou remise
+     * hors de 0-100 %, prix négatif) est ignorée, et les autres se
+     * calculent ensemble, sans elle. Des montants si absurdes que leur
+     * total ne se calcule plus ne donnent aucun aperçu.
+     *
+     * @param  array<array-key, mixed>  $lignesSaisies
      */
-    private function enregistrerUneLigne(User $auteur, FactureAchat $factureAchat, array $donnees, int $ordre): LigneAchat
+    public function apercu(array $lignesSaisies): DocumentChiffre
+    {
+        $lignes = [];
+
+        foreach ($lignesSaisies as $cle => $ligne) {
+            if (! is_array($ligne)) {
+                continue;
+            }
+
+            try {
+                $lignes[$cle] = $this->prixDeLaLigne(
+                    filled($ligne['prix_unitaire_ht'] ?? null) ? $ligne['prix_unitaire_ht'] : throw new InvalidArgumentException('PU HT à saisir.'),
+                    $ligne['quantite'] ?? null,
+                    filled($ligne['taux_tva'] ?? null) ? $ligne['taux_tva'] : 0,
+                    $ligne['remise_pourcentage'] ?? null,
+                );
+            } catch (InvalidArgumentException) {
+                continue;
+            }
+        }
+
+        try {
+            return $this->chiffrer($lignes);
+        } catch (InvalidArgumentException) {
+            return DocumentChiffre::vide();
+        }
+    }
+
+    /**
+     * Les montants des lignes d'un achat, calculés ensemble depuis leurs
+     * PU HT (voir CalculateurLigne::chiffrerUnAchat()), dans leur ordre :
+     * les lignes d'un même taux se partagent la TVA de leur total HT.
+     *
+     * @param  array<array-key, array<string, mixed>>  $lignes  chacune avec prix_unitaire_ht, quantite, taux_tva et remise_pourcentage écrits comme leurs colonnes
+     *
+     * @throws InvalidArgumentException
+     */
+    private function chiffrer(array $lignes): DocumentChiffre
+    {
+        return DocumentChiffre::depuisLeCalcul($lignes, $this->calculateur->chiffrerUnAchat(array_values(array_map(
+            fn (array $ligne): array => [
+                'prix_unitaire_ht' => $this->calculateur->enCentiemes($ligne['prix_unitaire_ht']),
+                'quantite' => $ligne['quantite'],
+                'remise_pourcentage' => $this->calculateur->enCentiemes($ligne['remise_pourcentage']),
+                'taux_tva' => $this->calculateur->enCentiemes($ligne['taux_tva']),
+            ],
+            $lignes,
+        ))), $this->calculateur);
+    }
+
+    /**
+     * Le PU HT, la quantité, le taux et la remise d'une ligne d'achat
+     * saisie, écrits comme leurs colonnes : un PU HT jamais négatif, un
+     * taux et une remise entre 0 et 100 %.
+     *
+     * @return array{quantite: int, prix_unitaire_ht: string, taux_tva: string, remise_pourcentage: string}
+     *
+     * @throws InvalidArgumentException
+     */
+    private function prixDeLaLigne(mixed $prixUnitaireHt, mixed $quantite, mixed $tauxTva, mixed $remise): array
+    {
+        $prix = SaisieDecimale::enCentiemes($prixUnitaireHt);
+        $taux = SaisieDecimale::enCentiemes($tauxTva);
+        $remise = filled($remise) ? SaisieDecimale::enCentiemes($remise) : 0;
+
+        if ($prix < 0) {
+            throw new InvalidArgumentException('Un prix unitaire ne peut pas être négatif.');
+        }
+
+        if ($taux < 0 || $taux > 10000) {
+            throw new InvalidArgumentException('Le taux de TVA doit être compris entre 0 et 100 %.');
+        }
+
+        if ($remise < 0 || $remise > 10000) {
+            throw new InvalidArgumentException('La remise doit être comprise entre 0 et 100 %.');
+        }
+
+        return [
+            'quantite' => QuantiteEntiere::depuisSaisie($quantite),
+            'prix_unitaire_ht' => $this->calculateur->enDecimal($prix),
+            'taux_tva' => $this->calculateur->enDecimal($taux),
+            'remise_pourcentage' => $this->calculateur->enDecimal($remise),
+        ];
+    }
+
+    /**
+     * Une ligne prête à enregistrer, sans ses montants, qui se calculent
+     * avec les autres lignes (voir chiffrer()) : son produit, existant et
+     * corrigé tout de suite, ou nouveau et gardé en fiche, et ses prix.
+     *
+     * @param  array<string, mixed>  $donnees
+     * @return array<string, mixed>
+     */
+    private function preparerUneLigne(User $auteur, FactureAchat $factureAchat, array $donnees, int $ordre): array
     {
         $produit = $this->produitDeLaLigne($factureAchat, $donnees);
-        $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
-        $tauxTva = (float) ($donnees['taux_tva'] ?? $produit->taux_tva);
-        $remise = (float) ($donnees['remise_pourcentage'] ?? 0);
         // Un achat part toujours du PU HT du fournisseur (voir
         // CalculateurLigne) : celui saisi, sinon le dernier prix d'achat du
         // produit.
-        $prixUnitaireHt = $this->calculateur->arrondirAuCentime((float) (filled($donnees['prix_unitaire_ht'] ?? null)
-            ? $donnees['prix_unitaire_ht']
-            : (($produit->exists ? $produit->dernierPrixDAchatHt() : null) ?? throw new InvalidArgumentException('Une ligne d\'achat doit fournir prix_unitaire_ht.'))));
+        $prix = $this->prixDeLaLigne(
+            filled($donnees['prix_unitaire_ht'] ?? null)
+                ? $donnees['prix_unitaire_ht']
+                : (($produit->exists ? $produit->dernierPrixDAchatHt() : null) ?? throw new InvalidArgumentException('Une ligne d\'achat doit fournir prix_unitaire_ht.')),
+            $donnees['quantite'] ?? null,
+            $donnees['taux_tva'] ?? $produit->taux_tva,
+            $donnees['remise_pourcentage'] ?? null,
+        );
 
         // Sans prix de vente donné, un nouveau produit prend celui du barème
         // du magasin (voir BaremePrixDeVente), s'il en prévoit un à ce prix
@@ -284,25 +389,21 @@ class ConstructeurLigneAchat
         // (voir verifierLesNouveauxProduits()).
         if (! $produit->exists) {
             if (blank($produit->prix_vente_ttc)) {
-                $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, $prixUnitaireHt, $remise, (float) $produit->taux_tva);
+                $produit->prix_vente_ttc = $this->prixDuBareme($factureAchat->magasin, (float) $prix['prix_unitaire_ht'], (float) $prix['remise_pourcentage'], (float) $produit->taux_tva);
             }
         } elseif ($produit->isDirty()) {
             $this->verifierLeDroitDEnregistrer($auteur, $produit);
             $produit->save();
         }
 
-        return $factureAchat->lignes()->create([
+        return [
             'produit_id' => $produit->id,
             'nouveau_produit' => $produit->exists ? null : self::ficheDuNouveauProduit($produit),
             'description' => $produit->nom,
             'reference' => $produit->reference,
-            'quantite' => $quantite,
-            'prix_unitaire_ht' => $prixUnitaireHt,
-            'taux_tva' => $tauxTva,
-            'remise_pourcentage' => $remise,
+            ...$prix,
             'ordre' => $ordre,
-            ...$this->calculateur->montantsDAchat($prixUnitaireHt, $tauxTva, $quantite, $remise),
-        ]);
+        ];
     }
 
     /**

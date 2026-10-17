@@ -12,7 +12,6 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
@@ -60,7 +59,6 @@ class ModifierFactureAction
 {
     public function __construct(
         private readonly ConstructeurLigneDocument $constructeurLigne,
-        private readonly CalculateurLigne $calculateurLigne,
         private readonly RegistreFiscal $registre,
         private readonly LignesRetirees $lignesRetirees,
         private readonly LecteurDesDroits $lecteur,
@@ -108,26 +106,26 @@ class ModifierFactureAction
             ->all();
 
         $contexte = ContexteDeVente::pourEnregistrer($client, $facture->magasin, $facture->fill($attributs)->noterSaNatureDOperation($attributs));
-        $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
-        $this->derogations->exiger($compte, $facture->lignes->map(fn (LigneFacture $ligne): array => $ligne->attributesToArray())->all(), $lignesConstruites, $contexte);
+        $document = $this->constructeurLigne->construireToutes($lignes, $contexte);
+        $this->derogations->exiger($compte, $facture->lignes->map(fn (LigneFacture $ligne): array => $ligne->attributesToArray())->all(), $document->lignes, $contexte);
         $facture->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
 
         $facture->lignes()->delete();
 
-        foreach ($lignesConstruites as $ligne) {
+        foreach ($document->lignes as $ligne) {
             $facture->lignes()->create($ligne);
         }
 
         $apres = array_map(
             fn (array $ligne): array => $this->lignesRetirees->comparable($ligne['produit_id'], $ligne['service_id'], $ligne['description'], $ligne['quantite'], $ligne['prix_unitaire_ttc']),
-            $lignesConstruites,
+            $document->lignes,
         );
 
         foreach ($this->lignesRetirees->entre($avant, $apres) as $retrait) {
             $this->registre->journaliser(CodeEvenement::LigneRetiree, ['origine' => 'brouillon', 'facture_id' => $facture->getKey(), ...$retrait]);
         }
 
-        $facture->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
+        $facture->forceFill($document->totaux)->save();
 
         return $facture->fresh('lignes');
     }

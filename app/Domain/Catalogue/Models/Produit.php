@@ -11,6 +11,7 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -45,7 +46,6 @@ class Produit extends Model
         'taille',
         'couleur',
         'cmup_ht',
-        'prix_vente_ht',
         'prix_vente_ttc',
         'taux_tva',
         'suivi_stock',
@@ -90,7 +90,7 @@ class Produit extends Model
         // NULL en base, jamais question de la laisser vide après coup.
         static::saving(function (Produit $produit) {
             $produit->verifierQueSaReferenceEstLibre();
-            $produit->synchroniserPrixDeVente();
+            $produit->arrondirLePrixDeVente();
             $produit->arrondirLeCmup();
             $produit->verifierQueSesPrixNeSontPasNegatifs();
 
@@ -104,7 +104,6 @@ class Produit extends Model
 
     protected $casts = [
         'cmup_ht' => 'decimal:4',
-        'prix_vente_ht' => 'decimal:2',
         'prix_vente_ttc' => 'decimal:2',
         'taux_tva' => 'decimal:2',
         'stock_quantite' => 'integer',
@@ -362,7 +361,7 @@ class Produit extends Model
      */
     private function verifierQueSesPrixNeSontPasNegatifs(): void
     {
-        if ((float) $this->prix_vente_ttc < 0 || (float) $this->prix_vente_ht < 0) {
+        if ((float) $this->prix_vente_ttc < 0) {
             throw new InvalidArgumentException('Le prix de vente d\'un produit ne peut pas être négatif.');
         }
 
@@ -372,27 +371,17 @@ class Produit extends Model
     }
 
     /**
-     * Le prix de vente TTC fait référence (c'est lui qu'une ligne de vente
-     * reprend, voir ConstructeurLigneDocument) : le HT n'en est que la
-     * conversion au centime, pour l'affichage. Quelle que soit la façon dont
-     * le produit est enregistré (formulaire TTC, saisie HT d'une fabrique ou
-     * d'une API, changement de taux), les deux restent toujours cohérents.
+     * Le prix de vente TTC est le seul prix de vente enregistré, et le seul
+     * prix arrondi : au centime, une fois, quand il est enregistré, comme
+     * sa colonne le gardera. Une ligne de vente le reprend (voir
+     * ConstructeurLigneDocument) ; son HT n'est qu'une conversion,
+     * affichée sans être enregistrée (voir
+     * ProduitResource::detailPrixDeVente()).
      */
-    private function synchroniserPrixDeVente(): void
+    private function arrondirLePrixDeVente(): void
     {
-        $calculateur = app(CalculateurLigne::class);
-        $tauxTva = (float) $this->taux_tva;
-
-        if ($this->isDirty('prix_vente_ttc') || ($this->isDirty('taux_tva') && ! $this->isDirty('prix_vente_ht'))) {
-            $this->prix_vente_ttc = $calculateur->arrondirAuCentime((float) $this->prix_vente_ttc);
-            $this->prix_vente_ht = $calculateur->prixUnitaireHtDepuisTtc((float) $this->prix_vente_ttc, $tauxTva);
-
-            return;
-        }
-
-        if ($this->isDirty('prix_vente_ht')) {
-            $this->prix_vente_ht = $calculateur->arrondirAuCentime((float) $this->prix_vente_ht);
-            $this->prix_vente_ttc = $calculateur->prixUnitaireTtcDepuisHt((float) $this->prix_vente_ht, $tauxTva);
+        if ($this->isDirty('prix_vente_ttc') && filled($this->prix_vente_ttc)) {
+            $this->prix_vente_ttc = app(CalculateurLigne::class)->enDecimal(SaisieDecimale::enCentiemes($this->getAttributes()['prix_vente_ttc']));
         }
     }
 

@@ -5,6 +5,7 @@ namespace App\Filament\App\Pages;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\ProduitResource;
 use Filament\Facades\Filament;
@@ -173,7 +174,7 @@ class ParametresPrixDeVente extends Page implements HasForms
                 return 'Aucun bénéfice prévu à ce prix d\'achat : le prix de vente se saisit à la main.';
             }
 
-            $beneficeReel = $calculateur->beneficeUnitaire($calculateur->prixUnitaireHtDepuisTtc($prix['prix_vente_ttc'], $tauxTva), $prixAchatHt);
+            $beneficeReel = $calculateur->beneficeUnitaire((float) $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($prix['prix_vente_ttc']), SaisieDecimale::enCentiemes($tauxTva))), $prixAchatHt);
         } catch (InvalidArgumentException) {
             return '—';
         }

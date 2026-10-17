@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;
@@ -37,13 +38,15 @@ class PanierCaisseFactory extends Factory
      */
     private static function lignesDu(Produit $produit, int $quantite): array
     {
+        $calculateur = app(CalculateurLigne::class);
+
         return [(string) Str::uuid() => [
             'produit_id' => $produit->id,
             'service_id' => null,
             'description' => $produit->nom,
             'reference' => $produit->reference,
             'quantite' => $quantite,
-            'prix_unitaire_ht' => (string) $produit->prix_vente_ht,
+            'prix_unitaire_ht' => $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc($calculateur->enCentiemes($produit->prix_vente_ttc), $calculateur->enCentiemes($produit->taux_tva))),
             'prix_unitaire_ttc' => (string) $produit->prix_vente_ttc,
             'taux_tva' => (string) (float) $produit->taux_tva,
             'remise_pourcentage' => '0',

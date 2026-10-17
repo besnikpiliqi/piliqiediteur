@@ -93,13 +93,12 @@ class FactureResource extends Resource
      */
     public static function getEloquentQuery(): Builder
     {
-        // withSum évite un N+1 sur montantPaye()/montantCrediteParAvoir()
-        // pour chaque ligne du tableau.
+        // Les imputations chargées avec les factures, sommées en centimes
+        // par la colonne « Payé » (jamais une somme que la base ferait sur
+        // une colonne décimale), sans une requête par facture.
         return parent::getEloquentQuery()
             ->visiblesPar(auth()->user())
-            ->with('client')
-            ->withSum('allocationsPaiement as montant_paye_somme', 'montant_alloue')
-            ->withSum('allocationsAvoir as montant_credite_somme', 'montant_alloue');
+            ->with(['client', 'allocationsPaiement:id,facture_id,montant_alloue', 'allocationsAvoir:id,facture_id,avoir_id,montant_alloue']);
     }
 
     /**
@@ -491,13 +490,14 @@ class FactureResource extends Resource
     /**
      * Lignes d'un document (facture, avoir, devis, facture d'achat, avoir
      * fournisseur) : pour chaque article son PU HT, son PU TTC et son taux,
-     * puis le HT, la TVA et le TTC de la ligne (voir CalculateurLigne). Un
-     * achat n'a pas de PU TTC : sa TVA se calcule sur le HT de la ligne. La
-     * remise n'apparaît que si une ligne du document en a une : c'est elle
-     * qui explique alors que PU x quantité diffère du total. Sur un
-     * document de vente à un professionnel, calculé depuis le HT de chaque
-     * ligne, la note de calcul l'explique aussi (voir
-     * MentionsFiscales::calcul()). La ligne d'une facture d'achat brouillon
+     * puis le HT, la TVA et le TTC de la ligne, tels qu'enregistrés (voir
+     * CalculateurLigne). Un achat n'a pas de PU TTC : sa TVA est sa part de
+     * celle du total HT de son taux. La remise n'apparaît que si une ligne
+     * du document en a une : c'est elle qui explique alors que PU x
+     * quantité diffère du total. Sur tout document de vente soumis à la
+     * TVA, la note de calcul dit que le HT de chaque taux se calcule sur son
+     * TTC et se répartit sur les lignes (voir MentionsFiscales::calcul()).
+     * La ligne d'une facture d'achat brouillon
      * qui garde la fiche d'un nouveau produit dit qu'il ne naîtra qu'à sa
      * validation (voir LigneAchat).
      *
@@ -615,6 +615,20 @@ class FactureResource extends Resource
             ->columns(5);
     }
 
+    /**
+     * Ce que la facture a reçu, paiements et crédit d'avoir compris, écrit
+     * comme sa colonne (« 12.50 ») : ses imputations, chargées avec elle
+     * (voir getEloquentQuery()), sommées en centimes.
+     */
+    private static function paye(Facture $facture): string
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        return $calculateur->enDecimal($facture->allocationsPaiement->concat($facture->allocationsAvoir)->sum(
+            fn (PaiementAllocation|AvoirAllocation $allocation): int => $calculateur->enCentiemes($allocation->montant_alloue),
+        ));
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -630,9 +644,9 @@ class FactureResource extends Resource
                 // facture jamais réellement encaissée. Le séparer du "Payé"
                 // ici donnerait l'impression contradictoire d'une facture
                 // "partiellement payée" à 0 € payé.
-                Tables\Columns\TextColumn::make('montant_paye_somme')
+                Tables\Columns\TextColumn::make('montant_paye')
                     ->label('Payé')
-                    ->state(fn (Facture $record) => app(CalculateurLigne::class)->sommer([$record->montant_paye_somme, $record->montant_credite_somme]))
+                    ->state(fn (Facture $record): string => self::paye($record))
                     ->money('EUR'),
                 Tables\Columns\TextColumn::make('cree_par_nom')->label('Créée par')->toggleable(),
                 Tables\Columns\TextColumn::make('date_echeance')->label('Échéance')->date('d/m/Y'),

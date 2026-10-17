@@ -207,7 +207,6 @@ class ProduitTest extends TestCase
     {
         return [
             'prix de vente TTC' => [['prix_vente_ttc' => -12.0], 'Le prix de vente d\'un produit ne peut pas être négatif.'],
-            'prix de vente HT' => [['prix_vente_ht' => -10.0], 'Le prix de vente d\'un produit ne peut pas être négatif.'],
             'coût d\'achat' => [['cmup_ht' => -5.0], 'Le coût d\'achat d\'un produit ne peut pas être négatif.'],
         ];
     }

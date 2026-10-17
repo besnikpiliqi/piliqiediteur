@@ -106,37 +106,39 @@ class DerogationsDePrix
     }
 
     /**
-     * La dérogation que porte la ligne, en une phrase, ou null.
+     * La dérogation que porte la ligne, en une phrase, ou null : ses prix,
+     * son taux et sa remise, écrits comme leurs colonnes, se comparent en
+     * centimes et en centièmes de point.
      *
      * @param  array<string, mixed>  $ligne
      */
     private function derogation(array $ligne, ?Produit $produit, ?Service $service, ContexteDeVente $contexte): ?string
     {
         $article = $produit?->nom ?? $service?->nom ?? (string) ($ligne['description'] ?? '');
-        $prix = $this->calculateur->arrondirAuCentime((float) $ligne['prix_unitaire_ttc']);
+        $prix = $this->calculateur->enCentiemes($ligne['prix_unitaire_ttc']);
 
         if ($service !== null && ! $service->aUnPrixDeReference()) {
             return "Le prix du service « {$article} » n'est pas fixé : demandez à un responsable.";
         }
 
-        if ((float) ($ligne['remise_pourcentage'] ?? 0) !== 0.0) {
+        if ($this->calculateur->enCentiemes($ligne['remise_pourcentage'] ?? 0) !== 0) {
             return 'Accorder une remise de '.self::pourcentage($ligne['remise_pourcentage'])." % sur « {$article} » ".self::AUTORISATION.'.';
         }
 
-        if ($produit !== null && $prix !== $this->calculateur->arrondirAuCentime((float) $produit->prix_vente_ttc)) {
-            return "Vendre « {$article} » à ".self::euros($prix).' au lieu de '.self::euros((float) $produit->prix_vente_ttc).', le prix de sa fiche, '.self::AUTORISATION.'.';
+        if ($produit !== null && $prix !== $this->calculateur->enCentiemes($produit->prix_vente_ttc)) {
+            return "Vendre « {$article} » à ".self::euros($ligne['prix_unitaire_ttc']).' au lieu de '.self::euros($produit->prix_vente_ttc).', le prix de sa fiche, '.self::AUTORISATION.'.';
         }
 
-        if ($service === null || $service->estASonPrixDeReference($prix, (float) $ligne['taux_tva_du_prix'], $contexte)) {
+        if ($service === null || $service->estASonPrixDeReference($prix, $this->calculateur->enCentiemes($ligne['taux_tva_du_prix']), $contexte)) {
             return null;
         }
 
         // Le prix de la ligne et celui de référence tels que l'écran les
         // montre : sans TVA hors de la TVA française.
-        $prixMontre = $this->calculateur->arrondirAuCentime((float) ($contexte->retireLaTvaDuPrix() ? $ligne['prix_unitaire_ht'] : $ligne['prix_unitaire_ttc']));
-        $prixDeReference = $this->calculateur->arrondirAuCentime((float) $service->prixDeReferenceDans($contexte));
+        $prixMontre = $contexte->retireLaTvaDuPrix() ? $ligne['prix_unitaire_ht'] : $ligne['prix_unitaire_ttc'];
+        $prixDeReference = $service->prixDeReferenceDans($contexte);
 
-        if ($prixMontre !== $prixDeReference) {
+        if ($this->calculateur->enCentiemes($prixMontre) !== $this->calculateur->enCentiemes($prixDeReference)) {
             return "Vendre « {$article} » à ".self::euros($prixMontre).' au lieu de '.self::euros($prixDeReference).', son prix de référence, '.self::AUTORISATION.'.';
         }
 
@@ -155,15 +157,21 @@ class DerogationsDePrix
             (int) ($ligne['produit_id'] ?? 0),
             (int) ($ligne['service_id'] ?? 0),
             (int) $ligne['quantite'],
-            number_format((float) $ligne['prix_unitaire_ttc'], 2, '.', ''),
-            number_format((float) ($ligne['taux_tva_du_prix'] ?? 0), 2, '.', ''),
-            number_format((float) ($ligne['remise_pourcentage'] ?? 0), 2, '.', ''),
+            $this->calculateur->enCentiemes($ligne['prix_unitaire_ttc']),
+            $this->calculateur->enCentiemes($ligne['taux_tva_du_prix'] ?? 0),
+            $this->calculateur->enCentiemes($ligne['remise_pourcentage'] ?? 0),
         ]);
     }
 
-    private static function euros(float $montant): string
+    /**
+     * Un prix écrit comme sa colonne (« 1234.50 »), tel qu'on le lit :
+     * « 1 234,50 € ».
+     */
+    private static function euros(string $prix): string
     {
-        return number_format($montant, 2, ',', ' ').' €';
+        [$euros, $centimes] = explode('.', $prix);
+
+        return number_format((int) $euros, 0, ',', ' ').','.$centimes.' €';
     }
 
     private static function pourcentage(mixed $pourcentage): string

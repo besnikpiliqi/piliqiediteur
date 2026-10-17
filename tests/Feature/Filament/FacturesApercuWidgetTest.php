@@ -40,7 +40,7 @@ class FacturesApercuWidgetTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
         foreach (range(1, 2) as $_) {
             Livewire::test(CreateFacture::class)->fillForm([
                 'client_id' => $client->id,
@@ -63,7 +63,7 @@ class FacturesApercuWidgetTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20]);
         app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -85,7 +85,7 @@ class FacturesApercuWidgetTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
         $this->travelTo(CarbonImmutable::parse('2026-10-11 22:30:00', 'UTC'));
         app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
@@ -99,9 +99,10 @@ class FacturesApercuWidgetTest extends TestCase
 
     /**
      * Le vendeur A vend F1 (1 x 120,00 € = 100,00 € HT) ; le propriétaire
-     * vend F2 (2 x 40,00 € = 66,66 € HT + 13,34 € de TVA), puis reprend un
-     * article de F2 par un avoir (33,33 € HT, 6,67 € de TVA, 40,00 €) : le
-     * propriétaire lit 100,00 + 66,66 - 33,33 = 133,33 € HT.
+     * vend F2 (2 x 40,00 € = 80,00 ÷ 1,2 = 66,67 € HT + 13,33 € de TVA),
+     * puis reprend un article de F2 par un avoir (33,33 € HT, 6,67 € de
+     * TVA, 40,00 €) : le propriétaire lit 100,00 + 66,67 - 33,33 =
+     * 133,34 € HT, la somme des documents enregistrés.
      */
     public function test_le_chiffre_d_affaires_du_magasin_est_net_des_avoirs(): void
     {
@@ -113,7 +114,7 @@ class FacturesApercuWidgetTest extends TestCase
 
         $widget->assertSee('Chiffre d\'affaires')
             ->assertDontSee('Mes ventes')
-            ->assertSeeInOrder(['Ce mois-ci', '133,33 € HT', '160,00 € TTC · 2 factures, 1 avoir', 'Cette année']);
+            ->assertSeeInOrder(['Ce mois-ci', '133,34 € HT', '160,00 € TTC · 2 factures, 1 avoir', 'Cette année']);
     }
 
     /**
@@ -138,7 +139,8 @@ class FacturesApercuWidgetTest extends TestCase
     /**
      * Un avoir du propriétaire sur la vente du vendeur réduit les ventes du
      * vendeur, quel que soit son auteur : l'avoir total de F1 ramène le
-     * vendeur à 0,00 € HT, et le magasin à F2 moins ses deux avoirs.
+     * vendeur à 0,00 € HT, et le magasin à F2 moins l'avoir d'un de ses
+     * articles, 66,67 - 33,33 = 33,34 € HT.
      */
     public function test_l_avoir_du_proprietaire_sur_la_vente_d_un_vendeur_reduit_les_ventes_du_vendeur(): void
     {
@@ -154,7 +156,7 @@ class FacturesApercuWidgetTest extends TestCase
         $widgetDuMagasin = Livewire::test(FacturesApercu::class);
 
         $widgetDuVendeur->assertSeeInOrder(['Ce mois-ci', '0,00 € HT', '0,00 € TTC · 1 facture, 1 avoir', 'Cette année']);
-        $widgetDuMagasin->assertSeeInOrder(['Ce mois-ci', '33,33 € HT', '40,00 € TTC · 2 factures, 2 avoirs', 'Cette année']);
+        $widgetDuMagasin->assertSeeInOrder(['Ce mois-ci', '33,34 € HT', '40,00 € TTC · 2 factures, 2 avoirs', 'Cette année']);
     }
 
     /**

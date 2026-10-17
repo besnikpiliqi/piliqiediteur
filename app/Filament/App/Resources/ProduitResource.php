@@ -4,6 +4,7 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -196,14 +197,23 @@ class ProduitResource extends Resource
         $calculateur = app(CalculateurLigne::class);
 
         try {
-            $prixUnitaireTtc = $calculateur->arrondirAuCentime((float) $get('prix_vente_ttc'));
-            $prixUnitaireHt = $calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, $tauxTva);
+            $prixUnitaireTtc = SaisieDecimale::enCentiemes($get('prix_vente_ttc'));
+            $prixUnitaireHt = $calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, SaisieDecimale::enCentiemes($tauxTva));
         } catch (InvalidArgumentException) {
             return null;
         }
 
-        return 'Soit '.number_format($prixUnitaireHt, 2, ',', ' ').' € HT + '
-            .number_format($calculateur->soustraire($prixUnitaireTtc, $prixUnitaireHt), 2, ',', ' ').' € de TVA';
+        return 'Soit '.self::euros($calculateur->enDecimal($prixUnitaireHt)).' HT + '
+            .self::euros($calculateur->enDecimal($prixUnitaireTtc - $prixUnitaireHt)).' de TVA';
+    }
+
+    /**
+     * Un montant écrit comme sa colonne (« 1234.50 »), tel qu'on le lit :
+     * « 1 234,50 € ».
+     */
+    private static function euros(string $montant): string
+    {
+        return number_format((float) $montant, 2, ',', ' ').' €';
     }
 
     /**

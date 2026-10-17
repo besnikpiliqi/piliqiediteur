@@ -12,15 +12,16 @@ use App\Domain\Tenancy\Models\Magasin;
 use LogicException;
 
 /**
- * Ce qui, hors des lignes elles-mêmes, décide du calcul d'une vente (voir
- * ConstructeurLigneDocument) : le type du client -- article par article
- * pour un particulier, depuis le HT de chaque ligne pour un professionnel
- * (E1, voir calculeDepuisLeHtDeLigne()) --, le régime de TVA de la société --
- * en franchise en base, tout se vend à 0 % au même prix TTC, article par
- * article quel que soit le client (B10) --, la nature de l'opération --
- * hors de la vente en France, tout se vend à 0 %, au prix sans la TVA
- * française (K3, voir retireLaTvaDuPrix()) -- et le taux proposé pour une
- * ligne de service sans taux saisi, celui du territoire du magasin (B2).
+ * Ce qui, hors des lignes elles-mêmes, décide d'une vente (voir
+ * ConstructeurLigneDocument) : le type du client -- qui choisit la série
+ * de la vente, ticket ou facture, et les natures d'opération permises --,
+ * le régime de TVA de la société -- en franchise en base, tout se vend à
+ * 0 % au même prix TTC (B10) --, la nature de l'opération -- hors de la
+ * vente en France, tout se vend à 0 %, au prix sans la TVA française (K3,
+ * voir retireLaTvaDuPrix()) -- et le taux proposé pour une ligne de
+ * service sans taux saisi, celui du territoire du magasin (B2). Le calcul
+ * des montants, lui, est le même pour tout client (voir
+ * CalculateurLigne::chiffrerUneVente()).
  *
  * Un brouillon de facture ou un devis note le type du client et la
  * franchise à chaque enregistrement (colonnes()), avec la nature qu'il
@@ -98,9 +99,10 @@ final readonly class ContexteDeVente
     /**
      * Le client paie-t-il le prix sans la TVA française (K3) ? Hors de la
      * vente en France, hors franchise : un produit se vend au prix TTC de
-     * son catalogue ÷ (1 + son taux), et un service à son prix saisi sans
-     * TVA -- 1 000 articles à 1,00 € TTC à 20 % font 833,33 € pour un
-     * professionnel, 830,00 € pour un particulier, à 0,83 € l'article. En
+     * son catalogue ÷ (1 + son taux), calculé taux par taux comme toute
+     * vente (voir CalculateurLigne::chiffrerUneVente()), et un service à son
+     * prix saisi sans TVA -- 1 000 articles à 1,00 € TTC à 20 % font
+     * 833,33 €, pour un particulier comme pour un professionnel. En
      * franchise, le client paie le même prix TTC, sans TVA, quelle que soit
      * la nature, dont seule la vente en France s'enregistre (voir
      * pourEnregistrer()).
@@ -126,14 +128,13 @@ final readonly class ContexteDeVente
     /**
      * Un brouillon de facture ou un devis part avec le type de client noté
      * à son enregistrement : si la fiche du client est devenue celle d'un
-     * professionnel, ou d'un particulier, depuis, ses lignes sont à
-     * recalculer pour ce type (E1), en l'enregistrant de nouveau. Sinon, un
-     * professionnel recevrait un devis calculé article par article et une
-     * facture calculée depuis le HT de ses lignes, qui ne coûterait pas le
-     * prix accepté (1 000 x 1,00 € à 20 % : 830,00 € HT sur le devis,
-     * 833,33 € HT sur la facture) ; et une facture partirait dans la série
-     * des tickets, ou un ticket dans celle des factures (voir
-     * Facture::serie()).
+     * professionnel, ou d'un particulier, depuis, il est à enregistrer de
+     * nouveau pour ce type. Sinon une facture partirait dans la série des
+     * tickets, ou un ticket dans celle des factures (voir
+     * Facture::serie()), avec une nature d'opération que ce client ne
+     * permet plus (voir pourEnregistrer()), sans l'identité légale qu'exige
+     * une facture à un professionnel ; ses montants, eux, sont les mêmes
+     * pour tout client.
      *
      * @throws LogicException
      */
@@ -166,34 +167,6 @@ final readonly class ContexteDeVente
     }
 
     /**
-     * Une vente à un professionnel se calcule depuis le HT de chaque ligne,
-     * quantité x PU TTC ÷ (1 + taux) arrondi une fois, et la TVA de chaque
-     * taux sur le total HT de ses lignes (voir CalculateurLigne) ; une vente
-     * à un particulier, article par article. Hors de la vente en France, de
-     * même, sans TVA (voir retireLaTvaDuPrix()). En franchise en base,
-     * toutes les lignes sont à 0 % et le client paie le même prix TTC, sans
-     * TVA (B10) : professionnel comme particulier, la vente se calcule
-     * article par article, remise comprise -- 9,99 € remisés de 50 % font
-     * 4,99 € pour l'un comme pour l'autre.
-     */
-    public function calculeDepuisLeHtDeLigne(): bool
-    {
-        return self::depuisLeHtDeLigne($this->typeClient, $this->franchiseEnBase);
-    }
-
-    /**
-     * Le calcul avec lequel un document a été enregistré, d'après le type
-     * de client et la franchise qu'il a notés (voir colonnes()), et non
-     * d'après la fiche du client ou le régime d'aujourd'hui : ses retours
-     * se calculent de même (voir LigneFacture::montantsDuRetour()), et sa
-     * note de calcul l'explique (voir MentionsFiscales::calcul()).
-     */
-    public static function documentCalculeDepuisLeHtDeLigne(Facture|Avoir|Devis $document): bool
-    {
-        return self::depuisLeHtDeLigne($document->type_client, $document->franchise_en_base);
-    }
-
-    /**
      * Les colonnes qu'un brouillon de facture ou un devis enregistre avec
      * ses lignes.
      *
@@ -205,11 +178,6 @@ final readonly class ContexteDeVente
             'type_client' => $this->typeClient,
             'franchise_en_base' => $this->franchiseEnBase,
         ];
-    }
-
-    private static function depuisLeHtDeLigne(TypeClient $typeClient, bool $franchiseEnBase): bool
-    {
-        return $typeClient === TypeClient::Professionnel && ! $franchiseEnBase;
     }
 
     private static function sansTvaFrancaise(bool $franchiseEnBase, NatureOperation $natureOperation): bool

@@ -50,7 +50,7 @@ class ProduitResourceTest extends TestCase
         Filament::setTenant($magasin);
     }
 
-    public function test_le_prix_de_vente_ttc_saisi_est_enregistre_tel_quel_avec_son_ht(): void
+    public function test_le_prix_de_vente_ttc_saisi_est_enregistre_tel_quel_et_son_ht_seulement_affiche(): void
     {
         $this->connecterProprietaire();
 
@@ -67,10 +67,11 @@ class ProduitResourceTest extends TestCase
         $produit = Produit::query()->where('nom', 'Ecran Iphone 18 Pro')->firstOrFail();
 
         $this->assertSame('40.00', $produit->prix_vente_ttc);
-        $this->assertSame('33.33', $produit->prix_vente_ht);
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->assertSee('Soit 33,33 € HT + 6,67 € de TVA');
     }
 
-    public function test_modifier_le_prix_de_vente_ttc_recalcule_le_ht(): void
+    public function test_modifier_le_prix_de_vente_ttc_affiche_son_nouveau_ht(): void
     {
         $this->connecterProprietaire();
 
@@ -83,24 +84,11 @@ class ProduitResourceTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertSame('144.00', $produit->fresh()->prix_vente_ttc);
-        $this->assertSame('120.00', $produit->fresh()->prix_vente_ht);
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->assertSee('Soit 120,00 € HT + 24,00 € de TVA');
     }
 
-    /**
-     * Un produit enregistré avec un HT (fabrique de test, future API)
-     * obtient son TTC au centime :
-     * 33,33 € HT donne bien 40,00 € TTC, jamais 39,996 €.
-     */
-    public function test_un_produit_enregistre_en_ht_obtient_son_ttc_au_centime(): void
-    {
-        $this->connecterProprietaire();
-
-        $produit = Produit::factory()->create(['prix_vente_ht' => 33.33, 'taux_tva' => 20]);
-
-        $this->assertSame('40.00', $produit->fresh()->prix_vente_ttc);
-    }
-
-    public function test_changer_le_taux_de_tva_garde_le_prix_ttc_et_recalcule_le_ht(): void
+    public function test_changer_le_taux_de_tva_garde_le_prix_ttc_et_affiche_son_nouveau_ht(): void
     {
         $this->connecterProprietaire();
 
@@ -109,7 +97,8 @@ class ProduitResourceTest extends TestCase
         $produit->update(['taux_tva' => 5.5]);
 
         $this->assertSame('12.00', $produit->fresh()->prix_vente_ttc);
-        $this->assertSame('11.37', $produit->fresh()->prix_vente_ht);
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->assertSee('Soit 11,37 € HT + 0,63 € de TVA');
     }
 
     /**
@@ -142,7 +131,7 @@ class ProduitResourceTest extends TestCase
     {
         $this->connecterProprietaire();
 
-        $produit = Produit::factory()->create(['nom' => 'Ecran Iphone 18 Pro', 'prix_vente_ht' => 33.33, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['nom' => 'Ecran Iphone 18 Pro', 'prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
         $client = Client::factory()->create();
 
         $component = Livewire::test(CreateFacture::class)
@@ -166,8 +155,8 @@ class ProduitResourceTest extends TestCase
         $this->assertSame('40.00', $ligne->prix_unitaire_ttc);
         $this->assertSame('33.33', $ligne->prix_unitaire_ht);
         $this->assertSame('80.00', $facture->total_ttc);
-        $this->assertSame('66.66', $facture->total_ht);
-        $this->assertSame('13.34', $facture->total_tva);
+        $this->assertSame('66.67', $facture->total_ht);
+        $this->assertSame('13.33', $facture->total_tva);
     }
 
     public function test_le_cmup_est_enregistre_au_dix_millieme(): void

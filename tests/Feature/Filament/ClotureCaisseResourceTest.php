@@ -39,7 +39,7 @@ class ClotureCaisseResourceTest extends TestCase
 
     private function emettreFactureParticulier(Client $client): Facture
     {
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,
@@ -434,9 +434,9 @@ class ClotureCaisseResourceTest extends TestCase
 
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, $facture->date_emission);
 
-        $this->assertSame(['76.66', '13.34', '90.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
+        $this->assertSame(['76.67', '13.33', '90.00'], [$cloture->total_ht, $cloture->total_tva, $cloture->total_ttc]);
         $this->assertSame([
-            ['taux_tva' => '20.00', 'montant_ht' => 66.66, 'montant_tva' => 13.34, 'montant_ttc' => 80.0],
+            ['taux_tva' => '20.00', 'montant_ht' => 66.67, 'montant_tva' => 13.33, 'montant_ttc' => 80.0],
             ['taux_tva' => '0.00', 'montant_ht' => 10.0, 'montant_tva' => 0.0, 'montant_ttc' => 10.0],
         ], $cloture->ventilation_tva);
 
@@ -444,7 +444,7 @@ class ClotureCaisseResourceTest extends TestCase
             ->assertSuccessful()
             ->assertSee('TVA par taux')
             ->assertSee('Biens et services')
-            ->assertSee('66,66')
-            ->assertSee('76,66');
+            ->assertSee('66,67')
+            ->assertSee('76,67');
     }
 }

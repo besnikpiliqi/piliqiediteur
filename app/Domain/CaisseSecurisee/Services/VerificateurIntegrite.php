@@ -14,6 +14,7 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
@@ -21,6 +22,7 @@ use Closure;
 use ErrorException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\JoinClause;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Exceptions\MathException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -1130,67 +1132,98 @@ class VerificateurIntegrite
      * Ce qui est imputé sur chaque facture émise, paiements et crédits
      * d'avoir, contre-passations déduites, et ce que chaque avoir émis a
      * crédité de factures, restent entre zéro et le total TTC du document.
-     * La base fait les sommes en centimes, sur les seules imputations du
-     * magasin, et ne rend que les documents en défaut.
+     * Les documents du magasin se lisent par paquets, avec leurs seules
+     * imputations, sommées en centimes -- jamais par une somme que la base
+     * ferait sur une colonne décimale : la mémoire ne grandit pas avec le
+     * registre.
      */
     private function verifierLesMontantsImputes(): void
     {
         $this->verifierLesMontantsImputesSur('facture', [
-            'paye' => [PaiementAllocation::query(), 'facture_id'],
-            'credite' => [AvoirAllocation::query(), 'facture_id'],
+            [PaiementAllocation::query(), 'facture_id'],
+            [AvoirAllocation::query(), 'facture_id'],
         ]);
         $this->verifierLesMontantsImputesSur('avoir', [
-            'impute' => [AvoirAllocation::query(), 'avoir_id'],
+            [AvoirAllocation::query(), 'avoir_id'],
         ]);
     }
 
     /**
-     * @param  array<string, array{0: Builder<PaiementAllocation>|Builder<AvoirAllocation>, 1: string}>  $sommes  par alias de jointure, les imputations et la colonne qui désigne le document
+     * @param  list<array{0: Builder<PaiementAllocation>|Builder<AvoirAllocation>, 1: string}>  $sommes  les imputations et la colonne qui désigne le document
      */
     private function verifierLesMontantsImputesSur(string $alias, array $sommes): void
     {
-        $table = (new (self::MODELES[$alias]))->getTable();
-        $documents = self::MODELES[$alias]::query()->whereNotNull("{$table}.numero");
-        $centimesImputes = [];
+        $nature = $alias === 'avoir' ? 'crédités de factures' : 'imputés (paiements et crédits d\'avoir)';
 
-        foreach ($sommes as $jointure => [$imputations, $colonne]) {
-            $documents->leftJoinSub(
-                $imputations->toBase()->selectRaw("{$colonne} as document_id, round(sum(montant_alloue) * 100) as centimes")->groupBy($colonne),
-                $jointure,
-                "{$jointure}.document_id",
-                '=',
-                "{$table}.id",
-            );
-            $centimesImputes[] = "coalesce({$jointure}.centimes, 0)";
+        self::MODELES[$alias]::query()
+            ->whereNotNull('numero')
+            ->toBase()
+            ->select(['id', 'numero', 'total_ttc'])
+            ->chunkById(100, function (Collection $documents) use ($alias, $sommes, $nature): void {
+                [$centimesImputes, $illisibles] = $this->centimesImputesSur($documents->pluck('id')->all(), $sommes);
+
+                foreach ($documents as $document) {
+                    $impute = $centimesImputes[$document->id] ?? 0;
+                    $total = self::centimesLus($document->total_ttc);
+
+                    // Un montant illisible (« NaN », que garde une colonne
+                    // numeric de PostgreSQL) est déjà signalé avec son
+                    // imputation (voir verifierLImputation()) ou son document
+                    // (voir verifierLeDocument()).
+                    if (isset($illisibles[$document->id]) || $total === null || ($impute >= 0 && $impute <= $total)) {
+                        continue;
+                    }
+
+                    $libelle = self::libelleDuDocument($alias, (int) $document->id, $document->numero);
+
+                    $this->rapport->signaler(AnomalieFiscale::defaut('montants_imputes', $impute < 0
+                        ? sprintf('%s : %s %s, un montant négatif : on y a retiré plus qu\'on n\'y avait imputé.', $libelle, self::enEuros($impute), $nature)
+                        : sprintf('%s : %s %s pour un total TTC de %s, soit %s de trop.', $libelle, self::enEuros($impute), $nature, self::enEuros($total), self::enEuros($impute - $total)), ['document' => $alias, 'document_id' => (int) $document->id]));
+                }
+            });
+    }
+
+    /**
+     * Ce qui est imputé sur chacun de ces documents, en centimes, et ceux
+     * dont une imputation est illisible ; lu ligne à ligne en base, sans
+     * charger de modèle.
+     *
+     * @param  list<int>  $documents
+     * @param  list<array{0: Builder<PaiementAllocation>|Builder<AvoirAllocation>, 1: string}>  $sommes
+     * @return array{0: array<int, int>, 1: array<int, true>}
+     */
+    private function centimesImputesSur(array $documents, array $sommes): array
+    {
+        $centimesImputes = [];
+        $illisibles = [];
+
+        foreach ($sommes as [$imputations, $colonne]) {
+            foreach ((clone $imputations)->toBase()->whereIn($colonne, $documents)->get([$colonne, 'montant_alloue']) as $imputation) {
+                $document = (int) $imputation->{$colonne};
+                $centimes = self::centimesLus($imputation->montant_alloue);
+
+                if ($centimes === null) {
+                    $illisibles[$document] = true;
+                } else {
+                    $centimesImputes[$document] = ($centimesImputes[$document] ?? 0) + $centimes;
+                }
+            }
         }
 
-        $impute = '('.implode(' + ', $centimesImputes).')';
-        $total = "round({$table}.total_ttc * 100)";
+        return [$centimesImputes, $illisibles];
+    }
 
-        $documents
-            ->whereRaw("({$impute} < 0 or {$impute} > {$total})")
-            ->orderBy("{$table}.id")
-            ->toBase()
-            ->selectRaw("{$table}.id as id, {$table}.numero as numero, {$total} as total, {$impute} as impute")
-            ->get()
-            ->each(function (stdClass $document) use ($alias): void {
-                // Une somme ou un total illisible (« NaN », que garde une
-                // colonne numeric de PostgreSQL) est déjà signalé avec son
-                // imputation (voir verifierLImputation()) ou son document
-                // (voir verifierLeDocument()).
-                if (! is_numeric($document->impute) || ! is_numeric($document->total)) {
-                    return;
-                }
-
-                $libelle = self::libelleDuDocument($alias, (int) $document->id, $document->numero);
-                $impute = (int) $document->impute;
-                $total = (int) $document->total;
-                $nature = $alias === 'avoir' ? 'crédités de factures' : 'imputés (paiements et crédits d\'avoir)';
-
-                $this->rapport->signaler(AnomalieFiscale::defaut('montants_imputes', $impute < 0
-                    ? sprintf('%s : %s %s, un montant négatif : on y a retiré plus qu\'on n\'y avait imputé.', $libelle, self::enEuros($impute), $nature)
-                    : sprintf('%s : %s %s pour un total TTC de %s, soit %s de trop.', $libelle, self::enEuros($impute), $nature, self::enEuros($total), self::enEuros($impute - $total)), ['document' => $alias, 'document_id' => (int) $document->id]));
-            });
+    /**
+     * Un montant lu tel quel en base (chaîne de PostgreSQL, nombre de
+     * SQLite), en centimes, ou null s'il n'est pas un nombre lisible.
+     */
+    private static function centimesLus(mixed $montant): ?int
+    {
+        try {
+            return SaisieDecimale::enCentiemes($montant);
+        } catch (InvalidArgumentException) {
+            return null;
+        }
     }
 
     // ---------------------------------------------------------------

@@ -104,8 +104,8 @@ class Devis extends Model implements DocumentEnvoyable
      * SoftDeletes de Client) : il se réimprime et se renvoie. Un devis ne
      * fige pas son client : il imprime sa fiche telle qu'elle est, son nom,
      * son adresse et ses identifiants. Le type écrit au dernier
-     * enregistrement du devis (type_client) décide de son calcul (voir
-     * estPourUnProfessionnel()) : son PDF présente le client selon ce type,
+     * enregistrement du devis (type_client, voir estPourUnProfessionnel())
+     * ne change pas ses montants : son PDF présente le client selon ce type,
      * avec ses identifiants pour un professionnel, et la facture qui en
      * sortira le reprend (voir CreerFactureDepuisDevisAction). Un devis ne
      * part pas si la fiche a changé de type depuis (voir
@@ -132,9 +132,10 @@ class Devis extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Le type du client écrit au dernier enregistrement du devis, avec
-     * lequel ses lignes ont été calculées (voir ContexteDeVente) : depuis
-     * le HT de chaque ligne pour un professionnel, hors franchise en base.
+     * Le type du client écrit au dernier enregistrement du devis : il
+     * décide de la présentation du client et des natures d'opération
+     * permises, jamais des montants, les mêmes pour tout client (voir
+     * ContexteDeVente::refuserSiLeTypeDeClientAChange()).
      */
     public function estPourUnProfessionnel(): bool
     {

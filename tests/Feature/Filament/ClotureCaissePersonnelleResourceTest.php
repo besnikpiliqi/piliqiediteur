@@ -41,7 +41,7 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
         $this->assertFalse($vendeur->can(PermissionRegistry::CLOTURE_CAISSE_GERER), 'Prérequis du test : le vendeur ne doit pas avoir la permission de clôturer la journée.');
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,
             'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => 50, 'taux_tva' => 20, 'remise_pourcentage' => 0]],

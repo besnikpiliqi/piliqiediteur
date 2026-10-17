@@ -80,7 +80,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
     public function test_un_credit_suffisant_couvre_integralement_une_nouvelle_facture(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         // Premier achat payé puis intégralement retourné : 60 € de crédit
         // disponible.
@@ -102,14 +102,14 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
     public function test_un_credit_partiel_laisse_un_solde_restant_a_payer_normalement(): void
     {
         $client = Client::factory()->create();
-        $produitRetourne = Produit::factory()->create(['prix_vente_ht' => 25, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produitRetourne = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         // 30 € de crédit disponible (25 € HT + 20 % TVA).
         $premiereFacture = $this->vendreEnCaisse($client, $produitRetourne, 1);
         $this->emettreAvoirPourClient($client, $premiereFacture, 1);
 
         // Nouvel achat de 60 € : 30 € crédités automatiquement, 30 € restent dus.
-        $produitPlusCher = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produitPlusCher = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $nouvelleFacture = $this->emettreFacture($client, $produitPlusCher, 1);
 
         $this->assertSame(StatutFacture::PartiellementPayee, $nouvelleFacture->statut);
@@ -134,7 +134,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
     public function test_plusieurs_avoirs_se_consomment_du_plus_ancien_au_plus_recent(): void
     {
         $client = Client::factory()->create();
-        $produitRetourne = Produit::factory()->create(['prix_vente_ht' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produitRetourne = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         // Les deux achats d'abord, AVANT tout avoir : sans quoi le crédit du
         // premier avoir s'appliquerait automatiquement au second achat
@@ -157,7 +157,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
 
         // Nouvel achat de 18 € : l'avoir le plus ancien (12 €) est consommé
         // intégralement, puis 6 € du plus récent -- jamais l'inverse.
-        $produitNouvelAchat = Produit::factory()->create(['prix_vente_ht' => 15, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produitNouvelAchat = Produit::factory()->create(['prix_vente_ttc' => 18, 'taux_tva' => 20, 'suivi_stock' => false]);
         $nouvelleFacture = $this->emettreFacture($client, $produitNouvelAchat, 1);
 
         $this->assertSame(StatutFacture::Payee, $nouvelleFacture->statut);
@@ -170,7 +170,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
     public function test_sans_avoir_disponible_le_statut_de_la_facture_nest_pas_modifie(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $facture = $this->emettreFacture($client, $produit, 1);
 
@@ -188,7 +188,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
     {
         $clientA = Client::factory()->create();
         $clientB = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $factureA = $this->vendreEnCaisse($clientA, $produit, 1);
         $this->emettreAvoirPourClient($clientA, $factureA, 1);
@@ -219,7 +219,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         $clientComptoir = Client::query()->where('nom', Client::NOM_COMPTOIR)->firstOrFail();
         $this->assertTrue($clientComptoir->estComptoir());
 
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         // Premier achat comptoir payé puis intégralement retourné : aurait
         // généré 60 € de crédit disponible pour un client nommé.

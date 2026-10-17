@@ -78,15 +78,14 @@ class DevisPdfGeneratorTest extends TestCase
     }
 
     /**
-     * Le devis d'un professionnel se calcule comme sa facture (E1) et
-     * porte la même note sous ses lignes ; celui établi pour un
-     * particulier, article par article, n'en porte pas. Si la fiche du
-     * client devient professionnelle après son envoi, il se réimprime
-     * comme il a été calculé : client sans identifiant et sans note.
+     * Tout devis se calcule comme sa facture, pour un professionnel comme
+     * pour un particulier, et porte la même note sous ses lignes (point
+     * 15). Si la fiche du client devient professionnelle après son envoi,
+     * il se réimprime tel qu'il a été établi : client sans identifiant.
      */
-    public function test_le_devis_d_un_professionnel_explique_le_calcul_de_ses_lignes(): void
+    public function test_tout_devis_explique_le_calcul_de_ses_lignes_et_se_reimprime_tel_qu_etabli(): void
     {
-        $note = 'Client professionnel : HT de chaque ligne = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA calculée sur le total HT de chaque taux.';
+        $note = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence.';
         $devisProfessionnel = $this->devisEnvoye();
         $client = Client::factory()->create(['nom' => 'Jean Ancien']);
         $devisParticulier = app(EmettreDevisAction::class)->handle(self::auteur(), app(CreerDevisAction::class)->handle(self::auteur(), $client, [['produit_id' => Produit::factory()->create()->id, 'quantite' => 1]]));
@@ -95,7 +94,7 @@ class DevisPdfGeneratorTest extends TestCase
         $renduParticulier = $this->compacte(app(DevisPdfGenerator::class)->html($devisParticulier->fresh()->load('client', 'lignes', 'magasin')));
 
         $this->assertStringContainsString($note, app(DevisPdfGenerator::class)->html($devisProfessionnel->load('client', 'lignes', 'magasin')));
-        $this->assertStringNotContainsString($note, $renduParticulier);
+        $this->assertStringContainsString($note, $renduParticulier);
         $this->assertStringContainsString('<div class="bloc-client"><div class="titre">Établi pour</div><strong>Jean Ancien</strong><br></div>', $renduParticulier);
     }
 

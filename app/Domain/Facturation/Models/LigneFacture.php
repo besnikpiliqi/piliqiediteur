@@ -8,7 +8,6 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Services\CalculateurLigne;
-use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -156,47 +155,38 @@ class LigneFacture extends Model
     }
 
     /**
-     * Montants d'un retour de $quantite articles de cette ligne : la ligne
-     * calculée pour tout ce qui en a été rendu jusqu'ici, moins ce que les
-     * avoirs déjà émis ont crédité (voir CalculateurLigne::retourCumule()).
-     * Le cumul se calcule comme la facture (voir
-     * ContexteDeVente::documentCalculeDepuisLeHtDeLigne()) : depuis le HT
-     * de la ligne sur une facture à un professionnel (E1, K2, voir
-     * CalculateurLigne::retourDeLigneProfessionnelle()), article par
-     * article sur un ticket ou sur une facture émise en franchise en base,
-     * à son PU TTC payé (voir prixUnitaireTtcPaye()). Le dernier retour
-     * retombe ainsi exactement sur la ligne vendue.
+     * Montants d'un retour de $quantite articles de cette ligne, écrits
+     * comme leurs colonnes : le calcul de la vente pour tout ce qui en a
+     * été rendu jusqu'ici, sans dépasser le HT ni la TVA de la ligne, moins
+     * ce que les avoirs déjà émis ont crédité (voir
+     * CalculateurLigne::retourDeLigne()). Le dernier retour retombe ainsi
+     * exactement sur la ligne vendue.
      *
-     * @return array{montant_ht: float, montant_tva: float, montant_ttc: float}
+     * @return array{montant_ht: string, montant_tva: string, montant_ttc: string}
      */
     public function montantsDuRetour(int $quantite): array
     {
         $calculateur = app(CalculateurLigne::class);
         $avoirsEmis = $this->lignesAvoir()
             ->whereHas('avoir', fn ($query) => $query->where('statut', StatutAvoir::Emise))
-            ->get(['quantite', 'montant_ht', 'montant_tva', 'montant_ttc']);
-        $quantiteRendue = (int) $avoirsEmis->sum('quantite') + $quantite;
+            ->get(['quantite', 'montant_ht', 'montant_tva']);
+        $centiemes = fn (string $colonne): int => $calculateur->enCentiemes($this->getAttribute($colonne));
 
-        return $calculateur->retourCumule(
-            ContexteDeVente::documentCalculeDepuisLeHtDeLigne($this->facture)
-                ? $calculateur->retourDeLigneProfessionnelle($this->only(['prix_unitaire_ttc', 'taux_tva', 'taux_tva_du_prix', 'quantite', 'remise_pourcentage', 'montant_ht', 'montant_tva']), $quantiteRendue)
-                : $calculateur->montantsDeVente((float) $this->prix_unitaire_ht, $this->prixUnitaireTtcPaye(), $quantiteRendue, (float) $this->remise_pourcentage),
-            $avoirsEmis->toArray(),
-        );
-    }
-
-    /**
-     * Le PU TTC qu'a payé le client : son PU TTC, sauf quand la TVA qu'il
-     * comprend a été retirée du prix (vente hors de la TVA française, voir
-     * ConstructeurLigneDocument) : la ligne est alors à 0 %, et le client a
-     * payé son PU HT.
-     */
-    private function prixUnitaireTtcPaye(): float
-    {
-        $calculateur = app(CalculateurLigne::class);
-
-        return (float) ($calculateur->enCentiemes($this->taux_tva_du_prix) === $calculateur->enCentiemes($this->taux_tva)
-            ? $this->prix_unitaire_ttc
-            : $this->prix_unitaire_ht);
+        return array_map($calculateur->enDecimal(...), $calculateur->retourDeLigne(
+            [
+                'prix_unitaire_ttc' => $centiemes('prix_unitaire_ttc'),
+                'quantite' => $this->quantite,
+                'remise_pourcentage' => $centiemes('remise_pourcentage'),
+                'taux_tva_du_prix' => $centiemes('taux_tva_du_prix'),
+                'taux_tva' => $centiemes('taux_tva'),
+                'montant_ht' => $centiemes('montant_ht'),
+                'montant_tva' => $centiemes('montant_tva'),
+            ],
+            (int) $avoirsEmis->sum('quantite') + $quantite,
+            [
+                'montant_ht' => $avoirsEmis->sum(fn (LigneAvoir $ligne): int => $calculateur->enCentiemes($ligne->montant_ht)),
+                'montant_tva' => $avoirsEmis->sum(fn (LigneAvoir $ligne): int => $calculateur->enCentiemes($ligne->montant_tva)),
+            ],
+        ));
     }
 }

@@ -33,7 +33,7 @@ class CreerFactureActionTest extends TestCase
     public function test_une_facture_est_creee_en_brouillon_avec_ses_lignes_et_ses_totaux(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20]);
 
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 2],
@@ -126,7 +126,7 @@ class CreerFactureActionTest extends TestCase
     public function test_une_remise_reduit_le_montant_ht_de_la_ligne(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20]);
 
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 10],
@@ -175,13 +175,13 @@ class CreerFactureActionTest extends TestCase
     public function test_le_snapshot_de_la_ligne_ne_change_pas_si_le_produit_change_ensuite(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20]);
 
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        $produit->update(['prix_vente_ht' => 500, 'taux_tva' => 5]);
+        $produit->update(['prix_vente_ttc' => 525, 'taux_tva' => 5]);
 
         $ligne = $facture->lignes->first()->fresh();
         $this->assertSame('100.00', $ligne->prix_unitaire_ht);
@@ -191,9 +191,10 @@ class CreerFactureActionTest extends TestCase
     /**
      * Une vente part toujours de son PU TTC, quel que soit le client,
      * multiplié par la quantité ; son PU HT en est la conversion au
-     * centime, article par article : 40 € TTC x 2 = 80,00 € TTC, soit 2 x
-     * 33,33 € = 66,66 € HT ; 10,05 € TTC (8,375 € -> 8,38 € HT) x 3 =
-     * 30,15 € TTC et 25,14 € HT.
+     * centime, affichée : 40 € TTC x 2 = 80,00 € TTC ; 10,05 € TTC (8,375 €
+     * -> 8,38 € HT) x 3 = 30,15 € TTC. Le HT du taux, 110,15 ÷ 1,2 =
+     * 91,791... -> 91,79 €, se répartit par cumul : 66,67 € (80,00 ÷ 1,2),
+     * puis 25,12 €.
      */
     public function test_une_vente_part_toujours_du_pu_ttc(): void
     {
@@ -209,23 +210,23 @@ class CreerFactureActionTest extends TestCase
         [$ligneCoque, $ligneCable] = $facture->lignes->sortBy('ordre')->values()->all();
 
         $this->assertSame(['33.33', '40.00'], [$ligneCoque->prix_unitaire_ht, $ligneCoque->prix_unitaire_ttc]);
-        $this->assertSame(['66.66', '13.34', '80.00'], [$ligneCoque->montant_ht, $ligneCoque->montant_tva, $ligneCoque->montant_ttc]);
+        $this->assertSame(['66.67', '13.33', '80.00'], [$ligneCoque->montant_ht, $ligneCoque->montant_tva, $ligneCoque->montant_ttc]);
         $this->assertSame(['8.38', '10.05'], [$ligneCable->prix_unitaire_ht, $ligneCable->prix_unitaire_ttc]);
-        $this->assertSame(['25.14', '5.01', '30.15'], [$ligneCable->montant_ht, $ligneCable->montant_tva, $ligneCable->montant_ttc]);
-        $this->assertSame(['91.80', '18.35', '110.15'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(['25.12', '5.03', '30.15'], [$ligneCable->montant_ht, $ligneCable->montant_tva, $ligneCable->montant_ttc]);
+        $this->assertSame(['91.79', '18.36', '110.15'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 
     /**
-     * Sans prix saisi, la ligne reprend tels quels les prix de vente
-     * enregistrés sur la fiche du produit -- arrondis une seule fois, à
-     * leur enregistrement : rien ne se recalcule à la vente, que la fiche
-     * ait été saisie en TTC ou en HT.
+     * Sans prix saisi, la ligne reprend tel quel le prix de vente TTC
+     * enregistré sur la fiche du produit -- arrondi une seule fois, à son
+     * enregistrement -- et son PU HT en est la conversion au centime : rien
+     * ne se recalcule à la vente.
      */
     public function test_sans_prix_saisi_la_ligne_reprend_tels_quels_les_prix_du_produit(): void
     {
         $client = Client::factory()->create();
         $coque = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $cable = Produit::factory()->create(['prix_vente_ht' => 10.01, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['prix_vente_ttc' => 12.01, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $coque->id, 'quantite' => 2],
@@ -235,7 +236,7 @@ class CreerFactureActionTest extends TestCase
         [$ligneCoque, $ligneCable] = $facture->lignes->sortBy('ordre')->values()->all();
 
         foreach ([[$ligneCoque, $coque->fresh()], [$ligneCable, $cable->fresh()]] as [$ligne, $produit]) {
-            $this->assertSame([$produit->prix_vente_ht, $produit->prix_vente_ttc], [$ligne->prix_unitaire_ht, $ligne->prix_unitaire_ttc]);
+            $this->assertSame($produit->prix_vente_ttc, $ligne->prix_unitaire_ttc);
         }
 
         $this->assertSame(['33.33', '40.00'], [$ligneCoque->prix_unitaire_ht, $ligneCoque->prix_unitaire_ttc]);
@@ -244,24 +245,21 @@ class CreerFactureActionTest extends TestCase
     }
 
     /**
-     * Un même panier vendu à un professionnel se calcule depuis le HT de
-     * chaque ligne, quantité x PU TTC ÷ (1 + taux) arrondi une fois, et la
-     * TVA de chaque taux sur le total HT de ses lignes (E1) ; vendu à un
-     * particulier, article par article. Articles : [PU TTC, taux, quantité,
-     * remise] ; montants : [HT, TVA, TTC] de chaque ligne puis du document.
+     * Un même panier a les mêmes montants pour un particulier et pour un
+     * professionnel : pour chaque taux, le HT est le TTC de ses lignes ÷
+     * (1 + taux), arrondi une fois et réparti par cumul ; la TVA est la
+     * différence (point 15, réponse Q1-a). Articles : [PU TTC, taux,
+     * quantité, remise] ; montants : [HT, TVA, TTC] de chaque ligne puis du
+     * document.
      *
-     * - 1 000 x 1,00 € : 1 000 / 1,2 = 833,33 € HT et 20 % de ce HT,
-     *   166,67 € ; article par article, 1 000 x 0,83 € = 830,00 € HT.
-     * - Trois lignes de 0,10 € : 0,08 € HT chacune, 20 % du cumul (0,016,
-     *   0,032, 0,048) répartis en 0,02, 0,01 et 0,02 € -- 0,29 € au lieu
-     *   des 0,30 € affichés, à quelques centimes près sur des lignes
-     *   nombreuses ; article par article, 3 x 0,02 €.
+     * - 1 000 x 1,00 € : 1 000 / 1,2 = 833,33 € HT et 166,67 € de TVA,
+     *   jamais 1 000 x 0,83 € = 830,00 € HT.
+     * - Trois lignes de 0,10 € : 0,30 / 1,2 = 0,25 € HT, répartis 0,08,
+     *   0,09 et 0,08 € ; le client paie bien les 0,30 € affichés.
      * - 2 x 49,90 € à 20 % et 3 x 4,20 € à 5,5 % : 83,17 € HT (99,80 / 1,2
-     *   = 83,166...) et 11,94 € HT (12,60 / 1,055 = 11,943...) ;
-     *   article par article, 2 x 41,58 € = 83,16 €.
-     * - 7 x 3,99 € à 5,5 % remisés de 10 % : 25,137 / 1,055 = 23,826... ->
-     *   23,83 € HT ; article par article, 26,46 € - 2,65 € de remise =
-     *   23,81 € HT.
+     *   = 83,166...) et 11,94 € HT (12,60 / 1,055 = 11,943...).
+     * - 7 x 3,99 € à 5,5 % remisés de 10 % : 27,93 € moins 2,79 € de
+     *   remise, 25,14 / 1,055 = 23,829... -> 23,83 € HT.
      *
      * @return array<string, array{bool, list<array{string, int|float, int, int}>, list<list<string>>, list<string>}>
      */
@@ -269,13 +267,13 @@ class CreerFactureActionTest extends TestCase
     {
         return [
             'professionnel, 1 000 x 1,00 € à 20 %' => [true, [['1.00', 20, 1000, 0]], [['833.33', '166.67', '1000.00']], ['833.33', '166.67', '1000.00']],
-            'particulier, 1 000 x 1,00 € à 20 %' => [false, [['1.00', 20, 1000, 0]], [['830.00', '170.00', '1000.00']], ['830.00', '170.00', '1000.00']],
-            'professionnel, trois lignes de 0,10 € à 20 %' => [true, [['0.10', 20, 1, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0]], [['0.08', '0.02', '0.10'], ['0.08', '0.01', '0.09'], ['0.08', '0.02', '0.10']], ['0.24', '0.05', '0.29']],
-            'particulier, trois lignes de 0,10 € à 20 %' => [false, [['0.10', 20, 1, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0]], [['0.08', '0.02', '0.10'], ['0.08', '0.02', '0.10'], ['0.08', '0.02', '0.10']], ['0.24', '0.06', '0.30']],
+            'particulier, 1 000 x 1,00 € à 20 %' => [false, [['1.00', 20, 1000, 0]], [['833.33', '166.67', '1000.00']], ['833.33', '166.67', '1000.00']],
+            'professionnel, trois lignes de 0,10 € à 20 %' => [true, [['0.10', 20, 1, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0]], [['0.08', '0.02', '0.10'], ['0.09', '0.01', '0.10'], ['0.08', '0.02', '0.10']], ['0.25', '0.05', '0.30']],
+            'particulier, trois lignes de 0,10 € à 20 %' => [false, [['0.10', 20, 1, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0]], [['0.08', '0.02', '0.10'], ['0.09', '0.01', '0.10'], ['0.08', '0.02', '0.10']], ['0.25', '0.05', '0.30']],
             'professionnel, 2 x 49,90 € à 20 % et 3 x 4,20 € à 5,5 %' => [true, [['49.90', 20, 2, 0], ['4.20', 5.5, 3, 0]], [['83.17', '16.63', '99.80'], ['11.94', '0.66', '12.60']], ['95.11', '17.29', '112.40']],
-            'particulier, 2 x 49,90 € à 20 % et 3 x 4,20 € à 5,5 %' => [false, [['49.90', 20, 2, 0], ['4.20', 5.5, 3, 0]], [['83.16', '16.64', '99.80'], ['11.94', '0.66', '12.60']], ['95.10', '17.30', '112.40']],
+            'particulier, 2 x 49,90 € à 20 % et 3 x 4,20 € à 5,5 %' => [false, [['49.90', 20, 2, 0], ['4.20', 5.5, 3, 0]], [['83.17', '16.63', '99.80'], ['11.94', '0.66', '12.60']], ['95.11', '17.29', '112.40']],
             'professionnel, 7 x 3,99 € à 5,5 % remisés de 10 %' => [true, [['3.99', 5.5, 7, 10]], [['23.83', '1.31', '25.14']], ['23.83', '1.31', '25.14']],
-            'particulier, 7 x 3,99 € à 5,5 % remisés de 10 %' => [false, [['3.99', 5.5, 7, 10]], [['23.81', '1.33', '25.14']], ['23.81', '1.33', '25.14']],
+            'particulier, 7 x 3,99 € à 5,5 % remisés de 10 %' => [false, [['3.99', 5.5, 7, 10]], [['23.83', '1.31', '25.14']], ['23.83', '1.31', '25.14']],
         ];
     }
 
@@ -285,7 +283,7 @@ class CreerFactureActionTest extends TestCase
      * @param  list<string>  $totauxAttendus
      */
     #[DataProvider('paniersVendusAUnProfessionnelOuAUnParticulier')]
-    public function test_une_vente_a_un_professionnel_se_calcule_depuis_le_ht_de_chaque_ligne(bool $professionnel, array $articles, array $lignesAttendues, array $totauxAttendus): void
+    public function test_un_meme_panier_a_les_memes_montants_pour_un_particulier_et_pour_un_professionnel(bool $professionnel, array $articles, array $lignesAttendues, array $totauxAttendus): void
     {
         $client = $professionnel ? Client::factory()->professionnel()->create() : Client::factory()->create();
 
@@ -296,21 +294,22 @@ class CreerFactureActionTest extends TestCase
     }
 
     /**
-     * Le récapitulatif par taux d'une facture à un professionnel donne,
-     * pour chaque taux, la TVA de son total HT : 20 % de 0,24 € = 0,05 €,
-     * 5,5 % de 11,94 € = 0,66 €.
+     * Le récapitulatif par taux d'une facture donne, pour chaque taux, le
+     * HT de son TTC, arrondi une fois, et la TVA par différence : 0,30 ÷
+     * 1,2 = 0,25 € HT à 20 %, 12,60 ÷ 1,055 = 11,94 € HT à 5,5 %, les lignes
+     * d'un taux n'étant pas consécutives.
      */
-    public function test_la_tva_de_chaque_taux_d_une_facture_professionnelle_est_celle_de_son_total_ht(): void
+    public function test_le_recapitulatif_de_chaque_taux_a_pour_ht_le_ttc_du_taux_arrondi_une_fois(): void
     {
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), $this->lignesDesArticles([
             ['0.10', 20, 1, 0], ['4.20', 5.5, 3, 0], ['0.10', 20, 1, 0], ['0.10', 20, 1, 0],
         ]));
 
         $this->assertSame([
-            ['taux_tva' => '20.00', 'montant_ht' => 0.24, 'montant_tva' => 0.05, 'montant_ttc' => 0.29],
+            ['taux_tva' => '20.00', 'montant_ht' => 0.25, 'montant_tva' => 0.05, 'montant_ttc' => 0.3],
             ['taux_tva' => '5.50', 'montant_ht' => 11.94, 'montant_tva' => 0.66, 'montant_ttc' => 12.6],
         ], $facture->ventilation_tva);
-        $this->assertSame(['12.18', '0.71', '12.89'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(['12.19', '0.71', '12.90'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 
     /**

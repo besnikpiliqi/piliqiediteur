@@ -13,7 +13,7 @@ use InvalidArgumentException;
  * (voir PanierDeCaisse) comme dans un brouillon de facture ou de ticket
  * (voir ModifierFactureAction).
  *
- * Les lignes se comparent article par article, pas une à une : déplacer
+ * Les lignes se comparent par article, pas une à une : déplacer
  * une ligne, la scinder en deux ou changer le prix saisi d'un service ne
  * retire rien. Chaque article d'avant cherche d'abord son pareil au même
  * prix, puis au même article quel que soit le prix ; ce qui ne trouve

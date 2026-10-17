@@ -5,7 +5,6 @@ namespace App\Domain\Facturation\Actions;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\Devis;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
@@ -31,7 +30,6 @@ class CreerDevisAction
 {
     public function __construct(
         private readonly ConstructeurLigneDocument $constructeurLigne,
-        private readonly CalculateurLigne $calculateurLigne,
         private readonly LecteurDesDroits $lecteur,
         private readonly DerogationsDePrix $derogations,
     ) {}
@@ -48,15 +46,15 @@ class CreerDevisAction
             $compte = $this->lecteur->exiger($auteur, 'create', app(TenantContext::class)->magasin(), Devis::class);
             $devis = new Devis($attributs);
             $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $devis->noterSaNatureDOperation($attributs));
-            $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
-            $this->derogations->exiger($compte, [], $lignesConstruites, $contexte);
+            $document = $this->constructeurLigne->construireToutes($lignes, $contexte);
+            $this->derogations->exiger($compte, [], $document->lignes, $contexte);
             $devis->forceFill(['client_id' => $client->getKey(), ...$contexte->colonnes()])->save();
 
-            foreach ($lignesConstruites as $ligne) {
+            foreach ($document->lignes as $ligne) {
                 $devis->lignes()->create($ligne);
             }
 
-            $devis->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
+            $devis->forceFill($document->totaux)->save();
 
             return $devis->fresh('lignes');
         });

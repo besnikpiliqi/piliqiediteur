@@ -49,7 +49,7 @@ class EmettreFactureActionTest extends TestCase
     public function test_emettre_une_facture_lui_attribue_un_numero_et_change_son_statut(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -64,7 +64,7 @@ class EmettreFactureActionTest extends TestCase
     public function test_emettre_decremente_le_stock_des_produits_suivis(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => true]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 3],
         ]);
@@ -83,7 +83,7 @@ class EmettreFactureActionTest extends TestCase
     public function test_un_produit_archive_depuis_le_brouillon_sort_du_stock_a_l_emission_et_y_revient_par_l_avoir(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 5, 'suivi_stock' => true]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 5, 'suivi_stock' => true]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 2],
         ]);
@@ -105,7 +105,7 @@ class EmettreFactureActionTest extends TestCase
     public function test_emettre_ne_touche_pas_au_stock_dun_produit_sans_suivi(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 3],
         ]);
@@ -124,7 +124,7 @@ class EmettreFactureActionTest extends TestCase
     public function test_une_vente_a_un_particulier_recoit_un_numero_de_ticket_de_caisse(): void
     {
         $client = Client::factory()->create(); // particulier par défaut
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -137,7 +137,7 @@ class EmettreFactureActionTest extends TestCase
     public function test_une_vente_a_un_professionnel_recoit_un_numero_de_facture(): void
     {
         $client = Client::factory()->professionnel()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -154,7 +154,7 @@ class EmettreFactureActionTest extends TestCase
     public function test_la_serie_se_lit_dans_le_premier_segment_du_numero(): void
     {
         $this->travelTo(Carbon::parse('2026-10-09 10:00:00', 'Europe/Paris'));
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $creerEtEmettre = fn (Client $client) => app(EmettreFactureAction::class)->handle(self::auteur(),
             app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]])
         );
@@ -170,7 +170,7 @@ class EmettreFactureActionTest extends TestCase
     {
         $clientParticulier = Client::factory()->create();
         $clientPro = Client::factory()->professionnel()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $creerEtEmettre = fn (Client $client) => app(EmettreFactureAction::class)->handle(self::auteur(),
             app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]])
@@ -194,7 +194,7 @@ class EmettreFactureActionTest extends TestCase
     {
         $this->travelTo(Carbon::parse('2026-12-31 23:30:00', 'UTC'));
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -290,7 +290,7 @@ class EmettreFactureActionTest extends TestCase
     public function test_impossible_demettre_deux_fois_la_meme_facture(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);

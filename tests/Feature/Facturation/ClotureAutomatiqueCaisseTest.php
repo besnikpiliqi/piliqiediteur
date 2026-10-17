@@ -40,7 +40,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
     private function emettreUneVente(Magasin $magasin): Facture
     {
         app(TenantContext::class)->set($magasin);
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
@@ -65,7 +65,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         app(TenantContext::class)->set($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -108,7 +108,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $vendeur = $this->vendeurDeLaPremiereHeure($magasin);
         $this->actingAs($vendeur);
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -192,7 +192,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);

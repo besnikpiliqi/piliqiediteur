@@ -14,8 +14,9 @@ use Tests\TestCase;
 
 /**
  * L'aperçu des lignes en cours de saisie (voir
- * ConstructeurLigneDocument::apercu()) : calculé comme à l'enregistrement,
- * par clé de ligne, sans jamais compter une ligne incomplète.
+ * ConstructeurLigneDocument::apercu()) : le document calculé comme à
+ * l'enregistrement, ses lignes par clé, sans jamais compter une ligne
+ * incomplète.
  */
 class ConstructeurLigneDocumentTest extends TestCase
 {
@@ -34,13 +35,14 @@ class ConstructeurLigneDocumentTest extends TestCase
             'quantite_a_virgule' => ['produit_id' => $produit->id, 'quantite' => '1.5'],
         ], new ContexteDeVente(TypeClient::Particulier, false, 20.0));
 
-        $this->assertSame(['ecran'], array_keys($apercu));
+        $this->assertSame(['ecran'], array_keys($apercu->lignes));
         $this->assertSame(['20.00', '30.00', '6.00', '36.00'], [
-            number_format($apercu['ecran']['taux_tva'], 2, '.', ''),
-            number_format($apercu['ecran']['montant_ht'], 2, '.', ''),
-            number_format($apercu['ecran']['montant_tva'], 2, '.', ''),
-            number_format($apercu['ecran']['montant_ttc'], 2, '.', ''),
+            $apercu->lignes['ecran']['taux_tva'],
+            $apercu->lignes['ecran']['montant_ht'],
+            $apercu->lignes['ecran']['montant_tva'],
+            $apercu->lignes['ecran']['montant_ttc'],
         ]);
+        $this->assertSame(['total_ht' => '30.00', 'total_tva' => '6.00', 'total_ttc' => '36.00'], $apercu->totaux);
     }
 
     /**
@@ -57,16 +59,17 @@ class ConstructeurLigneDocumentTest extends TestCase
             ['produit_id' => $produitAutreMagasin->id, 'quantite' => 1],
         ], new ContexteDeVente(TypeClient::Particulier, false, 20.0));
 
-        $this->assertSame([], $apercu);
+        $this->assertSame([], $apercu->lignes);
+        $this->assertSame('0.00', $apercu->totaux['total_ttc']);
     }
 
     /**
-     * Pour un professionnel, la TVA du taux se répartit entre les seules
-     * lignes complètes, dans leur ordre : trois lignes de 0,08 € HT
-     * prennent 0,02, 0,01 et 0,02 €, la ligne encore vide entre elles ne
+     * Le HT du taux se répartit entre les seules lignes complètes, dans
+     * leur ordre : trois lignes de 0,10 € TTC (0,30 ÷ 1,2 = 0,25 € HT)
+     * prennent 0,08, 0,09 et 0,08 € HT, la ligne encore vide entre elles ne
      * compte pas.
      */
-    public function test_l_apercu_d_une_vente_professionnelle_repartit_la_tva_entre_les_lignes_completes(): void
+    public function test_l_apercu_d_une_vente_professionnelle_repartit_le_ht_entre_les_lignes_completes(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
         $produit = Produit::factory()->create(['prix_vente_ttc' => '0.10', 'taux_tva' => 20]);
@@ -79,15 +82,15 @@ class ConstructeurLigneDocumentTest extends TestCase
         ], new ContexteDeVente(TypeClient::Professionnel, false, 20.0));
 
         $this->assertSame(
-            ['premiere' => [0.08, 0.02, 0.1], 'deuxieme' => [0.08, 0.01, 0.09], 'troisieme' => [0.08, 0.02, 0.1]],
-            array_map(fn (array $ligne): array => [$ligne['montant_ht'], $ligne['montant_tva'], $ligne['montant_ttc']], $apercu),
+            ['premiere' => ['0.08', '0.02', '0.10'], 'deuxieme' => ['0.09', '0.01', '0.10'], 'troisieme' => ['0.08', '0.02', '0.10']],
+            array_map(fn (array $ligne): array => [$ligne['montant_ht'], $ligne['montant_tva'], $ligne['montant_ttc']], $apercu->lignes),
         );
     }
 
     /**
-     * Des montants si absurdes que la TVA de leur total ne se calcule plus
-     * (vingt lignes de 99 x 9 999 999 999,99 € à 100 %) ne donnent aucun
-     * aperçu, au lieu de faire planter la page.
+     * Des montants si absurdes que leur total ne se calcule plus (vingt
+     * lignes de 99 x 9 999 999 999,99 € à 100 %) ne donnent aucun aperçu,
+     * au lieu de faire planter la page.
      */
     public function test_l_apercu_d_une_vente_professionnelle_aux_montants_absurdes_est_vide(): void
     {
@@ -99,6 +102,7 @@ class ConstructeurLigneDocumentTest extends TestCase
             new ContexteDeVente(TypeClient::Professionnel, false, 20.0),
         );
 
-        $this->assertSame([], $apercu);
+        $this->assertSame([], $apercu->lignes);
+        $this->assertSame('0.00', $apercu->totaux['total_ttc']);
     }
 }

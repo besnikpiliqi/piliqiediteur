@@ -21,23 +21,23 @@ use Illuminate\Support\Arr;
 use Tests\TestCase;
 
 /**
- * R4 (« Prix et TVA des ventes » dans CLAUDE.md) : sur une facture à un
- * professionnel, la TVA de chaque taux se calcule une fois sur le total HT
- * de ses lignes, puis se répartit entre elles par cumul, dans leur ordre :
- * chaque ligne reçoit la TVA arrondie du cumul des HT jusqu'à elle, moins
- * celle des lignes précédentes du même taux (voir
- * CalculateurLigne::repartirLaTva()).
+ * « Prix et TVA des ventes » dans CLAUDE.md : sur une facture, à un
+ * professionnel comme à un particulier, le HT de chaque taux se calcule une
+ * fois sur le TTC de ses lignes, puis se répartit entre elles par cumul,
+ * dans leur ordre : chaque ligne reçoit le HT arrondi du cumul des TTC
+ * jusqu'à elle, moins celui des lignes précédentes du même taux ; la TVA
+ * est la différence (voir CalculateurLigne::chiffrerUneVente()).
  *
  * La facture de ces tests, au centime :
- * - ligne 1, 1 x 1,00 € TTC à 20 % : 0,83 € HT ; 20 % de 0,83 = 0,166 ->
- *   0,17 € ;
- * - ligne 2, 2 x 4,50 € TTC à 5,5 % : 9,00 ÷ 1,055 = 8,5308 -> 8,53 € HT ;
- *   5,5 % de 8,53 = 0,469 -> 0,47 € ;
- * - ligne 3, 2 x 2,00 € TTC à 20 % : 4,00 ÷ 1,20 = 3,333 -> 3,33 € HT ;
- *   20 % du cumul 4,16 = 0,832 -> 0,83 €, moins les 0,17 € de la ligne 1 :
- *   0,66 €, et non les 0,67 € de 20 % de son seul HT.
- * Totaux : 12,69 € HT, 1,30 € de TVA (0,83 € à 20 %, 0,47 € à 5,5 %),
- * 13,99 € TTC.
+ * - ligne 1, 1 x 1,00 € TTC à 20 % : 1,00 ÷ 1,20 = 0,833 -> 0,83 € HT,
+ *   0,17 € de TVA ;
+ * - ligne 2, 2 x 4,50 € TTC à 5,5 % : 9,00 ÷ 1,055 = 8,5308 -> 8,53 € HT,
+ *   0,47 € de TVA ;
+ * - ligne 3, 2 x 2,00 € TTC à 20 % : le cumul du taux, 5,00 ÷ 1,20 =
+ *   4,166 -> 4,17 € HT, moins les 0,83 € de la ligne 1 : 3,34 € HT, et
+ *   0,66 € de TVA, et non les 0,67 € de ses seuls 4,00 € (3,33 € HT).
+ * Totaux : 12,70 € HT, 1,30 € de TVA (0,83 € à 20 %, 0,47 € à 5,5 %),
+ * 14,00 € TTC, la somme des prix.
  */
 class RepartitionTvaParCumulTest extends TestCase
 {
@@ -69,19 +69,19 @@ class RepartitionTvaParCumulTest extends TestCase
             ->all();
     }
 
-    public function test_une_facture_professionnelle_repartit_la_tva_de_chaque_taux_par_cumul_au_centime(): void
+    public function test_une_facture_professionnelle_repartit_le_ht_de_chaque_taux_par_cumul_au_centime(): void
     {
         $facture = $this->factureProfessionnelle();
 
         $this->assertSame([
             ['0.83', '0.17', '1.00'],
             ['8.53', '0.47', '9.00'],
-            ['3.33', '0.66', '3.99'],
+            ['3.34', '0.66', '4.00'],
         ], $this->montantsDesLignes($facture));
-        $this->assertSame(['12.69', '1.30', '13.99'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(['12.70', '1.30', '14.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 
-    public function test_le_contenu_signe_et_le_pdf_portent_les_parts_de_tva_ainsi_reparties(): void
+    public function test_le_contenu_signe_et_le_pdf_portent_les_parts_ainsi_reparties(): void
     {
         $facture = $this->factureProfessionnelle();
 
@@ -94,24 +94,23 @@ class RepartitionTvaParCumulTest extends TestCase
         $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $this->assertSame(
-            [['ht' => 83, 'tva' => 17, 'ttc' => 100], ['ht' => 853, 'tva' => 47, 'ttc' => 900], ['ht' => 333, 'tva' => 66, 'ttc' => 399]],
+            [['ht' => 83, 'tva' => 17, 'ttc' => 100], ['ht' => 853, 'tva' => 47, 'ttc' => 900], ['ht' => 334, 'tva' => 66, 'ttc' => 400]],
             array_map(static fn (array $ligne): array => Arr::only($ligne, ['ht', 'tva', 'ttc']), $document['lignes']),
         );
         $this->assertSame([
-            ['taux' => 2000, 'ht' => 416, 'tva' => 83, 'ttc' => 499],
+            ['taux' => 2000, 'ht' => 417, 'tva' => 83, 'ttc' => 500],
             ['taux' => 550, 'ht' => 853, 'tva' => 47, 'ttc' => 900],
         ], $document['ventilation']);
-        $this->assertSame(['ht' => 1269, 'tva' => 130, 'ttc' => 1399], $document['totaux']);
-        $this->assertStringContainsString('<td class="montant">3,33 €</td><td class="montant">0,66 €</td><td class="montant">3,99 €</td>', preg_replace('/>\s+</', '><', $html));
+        $this->assertSame(['ht' => 1270, 'tva' => 130, 'ttc' => 1400], $document['totaux']);
+        $this->assertStringContainsString('<td class="montant">3,34 €</td><td class="montant">0,66 €</td><td class="montant">4,00 €</td>', preg_replace('/>\s+</', '><', $html));
     }
 
     /**
-     * La ligne 3 n'a reçu que 0,66 € de la TVA de son taux. Son premier
-     * article rendu crédite 1,67 € HT (2,00 ÷ 1,20) et 0,33 € (20 % de
-     * 1,67 = 0,334) ; le second solde la ligne : 3,33 € HT et 0,66 € de
-     * TVA, moins le premier retour, soit 1,66 € et 0,33 €. Les deux
-     * retours créditent 0,66 € de TVA, jamais les 0,67 € de 20 % du HT de
-     * la ligne.
+     * La ligne 3 n'a que 0,66 € de TVA. Son premier article rendu crédite
+     * 2,00 € : 1,67 € HT (2,00 ÷ 1,20 = 1,666...) et 0,33 € ; le second
+     * solde la ligne : 3,34 € HT et 0,66 € de TVA, moins le premier retour,
+     * soit 1,67 € et 0,33 €. Les deux retours créditent 0,66 € de TVA,
+     * jamais les 0,67 € de ses seuls 4,00 €.
      */
     public function test_le_retour_d_une_ligne_ne_depasse_jamais_sa_part_de_tva(): void
     {
@@ -125,6 +124,6 @@ class RepartitionTvaParCumulTest extends TestCase
         $secondRetour = $rendre($cheville);
 
         $this->assertSame([['1.67', '0.33', '2.00']], $this->montantsDesLignes($premierRetour));
-        $this->assertSame([['1.66', '0.33', '1.99']], $this->montantsDesLignes($secondRetour));
+        $this->assertSame([['1.67', '0.33', '2.00']], $this->montantsDesLignes($secondRetour));
     }
 }

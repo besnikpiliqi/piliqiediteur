@@ -36,7 +36,7 @@ class AvoirResourceTest extends TestCase
 
     private function emettreFactureDepuisLePanneau(Client $client): Facture
     {
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,
@@ -140,7 +140,7 @@ class AvoirResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,

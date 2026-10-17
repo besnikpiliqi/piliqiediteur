@@ -119,7 +119,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
     public function test_un_avoir_reduit_le_reste_a_payer_de_sa_facture_impayee(): void
     {
         $client = Client::factory()->professionnel()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit, 3);
 
         $avoir = $this->emettreAvoir($client, [[$facture, 1]]);
@@ -140,7 +140,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
     {
         $this->travelTo('2026-09-01 10:00:00');
         $client = Client::factory()->professionnel()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $this->travelTo('2026-10-15 10:00:00');
         $facture->forceFill(['statut' => StatutFacture::EnRetard])->save();
@@ -155,7 +155,7 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
     public function test_seul_l_excedent_sur_le_reste_a_payer_devient_un_credit_pour_le_client(): void
     {
         $client = Client::factory()->professionnel()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = $this->emettreFacture($client, $produit, 3);
         $this->encaisser($facture, 150);
 
@@ -178,8 +178,8 @@ class ImputerAvoirSurSesFacturesActionTest extends TestCase
     public function test_la_part_d_une_facture_deja_reglee_regle_ensuite_les_factures_impayees_du_client(): void
     {
         $client = Client::factory()->professionnel()->create();
-        $ecran = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $coque = Produit::factory()->create(['prix_vente_ht' => 25, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $coque = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
         $factureImpayee = $this->emettreFacture($client, $ecran, 2);
         $factureReglee = $this->emettreFacture($client, $coque, 1);
         $this->encaisser($factureReglee, 30);

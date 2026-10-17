@@ -7,7 +7,6 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\LigneDevis;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
@@ -41,7 +40,6 @@ class ModifierDevisAction
 {
     public function __construct(
         private readonly ConstructeurLigneDocument $constructeurLigne,
-        private readonly CalculateurLigne $calculateurLigne,
         private readonly LecteurDesDroits $lecteur,
         private readonly DerogationsDePrix $derogations,
     ) {}
@@ -69,8 +67,8 @@ class ModifierDevisAction
             $compte = $this->lecteur->exiger($auteur, 'update', $devis->magasin, $devis);
 
             $contexte = ContexteDeVente::pourEnregistrer($client, app(TenantContext::class)->magasin(), $devis->fill($attributs)->noterSaNatureDOperation($attributs));
-            $lignesConstruites = $this->constructeurLigne->construireToutes($lignes, $contexte);
-            $this->derogations->exiger($compte, $devis->lignes->map(fn (LigneDevis $ligne): array => $ligne->attributesToArray())->all(), $lignesConstruites, $contexte);
+            $document = $this->constructeurLigne->construireToutes($lignes, $contexte);
+            $this->derogations->exiger($compte, $devis->lignes->map(fn (LigneDevis $ligne): array => $ligne->attributesToArray())->all(), $document->lignes, $contexte);
             $devis->forceFill([
                 'client_id' => $client->getKey(),
                 ...$contexte->colonnes(),
@@ -78,11 +76,11 @@ class ModifierDevisAction
             ])->save();
             $devis->lignes()->delete();
 
-            foreach ($lignesConstruites as $ligne) {
+            foreach ($document->lignes as $ligne) {
                 $devis->lignes()->create($ligne);
             }
 
-            $devis->forceFill($this->calculateurLigne->totaliser($lignesConstruites))->save();
+            $devis->forceFill($document->totaux)->save();
 
             return $devis->fresh('lignes');
         });

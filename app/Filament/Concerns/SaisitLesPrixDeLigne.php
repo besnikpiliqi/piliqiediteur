@@ -2,52 +2,61 @@
 
 namespace App\Filament\Concerns;
 
-use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\DocumentChiffre;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Get;
-use InvalidArgumentException;
+use Illuminate\Support\HtmlString;
 
 /**
  * Prix et totaux des lignes d'un document à l'écran, partagés par les
  * lignes de vente (voir AjouteDesLignesDeVente) et d'achat (voir
- * AjouteDesLignesDAchat) : chacune calcule ses montants comme à
- * l'enregistrement réel (voir montantsDesLignesSaisies()).
+ * AjouteDesLignesDAchat) : le document se calcule comme à
+ * l'enregistrement réel (voir documentDesLignesSaisies()), et l'écran ne
+ * fait que lire ses montants.
  */
 trait SaisitLesPrixDeLigne
 {
     /**
-     * Les montants des lignes saisies du document, calculés comme à leur
+     * Les lignes saisies du document, calculées ensemble comme à leur
      * enregistrement ; $get lit le formulaire au niveau du document.
-     *
-     * @return iterable<array{montant_ht: float|string, montant_tva: float|string, montant_ttc: float|string}>
      */
-    abstract protected static function montantsDesLignesSaisies(Get $get): iterable;
+    abstract protected static function documentDesLignesSaisies(Get $get): DocumentChiffre;
 
     /**
-     * Totaux du document en cours de saisie, sommés séparément comme à
-     * l'enregistrement (voir CalculateurLigne::totaliser()).
+     * Totaux du document en cours de saisie, tels que le calcul les donne
+     * (voir DocumentChiffre), précédés d'une rangée par taux dès qu'il y en
+     * a plusieurs : HT, TVA et TTC de chaque taux, sommes exactes de ses
+     * lignes.
      */
     public static function totauxDuDocument(): Placeholder
     {
         return Placeholder::make('totaux_document')
             ->label('Totaux')
             ->columnSpanFull()
-            ->content(function (Get $get): string {
-                try {
-                    $totaux = app(CalculateurLigne::class)->totaliser(self::montantsDesLignesSaisies($get));
-                } catch (InvalidArgumentException) {
-                    return '—';
-                }
+            ->content(function (Get $get): HtmlString {
+                $document = self::documentDesLignesSaisies($get);
+                $rangees = count($document->parTaux) > 1
+                    ? array_map(
+                        fn (string $taux, array $montants): string => 'À '.str_replace('.', ',', self::pourcentageEnTexte($taux)).' % : '.self::montantEnTexte($montants['montant_ht']).' HT + '.self::montantEnTexte($montants['montant_tva']).' de TVA = '.self::montantEnTexte($montants['montant_ttc']).' TTC',
+                        array_keys($document->parTaux),
+                        $document->parTaux,
+                    )
+                    : [];
 
-                return 'Total HT '.self::montantEnTexte($totaux['total_ht'])
-                    .' · TVA '.self::montantEnTexte($totaux['total_tva'])
-                    .' · Total TTC '.self::montantEnTexte($totaux['total_ttc']);
+                $rangees[] = 'Total HT '.self::montantEnTexte($document->totaux['total_ht'])
+                    .' · TVA '.self::montantEnTexte($document->totaux['total_tva'])
+                    .' · Total TTC '.self::montantEnTexte($document->totaux['total_ttc']);
+
+                return new HtmlString(implode('<br>', array_map(e(...), $rangees)));
             });
     }
 
-    private static function montantEnTexte(float $montant): string
+    /**
+     * Un montant tel qu'on le lit : « 1 234,50 € ».
+     */
+    private static function montantEnTexte(float|string $montant): string
     {
-        return number_format($montant, 2, ',', ' ').' €';
+        return number_format((float) $montant, 2, ',', ' ').' €';
     }
 
     /**

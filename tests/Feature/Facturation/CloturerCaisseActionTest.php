@@ -41,9 +41,9 @@ class CloturerCaisseActionTest extends TestCase
         app(TenantContext::class)->set($this->magasin);
     }
 
-    private function emettreFacturePour(Client $client, float $prixUnitaireHt = 100): Facture
+    private function emettreFacturePour(Client $client, float $prixUnitaireTtc = 120): Facture
     {
-        $produit = Produit::factory()->create(['prix_vente_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => $prixUnitaireTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -56,8 +56,8 @@ class CloturerCaisseActionTest extends TestCase
         $particulier = Client::factory()->create();
         $professionnel = Client::factory()->professionnel()->create();
 
-        $factureParticulier = $this->emettreFacturePour($particulier, 100); // 120 TTC
-        $this->emettreFacturePour($professionnel, 50); // ne doit jamais être agrégée
+        $factureParticulier = $this->emettreFacturePour($particulier, 120); // 120 TTC
+        $this->emettreFacturePour($professionnel, 60); // ne doit jamais être agrégée
 
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
 
@@ -74,7 +74,7 @@ class CloturerCaisseActionTest extends TestCase
     public function test_exclut_les_brouillons_et_deduit_une_vente_corrigee_par_un_avoir_total(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         // Brouillon jamais émis : pas de date_emission, jamais inclus.
         app(CreerFactureAction::class)->handle(self::auteur(), $client, [
@@ -102,10 +102,10 @@ class CloturerCaisseActionTest extends TestCase
     {
         $client = Client::factory()->create();
         $this->travelTo(now()->subDay());
-        $venteDHier = $this->emettreFacturePour($client, 50); // 60 TTC
+        $venteDHier = $this->emettreFacturePour($client, 60); // 60 TTC
         app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
         $this->travelBack();
-        $this->emettreFacturePour($client, 100); // 120 TTC
+        $this->emettreFacturePour($client, 120); // 120 TTC
         $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteDHier->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
@@ -131,9 +131,9 @@ class CloturerCaisseActionTest extends TestCase
     {
         $client = Client::factory()->create();
         $this->travelTo(CarbonImmutable::parse('2026-07-14 21:30:00', 'UTC'));
-        $venteDu14 = $this->emettreFacturePour($client, 50);
+        $venteDu14 = $this->emettreFacturePour($client, 60);
         $this->travelTo(CarbonImmutable::parse('2026-07-14 22:30:00', 'UTC'));
-        $venteDu15 = $this->emettreFacturePour($client, 100);
+        $venteDu15 = $this->emettreFacturePour($client, 120);
         $avoirDu15 = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteDu14->lignes->firstOrFail()->id, 'quantite' => 1],
         ]);
@@ -181,8 +181,8 @@ class CloturerCaisseActionTest extends TestCase
     public function test_les_ventes_et_les_retours_d_un_client_archive_restent_dans_la_cloture(): void
     {
         $client = Client::factory()->create();
-        $this->emettreFacturePour($client, 100); // 120 TTC
-        $venteRendue = $this->emettreFacturePour($client, 50); // 60 TTC
+        $this->emettreFacturePour($client, 120); // 120 TTC
+        $venteRendue = $this->emettreFacturePour($client, 60); // 60 TTC
         app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteRendue->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
@@ -198,7 +198,7 @@ class CloturerCaisseActionTest extends TestCase
     public function test_un_avoir_a_un_professionnel_nest_jamais_deduit_de_la_cloture(): void
     {
         $professionnel = Client::factory()->professionnel()->create();
-        $facture = $this->emettreFacturePour($professionnel, 50);
+        $facture = $this->emettreFacturePour($professionnel, 60);
         $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $professionnel, [
             ['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));

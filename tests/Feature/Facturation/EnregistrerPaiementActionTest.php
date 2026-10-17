@@ -33,12 +33,12 @@ class EnregistrerPaiementActionTest extends TestCase
 
     /**
      * Émet une facture dont le total TTC est exactement déterminé par le
-     * prix unitaire HT fourni (taux de TVA fixé à 20 %), pour pouvoir
+     * prix unitaire TTC fourni (taux de TVA fixé à 20 %), pour pouvoir
      * raisonner sur des montants ronds dans les assertions.
      */
-    private function emettreFactureDe(Client $client, float $prixUnitaireHt): Facture
+    private function emettreFactureDe(Client $client, float $prixUnitaireTtc): Facture
     {
-        $produit = Produit::factory()->create(['prix_vente_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => $prixUnitaireTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -49,7 +49,7 @@ class EnregistrerPaiementActionTest extends TestCase
     public function test_un_paiement_integral_passe_la_facture_au_statut_payee(): void
     {
         $client = Client::factory()->create();
-        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+        $facture = $this->emettreFactureDe($client, 120); // total TTC 120
 
         $paiement = app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Virement->value,
@@ -70,7 +70,7 @@ class EnregistrerPaiementActionTest extends TestCase
     public function test_un_paiement_partiel_passe_la_facture_au_statut_partiellement_payee_puis_payee_au_complement(): void
     {
         $client = Client::factory()->create();
-        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+        $facture = $this->emettreFactureDe($client, 120); // total TTC 120
 
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Especes->value,
@@ -100,8 +100,8 @@ class EnregistrerPaiementActionTest extends TestCase
     public function test_un_paiement_peut_regler_plusieurs_factures_du_meme_client_a_la_fois(): void
     {
         $client = Client::factory()->create();
-        $factureA = $this->emettreFactureDe($client, 100 / 1.2); // total TTC 100
-        $factureB = $this->emettreFactureDe($client, 20 / 1.2); // total TTC 20
+        $factureA = $this->emettreFactureDe($client, 100); // total TTC 100
+        $factureB = $this->emettreFactureDe($client, 20); // total TTC 20
 
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Virement->value,
@@ -123,7 +123,7 @@ class EnregistrerPaiementActionTest extends TestCase
     public function test_un_montant_recu_superieur_au_total_impute_est_refuse(): void
     {
         $client = Client::factory()->create();
-        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+        $facture = $this->emettreFactureDe($client, 120); // total TTC 120
         $registreAvant = EnregistrementFiscal::query()->count();
 
         $this->assertThrows(
@@ -143,8 +143,8 @@ class EnregistrerPaiementActionTest extends TestCase
     public function test_un_montant_recu_egal_au_total_impute_sur_deux_factures_les_regle_toutes_les_deux(): void
     {
         $client = Client::factory()->create();
-        $premiere = $this->emettreFactureDe($client, 100); // total TTC 120
-        $seconde = $this->emettreFactureDe($client, 50 / 1.2); // total TTC 50
+        $premiere = $this->emettreFactureDe($client, 120); // total TTC 120
+        $seconde = $this->emettreFactureDe($client, 50); // total TTC 50
 
         $paiement = app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Virement->value,
@@ -180,7 +180,7 @@ class EnregistrerPaiementActionTest extends TestCase
     public function test_un_montant_recu_negatif_est_refuse(): void
     {
         $client = Client::factory()->create();
-        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+        $facture = $this->emettreFactureDe($client, 120); // total TTC 120
 
         $this->assertThrows(
             fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
@@ -198,7 +198,7 @@ class EnregistrerPaiementActionTest extends TestCase
     public function test_une_facture_imputee_deux_fois_dans_le_meme_paiement_est_refusee(): void
     {
         $client = Client::factory()->create();
-        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+        $facture = $this->emettreFactureDe($client, 120); // total TTC 120
 
         $this->assertThrows(
             fn () => app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
@@ -222,10 +222,10 @@ class EnregistrerPaiementActionTest extends TestCase
     {
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $ticketRetourne = $this->emettreFactureDe($comptoir, 100); // total TTC 120
+        $ticketRetourne = $this->emettreFactureDe($comptoir, 120); // total TTC 120
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $comptoir, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '120.00', 'recu_le' => now()->toDateString()], [['facture_id' => $ticketRetourne->id, 'montant' => '120.00']]);
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $ticketRetourne->lignes()->sole()->id, 'quantite' => 1]]);
-        $ticket = $this->emettreFactureDe($comptoir, 100); // total TTC 120
+        $ticket = $this->emettreFactureDe($comptoir, 120); // total TTC 120
 
         $paiement = app(EnregistrerPaiementAction::class)->handle(self::auteur(), $comptoir, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '10.00', 'recu_le' => now()->toDateString()], [['facture_id' => $ticket->id, 'montant' => '10.00']]);
 
@@ -237,7 +237,7 @@ class EnregistrerPaiementActionTest extends TestCase
     public function test_impossible_dallouer_plus_que_le_solde_restant_dune_facture(): void
     {
         $client = Client::factory()->create();
-        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+        $facture = $this->emettreFactureDe($client, 120); // total TTC 120
 
         $this->expectException(LogicException::class);
 
@@ -253,8 +253,8 @@ class EnregistrerPaiementActionTest extends TestCase
     public function test_impossible_dallouer_plus_que_le_montant_du_paiement_sur_plusieurs_factures(): void
     {
         $client = Client::factory()->create();
-        $factureA = $this->emettreFactureDe($client, 100); // total TTC 120
-        $factureB = $this->emettreFactureDe($client, 100); // total TTC 120
+        $factureA = $this->emettreFactureDe($client, 120); // total TTC 120
+        $factureB = $this->emettreFactureDe($client, 120); // total TTC 120
 
         try {
             app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
@@ -279,7 +279,7 @@ class EnregistrerPaiementActionTest extends TestCase
     {
         $clientPayeur = Client::factory()->create();
         $autreClient = Client::factory()->create();
-        $facture = $this->emettreFactureDe($autreClient, 100);
+        $facture = $this->emettreFactureDe($autreClient, 120);
 
         $this->expectException(LogicException::class);
 
@@ -295,7 +295,7 @@ class EnregistrerPaiementActionTest extends TestCase
     public function test_impossible_dencaisser_une_facture_encore_en_brouillon(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 100, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
@@ -320,7 +320,7 @@ class EnregistrerPaiementActionTest extends TestCase
     {
         $this->travelTo('2026-10-09 23:30:00');
         $client = Client::factory()->create();
-        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+        $facture = $this->emettreFactureDe($client, 120); // total TTC 120
 
         try {
             app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
@@ -341,7 +341,7 @@ class EnregistrerPaiementActionTest extends TestCase
     {
         $this->travelTo('2026-10-09 00:30:00');
         $client = Client::factory()->create();
-        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+        $facture = $this->emettreFactureDe($client, 120); // total TTC 120
 
         $paiement = app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [
             'mode_paiement' => ModePaiement::Virement->value,
@@ -361,7 +361,7 @@ class EnregistrerPaiementActionTest extends TestCase
     public function test_le_solde_d_une_facture_en_retard_la_passe_payee(): void
     {
         $client = Client::factory()->create();
-        $facture = $this->emettreFactureDe($client, 100); // total TTC 120
+        $facture = $this->emettreFactureDe($client, 120); // total TTC 120
         $facture->forceFill(['statut' => StatutFacture::EnRetard])->save();
 
         app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, [

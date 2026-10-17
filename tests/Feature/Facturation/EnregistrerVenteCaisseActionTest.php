@@ -41,7 +41,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
     public function test_encaisser_une_vente_cree_emet_et_paie_integralement_la_facture(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $facture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
             $client,
@@ -58,7 +58,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
     public function test_encaisser_une_vente_decremente_le_stock(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 10, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 5]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 5]);
 
         app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
             $client,
@@ -102,7 +102,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
     public function test_le_credit_disponible_du_client_reduit_le_montant_reellement_encaisse(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         // Premier achat payé puis intégralement retourné : 60 € de crédit
         // disponible.
@@ -137,7 +137,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
     public function test_la_reference_de_paiement_est_enregistree(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
             $client,

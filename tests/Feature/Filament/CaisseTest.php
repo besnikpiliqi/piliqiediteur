@@ -73,7 +73,7 @@ class CaisseTest extends TestCase
         Filament::setTenant($magasin);
 
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 20, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 10]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 10]);
 
         Livewire::test(Caisse::class)
             ->fillForm([
@@ -118,7 +118,7 @@ class CaisseTest extends TestCase
         $this->assertTrue(Caisse::canAccess());
 
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 36, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(Caisse::class)
             ->fillForm([
@@ -238,7 +238,7 @@ class CaisseTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
         $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:05', 'UTC'));
         app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $clientComptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
         $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:04', 'UTC'));
@@ -296,7 +296,7 @@ class CaisseTest extends TestCase
         Filament::setTenant($magasin);
 
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 8.33, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(Caisse::class)
             ->fillForm([
@@ -485,10 +485,12 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * Le formulaire montre le HT et la TVA de chaque ligne et les totaux de
-     * la vente, calculés comme la facture qui sera enregistrée.
+     * Le formulaire montre les totaux de la vente, calculés comme la
+     * facture qui sera enregistrée : 2 x 40,00 € TTC à 20 % font 80,00 ÷
+     * 1,2 = 66,67 € HT et 13,33 € de TVA ; aucun total ne s'affiche sous la
+     * ligne.
      */
-    public function test_la_caisse_montre_le_ht_et_la_tva_de_chaque_ligne_et_les_totaux(): void
+    public function test_la_caisse_montre_les_totaux_de_la_vente_calcules_comme_la_facture(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
@@ -503,18 +505,70 @@ class CaisseTest extends TestCase
         $component
             ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '2')
-            ->assertSee('66,66 € HT + 13,34 € de TVA')
-            ->assertSee('Total HT 66,66 € · TVA 13,34 € · Total TTC 80,00 €');
+            ->assertSee('Total HT 66,67 € · TVA 13,33 € · Total TTC 80,00 €')
+            ->assertDontSee('€ HT +');
     }
 
     /**
-     * Pour un client professionnel, chaque ligne affiche son HT, quantité x
-     * PU TTC ÷ (1 + taux) arrondi une fois, et la TVA se calcule sur le
-     * total de chaque taux (E1) : 2 x 49,90 € à 20 % font 83,17 € HT, 3 x
-     * 4,20 € à 5,5 % 11,94 € HT. La caisse affiche et encaisse le total
-     * qu'enregistre la facture, 112,40 €, et rend 7,60 € sur 120,00 €.
+     * Le cas obligatoire de l'éditeur à l'écran : 2 x 25,00 € TTC à 20 %
+     * affichent 41,67 € HT et 8,33 € de TVA (50,00 ÷ 1,2 = 41,666...),
+     * jamais 2 x 20,83 € = 41,66 €, et le ticket encaissé porte les mêmes
+     * montants.
      */
-    public function test_une_vente_a_un_professionnel_affiche_et_encaisse_le_total_calcule_depuis_le_ht_des_lignes(): void
+    public function test_l_ecran_de_la_caisse_affiche_les_montants_qui_seront_enregistres(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $comptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
+        $tshirt = Produit::factory()->create(['nom' => 'T-shirt', 'prix_vente_ttc' => 25, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class)->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit');
+        $cle = array_key_first($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$cle}.produit_id", $tshirt->id)
+            ->set("data.lignes.{$cle}.quantite", '2')
+            ->assertSee('Total HT 41,67 € · TVA 8,33 € · Total TTC 50,00 €')
+            ->call('encaisser')
+            ->assertHasNoFormErrors();
+
+        $ticket = Facture::query()->where('client_id', $comptoir->id)->sole();
+        $this->assertSame(['41.67', '8.33', '50.00'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
+        $this->assertSame(['41.67', '8.33', '50.00'], [$ticket->lignes->sole()->montant_ht, $ticket->lignes->sole()->montant_tva, $ticket->lignes->sole()->montant_ttc]);
+    }
+
+    /**
+     * Point 12 : aucune ligne ne montre de total sous elle, ni son HT ni sa
+     * TVA, qui dépendent des autres lignes de son taux ; seuls les totaux
+     * du document s'affichent. Deux lignes de 25,00 € montrent 50,00 €
+     * TTC au total, et nulle part 25,00 €, 20,83 € ou 20,84 €.
+     */
+    public function test_aucun_total_ne_s_affiche_sous_une_ligne(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $tshirt = Produit::factory()->create(['nom' => 'T-shirt', 'prix_vente_ttc' => 25, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $component = Livewire::test(Caisse::class)
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit');
+        [$premiere, $seconde] = array_keys($component->get('data.lignes'));
+
+        $component
+            ->set("data.lignes.{$premiere}.produit_id", $tshirt->id)
+            ->set("data.lignes.{$seconde}.produit_id", $tshirt->id)
+            ->assertSee('Total HT 41,67 € · TVA 8,33 € · Total TTC 50,00 €')
+            ->assertDontSee('25,00 €')
+            ->assertDontSee('20,83 €')
+            ->assertDontSee('20,84 €')
+            ->assertDontSee('Total TTC 25');
+    }
+
+    /**
+     * Une vente à un professionnel se calcule comme toute vente, taux par
+     * taux, et les totaux du bas gagnent une rangée par taux : 2 x 49,90 €
+     * à 20 % font 99,80 ÷ 1,2 = 83,17 € HT, 3 x 4,20 € à 5,5 % 12,60 ÷
+     * 1,055 = 11,94 € HT. La caisse affiche et encaisse le total
+     * qu'enregistre la facture, 112,40 €, la somme des prix, et rend 7,60 €
+     * sur 120,00 €.
+     */
+    public function test_une_vente_a_un_professionnel_affiche_ses_taux_et_encaisse_le_total_de_la_facture(): void
     {
         $this->completerIdentiteLegale($this->ouvrirLaCaisseDUnMagasin());
         $professionnel = Client::factory()->professionnel()->create();
@@ -531,9 +585,8 @@ class CaisseTest extends TestCase
                 'mode_paiement' => 'especes',
                 'montant_recu' => 120,
             ])
-            ->assertSee('83,17 €')
-            ->assertSee('11,94 €')
-            ->assertSee('TVA calculée sur le total')
+            ->assertSee('À 20 % : 83,17 € HT + 16,63 € de TVA = 99,80 € TTC')
+            ->assertSee('À 5,5 % : 11,94 € HT + 0,66 € de TVA = 12,60 € TTC')
             ->assertSee('Total HT 95,11 € · TVA 17,29 € · Total TTC 112,40 €')
             ->assertSee('7,60 €')
             ->call('encaisser')
@@ -658,10 +711,10 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * L'exemple du magasin : écran 50 € + main-d'œuvre, payés ensemble. La
-     * TVA du service se déduit du TTC saisi, comme pour un produit : 15,03 €
-     * TTC donnent 12,53 € HT, et non le TTC recalculé depuis ce HT
-     * (15,04 €).
+     * L'exemple du magasin : écran 50 € + main-d'œuvre, payés ensemble. Le
+     * service garde le TTC saisi, 15,03 €, jamais recalculé ; le HT du taux,
+     * 65,03 ÷ 1,2 = 54,19 €, se répartit : 41,67 € à l'écran, 12,52 € à la
+     * main-d'œuvre, et 2,51 € de TVA.
      */
     public function test_une_vente_avec_un_service_enregistre_sa_ligne_depuis_le_ttc_saisi(): void
     {
@@ -677,8 +730,7 @@ class CaisseTest extends TestCase
         $component
             ->set("data.lignes.{$cleProduit}.produit_id", $ecran->id)
             ->set("data.lignes.{$cleService}.prix_unitaire_ttc", '15.03')
-            ->assertSee('12,53 € HT + 2,50 € de TVA')
-            ->assertSee('Total HT 54,20 € · TVA 10,83 € · Total TTC 65,03 €')
+            ->assertSee('Total HT 54,19 € · TVA 10,84 € · Total TTC 65,03 €')
             ->call('encaisser')
             ->assertHasNoFormErrors();
 
@@ -690,8 +742,8 @@ class CaisseTest extends TestCase
         $this->assertSame(NatureLigne::Service, $ligneService->nature);
         $this->assertNull($ligneService->produit_id);
         $this->assertSame('Main-d\'œuvre', $ligneService->description);
-        $this->assertSame('12.53', $ligneService->montant_ht);
-        $this->assertSame('2.50', $ligneService->montant_tva);
+        $this->assertSame('12.52', $ligneService->montant_ht);
+        $this->assertSame('2.51', $ligneService->montant_tva);
         $this->assertSame('15.03', $ligneService->montant_ttc);
         $this->assertSame(2, $ecran->fresh()->stock_quantite);
         $this->assertSame($magasin->id, $ligneService->magasin_id);
@@ -958,7 +1010,7 @@ class CaisseTest extends TestCase
         $this->assertSame([], $component->get('data.lignes'));
     }
 
-    public function test_effacer_le_prix_ttc_d_un_service_remet_son_total_a_zero(): void
+    public function test_effacer_le_prix_ttc_d_un_service_remet_les_totaux_a_zero(): void
     {
         $this->ouvrirLaCaisseDUnMagasin();
         $service = Service::factory()->create(['nom' => 'Diagnostic']);
@@ -969,7 +1021,6 @@ class CaisseTest extends TestCase
         $component
             ->set("data.lignes.{$cle}.prix_unitaire_ttc", '15.03')
             ->set("data.lignes.{$cle}.prix_unitaire_ttc", '')
-            ->assertSee('0,00 € HT + 0,00 € de TVA')
             ->assertSee('Total HT 0,00 € · TVA 0,00 € · Total TTC 0,00 €');
     }
 

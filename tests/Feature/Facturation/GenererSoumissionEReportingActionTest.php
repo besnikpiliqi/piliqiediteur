@@ -41,10 +41,10 @@ class GenererSoumissionEReportingActionTest extends TestCase
         app(TenantContext::class)->set($this->magasin);
     }
 
-    private function cloturerJournee(string $date, float $prixUnitaireHt = 100): ClotureCaisse
+    private function cloturerJournee(string $date, float $prixUnitaireTtc = 120): ClotureCaisse
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => $prixUnitaireHt, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => $prixUnitaireTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
@@ -61,8 +61,8 @@ class GenererSoumissionEReportingActionTest extends TestCase
 
     public function test_agrege_toutes_les_clotures_de_la_periode(): void
     {
-        $this->cloturerJournee('2026-10-03', 100); // 120 TTC
-        $this->cloturerJournee('2026-10-07', 50); // 60 TTC
+        $this->cloturerJournee('2026-10-03', 120); // 120 TTC
+        $this->cloturerJournee('2026-10-07', 60); // 60 TTC
 
         $periode = new PeriodeEReporting(
             CarbonImmutable::parse('2026-10-01'),
@@ -82,7 +82,7 @@ class GenererSoumissionEReportingActionTest extends TestCase
     public function test_declare_les_ventes_de_la_periode_moins_ses_avoirs(): void
     {
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $this->travelTo('2026-10-03 10:00:00');
         $vente = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 3],
@@ -113,7 +113,7 @@ class GenererSoumissionEReportingActionTest extends TestCase
      */
     public function test_une_periode_sans_cloture_n_est_ni_declaree_ni_numerotee(): void
     {
-        $clotureHorsPeriode = $this->cloturerJournee('2026-10-15', 100);
+        $clotureHorsPeriode = $this->cloturerJournee('2026-10-15', 120);
 
         $periode = new PeriodeEReporting(
             CarbonImmutable::parse('2026-10-01'),
@@ -135,7 +135,7 @@ class GenererSoumissionEReportingActionTest extends TestCase
      */
     public function test_seules_les_clotures_ayant_des_operations_sont_declarees(): void
     {
-        $clotureDesVentes = $this->cloturerJournee('2026-10-03', 100); // 120 TTC
+        $clotureDesVentes = $this->cloturerJournee('2026-10-03', 120); // 120 TTC
         $this->travelTo('2026-10-05 00:00:00');
         $clotureAZero = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-04');
 
@@ -177,7 +177,7 @@ class GenererSoumissionEReportingActionTest extends TestCase
 
     public function test_generer_deux_fois_la_meme_periode_est_un_no_op(): void
     {
-        $this->cloturerJournee('2026-10-03', 100);
+        $this->cloturerJournee('2026-10-03', 120);
 
         $periode = new PeriodeEReporting(
             CarbonImmutable::parse('2026-10-01'),
@@ -195,7 +195,7 @@ class GenererSoumissionEReportingActionTest extends TestCase
 
     public function test_une_cloture_deja_agregee_nest_jamais_reprise_dans_une_periode_suivante(): void
     {
-        $cloture = $this->cloturerJournee('2026-10-03', 100);
+        $cloture = $this->cloturerJournee('2026-10-03', 120);
 
         $premierePeriode = new PeriodeEReporting(
             CarbonImmutable::parse('2026-10-01'),
@@ -223,7 +223,7 @@ class GenererSoumissionEReportingActionTest extends TestCase
     {
         Queue::fake();
         MandatPdp::factory()->create(['magasin_id' => $this->magasin->id]);
-        $this->cloturerJournee('2026-10-03', 100);
+        $this->cloturerJournee('2026-10-03', 120);
 
         $periode = new PeriodeEReporting(
             CarbonImmutable::parse('2026-10-01'),
@@ -238,7 +238,7 @@ class GenererSoumissionEReportingActionTest extends TestCase
     public function test_generer_une_soumission_sans_mandat_pdp_ne_declenche_rien(): void
     {
         Queue::fake();
-        $this->cloturerJournee('2026-10-03', 100);
+        $this->cloturerJournee('2026-10-03', 120);
 
         $periode = new PeriodeEReporting(
             CarbonImmutable::parse('2026-10-01'),
@@ -256,7 +256,7 @@ class GenererSoumissionEReportingActionTest extends TestCase
         // intercepterait aussi les events internes d'Eloquent (creating,
         // ...) dont dépend BelongsToMagasin pour positionner magasin_id.
         Event::fake([SoumissionEReportingGeneree::class]);
-        $this->cloturerJournee('2026-10-03', 100);
+        $this->cloturerJournee('2026-10-03', 120);
 
         $periode = new PeriodeEReporting(
             CarbonImmutable::parse('2026-10-01'),

@@ -14,6 +14,7 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
@@ -63,7 +64,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['nom' => 'Écran iPhone 17 Pro', 'prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['nom' => 'Écran iPhone 17 Pro', 'prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,
@@ -105,7 +106,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,
@@ -134,7 +135,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         // Premier achat payé puis intégralement retourné : 60 € de crédit
         // disponible.
@@ -235,8 +236,8 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produitRembourse = Produit::factory()->create(['prix_vente_ht' => 8.33, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $produitFacture = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produitRembourse = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produitFacture = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         // Premier achat payé puis intégralement retourné : 10 € de crédit
         // disponible.
@@ -266,11 +267,10 @@ class FactureResourceTest extends TestCase
 
         // On passe la clé, pas le modèle déjà chargé : assertTableColumnStateSet
         // ne re-résout la ligne via la requête de la table (et donc ses
-        // withSum) que si on lui laisse le faire elle-même -- un modèle
-        // déjà en main (même fresh()) n'aurait pas ces agrégats et
-        // fausserait le test.
+        // imputations chargées avec elle) que si on lui laisse le faire
+        // elle-même.
         Livewire::test(ListFactures::class)
-            ->assertTableColumnStateSet('montant_paye_somme', 10.0, $nouvelleFacture->getKey());
+            ->assertTableColumnStateSet('montant_paye', '10.00', $nouvelleFacture->getKey());
     }
 
     /**
@@ -291,8 +291,8 @@ class FactureResourceTest extends TestCase
         // Montants choisis pour qu'aucun total légitime de la page ne se
         // termine par "0,00" (voir plus bas pourquoi) : 10,83 € HT + 20 %
         // de TVA = 13,00 € TTC de crédit disponible.
-        $produitRembourse = Produit::factory()->create(['prix_vente_ht' => 10.83, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $produitFacture = Produit::factory()->create(['prix_vente_ht' => 51, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produitRembourse = Produit::factory()->create(['prix_vente_ttc' => 13, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produitFacture = Produit::factory()->create(['prix_vente_ttc' => 61.20, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         // Premier achat payé puis intégralement retourné : 13 € de crédit
         // disponible.
@@ -332,6 +332,37 @@ class FactureResourceTest extends TestCase
             ->assertSuccessful()
             ->assertSee('13,00')
             ->assertDontSee('0,00');
+    }
+
+    /**
+     * La colonne « Payé » de la liste additionne en centimes les paiements
+     * et les crédits d'avoir imputés sur chaque facture, jamais par une
+     * somme que la base de données ferait sur une colonne décimale : 0,10 €
+     * de crédit d'avoir, puis 0,10 € et 0,20 € encaissés font exactement
+     * 0,40 € (une somme de nombres à virgule donnerait
+     * 0,30000000000000004 pour les deux paiements).
+     */
+    public function test_le_paye_de_la_liste_se_somme_en_centimes(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $bonbon = Produit::factory()->create(['prix_vente_ttc' => '0.10', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $cable = Produit::factory()->create(['prix_vente_ttc' => '10.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $bonbon->id, 'quantite' => 1]], ModePaiement::Especes);
+        app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]));
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $cable->id, 'quantite' => 1]]));
+
+        foreach (['0.10', '0.20'] as $montant) {
+            app(EnregistrerPaiementAction::class)->handle(self::auteur(), $client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => $montant, 'recu_le' => today()->toDateString()], [['facture_id' => $facture->id, 'montant' => $montant]]);
+        }
+
+        $this->assertSame(['0.10', '0.10', '0.20'], [$facture->allocationsAvoir()->sole()->montant_alloue, ...$facture->allocationsPaiement()->orderBy('id')->pluck('montant_alloue')->all()]);
+        Livewire::test(ListFactures::class)
+            ->assertTableColumnStateSet('montant_paye', '0.40', $facture->getKey())
+            ->assertTableColumnStateSet('montant_paye', '0.10', $ticket->getKey());
     }
 
     /**
@@ -450,13 +481,13 @@ class FactureResourceTest extends TestCase
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
-            ->assertSee('10,00 € HT + 2,00 € de TVA')
+            ->assertSee('Total HT 10,00 € · TVA 2,00 € · Total TTC 12,00 €')
             ->set("data.lignes.{$cle}.taux_tva", '')
-            ->assertSee('10,00 € HT + 2,00 € de TVA')
-            ->assertDontSee('12,00 € HT + 0,00 € de TVA')
+            ->assertSee('Total HT 10,00 € · TVA 2,00 € · Total TTC 12,00 €')
+            ->assertDontSee('Total HT 12,00 € · TVA 0,00 €')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '12')
             ->set("data.lignes.{$cle}.taux_tva", '5.5')
-            ->assertSee('11,37 € HT + 0,63 € de TVA')
+            ->assertSee('Total HT 11,37 € · TVA 0,63 € · Total TTC 12,00 €')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '12');
     }
 
@@ -583,23 +614,29 @@ class FactureResourceTest extends TestCase
 
     /**
      * Le taux d'un service se saisit librement (B2) : un taux qui n'est
-     * pas en vigueur en métropole est signalé sous la ligne, sans empêcher
+     * pas en vigueur en métropole est signalé sur le champ du taux, plus
+     * sous la ligne, qui n'a plus de total (point 12), sans empêcher
      * d'enregistrer (X8).
      */
-    public function test_un_taux_de_service_inhabituel_est_signale_sans_etre_refuse(): void
+    public function test_un_taux_de_service_inhabituel_est_signale_sur_le_champ_du_taux(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $service = Service::factory()->create(['nom' => 'Pose écran']);
+        $aide = 'Taux inhabituel pour un magasin en métropole (en vigueur : 20 ; 10 ; 5,5 ; 2,1 %) : vérifiez votre saisie.';
 
-        Livewire::test(CreateFacture::class)
+        $formulaire = Livewire::test(CreateFacture::class)
             ->fillForm([
                 'client_id' => Client::factory()->create()->id,
                 'lignes' => [['service_id' => $service->id, 'description' => 'Pose écran', 'quantite' => 1, 'prix_unitaire_ttc' => '11.96', 'taux_tva' => '19.6', 'remise_pourcentage' => 0]],
-            ])
-            ->assertSee('Taux inhabituel pour un magasin en métropole (en vigueur : 20 ; 10 ; 5,5 ; 2,1 %) : vérifiez votre saisie.')
+            ]);
+        $ligneSaisie = array_key_first($formulaire->get('data.lignes'));
+
+        $formulaire
+            ->assertSee($aide)
+            ->assertFormFieldExists("lignes.{$ligneSaisie}.taux_tva", fn (TextInput $taux): bool => $taux->getHelperText() === $aide)
             ->call('create')
             ->assertHasNoFormErrors();
 
@@ -608,15 +645,52 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * Facture signalée par le magasin : 2 écrans à 40 € TTC (20 %), un câble
-     * à 10 € sans TVA, une coque à 10 € TTC (20 %). Chaque article a son HT,
-     * sa TVA et son TTC, et chaque ligne les multiplie par la quantité : le
-     * total HT est la somme visible des lignes (84,99 €, pas 85,00 €), la
-     * TVA la somme des TVA des lignes (15,01 €), et HT + TVA = TTC. La fiche
-     * et le PDF montrent le HT et la TVA de chaque ligne, et le récapitulatif
-     * par taux.
+     * Les totaux du bas d'une facture de deux taux gagnent une rangée par
+     * taux (point 12), lue dans le même calcul que l'enregistrement : à
+     * 20 %, 2 x 25,00 € font 50,00 ÷ 1,2 = 41,67 € HT + 8,33 € de TVA ; à
+     * 5,5 %, 10,00 € font 9,48 € HT + 0,52 € de TVA. La facture enregistrée
+     * porte les mêmes montants ; avec un seul taux, seul le total reste.
      */
-    public function test_la_facture_du_magasin_totalise_84_99_ht_et_le_montre_ligne_par_ligne(): void
+    public function test_les_totaux_du_bas_se_ventilent_par_taux(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create();
+        $tshirt = Produit::factory()->create(['nom' => 'T-shirt', 'prix_vente_ttc' => '25.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $livre = Produit::factory()->create(['nom' => 'Livre', 'prix_vente_ttc' => '10.00', 'taux_tva' => 5.5, 'suivi_stock' => false]);
+        $ligneDuTshirt = ['produit_id' => $tshirt->id, 'description' => 'T-shirt', 'quantite' => 2, 'prix_unitaire_ttc' => '25.00', 'remise_pourcentage' => 0];
+        $ligneDuLivre = ['produit_id' => $livre->id, 'description' => 'Livre', 'quantite' => 1, 'prix_unitaire_ttc' => '10.00', 'remise_pourcentage' => 0];
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => $client->id, 'lignes' => [$ligneDuTshirt]])
+            ->assertSee('Total HT 41,67 € · TVA 8,33 € · Total TTC 50,00 €')
+            ->assertDontSee('À 20 %')
+            ->fillForm(['client_id' => $client->id, 'lignes' => [$ligneDuTshirt, $ligneDuLivre]])
+            ->assertSee('À 20 % : 41,67 € HT + 8,33 € de TVA = 50,00 € TTC')
+            ->assertSee('À 5,5 % : 9,48 € HT + 0,52 € de TVA = 10,00 € TTC')
+            ->assertSee('Total HT 51,15 € · TVA 8,85 € · Total TTC 60,00 €')
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $facture = Facture::query()->sole();
+        $this->assertSame(['51.15', '8.85', '60.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertEqualsCanonicalizing([
+            ['taux_tva' => '20.00', 'montant_ht' => 41.67, 'montant_tva' => 8.33, 'montant_ttc' => 50.0],
+            ['taux_tva' => '5.50', 'montant_ht' => 9.48, 'montant_tva' => 0.52, 'montant_ttc' => 10.0],
+        ], $facture->ventilation_tva);
+    }
+
+    /**
+     * Facture signalée par le magasin : 2 écrans à 40 € TTC (20 %), un câble
+     * à 10 € sans TVA, une coque à 10 € TTC (20 %). Le HT du taux de 20 %,
+     * 90,00 ÷ 1,2 = 75,00 €, se répartit 66,67 € et 8,33 € : le total HT
+     * fait 85,00 € (jamais 84,99 €), la TVA 15,00 €, et HT + TVA = TTC. La
+     * fiche et le PDF montrent le HT et la TVA de chaque ligne, et le
+     * récapitulatif par taux.
+     */
+    public function test_la_facture_du_magasin_totalise_85_ht_et_le_montre_ligne_par_ligne(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
@@ -634,35 +708,34 @@ class FactureResourceTest extends TestCase
             ['produit_id' => $coque->id, 'quantite' => 1],
         ]);
 
-        $this->assertSame(['84.99', '15.01', '100.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(['85.00', '15.00', '100.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         $this->assertSame([
-            ['taux_tva' => '20.00', 'montant_ht' => 74.99, 'montant_tva' => 15.01, 'montant_ttc' => 90.0],
+            ['taux_tva' => '20.00', 'montant_ht' => 75.0, 'montant_tva' => 15.0, 'montant_ttc' => 90.0],
             ['taux_tva' => '0.00', 'montant_ht' => 10.0, 'montant_tva' => 0.0, 'montant_ttc' => 10.0],
         ], $facture->ventilation_tva);
 
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
             ->assertSuccessful()
-            ->assertSee('66,66')
-            ->assertSee('13,34')
-            ->assertSee('84,99')
-            ->assertSee('15,01')
+            ->assertSee('66,67')
+            ->assertSee('13,33')
+            ->assertSee('85,00')
+            ->assertSee('15,00')
             ->assertSee('TVA par taux')
-            ->assertSee('74,99')
-            ->assertDontSee('85,00');
+            ->assertSee('75,00')
+            ->assertDontSee('84,99');
 
         $pdf = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
-        $this->assertStringContainsString('66,66', $pdf);
-        $this->assertStringContainsString('74,99', $pdf);
-        $this->assertStringContainsString('84,99', $pdf);
-        $this->assertStringNotContainsString('85,00', $pdf);
+        $this->assertStringContainsString('66,67', $pdf);
+        $this->assertStringContainsString('75,00', $pdf);
+        $this->assertStringContainsString('85,00', $pdf);
+        $this->assertStringNotContainsString('84,99', $pdf);
     }
 
     /**
-     * Le même panier vendu à un professionnel se calcule depuis le HT de
-     * chaque ligne (E1) : 80,00 / 1,2 = 66,67 € HT, 10,00 / 1,2 = 8,33 €,
-     * et 20 % des 75,00 € HT du taux, 15,00 €, répartis en 13,33 € et
-     * 1,67 €. Il totalise 85,00 € HT + 15,00 € = 100,00 €, et sa fiche
-     * explique le calcul sous les lignes.
+     * Le même panier vendu à un professionnel a les mêmes montants : le HT
+     * du taux de 20 %, 75,00 €, se répartit 66,67 € et 8,33 €, la TVA par
+     * différence, 13,33 € et 1,67 €. Il totalise 85,00 € HT + 15,00 € =
+     * 100,00 €, et sa fiche explique le calcul sous les lignes.
      */
     public function test_la_meme_facture_a_un_professionnel_totalise_85_ht_et_explique_son_calcul(): void
     {
@@ -686,7 +759,7 @@ class FactureResourceTest extends TestCase
             ->assertSee('66,67')
             ->assertSee('13,33')
             ->assertSee('85,00')
-            ->assertSee('Client professionnel : HT de chaque ligne = quantité × PU TTC ÷ (1 + taux), arrondi une fois ; TVA calculée sur le total HT de chaque taux.');
+            ->assertSee('Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence.');
     }
 
     /**
@@ -760,7 +833,9 @@ class FactureResourceTest extends TestCase
 
     /**
      * Le PU TTC tapé est gardé tel quel, le PU HT en est la conversion au
-     * centime, et la ligne multiplie séparément HT et TTC par la quantité.
+     * centime, et la ligne vaut quantité x PU TTC : 3 x 10,05 € = 30,15 €
+     * TTC, dont 30,15 ÷ 1,2 = 25,125 -> 25,13 € HT, un demi-centime exact
+     * arrondi au centime supérieur (réponse Q2).
      */
     public function test_le_pu_ttc_saisi_est_garde_tel_quel(): void
     {
@@ -785,7 +860,7 @@ class FactureResourceTest extends TestCase
             ->assertHasNoFormErrors();
 
         $facture = Facture::query()->where('client_id', $client->id)->latest('id')->firstOrFail();
-        $this->assertSame(['25.14', '5.01', '30.15'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
+        $this->assertSame(['25.13', '5.02', '30.15'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 
     /**
@@ -914,7 +989,7 @@ class FactureResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         Livewire::test(CreateFacture::class)
             ->fillForm([
                 'client_id' => $client->id,
@@ -941,7 +1016,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10]);
 
         Livewire::test(CreateFacture::class)
             ->fillForm([
@@ -977,7 +1052,7 @@ class FactureResourceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
         config(['caisse_securisee.cle_privee' => null]);
         Exceptions::fake([ModuleFiscalNonConfigureException::class]);
@@ -1003,7 +1078,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'stock_quantite' => 10]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'stock_quantite' => 10]);
 
         Livewire::test(CreateFacture::class)
             ->fillForm([
@@ -1037,7 +1112,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,
@@ -1062,7 +1137,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,
@@ -1134,7 +1209,7 @@ class FactureResourceTest extends TestCase
 
         $client = Client::factory()->create();
         $autreClient = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,
@@ -1204,7 +1279,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,
@@ -1227,7 +1302,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,
@@ -1323,7 +1398,7 @@ class FactureResourceTest extends TestCase
 
     private function emettreFactureDepuisLePanneau(Client $client)
     {
-        $produit = Produit::factory()->create(['prix_vente_ht' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         Livewire::test(CreateFacture::class)->fillForm([
             'client_id' => $client->id,
@@ -1401,7 +1476,7 @@ class FactureResourceTest extends TestCase
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_CREATE]);
 
         $client = Client::factory()->create();
-        $produit = Produit::factory()->create(['prix_vente_ht' => 10, 'taux_tva' => 20]);
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
 
         $this->actingAs($vendeurA);
         Filament::setTenant($magasin);
@@ -2052,7 +2127,7 @@ class FactureResourceTest extends TestCase
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
             ->assertSeeText('Prix catalogue TTC')
             ->assertSeeText('TVA retirée')
-            ->assertSeeText('quantité × prix catalogue TTC ÷ (1 + TVA retirée)')
+            ->assertSeeText('HT de chaque taux = TTC du catalogue ÷ (1 + taux)')
             ->assertDontSeeText('PU TTC');
     }
 }

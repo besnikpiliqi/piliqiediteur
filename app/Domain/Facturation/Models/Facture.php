@@ -291,6 +291,18 @@ class Facture extends Model implements DocumentEnvoyable
     }
 
     /**
+     * Le ticket ou la facture de ce numéro, saisi en majuscules ou en
+     * minuscules, avec ou sans espaces autour : un numéro s'écrit toujours
+     * en majuscules (le code du type, celui du magasin, voir CodeMagasin,
+     * l'année et la séquence, voir DocumentNumberingService), et se cherche
+     * donc tel quel en majuscules, dans le magasin actif (MagasinScope).
+     */
+    public function scopeDeNumero(Builder $query, string $numero): Builder
+    {
+        return $query->where($query->qualifyColumn('numero'), mb_strtoupper(trim($numero)));
+    }
+
+    /**
      * Le jour, à l'heure de Paris (AAAA-MM-JJ), de la première facture ou
      * du premier ticket émis par le magasin actif : sa première journée de
      * caisse (voir CloturerLesJourneesAction). Null tant qu'il n'a rien

@@ -7,6 +7,7 @@ use App\Domain\Facturation\Actions\NoterBordereauDetaxeAction;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\PreuvesRequises;
+use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use Filament\Actions;
@@ -22,7 +23,9 @@ use Filament\Resources\Pages\ViewRecord;
  * FacturePolicy::justifier()) : les preuves de son exonération (voir
  * AjouterPreuveOperationAction) et le bordereau de détaxe d'un ticket
  * (voir NoterBordereauDetaxeAction). Chaque bouton n'apparaît que là où
- * son action l'accepte (voir leurs refusPour()).
+ * son action l'accepte (voir leurs refusPour()). Son retour passe par
+ * « Avoir », qui ouvre la recherche par numéro de « Nouvel avoir » sur ce
+ * document (voir faireUnAvoir()).
  */
 class ViewFacture extends ViewRecord
 {
@@ -36,9 +39,27 @@ class ViewFacture extends ViewRecord
             FactureResource::telechargerLePdf(Actions\Action::make('telecharger_pdf')),
             FactureResource::envoyerParEmail(Actions\Action::make('envoyer_par_email')),
             FactureResource::relancer(Actions\Action::make('relancer')),
+            $this->faireUnAvoir(),
             $this->ajouterUnePreuve(),
             $this->noterLeBordereauDeDetaxe(),
         ];
+    }
+
+    /**
+     * « Avoir » : la page « Nouvel avoir », dont la recherche par numéro
+     * part de ce ticket ou de cette facture (voir CreateAvoir::afterFill()),
+     * où d'autres documents du même client peuvent s'ajouter. Le bouton
+     * apparaît comme l'action « Avoir » de la liste des factures (voir
+     * AvoirResource::peutCrediter()).
+     */
+    private function faireUnAvoir(): Actions\Action
+    {
+        return Actions\Action::make('avoir')
+            ->label('Avoir')
+            ->icon('heroicon-o-receipt-refund')
+            ->color('danger')
+            ->visible(fn (Facture $record): bool => AvoirResource::peutCrediter($record))
+            ->url(fn (Facture $record): string => AvoirResource::getUrl('create', ['document' => $record->numero]));
     }
 
     /**

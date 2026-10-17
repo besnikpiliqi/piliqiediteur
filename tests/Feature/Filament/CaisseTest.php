@@ -32,6 +32,8 @@ use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
+use App\Filament\App\Resources\AvoirResource;
+use App\Filament\App\Resources\AvoirResource\Pages\CreateAvoir;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
@@ -1689,6 +1691,26 @@ class CaisseTest extends TestCase
         app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [
             $magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [$autorisation]))],
         ]);
+    }
+
+    /**
+     * Point 2 : « Retour d'un ticket » mène à la recherche par numéro de
+     * « Nouvel avoir », à qui peut créer un avoir ; un vendeur qui ne le
+     * peut pas ne voit pas le bouton.
+     */
+    public function test_le_bouton_retour_d_un_ticket_ouvre_la_recherche_par_numero(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+
+        $caisse = Livewire::test(Caisse::class);
+
+        $caisse->assertActionHasUrl('retourDUnTicket', AvoirResource::getUrl('create'));
+        Livewire::test(CreateAvoir::class)
+            ->assertFormFieldExists('recherche', fn (TextInput $champ): bool => $champ->getLabel() === 'N° du ticket ou de la facture')
+            ->assertFormFieldDoesNotExist('client_id');
+        $this->dansLeMagasin($magasin, $vendeur);
+        Livewire::test(Caisse::class)->assertActionHidden('retourDUnTicket');
     }
 
     private function ouvrirLaCaisseDUnMagasin(): Magasin

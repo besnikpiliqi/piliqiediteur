@@ -4,19 +4,21 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerAvoirAction;
+use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Filament\App\Resources\AvoirResource\Pages;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
+use Filament\Forms\Components\Actions\Action as ActionDeChamp;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
-use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
-use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
@@ -31,25 +33,46 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rules\Exists;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
 
 /**
- * Création possible de deux façons : depuis l'action rapide "Avoir" de
- * FactureResource (pour le cas simple d'une seule facture, pré-rempli
- * depuis celle-ci), ou depuis cette Resource (pour regrouper des lignes de
- * plusieurs documents d'un même client, tous tickets de caisse ou tous
- * factures, voir le docblock de CreerAvoirAction). Les deux créent et
- * émettent l'avoir d'un seul geste (voir EnregistrerAvoirAction). Jamais
- * de page edit : un avoir émis ne se modifie ni ne se supprime jamais
- * (voir AvoirPolicy).
+ * Un avoir part toujours du numéro d'un ticket ou d'une facture, jamais du
+ * client (point 2 de la série 8) : « N° du ticket ou de la facture »
+ * cherche, sans tenir compte des majuscules, parmi les documents émis du
+ * magasin actif que la personne voit (un vendeur ne retrouve que ses
+ * ventes) et qui ont encore une ligne à créditer ; le client s'affiche
+ * ensuite d'après le document, tel qu'il l'a figé à son émission, avec les
+ * lignes encore à rendre. D'autres tickets ou factures du même client s'y
+ * ajoutent, s'ils peuvent entrer dans le même avoir (voir
+ * CreerAvoirAction::incompatibilite()). Le client envoyé à l'émission est
+ * celui du premier document, relu par le serveur (voir
+ * clientDuPremierDocument()), jamais une valeur venue du navigateur.
+ *
+ * La même recherche s'ouvre depuis « Nouvel avoir », depuis la fiche d'un
+ * ticket ou d'une facture, déjà lancée sur son numéro (voir ViewFacture et
+ * CreateAvoir::afterFill()), et par « Retour d'un ticket » à la caisse
+ * (voir Caisse). L'action rapide « Avoir » de la liste des factures (voir
+ * FactureResource) crédite, elle, une seule facture, pré-remplie depuis
+ * celle-ci. Toutes créent et émettent l'avoir d'un seul geste (voir
+ * EnregistrerAvoirAction). Jamais de page edit : un avoir émis ne se
+ * modifie ni ne se supprime jamais (voir AvoirPolicy).
  */
 class AvoirResource extends Resource
 {
     use EnvoieLesDocuments;
     use GereLesExceptionsMetier;
     use SaisitUneQuantiteRetournee;
+
+    /**
+     * Le refus d'un numéro que la personne ne peut pas corriger : inconnu,
+     * d'un autre magasin, encore en brouillon, ou vente d'un collègue pour
+     * un vendeur qui ne voit que les siennes. Le même message pour tous :
+     * il ne dit jamais qu'un tel document existe.
+     */
+    public const DOCUMENT_INTROUVABLE = 'Aucun ticket ni aucune facture que vous pouvez corriger ne porte ce numéro dans ce magasin.';
 
     protected static ?string $model = Avoir::class;
 
@@ -84,64 +107,234 @@ class AvoirResource extends Resource
             // Le jeton de l'avoir (R3) : renvoyé après une réponse perdue,
             // il n'est émis qu'une fois (voir CreateAvoir).
             self::champDuJeton(),
-            Select::make('client_id')
-                ->label('Client')
-                // Archivé, un client n'est plus proposé pour une vente, mais
-                // ce qu'il a acheté se retourne toujours (voir
-                // Client::scopeQuiPeuventEtreCredites()).
-                ->options(fn (): array => Client::query()->quiPeuventEtreCredites()->orderBy('nom')->pluck('nom', 'id')->all())
-                ->rule(fn (): Exists => Client::regleExisteDansLeMagasin(Client::query()->quiPeuventEtreCredites()))
-                ->searchable()
-                ->required()
-                ->live()
-                ->afterStateUpdated(function (?int $state, Set $set): void {
-                    $series = $state ? self::seriesCreditablesPourClient($state) : [];
-                    $serie = count($series) === 1 ? array_key_first($series) : null;
-
-                    $set('serie', $serie);
-                    $set('lignes', $serie ? self::lignesCreditablesPourClient($state, TypeDocument::from($serie)) : []);
-                })
+            TextInput::make('recherche')
+                ->label(fn (Get $get): string => self::documentsDeLAvoir($get('lignes')) === [] ? 'N° du ticket ou de la facture' : 'Ajouter un autre ticket ou une autre facture')
+                ->placeholder('TK-... ou FAC-...')
+                ->helperText('Le numéro imprimé sur le ticket ou la facture, en majuscules ou en minuscules.')
+                ->maxLength(40)
+                ->autofocus()
+                // Entrée cherche le numéro au lieu d'émettre l'avoir.
+                ->extraInputAttributes(fn (TextInput $component): array => ['x-on:keydown.enter.prevent' => "\$wire.mountFormComponentAction('{$component->getKey()}', 'chercher')"])
+                ->suffixAction(self::actionChercher())
+                ->dehydrated(false)
                 ->columnSpanFull(),
 
-            // Choisie d'office quand le client n'a de lignes créditables que
-            // dans une série ; sinon le magasin choisit avant que les lignes
-            // ne soient proposées (voir CreerAvoirAction, qui refuse tout
-            // mélange).
-            Radio::make('serie')
-                ->label('Documents à créditer')
-                ->helperText('Un avoir crédite des tickets de caisse ou des factures, jamais les deux : faites un avoir pour chacun.')
-                ->options(fn (Get $get): array => self::seriesCreditablesPourClient((int) $get('client_id')))
-                ->visible(fn (Get $get): bool => filled($get('client_id')) && self::seriesCreditablesPourClient((int) $get('client_id')) !== [])
-                ->inline()
-                ->inlineLabel(false)
-                ->required()
-                ->live()
-                ->dehydrated(false)
-                ->afterStateUpdated(fn (?string $state, Get $get, Set $set) => $set('lignes', $state ? self::lignesCreditablesPourClient((int) $get('client_id'), TypeDocument::from($state)) : []))
+            Placeholder::make('client')
+                ->label('Client')
+                ->content(fn (Get $get): string => self::clientEtDocuments(self::documentsDeLAvoir($get('lignes'))))
+                ->visible(fn (Get $get): bool => self::documentsDeLAvoir($get('lignes')) !== [])
                 ->columnSpanFull(),
 
             Repeater::make('lignes')
                 ->label('Lignes à créditer')
-                ->helperText('Toutes les lignes encore créditables de ces documents. Retirez celles à ne pas créditer.')
+                ->helperText('Les lignes encore à rendre des documents cherchés. Retirez celles à ne pas créditer, ou baissez leur quantité.')
                 ->schema([
                     Hidden::make('ligne_facture_id'),
                     TextInput::make('facture_numero')->label('Document')->disabled()->dehydrated(false),
                     TextInput::make('description')->label('Produit / description')->disabled()->dehydrated(false),
                     self::champQuantiteRetournee('Quantité à créditer', fn (Get $get): ?int => self::ligneVisible($get('ligne_facture_id'))?->quantiteCreditableRestante()),
                 ])
-                ->columns(4)
+                ->columns(3)
+                ->defaultItems(0)
                 ->addable(false)
                 ->deletable(true)
+                ->required()
+                ->validationMessages(['required' => 'Cherchez un ticket ou une facture : l\'avoir crédite ses lignes.'])
                 ->columnSpanFull(),
 
             Textarea::make('motif')->label('Motif de l\'avoir')->required()->columnSpanFull(),
 
             Placeholder::make('imputation_du_credit')
                 ->hiddenLabel()
-                ->content(fn (Get $get): string => self::imputationDuCredit(Client::withTrashed()->find($get('client_id'))))
-                ->visible(fn (Get $get): bool => filled($get('client_id')))
+                ->content(fn (Get $get): string => self::imputationDuCredit((self::documentsDeLAvoir($get('lignes'))[0] ?? null)?->client))
+                ->visible(fn (Get $get): bool => self::documentsDeLAvoir($get('lignes')) !== [])
                 ->columnSpanFull(),
         ])->columns(2);
+    }
+
+    /**
+     * « Chercher » (ou Entrée dans le champ) : ajoute à l'avoir le document
+     * du numéro saisi et vide le champ, prêt pour un autre numéro ; un
+     * refus s'affiche sous le champ, et rien n'est ajouté.
+     *
+     * @throws ValidationException
+     */
+    private static function actionChercher(): ActionDeChamp
+    {
+        return ActionDeChamp::make('chercher')
+            ->label('Chercher')
+            ->icon('heroicon-o-magnifying-glass')
+            ->action(function (mixed $state, Get $get, Set $set, TextInput $component): void {
+                try {
+                    $lignes = self::lignesAvecLeDocument($state, $get('lignes'));
+                } catch (InvalidArgumentException $refus) {
+                    throw ValidationException::withMessages([$component->getStatePath() => $refus->getMessage()]);
+                }
+
+                $set('lignes', $lignes);
+                $set('recherche', null);
+                $component->getLivewire()->resetErrorBag($component->getStatePath());
+            });
+    }
+
+    /**
+     * Les lignes de l'avoir, plus celles du ticket ou de la facture de ce
+     * numéro (voir Facture::scopeDeNumero()) encore à rendre, chacune à la
+     * quantité qui en reste : un document émis du magasin actif, que la
+     * personne voit (voir Facture::scopeVisiblesPar()), qui n'est pas déjà
+     * dans l'avoir, a encore une ligne à créditer, est du même client que
+     * le premier document de l'avoir et peut entrer dans le même avoir que
+     * lui (voir CreerAvoirAction::incompatibilite()).
+     *
+     * @return array<array-key, mixed>
+     *
+     * @throws InvalidArgumentException le refus, rédigé pour la personne
+     */
+    public static function lignesAvecLeDocument(mixed $numero, mixed $lignes): array
+    {
+        if (! is_string($numero) || blank($numero)) {
+            throw new InvalidArgumentException('Saisissez le n° du ticket ou de la facture.');
+        }
+
+        $lignes = is_array($lignes) ? $lignes : [];
+        $document = Facture::query()->emises()->visiblesPar(auth()->user())->deNumero($numero)->with('lignes')->first();
+        $refus = self::refusDuDocument($document, self::documentsDeLAvoir($lignes));
+
+        if ($refus !== null) {
+            throw new InvalidArgumentException($refus);
+        }
+
+        return [...$lignes, ...self::lignesARendre($document)];
+    }
+
+    /**
+     * Pourquoi ce document ne s'ajoute pas à l'avoir qui corrige déjà
+     * $documents ; null s'il s'ajoute.
+     *
+     * @param  list<Facture>  $documents
+     */
+    private static function refusDuDocument(?Facture $document, array $documents): ?string
+    {
+        if ($document === null) {
+            return self::DOCUMENT_INTROUVABLE;
+        }
+
+        [$designation, $credite, $pronom, $autre] = $document->serie() === TypeDocument::TicketCaisse
+            ? ["Le ticket {$document->numero}", 'crédité', 'il', 'celui']
+            : ["La facture {$document->numero}", 'créditée', 'elle', 'celle'];
+        $premier = $documents[0] ?? null;
+
+        return match (true) {
+            collect($documents)->contains(fn (Facture $dejaAjoute): bool => $dejaAjoute->is($document)) => "{$designation} est déjà dans l'avoir.",
+            ! $document->possedeDesLignesCreditables() => "{$designation} est déjà entièrement {$credite} : {$pronom} n'a plus rien à rendre.",
+            $premier === null => null,
+            (int) $document->client_id !== (int) $premier->client_id => "{$designation} est {$autre} d'un autre client : un avoir ne corrige que les documents d'un même client.",
+            default => CreerAvoirAction::incompatibilite($premier, $document),
+        };
+    }
+
+    /**
+     * Les lignes du document encore à rendre, à la quantité qui en reste,
+     * sous les clés du Repeater.
+     *
+     * @return array<string, array{ligne_facture_id: int, facture_numero: string, description: string, quantite: int}>
+     */
+    private static function lignesARendre(Facture $document): array
+    {
+        return $document->lignes
+            ->filter(fn (LigneFacture $ligne): bool => $ligne->quantiteCreditableRestante() > 0)
+            ->mapWithKeys(fn (LigneFacture $ligne): array => [(string) Str::uuid() => [
+                'ligne_facture_id' => $ligne->id,
+                'facture_numero' => $document->numero,
+                'description' => $ligne->description,
+                'quantite' => $ligne->quantiteCreditableRestante(),
+            ]])
+            ->all();
+    }
+
+    /**
+     * Les documents émis dont l'avoir porte des lignes, dans l'ordre où ils
+     * ont été ajoutés, relus en base parmi ceux que la personne voit : le
+     * premier est le client affiché, et la référence des documents qui
+     * s'ajoutent (voir refusDuDocument()).
+     *
+     * @return list<Facture>
+     */
+    public static function documentsDeLAvoir(mixed $lignes): array
+    {
+        $identifiants = collect(is_array($lignes) ? $lignes : [])
+            ->map(fn (mixed $ligne): mixed => is_array($ligne) ? filter_var($ligne['ligne_facture_id'] ?? null, FILTER_VALIDATE_INT) : false)
+            ->filter(fn (mixed $identifiant): bool => is_int($identifiant))
+            ->values();
+
+        if ($identifiants->isEmpty()) {
+            return [];
+        }
+
+        $lignesVues = LigneFacture::query()
+            ->whereKey($identifiants->all())
+            ->whereHas('facture', fn (Builder $query) => $query->emises()->visiblesPar(auth()->user()))
+            ->with('facture')
+            ->get()
+            ->keyBy('id');
+
+        return $identifiants
+            ->map(fn (int $identifiant): ?Facture => $lignesVues->get($identifiant)?->facture)
+            ->filter()
+            ->unique(fn (Facture $facture): int => $facture->getKey())
+            ->values()
+            ->all();
+    }
+
+    /**
+     * « Client comptoir — ticket TK-LYON1-2026-000001 du 17/10/2026 à
+     * 10 h 32 » : le client tel que le premier document l'a figé à son
+     * émission, puis chaque document de l'avoir.
+     *
+     * @param  list<Facture>  $documents
+     */
+    private static function clientEtDocuments(array $documents): string
+    {
+        $designations = collect($documents)->map(function (Facture $document): string {
+            $type = $document->serie() === TypeDocument::TicketCaisse ? 'ticket' : 'facture';
+
+            return $type.' '.$document->numero.' du '.$document->date_emission->format('d/m/Y à H \\h i');
+        });
+
+        return collect([($documents[0] ?? null)?->nomDuClient(), $designations->implode(', ')])->filter()->implode(' — ');
+    }
+
+    /**
+     * Le client de l'avoir : celui du document de sa première ligne, relu
+     * par le serveur parmi les documents que la personne voit. Une ligne
+     * introuvable est refusée avant toute écriture.
+     *
+     * @param  array<array-key, array{ligne_facture_id: mixed}>  $lignes
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function clientDuPremierDocument(array $lignes): Client
+    {
+        $premiere = self::ligneVisible(array_values($lignes)[0]['ligne_facture_id'] ?? null);
+
+        if ($premiere === null) {
+            throw new InvalidArgumentException('Cette ligne de facture est introuvable.');
+        }
+
+        return $premiere->facture->client;
+    }
+
+    /**
+     * Un avoir se fait sur ce ticket ou cette facture : émis, avec encore
+     * une ligne à créditer, par une personne qui peut créer un avoir. Le
+     * bouton « Avoir » de la liste des factures et celui de la fiche
+     * apparaissent ainsi.
+     */
+    public static function peutCrediter(Facture $facture): bool
+    {
+        return $facture->statut !== StatutFacture::Brouillon
+            && $facture->possedeDesLignesCreditables()
+            && auth()->user()->can(PermissionRegistry::AVOIR_CREER);
     }
 
     /**
@@ -214,55 +407,6 @@ class AvoirResource extends Resource
 
             self::envoisSection(),
         ]);
-    }
-
-    /**
-     * Les séries (tickets de caisse, factures) dans lesquelles le client a
-     * encore des lignes créditables, avec leur libellé.
-     *
-     * @return array<string, string>
-     */
-    private static function seriesCreditablesPourClient(int $clientId): array
-    {
-        $seriesPresentes = self::lignesCreditables($clientId)->map(fn (LigneFacture $ligne): TypeDocument => $ligne->facture->serie());
-
-        return collect([TypeDocument::TicketCaisse->value => 'Tickets de caisse', TypeDocument::Facture->value => 'Factures'])
-            ->filter(fn (string $libelle, string $serie): bool => $seriesPresentes->contains(TypeDocument::from($serie)))
-            ->all();
-    }
-
-    /**
-     * @return list<array{ligne_facture_id: int, facture_numero: ?string, description: string, quantite: int}>
-     */
-    private static function lignesCreditablesPourClient(int $clientId, TypeDocument $serie): array
-    {
-        return self::lignesCreditables($clientId)
-            ->filter(fn (LigneFacture $ligne): bool => $ligne->facture->serie() === $serie)
-            ->map(fn (LigneFacture $ligne): array => [
-                'ligne_facture_id' => $ligne->id,
-                'facture_numero' => $ligne->facture->numero,
-                'description' => $ligne->description,
-                'quantite' => $ligne->quantiteCreditableRestante(),
-            ])
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Les lignes des documents émis du client qu'aucun avoir n'a encore
-     * entièrement créditées, parmi les documents que l'utilisateur voit
-     * (B16, voir Facture::scopeVisiblesPar()) : un vendeur ne crédite que
-     * ses ventes.
-     *
-     * @return Collection<int, LigneFacture>
-     */
-    private static function lignesCreditables(int $clientId): Collection
-    {
-        return LigneFacture::query()
-            ->creditables()
-            ->whereHas('facture', fn (Builder $query) => $query->emises()->visiblesPar(auth()->user())->where('client_id', $clientId))
-            ->with('facture')
-            ->get();
     }
 
     /**

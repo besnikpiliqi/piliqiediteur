@@ -791,9 +791,7 @@ class FactureResource extends Resource
                     ])
                     ->requiresConfirmation()
                     ->modalDescription(fn (Facture $record): string => 'Seules les lignes et quantités conservées ci-dessous seront créditées, et leur stock restauré. Retirez les lignes à ne pas créditer. Cette action est irréversible. '.AvoirResource::imputationDuCredit($record->client))
-                    ->visible(fn (Facture $record) => $record->statut !== StatutFacture::Brouillon
-                        && $record->possedeDesLignesCreditables()
-                        && auth()->user()->can(PermissionRegistry::AVOIR_CREER))
+                    ->visible(fn (Facture $record): bool => AvoirResource::peutCrediter($record))
                     ->action(function (Facture $record, array $data): void {
                         AvoirResource::autoriserLesLignesACrediter($data['lignes']);
                         static::executerSansCasser(fn () => app(EnregistrerAvoirAction::class)->handle(auth()->user(), $record->client, $data['lignes'], $data['motif'], $data['jeton']));

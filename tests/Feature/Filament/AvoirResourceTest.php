@@ -11,21 +11,25 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
-use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\AvoirResource\Pages\CreateAvoir;
 use App\Filament\App\Resources\AvoirResource\Pages\ListAvoirs;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
+use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
 use Filament\Facades\Filament;
-use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use LogicException;
 use Tests\TestCase;
@@ -151,13 +155,12 @@ class AvoirResourceTest extends TestCase
         $this->assertSame(StatutFacture::Brouillon, $facture->statut);
         $ligneFacture = $facture->lignes->firstOrFail();
 
-        // lignesCreditablesPourClient() exclut déjà les brouillons du champ
-        // par défaut : cette ligne ne pourrait normalement jamais être
-        // sélectionnée depuis l'UI -- on simule ici une soumission avec un
+        // La recherche par numéro ne trouve jamais un brouillon, qui n'a pas
+        // de numéro : cette ligne ne pourrait normalement jamais être
+        // proposée depuis l'UI -- on simule ici une soumission avec un
         // identifiant resté en mémoire sur une page restée ouverte.
         Livewire::test(CreateAvoir::class)
             ->fillForm([
-                'client_id' => $client->id,
                 'lignes' => [
                     ['ligne_facture_id' => $ligneFacture->id, 'facture_numero' => $facture->numero, 'description' => $ligneFacture->description, 'quantite' => 1],
                 ],
@@ -207,7 +210,6 @@ class AvoirResourceTest extends TestCase
 
         Livewire::test(CreateAvoir::class)
             ->fillForm([
-                'client_id' => $client->id,
                 'lignes' => [['ligne_facture_id' => $ligneFacture->id, 'quantite' => 1]],
                 'motif' => 'Retour client',
             ])
@@ -252,16 +254,15 @@ class AvoirResourceTest extends TestCase
 
         $ligneA = $factureA->lignes->firstOrFail();
         $ligneB = $factureB->lignes->firstOrFail();
+        $formulaire = $this->chercher($this->chercher(Livewire::test(CreateAvoir::class), $factureA->numero), $factureB->numero);
+        $this->assertSame([[$ligneA->id, 3], [$ligneB->id, 3]], $this->lignesProposees($formulaire));
 
-        Livewire::test(CreateAvoir::class)
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [
-                    ['ligne_facture_id' => $ligneA->id, 'quantite' => 1],
-                    ['ligne_facture_id' => $ligneB->id, 'quantite' => 2],
-                ],
-                'motif' => 'Retour de deux achats différents',
+        $formulaire
+            ->set('data.lignes', [
+                ['ligne_facture_id' => $ligneA->id, 'quantite' => 1],
+                ['ligne_facture_id' => $ligneB->id, 'quantite' => 2],
             ])
+            ->fillForm(['motif' => 'Retour de deux achats différents'])
             ->call('create')
             ->assertHasNoFormErrors();
 
@@ -274,11 +275,12 @@ class AvoirResourceTest extends TestCase
 
     /**
      * Archivé, un client n'est plus proposé pour une vente, mais ce qu'il a
-     * acheté se retourne toujours, sur deux de ses factures à la fois (voir
-     * Client::scopeQuiPeuventEtreCredites()).
+     * acheté se retourne toujours, sur deux de ses factures à la fois :
+     * leurs numéros les retrouvent, avec le nom qu'elles ont figé.
      */
     public function test_un_client_archive_recoit_un_avoir_couvrant_deux_de_ses_factures(): void
     {
+        $this->travelTo('2026-10-17 10:32:00');
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
@@ -288,16 +290,13 @@ class AvoirResourceTest extends TestCase
         $ligneB = $this->emettreFactureDepuisLePanneau($client)->lignes->firstOrFail();
         $client->delete();
 
-        Livewire::test(CreateAvoir::class)
-            ->assertFormFieldExists('client_id', fn (Select $champ): bool => ($champ->getOptions()[$client->id] ?? null) === 'Société Archivée')
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [
-                    ['ligne_facture_id' => $ligneA->id, 'quantite' => 1],
-                    ['ligne_facture_id' => $ligneB->id, 'quantite' => 2],
-                ],
-                'motif' => 'Retour de deux achats',
+        $this->chercher($this->chercher(Livewire::test(CreateAvoir::class), 'TK-MABOUT-2026-000001'), 'TK-MABOUT-2026-000002')
+            ->assertSee('Société Archivée — ticket TK-MABOUT-2026-000001 du 17/10/2026 à 10 h 32, ticket TK-MABOUT-2026-000002 du 17/10/2026 à 10 h 32')
+            ->set('data.lignes', [
+                ['ligne_facture_id' => $ligneA->id, 'quantite' => 1],
+                ['ligne_facture_id' => $ligneB->id, 'quantite' => 2],
             ])
+            ->fillForm(['motif' => 'Retour de deux achats'])
             ->call('create')
             ->assertHasNoFormErrors();
 
@@ -308,8 +307,8 @@ class AvoirResourceTest extends TestCase
     }
 
     /**
-     * Un client archivé dont tout a déjà été crédité n'est ni proposé ni
-     * accepté, même par une requête forgée.
+     * Le document d'un client archivé dont tout a déjà été crédité n'est
+     * ni proposé ni accepté, même par une requête forgée.
      */
     public function test_un_client_archive_sans_rien_a_crediter_n_est_ni_propose_ni_accepte(): void
     {
@@ -321,27 +320,26 @@ class AvoirResourceTest extends TestCase
         $facture = $this->emettreFactureDepuisLePanneau($client);
         Livewire::test(ListFactures::class)->callTableAction('avoir', $facture, data: ['motif' => 'Retour complet']);
         $client->delete();
+        $ligne = $facture->lignes->firstOrFail();
 
-        Livewire::test(CreateAvoir::class)
-            ->assertFormFieldExists('client_id', fn (Select $champ): bool => ! array_key_exists($client->id, $champ->getOptions()))
-            ->fillForm([
-                'client_id' => $client->id,
-                'lignes' => [['ligne_facture_id' => $facture->lignes->firstOrFail()->id, 'quantite' => 1]],
-                'motif' => 'Second retour',
-            ])
+        $formulaire = $this->chercher(Livewire::test(CreateAvoir::class), $facture->numero);
+        $this->assertSame(["Le ticket {$facture->numero} est déjà entièrement crédité : il n'a plus rien à rendre."], $this->refusSousLeChamp($formulaire));
+        $formulaire
+            ->assertSet('data.lignes', [])
+            ->fillForm(['lignes' => [['ligne_facture_id' => $ligne->id, 'quantite' => 1]], 'motif' => 'Second retour'])
             ->call('create')
-            ->assertHasFormErrors(['client_id' => 'exists']);
+            ->assertHasFormErrors(['lignes.0.quantite' => 'max']);
 
         $this->assertSame(1, Avoir::query()->count());
     }
 
     /**
-     * Défense en profondeur : même si l'UI ne propose normalement que les
-     * lignes du client sélectionné (voir AvoirResource::lignesCreditablesPourClient()),
-     * l'action elle-même doit aussi refuser toute incohérence -- voir
-     * AvoirActionsTest pour le test équivalent au niveau de l'action.
+     * Seules les lignes du document cherché sont proposées, pas celles des
+     * autres documents de son client ni d'un autre client ; l'action
+     * refuse en plus toute incohérence -- voir AvoirActionsTest pour le
+     * test équivalent au niveau de l'action.
      */
-    public function test_le_formulaire_ne_propose_que_les_lignes_du_client_selectionne(): void
+    public function test_le_formulaire_ne_propose_que_les_lignes_du_document_cherche(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
@@ -351,23 +349,22 @@ class AvoirResourceTest extends TestCase
         $clientA = Client::factory()->create();
         $clientB = Client::factory()->create();
         $factureDeA = $this->emettreFactureDepuisLePanneau($clientA);
+        $this->emettreFactureDepuisLePanneau($clientA);
         $this->emettreFactureDepuisLePanneau($clientB);
 
-        $livewire = Livewire::test(CreateAvoir::class)
-            ->fillForm(['client_id' => $clientA->id]);
+        $formulaire = $this->chercher(Livewire::test(CreateAvoir::class), $factureDeA->numero);
 
-        $lignes = $livewire->instance()->form->getRawState()['lignes'];
-        $this->assertCount(1, $lignes, 'Seule la ligne du client sélectionné doit être proposée.');
-        $this->assertSame($factureDeA->lignes->firstOrFail()->id, $lignes[0]['ligne_facture_id']);
+        $this->assertSame([[$factureDeA->lignes->firstOrFail()->id, 3]], $this->lignesProposees($formulaire), 'Seule la ligne du document cherché doit être proposée.');
     }
 
     /**
      * Un client passé professionnel après un ticket a des lignes
-     * créditables dans les deux séries : le formulaire fait choisir la
-     * série avant de proposer des lignes, et ne préremplit donc jamais le
-     * mélange que CreerAvoirAction refuse.
+     * créditables dans les deux séries : la facture cherchée après son
+     * ticket est refusée sous le champ, avec le message de
+     * CreerAvoirAction, et le formulaire ne propose donc jamais le mélange
+     * que l'action refuse.
      */
-    public function test_le_formulaire_fait_choisir_tickets_ou_factures_avant_de_proposer_les_lignes(): void
+    public function test_ajouter_une_facture_a_un_avoir_de_tickets_est_refuse(): void
     {
         $proprietaire = User::factory()->create();
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire));
@@ -376,37 +373,37 @@ class AvoirResourceTest extends TestCase
         $client = Client::factory()->create();
         $ticket = $this->emettreFactureDepuisLePanneau($client);
         $client->update(['type_client' => TypeClient::Professionnel, 'siret' => '10000000900025']);
-        $this->emettreFactureDepuisLePanneau($client);
+        $facture = $this->emettreFactureDepuisLePanneau($client);
 
-        $formulaire = Livewire::test(CreateAvoir::class)
-            ->fillForm(['client_id' => $client->id, 'motif' => 'Retour du ticket']);
+        $formulaire = $this->chercher($this->chercher(Livewire::test(CreateAvoir::class), $ticket->numero), $facture->numero);
 
-        $this->assertSame([], $formulaire->instance()->form->getRawState()['lignes']);
-        $formulaire->call('create')->assertHasFormErrors(['serie' => 'required']);
-
-        $formulaire->fillForm(['serie' => TypeDocument::TicketCaisse->value]);
-
-        $lignesProposees = array_values($formulaire->instance()->form->getRawState()['lignes']);
-        $this->assertSame([$ticket->lignes->firstOrFail()->id], array_column($lignesProposees, 'ligne_facture_id'));
-        $formulaire->call('create')->assertHasNoFormErrors();
+        $this->assertSame(['Un avoir ne mélange jamais des tickets de caisse et des factures : faites un avoir pour les tickets, et un autre pour les factures.'], $this->refusSousLeChamp($formulaire));
+        $formulaire->assertSet('data.recherche', $facture->numero);
+        $this->assertSame([[$ticket->lignes->firstOrFail()->id, 3]], $this->lignesProposees($formulaire));
+        $formulaire->fillForm(['motif' => 'Retour du ticket'])->call('create')->assertHasNoFormErrors();
         $this->assertSame([$ticket->id], Avoir::query()->firstOrFail()->facturesConcernees()->pluck('id')->all());
     }
 
-    public function test_le_client_d_un_autre_magasin_est_refuse(): void
+    /**
+     * Sans champ client, un autre magasin ne s'atteint plus que par une
+     * ligne forgée : introuvable dans le magasin actif, elle est refusée
+     * avant toute écriture.
+     */
+    public function test_la_ligne_d_un_autre_magasin_forgee_dans_le_formulaire_est_refusee(): void
     {
-        $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
-        $clientDUnAutreMagasin = Client::factory()->create();
+        $autreMagasin = $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
+        $ligneDUnAutreMagasin = $this->emettreUnTicketDansLeMagasin($autreMagasin)->lignes->sole();
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
         Livewire::test(CreateAvoir::class)
-            ->fillForm(['client_id' => $clientDUnAutreMagasin->id, 'motif' => 'Retour'])
+            ->fillForm(['lignes' => [['ligne_facture_id' => $ligneDUnAutreMagasin->id, 'quantite' => 1]], 'motif' => 'Retour'])
             ->call('create')
-            ->assertHasFormErrors(['client_id' => 'exists']);
+            ->assertNotified('Cette ligne de facture est introuvable.');
 
-        $this->assertSame(0, Avoir::query()->count());
+        $this->assertSame(0, Avoir::withoutGlobalScope(MagasinScope::class)->count());
     }
 
     /**
@@ -436,12 +433,12 @@ class AvoirResourceTest extends TestCase
      */
     public function test_le_formulaire_d_un_vendeur_ne_propose_que_les_lignes_de_ses_ventes(): void
     {
-        ['vendeurB' => $vendeurB, 'client' => $client, 'venteDeB' => $venteDeB] = $this->clientDesDeuxVendeurs();
+        ['vendeurB' => $vendeurB, 'venteDeB' => $venteDeB] = $this->clientDesDeuxVendeurs();
         $this->actingAs($vendeurB);
 
-        $formulaire = Livewire::test(CreateAvoir::class)->fillForm(['client_id' => $client->id]);
+        $formulaire = $this->chercher(Livewire::test(CreateAvoir::class), $venteDeB->numero);
 
-        $this->assertSame([$venteDeB->lignes->sole()->id], array_column(array_values($formulaire->instance()->form->getRawState()['lignes']), 'ligne_facture_id'));
+        $this->assertSame([[$venteDeB->lignes->sole()->id, 1]], $this->lignesProposees($formulaire));
     }
 
     /**
@@ -451,12 +448,11 @@ class AvoirResourceTest extends TestCase
      */
     public function test_la_ligne_d_un_collegue_forgee_dans_le_formulaire_est_refusee(): void
     {
-        ['vendeurB' => $vendeurB, 'client' => $client, 'venteDeA' => $venteDeA] = $this->clientDesDeuxVendeurs();
+        ['vendeurB' => $vendeurB, 'venteDeA' => $venteDeA] = $this->clientDesDeuxVendeurs();
         $this->actingAs($vendeurB);
 
         $formulaire = Livewire::test(CreateAvoir::class)
-            ->fillForm(['client_id' => $client->id, 'motif' => 'Retour'])
-            ->fillForm(['lignes' => [['ligne_facture_id' => $venteDeA->lignes->sole()->id, 'quantite' => 1]]])
+            ->fillForm(['lignes' => [['ligne_facture_id' => $venteDeA->lignes->sole()->id, 'quantite' => 1]], 'motif' => 'Retour'])
             ->call('create');
 
         $formulaire->assertForbidden();
@@ -541,17 +537,321 @@ class AvoirResourceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
-        $client = Client::factory()->create();
-        $this->emettreFactureDepuisLePanneau($client);
+        $venteAuClient = $this->emettreFactureDepuisLePanneau(Client::factory()->create());
+        $venteAuComptoir = $this->emettreFactureDepuisLePanneau(Client::query()->where('est_comptoir', true)->sole());
+
+        $avoirAuClient = $this->chercher(Livewire::test(CreateAvoir::class), $venteAuClient->numero);
+        $avoirAuComptoir = $this->chercher(Livewire::test(CreateAvoir::class), $venteAuComptoir->numero);
+
+        $avoirAuClient->assertSee('L\'avoir réduit d\'abord ce qui reste dû des documents qu\'il corrige. Le crédit restant est imputé sur les factures impayées du client, de la plus ancienne à la plus récente.');
+        $avoirAuComptoir->assertSee('L\'avoir réduit d\'abord ce qui reste dû des tickets qu\'il corrige ; son crédit restant vaut bon d\'avoir : son numéro le fait utiliser lors d\'un prochain achat au comptoir.');
+    }
+
+    /**
+     * Point 2 : le retour part du numéro du document, saisi ici en
+     * minuscules avec des espaces autour ; le client s'affiche tel que le
+     * ticket l'a figé à sa vente, même renommé depuis, et l'avoir lui est
+     * fait.
+     */
+    public function test_le_retour_se_cherche_par_le_numero_du_document_et_affiche_son_client(): void
+    {
+        $this->travelTo('2026-10-17 10:32:00');
+        $magasin = $this->ouvrirLeMagasinDuProprietaire();
+        $client = Client::factory()->create(['nom' => 'Mme Durand']);
+        $ticket = $this->emettreFactureDepuisLePanneau($client);
+        $client->update(['nom' => 'Mme Durand-Martin']);
+
+        $formulaire = $this->chercher(Livewire::test(CreateAvoir::class), '  tk-mabout-2026-000001 ');
+
+        $formulaire
+            ->assertHasNoFormErrors()
+            ->assertSee('Mme Durand — ticket TK-MABOUT-2026-000001 du 17/10/2026 à 10 h 32')
+            ->assertDontSee('Mme Durand-Martin')
+            ->assertSet('data.recherche', null)
+            ->assertFormFieldExists('recherche', fn (TextInput $champ): bool => $champ->getLabel() === 'Ajouter un autre ticket ou une autre facture');
+        $this->assertSame([[$ticket->lignes->sole()->id, 3]], $this->lignesProposees($formulaire));
+
+        $formulaire->fillForm(['motif' => 'Retour'])->call('create')->assertHasNoFormErrors();
+
+        $avoir = Avoir::query()->sole();
+        $this->assertSame([$magasin->id, $client->id, 'Mme Durand', '180.00'], [$avoir->magasin_id, $avoir->client_id, $avoir->client_nom, $avoir->total_ttc]);
+    }
+
+    /**
+     * Le client comptoir a acheté deux fois : seul le ticket cherché est
+     * proposé, jamais toutes les lignes de tous ses tickets.
+     */
+    public function test_avec_le_client_comptoir_seul_le_ticket_cherche_est_propose(): void
+    {
+        $this->travelTo('2026-10-17 09:15:00');
+        $magasin = $this->ouvrirLeMagasinDuProprietaire();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $this->emettreFactureDepuisLePanneau($comptoir);
+        $this->emettreUnTicketDansLeMagasin($magasin, $comptoir);
+        $this->travelTo('2026-10-17 10:32:00');
+        $ticketCherche = $this->emettreUnTicketDansLeMagasin($magasin, $comptoir);
+
+        $formulaire = $this->chercher(Livewire::test(CreateAvoir::class), $ticketCherche->numero);
+
+        $formulaire->assertSee('Client comptoir — ticket TK-MABOUT-2026-000002 du 17/10/2026 à 10 h 32');
+        $this->assertSame([[$ticketCherche->lignes->sole()->id, 1]], $this->lignesProposees($formulaire));
+    }
+
+    public function test_un_client_sans_achat_n_est_jamais_propose(): void
+    {
+        $this->ouvrirLeMagasinDuProprietaire();
+        Client::factory()->create(['nom' => 'Jeanne Sansachat']);
+        $this->emettreFactureDepuisLePanneau(Client::factory()->create(['nom' => 'Marc Acheteur']));
+
+        $formulaire = Livewire::test(CreateAvoir::class);
+
+        $formulaire->assertDontSee('Jeanne Sansachat')->assertDontSee('Marc Acheteur');
+        $this->chercher($formulaire, 'Jeanne Sansachat')->assertSet('data.lignes', []);
+        $this->assertSame([AvoirResource::DOCUMENT_INTROUVABLE], $this->refusSousLeChamp($formulaire));
+    }
+
+    public function test_l_ecran_n_a_plus_de_champ_client(): void
+    {
+        $this->ouvrirLeMagasinDuProprietaire();
 
         $formulaire = Livewire::test(CreateAvoir::class);
 
         $formulaire
-            ->fillForm(['client_id' => $client->id])
-            ->assertSee('L\'avoir réduit d\'abord ce qui reste dû des documents qu\'il corrige. Le crédit restant est imputé sur les factures impayées du client, de la plus ancienne à la plus récente.')
-            ->fillForm(['client_id' => $comptoir->id])
-            ->assertSee('L\'avoir réduit d\'abord ce qui reste dû des tickets qu\'il corrige ; son crédit restant vaut bon d\'avoir : son numéro le fait utiliser lors d\'un prochain achat au comptoir.');
+            ->assertFormFieldDoesNotExist('client_id')
+            ->assertFormFieldDoesNotExist('serie')
+            ->assertFormFieldExists('recherche', fn (TextInput $champ): bool => $champ->getLabel() === 'N° du ticket ou de la facture');
+    }
+
+    public function test_ajouter_un_document_d_un_autre_client_est_refuse(): void
+    {
+        $this->ouvrirLeMagasinDuProprietaire();
+        $ticketDeA = $this->emettreFactureDepuisLePanneau(Client::factory()->create());
+        $ticketDeB = $this->emettreFactureDepuisLePanneau(Client::factory()->create());
+
+        $formulaire = $this->chercher($this->chercher(Livewire::test(CreateAvoir::class), $ticketDeA->numero), $ticketDeB->numero);
+
+        $this->assertSame(["Le ticket {$ticketDeB->numero} est celui d'un autre client : un avoir ne corrige que les documents d'un même client."], $this->refusSousLeChamp($formulaire));
+        $this->assertSame([[$ticketDeA->lignes->sole()->id, 3]], $this->lignesProposees($formulaire));
+    }
+
+    public function test_un_document_deja_dans_l_avoir_n_y_entre_pas_deux_fois(): void
+    {
+        $this->ouvrirLeMagasinDuProprietaire();
+        $ticket = $this->emettreFactureDepuisLePanneau(Client::factory()->create());
+
+        $formulaire = $this->chercher($this->chercher(Livewire::test(CreateAvoir::class), $ticket->numero), $ticket->numero);
+
+        $this->assertSame(["Le ticket {$ticket->numero} est déjà dans l'avoir."], $this->refusSousLeChamp($formulaire));
+        $this->assertSame([[$ticket->lignes->sole()->id, 3]], $this->lignesProposees($formulaire));
+    }
+
+    /**
+     * B16 : le numéro de la vente d'un collègue est introuvable pour un
+     * vendeur qui ne voit que ses ventes, comme un numéro inconnu ; le sien
+     * se retrouve, et le refus précédent disparaît.
+     */
+    public function test_un_vendeur_ne_retrouve_que_ses_documents(): void
+    {
+        ['vendeurB' => $vendeurB, 'venteDeA' => $venteDeA, 'venteDeB' => $venteDeB] = $this->clientDesDeuxVendeurs();
+        $this->actingAs($vendeurB);
+
+        $formulaire = $this->chercher(Livewire::test(CreateAvoir::class), $venteDeA->numero);
+
+        $this->assertSame([AvoirResource::DOCUMENT_INTROUVABLE], $this->refusSousLeChamp($formulaire));
+        $formulaire->assertSet('data.lignes', []);
+        $this->chercher($formulaire, $venteDeB->numero)->assertHasNoFormErrors();
+        $this->assertSame([[$venteDeB->lignes->sole()->id, 1]], $this->lignesProposees($formulaire));
+    }
+
+    /**
+     * Le propriétaire a aussi accès à l'autre magasin de sa société : le
+     * numéro d'un ticket de celui-ci reste introuvable dans le magasin
+     * ouvert, comme celui d'une autre société, même identique au numéro
+     * que porterait le premier ticket du magasin ouvert.
+     */
+    public function test_un_numero_d_un_autre_magasin_est_introuvable(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON1']);
+        $ticketDeVilleurbanne = $this->emettreUnTicketDansLeMagasin($this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne', 'code' => 'VILL1']));
+        $ticketDUneAutreSociete = $this->emettreUnTicketDansLeMagasin($this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON1']));
+        $this->dansLeMagasin($lyon, $this->proprietaireDe($lyon));
+        $formulaire = Livewire::test(CreateAvoir::class);
+
+        $refusPourVilleurbanne = $this->refusSousLeChamp($this->chercher($formulaire, $ticketDeVilleurbanne->numero));
+        $refusPourLAutreSociete = $this->refusSousLeChamp($this->chercher($formulaire, $ticketDUneAutreSociete->numero));
+
+        $this->assertSame(['TK-VILL1-2026-000001', 'TK-LYON1-2026-000001'], [$ticketDeVilleurbanne->numero, $ticketDUneAutreSociete->numero]);
+        $this->assertSame([[AvoirResource::DOCUMENT_INTROUVABLE], [AvoirResource::DOCUMENT_INTROUVABLE]], [$refusPourVilleurbanne, $refusPourLAutreSociete]);
+        $formulaire->assertSet('data.lignes', []);
+    }
+
+    /**
+     * La facture d'un professionnel entièrement reprise par un avoir n'a
+     * plus rien à rendre : elle n'est plus proposée, et le champ le dit.
+     */
+    public function test_un_document_entierement_credite_n_est_plus_propose(): void
+    {
+        $magasin = $this->ouvrirLeMagasinDuProprietaire();
+        $this->completerIdentiteLegale($magasin);
+        $facture = $this->emettreFactureDepuisLePanneau(Client::factory()->professionnel()->create());
+        Livewire::test(ListFactures::class)->callTableAction('avoir', $facture, data: ['motif' => 'Retour complet']);
+
+        $formulaire = $this->chercher(Livewire::test(CreateAvoir::class), $facture->numero);
+
+        $this->assertSame(["La facture {$facture->numero} est déjà entièrement créditée : elle n'a plus rien à rendre."], $this->refusSousLeChamp($formulaire));
+        $formulaire->assertSet('data.lignes', []);
+    }
+
+    /**
+     * Le client de l'avoir n'est jamais lu dans la requête : un client
+     * glissé dans les données est ignoré, et une ligne d'un autre client
+     * ajoutée aux lignes du document cherché fait refuser l'avoir. Seul
+     * l'avoir des lignes du premier document s'émet, à son client.
+     */
+    public function test_un_client_forge_dans_la_requete_est_refuse(): void
+    {
+        $this->ouvrirLeMagasinDuProprietaire();
+        $clientA = Client::factory()->create();
+        $clientB = Client::factory()->create();
+        $ticketDeA = $this->emettreFactureDepuisLePanneau($clientA);
+        $ticketDeB = $this->emettreFactureDepuisLePanneau($clientB);
+        $formulaire = $this->chercher(Livewire::test(CreateAvoir::class), $ticketDeA->numero)->fillForm(['motif' => 'Retour']);
+
+        $formulaire
+            ->set('data.client_id', $clientB->id)
+            ->set('data.lignes', [
+                ['ligne_facture_id' => $ticketDeA->lignes->sole()->id, 'quantite' => 1],
+                ['ligne_facture_id' => $ticketDeB->lignes->sole()->id, 'quantite' => 1],
+            ])
+            ->call('create')
+            ->assertNotified("Cette ligne appartient à une facture d'un autre client.");
+        $this->assertSame(0, Avoir::query()->count());
+
+        $formulaire
+            ->set('data.lignes', [['ligne_facture_id' => $ticketDeA->lignes->sole()->id, 'quantite' => 1]])
+            ->call('create')
+            ->assertHasNoFormErrors();
+        $this->assertSame($clientA->id, Avoir::query()->sole()->client_id);
+    }
+
+    /**
+     * Le nom figé du client, rendu tel quel dans la page, n'y injecte
+     * aucune balise.
+     */
+    public function test_le_nom_du_client_s_affiche_echappe(): void
+    {
+        $this->ouvrirLeMagasinDuProprietaire();
+        $ticket = $this->emettreFactureDepuisLePanneau(Client::factory()->create(['nom' => "<script>alert('x')</script> Dupont"]));
+
+        $formulaire = $this->chercher(Livewire::test(CreateAvoir::class), $ticket->numero);
+
+        $formulaire
+            ->assertSeeHtml('&lt;script&gt;')
+            ->assertDontSeeHtml("<script>alert('x')</script>");
+    }
+
+    /**
+     * « Avoir » sur la fiche d'un ticket ouvre « Nouvel avoir » avec son
+     * numéro, que la page cherche aussitôt : ses lignes sont proposées.
+     */
+    public function test_l_action_avoir_de_la_fiche_ouvre_la_recherche_sur_son_document(): void
+    {
+        $this->ouvrirLeMagasinDuProprietaire();
+        $ticket = $this->emettreFactureDepuisLePanneau(Client::factory()->create());
+        Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])
+            ->assertActionHasUrl('avoir', AvoirResource::getUrl('create', ['document' => $ticket->numero]));
+
+        $formulaire = Livewire::withQueryParams(['document' => $ticket->numero])->test(CreateAvoir::class);
+
+        $formulaire->assertHasNoFormErrors();
+        $this->assertSame([[$ticket->lignes->sole()->id, 3]], $this->lignesProposees($formulaire));
+    }
+
+    public function test_l_action_avoir_de_la_fiche_disparait_quand_rien_ne_reste_a_crediter(): void
+    {
+        $this->ouvrirLeMagasinDuProprietaire();
+        $ticket = $this->emettreFactureDepuisLePanneau(Client::factory()->create());
+        Livewire::test(ListFactures::class)->callTableAction('avoir', $ticket, data: ['motif' => 'Retour complet']);
+
+        $fiche = Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()]);
+
+        $fiche->assertActionHidden('avoir');
+    }
+
+    /**
+     * Un numéro passé dans l'adresse de la page suit la même recherche :
+     * la vente d'un collègue reste introuvable pour un vendeur qui ne voit
+     * que les siennes, et aucune ligne n'est proposée.
+     */
+    public function test_un_numero_passe_dans_l_adresse_que_la_personne_ne_peut_pas_corriger_est_refuse_sous_le_champ(): void
+    {
+        ['vendeurB' => $vendeurB, 'venteDeA' => $venteDeA] = $this->clientDesDeuxVendeurs();
+        $this->actingAs($vendeurB);
+
+        $formulaire = Livewire::withQueryParams(['document' => $venteDeA->numero])->test(CreateAvoir::class);
+
+        $this->assertSame([AvoirResource::DOCUMENT_INTROUVABLE], $this->refusSousLeChamp($formulaire));
+        $formulaire
+            ->assertSet('data.recherche', $venteDeA->numero)
+            ->assertSet('data.lignes', []);
+    }
+
+    /**
+     * Le propriétaire connecté dans le magasin de sa société, qui devient
+     * le magasin du panneau.
+     */
+    private function ouvrirLeMagasinDuProprietaire(): Magasin
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+
+        return $magasin;
+    }
+
+    /**
+     * « Chercher » le numéro saisi dans « N° du ticket ou de la facture ».
+     */
+    private function chercher(Testable $formulaire, string $numero): Testable
+    {
+        return $formulaire
+            ->fillForm(['recherche' => $numero])
+            ->callFormComponentAction('recherche', 'chercher');
+    }
+
+    /**
+     * Le refus affiché sous « N° du ticket ou de la facture », lu tel quel
+     * (un message qui contient « : » ne se compare pas par
+     * assertHasFormErrors(), qui le prendrait pour une règle).
+     *
+     * @return list<string>
+     */
+    private function refusSousLeChamp(Testable $formulaire): array
+    {
+        return $formulaire->errors()->get('data.recherche');
+    }
+
+    /**
+     * Les lignes que propose le formulaire : chacune avec sa quantité.
+     *
+     * @return list<array{0: int, 1: int}>
+     */
+    private function lignesProposees(Testable $formulaire): array
+    {
+        return array_map(fn (array $ligne): array => [$ligne['ligne_facture_id'], $ligne['quantite']], array_values($formulaire->get('data.lignes')));
+    }
+
+    /**
+     * Un ticket d'un article à 12,00 € TTC émis dans ce magasin par son
+     * propriétaire, au client donné ou à un nouveau client particulier.
+     */
+    private function emettreUnTicketDansLeMagasin(Magasin $magasin, ?Client $client = null): Facture
+    {
+        return app(TenantContext::class)->runAs($magasin, function () use ($magasin, $client): Facture {
+            $proprietaire = $this->proprietaireDe($magasin);
+            $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+            return app(EmettreFactureAction::class)->handle($proprietaire, app(CreerFactureAction::class)->handle($proprietaire, $client ?? Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
+        });
     }
 }

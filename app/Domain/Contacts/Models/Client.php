@@ -220,21 +220,6 @@ class Client extends Model
     }
 
     /**
-     * Les clients à qui un avoir se fait : archivé, un client n'est plus
-     * proposé pour une vente, mais ce qu'il a acheté se retourne toujours,
-     * sur plusieurs documents à la fois s'il le faut (voir AvoirResource).
-     *
-     * @param  Builder<static>  $query
-     * @return Builder<static>
-     */
-    public function scopeQuiPeuventEtreCredites(Builder $query): Builder
-    {
-        return $query->withTrashed()->where(fn (Builder $clients): Builder => $clients
-            ->whereNull($this->getQualifiedDeletedAtColumn())
-            ->orWhereHas('factures', fn (Builder $factures): Builder => $factures->emises()->whereHas('lignes', fn (Builder $lignes): Builder => $lignes->creditables())));
-    }
-
-    /**
      * Crédit encore disponible pour ce client, tous avoirs confondus,
      * particulier ou professionnel : un avoir n'est jamais remboursé (B5).
      * À son émission, il règle d'abord les factures qu'il corrige, puis les

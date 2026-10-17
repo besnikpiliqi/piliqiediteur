@@ -6,6 +6,7 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
@@ -89,9 +90,7 @@ class CreerAvoirAction
             $magasin = app(TenantContext::class)->magasin();
             $compte = $this->lecteur->exiger($auteur, 'create', $magasin, Avoir::class);
             $lignesDeLAvoir = [];
-            $typeClient = null;
-            $franchiseEnBase = null;
-            $natureOperation = null;
+            $premiere = null;
 
             foreach (array_values($lignesSelectionnees) as $index => $selection) {
                 $ligneFacture = LigneFacture::query()
@@ -116,22 +115,11 @@ class CreerAvoirAction
                     throw new LogicException("Impossible de créditer une ligne d'une facture au statut [{$facture->statut->value}].");
                 }
 
-                $typeClient ??= $facture->type_client;
+                $premiere ??= $facture;
+                $incompatibilite = self::incompatibilite($premiere, $facture);
 
-                if ($facture->type_client !== $typeClient) {
-                    throw new InvalidArgumentException('Un avoir ne mélange jamais des tickets de caisse et des factures : faites un avoir pour les tickets, et un autre pour les factures.');
-                }
-
-                $franchiseEnBase ??= $facture->franchise_en_base;
-
-                if ($facture->franchise_en_base !== $franchiseEnBase) {
-                    throw new InvalidArgumentException('Un avoir ne mélange pas des factures émises en franchise de TVA et d\'autres : faites deux avoirs.');
-                }
-
-                $natureOperation ??= $facture->nature_operation;
-
-                if ($facture->nature_operation !== $natureOperation) {
-                    throw new InvalidArgumentException('Un avoir ne mélange pas des factures de natures d\'opération différentes : faites un avoir par nature.');
+                if ($incompatibilite !== null) {
+                    throw new InvalidArgumentException($incompatibilite);
                 }
 
                 $restante = $ligneFacture->quantiteCreditableRestante();
@@ -162,9 +150,9 @@ class CreerAvoirAction
             $avoir->forceFill([
                 'client_id' => $client->getKey(),
                 'cree_par' => $compte->getKey(),
-                'type_client' => $typeClient,
-                'franchise_en_base' => $franchiseEnBase,
-                'nature_operation' => $natureOperation,
+                'type_client' => $premiere->type_client,
+                'franchise_en_base' => $premiere->franchise_en_base,
+                'nature_operation' => $premiere->nature_operation,
                 ...$this->calculateurLigne->totaliser($lignesDeLAvoir),
             ])->save();
 
@@ -174,5 +162,24 @@ class CreerAvoirAction
 
             return $avoir->fresh('lignes');
         });
+    }
+
+    /**
+     * Pourquoi $facture n'entre pas dans le même avoir que $premiere, la
+     * première facture qu'il corrige (voir le docblock de la classe) :
+     * jamais de tickets de caisse et de factures, de documents émis en
+     * franchise de TVA et d'autres, ni de natures d'opération différentes.
+     * Null si rien ne l'empêche. L'écran « Nouvel avoir » refuse ainsi
+     * d'ajouter un document, avec le même message que l'action (voir
+     * AvoirResource::lignesAvecLeDocument()).
+     */
+    public static function incompatibilite(Facture $premiere, Facture $facture): ?string
+    {
+        return match (true) {
+            $facture->type_client !== $premiere->type_client => 'Un avoir ne mélange jamais des tickets de caisse et des factures : faites un avoir pour les tickets, et un autre pour les factures.',
+            $facture->franchise_en_base !== $premiere->franchise_en_base => 'Un avoir ne mélange pas des factures émises en franchise de TVA et d\'autres : faites deux avoirs.',
+            $facture->nature_operation !== $premiere->nature_operation => 'Un avoir ne mélange pas des factures de natures d\'opération différentes : faites un avoir par nature.',
+            default => null,
+        };
     }
 }

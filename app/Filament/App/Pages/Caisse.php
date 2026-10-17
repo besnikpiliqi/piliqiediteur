@@ -19,6 +19,7 @@ use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
+use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\AvertitDUneVenteSansStock;
@@ -422,9 +423,20 @@ class Caisse extends Page implements HasForms
         return $bon !== null && $bon->montantNonAlloue() > 0 ? $bon : null;
     }
 
+    /**
+     * « Retour d'un ticket » ouvre la recherche par numéro de « Nouvel
+     * avoir » (voir AvoirResource), à qui peut créer un avoir ; la vente en
+     * cours reste dans son panier, et la caisse la reprend à son retour.
+     */
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('retourDUnTicket')
+                ->label('Retour d\'un ticket')
+                ->icon('heroicon-o-receipt-refund')
+                ->color('gray')
+                ->visible(fn (): bool => auth()->user()->can(PermissionRegistry::AVOIR_CREER))
+                ->url(fn (): string => AvoirResource::getUrl('create')),
             Actions\Action::make('abandonnerLaVente')
                 ->label('Abandonner la vente')
                 ->icon('heroicon-o-x-circle')

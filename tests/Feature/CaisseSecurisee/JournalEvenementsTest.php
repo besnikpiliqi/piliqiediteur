@@ -507,8 +507,8 @@ class JournalEvenementsTest extends TestCase
 
     /**
      * Supprimer un brouillon de vente, c'est abandonner la vente avant
-     * validation : le journal en garde le nombre de lignes et le total TTC
-     * en centimes.
+     * validation : le journal en garde le nombre de lignes, le nombre
+     * d'articles et le total TTC en centimes.
      */
     public function test_supprimer_un_brouillon_inscrit_la_vente_abandonnee(): void
     {
@@ -520,7 +520,7 @@ class JournalEvenementsTest extends TestCase
 
         $this->assertModelMissing($brouillon);
         $this->assertSame(['260', '320'], $this->codes($magasin));
-        $this->assertSame(['origine' => 'brouillon', 'facture_id' => $brouillon->id, 'nombre_lignes' => 1, 'total_ttc' => 2500], $this->details($magasin, CodeEvenement::TransactionAbandonnee));
+        $this->assertSame(['origine' => 'brouillon', 'facture_id' => $brouillon->id, 'nombre_lignes' => 1, 'nombre_articles' => 2, 'total_ttc' => 2500], $this->details($magasin, CodeEvenement::TransactionAbandonnee));
     }
 
     public function test_sans_cle_de_signature_un_brouillon_ne_se_supprime_pas(): void
@@ -584,10 +584,33 @@ class JournalEvenementsTest extends TestCase
     }
 
     /**
-     * Corriger le prix saisi d'un service, ou ajouter un article, ne
-     * retire rien : le journal n'inscrit aucune ligne retirée.
+     * Monter le prix saisi d'un service, ou ajouter un article, ne retire
+     * rien : le journal n'inscrit aucune ligne retirée.
      */
-    public function test_corriger_le_prix_d_un_service_d_un_brouillon_ne_retire_rien(): void
+    public function test_monter_le_prix_d_un_service_d_un_brouillon_ou_en_ajouter_ne_retire_rien(): void
+    {
+        $magasin = $this->magasinDe(User::factory()->create());
+        $client = Client::factory()->create();
+        $reparation = Service::factory()->create(['nom' => 'Remplacement écran']);
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
+            ['service_id' => $reparation->id, 'quantite' => 1, 'prix_unitaire_ttc' => 50, 'taux_tva' => 20],
+        ]);
+
+        $modifie = app(ModifierFactureAction::class)->handle(self::auteur(), $brouillon, $client, [
+            ['service_id' => $reparation->id, 'quantite' => 2, 'prix_unitaire_ttc' => 60, 'taux_tva' => 20],
+        ]);
+
+        $this->assertSame('120.00', $modifie->total_ttc);
+        $this->assertSame([], $this->codes($magasin));
+    }
+
+    /**
+     * Baisser le prix d'une ligne avant validation fait disparaître une
+     * partie de la vente (Q8) : le journal l'inscrit en ligne retirée, avec
+     * la quantité concernée, le prix d'avant et le prix d'après, en
+     * centimes ; l'article ajouté en plus ne retire rien.
+     */
+    public function test_baisser_le_prix_d_une_ligne_avant_validation_s_inscrit_au_journal(): void
     {
         $magasin = $this->magasinDe(User::factory()->create());
         $client = Client::factory()->create();
@@ -601,7 +624,11 @@ class JournalEvenementsTest extends TestCase
         ]);
 
         $this->assertSame('80.00', $modifie->total_ttc);
-        $this->assertSame([], $this->codes($magasin));
+        $this->assertSame(['260', '323'], $this->codes($magasin));
+        $this->assertSame(
+            ['origine' => 'brouillon', 'facture_id' => $brouillon->id, 'produit_id' => null, 'service_id' => $reparation->id, 'description' => 'Remplacement écran', 'quantite' => 1, 'prix_unitaire_ttc' => 5000, 'prix_unitaire_ttc_apres' => 4000],
+            $this->details($magasin, CodeEvenement::LigneRetiree),
+        );
     }
 
     public function test_sans_cle_de_signature_un_brouillon_ne_se_modifie_pas(): void

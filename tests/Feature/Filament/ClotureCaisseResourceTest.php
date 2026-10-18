@@ -22,8 +22,10 @@ use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ViewClotureCaisse;
+use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Models\User;
@@ -446,5 +448,97 @@ class ClotureCaisseResourceTest extends TestCase
             ->assertSee('Biens et services')
             ->assertSee('66,67')
             ->assertSee('76,67');
+    }
+
+    /**
+     * Un ticket de ce montant à 20 % au client, réglé à la caisse dans ce
+     * mode par l'utilisateur connecté.
+     */
+    private function vendreAuComptantUnTicketDe(float $prixTtc, ModePaiement $mode, ?Client $client = null): Facture
+    {
+        $produit = Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        return self::vendreAuComptant(self::auteur(), $client ?? Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], $mode);
+    }
+
+    /**
+     * Points 15 et 24 : la fiche montre les ventes, la somme des avoirs, le
+     * net, les encaissements par mode avec leur total, le crédit d'avoir
+     * utilisé à part, et les grands totaux. Un ticket de 60,00 € en
+     * espèces, un de 30,00 € par carte, rendu.
+     */
+    public function test_la_fiche_affiche_les_encaissements_par_mode_et_la_somme_des_avoirs(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $this->vendreAuComptantUnTicketDe(60, ModePaiement::Especes);
+        $client = Client::factory()->create();
+        $this->emettreAvoir($client, $this->vendreAuComptantUnTicketDe(30, ModePaiement::CarteBancaire, $client));
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+
+        $fiche = Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()]);
+
+        $fiche->assertSeeInOrder(['Ventes aux particuliers (tickets)', '2', '75,00 €', '15,00 €', '90,00 €'])
+            ->assertSeeInOrder(['Avoirs sur des tickets', '1', '-25,00 €', '-5,00 €', '-30,00 €'])
+            ->assertSeeInOrder(['Net des ventes aux particuliers (base de l\'e-reporting)', '50,00 €', '10,00 €', '60,00 €'])
+            ->assertSeeInOrder(['Espèces', '1', '0', '60,00 €', 'Carte bancaire', '1', '0', '30,00 €', 'Chèque', '0', '0', '0,00 €'])
+            ->assertSeeInOrder(['Total encaissé', '90,00 €'])
+            ->assertSeeInOrder(['Crédit d\'avoir utilisé (n\'entre pas dans les encaissements)', '0,00 €'])
+            ->assertSee('Ventes et encaissements diffèrent quand un client garde un crédit d\'avoir ou paie plus tard.')
+            ->assertSeeInOrder(['Grand total perpétuel réel', '60,00 €', 'Grand total perpétuel absolu', '120,00 €']);
+        Livewire::test(ListClotureCaisses::class)
+            ->assertTableColumnStateSet('encaisse', '90,00 €', $cloture);
+    }
+
+    /**
+     * Point 25 : chaque numéro de ticket et d'avoir de la fiche ouvre la
+     * fiche de son document.
+     */
+    public function test_les_numeros_des_tickets_et_des_avoirs_ouvrent_leur_fiche(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $client = Client::factory()->create();
+        $ticket = $this->vendreAuComptantUnTicketDe(30, ModePaiement::Especes, $client);
+        $avoir = $this->emettreAvoir($client, $ticket);
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+
+        Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])
+            ->assertSeeHtml('href="'.FactureResource::getUrl('view', ['record' => $ticket]).'"')
+            ->assertSeeHtml('href="'.AvoirResource::getUrl('view', ['record' => $avoir]).'"')
+            ->assertSee($ticket->numero)
+            ->assertSee($avoir->numero);
+    }
+
+    /**
+     * Règle « Vendeurs » : un vendeur qui clôture la journée mais ne voit
+     * que ses ventes voit dans sa clôture les totaux du magasin et le
+     * détail de ses seuls tickets ; ceux d'un autre vendeur, et l'avoir
+     * qu'il ne peut pas ouvrir, ne se comptent qu'en nombre et en total,
+     * sans numéro ni client.
+     */
+    public function test_un_vendeur_qui_ne_voit_que_ses_ventes_ne_voit_dans_la_cloture_que_le_detail_de_ses_documents(): void
+    {
+        $magasin = $this->ouvrirLeMagasin();
+        $proprietaire = $this->proprietaireDe($magasin);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
+        $collegue = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+        $sonTicket = $this->vendreAuComptantUnTicketDe(12, ModePaiement::Especes);
+        $this->actingAs($collegue);
+        $clientDuCollegue = Client::factory()->create(['nom' => 'Paul Martin']);
+        $ticketDuCollegue = $this->vendreAuComptantUnTicketDe(30, ModePaiement::CarteBancaire, $clientDuCollegue);
+        $this->actingAs($proprietaire);
+        $avoir = $this->emettreAvoir($clientDuCollegue, $ticketDuCollegue);
+        $this->actingAs($vendeur);
+        $cloture = app(CloturerCaisseAction::class)->handle($vendeur, $magasin, now());
+
+        $fiche = Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()]);
+
+        $fiche->assertSeeHtml('href="'.FactureResource::getUrl('view', ['record' => $sonTicket]).'"')
+            ->assertSeeInOrder(['Autres tickets de l\'équipe', '1 ticket, 30,00 € TTC'])
+            ->assertSeeInOrder(['Autres avoirs de l\'équipe', '1 avoir, -30,00 € TTC'])
+            ->assertSeeInOrder(['Net des ventes aux particuliers (base de l\'e-reporting)', '10,00 €', '2,00 €', '12,00 €'])
+            ->assertDontSee($ticketDuCollegue->numero)
+            ->assertDontSee($avoir->numero)
+            ->assertDontSee('Paul Martin');
     }
 }

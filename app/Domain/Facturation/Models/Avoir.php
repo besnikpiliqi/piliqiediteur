@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
@@ -18,6 +19,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\CopieClient;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
+use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -180,6 +182,22 @@ class Avoir extends Model implements DocumentEnvoyable
             ->emisLe($jour)
             ->where('statut', StatutAvoir::Emise)
             ->whereNull('cloture_caisse_id');
+    }
+
+    /**
+     * Les avoirs que cet utilisateur voit, exactement comme
+     * AvoirPolicy::view() : aucun sans l'autorisation de voir les avoirs ;
+     * tous avec celle de voir les factures de toute l'équipe ; sinon ceux
+     * qu'il a créés. Toute liste d'avoirs passe par ici (voir AvoirResource
+     * et la fiche d'une clôture, ClotureCaisseResource).
+     */
+    public function scopeVisiblesPar(Builder $query, User $user): Builder
+    {
+        return match (true) {
+            ! $user->can(PermissionRegistry::AVOIR_VIEW) => $query->whereRaw('1 = 0'),
+            $user->can(PermissionRegistry::FACTURE_VIEW_TOUTES) => $query,
+            default => $query->where($query->qualifyColumn('cree_par'), $user->getKey()),
+        };
     }
 
     /**

@@ -17,6 +17,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\JourneesDeCaisse;
 use App\Domain\Facturation\Services\PanierDeCaisse;
+use App\Domain\Facturation\Services\RecapitulatifDeCloture;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
@@ -135,7 +136,7 @@ class CloturerLesJourneesActionTest extends TestCase
         $this->travelTo('2026-10-05 10:00:00');
         $this->vendreUnTicket();
         $this->travelTo('2026-10-08 19:00:00');
-        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), app(LecteurDesDroits::class), app(OperateurCourant::class)) extends CloturerCaisseAction
+        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RecapitulatifDeCloture::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), app(LecteurDesDroits::class), app(OperateurCourant::class)) extends CloturerCaisseAction
         {
             public function parLeSysteme(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
             {
@@ -169,7 +170,7 @@ class CloturerLesJourneesActionTest extends TestCase
         $this->vendreUnTicket();
         $this->travelTo('2026-10-08 19:00:00');
         $jeton = (string) Str::uuid();
-        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), app(LecteurDesDroits::class), app(OperateurCourant::class)) extends CloturerCaisseAction
+        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RecapitulatifDeCloture::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), app(LecteurDesDroits::class), app(OperateurCourant::class)) extends CloturerCaisseAction
         {
             public function handle(User $auteur, Magasin $magasin, CarbonInterface|string $date): ClotureCaisse
             {

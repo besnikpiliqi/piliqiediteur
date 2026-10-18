@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Facturation\Services\RecapitulatifDeCloture;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -16,6 +17,7 @@ class ClotureCaisseFactory extends Factory
     {
         return [
             'date_cloture' => now()->toDateString(),
+            'recapitulatif' => RecapitulatifDeCloture::vide(),
         ];
     }
 }

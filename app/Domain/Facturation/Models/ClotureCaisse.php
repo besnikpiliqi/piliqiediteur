@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Models;
 
+use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\InstantFiscal;
@@ -24,19 +25,27 @@ use Illuminate\Support\Collection;
 use LogicException;
 
 /**
- * Agrège les tickets de caisse (ventes à des particuliers) d'une journée,
- * moins les avoirs sur des tickets émis ce jour-là, pour l'e-reporting
- * (voir CloturerCaisseAction) -- pas les factures à des professionnels, ni
- * leurs avoirs (voir Facture::scopeTickets()). Une clôture par
+ * La clôture d'une journée de caisse, son ticket Z (voir
+ * CloturerCaisseAction). Ses totaux (total_ht, total_tva, total_ttc) sont
+ * le net des tickets de caisse (ventes à des particuliers) de la journée
+ * moins les avoirs sur des tickets émis ce jour-là, base de l'e-reporting
+ * -- jamais les factures à des professionnels ni leurs avoirs (voir
+ * Facture::scopeTickets()). Son récapitulatif garde en plus, en centimes,
+ * les ventes et les avoirs séparés, les factures aux professionnels pour
+ * information, les encaissements par mode, le crédit d'avoir imputé et les
+ * grands totaux perpétuels (voir RecapitulatifDeCloture). Une clôture par
  * jour du calendrier à partir de la première vente, dans l'ordre (voir
  * CloturerLesJourneesAction).
  *
- * PAS de SoftDeletes ici, volontairement : document fiscal au même titre
- * qu'une facture, la loi impose sa conservation.
+ * Écrite une seule fois : numérotée en base, elle ne se modifie plus (sauf
+ * la soumission d'e-reporting qui la reprend) et ne se supprime jamais
+ * (voir ProtegeLesDonneesValidees). PAS de SoftDeletes ici, volontairement,
+ * pour un document fiscal au même titre qu'une facture, dont la loi impose
+ * la conservation.
  */
 class ClotureCaisse extends Model
 {
-    use FigeLeNomDeSesAuteurs;
+    use FigeLeNomDeSesAuteurs, ProtegeLesDonneesValidees;
 
     /**
      * @return array<string, string>
@@ -53,8 +62,8 @@ class ClotureCaisse extends Model
 
     protected $table = 'clotures_caisse';
 
-    // numero, totaux, cloturee_a : jamais en mass assignment, uniquement
-    // via CloturerCaisseAction.
+    // numero, totaux, récapitulatif, cloturee_a : jamais en mass
+    // assignment, uniquement via CloturerCaisseAction.
     protected $fillable = [
         'date_cloture',
     ];
@@ -64,8 +73,45 @@ class ClotureCaisse extends Model
         'total_ht' => 'decimal:2',
         'total_tva' => 'decimal:2',
         'total_ttc' => 'decimal:2',
+        'recapitulatif' => 'array',
+        'derniere_sequence_vente' => 'integer',
+        'derniere_sequence_encaissement' => 'integer',
         'cloturee_a' => 'datetime',
     ];
+
+    /**
+     * Numérotée en base : la clôture est faite.
+     */
+    public function estValidee(): bool
+    {
+        return $this->exists && $this->documentNumeroteEnBase(self::class, [$this->getKey()]);
+    }
+
+    protected function regleDInalterabilite(): string
+    {
+        return 'Une clôture de caisse ne se modifie plus : son récapitulatif et ses totaux s\'écrivent une seule fois, à la clôture.';
+    }
+
+    /**
+     * La soumission d'e-reporting qui reprend la clôture la note sur elle
+     * (voir GenererSoumissionEReportingAction).
+     *
+     * @return list<string>
+     */
+    protected function colonnesModifiablesUneFoisValidee(): array
+    {
+        return ['soumission_ereporting_id', 'updated_at'];
+    }
+
+    /**
+     * Le montant encaissé de la journée, tous modes confondus,
+     * contre-passations déduites, en centimes (voir
+     * RecapitulatifDeCloture).
+     */
+    public function totalEncaisseEnCentimes(): int
+    {
+        return (int) array_sum(array_column($this->recapitulatif['encaissements'], 'montant'));
+    }
 
     /**
      * La clôture de tel jour (AAAA-MM-JJ). whereDate() plutôt qu'une

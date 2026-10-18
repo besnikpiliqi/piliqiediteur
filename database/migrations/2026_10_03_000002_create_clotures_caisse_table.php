@@ -23,13 +23,30 @@ return new class extends Migration
             // retard, ou clôture automatique planifiée à minuit).
             $table->date('date_cloture');
             $table->unsignedInteger('nombre_ventes')->default(0);
-            // Avoirs sur des tickets émis ce jour-là : les totaux
-            // ci-dessous sont les ventes MOINS ces avoirs (voir
+            // Avoirs sur des tickets émis ce jour-là : les trois totaux
+            // qui suivent, net des ventes aux particuliers et base de
+            // l'e-reporting, sont les ventes MOINS ces avoirs (voir
             // CloturerCaisseAction).
             $table->unsignedInteger('nombre_avoirs')->default(0);
             $table->decimal('total_ht', 12, 2)->default(0);
             $table->decimal('total_tva', 12, 2)->default(0);
             $table->decimal('total_ttc', 12, 2)->default(0);
+            // Le récapitulatif de la journée, écrit une seule fois à la
+            // clôture, en centimes entiers (voir RecapitulatifDeCloture) :
+            // ventes et avoirs aux particuliers, factures et avoirs aux
+            // professionnels, chacun avec son nombre et ses montants par
+            // taux, encaissements par mode, crédit d'avoir imputé et
+            // grands totaux perpétuels. Un texte JSON, jamais une colonne
+            // jsonb, qui réordonnerait ses clés : l'étape des clôtures
+            // signées le signera tel quel.
+            $table->json('recapitulatif');
+            // Les dernières séquences des chaînes des ventes et des
+            // encaissements du registre fiscal que la clôture a comptées
+            // (null tant qu'aucune n'en compte) : la suivante part de là,
+            // et chaque document ou paiement compte dans une seule clôture
+            // (voir RecapitulatifDeCloture).
+            $table->unsignedBigInteger('derniere_sequence_vente')->nullable();
+            $table->unsignedBigInteger('derniere_sequence_encaissement')->nullable();
             $table->timestamp('cloturee_a')->nullable();
             // Soumission d'e-reporting périodique qui a déjà inclus cette
             // clôture, pour ne jamais l'agréger deux fois (voir

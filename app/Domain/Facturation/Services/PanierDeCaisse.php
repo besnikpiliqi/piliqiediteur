@@ -29,6 +29,8 @@ use InvalidArgumentException;
  *    320 ;
  *  - un article est retiré avant l'encaissement, ligne retirée, produit
  *    ou service remplacé, quantité baissée (voir LignesRetirees) : JET 323.
+ * Un article dont le prix baisse avant l'encaissement s'inscrit aussi en
+ * ligne retirée (JET 323), avec son prix d'avant et d'après (Q8).
  *
  * Toutes ces écritures se font sous le verrou du registre fiscal du
  * magasin, puis du panier : un panier ouvert dans deux onglets ne perd
@@ -62,8 +64,9 @@ class PanierDeCaisse
     /**
      * Enregistre le panier tel que le vendeur le voit : son client, s'il
      * est du magasin, et ses lignes où un produit ou un service est choisi.
-     * Chaque article qu'il a perdu depuis son dernier enregistrement
-     * s'inscrit au journal des événements (JET 323) ; un panier vide
+     * Chaque article qu'il a perdu depuis son dernier enregistrement, et
+     * chaque baisse du prix d'un article resté, s'inscrit au journal des
+     * événements (JET 323) ; un panier vide
      * s'efface. Une quantité en cours de saisie (vide, à virgule, nulle)
      * garde celle qu'avait la ligne : elle ne retire rien tant qu'elle
      * n'est pas un nombre d'articles.
@@ -124,8 +127,9 @@ class PanierDeCaisse
     /**
      * Abandonne la vente en cours du vendeur, telle qu'il la voit : ce
      * qu'elle a perdu depuis son dernier enregistrement d'abord (JET 323),
-     * puis son abandon, avec son nombre de lignes et son total TTC en
-     * centimes (JET 320). Le panier s'efface.
+     * puis son abandon, avec son nombre de lignes, son nombre d'articles
+     * et son total TTC en centimes (JET 320), comme l'annonce la fenêtre
+     * de confirmation de la caisse. Le panier s'efface.
      *
      * @param  string  $jeton  le jeton de la vente que montre la caisse
      * @param  array<array-key, mixed>  $lignes  les lignes du formulaire de la caisse, par clé du répéteur
@@ -147,6 +151,7 @@ class PanierDeCaisse
             $this->registre->journaliser(CodeEvenement::TransactionAbandonnee, [
                 'origine' => 'caisse',
                 'nombre_lignes' => count($panier->lignes),
+                'nombre_articles' => self::nombreDArticles($panier),
                 'total_ttc' => $this->totalTtcEnCentimes($panier),
             ]);
 
@@ -158,8 +163,9 @@ class PanierDeCaisse
      * Les ventes restées ouvertes à la clôture de leur journée sont
      * abandonnées : chaque panier enregistré pour la dernière fois ce
      * jour-là ou avant s'inscrit au journal des événements (JET 320), avec
-     * son vendeur, et s'efface. À appeler dans la transaction de la
-     * clôture, qui tient déjà le verrou du registre fiscal (voir
+     * son vendeur, son nombre de lignes, son nombre d'articles et son
+     * total TTC en centimes, et s'efface. À appeler dans la transaction de
+     * la clôture, qui tient déjà le verrou du registre fiscal (voir
      * CloturerCaisseAction).
      *
      * @param  string  $journee  la journée clôturée, AAAA-MM-JJ
@@ -179,6 +185,7 @@ class PanierDeCaisse
                     'journee' => $journee,
                     'vendeur_id' => (int) $panier->user_id,
                     'nombre_lignes' => count($panier->lignes),
+                    'nombre_articles' => self::nombreDArticles($panier),
                     'total_ttc' => $this->totalTtcEnCentimes($panier),
                 ]);
 
@@ -301,6 +308,15 @@ class PanierDeCaisse
         $contexte = ContexteDeVente::pour(Client::withTrashed()->find($panier->client_id), app(TenantContext::class)->magasin());
 
         return $this->calculateur->enCentiemes($this->constructeurLigne->apercu($panier->lignes, $contexte)->totaux['total_ttc']);
+    }
+
+    /**
+     * Le nombre d'articles du panier : la somme des quantités de ses
+     * lignes.
+     */
+    private static function nombreDArticles(PanierCaisse $panier): int
+    {
+        return (int) array_sum(array_column($panier->lignes, 'quantite'));
     }
 
     private static function identifiant(mixed $valeur): ?int

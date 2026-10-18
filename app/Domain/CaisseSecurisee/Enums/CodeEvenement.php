@@ -31,6 +31,12 @@ use Filament\Support\Contracts\HasLabel;
  *   fermeture, avec son motif, et réouverture d'un magasin réel) et celui
  *   du motif de fermeture d'un magasin déjà fermé que la société cède
  *   (motif_fermeture).
+ * - La clôture de période s'inscrit à chaque clôture du jour, manuelle,
+ *   automatique, rattrapée ou à zéro, dans sa transaction et sous le
+ *   verrou du registre, avec son numéro, sa journée, ses nombres de ventes
+ *   et d'avoirs, son net, ses encaissements par mode, le crédit d'avoir
+ *   imputé et les grands totaux perpétuels, en centimes (voir
+ *   CloturerCaisseAction) ; la clôture refusée n'inscrit rien.
  * - L'annulation de ticket suit l'émission d'un avoir sur des tickets de
  *   caisse (voir EmettreAvoirAction).
  * - La vente abandonnée avant validation suit la suppression d'un
@@ -40,7 +46,8 @@ use Filament\Support\Contracts\HasLabel;
  *   d'une vente avant validation, chaque article qu'une vente perd avant
  *   son encaissement ou son émission, au panier de la caisse comme dans un
  *   brouillon de facture ou de ticket : ligne retirée, produit ou service
- *   remplacé, quantité baissée (voir LignesRetirees).
+ *   remplacé, quantité baissée, et chaque baisse du prix d'un article
+ *   restant, avec son prix d'avant et d'après (Q8, voir LignesRetirees).
  * - L'entrée en mode démonstration (mode école) suit chaque ouverture du
  *   magasin de démonstration, et sa sortie chaque fermeture, dans le
  *   registre de ce magasin distinct (voir OuvrirLaDemonstrationAction et
@@ -56,6 +63,7 @@ use Filament\Support\Contracts\HasLabel;
 enum CodeEvenement: int implements HasLabel
 {
     case FinDeSession = 40;
+    case CloturePeriode = 50;
     case OuvertureDeSession = 80;
     case DefautDIntegrite = 90;
     case RuptureDeSequence = 95;
@@ -76,6 +84,7 @@ enum CodeEvenement: int implements HasLabel
     {
         return match ($this) {
             self::FinDeSession => 'Fin de session (déconnexion)',
+            self::CloturePeriode => 'Clôture de période (journée)',
             self::OuvertureDeSession => 'Ouverture de session dans le magasin',
             self::DefautDIntegrite => 'Défaut d\'intégrité détecté par la vérification',
             self::RuptureDeSequence => 'Rupture de séquence ou de numérotation détectée par la vérification',

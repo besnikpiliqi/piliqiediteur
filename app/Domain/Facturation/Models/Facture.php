@@ -139,6 +139,7 @@ class Facture extends Model implements DocumentEnvoyable
                 'origine' => 'brouillon',
                 'facture_id' => $facture->getKey(),
                 'nombre_lignes' => $facture->lignes()->count(),
+                'nombre_articles' => (int) $facture->lignes()->pluck('quantite')->sum(),
                 'total_ttc' => app(CalculateurLigne::class)->enCentiemes($facture->total_ttc ?? '0.00'),
             ]);
         });
@@ -148,9 +149,10 @@ class Facture extends Model implements DocumentEnvoyable
      * Supprime le brouillon et inscrit au journal des événements, dans la
      * même transaction, sous le verrou du registre fiscal du magasin (voir
      * RegistreFiscal::sousVerrou()), la vente abandonnée avant validation
-     * (JET 320) : son nombre de lignes et son total TTC en centimes. Si le
-     * journal ne s'écrit pas, le brouillon reste. Une facture émise ne se
-     * supprime jamais (voir ProtegeLesDonneesValidees).
+     * (JET 320) : son nombre de lignes, son nombre d'articles et son total
+     * TTC en centimes. Si le journal ne s'écrit pas, le brouillon reste.
+     * Une facture émise ne se supprime jamais (voir
+     * ProtegeLesDonneesValidees).
      *
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException

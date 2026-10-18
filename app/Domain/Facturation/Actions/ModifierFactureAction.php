@@ -31,7 +31,9 @@ use LogicException;
  *
  * Un brouillon reste pourtant une vente commencée : chaque article qu'il
  * perd -- ligne retirée, produit ou service remplacé, quantité baissée --
- * s'inscrit au journal des événements (JET 323, voir LignesRetirees),
+ * et chaque baisse du prix d'un article resté, avec son prix d'avant et
+ * d'après (Q8), s'inscrit au journal des événements (JET 323, voir
+ * LignesRetirees),
  * comme sa suppression y inscrit l'abandon de la vente (voir
  * Facture::delete()). Tout se fait donc sous le verrou du registre fiscal
  * du magasin, le brouillon relu verrouillé : si le journal ne s'écrit pas,

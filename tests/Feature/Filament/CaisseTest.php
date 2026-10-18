@@ -1196,8 +1196,8 @@ class CaisseTest extends TestCase
 
     /**
      * Une vente abandonnée avant l'encaissement s'inscrit au journal des
-     * événements, avec son nombre de lignes et son total en centimes, et
-     * le panier se vide ; le journal reste intègre.
+     * événements, avec son nombre de lignes, son nombre d'articles et son
+     * total en centimes, et le panier se vide ; le journal reste intègre.
      */
     public function test_abandonner_la_vente_l_inscrit_au_journal_et_vide_le_panier(): void
     {
@@ -1214,10 +1214,28 @@ class CaisseTest extends TestCase
         $this->assertSame([], $caisse->get('data.lignes'));
         $this->assertSame([
             ['260', []],
-            ['320', ['origine' => 'caisse', 'nombre_lignes' => 2, 'total_ttc' => 7200]],
+            ['320', ['origine' => 'caisse', 'nombre_lignes' => 2, 'nombre_articles' => 3, 'total_ttc' => 7200]],
         ], $this->journalDesEvenements($magasin));
         $this->assertSame(0, Facture::query()->count());
         $this->assertTrue(app(VerificateurIntegrite::class)->verifier($magasin)->estConforme());
+    }
+
+    /**
+     * Point 14 : la fenêtre de confirmation de l'abandon dit pourquoi et ce
+     * que le journal des événements en garde.
+     */
+    public function test_la_fenetre_d_abandon_dit_ce_qui_est_inscrit_au_journal(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 12, 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+
+        $caisse->mountAction('abandonnerLaVente');
+
+        $caisse->assertSee('Abandonner la vente ?')
+            ->assertSee('Les lignes saisies sont effacées. Pour la sécurité de la caisse, l\'abandon est inscrit au journal des événements avec votre nom, le nombre d\'articles et le montant.');
     }
 
     /**
@@ -1240,7 +1258,7 @@ class CaisseTest extends TestCase
 
         $this->assertSame([
             ['260', []],
-            ['320', ['origine' => 'caisse', 'nombre_lignes' => 2, 'total_ttc' => 7200]],
+            ['320', ['origine' => 'caisse', 'nombre_lignes' => 2, 'nombre_articles' => 3, 'total_ttc' => 7200]],
         ], $this->journalDesEvenements($magasin));
         $this->assertTrue(app(VerificateurIntegrite::class)->verifier($magasin)->estConforme());
     }
@@ -1266,7 +1284,7 @@ class CaisseTest extends TestCase
 
         $this->assertSame([
             ['260', []],
-            ['320', ['origine' => 'caisse', 'nombre_lignes' => 3, 'total_ttc' => 7200]],
+            ['320', ['origine' => 'caisse', 'nombre_lignes' => 3, 'nombre_articles' => 1000000000002, 'total_ttc' => 7200]],
         ], $this->journalDesEvenements($magasin));
         $this->assertTrue(app(VerificateurIntegrite::class)->verifier($magasin)->estConforme());
     }
@@ -1435,6 +1453,30 @@ class CaisseTest extends TestCase
         $this->assertSame([
             ['260', []],
             ['323', ['origine' => 'caisse', 'produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 2, 'prix_unitaire_ttc' => 12000]],
+        ], $this->journalDesEvenements($magasin));
+    }
+
+    /**
+     * Q8 : baisser le prix d'une ligne du panier avant l'encaissement
+     * s'inscrit en ligne retirée, avec le prix d'avant et d'après ; le
+     * monter ne retire rien.
+     */
+    public function test_baisser_le_prix_d_une_ligne_du_panier_l_inscrit_au_journal(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 2, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+        $prix = 'data.lignes.'.array_key_first($caisse->get('data.lignes')).'.prix_unitaire_ttc';
+        $caisse->set($prix, '130.00');
+        $this->assertSame([], $this->journalDesEvenements($magasin));
+
+        $caisse->set($prix, '100.00');
+
+        $this->assertSame([
+            ['260', []],
+            ['323', ['origine' => 'caisse', 'produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 2, 'prix_unitaire_ttc' => 13000, 'prix_unitaire_ttc_apres' => 10000]],
         ], $this->journalDesEvenements($magasin));
     }
 

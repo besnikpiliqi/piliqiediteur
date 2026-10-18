@@ -10,6 +10,7 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Paiement;
@@ -202,6 +203,23 @@ class EnregistrementFiscalResourceTest extends TestCase
         $composant->assertSee("Ticket {$ticket->numero}")
             ->assertSee("Paiement (identifiant interne {$paiement->id})")
             ->assertDontSee("facture n° {$ticket->id}");
+    }
+
+    /**
+     * Point 21 : la clôture du jour paraît dans la caisse sécurisée, son
+     * événement nommé par le numéro de son ticket Z, jamais par un
+     * identifiant interne.
+     */
+    public function test_l_evenement_de_cloture_nomme_son_ticket_z(): void
+    {
+        $magasin = $this->connecterProprietaire();
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
+
+        $composant = Livewire::test(ListEnregistrementsFiscaux::class);
+
+        $composant->assertSee('50 – Clôture de période (journée)')
+            ->assertSee("Clôture {$cloture->numero}")
+            ->assertDontSee("(identifiant interne {$cloture->id})");
     }
 
     /**

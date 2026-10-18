@@ -4,6 +4,9 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -18,6 +21,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\JourneesDeCaisse;
 use App\Domain\Facturation\Services\PanierDeCaisse;
+use App\Domain\Facturation\Services\RecapitulatifDeCloture;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -26,6 +30,7 @@ use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Exceptions;
 use RuntimeException;
 use Tests\TestCase;
@@ -78,6 +83,21 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $this->travelBack();
 
         return $facture;
+    }
+
+    /**
+     * Les événements de clôture (JET 50) du magasin actif, dans l'ordre de
+     * sa chaîne.
+     *
+     * @return Collection<int, EnregistrementFiscal>
+     */
+    private static function evenementsDeCloture(): Collection
+    {
+        return EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', (string) CodeEvenement::CloturePeriode->value)
+            ->orderBy('sequence')
+            ->get();
     }
 
     public function test_cloture_la_veille_pour_un_magasin_qui_ne_la_pas_fait_lui_meme(): void
@@ -306,6 +326,53 @@ class ClotureAutomatiqueCaisseTest extends TestCase
     }
 
     /**
+     * Point 21 : la clôture de minuit s'inscrit au journal des événements
+     * (JET 50) au nom du système, sans opérateur.
+     */
+    public function test_la_cloture_de_minuit_inscrit_l_evenement_50_sans_operateur(): void
+    {
+        $magasin = Magasin::factory()->create();
+        $this->travelTo('2026-10-08 10:00:00');
+        $this->vendreUnTicketDe12Euros($magasin);
+        $this->travelTo('2026-10-09 00:00:00');
+
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+
+        app(TenantContext::class)->set($magasin);
+        $evenement = self::evenementsDeCloture()->sole();
+        $this->assertNull($evenement->contenuSigne()['operateur']);
+        $this->assertSame(['2026-10-08', 1, 1200], [
+            $evenement->contenuSigne()['donnees']['details']['journee'],
+            $evenement->contenuSigne()['donnees']['details']['nombre_ventes'],
+            $evenement->contenuSigne()['donnees']['details']['total_ttc'],
+        ]);
+    }
+
+    /**
+     * Chaque journée rattrapée, à zéro comprise, a son propre événement de
+     * clôture, dans l'ordre des journées.
+     */
+    public function test_chaque_journee_rattrapee_inscrit_son_evenement_50(): void
+    {
+        $magasin = Magasin::factory()->create(['nom' => 'Ma Boutique']);
+        $this->travelTo('2026-10-05 10:00:00');
+        $this->vendreUnTicketDe12Euros($magasin);
+        $this->travelTo('2026-10-08 00:00:00');
+
+        $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
+
+        app(TenantContext::class)->set($magasin);
+        $this->assertSame(
+            [['2026-10-05', 'Z-MABOUT-2026-000001', 1200], ['2026-10-06', 'Z-MABOUT-2026-000002', 0], ['2026-10-07', 'Z-MABOUT-2026-000003', 0]],
+            self::evenementsDeCloture()->map(fn (EnregistrementFiscal $evenement): array => [
+                $evenement->contenuSigne()['donnees']['details']['journee'],
+                $evenement->contenuSigne()['donnees']['details']['numero'],
+                $evenement->contenuSigne()['donnees']['details']['total_ttc'],
+            ])->all(),
+        );
+    }
+
+    /**
      * Un ticket Z se produit chaque jour à partir de la première vente :
      * un magasin ouvert le 01/10 qui vend pour la première fois le 05/10
      * n'a aucune clôture avant, puis seulement celle du 05/10.
@@ -345,11 +412,11 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $this->vendreUnTicketDe12Euros($autreMagasin);
         $this->travelTo('2026-10-09 00:00:00');
         Exceptions::fake([RuntimeException::class]);
-        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), app(LecteurDesDroits::class), app(OperateurCourant::class), $magasinEnPanne->id) extends CloturerCaisseAction
+        $this->app->instance(CloturerCaisseAction::class, new class(app(DocumentNumberingService::class), app(CalculateurLigne::class), app(RecapitulatifDeCloture::class), app(RegistreFiscal::class), app(PanierDeCaisse::class), app(JourneesDeCaisse::class), app(LecteurDesDroits::class), app(OperateurCourant::class), $magasinEnPanne->id) extends CloturerCaisseAction
         {
-            public function __construct(DocumentNumberingService $numerotation, CalculateurLigne $calculateur, RegistreFiscal $registre, PanierDeCaisse $panierDeCaisse, JourneesDeCaisse $journeesDeCaisse, LecteurDesDroits $lecteur, OperateurCourant $operateur, private readonly int $magasinEnPanne)
+            public function __construct(DocumentNumberingService $numerotation, CalculateurLigne $calculateur, RecapitulatifDeCloture $recapitulatif, RegistreFiscal $registre, PanierDeCaisse $panierDeCaisse, JourneesDeCaisse $journeesDeCaisse, LecteurDesDroits $lecteur, OperateurCourant $operateur, private readonly int $magasinEnPanne)
             {
-                parent::__construct($numerotation, $calculateur, $registre, $panierDeCaisse, $journeesDeCaisse, $lecteur, $operateur);
+                parent::__construct($numerotation, $calculateur, $recapitulatif, $registre, $panierDeCaisse, $journeesDeCaisse, $lecteur, $operateur);
             }
 
             public function parLeSysteme(Magasin $magasin, CarbonInterface|string $date): ClotureCaisse

@@ -145,6 +145,33 @@ class MagasinDeDemonstrationTest extends TestCase
     }
 
     /**
+     * Point 21 : la clôture de la journée de démonstration, faite par le
+     * système à sa fermeture, s'inscrit (JET 50) dans le journal de ce
+     * magasin distinct, jamais dans celui d'un magasin réel.
+     */
+    public function test_la_cloture_du_magasin_de_demonstration_s_inscrit_dans_son_propre_journal(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $reel = $this->creerLeMagasinDuSiege($societe);
+        $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
+        $this->vendre();
+
+        $this->verifierLIdentiteDuProprietaire($societe);
+
+        $evenement = EnregistrementFiscal::withoutGlobalScope(MagasinScope::class)
+            ->where('magasin_id', $demonstration->id)
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', (string) CodeEvenement::CloturePeriode->value)
+            ->sole();
+        $this->assertSame(['DEMO', 1, null], [
+            explode('-', $evenement->contenuSigne()['donnees']['details']['numero'])[1],
+            $evenement->contenuSigne()['donnees']['details']['nombre_ventes'],
+            $evenement->contenuSigne()['operateur'],
+        ]);
+        $this->assertNotContains((string) CodeEvenement::CloturePeriode->value, $this->codesDuJournal($reel));
+    }
+
+    /**
      * Les services du catalogue fictif ont un prix de référence : un
      * vendeur, qui ne fixe aucun prix, les voit à la caisse et les vend.
      */

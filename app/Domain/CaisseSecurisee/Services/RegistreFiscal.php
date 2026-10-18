@@ -3,6 +3,7 @@
 namespace App\Domain\CaisseSecurisee\Services;
 
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
@@ -14,8 +15,10 @@ use App\Domain\CaisseSecurisee\ModuleFiscal;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Database\DatabaseTransactionRecord;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -67,7 +70,10 @@ use LogicException;
  * trouvées avant d'attendre, et ignorerait l'enregistrement ou la clôture
  * qu'une autre caisse a validés pendant ce temps ; la ligne de tête, qui
  * existe toujours, se relit au contraire à jour une fois le verrou
- * obtenu, comme tout ce que lisent les requêtes suivantes.
+ * obtenu, comme tout ce que lisent les requêtes suivantes. Ce qu'une
+ * clôture du jour compte, les enregistrements de sa journée et les grands
+ * totaux à sa fin, se lit ainsi, par des requêtes qui suivent le verrou
+ * (voir enregistrementsJusquA() et grandsTotauxApres()).
  *
  * Les verrous se prennent toujours dans cet ordre : les registres des
  * magasins concernés, par identifiant croissant, puis la ligne de la
@@ -252,6 +258,67 @@ class RegistreFiscal
     public function noterLaJourneeCloturee(Magasin $magasin, string $journee): void
     {
         $this->verrou($magasin)[0]->forceFill(['derniere_journee_cloturee' => $journee])->save();
+    }
+
+    /**
+     * Les enregistrements d'une chaîne du registre du magasin actif qui
+     * suivent la séquence $apres (toute la chaîne quand elle est nulle) et
+     * dont l'horodatage ne dépasse pas $jusquA, dans l'ordre de la chaîne,
+     * lus sous le verrou de la transaction en cours (voir verrouiller()) :
+     * ce qu'une clôture du jour compte (voir RecapitulatifDeCloture).
+     *
+     * Chaque écriture fiscale du magasin tient ce verrou jusqu'à sa
+     * validation, et prend son horodatage une fois le verrou obtenu, jamais
+     * avant le précédent : les horodatages croissent avec les séquences, et
+     * les enregistrements qui ne dépassent pas $jusquA en forment le début.
+     * Lue dans une requête qui suit le verrou, et non dans celle qui l'a
+     * attendu, la chaîne comprend tout ce qui a été validé avant lui.
+     *
+     * @return Collection<int, EnregistrementFiscal>
+     *
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function enregistrementsJusquA(Magasin $magasin, ChaineFiscale $chaine, ?int $apres, CarbonInterface $jusquA): Collection
+    {
+        $this->verrou($magasin);
+
+        return EnregistrementFiscal::query()
+            ->where('chaine', $chaine->value)
+            ->when($apres !== null, fn (Builder $enregistrements): Builder => $enregistrements->where('sequence', '>', $apres))
+            ->where('horodatage', '<=', HorodatageUtc::enBase($jusquA))
+            ->orderBy('sequence')
+            ->get();
+    }
+
+    /**
+     * Les grands totaux perpétuels du magasin actif, en centimes, tels que
+     * les signe l'enregistrement de la chaîne des ventes de cette séquence
+     * (voir inscrire()) : le réel, somme des montants TTC des ventes et des
+     * avoirs, et l'absolu, somme de leurs valeurs absolues. Zéro sans
+     * séquence, avant la première vente. Lus sous le verrou de la
+     * transaction en cours (voir verrouiller()).
+     *
+     * @return array{perpetuel_reel: int, perpetuel_absolu: int}
+     *
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
+     */
+    public function grandsTotauxApres(Magasin $magasin, ?int $sequenceDeVente): array
+    {
+        $this->verrou($magasin);
+
+        if ($sequenceDeVente === null) {
+            return ['perpetuel_reel' => 0, 'perpetuel_absolu' => 0];
+        }
+
+        $grandsTotaux = EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Vente->value)
+            ->where('sequence', $sequenceDeVente)
+            ->sole()
+            ->contenuSigne()['gt'];
+
+        return ['perpetuel_reel' => $grandsTotaux['perpetuel_reel'], 'perpetuel_absolu' => $grandsTotaux['perpetuel_absolu']];
     }
 
     /**

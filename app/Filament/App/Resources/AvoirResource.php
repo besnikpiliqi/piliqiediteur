@@ -92,17 +92,12 @@ class AvoirResource extends Resource
 
     /**
      * Même esprit de confidentialité que FactureResource, mais basée sur
-     * le créateur de l'avoir lui-même : voir AvoirPolicy.
+     * le créateur de l'avoir lui-même : voir Avoir::scopeVisiblesPar() et
+     * AvoirPolicy.
      */
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->with(['client', 'lignes.ligneFacture.facture']);
-
-        if (! auth()->user()->can(PermissionRegistry::FACTURE_VIEW_TOUTES)) {
-            $query->where('cree_par', auth()->id());
-        }
-
-        return $query;
+        return parent::getEloquentQuery()->with(['client', 'lignes.ligneFacture.facture'])->visiblesPar(auth()->user());
     }
 
     public static function form(Form $form): Form

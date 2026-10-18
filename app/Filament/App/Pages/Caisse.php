@@ -73,7 +73,9 @@ use LogicException;
  * fermeture de l'onglet. Une vente qui ne va pas jusqu'à l'encaissement
  * laisse donc toujours une trace au journal des événements du magasin :
  * son abandon (« Abandonner la vente », ou la clôture de sa journée, JET
- * 320) et chaque article retiré du panier avant l'encaissement (JET 323).
+ * 320, avec le vendeur, le nombre d'articles et le montant, comme le dit
+ * la fenêtre de confirmation) et chaque article retiré du panier ou dont
+ * le prix baisse avant l'encaissement (JET 323).
  *
  * Une fois la journée clôturée, la caisse n'encaisse plus aucune vente
  * jusqu'à minuit, pas même à un professionnel (voir journeeCloturee()) ;
@@ -430,7 +432,7 @@ class Caisse extends Page implements HasForms
                 ->color('danger')
                 ->requiresConfirmation()
                 ->modalHeading('Abandonner la vente ?')
-                ->modalDescription('Les lignes saisies sont effacées, et l\'abandon de la vente est inscrit au journal des événements de la caisse.')
+                ->modalDescription('Les lignes saisies sont effacées. Pour la sécurité de la caisse, l\'abandon est inscrit au journal des événements avec votre nom, le nombre d\'articles et le montant.')
                 ->modalSubmitActionLabel('Oui, abandonner la vente')
                 ->visible(fn (): bool => $this->lignesRenseignees() !== [])
                 ->action(function (): void {

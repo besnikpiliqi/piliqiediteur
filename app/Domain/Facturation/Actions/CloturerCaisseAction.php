@@ -4,6 +4,7 @@ namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\InstantFiscal;
@@ -16,6 +17,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\JourneesDeCaisse;
 use App\Domain\Facturation\Services\PanierDeCaisse;
+use App\Domain\Facturation\Services\RecapitulatifDeCloture;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -30,13 +32,28 @@ use LogicException;
  * des particuliers) d'une journée donnée, moins les avoirs sur des tickets
  * émis ce jour-là : la TVA d'une vente corrigée se régularise le jour de
  * l'avoir (art. 272 du CGI), et en caisse une correction est toujours une
- * opération en négatif, jamais une modification ni une suppression. Les
+ * opération en négatif, jamais une modification ni une suppression. Ce
+ * net (total_ht, total_tva, total_ttc) est la base de l'e-reporting : les
  * factures à des professionnels et leurs avoirs n'y figurent pas. Le type
  * du client, figé sur chaque document à son émission, le dit pour
  * toujours, même si la fiche du client change depuis (voir
  * Facture::scopeTickets() et Avoir::corrigeDesTickets()). La correction
  * d'une vente déjà agrégée passe par un avoir, compté dans la clôture du
  * jour où il est émis, jamais par une réouverture de la clôture.
+ *
+ * La clôture garde aussi, écrit une seule fois, son récapitulatif (voir
+ * RecapitulatifDeCloture) : les ventes et les avoirs séparés, par taux,
+ * dont le net se déduit ; les factures et les avoirs aux professionnels,
+ * pour information ; les encaissements par mode, chaque paiement comptant
+ * dans la seule clôture de la journée où il est enregistré ; le crédit
+ * d'avoir imputé et les grands totaux perpétuels à la fin de la journée.
+ * Puis elle s'inscrit au journal des événements (JET 50, clôture de
+ * période), dans sa transaction et sous le verrou du registre, avec son
+ * numéro, sa journée, ses nombres de tickets et d'avoirs, son net, ses
+ * encaissements par mode, son crédit d'avoir imputé et ses grands totaux,
+ * en centimes : manuelle, de minuit, rattrapée, à zéro ou dans le magasin
+ * de démonstration, chaque clôture en inscrit une, et une clôture refusée
+ * aucune.
  *
  * Les journées se clôturent une à une, dans l'ordre du calendrier des
  * journées de caisse (voir JourneesDeCaisse), et chacune une seule fois
@@ -79,6 +96,7 @@ class CloturerCaisseAction
     public function __construct(
         private readonly DocumentNumberingService $numerotation,
         private readonly CalculateurLigne $calculateur,
+        private readonly RecapitulatifDeCloture $recapitulatif,
         private readonly RegistreFiscal $registre,
         private readonly PanierDeCaisse $panierDeCaisse,
         private readonly JourneesDeCaisse $journeesDeCaisse,
@@ -133,17 +151,25 @@ class CloturerCaisseAction
 
         $ventes = Facture::query()->enAttenteDeCloture($journee)->lockForUpdate()->get();
         $avoirs = Avoir::query()->enAttenteDeCloture($journee)->lockForUpdate()->get();
+        $etabli = $this->recapitulatif->etablir($magasin, $journee, $ventes, $avoirs, ClotureCaisse::query()->orderByDesc('date_cloture')->first());
+        $recapitulatif = $etabli['recapitulatif'];
+        $net = fn (string $montant): int => $recapitulatif['ventes_particuliers'][$montant] + $recapitulatif['avoirs_particuliers'][$montant];
 
-        $cloture = (new ClotureCaisse(['date_cloture' => $journee]))->forceFill(['cree_par' => $compte?->getKey()]);
-        $cloture->save();
-
-        $numero = $this->numerotation->suivant($magasin, TypeDocument::ClotureCaisse, CarbonImmutable::parse($journee)->format('Y'));
-
-        $cloture->forceFill([
-            'numero' => $numero,
+        $cloture = (new ClotureCaisse(['date_cloture' => $journee]))->forceFill([
+            'cree_par' => $compte?->getKey(),
             'nombre_ventes' => $ventes->count(),
             'nombre_avoirs' => $avoirs->count(),
-            ...$this->calculateur->deduire($this->calculateur->cumuler($ventes), $this->calculateur->cumuler($avoirs)),
+            'total_ht' => $this->calculateur->enDecimal($net('ht')),
+            'total_tva' => $this->calculateur->enDecimal($net('tva')),
+            'total_ttc' => $this->calculateur->enDecimal($net('ttc')),
+            'recapitulatif' => $recapitulatif,
+            'derniere_sequence_vente' => $etabli['derniere_sequence_vente'],
+            'derniere_sequence_encaissement' => $etabli['derniere_sequence_encaissement'],
+        ]);
+        $cloture->save();
+
+        $cloture->forceFill([
+            'numero' => $this->numerotation->suivant($magasin, TypeDocument::ClotureCaisse, CarbonImmutable::parse($journee)->format('Y')),
             'cloturee_a' => now(),
         ])->save();
 
@@ -163,6 +189,18 @@ class CloturerCaisseAction
                 ->update(['cloture_caisse_id' => $cloture->id]);
         }
 
+        $this->registre->journaliser(CodeEvenement::CloturePeriode, [
+            'numero' => $cloture->numero,
+            'journee' => $journee,
+            'nombre_ventes' => $cloture->nombre_ventes,
+            'nombre_avoirs' => $cloture->nombre_avoirs,
+            'total_ht' => $net('ht'),
+            'total_tva' => $net('tva'),
+            'total_ttc' => $net('ttc'),
+            'encaissements' => array_column($recapitulatif['encaissements'], 'montant', 'mode'),
+            'credit_avoir_impute' => $recapitulatif['credit_avoir_impute'],
+            'grands_totaux' => $recapitulatif['grands_totaux'],
+        ], $cloture);
         $this->registre->noterLaJourneeCloturee($magasin, $journee);
 
         return $cloture;

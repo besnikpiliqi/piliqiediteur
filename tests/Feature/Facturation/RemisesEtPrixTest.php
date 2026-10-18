@@ -93,8 +93,9 @@ class RemisesEtPrixTest extends TestCase
 
     /**
      * Q1 (a) : sans l'autorisation, une ligne de produit prend le PU TTC
-     * de sa fiche ; un autre prix est refusé, et le propriétaire le
-     * saisit.
+     * de sa fiche ; un autre prix est refusé, et un responsable, qui a
+     * l'autorisation, le saisit (le propriétaire, qui l'a aussi, ne vend
+     * jamais).
      */
     public function test_seul_un_membre_autorise_vend_un_produit_a_un_autre_prix_que_celui_de_sa_fiche(): void
     {
@@ -108,9 +109,9 @@ class RemisesEtPrixTest extends TestCase
             AuthorizationException::class,
             'Vendre « Câble USB » à 9,00 € au lieu de 12,00 €, le prix de sa fiche, '.DerogationsDePrix::AUTORISATION.'.',
         );
-        $auPrixDuProprietaire = app(CreerFactureAction::class)->handle($this->proprietaireDe($magasin), Client::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 1, 'prix_unitaire_ttc' => '9.00']]);
+        $auPrixDuResponsable = app(CreerFactureAction::class)->handle($this->responsableDeTest($magasin), Client::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 1, 'prix_unitaire_ttc' => '9.00']]);
 
-        $this->assertSame(['12.00', '9.00'], [$auPrixDeLaFiche->total_ttc, $auPrixDuProprietaire->total_ttc]);
+        $this->assertSame(['12.00', '9.00'], [$auPrixDeLaFiche->total_ttc, $auPrixDuResponsable->total_ttc]);
         $this->assertSame(2, Facture::query()->count());
     }
 

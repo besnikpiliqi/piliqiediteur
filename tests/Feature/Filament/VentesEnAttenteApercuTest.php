@@ -47,9 +47,9 @@ class VentesEnAttenteApercuTest extends TestCase
 
     public function test_affiche_le_nombre_et_le_total_des_ventes_de_la_journee_en_attente_de_cloture(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $this->travelTo('2026-10-09 10:00:00');
         $this->emettreFactureParticulier(Client::factory()->create()); // 50 € HT, TVA 20 % => 60 € TTC
@@ -61,9 +61,9 @@ class VentesEnAttenteApercuTest extends TestCase
 
     public function test_deduit_du_total_les_avoirs_du_jour_en_attente(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
         $this->travelTo('2026-10-09 10:00:00');
@@ -80,9 +80,9 @@ class VentesEnAttenteApercuTest extends TestCase
      */
     public function test_affiche_une_journee_oubliee_avec_celle_du_jour(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $this->travelTo('2026-10-08 10:00:00');
         $this->emettreFactureParticulier(Client::factory()->create()); // 60 € TTC

@@ -7,6 +7,7 @@ use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
+use App\Filament\App\Resources\ClotureCaisseResource\Widgets\CaissesPersonnellesOuvertesApercu;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PorteUnJeton;
 use App\Models\User;
@@ -20,6 +21,11 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 
 /**
+ * « Ma caisse » ou « Les caisses » selon la personne (voir
+ * ClotureCaissePersonnelleResource::libelle()) ; en tête, pour qui voit les
+ * relevés de toute l'équipe ou peut clôturer la journée, les caisses
+ * encore ouvertes (voir CaissesPersonnellesOuvertesApercu).
+ *
  * « Fermer ma caisse » : quiconque vend ou encaisse ferme la sienne, et
  * voit son relevé avant de le fermer (voir FermerSaCaisseAction::apercu()).
  * « Fermer la caisse d'un vendeur » : qui peut clôturer la journée ferme
@@ -39,6 +45,16 @@ class ListClotureCaissePersonnelles extends ListRecords
     use PorteUnJeton;
 
     protected static string $resource = ClotureCaissePersonnelleResource::class;
+
+    public function getTitle(): string
+    {
+        return ClotureCaissePersonnelleResource::libelle();
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [CaissesPersonnellesOuvertesApercu::class];
+    }
 
     protected function getHeaderActions(): array
     {

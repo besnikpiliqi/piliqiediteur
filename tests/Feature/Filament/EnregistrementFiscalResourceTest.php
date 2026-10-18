@@ -61,11 +61,15 @@ class EnregistrementFiscalResourceTest extends TestCase
         return DB::transaction(fn (): EnregistrementFiscal => app(RegistreFiscal::class)->journaliser($code, $details));
     }
 
+    /**
+     * Une vente au comptoir du responsable de test du magasin actif : le
+     * propriétaire connecté consulte le registre, mais ne vend jamais.
+     */
     private function vendre(int $quantite = 2): void
     {
         $produit = Produit::factory()->create(['nom' => 'Article à 12 €', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]], ModePaiement::Especes);
+        self::vendreAuComptant($this->responsableDeTest(app(TenantContext::class)->magasin()), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]], ModePaiement::Especes);
     }
 
     /**
@@ -195,7 +199,7 @@ class EnregistrementFiscalResourceTest extends TestCase
     {
         $this->connecterProprietaire();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant($this->responsableDeTest(app(TenantContext::class)->magasin()), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
         $paiement = Paiement::query()->sole();
 
         $composant = Livewire::test(ListEnregistrementsFiscaux::class);
@@ -538,7 +542,7 @@ class EnregistrementFiscalResourceTest extends TestCase
         $this->connecterProprietaire();
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 2]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant($this->responsableDeTest(app(TenantContext::class)->magasin()), $client, [['produit_id' => $produit->id, 'quantite' => 2]], ModePaiement::Especes);
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $clePublique = Arr::first(config('caisse_securisee.cles_publiques'));
         $cleId = hash('sha256', base64_decode(str_replace(['-----BEGIN PUBLIC KEY-----', '-----END PUBLIC KEY-----', "\n"], '', $clePublique)));

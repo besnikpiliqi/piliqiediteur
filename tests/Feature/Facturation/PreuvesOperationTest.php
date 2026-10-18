@@ -18,6 +18,7 @@ use App\Domain\Facturation\Models\PreuveOperation;
 use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
@@ -52,7 +53,10 @@ class PreuvesOperationTest extends TestCase
 
     /**
      * Le magasin de Lyon à l'identité légale complète et son propriétaire
-     * connecté, le 9 octobre 2026 à 10 h 15 à Paris.
+     * connecté, le 9 octobre 2026 à 10 h 15 à Paris : il note les preuves
+     * (il a « noter les preuves d'exonération et les bordereaux de
+     * détaxe »), mais ne vend jamais ; ses ventes se font par le
+     * responsable de test (voir venteEmise()).
      */
     private function magasin(): Magasin
     {
@@ -66,7 +70,8 @@ class PreuvesOperationTest extends TestCase
     }
 
     /**
-     * Une vente émise de 10 clés USB à 12,00 € TTC du catalogue :
+     * Une vente émise par le responsable de test du magasin actif, de 10
+     * clés USB à 12,00 € TTC du catalogue :
      * - « export » : à Acme Inc., expédiée à New York ;
      * - « dom » : à un particulier, expédiée à Fort-de-France ;
      * - « intracommunautaire » : à Muster GmbH, expédiée à Berlin par le
@@ -99,7 +104,9 @@ class PreuvesOperationTest extends TestCase
             'france' => [Client::factory()->create(), []],
         };
 
-        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 10]], $nature));
+        $vendeur = $this->responsableDeTest(app(TenantContext::class)->magasin());
+
+        return app(EmettreFactureAction::class)->handle($vendeur, app(CreerFactureAction::class)->handle($vendeur, $client, [['produit_id' => $produit->id, 'quantite' => 10]], $nature));
     }
 
     /**
@@ -262,7 +269,7 @@ class PreuvesOperationTest extends TestCase
 
     /**
      * Le badge ne compte que les factures que l'utilisateur voit (B16) : un
-     * vendeur ne voit pas l'export incomplet de son patron.
+     * vendeur ne voit pas l'export incomplet de son responsable.
      */
     public function test_le_badge_ne_compte_pas_les_factures_qu_un_vendeur_ne_voit_pas(): void
     {
@@ -377,8 +384,8 @@ class PreuvesOperationTest extends TestCase
 
     public function test_une_preuve_ne_s_enregistre_pas_sur_un_brouillon(): void
     {
-        $this->magasin();
-        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '12.00', 'taux_tva' => 20])->id, 'quantite' => 1]], [
+        $magasin = $this->magasin();
+        $brouillon = app(CreerFactureAction::class)->handle($this->responsableDeTest($magasin), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '12.00', 'taux_tva' => 20])->id, 'quantite' => 1]], [
             'nature_operation' => NatureOperation::LivraisonDom, 'livraison_adresse' => '1 rue Victor Hugo', 'livraison_code_postal' => '97200', 'livraison_ville' => 'Fort-de-France', 'livraison_pays' => 'FR',
         ]);
 
@@ -529,16 +536,19 @@ class PreuvesOperationTest extends TestCase
     }
 
     /**
-     * Le bouton est réservé à qui peut émettre (FacturePolicy::justifier()) :
-     * un comptable, qui voit toutes les factures, ne l'a pas. Il n'apparaît
-     * pas non plus sur une vente en France.
+     * Le bouton est réservé à qui est autorisé à noter les preuves
+     * d'exonération et les bordereaux de détaxe (FacturePolicy::justifier(),
+     * réponse (b) de l'éditeur à Q-V2) : le propriétaire, qui ne vend pas,
+     * l'a ; un comptable, qui voit toutes les factures, ne l'a pas, ni un
+     * expert-comptable. Il n'apparaît pas non plus sur une vente en France.
      */
-    public function test_le_bouton_ajouter_une_preuve_est_reserve_a_qui_peut_emettre_une_vente_exoneree(): void
+    public function test_le_bouton_ajouter_une_preuve_est_reserve_a_qui_est_autorise_a_noter_les_preuves_d_une_vente_exoneree(): void
     {
         $magasin = $this->magasin();
         $export = $this->venteEmise('export');
         $enFrance = $this->venteEmise('france');
 
+        Livewire::test(ViewFacture::class, ['record' => $export->getRouteKey()])->assertActionVisible('ajouter_preuve');
         Livewire::test(ViewFacture::class, ['record' => $enFrance->getRouteKey()])->assertActionHidden('ajouter_preuve');
         $expert = $this->expertComptable($magasin);
         $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable()));

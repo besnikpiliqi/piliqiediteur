@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
+use App\Domain\Facturation\Support\GardesDeLaVente;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -17,6 +18,10 @@ use Illuminate\Support\Facades\Schema;
  * ContrePasserPaiementAction) : un paiement opposé, de montant négatif,
  * qui désigne l'original par contre_passe_paiement_id. Un paiement n'a
  * qu'une contre-passation au plus.
+ *
+ * Le propriétaire, qui ne vend jamais, n'enregistre aucun paiement : la
+ * base refuse un paiement à son nom, mais pas sa contre-passation (voir
+ * GardesDeLaVente).
  */
 return new class extends Migration
 {
@@ -44,11 +49,13 @@ return new class extends Migration
         });
 
         DeclencheursDeProtection::ajoutSeul('paiements');
+        GardesDeLaVente::poser('paiements');
     }
 
     public function down(): void
     {
         Schema::dropIfExists('paiements');
         DeclencheursDeProtection::retirer('paiements');
+        GardesDeLaVente::retirer('paiements');
     }
 };

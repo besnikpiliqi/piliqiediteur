@@ -66,7 +66,7 @@ class VenteSansStockConcurrenceTest extends TestCase
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $proprietaire = $this->proprietaireDe($magasin);
+        $premier = self::responsableDeTest($magasin);
         $responsable = $this->responsable($magasin);
         $produit = $this->cableEnStock(0);
         $magasinId = $magasin->id;
@@ -78,7 +78,7 @@ class VenteSansStockConcurrenceTest extends TestCase
             self::vendreUnCable(User::query()->findOrFail($responsableId), $produitId, -2);
         }, $concurrente);
 
-        self::vendreUnCable($proprietaire, $produitId, -2);
+        self::vendreUnCable($premier, $produitId, -2);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $concurrente->wait();

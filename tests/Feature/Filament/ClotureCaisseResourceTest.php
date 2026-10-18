@@ -30,7 +30,6 @@ use App\Filament\App\Resources\ClotureCaisseResource\Pages\ViewClotureCaisse;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
-use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -77,29 +76,30 @@ class ClotureCaisseResourceTest extends TestCase
     }
 
     /**
-     * Un magasin dont le propriétaire est connecté, sur son panneau.
+     * Un magasin dont le responsable de test, qui y vend, est connecté, sur
+     * son panneau.
      */
     private function ouvrirLeMagasin(): Magasin
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
         Filament::setTenant($magasin);
 
         return $magasin;
     }
 
     /**
-     * Le soir, après sa dernière vente, le magasin clôture lui-même la
-     * journée en cours ; à minuit, la commande ne clôture rien de plus pour
-     * cette journée.
+     * Le soir, après la dernière vente de son responsable, le propriétaire
+     * clôture lui-même la journée en cours depuis le panneau ; à minuit, la
+     * commande ne clôture rien de plus pour cette journée.
      */
     public function test_le_proprietaire_cloture_la_journee_du_jour_depuis_le_panneau(): void
     {
         $magasin = $this->ouvrirLeMagasin();
         $this->travelTo('2026-10-09 10:00:00');
         $facture = $this->emettreFactureParticulier(Client::factory()->create()); // 60 € TTC
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
+        $this->actingAs($this->proprietaireDe($magasin));
         $this->travelTo('2026-10-09 19:00:00');
 
         Livewire::test(ListClotureCaisses::class)
@@ -126,7 +126,7 @@ class ClotureCaisseResourceTest extends TestCase
         $magasin = $this->ouvrirLeMagasin();
         $this->travelTo('2026-10-09 10:00:00');
         $this->emettreFactureParticulier(Client::factory()->create()); // 50 € HT, TVA 20 % => 60 € TTC
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
 
         Livewire::test(ListClotureCaisses::class)
             ->mountAction('cloturer')
@@ -144,8 +144,8 @@ class ClotureCaisseResourceTest extends TestCase
         $magasin = $this->ouvrirLeMagasin();
         $this->travelTo('2026-10-09 10:00:00');
         $this->emettreFactureParticulier(Client::factory()->create());
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
-        PanierCaisse::factory()->create(['user_id' => $this->proprietaireDe($magasin)->id]);
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
+        PanierCaisse::factory()->create(['user_id' => $this->responsableDeTest($magasin)->id]);
 
         Livewire::test(ListClotureCaisses::class)
             ->mountAction('cloturer')
@@ -159,7 +159,7 @@ class ClotureCaisseResourceTest extends TestCase
         $this->travelTo('2026-10-09 10:00:00');
         $this->emettreFactureParticulier($client); // 60 € TTC
         $this->emettreAvoir($client, $this->emettreFactureParticulier($client));
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
 
         Livewire::test(ListClotureCaisses::class)
             ->mountAction('cloturer')
@@ -178,7 +178,7 @@ class ClotureCaisseResourceTest extends TestCase
         app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
 
         Livewire::test(ListClotureCaisses::class)
             ->mountAction('cloturer')
@@ -198,7 +198,7 @@ class ClotureCaisseResourceTest extends TestCase
         $venteDu8 = $this->emettreFactureParticulier($client);
         $this->travelTo('2026-10-09 10:00:00');
         $venteDu9 = $this->emettreFactureParticulier($client);
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
         $this->travelTo('2026-10-09 19:00:00');
 
         Livewire::test(ListClotureCaisses::class)
@@ -257,7 +257,7 @@ class ClotureCaisseResourceTest extends TestCase
         $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirLeMagasin();
         $ticket = $this->vendreUnTicket();
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
         $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable());
         $comptable->forceFill(['name' => 'Claire Compta'])->save();
         $this->actingAs($comptable);
@@ -296,7 +296,7 @@ class ClotureCaisseResourceTest extends TestCase
         $magasin = $this->ouvrirLeMagasin();
         $this->travelTo('2026-10-09 10:00:00');
         $this->emettreFactureParticulier(Client::factory()->create());
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
 
         Livewire::test(ListClotureCaisses::class)
             ->callAction('cloturer');
@@ -315,7 +315,7 @@ class ClotureCaisseResourceTest extends TestCase
         $magasin = $this->ouvrirLeMagasin();
         $this->travelTo('2026-10-09 10:00:00');
         $this->emettreFactureParticulier(Client::factory()->create());
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
         $this->travelTo('2026-10-09 23:59:00');
         $page = Livewire::test(ListClotureCaisses::class)->mountAction('cloturer');
         $this->travelTo('2026-10-10 00:00:00');
@@ -332,7 +332,7 @@ class ClotureCaisseResourceTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasin();
         $this->vendreUnTicket();
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
         $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW]));
 
         Livewire::test(ListClotureCaisses::class)
@@ -347,7 +347,7 @@ class ClotureCaisseResourceTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasin();
         $this->vendreUnTicket();
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
         $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]));
 
         Livewire::test(ListClotureCaisses::class)
@@ -358,7 +358,7 @@ class ClotureCaisseResourceTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasin();
         $facture = $this->emettreFactureParticulier(Client::factory()->create());
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 
         $cloture = ClotureCaisse::query()->sole();
@@ -372,7 +372,7 @@ class ClotureCaisseResourceTest extends TestCase
         $magasin = $this->ouvrirLeMagasin();
         $client = Client::factory()->create();
         $avoir = $this->emettreAvoir($client, $this->emettreFactureParticulier($client));
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 
         $cloture = ClotureCaisse::query()->sole();
@@ -396,7 +396,7 @@ class ClotureCaisseResourceTest extends TestCase
         $vendeurA = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
         $vendeurB = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
         $this->vendreUnTicket();
-        app(FermerSaCaisseAction::class)->handle($proprietaire, $proprietaire);
+        app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
         $this->travelTo('2026-10-08 19:00:00');
         $this->actingAs($vendeurA);
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
@@ -423,9 +423,9 @@ class ClotureCaisseResourceTest extends TestCase
      */
     public function test_la_cloture_ventile_ses_ventes_par_taux_de_tva(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();

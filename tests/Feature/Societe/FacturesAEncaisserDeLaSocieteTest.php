@@ -162,8 +162,9 @@ class FacturesAEncaisserDeLaSocieteTest extends TestCase
     }
 
     /**
-     * Le magasin de démonstration, qui vend avant la validation de la
-     * société, n'a jamais de ligne : seul le magasin réel en a une, à zéro.
+     * Le magasin de démonstration, où l'équipe vend avant la validation de
+     * la société, n'a jamais de ligne : seul le magasin réel en a une, à
+     * zéro.
      */
     public function test_le_magasin_de_demonstration_n_a_pas_de_ligne(): void
     {
@@ -171,7 +172,8 @@ class FacturesAEncaisserDeLaSocieteTest extends TestCase
         $reel = $this->creerLeMagasinDuSiege($societe);
         $proprietaire = $societe->proprietaire()->firstOrFail();
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
-        $vente = app(TenantContext::class)->runAs($demonstration, fn (): Facture => app(EmettreFactureAction::class)->handle($proprietaire, app(CreerFactureAction::class)->handle($proprietaire, Client::factory()->create(), [
+        $entraine = self::responsableDeTest($demonstration);
+        $vente = app(TenantContext::class)->runAs($demonstration, fn (): Facture => app(EmettreFactureAction::class)->handle($entraine, app(CreerFactureAction::class)->handle($entraine, Client::factory()->create(), [
             ['produit_id' => Produit::query()->where('reference', 'DEMO-CARNET')->value('id'), 'quantite' => 1],
         ])));
         $this->dansLEspaceDeLaSociete($societe, $proprietaire);
@@ -185,13 +187,13 @@ class FacturesAEncaisserDeLaSocieteTest extends TestCase
     /**
      * Une facture d'un article au prix TTC donné, à 20 %, émise dans ce
      * magasin pour un nouveau client professionnel de ce nom, par l'auteur
-     * donné, sinon par le propriétaire (qui n'encaisse que dans un magasin
-     * à la fois) ; la société peut facturer un professionnel.
+     * donné, sinon par le responsable de test du magasin, le propriétaire
+     * ne vendant jamais ; la société peut facturer un professionnel.
      */
     private function facture(Magasin $magasin, string $client, float $prixTtc, ?User $auteur = null): Facture
     {
         $this->completerIdentiteLegale($magasin);
-        $auteur ??= $this->proprietaireDe($magasin);
+        $auteur ??= self::responsableDeTest($magasin);
 
         return app(TenantContext::class)->runAs($magasin, function () use ($auteur, $client, $prixTtc): Facture {
             $produit = Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);

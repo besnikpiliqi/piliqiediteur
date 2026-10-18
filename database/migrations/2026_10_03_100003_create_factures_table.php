@@ -1,9 +1,15 @@
 <?php
 
+use App\Domain\Facturation\Support\GardesDeLaVente;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * Les factures et les tickets de caisse d'un magasin. Le propriétaire, qui
+ * ne vend jamais, n'en crée aucun : la base refuse une facture créée à son
+ * nom ou qu'on lui attribue ensuite (voir GardesDeLaVente).
+ */
 return new class extends Migration
 {
     public function up(): void
@@ -117,10 +123,13 @@ return new class extends Migration
             $table->index(['magasin_id', 'cloture_caisse_id']);
             $table->index(['magasin_id', 'type_client', 'date_emission']);
         });
+
+        GardesDeLaVente::poser('factures');
     }
 
     public function down(): void
     {
         Schema::dropIfExists('factures');
+        GardesDeLaVente::retirer('factures');
     }
 };

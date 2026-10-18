@@ -44,6 +44,17 @@ class ProduitResourceTest extends TestCase
 
     private const MESSAGE_REFERENCE_PRISE = 'Cette référence est déjà celle d\'un autre produit, peut-être archivé : affichez les produits archivés pour le restaurer.';
 
+    /**
+     * Le responsable de test d'un nouveau magasin, connecté : il vend, ce
+     * que le propriétaire ne fait jamais.
+     */
+    private function connecterLeResponsable(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
+        Filament::setTenant($magasin);
+    }
+
     private function connecterProprietaire(): void
     {
         $proprietaire = User::factory()->create();
@@ -129,7 +140,7 @@ class ProduitResourceTest extends TestCase
      */
     public function test_un_produit_a_40_euros_ttc_vendu_par_2_totalise_80_euros_a_lecran_et_en_base(): void
     {
-        $this->connecterProprietaire();
+        $this->connecterLeResponsable();
 
         $produit = Produit::factory()->create(['nom' => 'Ecran Iphone 18 Pro', 'prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
         $client = Client::factory()->create();
@@ -678,7 +689,7 @@ class ProduitResourceTest extends TestCase
      */
     public function test_une_ligne_forgee_avec_un_produit_archive_est_refusee_avec_un_message(): void
     {
-        $this->connecterProprietaire();
+        $this->connecterLeResponsable();
         $client = Client::factory()->create();
         $produit = Produit::factory()->trashed()->create(['nom' => 'Chargeur ancien modèle', 'prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
 

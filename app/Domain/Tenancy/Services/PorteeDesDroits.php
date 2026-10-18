@@ -60,9 +60,10 @@ use LogicException;
  *   provisoire (voir User::recoitDeNouveauxDroitsDe()) : qui connaît le
  *   provisoire ne profite jamais, par ce compte, de droits qu'il ne
  *   pourrait pas donner lui-même ;
- * - ce qu'on coche pour quelqu'un dans un magasin reste inclus dans ses
- *   propres autorisations dans ce magasin : toutes pour le propriétaire et
- *   un responsable du magasin, aucune pour tout autre compte (voir
+ * - ce qu'on coche pour quelqu'un dans un magasin : toutes les
+ *   autorisations pour le propriétaire, y compris celles de la vente qu'il
+ *   n'exerce pas lui-même, toutes celles de son magasin pour un
+ *   responsable, qui les a toutes, aucune pour tout autre compte (voir
  *   autorisationsCochables()).
  *
  * Retirer quelqu'un de son dernier magasin le retire de la société : n'en
@@ -354,9 +355,11 @@ final class PorteeDesDroits
 
     /**
      * Les autorisations qu'il peut cocher pour un vendeur ou un observateur
-     * dans ce magasin : toutes pour le propriétaire et un responsable de ce
-     * magasin ; aucune sinon (les cases d'un administrateur se cochent par
-     * le propriétaire, dans les actions des administrateurs).
+     * dans ce magasin : toutes pour le propriétaire, celles de la vente
+     * comprises, qu'il ne fait jamais lui-même mais coche pour qui il veut,
+     * et pour un responsable de ce magasin, qui les a toutes ; aucune sinon
+     * (les cases d'un administrateur se cochent par le propriétaire, dans
+     * les actions des administrateurs).
      *
      * @return list<string>
      */

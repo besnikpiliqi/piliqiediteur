@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Facturation;
 
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
@@ -12,12 +13,14 @@ use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -288,8 +291,9 @@ class FermerSaCaisseActionTest extends TestCase
      * Un paiement de 100,00 € en espèces saisi par erreur par le vendeur,
      * contre-passé par le propriétaire, puis le bon paiement de 10,00 € :
      * la contre-passation revient dans le relevé du vendeur (Espèces
-     * 10,00 €), jamais dans celui du propriétaire ; le paiement d'un
-     * autre vendeur n'y figure pas.
+     * 10,00 €) ; le propriétaire, qui ne vend jamais, n'a pas de caisse,
+     * même après sa contre-passation ; le paiement d'un autre vendeur n'y
+     * figure pas.
      */
     public function test_une_erreur_contre_passee_par_le_proprietaire_revient_dans_le_releve_du_vendeur(): void
     {
@@ -308,11 +312,12 @@ class FermerSaCaisseActionTest extends TestCase
         $this->encaisser($facture, ModePaiement::Cheque, 20);
 
         $releveDuVendeur = app(FermerSaCaisseAction::class)->handle($vendeur, $vendeur);
-        $releveDuProprietaire = app(FermerSaCaisseAction::class)->handle($proprietaire, $proprietaire);
 
         $this->assertSame(['especes' => '10.00'], $releveDuVendeur->fresh()->encaissements);
         $this->assertSame(3, $releveDuVendeur->paiements()->count());
-        $this->assertSame([], $releveDuProprietaire->fresh()->encaissements);
+        $this->assertFalse($proprietaire->can('fermer', ClotureCaissePersonnelle::class));
+        $this->assertThrows(fn () => app(FermerSaCaisseAction::class)->handle($proprietaire, $proprietaire), AuthorizationException::class, LecteurDesDroits::REFUS);
+        $this->assertSame(0, ClotureCaissePersonnelle::query()->where('vendeur_id', $proprietaire->id)->count());
     }
 
     /**

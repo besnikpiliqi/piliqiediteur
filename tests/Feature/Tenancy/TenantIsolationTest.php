@@ -469,10 +469,10 @@ class TenantIsolationTest extends TestCase
 
     /**
      * L'URL d'un enregistrement du magasin A, placée sous le magasin B
-     * dont le visiteur est propriétaire (toutes les permissions) : 404,
-     * comme pour un identifiant qui n'existe pas. La même page s'ouvre
-     * sous le magasin A pour son propriétaire : le 404 ne vient pas d'une
-     * URL fausse.
+     * dont le visiteur est responsable (tous les droits du magasin, vente
+     * comprise, que le propriétaire n'a pas) : 404, comme pour un
+     * identifiant qui n'existe pas. La même page s'ouvre sous le magasin A
+     * pour son responsable : le 404 ne vient pas d'une URL fausse.
      *
      * @param  class-string<RessourceFilament>  $ressource
      * @param  Closure(Magasin): Model  $creerEnregistrement
@@ -480,16 +480,17 @@ class TenantIsolationTest extends TestCase
     #[DataProvider('pagesDUnEnregistrement')]
     public function test_l_url_d_un_enregistrement_d_un_autre_magasin_repond_404(string $ressource, string $page, Closure $creerEnregistrement): void
     {
-        $proprietaireA = User::factory()->create();
-        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A'], $proprietaireA);
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A']);
         $enregistrementDeA = $creerEnregistrement($magasinA);
-        $proprietaireB = User::factory()->create();
-        $magasinB = $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
-        $this->actingAs($proprietaireA)
+        $responsableA = $this->responsableDeTest($magasinA);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'Boutique B']);
+        $responsableB = $this->responsableDeTest($magasinB);
+        $this->actingAs($responsableA)
             ->get($ressource::getUrl($page, ['record' => $enregistrementDeA, 'tenant' => $magasinA]))
             ->assertSuccessful();
+        $this->flushSession();
 
-        $reponse = $this->actingAs($proprietaireB)
+        $reponse = $this->actingAs($responsableB)
             ->get($ressource::getUrl($page, ['record' => $enregistrementDeA, 'tenant' => $magasinB]));
 
         $reponse->assertNotFound();

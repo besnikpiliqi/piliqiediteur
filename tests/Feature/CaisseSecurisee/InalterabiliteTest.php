@@ -387,8 +387,8 @@ class InalterabiliteTest extends TestCase
             ['produit_id' => $this->produit()->id, 'quantite' => 1],
             ['service_id' => $service->id, 'quantite' => 1, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20],
         ]);
-        // Émise par le propriétaire : seul cree_par référence l'auteur.
-        $facture = app(EmettreFactureAction::class)->handle($this->proprietaireDe($magasin), $brouillon);
+        // Émise par un responsable : seul cree_par référence l'auteur.
+        $facture = app(EmettreFactureAction::class)->handle($this->responsableDeTest($magasin), $brouillon);
         $referencee = $fiche($facture);
 
         // La base refuse d'elle-même, quel que soit le code qui le tente : la

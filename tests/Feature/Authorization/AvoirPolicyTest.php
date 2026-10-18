@@ -45,7 +45,7 @@ class AvoirPolicyTest extends TestCase
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $membre = $this->membre($magasin, $role, $autorisations, ['name' => 'Membre', 'email' => 'membre@example.test']);
-        $avoir = $this->emettreUnAvoirEnTantQue($proprietaire);
+        $avoir = $this->emettreUnAvoirEnTantQue($this->responsableDeTest($magasin));
 
         $this->assertSame($peutEnvoyer, $membre->can('envoyer', $avoir));
     }
@@ -68,9 +68,8 @@ class AvoirPolicyTest extends TestCase
 
     public function test_personne_n_envoie_l_avoir_d_un_autre_magasin(): void
     {
-        $proprietaireA = User::factory()->create();
-        $this->ouvrirUneSociete(['nom' => 'Boutique A'], $proprietaireA);
-        $avoirDeA = $this->emettreUnAvoirEnTantQue($proprietaireA);
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A']);
+        $avoirDeA = $this->emettreUnAvoirEnTantQue($this->responsableDeTest($magasinA));
         $proprietaireB = User::factory()->create();
         $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
 

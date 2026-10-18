@@ -169,7 +169,7 @@ class ExpertComptableTest extends TestCase
     public function test_l_expert_comptable_telecharge_les_pdf_et_exporte_le_journal_des_evenements_a_son_nom(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $ticket = $this->ticketDuProprietaire($magasin);
+        $ticket = $this->ticketDuMagasin($magasin);
         $expert = $this->expertComptable($magasin);
 
         $this->dansLeMagasin($magasin, $expert);
@@ -192,7 +192,7 @@ class ExpertComptableTest extends TestCase
     public function test_l_expert_comptable_n_envoie_aucun_e_mail(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $ticket = $this->ticketDuProprietaire($magasin);
+        $ticket = $this->ticketDuMagasin($magasin);
         $expert = $this->expertComptable($magasin);
 
         $this->dansLeMagasin($magasin, $expert);
@@ -333,9 +333,13 @@ class ExpertComptableTest extends TestCase
         $this->assertTrue($compte->peutOuvrir($autre));
     }
 
-    private function ticketDuProprietaire(Magasin $magasin): Facture
+    /**
+     * Un ticket de 12,00 € TTC émis dans le magasin par son responsable de
+     * test, connecté : le propriétaire ne vend jamais.
+     */
+    private function ticketDuMagasin(Magasin $magasin): Facture
     {
-        $this->actingAs($this->proprietaireDe($magasin));
+        $this->actingAs($this->responsableDeTest($magasin));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));

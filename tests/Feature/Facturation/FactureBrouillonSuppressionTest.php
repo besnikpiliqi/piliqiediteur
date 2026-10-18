@@ -21,19 +21,19 @@ class FactureBrouillonSuppressionTest extends TestCase
 
     public function test_le_createur_peut_supprimer_son_propre_brouillon(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $createur = $this->responsableDeTest($magasin);
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create();
-        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
+        $facture = app(CreerFactureAction::class)->handle($createur, $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
 
-        $this->actingAs($proprietaire);
+        $this->actingAs($createur);
 
-        $this->assertTrue($proprietaire->can('delete', $facture));
-        $this->assertTrue($proprietaire->can('deleteAny', Facture::class));
+        $this->assertTrue($createur->can('delete', $facture));
+        $this->assertTrue($createur->can('deleteAny', Facture::class));
 
         $facture->delete();
 

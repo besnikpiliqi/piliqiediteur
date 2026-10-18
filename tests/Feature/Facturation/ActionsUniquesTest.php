@@ -135,9 +135,9 @@ class ActionsUniquesTest extends TestCase
     public function test_recharger_la_caisse_apres_une_reponse_perdue_ne_cree_pas_un_second_ticket(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $proprietaire = $this->proprietaireDe($magasin);
+        $vendeur = $this->responsableDeTest($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $this->actingAs($proprietaire);
+        $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $caisse = Livewire::test(Caisse::class)->fillForm([
@@ -146,7 +146,7 @@ class ActionsUniquesTest extends TestCase
             'mode_paiement' => 'especes',
         ]);
         $this->assertSame(PanierCaisse::query()->sole()->jeton, $caisse->get('jetonDeLaVente'));
-        $ticket = self::vendreAuComptant($proprietaire, $comptoir, $caisse->instance()->form->getState()['lignes'], ModePaiement::Especes, jeton: $caisse->get('jetonDeLaVente'));
+        $ticket = self::vendreAuComptant($vendeur, $comptoir, $caisse->instance()->form->getState()['lignes'], ModePaiement::Especes, jeton: $caisse->get('jetonDeLaVente'));
 
         $caisse->call('encaisser')
             ->assertNotified("Vente encaissée : facture {$ticket->numero}")

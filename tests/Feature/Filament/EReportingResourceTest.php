@@ -38,8 +38,9 @@ class EReportingResourceTest extends TestCase
     }
 
     /**
-     * Ce jour-là, à 10 h, ces lignes vendues à la caisse en espèces, puis
-     * la clôture de la journée à 19 h.
+     * Ce jour-là, à 10 h, ces lignes vendues à la caisse en espèces par le
+     * responsable de test, le propriétaire ne vendant jamais, puis la
+     * clôture de la journée à 19 h par le propriétaire.
      *
      * @param  list<array<string, mixed>>  $lignes
      */
@@ -48,7 +49,7 @@ class EReportingResourceTest extends TestCase
         $this->travelTo("{$jour} 10:00:00");
 
         if ($lignes !== []) {
-            self::vendreAuComptant(self::auteur(), Client::factory()->create(), $lignes, ModePaiement::Especes);
+            self::vendreAuComptant($this->responsableDeTest($magasin), Client::factory()->create(), $lignes, ModePaiement::Especes);
         }
 
         $this->travelTo("{$jour} 19:00:00");

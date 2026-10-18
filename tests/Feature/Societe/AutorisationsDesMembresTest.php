@@ -480,23 +480,33 @@ class AutorisationsDesMembresTest extends TestCase
 
     /**
      * Le propriétaire peut cocher chaque autorisation pour un membre,
-     * paramètres du magasin compris, sous son libellé.
+     * paramètres du magasin compris, sous son libellé, celles de la vente,
+     * qu'il n'exerce pas lui-même, dans leur groupe à part.
      */
     public function test_le_proprietaire_peut_cocher_chaque_autorisation_sous_son_libelle(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->dansLeMagasin($magasin, $this->proprietaireDe($magasin));
+        $proposees = [];
 
         Livewire::test(CreateMembreDuMagasin::class)
             ->fillForm(['role' => RoleMagasin::Vendeur->value])
-            ->assertFormFieldExists('autorisations', function (CheckboxList $autorisations): bool {
-                $proposees = array_keys($autorisations->getOptions());
+            ->assertFormFieldExists('autorisations', function (CheckboxList $autorisations) use (&$proposees): bool {
+                $proposees = array_merge($proposees, array_keys($autorisations->getOptions()));
 
-                return count($proposees) === count(PermissionRegistry::toutes())
-                    && array_diff(PermissionRegistry::toutes(), $proposees) === []
-                    && $autorisations->getOptions()[PermissionRegistry::PARAMETRES_GERER] === PermissionRegistry::libelles()[PermissionRegistry::PARAMETRES_GERER];
+                return $autorisations->getOptions()[PermissionRegistry::PARAMETRES_GERER] === PermissionRegistry::libelles()[PermissionRegistry::PARAMETRES_GERER];
             })
-            ->assertFormFieldIsEnabled('autorisations');
+            ->assertFormFieldExists('autorisations_vente', function (CheckboxList $vente) use (&$proposees): bool {
+                $proposees = array_merge($proposees, array_keys($vente->getOptions()));
+
+                return collect($vente->getOptions())->keys()->sort()->values()->all() === collect(PermissionRegistry::deVente())->sort()->values()->all()
+                    && $vente->getOptions()[PermissionRegistry::FACTURE_EMETTRE] === PermissionRegistry::libelles()[PermissionRegistry::FACTURE_EMETTRE];
+            })
+            ->assertFormFieldIsEnabled('autorisations')
+            ->assertFormFieldIsEnabled('autorisations_vente');
+
+        $this->assertCount(count(PermissionRegistry::toutes()), $proposees);
+        $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $proposees);
     }
 
     /**

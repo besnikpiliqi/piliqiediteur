@@ -223,17 +223,17 @@ class HistoriqueAuNomFigeTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->nomme($this->membre($magasin, RoleMagasin::Vendeur), 'Paul Martin');
-        $proprietaire = $this->nomme($this->proprietaireDe($magasin), 'Alice Martin');
+        $responsable = $this->nomme($this->responsableDeTest($magasin), 'Alice Martin');
         $brouillon = app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), $this->lignes());
 
         $this->assertThrows(fn () => $brouillon->forceFill(['cree_par_nom' => 'Quelqu\'un d\'autre'])->save(), LogicException::class, 'Le nom figé d\'une personne dans l\'historique ne se modifie jamais.');
         $this->assertThrows(fn () => $brouillon->fresh()->forceFill(['notes' => 'Note', 'cree_par_nom' => 'Paul Durand'])->save(), LogicException::class, 'Le nom figé d\'une personne dans l\'historique ne se modifie jamais.');
         $this->assertSame('Paul Martin', $brouillon->fresh()->cree_par_nom);
 
-        $brouillon->fresh()->forceFill(['cree_par' => $proprietaire->id, 'cree_par_nom' => 'Nom inventé'])->save();
+        $brouillon->fresh()->forceFill(['cree_par' => $responsable->id, 'cree_par_nom' => 'Nom inventé'])->save();
         $this->assertSame('Alice Martin', $brouillon->fresh()->cree_par_nom);
 
-        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($proprietaire, $brouillon->fresh())->forceFill(['cree_par_nom' => 'Paul Durand'])->save(), LogicException::class);
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($responsable, $brouillon->fresh())->forceFill(['cree_par_nom' => 'Paul Durand'])->save(), LogicException::class);
         $this->assertSame('Alice Martin', Facture::query()->sole()->cree_par_nom);
     }
 

@@ -57,9 +57,9 @@ class CaisseTest extends TestCase
 
     public function test_le_formulaire_propose_le_client_comptoir_par_defaut(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
@@ -70,9 +70,8 @@ class CaisseTest extends TestCase
 
     public function test_un_vendeur_encaisse_une_vente_comptoir_depuis_la_caisse(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur));
         Filament::setTenant($magasin);
 
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
@@ -236,9 +235,9 @@ class CaisseTest extends TestCase
      */
     public function test_une_horloge_qui_recule_refuse_la_vente_avec_un_message_sans_rien_enregistrer(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -264,9 +263,9 @@ class CaisseTest extends TestCase
 
     public function test_encaisser_sans_aucune_ligne_est_refuse(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
@@ -293,9 +292,9 @@ class CaisseTest extends TestCase
      */
     public function test_le_total_a_payer_correspond_exactement_a_la_somme_des_lignes_affichees(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
@@ -326,9 +325,9 @@ class CaisseTest extends TestCase
      */
     public function test_un_article_a_40_euros_ttc_vendu_par_2_encaisse_exactement_80_euros(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $clientComptoir = Client::query()->where('nom', Client::NOM_COMPTOIR)->firstOrFail();
@@ -361,9 +360,9 @@ class CaisseTest extends TestCase
      */
     public function test_la_caisse_deduit_le_credit_davoir_du_client_du_total_et_de_la_monnaie_a_rendre(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create(['nom' => 'Mme Martin']);
@@ -406,9 +405,9 @@ class CaisseTest extends TestCase
      */
     public function test_saisir_le_prix_ttc_dune_ligne_calcule_automatiquement_le_prix_ht(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
@@ -431,9 +430,9 @@ class CaisseTest extends TestCase
 
     public function test_creer_un_nouveau_client_a_la_volee_depuis_la_caisse(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         Livewire::test(Caisse::class)
@@ -452,9 +451,9 @@ class CaisseTest extends TestCase
      */
     public function test_la_caisse_refuse_de_creer_un_professionnel_etabli_en_france_sans_siren(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         Livewire::test(Caisse::class)
@@ -474,9 +473,9 @@ class CaisseTest extends TestCase
      */
     public function test_un_montant_recu_insuffisant_est_refuse(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $produit = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -504,9 +503,9 @@ class CaisseTest extends TestCase
      */
     public function test_la_caisse_montre_les_totaux_de_la_vente_calcules_comme_la_facture(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -611,9 +610,9 @@ class CaisseTest extends TestCase
      */
     public function test_un_montant_recu_absurde_ne_fait_pas_planter_la_caisse(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -1095,9 +1094,9 @@ class CaisseTest extends TestCase
     {
         $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $clientDUnAutreMagasin = Client::factory()->create();
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
 
@@ -1232,9 +1231,9 @@ class CaisseTest extends TestCase
      */
     public function test_la_caisse_d_un_magasin_qui_ne_peut_pas_vendre_ne_s_ouvre_pas_et_n_encaisse_pas(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $this->get(Caisse::getUrl(tenant: $magasin))->assertForbidden();
@@ -2067,9 +2066,9 @@ class CaisseTest extends TestCase
 
     private function ouvrirLaCaisseDUnMagasin(): Magasin
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         return $magasin;

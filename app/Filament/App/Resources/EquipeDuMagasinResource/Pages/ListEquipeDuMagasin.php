@@ -44,7 +44,7 @@ class ListEquipeDuMagasin extends ListRecords
             ->form([
                 TextInput::make('email')->label('Adresse e-mail de son compte')->email()->adresseDeConnexion()->required()->maxLength(255),
                 EquipeDuMagasinResource::champRole(),
-                EquipeDuMagasinResource::champAutorisations(),
+                ...EquipeDuMagasinResource::champsAutorisations(),
             ])
             ->action(function (array $data): void {
                 EquipeDuMagasinResource::executerLeGeste(function () use ($data): void {
@@ -53,7 +53,7 @@ class ListEquipeDuMagasin extends ListRecords
                         $this->magasin()->societe,
                         $data['email'],
                         RoleSociete::Membre,
-                        [$this->magasin()->getKey() => ['role' => $data['role'], 'autorisations' => $data['autorisations'] ?? []]],
+                        [$this->magasin()->getKey() => ['role' => $data['role'], 'autorisations' => EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations')]],
                     );
                     Notification::make()->title(ProposerUnRattachementAction::REPONSE)->success()->send();
                 });

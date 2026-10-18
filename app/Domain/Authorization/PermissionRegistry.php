@@ -16,18 +16,23 @@ use InvalidArgumentException;
  * Ces autorisations valent magasin par magasin (voir Affectation et
  * User::autorisationsDans()) : cocher "client.create" pour un vendeur dans
  * le magasin A ne lui donne rien dans le magasin B. Sans aucune case, le
- * propriétaire de la société les a toutes dans chacun de ses magasins, un
- * responsable toutes dans son magasin, et un expert-comptable les seules
+ * propriétaire de la société les a toutes sauf celles de la vente (voir
+ * deVente() et duProprietaire()) dans chacun de ses magasins, démonstration
+ * comprise : il supervise et contrôle, et ne vend jamais ; un responsable
+ * les a toutes dans son magasin, et un expert-comptable les seules
  * consultations dans chaque magasin réel de la société (voir
  * consultations()). Un vendeur ou un observateur a celles de son
  * affectation à ce magasin, cochées par le propriétaire ou un responsable
  * du magasin à partir du modèle de son rôle (voir
- * RoleMagasin::permissionsParDefaut()), jamais au-delà des autorisations
- * de celui qui coche ; un administrateur, celles que le propriétaire lui
- * a cochées pour tous les magasins ou pour chaque magasin de sa sélection
- * (voir modeleDeLAdministrateur()). Les autorisations de la société
- * elle-même (gérer ses magasins, nommer ses responsables, ses paramètres)
- * sont à part (voir AutorisationsSociete).
+ * RoleMagasin::permissionsParDefaut()) : le propriétaire peut toutes les
+ * cocher, celles de la vente comprises, un responsable jamais au-delà des
+ * siennes ; un administrateur, celles que le propriétaire lui a cochées
+ * pour tous les magasins ou pour chaque magasin de sa sélection (voir
+ * modeleDeLAdministrateur()), celles de la vente seulement s'il les lui
+ * coche. Chaque autorisation est rangée, en toutes lettres, parmi celles
+ * de la vente ou celles qui n'en sont pas (voir horsVente()). Les
+ * autorisations de la société elle-même (gérer ses magasins, nommer ses
+ * responsables, ses paramètres) sont à part (voir AutorisationsSociete).
  */
 final class PermissionRegistry
 {
@@ -79,8 +84,9 @@ final class PermissionRegistry
     /**
      * Vendre au-delà du stock disponible (R1, voir VerificateurDeStock) :
      * après un avertissement, qui se renouvelle si le stock a encore
-     * baissé. Le propriétaire et les responsables du magasin l'ont
-     * toujours ; aucun modèle ne la coche d'office, pas même celui de
+     * baissé. Une autorisation de vente (voir deVente()) : les responsables
+     * du magasin l'ont toujours, le propriétaire, qui ne vend jamais,
+     * jamais ; aucun modèle ne la coche d'office, pas même celui de
      * l'administrateur (voir modeleDeLAdministrateur()), et un
      * expert-comptable ne l'a jamais (elle n'est pas une consultation).
      */
@@ -103,10 +109,13 @@ final class PermissionRegistry
      * Accorder une remise, fixer le prix d'un service (son prix de
      * référence au catalogue comme celui d'une ligne) et mettre sur une
      * ligne de produit un prix différent de sa fiche (R2, voir
-     * DerogationsDePrix). Le propriétaire et les responsables du magasin
-     * l'ont toujours ; le modèle de l'administrateur la précoche, aucun
-     * modèle de vendeur ou d'observateur ; un expert-comptable ne l'a
-     * jamais.
+     * DerogationsDePrix). Pas une autorisation de vente : elle ne vaut sur
+     * une ligne de ticket ou de facture que pour qui peut aussi la créer.
+     * Les responsables du magasin et le propriétaire l'ont toujours (le
+     * propriétaire, qui ne vend jamais, pour le prix de référence d'un
+     * service et les lignes d'un devis) ; le modèle de l'administrateur la
+     * précoche, aucun modèle de vendeur ou d'observateur ; un
+     * expert-comptable ne l'a jamais.
      */
     public const VENTE_REMISES_ET_PRIX = 'vente.remises_et_prix';
 
@@ -137,6 +146,19 @@ final class PermissionRegistry
     // impayée (voir EnvoyerDocumentAction), parmi celles que
     // l'utilisateur voit (voir FacturePolicy::envoyer()).
     public const FACTURE_ENVOYER = 'facture.envoyer';
+
+    /**
+     * Noter les preuves de l'exonération d'une facture et le n° du
+     * bordereau de détaxe d'un ticket (voir FacturePolicy::justifier(),
+     * AjouterPreuveOperationAction et NoterBordereauDetaxeAction) : une
+     * information ajoutée après l'émission, hors du document signé, et non
+     * une vente. Le propriétaire et les responsables du magasin l'ont
+     * toujours ; les modèles du vendeur et de l'administrateur la
+     * précochent, pas celui de l'observateur, à qui le propriétaire ou un
+     * responsable du magasin peut la cocher ; un expert-comptable ne l'a
+     * jamais (elle n'est pas une consultation).
+     */
+    public const FACTURE_JUSTIFIER = 'facture.justifier';
 
     /**
      * Régler les relances automatiques des factures impayées (Paramètres >
@@ -224,7 +246,7 @@ final class PermissionRegistry
             self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_ARCHIVER, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK, self::PRIX_VENTE_REGLER,
             self::STOCK_VENDRE_SANS_STOCK, self::VENTE_REMISES_ET_PRIX,
             self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
-            self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ENVOYER, self::RELANCES_REGLER,
+            self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_CREATE, self::FACTURE_EMETTRE, self::FACTURE_ENVOYER, self::FACTURE_JUSTIFIER, self::RELANCES_REGLER,
             self::PARAMETRES_GERER,
             self::PAIEMENT_VIEW, self::PAIEMENT_CREER, self::PAIEMENT_CONTRE_PASSER,
             self::AVOIR_VIEW, self::AVOIR_CREER, self::AVOIR_ENVOYER,
@@ -282,23 +304,93 @@ final class PermissionRegistry
     }
 
     /**
+     * Les autorisations de la vente : créer et émettre un ticket ou une
+     * facture, enregistrer un encaissement (les parts d'un règlement et le
+     * bon d'avoir compris, à la caisse comme sur un ticket impayé), vendre
+     * sans stock. Le propriétaire ne les a jamais, dans aucun magasin, pas
+     * même la démonstration (voir duProprietaire()) ; un administrateur
+     * seulement quand le propriétaire les lui coche, jamais précochées
+     * (voir modeleDeLAdministrateur()). Ni l'avoir, ni le devis, ni la
+     * contre-passation, ni l'envoi, ni la clôture ne sont des ventes (voir
+     * horsVente()).
+     *
+     * @return list<string>
+     */
+    public static function deVente(): array
+    {
+        return [
+            self::FACTURE_CREATE,
+            self::FACTURE_EMETTRE,
+            self::PAIEMENT_CREER,
+            self::STOCK_VENDRE_SANS_STOCK,
+        ];
+    }
+
+    /**
+     * Toutes les autres autorisations, écrites en toutes lettres : une
+     * autorisation nouvelle doit être rangée ici ou parmi celles de la
+     * vente (voir deVente()), et un test refuse le registre tant qu'elle
+     * ne l'est pas.
+     *
+     * @return list<string>
+     */
+    public static function horsVente(): array
+    {
+        return [
+            self::CLIENT_VIEW, self::CLIENT_CREATE, self::CLIENT_UPDATE, self::CLIENT_ARCHIVER,
+            self::FOURNISSEUR_VIEW, self::FOURNISSEUR_CREATE, self::FOURNISSEUR_UPDATE, self::FOURNISSEUR_ARCHIVER,
+            self::PRODUIT_VIEW, self::PRODUIT_CREATE, self::PRODUIT_UPDATE, self::PRODUIT_ARCHIVER, self::PRODUIT_AJUSTER_STOCK, self::PRODUIT_VOIR_VALEUR_STOCK, self::PRIX_VENTE_REGLER,
+            self::VENTE_REMISES_ET_PRIX,
+            self::DEVIS_VIEW, self::DEVIS_CREATE, self::DEVIS_UPDATE, self::DEVIS_ENVOYER,
+            self::FACTURE_VIEW, self::FACTURE_VIEW_TOUTES, self::FACTURE_ENVOYER, self::FACTURE_JUSTIFIER, self::RELANCES_REGLER,
+            self::PARAMETRES_GERER,
+            self::PAIEMENT_VIEW, self::PAIEMENT_CONTRE_PASSER,
+            self::AVOIR_VIEW, self::AVOIR_CREER, self::AVOIR_ENVOYER,
+            self::CLOTURE_CAISSE_VIEW, self::CLOTURE_CAISSE_VIEW_TOUTES, self::CLOTURE_CAISSE_GERER,
+            self::FACTURE_ACHAT_VIEW, self::FACTURE_ACHAT_CREER, self::FACTURE_ACHAT_VALIDER,
+            self::AVOIR_FOURNISSEUR_VIEW, self::AVOIR_FOURNISSEUR_CREER,
+            self::CAISSE_SECURISEE_CONSULTER,
+        ];
+    }
+
+    /**
+     * Les autorisations du propriétaire dans chacun des magasins de sa
+     * société, sans case : toutes, sauf celles de la vente (voir
+     * deVente()), dans l'ordre alphabétique. Il supervise et contrôle : il
+     * fait les avoirs et les devis, contre-passe, envoie et relance,
+     * clôture la journée et ferme la caisse d'un vendeur, mais ne crée,
+     * n'émet ni n'encaisse jamais aucune vente.
+     *
+     * @return list<string>
+     */
+    public static function duProprietaire(): array
+    {
+        $autorisations = array_values(array_diff(self::toutes(), self::deVente()));
+        sort($autorisations);
+
+        return $autorisations;
+    }
+
+    /**
      * Le modèle des autorisations de magasin d'un nouvel administrateur,
      * que le propriétaire décoche à son gré (voir
      * CreerAdministrateurAction) : toutes, sauf les paramètres du magasin
-     * et la vente sans stock, qu'il coche pour qui il veut.
+     * et les autorisations de vente (voir deVente()), que le propriétaire
+     * coche pour qui il veut.
      *
      * @return list<string>
      */
     public static function modeleDeLAdministrateur(): array
     {
-        return array_values(array_diff(self::toutes(), [self::PARAMETRES_GERER, self::STOCK_VENDRE_SANS_STOCK]));
+        return array_values(array_diff(self::toutes(), [self::PARAMETRES_GERER], self::deVente()));
     }
 
     /**
      * Les autorisations des opérations commerciales, refusées tant que le
      * magasin ne peut pas vendre (voir ControleDesDroits et
-     * Magasin::peutVendre()) : émettre une facture ou un ticket, envoyer
-     * une facture, un devis ou un avoir, créer un avoir, enregistrer ou
+     * Magasin::peutVendre()) : émettre une facture ou un ticket, noter les
+     * preuves de son exonération ou son bordereau de détaxe, envoyer une
+     * facture, un devis ou un avoir, créer un avoir, enregistrer ou
      * contre-passer un paiement.
      *
      * @return list<string>
@@ -307,6 +399,7 @@ final class PermissionRegistry
     {
         return [
             self::FACTURE_EMETTRE,
+            self::FACTURE_JUSTIFIER,
             self::FACTURE_ENVOYER,
             self::DEVIS_ENVOYER,
             self::AVOIR_CREER,
@@ -376,6 +469,7 @@ final class PermissionRegistry
             self::FACTURE_CREATE => 'Factures : créer',
             self::FACTURE_EMETTRE => 'Factures : émettre',
             self::FACTURE_ENVOYER => 'Factures : envoyer par e-mail et relancer',
+            self::FACTURE_JUSTIFIER => 'Factures : noter les preuves d\'exonération et les bordereaux de détaxe',
             self::RELANCES_REGLER => 'Relances : régler les relances automatiques',
             self::PARAMETRES_GERER => 'Paramètres du magasin : coordonnées, références d\'acheteur, échéance et mentions des factures',
             self::PAIEMENT_VIEW => 'Paiements : voir',

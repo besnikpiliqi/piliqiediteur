@@ -78,6 +78,10 @@ enum RoleMagasin: string implements HasLabel
                 // Envoyer par e-mail, et relancer, les factures qu'il voit,
                 // donc les siennes (voir FacturePolicy::envoyer()).
                 PermissionRegistry::FACTURE_ENVOYER,
+                // Noter les preuves d'exonération et le bordereau de
+                // détaxe de ses ventes émises (voir
+                // FacturePolicy::justifier()).
+                PermissionRegistry::FACTURE_JUSTIFIER,
                 PermissionRegistry::PAIEMENT_VIEW,
                 PermissionRegistry::PAIEMENT_CREER,
             ],

@@ -197,7 +197,7 @@ class RegistreFiscalTest extends TestCase
         $this->travelTo('2026-10-09 10:15:30');
         $magasin = Magasin::factory()->avecLaSociete(['siren' => '100000009'])->create(['siret' => '10000000900017']);
         app(TenantContext::class)->set($magasin);
-        $vendeuse = User::factory()->create(['name' => 'Zoé Lefèvre']);
+        $vendeuse = User::factory()->responsableDeTest($magasin, self::MOT_DE_PASSE_CHOISI)->create(['name' => 'Zoé Lefèvre']);
         $facture = Facture::factory()->create();
         $cleId = $this->cleIdDe($this->clePubliqueDeTest());
 

@@ -40,12 +40,13 @@ use Tests\TestCase;
 
 /**
  * La vente au-delà du stock (R1) : refusée à qui n'est pas autorisé à
- * vendre sans stock dans le magasin ; pour qui l'est (le propriétaire et
- * les responsables toujours, un vendeur à qui on l'a cochée), elle ne
- * passe qu'après l'avertissement confirmé, renouvelé si le stock a encore
- * baissé ; confirmée, elle rend le stock négatif, alerte, se journalise et
- * reste visible jusqu'à sa régularisation. Les ventes simultanées sont
- * dans VenteSansStockConcurrenceTest.
+ * vendre sans stock dans le magasin ; pour qui l'est (les responsables
+ * toujours, un vendeur ou un administrateur à qui on l'a cochée ; le
+ * propriétaire, qui ne vend jamais, ne l'a pas), elle ne passe qu'après
+ * l'avertissement confirmé, renouvelé si le stock a encore baissé ;
+ * confirmée, elle rend le stock négatif, alerte, se journalise et reste
+ * visible jusqu'à sa régularisation. Les ventes simultanées sont dans
+ * VenteSansStockConcurrenceTest.
  */
 class VenteSansStockTest extends TestCase
 {
@@ -74,12 +75,12 @@ class VenteSansStockTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $cable = $this->produit('Câble USB', 1);
 
-        $avertissement = $this->avertissementDe(fn () => $this->vendre($this->proprietaireDe($magasin), $cable, 3));
+        $avertissement = $this->avertissementDe(fn () => $this->vendre($this->responsableDeTest($magasin), $cable, 3));
 
         $this->assertSame('Le stock de Câble USB passera à −2 : confirmer la vente ?', $avertissement->getMessage());
         $this->assertSame([0, 1], [Facture::query()->count(), $cable->fresh()->stock_quantite]);
 
-        $ticket = $this->vendre($this->proprietaireDe($magasin), $cable, 3, ConfirmationVenteSansStock::de($avertissement->manques));
+        $ticket = $this->vendre($this->responsableDeTest($magasin), $cable, 3, ConfirmationVenteSansStock::de($avertissement->manques));
 
         $this->assertSame([StatutFacture::Payee, -2], [$ticket->statut, $cable->fresh()->stock_quantite]);
     }
@@ -87,12 +88,12 @@ class VenteSansStockTest extends TestCase
     public function test_une_confirmation_devenue_insuffisante_redemande_l_avertissement(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $proprietaire = $this->proprietaireDe($magasin);
+        $responsable = $this->responsableDeTest($magasin);
         $cable = $this->produit('Câble USB', 1);
-        $confirmation = ConfirmationVenteSansStock::de($this->avertissementDe(fn () => $this->vendre($proprietaire, $cable, 3))->manques);
-        $this->vendre($proprietaire, $cable, 1);
+        $confirmation = ConfirmationVenteSansStock::de($this->avertissementDe(fn () => $this->vendre($responsable, $cable, 3))->manques);
+        $this->vendre($responsable, $cable, 1);
 
-        $nouvelAvertissement = $this->avertissementDe(fn () => $this->vendre($proprietaire, $cable, 3, $confirmation));
+        $nouvelAvertissement = $this->avertissementDe(fn () => $this->vendre($responsable, $cable, 3, $confirmation));
 
         $this->assertSame('Le stock de Câble USB passera à −3 : confirmer la vente ?', $nouvelAvertissement->getMessage());
         $this->assertSame([1, 0], [Facture::query()->count(), $cable->fresh()->stock_quantite]);
@@ -104,19 +105,20 @@ class VenteSansStockTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $responsable = $this->responsable($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $responsableQuiVend = $this->responsableDeTest($magasin);
         $cable = $this->produit('Câble USB', 1);
         Notification::fake();
 
-        $ticket = $this->vendre($proprietaire, $cable, 3, ConfirmationVenteSansStock::de($this->avertissementDe(fn () => $this->vendre($proprietaire, $cable, 3))->manques));
+        $ticket = $this->vendre($responsableQuiVend, $cable, 3, ConfirmationVenteSansStock::de($this->avertissementDe(fn () => $this->vendre($responsableQuiVend, $cable, 3))->manques));
 
         $this->assertSame(-2, $cable->fresh()->stock_quantite);
         $this->assertSame("Vente facture {$ticket->numero} (vente sans stock confirmée : stock négatif à régulariser)", MouvementStock::query()->where('produit_id', $cable->id)->where('type', 'vente')->sole()->note);
         $entree = $this->entreesDAudit($magasin->societe, ActionAuditee::VenteSansStock)[0];
         $this->assertSame(
-            [$magasin->id, $proprietaire->id, ['produits' => [['quantite' => 3, 'reference' => 'CABLE-USB', 'stock_avant' => 1]], 'vente' => $ticket->numero]],
+            [$magasin->id, $responsableQuiVend->id, ['produits' => [['quantite' => 3, 'reference' => 'CABLE-USB', 'stock_avant' => 1]], 'vente' => $ticket->numero]],
             [(int) $entree->magasin_id, (int) $entree->auteur_id, $entree->nouvelles_valeurs],
         );
-        Notification::assertSentTo([$proprietaire, $responsable], StockNegatif::class, fn (StockNegatif $alerte): bool => $alerte->produit->is($cable) && $alerte->numeroDeLaVente === $ticket->numero);
+        Notification::assertSentTo([$proprietaire, $responsable, $responsableQuiVend], StockNegatif::class, fn (StockNegatif $alerte): bool => $alerte->produit->is($cable) && $alerte->numeroDeLaVente === $ticket->numero);
         Notification::assertNotSentTo($vendeur, StockNegatif::class);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
@@ -125,9 +127,10 @@ class VenteSansStockTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
+        $responsable = $this->responsableDeTest($magasin);
         $cable = $this->produit('Câble USB', 1);
         $enStock = $this->produit('Chargeur', 4);
-        $this->vendre($proprietaire, $cable, 3, ConfirmationVenteSansStock::de($this->avertissementDe(fn () => $this->vendre($proprietaire, $cable, 3))->manques));
+        $this->vendre($responsable, $cable, 3, ConfirmationVenteSansStock::de($this->avertissementDe(fn () => $this->vendre($responsable, $cable, 3))->manques));
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -193,7 +196,7 @@ class VenteSansStockTest extends TestCase
     public function test_une_requete_forgee_sans_confirmation_est_refusee(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $proprietaire = $this->proprietaireDe($magasin);
+        $responsable = $this->responsableDeTest($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $cable = $this->produit('Câble USB', 1);
         $panier = ['client_id' => $this->comptoir()->id, 'lignes' => [['produit_id' => $cable->id, 'description' => $cable->nom, 'quantite' => 3]], 'mode_paiement' => 'especes'];
@@ -207,7 +210,7 @@ class VenteSansStockTest extends TestCase
             ->assertNotified('Stock insuffisant : Câble USB, reste 1, demandé 3.');
         $this->assertSame(0, Facture::query()->whereNotNull('numero')->count());
 
-        $this->actingAs($proprietaire);
+        $this->actingAs($responsable);
         $caisse = Livewire::test(Caisse::class)
             ->fillForm($panier)
             ->call('encaisser')
@@ -230,10 +233,10 @@ class VenteSansStockTest extends TestCase
     public function test_la_liste_des_factures_avertit_avant_d_emettre_une_vente_sans_stock(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $proprietaire = $this->proprietaireDe($magasin);
+        $responsable = $this->responsableDeTest($magasin);
         $cable = $this->produit('Câble USB', 1);
-        $brouillon = app(CreerFactureAction::class)->handle($proprietaire, $this->comptoir(), [['produit_id' => $cable->id, 'quantite' => 3]]);
-        $this->actingAs($proprietaire);
+        $brouillon = app(CreerFactureAction::class)->handle($responsable, $this->comptoir(), [['produit_id' => $cable->id, 'quantite' => 3]]);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $liste = Livewire::test(ListFactures::class)
@@ -278,13 +281,14 @@ class VenteSansStockTest extends TestCase
     /**
      * Ni le modèle de l'administrateur, ni ceux du vendeur et de
      * l'observateur ne cochent « vendre sans stock » ; l'expert-comptable
-     * ne l'a jamais.
+     * ne l'a jamais, et le propriétaire, qui ne vend jamais, non plus ;
+     * un responsable l'a toujours.
      */
     public function test_vendre_sans_stock_n_est_precoche_dans_aucun_modele_et_jamais_donne_a_l_expert_comptable(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 
-        $this->assertTrue($this->proprietaireDe($magasin)->can(PermissionRegistry::STOCK_VENDRE_SANS_STOCK));
+        $this->assertFalse($this->proprietaireDe($magasin)->can(PermissionRegistry::STOCK_VENDRE_SANS_STOCK));
         $this->assertTrue($this->responsable($magasin)->can(PermissionRegistry::STOCK_VENDRE_SANS_STOCK));
         $this->assertFalse($this->administrateur($magasin)->can(PermissionRegistry::STOCK_VENDRE_SANS_STOCK));
         $this->assertFalse($this->membre($magasin, RoleMagasin::Vendeur)->can(PermissionRegistry::STOCK_VENDRE_SANS_STOCK));

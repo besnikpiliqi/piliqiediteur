@@ -54,6 +54,7 @@ class EquipeDuMagasinTest extends TestCase
             Livewire::test(CreateMembreDuMagasin::class)
                 ->fillForm(['name' => $email, 'email' => $email, 'mot_de_passe_provisoire' => self::MOT_DE_PASSE_PROVISOIRE, 'role' => $role->value])
                 ->set('data.autorisations', $autorisations)
+                ->set('data.autorisations_vente', [])
                 ->call('create')
                 ->assertHasNoFormErrors();
 

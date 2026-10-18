@@ -35,9 +35,9 @@ class FacturesApercuWidgetTest extends TestCase
     public function test_le_widget_additionne_le_chiffre_daffaires_de_la_periode_en_ht(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-14 10:00:00'));
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -59,9 +59,9 @@ class FacturesApercuWidgetTest extends TestCase
 
     public function test_un_brouillon_ne_compte_pas_dans_le_chiffre_daffaires(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20]);
         app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [
@@ -81,9 +81,9 @@ class FacturesApercuWidgetTest extends TestCase
      */
     public function test_une_vente_du_lundi_apres_minuit_a_paris_compte_dans_la_semaine(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
         $this->travelTo(CarbonImmutable::parse('2026-10-11 22:30:00', 'UTC'));
@@ -98,7 +98,7 @@ class FacturesApercuWidgetTest extends TestCase
     }
 
     /**
-     * Le vendeur A vend F1 (1 x 120,00 € = 100,00 € HT) ; le propriétaire
+     * Le vendeur A vend F1 (1 x 120,00 € = 100,00 € HT) ; le responsable
      * vend F2 (2 x 40,00 € = 80,00 ÷ 1,2 = 66,67 € HT + 13,33 € de TVA),
      * puis reprend un article de F2 par un avoir (33,33 € HT, 6,67 € de
      * TVA, 40,00 €) : le propriétaire lit 100,00 + 66,67 - 33,33 =
@@ -169,7 +169,7 @@ class FacturesApercuWidgetTest extends TestCase
         $proprietaire = User::factory()->create();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
         $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00'));
-        $vente = $this->emettreUnTicket($proprietaire, Client::factory()->create(), 120.0, 1);
+        $vente = $this->emettreUnTicket($this->responsableDeTest($magasin), Client::factory()->create(), 120.0, 1);
         $this->travelTo(CarbonImmutable::parse('2026-11-02 10:00:00'));
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $vente->client, [['ligne_facture_id' => $vente->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         Filament::setTenant($magasin);
@@ -186,9 +186,8 @@ class FacturesApercuWidgetTest extends TestCase
     public function test_les_ventes_d_un_autre_magasin_ne_comptent_jamais(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-14 10:00:00'));
-        $proprietaireB = User::factory()->create();
-        $this->ouvrirUneSociete(['nom' => 'Autre boutique'], $proprietaireB);
-        $this->emettreUnTicket($proprietaireB, Client::factory()->create(), 120.0, 1);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
+        $this->emettreUnTicket($this->responsableDeTest($magasinB), Client::factory()->create(), 120.0, 1);
         $proprietaireA = User::factory()->create();
         $magasinA = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaireA);
         $this->actingAs($proprietaireA);
@@ -211,8 +210,9 @@ class FacturesApercuWidgetTest extends TestCase
     }
 
     /**
-     * F1 du vendeur A (1 x 120,00 €), F2 du propriétaire (2 x 40,00 €) et
-     * l'avoir d'un article de F2, le 14 octobre 2026.
+     * F1 du vendeur A (1 x 120,00 €), F2 du responsable de test (2 x
+     * 40,00 €) et l'avoir d'un article de F2, le 14 octobre 2026 ; le
+     * propriétaire, qui ne vend jamais, lit le magasin.
      *
      * @return array{magasin: Magasin, proprietaire: User, vendeur: User, f1: Facture, f2: Facture, avoir: Avoir}
      */
@@ -224,7 +224,7 @@ class FacturesApercuWidgetTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $client = Client::factory()->create();
         $f1 = $this->emettreUnTicket($vendeur, $client, 120.0, 1);
-        $f2 = $this->emettreUnTicket($proprietaire, $client, 40.0, 2);
+        $f2 = $this->emettreUnTicket($this->responsableDeTest($magasin), $client, 40.0, 2);
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $f2->lignes->sole()->id, 'quantite' => 1]], 'Retour d\'un article');
 
         return ['magasin' => $magasin, 'proprietaire' => $proprietaire, 'vendeur' => $vendeur, 'f1' => $f1, 'f2' => $f2, 'avoir' => $avoir];

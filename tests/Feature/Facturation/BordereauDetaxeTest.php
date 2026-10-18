@@ -17,6 +17,7 @@ use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Models\User;
 use Closure;
@@ -47,7 +48,10 @@ class BordereauDetaxeTest extends TestCase
 
     /**
      * Le magasin de Lyon à l'identité légale complète et son propriétaire
-     * connecté, le 9 octobre 2026 à 10 h 15 à Paris.
+     * connecté, le 9 octobre 2026 à 10 h 15 à Paris : il note les
+     * bordereaux (il a « noter les preuves d'exonération et les bordereaux
+     * de détaxe »), mais ne vend jamais ; ses ventes se font par le
+     * responsable de test (voir emettre()).
      */
     private function magasin(): Magasin
     {
@@ -72,14 +76,17 @@ class BordereauDetaxeTest extends TestCase
     }
 
     /**
-     * Une vente émise de ces lignes, un ticket pour un particulier.
+     * Une vente émise de ces lignes par le responsable de test du magasin
+     * actif, un ticket pour un particulier.
      *
      * @param  list<array<string, mixed>>  $lignes
      * @param  array<string, mixed>  $nature
      */
     private function emettre(array $lignes, ?Client $client = null, array $nature = []): Facture
     {
-        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client ?? Client::factory()->create(), $lignes, $nature));
+        $vendeur = $this->responsableDeTest(app(TenantContext::class)->magasin());
+
+        return app(EmettreFactureAction::class)->handle($vendeur, app(CreerFactureAction::class)->handle($vendeur, $client ?? Client::factory()->create(), $lignes, $nature));
     }
 
     /**
@@ -300,8 +307,8 @@ class BordereauDetaxeTest extends TestCase
 
     public function test_un_brouillon_ne_se_detaxe_pas(): void
     {
-        $this->magasin();
-        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '250.00', 'taux_tva' => 20])->id, 'quantite' => 1]]);
+        $magasin = $this->magasin();
+        $brouillon = app(CreerFactureAction::class)->handle($this->responsableDeTest($magasin), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => '250.00', 'taux_tva' => 20])->id, 'quantite' => 1]]);
 
         $this->assertThrows(
             fn () => $this->noter($brouillon, '2026FR000123456'),
@@ -392,17 +399,20 @@ class BordereauDetaxeTest extends TestCase
     }
 
     /**
-     * Le bouton est réservé à qui peut émettre (FacturePolicy::justifier()),
-     * sur un ticket qui se détaxe : ni sur une facture à un professionnel,
-     * ni pour un vendeur aux cases de l'ancien comptable de magasin, ni pour
-     * un expert-comptable, qui n'écrit rien.
+     * Le bouton est réservé à qui est autorisé à noter les preuves
+     * d'exonération et les bordereaux de détaxe (FacturePolicy::justifier(),
+     * réponse (b) de l'éditeur à Q-V2), sur un ticket qui se détaxe : le
+     * propriétaire, qui ne vend pas, le voit ; pas sur une facture à un
+     * professionnel, ni pour un vendeur aux cases de l'ancien comptable de
+     * magasin, ni pour un expert-comptable, qui n'écrit rien.
      */
-    public function test_le_bouton_noter_le_bordereau_est_reserve_a_qui_peut_emettre_un_ticket_detaxable(): void
+    public function test_le_bouton_noter_le_bordereau_est_reserve_a_qui_est_autorise_a_noter_les_preuves_sur_un_ticket_detaxable(): void
     {
         $magasin = $this->magasin();
         $ticket = $this->venteEmise('250.00');
         $facture = $this->venteEmise('250.00', Client::factory()->professionnel()->create());
 
+        Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()])->assertActionVisible('noter_bordereau_detaxe');
         Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])->assertActionHidden('noter_bordereau_detaxe');
         $expert = $this->expertComptable($magasin);
         $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable()));

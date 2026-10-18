@@ -17,7 +17,6 @@ use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -35,7 +34,7 @@ class SelecteurDeProduitsTest extends TestCase
 
     public function test_le_tableau_affiche_cinquante_produits_puis_cinquante_de_plus(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $produits = collect(range(1, 55))->map(fn (int $numero): Produit => Produit::factory()->create(['nom' => sprintf('Produit %02d', $numero)]));
 
         $selecteur = Livewire::test(SelecteurDeProduits::class)
@@ -50,7 +49,7 @@ class SelecteurDeProduitsTest extends TestCase
 
     public function test_la_recherche_trouve_par_nom_reference_et_code_barres_sans_accents(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $creme = Produit::factory()->create(['nom' => 'Crème solaire', 'reference' => 'SOL-1']);
         $etiquette = Produit::factory()->create(['nom' => 'Rouleau', 'reference' => 'ÉTIQ-9']);
         $ecran = Produit::factory()->create(['nom' => 'Écran 24 pouces', 'reference' => 'ECR-24', 'code_barres' => '3456789012345']);
@@ -69,7 +68,7 @@ class SelecteurDeProduitsTest extends TestCase
 
     public function test_les_colonnes_se_choisissent_et_le_choix_reste_pour_la_session(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         Produit::factory()->create(['nom' => 'Câble USB', 'code_barres' => '3456789012345']);
 
         Livewire::test(SelecteurDeProduits::class)
@@ -92,7 +91,7 @@ class SelecteurDeProduitsTest extends TestCase
      */
     public function test_le_cout_et_le_benefice_ne_s_affichent_qu_avec_l_autorisation_de_voir_la_valeur_du_stock(): void
     {
-        $magasin = $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $magasin = $this->ouvrirLeMagasinEnTantQueResponsable();
         Produit::factory()->create(['nom' => 'T-shirt', 'prix_vente_ttc' => 25, 'taux_tva' => 20, 'cmup_ht' => '8.3333']);
 
         Livewire::test(SelecteurDeProduits::class)
@@ -131,7 +130,7 @@ class SelecteurDeProduitsTest extends TestCase
      */
     public function test_le_filtre_hors_stock_n_existe_que_pour_qui_peut_vendre_sans_stock(): void
     {
-        $magasin = $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $magasin = $this->ouvrirLeMagasinEnTantQueResponsable();
         $enStock = Produit::factory()->create(['nom' => 'Câble USB', 'suivi_stock' => true, 'stock_quantite' => 4]);
         $epuise = Produit::factory()->create(['nom' => 'Chargeur', 'suivi_stock' => true, 'stock_quantite' => 0]);
         $negatif = Produit::factory()->create(['nom' => 'Housse', 'suivi_stock' => true, 'stock_quantite' => -2]);
@@ -164,7 +163,7 @@ class SelecteurDeProduitsTest extends TestCase
      */
     public function test_un_produit_epuise_ne_se_selectionne_pas_sans_l_autorisation_meme_par_requete_forgee(): void
     {
-        $magasin = $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $magasin = $this->ouvrirLeMagasinEnTantQueResponsable();
         $epuise = Produit::factory()->create(['nom' => 'Chargeur', 'reference' => 'CHG-1', 'suivi_stock' => true, 'stock_quantite' => 0]);
         $negatif = Produit::factory()->create(['nom' => 'Housse', 'reference' => 'HOU-1', 'suivi_stock' => true, 'stock_quantite' => -2]);
         $refus = '« Chargeur » est épuisé : seule une personne autorisée à vendre sans stock peut le vendre.';
@@ -194,7 +193,7 @@ class SelecteurDeProduitsTest extends TestCase
             ->assertNotified($refus);
         $this->assertSame([], $caisse->get('data.lignes'));
 
-        $this->actingAs($magasin->societe->proprietaire()->firstOrFail());
+        $this->actingAs($this->responsableDeTest($magasin));
 
         Livewire::test(SelecteurDeProduits::class)
             ->assertTableColumnDoesNotHaveDescription('nom', 'Épuisé', $negatif)
@@ -212,7 +211,7 @@ class SelecteurDeProduitsTest extends TestCase
      */
     public function test_la_liste_produit_d_une_ligne_refuse_un_produit_epuise_sans_l_autorisation(): void
     {
-        $magasin = $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $magasin = $this->ouvrirLeMagasinEnTantQueResponsable();
         $cable = Produit::factory()->create(['nom' => 'Câble', 'reference' => 'CAB-1', 'prix_vente_ttc' => '12.00', 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 5]);
         $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'reference' => 'CHG-1', 'prix_vente_ttc' => '30.00', 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 0]);
         $client = Client::factory()->create();
@@ -232,7 +231,7 @@ class SelecteurDeProduitsTest extends TestCase
             ->assertHasNoFormErrors();
         $this->assertSame([$cable->getKey()], Facture::query()->sole()->lignes->pluck('produit_id')->all());
 
-        $this->actingAs($magasin->societe->proprietaire()->firstOrFail());
+        $this->actingAs($this->responsableDeTest($magasin));
 
         $page = Livewire::test(CreateFacture::class)
             ->fillForm(['client_id' => $client->getKey()])
@@ -254,7 +253,7 @@ class SelecteurDeProduitsTest extends TestCase
      */
     public function test_le_stock_et_le_fournisseur_ne_s_affichent_qu_a_qui_voit_les_fiches_des_produits(): void
     {
-        $magasin = $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $magasin = $this->ouvrirLeMagasinEnTantQueResponsable();
         $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste Secret']);
         $this->travelTo(CarbonImmutable::parse('2026-09-03 10:00'));
         $cable = Produit::factory()->create(['nom' => 'Câble', 'reference' => 'CAB-1', 'prix_vente_ttc' => '12.00', 'suivi_stock' => true, 'stock_quantite' => 37, 'seuil_alerte' => 11, 'fournisseur_id' => $fournisseur->getKey()]);
@@ -297,7 +296,7 @@ class SelecteurDeProduitsTest extends TestCase
      */
     public function test_les_totaux_de_la_selection_egalent_ceux_du_document_apres_l_ajout(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $cable = Produit::factory()->create(['nom' => 'Câble', 'prix_vente_ttc' => '49.90', 'taux_tva' => 20, 'suivi_stock' => false]);
         $livre = Produit::factory()->create(['nom' => 'Livre', 'prix_vente_ttc' => '4.20', 'taux_tva' => '5.5', 'suivi_stock' => false]);
         $professionnel = Client::factory()->create(['nom' => 'Atelier Martin', 'type_client' => TypeClient::Professionnel, 'siren' => '732829320']);
@@ -344,7 +343,7 @@ class SelecteurDeProduitsTest extends TestCase
      */
     public function test_ajouter_la_selection_cree_une_ligne_par_produit_au_prix_de_sa_fiche(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $cable = Produit::factory()->create(['nom' => 'Câble', 'reference' => 'CAB-1', 'prix_vente_ttc' => '49.90', 'taux_tva' => 20, 'suivi_stock' => false]);
         $livre = Produit::factory()->create(['nom' => 'Livre', 'reference' => 'LIV-1', 'prix_vente_ttc' => '4.20', 'taux_tva' => '5.5', 'suivi_stock' => false]);
         $client = Client::factory()->create();
@@ -391,7 +390,7 @@ class SelecteurDeProduitsTest extends TestCase
      */
     public function test_un_produit_deja_present_sans_remise_voit_sa_quantite_augmenter(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $cable = Produit::factory()->create(['nom' => 'Câble', 'prix_vente_ttc' => '10.00', 'taux_tva' => 20, 'suivi_stock' => false]);
 
         $caisse = Livewire::test(Caisse::class)
@@ -413,7 +412,7 @@ class SelecteurDeProduitsTest extends TestCase
     {
         $this->ouvrirUneSociete(['nom' => 'Autre Boutique']);
         $autreMagasin = Produit::factory()->create(['nom' => 'Câble de la concurrence', 'reference' => 'CONC-1']);
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $actif = Produit::factory()->create(['nom' => 'Câble USB']);
         $archive = Produit::factory()->create(['nom' => 'Câble HDMI', 'reference' => 'HDMI-1']);
         $archive->delete();
@@ -450,7 +449,7 @@ class SelecteurDeProduitsTest extends TestCase
      */
     public function test_le_tri_plus_recents_d_abord_suit_la_date_d_entree_du_produit(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $this->travelTo(CarbonImmutable::parse('2026-10-01 09:00'));
         $ancien = Produit::factory()->create(['nom' => 'Agrafeuse']);
         $this->travelTo(CarbonImmutable::parse('2026-10-10 09:00'));
@@ -468,7 +467,7 @@ class SelecteurDeProduitsTest extends TestCase
 
     public function test_le_nom_d_un_produit_s_affiche_echappe_dans_le_tableau_et_la_selection(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $piege = Produit::factory()->create(['nom' => '<script>alert("piège")</script>', 'reference' => 'PIEGE-1']);
 
         Livewire::test(SelecteurDeProduits::class)
@@ -483,17 +482,20 @@ class SelecteurDeProduitsTest extends TestCase
      */
     public function test_le_tableau_ne_s_ouvre_qu_a_qui_saisit_une_vente(): void
     {
-        $magasin = $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $magasin = $this->ouvrirLeMagasinEnTantQueResponsable();
         $this->actingAs($this->membre($magasin, RoleMagasin::Observateur));
 
         Livewire::test(SelecteurDeProduits::class)->assertForbidden();
     }
 
-    private function ouvrirLeMagasinEnTantQueProprietaire(): Magasin
+    /**
+     * Le magasin, son responsable de test connecté : il vend, sans stock
+     * aussi, ce que le propriétaire ne fait jamais.
+     */
+    private function ouvrirLeMagasinEnTantQueResponsable(): Magasin
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
         Filament::setTenant($magasin);
 
         return $magasin;

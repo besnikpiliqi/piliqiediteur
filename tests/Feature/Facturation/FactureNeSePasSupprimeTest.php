@@ -42,6 +42,11 @@ class FactureNeSePasSupprimeTest extends TestCase
 
         $this->assertFalse($proprietaire->can('delete', $facture));
         $this->assertFalse($proprietaire->can('forceDelete', $facture));
+
+        $vendeur = $this->responsableDeTest($magasin);
+        $this->actingAs($vendeur);
+        $this->assertFalse($vendeur->can('delete', $facture));
+        $this->assertFalse($vendeur->can('forceDelete', $facture));
     }
 
     public function test_une_facture_corrigee_par_un_avoir_total_reste_definitivement_non_supprimable(): void
@@ -63,6 +68,11 @@ class FactureNeSePasSupprimeTest extends TestCase
 
         $this->assertFalse($proprietaire->can('delete', $facture->fresh()));
         $this->assertFalse($proprietaire->can('update', $facture->fresh()));
+
+        $vendeur = $this->responsableDeTest($magasin);
+        $this->actingAs($vendeur);
+        $this->assertFalse($vendeur->can('delete', $facture->fresh()));
+        $this->assertFalse($vendeur->can('update', $facture->fresh()));
     }
 
     public function test_le_modele_facture_ne_possede_aucune_capacite_de_suppression_douce(): void
@@ -81,23 +91,23 @@ class FactureNeSePasSupprimeTest extends TestCase
      */
     public function test_seul_le_brouillon_est_modifiable_pas_une_facture_emise(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->responsableDeTest($magasin);
 
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['suivi_stock' => false]);
-        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
+        $brouillon = app(CreerFactureAction::class)->handle($vendeur, $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
-        $emise = app(EmettreFactureAction::class)->handle(self::auteur(),
-            app(CreerFactureAction::class)->handle(self::auteur(), $client, [
+        $emise = app(EmettreFactureAction::class)->handle($vendeur,
+            app(CreerFactureAction::class)->handle($vendeur, $client, [
                 ['produit_id' => $produit->id, 'quantite' => 1],
             ])
         );
 
-        $this->actingAs($proprietaire);
+        $this->actingAs($vendeur);
 
-        $this->assertTrue($proprietaire->can('update', $brouillon));
-        $this->assertFalse($proprietaire->can('update', $emise));
+        $this->assertTrue($vendeur->can('update', $brouillon));
+        $this->assertFalse($vendeur->can('update', $emise));
     }
 }

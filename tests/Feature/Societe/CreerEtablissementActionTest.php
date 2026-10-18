@@ -370,9 +370,9 @@ class CreerEtablissementActionTest extends TestCase
 
     /**
      * Dans une société validée, le propriétaire a d'emblée tous les droits
-     * dans le nouveau magasin : le journal des événements du magasin
-     * l'inscrit (JET 130), avant nul, après relu en base ; le SIRET se
-     * réserve et la première période d'activité s'ouvre.
+     * dans le nouveau magasin, sauf celui de vendre : le journal des
+     * événements du magasin l'inscrit (JET 130), avant nul, après relu en
+     * base ; le SIRET se réserve et la première période d'activité s'ouvre.
      */
     public function test_un_nouveau_magasin_journalise_les_droits_implicites(): void
     {
@@ -381,12 +381,10 @@ class CreerEtablissementActionTest extends TestCase
 
         $magasin = $this->creer($premier, ['nom' => 'Lyon 2', 'nic' => $this->nic($premier->societe, '0002')]);
 
-        $toutes = PermissionRegistry::toutes();
-        sort($toutes);
         $droits = app(TenantContext::class)->runAs($magasin, fn (): array => json_decode(EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->where('type', (string) CodeEvenement::ModificationDesDroits->value)->sole()->contenu, true)['donnees']);
         $this->assertSame(['id' => $proprietaire->id, 'nom' => $proprietaire->name], $droits['details']['membre']);
         $this->assertNull($droits['details']['avant']);
-        $this->assertSame(['role_societe' => 'proprietaire', 'role_magasin' => null, 'statut' => 'actif', 'permissions' => $toutes], $droits['details']['apres']);
+        $this->assertSame(['role_societe' => 'proprietaire', 'role_magasin' => null, 'statut' => 'actif', 'permissions' => PermissionRegistry::duProprietaire()], $droits['details']['apres']);
         $this->assertSame($magasin->siret, SiretMagasin::query()->where('magasin_id', $magasin->id)->sole()->siret);
         $this->assertSame(1, PeriodeActivite::query()->where('magasin_id', $magasin->id)->whereNull('fin')->count());
     }

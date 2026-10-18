@@ -154,12 +154,12 @@ class InventaireOuvertureResourceTest extends TestCase
      */
     public function test_le_menu_et_le_bouton_nouveau_disparaissent_apres_la_premiere_vente(): void
     {
-        $this->magasinDuProprietaire();
+        $magasin = $this->magasinDuProprietaire();
         $vendu = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $this->assertTrue(InventaireOuvertureResource::shouldRegisterNavigation());
         Livewire::test(ListInventairesOuverture::class)->assertActionVisible('create');
 
-        self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $vendu->id, 'quantite' => 1]]);
+        self::vendreAuComptant($this->responsableDeTest($magasin), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $vendu->id, 'quantite' => 1]]);
 
         $this->assertFalse(InventaireOuvertureResource::shouldRegisterNavigation());
         Livewire::test(ListInventairesOuverture::class)->assertActionHidden('create');
@@ -171,12 +171,12 @@ class InventaireOuvertureResourceTest extends TestCase
      */
     public function test_un_brouillon_reste_consultable_apres_la_premiere_vente_sans_se_valider(): void
     {
-        $this->magasinDuProprietaire();
+        $magasin = $this->magasinDuProprietaire();
         $brouillon = app(CreerInventaireOuvertureAction::class)->handle(self::auteur(), [
             ['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20'], 'quantite' => 10, 'cout_unitaire_ht' => '2.00'],
         ]);
         $vendu = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $vendu->id, 'quantite' => 1]]);
+        self::vendreAuComptant($this->responsableDeTest($magasin), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $vendu->id, 'quantite' => 1]]);
 
         $this->assertTrue(InventaireOuvertureResource::shouldRegisterNavigation());
         $this->forgerLAction(

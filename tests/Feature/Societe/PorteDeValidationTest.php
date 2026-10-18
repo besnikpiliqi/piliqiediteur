@@ -90,7 +90,8 @@ class PorteDeValidationTest extends TestCase
     /**
      * Avant la validation, la société se prépare : catalogue, clients,
      * fournisseurs, équipe, paramètres du magasin, achats saisis et
-     * validés, brouillons de ventes.
+     * validés par le propriétaire ; brouillons de ventes par un
+     * responsable, le propriétaire ne vendant jamais.
      */
     public function test_une_societe_a_verifier_se_configure_catalogue_equipe_parametres_et_achats(): void
     {
@@ -107,14 +108,16 @@ class PorteDeValidationTest extends TestCase
             'quantite' => 3,
             'prix_unitaire_ht' => 0.47,
         ]]));
-        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['service_id' => $service->id, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle($this->responsableDeTest($magasin), $client, [['service_id' => $service->id, 'prix_unitaire_ttc' => 30, 'taux_tva' => 20, 'quantite' => 1]]);
 
         $this->assertSame(3, Produit::query()->sole()->stock_quantite);
         $this->assertSame(StatutFactureAchat::Validee, $achat->fresh()->statut);
         $this->assertTrue($vendeur->peutOuvrir($magasin));
         $this->assertSame(45, $magasin->fresh()->delai_paiement_jours);
         $this->assertSame(StatutFacture::Brouillon, $brouillon->fresh()->statut);
-        $this->assertTrue($proprietaire->can(PermissionRegistry::FACTURE_CREATE));
+        $this->assertTrue($vendeur->can(PermissionRegistry::FACTURE_CREATE));
+        $this->assertTrue($this->responsableDeTest($magasin)->can(PermissionRegistry::VENTE_REMISES_ET_PRIX));
+        $this->assertFalse($proprietaire->can(PermissionRegistry::FACTURE_CREATE));
         $this->assertTrue($proprietaire->can(PermissionRegistry::PRODUIT_CREATE));
     }
 

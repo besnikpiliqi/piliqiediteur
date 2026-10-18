@@ -119,8 +119,8 @@ class EnvoieLesDocumentsTest extends TestCase
 
     public function test_une_facture_brouillon_n_a_ni_envoi_ni_pdf(): void
     {
-        $this->connecterLeProprietaire();
-        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $magasin = $this->connecterLeProprietaire();
+        $brouillon = app(CreerFactureAction::class)->handle($this->responsableDeTest($magasin), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
         Livewire::test(ListFactures::class)
             ->assertTableActionHidden('envoyer_par_email', $brouillon)
@@ -266,7 +266,7 @@ class EnvoieLesDocumentsTest extends TestCase
     {
         Exceptions::fake([DocumentSansEnregistrementSigneException::class]);
         $magasin = $this->connecterLeProprietaire();
-        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $brouillon = app(CreerFactureAction::class)->handle($this->responsableDeTest($magasin), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
         DB::table('factures')->where('magasin_id', $magasin->id)->where('id', $brouillon->id)->update(['numero' => 'TK-MABOUT-2026-000009', 'statut' => 'emise', 'date_emission' => '2026-10-09 08:00:00']);
 
         Livewire::test(ListFactures::class)
@@ -289,7 +289,7 @@ class EnvoieLesDocumentsTest extends TestCase
         $this->actingAs($vendeur);
         Filament::setTenant($magasin);
         app(TenantContext::class)->set($magasin);
-        $facture = $this->emettreFacture(Client::factory()->create(['delai_paiement_jours' => 0]));
+        $facture = $this->emettreFacture(Client::factory()->create(['delai_paiement_jours' => 0]), $vendeur);
         $this->travelTo('2026-10-15 10:00:00');
 
         Livewire::test(ListFactures::class)
@@ -333,13 +333,16 @@ class EnvoieLesDocumentsTest extends TestCase
     }
 
     /**
-     * Une facture de 120,00 € TTC.
+     * Une facture de 120,00 € TTC, émise par ce vendeur, sinon par le
+     * responsable de test du magasin actif : le propriétaire connecté
+     * l'envoie et la relance, mais ne vend jamais.
      */
-    private function emettreFacture(Client $client): Facture
+    private function emettreFacture(Client $client, ?User $vendeur = null): Facture
     {
-        $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
+        $vendeur ??= $this->responsableDeTest(app(TenantContext::class)->magasin());
+        $facture = app(CreerFactureAction::class)->handle($vendeur, $client, [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
 
-        return app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
+        return app(EmettreFactureAction::class)->handle($vendeur, $facture);
     }
 
     /**

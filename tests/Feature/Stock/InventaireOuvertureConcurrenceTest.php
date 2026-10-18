@@ -207,8 +207,10 @@ class InventaireOuvertureConcurrenceTest extends TestCase
     }
 
     /**
-     * Le propriétaire vend un ticket de 12,00 € au comptoir : la première
-     * vente du magasin.
+     * Le responsable de test du magasin, obtenu par le test avant de lancer
+     * l'autre processus (voir auteur()), vend un ticket de 12,00 € au
+     * comptoir : la première vente du magasin, que le propriétaire ne fait
+     * jamais.
      */
     private static function vendre(int $magasinId, int $produitId): void
     {
@@ -216,7 +218,7 @@ class InventaireOuvertureConcurrenceTest extends TestCase
         app(TenantContext::class)->set($magasin);
 
         self::vendreAuComptant(
-            User::query()->whereKey($magasin->societe->proprietaire()->value('id'))->firstOrFail(),
+            self::responsableDeTest($magasin),
             Client::query()->where('est_comptoir', true)->sole(),
             [['produit_id' => $produitId, 'quantite' => 1]],
             ModePaiement::Especes,

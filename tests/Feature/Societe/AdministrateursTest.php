@@ -3,8 +3,16 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
@@ -14,11 +22,17 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\AffectationsDesMembres;
 use App\Domain\Tenancy\Services\PorteeDesAdministrateurs;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\GardesDesDroits;
+use App\Filament\App\Pages\Caisse;
+use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
+use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\ProduitResource;
+use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
 use App\Models\User;
 use Database\Factories\MagasinFactory;
@@ -26,6 +40,7 @@ use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use LogicException;
 use Tests\TestCase;
@@ -370,5 +385,117 @@ class AdministrateursTest extends TestCase
         $this->assertSame([], $administrateur->autorisationsDans($magasin));
         $this->assertFalse($administrateur->administreTousLesMagasins());
         $this->assertFalse($administrateur->canAccessTenant($horsSelection));
+    }
+
+    /**
+     * Le modèle de l'administrateur coche toutes les autorisations sauf les
+     * paramètres du magasin et celles de la vente, qui restent dans leur
+     * groupe à part, jamais précochées (Q3-a) : un administrateur créé
+     * sans y toucher ne vend pas.
+     */
+    public function test_le_modele_de_l_administrateur_ne_precoche_aucune_autorisation_de_vente(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+
+        $page = Livewire::test(ListMembres::class)->mountAction('creerUnAdministrateur')->assertSee('Vente (seulement si cet administrateur vend)');
+
+        $this->assertSame([], array_values(array_intersect(PermissionRegistry::deVente(), PermissionRegistry::modeleDeLAdministrateur())));
+        $this->assertEqualsCanonicalizing(array_values(array_diff(PermissionRegistry::horsVente(), [PermissionRegistry::PARAMETRES_GERER])), PermissionRegistry::modeleDeLAdministrateur());
+        $this->assertEmpty($page->get('mountedActionsData.0.autorisations_magasin_vente'));
+        $page->setActionData(['name' => 'Alix', 'email' => 'alix@example.test', 'mot_de_passe_provisoire' => self::MOT_DE_PASSE_PROVISOIRE, 'portee' => 'tous'])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+        $alix = $this->choisirSonMotDePasse(User::query()->where('email', 'alix@example.test')->sole());
+        $this->assertSame([], array_values(array_intersect(PermissionRegistry::deVente(), $alix->autorisationsDans($magasin))));
+        $this->assertFalse($alix->tientUneCaisseDans($magasin));
+    }
+
+    /**
+     * Sans les autorisations de vente, un administrateur ne vend pas : ni
+     * caisse, ni « Nouvelle facture », ni « Émettre » à l'écran ; une
+     * requête Livewire forgée, l'action appelée directement et
+     * l'instantané de la caisse d'un responsable rejoué sous sa session
+     * sont refusés, et rien n'est vendu.
+     */
+    public function test_un_administrateur_sans_autorisation_de_vente_ne_vend_ni_par_l_ecran_ni_par_livewire_ni_par_l_action_ni_par_une_demande_fabriquee(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $administrateur = $this->administrateur($magasin);
+        $responsable = $this->responsableDeTest($magasin);
+        $brouillon = app(CreerFactureAction::class)->handle($responsable, Client::factory()->create(), $this->lignes());
+        PanierCaisse::factory()->avecLeProduit(Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]), 1)->create(['user_id' => $responsable->id]);
+        $instantane = $this->instantaneLivewire($this->actingAs($responsable)->get(Caisse::getUrl(tenant: $magasin))->assertOk()->getContent(), 'caisse');
+        $this->dansLeMagasin($magasin, $administrateur);
+
+        $this->get(Caisse::getUrl(tenant: $magasin))->assertForbidden();
+        Livewire::test(ListFactures::class)->assertActionHidden('create')->assertTableActionHidden('emettre', $brouillon);
+        Livewire::test(CreateFacture::class)->assertForbidden();
+        $this->forgerLActionDeLigne(Livewire::test(ListFactures::class), 'emettre', $brouillon, ['jeton' => (string) Str::uuid()]);
+        $this->assertThrows(fn () => app(CreerFactureAction::class)->handle($administrateur, Client::factory()->create(), $this->lignes()), AuthorizationException::class, LecteurDesDroits::REFUS);
+        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($administrateur, $brouillon), AuthorizationException::class, LecteurDesDroits::REFUS);
+        $this->requeteLivewire($instantane, [], 'encaisser')->assertForbidden();
+
+        $this->assertSame([1, StatutFacture::Brouillon], [Facture::query()->count(), $brouillon->fresh()->statut]);
+        $this->assertFalse($administrateur->tientUneCaisseDans($magasin));
+    }
+
+    /**
+     * Un administrateur de deux magasins à qui le propriétaire coche la
+     * vente vend dans l'un et l'autre, avec une seule caisse ouverte à la
+     * fois : il ferme sa caisse du premier avant d'encaisser dans le second
+     * (précision 2, par compte).
+     */
+    public function test_un_administrateur_a_qui_le_proprietaire_coche_la_vente_vend_avec_une_caisse_a_la_fois(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
+        $administrateur = $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], [], [...PermissionRegistry::modeleDeLAdministrateur(), ...PermissionRegistry::deVente()]);
+        $vendre = fn (Magasin $magasin): Facture => app(TenantContext::class)->runAs($magasin, fn (): Facture => self::vendreAuComptant($administrateur, Client::factory()->create(), $this->lignes()));
+
+        $this->assertSame($lyon->id, $vendre($lyon)->magasin_id);
+        $this->assertThrows(fn () => $vendre($villeurbanne), LogicException::class, 'Fermez d\'abord votre caisse de Lyon : vous n\'encaissez que dans un magasin à la fois.');
+        $this->assertSame(0, Facture::withoutGlobalScope(MagasinScope::class)->where('magasin_id', $villeurbanne->id)->count());
+
+        app(TenantContext::class)->runAs($lyon, fn () => app(FermerSaCaisseAction::class)->handle($administrateur, $administrateur));
+
+        $this->assertSame($villeurbanne->id, $vendre($villeurbanne)->magasin_id);
+        $this->assertTrue($administrateur->tientUneCaisseDans($lyon) && $administrateur->tientUneCaisseDans($villeurbanne));
+    }
+
+    /**
+     * Un vendeur nommé administrateur perd ses cases de membre, vente
+     * comprise : le formulaire de la nomination ne précoche que le modèle
+     * de l'administrateur, sans aucune autorisation de vente, et il ne vend
+     * plus.
+     */
+    public function test_un_vendeur_nomme_administrateur_ne_garde_aucune_autorisation_de_vente(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->assertTrue($vendeur->tientUneCaisseDans($magasin));
+        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
+
+        $page = Livewire::test(FicheDuMembre::class, ['record' => $vendeur->getRouteKey()])->mountAction('nommerAdministrateur');
+        $this->assertEmpty($page->get('mountedActionsData.0.autorisations_magasin_vente'));
+        $page->setActionData(['portee' => 'tous'])->callMountedAction()->assertHasNoActionErrors();
+
+        $administrateur = $vendeur->fresh();
+        $this->assertSame(RoleSociete::Administrateur, $administrateur->role_societe);
+        $this->assertSame([], array_values(array_intersect(PermissionRegistry::deVente(), $administrateur->autorisationsDans($magasin))));
+        $this->assertFalse($administrateur->tientUneCaisseDans($magasin));
+        app(TenantContext::class)->set($magasin);
+        $this->assertThrows(fn () => app(CreerFactureAction::class)->handle($administrateur, Client::factory()->create(), $this->lignes()), AuthorizationException::class, LecteurDesDroits::REFUS);
+    }
+
+    /**
+     * Une ligne d'un article à 12,00 € TTC du magasin actif, sans suivi de
+     * stock.
+     *
+     * @return list<array{produit_id: int, quantite: int}>
+     */
+    private function lignes(): array
+    {
+        return [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]];
     }
 }

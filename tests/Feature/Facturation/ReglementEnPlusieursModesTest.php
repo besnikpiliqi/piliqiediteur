@@ -236,7 +236,7 @@ class ReglementEnPlusieursModesTest extends TestCase
     public function test_seule_la_part_en_especes_rend_la_monnaie(): void
     {
         $magasin = $this->magasin();
-        $this->actingAs($this->proprietaireDe($magasin));
+        $this->actingAs($this->responsableDeTest($magasin));
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 80, 'taux_tva' => 20, 'suivi_stock' => false]);
         $caisse = Livewire::test(Caisse::class)

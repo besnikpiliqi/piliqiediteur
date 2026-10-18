@@ -153,7 +153,7 @@ class TracabiliteDesVentesTest extends TestCase
 
         $this->assertThrows(fn () => $this->vendre($responsable, $this->villeurbanne), LogicException::class, $refus);
         $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle($responsable, $brouillon), LogicException::class, $refus);
-        $this->assertThrows(fn () => $this->payer($responsable, $this->vendreParLeProprietaire($this->villeurbanne)), LogicException::class, $refus);
+        $this->assertThrows(fn () => $this->payer($responsable, $this->vendreParLeResponsableDeTest($this->villeurbanne)), LogicException::class, $refus);
         $this->assertThrows(fn () => app(ContrePasserPaiementAction::class)->handle($responsable, $paiement, 'Erreur de saisie'), LogicException::class, $refus);
 
         app(TenantContext::class)->runAs($this->lyon, fn () => app(FermerSaCaisseAction::class)->handle($responsable, $responsable));
@@ -224,15 +224,15 @@ class TracabiliteDesVentesTest extends TestCase
     }
 
     /**
-     * Un ticket de 12,00 € TTC émis par le propriétaire dans le magasin,
-     * non réglé.
+     * Un ticket de 12,00 € TTC émis dans le magasin par son responsable de
+     * test, non réglé : le propriétaire ne vend jamais.
      */
-    private function vendreParLeProprietaire(Magasin $magasin): Facture
+    private function vendreParLeResponsableDeTest(Magasin $magasin): Facture
     {
         return app(TenantContext::class)->runAs($magasin, function () use ($magasin): Facture {
-            $proprietaire = $this->proprietaireDe($magasin);
+            $responsable = $this->responsableDeTest($magasin);
 
-            return app(EmettreFactureAction::class)->handle($proprietaire, app(CreerFactureAction::class)->handle($proprietaire, Client::factory()->create(), $this->lignes()));
+            return app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, Client::factory()->create(), $this->lignes()));
         });
     }
 

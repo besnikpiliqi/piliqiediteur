@@ -13,7 +13,8 @@ use Tests\TestCase;
 
 /**
  * Les rôles ne sont que des modèles : aucun rôle n'est enregistré en base.
- * Le propriétaire de la société a toutes les autorisations sans case, un
+ * Le propriétaire de la société a toutes les autorisations sans case, sauf
+ * celles de la vente (précision 1 de l'éditeur : il ne vend jamais), un
  * responsable toutes celles de son magasin sans case (voir
  * DroitsDuResponsableTest) ; un vendeur ou un observateur reçoit d'office
  * le modèle de son rôle (voir RoleMagasin::permissionsParDefaut()), que
@@ -32,31 +33,41 @@ class AutorisationsDesRolesTest extends TestCase
 
         $this->assertFalse(Schema::hasTable('roles'));
         $this->assertSame(0, Affectation::query()->where('user_id', $proprietaire->id)->count());
-        $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $proprietaire->autorisationsDans($magasin));
+        $this->assertSame(PermissionRegistry::duProprietaire(), $proprietaire->autorisationsDans($magasin));
+        $this->assertSame([], array_intersect(PermissionRegistry::deVente(), $proprietaire->autorisationsDans($magasin)));
     }
 
-    public function test_le_proprietaire_a_implicitement_toutes_les_autorisations(): void
+    public function test_le_proprietaire_a_implicitement_toutes_les_autorisations_sauf_celles_de_la_vente(): void
     {
         $proprietaire = User::factory()->create();
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
-        foreach (PermissionRegistry::toutes() as $permission) {
+        foreach (PermissionRegistry::duProprietaire() as $permission) {
             $this->assertTrue($proprietaire->can($permission), $permission);
+        }
+
+        foreach ([PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER, PermissionRegistry::STOCK_VENDRE_SANS_STOCK] as $vente) {
+            $this->assertFalse($proprietaire->can($vente), $vente);
         }
     }
 
     /**
      * Le modèle d'un nouvel administrateur coche toutes les autorisations
-     * de magasin, sauf la vente sans stock et les paramètres du magasin,
-     * que le propriétaire coche pour qui il veut.
+     * de magasin, sauf les paramètres du magasin et les autorisations de
+     * vente (créer et émettre un ticket ou une facture, enregistrer un
+     * encaissement, vendre sans stock), que le propriétaire coche pour qui
+     * il veut.
      */
-    public function test_le_modele_de_l_administrateur_coche_tout_sauf_les_parametres_et_la_vente_sans_stock(): void
+    public function test_le_modele_de_l_administrateur_coche_tout_sauf_les_parametres_et_les_autorisations_de_vente(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
 
         $administrateur = $this->administrateur($magasin);
 
-        $this->assertSame([PermissionRegistry::STOCK_VENDRE_SANS_STOCK, PermissionRegistry::PARAMETRES_GERER], array_values(array_diff(PermissionRegistry::toutes(), $administrateur->autorisationsDans($magasin))));
+        $this->assertEqualsCanonicalizing(
+            [PermissionRegistry::PARAMETRES_GERER, PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER, PermissionRegistry::STOCK_VENDRE_SANS_STOCK],
+            array_values(array_diff(PermissionRegistry::toutes(), $administrateur->autorisationsDans($magasin))),
+        );
         $this->assertEqualsCanonicalizing(PermissionRegistry::modeleDeLAdministrateur(), $administrateur->autorisationsDans($magasin));
     }
 

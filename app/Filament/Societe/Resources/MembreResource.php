@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Filament\Concerns\CocheLesAutorisationsDeMagasin;
 use App\Filament\Concerns\GereLesComptes;
 use App\Filament\Societe\Resources\MembreResource\Pages;
 use App\Filament\Societe\RessourceDuPanneauSociete;
@@ -57,6 +58,7 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class MembreResource extends RessourceDuPanneauSociete
 {
+    use CocheLesAutorisationsDeMagasin;
     use GereLesComptes;
 
     protected static ?string $model = User::class;
@@ -222,7 +224,8 @@ class MembreResource extends RessourceDuPanneauSociete
     /**
      * Les champs d'affectations de membre d'un compte, que le propriétaire
      * choisit magasin par magasin : le magasin, le rôle, et les cases d'un
-     * vendeur ou d'un observateur, précochées par son rôle.
+     * vendeur ou d'un observateur, précochées par son rôle, celles de la
+     * vente à part (voir CocheLesAutorisationsDeMagasin).
      */
     public static function champAffectations(string $nom = 'affectations'): Repeater
     {
@@ -239,14 +242,21 @@ class MembreResource extends RessourceDuPanneauSociete
                     ->options(RoleMagasin::class)
                     ->required()
                     ->live()
-                    ->afterStateUpdated(fn (Set $set, mixed $state) => $set('autorisations', RoleMagasin::tryFrom((string) ($state instanceof RoleMagasin ? $state->value : $state))?->permissionsParDefaut() ?? [])),
-                CheckboxList::make('autorisations')
-                    ->label('Autorisations dans ce magasin')
-                    ->options(PermissionRegistry::libelles())
-                    ->columns(2)
-                    ->bulkToggleable()
-                    ->hidden(fn (Get $get): bool => in_array($get('role'), [RoleMagasin::Responsable, RoleMagasin::Responsable->value], true))
-                    ->columnSpanFull(),
+                    ->afterStateUpdated(function (Set $set, mixed $state): void {
+                        $modele = RoleMagasin::tryFrom((string) ($state instanceof RoleMagasin ? $state->value : $state))?->permissionsParDefaut() ?? [];
+
+                        foreach (static::autorisationsAAfficher($modele, 'autorisations') as $champ => $cases) {
+                            $set($champ, $cases);
+                        }
+                    }),
+                ...static::champsDesAutorisationsDeMagasin(
+                    'autorisations',
+                    'Autorisations dans ce magasin',
+                    null,
+                    'Vente',
+                    'Créer et émettre un ticket ou une facture, enregistrer un encaissement, vendre sans stock : ce compte aura sa caisse personnelle.',
+                    fn (Get $get): bool => in_array($get('role'), [RoleMagasin::Responsable, RoleMagasin::Responsable->value], true),
+                ),
             ])
             ->columns(2)
             ->minItems(1)
@@ -258,7 +268,7 @@ class MembreResource extends RessourceDuPanneauSociete
      * Les affectations saisies, par identifiant de magasin, comme les
      * reçoivent les actions de l'équipe.
      *
-     * @param  list<array{magasin_id: int|string, role: RoleMagasin|string, autorisations?: list<string>|null}>  $lignes
+     * @param  list<array{magasin_id: int|string, role: RoleMagasin|string, autorisations?: list<string>|null, autorisations_vente?: list<string>|null}>  $lignes
      * @return array<int, array{role: string, autorisations: list<string>}>
      */
     public static function affectationsSaisies(array $lignes): array
@@ -267,7 +277,7 @@ class MembreResource extends RessourceDuPanneauSociete
 
         foreach ($lignes as $ligne) {
             $role = $ligne['role'] instanceof RoleMagasin ? $ligne['role']->value : (string) $ligne['role'];
-            $affectations[(int) $ligne['magasin_id']] = ['role' => $role, 'autorisations' => $role === RoleMagasin::Responsable->value ? [] : array_values($ligne['autorisations'] ?? [])];
+            $affectations[(int) $ligne['magasin_id']] = ['role' => $role, 'autorisations' => $role === RoleMagasin::Responsable->value ? [] : static::autorisationsSaisies($ligne, 'autorisations')];
         }
 
         return $affectations;
@@ -275,7 +285,11 @@ class MembreResource extends RessourceDuPanneauSociete
 
     /**
      * Les champs de la portée et des autorisations d'un administrateur,
-     * sans rien de présélectionné pour sa portée.
+     * sans rien de présélectionné pour sa portée : ses cases de magasin
+     * précochées selon le modèle de l'administrateur, et à part celles de
+     * la vente, jamais précochées (voir
+     * PermissionRegistry::modeleDeLAdministrateur()) ; l'action reçoit leur
+     * réunion (voir autorisationsSaisies()).
      *
      * @return list<Component>
      */
@@ -297,12 +311,14 @@ class MembreResource extends RessourceDuPanneauSociete
                 ->options(AutorisationsSociete::libelles())
                 ->default(AutorisationsSociete::modeleDeLAdministrateur())
                 ->disableOptionWhen(fn (Get $get, string $value): bool => $get('portee') !== 'tous' && in_array($value, AutorisationsSociete::exigentTousLesMagasins(), true)),
-            CheckboxList::make('autorisations_magasin')
-                ->label('Autorisations dans les magasins de sa portée')
-                ->options(PermissionRegistry::libelles())
-                ->default(PermissionRegistry::modeleDeLAdministrateur())
-                ->columns(2)
-                ->bulkToggleable(),
+            ...static::champsDesAutorisationsDeMagasin(
+                'autorisations_magasin',
+                'Autorisations dans les magasins de sa portée',
+                null,
+                'Vente (seulement si cet administrateur vend)',
+                'Cet administrateur pourra vendre et aura sa caisse personnelle ; il n\'encaisse que dans un magasin à la fois.',
+                precochees: PermissionRegistry::modeleDeLAdministrateur(),
+            ),
         ];
     }
 

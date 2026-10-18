@@ -1006,12 +1006,12 @@ class MagasinResourceTest extends TestCase
 
     /**
      * Un ticket de 12,00 € TTC au comptoir du magasin, vendu par son
-     * propriétaire.
+     * responsable de test : le propriétaire ne vend jamais.
      */
     private function vendre(Magasin $magasin): Facture
     {
         return app(TenantContext::class)->runAs($magasin->fresh(), fn (): Facture => self::vendreAuComptant(
-            $this->proprietaireDe($magasin),
+            self::responsableDeTest($magasin),
             Client::query()->where('est_comptoir', true)->sole(),
             [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]],
             ModePaiement::Especes,

@@ -47,9 +47,10 @@ class FacturesAEncaisserTest extends TestCase
     {
         $magasin = $this->magasin();
         $proprietaire = $this->proprietaireDe($magasin);
-        $jamaisReglee = $this->facture($proprietaire, 'Atelier Martin', 50);
-        $rouverte = $this->facture($proprietaire, 'Garage Durand', 120);
-        $virement = $this->payer($proprietaire, $rouverte, '120.00');
+        $vendeur = $this->responsableDeTest($magasin);
+        $jamaisReglee = $this->facture($vendeur, 'Atelier Martin', 50);
+        $rouverte = $this->facture($vendeur, 'Garage Durand', 120);
+        $virement = $this->payer($vendeur, $rouverte, '120.00');
         $this->dansLeMagasin($magasin, $proprietaire);
         Livewire::test(FacturesAEncaisserApercu::class)->assertSee('1 facture à encaisser')->assertDontSee($rouverte->numero);
 
@@ -74,10 +75,11 @@ class FacturesAEncaisserTest extends TestCase
     {
         $magasin = $this->magasin();
         $proprietaire = $this->proprietaireDe($magasin);
-        $due = $this->facture($proprietaire, 'Atelier Martin', 50);
-        $payee = $this->facture($proprietaire, 'Garage Durand', 120);
-        $this->payer($proprietaire, $payee, '120.00');
-        $brouillon = app(CreerFactureAction::class)->handle($proprietaire, Client::factory()->professionnel()->create(['nom' => 'Brasserie Petit']), [
+        $vendeur = $this->responsableDeTest($magasin);
+        $due = $this->facture($vendeur, 'Atelier Martin', 50);
+        $payee = $this->facture($vendeur, 'Garage Durand', 120);
+        $this->payer($vendeur, $payee, '120.00');
+        $brouillon = app(CreerFactureAction::class)->handle($vendeur, Client::factory()->professionnel()->create(['nom' => 'Brasserie Petit']), [
             ['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1],
         ]);
         $this->dansLeMagasin($magasin, $proprietaire);
@@ -98,20 +100,20 @@ class FacturesAEncaisserTest extends TestCase
         $magasin = $this->magasin();
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $deLEquipe = $this->facture($vendeur, 'Client du vendeur', 50);
-        $duProprietaire = $this->facture($this->proprietaireDe($magasin), 'Client du propriétaire', 120);
+        $duResponsable = $this->facture($this->responsableDeTest($magasin), 'Client du responsable', 120);
 
         foreach ([$this->proprietaireDe($magasin), $this->responsable($magasin)] as $compte) {
             $this->dansLeMagasin($magasin, $compte);
 
             $this->assertTrue(FacturesAEncaisserApercu::canView());
-            Livewire::test(FacturesAEncaisserApercu::class)->assertSeeInOrder(['2 factures à encaisser', '170,00 € restant dû', $deLEquipe->numero, $duProprietaire->numero]);
+            Livewire::test(FacturesAEncaisserApercu::class)->assertSeeInOrder(['2 factures à encaisser', '170,00 € restant dû', $deLEquipe->numero, $duResponsable->numero]);
         }
     }
 
     public function test_un_administrateur_ne_voit_l_alerte_que_s_il_voit_toutes_les_factures(): void
     {
         $magasin = $this->magasin();
-        $facture = $this->facture($this->proprietaireDe($magasin), 'Atelier Martin', 50);
+        $facture = $this->facture($this->responsableDeTest($magasin), 'Atelier Martin', 50);
         $voitTout = $this->administrateur($magasin);
         $neVoitQueLesSiennes = $this->administrateur($magasin, autorisationsMagasin: array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::FACTURE_VIEW_TOUTES])));
 
@@ -132,7 +134,7 @@ class FacturesAEncaisserTest extends TestCase
     public function test_un_administrateur_qui_ne_peut_pas_ouvrir_la_liste_des_factures_n_a_pas_l_alerte(): void
     {
         $magasin = $this->magasin();
-        $this->facture($this->proprietaireDe($magasin), 'Atelier Martin', 50);
+        $this->facture($this->responsableDeTest($magasin), 'Atelier Martin', 50);
         $administrateur = $this->administrateur($magasin, autorisationsMagasin: array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::FACTURE_VIEW])));
         $this->dansLeMagasin($magasin, $administrateur);
 
@@ -148,7 +150,7 @@ class FacturesAEncaisserTest extends TestCase
     public function test_un_vendeur_sans_l_autorisation_de_contre_passer_ne_voit_pas_l_alerte(): void
     {
         $magasin = $this->magasin();
-        $this->facture($this->proprietaireDe($magasin), 'Atelier Martin', 50);
+        $this->facture($this->responsableDeTest($magasin), 'Atelier Martin', 50);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES]);
         $observateur = $this->membre($magasin, RoleMagasin::Observateur);
 
@@ -164,14 +166,14 @@ class FacturesAEncaisserTest extends TestCase
         $magasin = $this->magasin();
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PAIEMENT_CONTRE_PASSER]);
         $sienne = $this->facture($vendeur, 'Client du vendeur', 50);
-        $duProprietaire = $this->facture($this->proprietaireDe($magasin), 'Client du propriétaire', 120);
+        $duResponsable = $this->facture($this->responsableDeTest($magasin), 'Client du responsable', 120);
         $this->dansLeMagasin($magasin, $vendeur);
 
         $alerte = Livewire::test(FacturesAEncaisserApercu::class);
 
         $this->assertTrue(FacturesAEncaisserApercu::canView());
         $alerte->assertSeeInOrder(['1 facture à encaisser', '50,00 € restant dû', $sienne->numero, 'Client du vendeur'])
-            ->assertDontSee([$duProprietaire->numero, 'Client du propriétaire', '170,00 €']);
+            ->assertDontSee([$duResponsable->numero, 'Client du responsable', '170,00 €']);
     }
 
     /**
@@ -187,11 +189,11 @@ class FacturesAEncaisserTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, $cases);
         $sansLaListe = $this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff($cases, [PermissionRegistry::FACTURE_VIEW])));
         $sienne = $this->facture($vendeur, 'Client du vendeur', 50);
-        $duProprietaire = $this->facture($this->proprietaireDe($magasin), 'Client du propriétaire', 120);
+        $duResponsable = $this->facture($this->responsableDeTest($magasin), 'Client du responsable', 120);
 
         $this->dansLeMagasin($magasin, $vendeur);
         $this->assertTrue(FacturesAEncaisserApercu::canView());
-        Livewire::test(FacturesAEncaisserApercu::class)->assertSeeInOrder(['2 factures à encaisser', '170,00 € restant dû', $sienne->numero, $duProprietaire->numero]);
+        Livewire::test(FacturesAEncaisserApercu::class)->assertSeeInOrder(['2 factures à encaisser', '170,00 € restant dû', $sienne->numero, $duResponsable->numero]);
 
         $this->dansLeMagasin($magasin, $sansLaListe);
         $this->assertFalse(FacturesAEncaisserApercu::canView());
@@ -208,14 +210,14 @@ class FacturesAEncaisserTest extends TestCase
         $magasin = $this->magasin();
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $deLEquipe = $this->facture($vendeur, 'Client du vendeur', 50);
-        $duProprietaire = $this->facture($this->proprietaireDe($magasin), 'Client du propriétaire', 120);
+        $duResponsable = $this->facture($this->responsableDeTest($magasin), 'Client du responsable', 120);
         $expertComptable = $this->expertComptable($magasin);
         $this->dansLeMagasin($magasin, $expertComptable);
 
         $alerte = Livewire::test(FacturesAEncaisserApercu::class);
 
         $this->assertTrue(FacturesAEncaisserApercu::canView());
-        $alerte->assertSeeInOrder(['2 factures à encaisser', '170,00 € restant dû', $deLEquipe->numero, $duProprietaire->numero]);
+        $alerte->assertSeeInOrder(['2 factures à encaisser', '170,00 € restant dû', $deLEquipe->numero, $duResponsable->numero]);
         $this->assertSame([false, false], [$expertComptable->can(PermissionRegistry::PAIEMENT_CONTRE_PASSER), $expertComptable->can(PermissionRegistry::PAIEMENT_CREER)]);
     }
 
@@ -230,9 +232,10 @@ class FacturesAEncaisserTest extends TestCase
         $this->travelTo(CarbonImmutable::parse('2026-10-01 10:00:00', 'Europe/Paris'));
         $magasin = $this->magasin();
         $proprietaire = $this->proprietaireDe($magasin);
-        $enRetard = $this->facture($proprietaire, 'Atelier Martin', 50);
+        $vendeur = $this->responsableDeTest($magasin);
+        $enRetard = $this->facture($vendeur, 'Atelier Martin', 50);
         $this->travelTo(CarbonImmutable::parse('2026-10-20 10:00:00', 'Europe/Paris'));
-        $aLHeure = $this->facture($proprietaire, 'Garage Durand', 120);
+        $aLHeure = $this->facture($vendeur, 'Garage Durand', 120);
         $this->travelTo(CarbonImmutable::parse('2026-11-02 10:00:00', 'Europe/Paris'));
         $this->dansLeMagasin($magasin, $proprietaire);
 
@@ -255,10 +258,11 @@ class FacturesAEncaisserTest extends TestCase
     {
         $magasin = $this->magasin();
         $proprietaire = $this->proprietaireDe($magasin);
-        $this->facture($proprietaire, 'Atelier Martin', 10.10);
-        $this->facture($proprietaire, 'Garage Durand', 20.20);
-        $partielle = $this->facture($proprietaire, 'Brasserie Petit', 0.30);
-        $this->payer($proprietaire, $partielle, '0.10');
+        $vendeur = $this->responsableDeTest($magasin);
+        $this->facture($vendeur, 'Atelier Martin', 10.10);
+        $this->facture($vendeur, 'Garage Durand', 20.20);
+        $partielle = $this->facture($vendeur, 'Brasserie Petit', 0.30);
+        $this->payer($vendeur, $partielle, '0.10');
         $this->dansLeMagasin($magasin, $proprietaire);
         $requetes = [];
         DB::listen(function (QueryExecuted $requete) use (&$requetes): void {

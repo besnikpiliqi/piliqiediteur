@@ -66,7 +66,7 @@ class FicheDuMembre extends ViewRecord
             ->fillForm(fn (): array => ['affectations' => $this->compte()->affectationsDeMembre()->map(fn (Affectation $affectation): array => [
                 'magasin_id' => (int) $affectation->magasin_id,
                 'role' => $affectation->role->value,
-                'autorisations' => $affectation->autorisations(),
+                ...MembreResource::autorisationsAAfficher($affectation->autorisations(), 'autorisations'),
             ])->values()->all()])
             ->form([MembreResource::champAffectations()])
             ->action(function (array $data): void {
@@ -199,7 +199,7 @@ class FicheDuMembre extends ViewRecord
             ->icon('heroicon-o-key')
             ->color('danger')
             ->visible(fn (): bool => $this->auteur()->can('transmettreLaPropriete', $this->compte()))
-            ->modalDescription(fn (): string => "{$this->compte()->name} deviendra le propriétaire de la société, avec tous les droits ; vous en deviendrez administrateur de tous les magasins, avec toutes les autorisations. Sa qualité de représentant légal ou de mandataire doit être prouvée à son nom.")
+            ->modalDescription(fn (): string => "{$this->compte()->name} deviendra le propriétaire de la société, avec tous les droits sauf celui de vendre : le propriétaire supervise et contrôle. Vous en deviendrez administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, que le nouveau propriétaire pourra vous cocher, et toutes celles de la société. Sa qualité de représentant légal ou de mandataire doit être prouvée à son nom.")
             ->form([
                 TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->autocomplete('current-password')->required(),
             ])
@@ -288,7 +288,7 @@ class FicheDuMembre extends ViewRecord
             $this->auteur(),
             $this->compte(),
             $data['portee'] === 'tous' ? null : array_map(intval(...), $data['magasins'] ?? []),
-            array_values($data['autorisations_magasin'] ?? []),
+            MembreResource::autorisationsSaisies($data, 'autorisations_magasin'),
             array_values($data['autorisations_societe'] ?? []),
         ];
     }
@@ -306,7 +306,7 @@ class FicheDuMembre extends ViewRecord
             'portee' => $compte->administreTousLesMagasins() ? 'tous' : 'selection',
             'magasins' => $affectations->pluck('magasin_id')->filter()->map(fn ($id): int => (int) $id)->values()->all(),
             'autorisations_societe' => $compte->autorisationsDeSociete(),
-            'autorisations_magasin' => $premiere?->autorisations() ?? [],
+            ...MembreResource::autorisationsAAfficher($premiere?->autorisations() ?? [], 'autorisations_magasin'),
         ];
     }
 

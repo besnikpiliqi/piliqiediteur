@@ -98,9 +98,9 @@ class DevisResourceTest extends TestCase
 
     public function test_creer_un_devis_avec_des_lignes_via_le_formulaire(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -130,9 +130,9 @@ class DevisResourceTest extends TestCase
      */
     public function test_le_credit_disponible_du_client_est_affiche_sous_le_select(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -190,9 +190,9 @@ class DevisResourceTest extends TestCase
 
     public function test_envoyer_un_devis_brouillon_depuis_la_liste_lui_attribue_un_numero(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -274,9 +274,9 @@ class DevisResourceTest extends TestCase
 
     public function test_accepter_un_devis_envoye_depuis_la_liste(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -290,9 +290,9 @@ class DevisResourceTest extends TestCase
 
     public function test_refuser_un_devis_envoye_depuis_la_liste(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -306,9 +306,9 @@ class DevisResourceTest extends TestCase
 
     public function test_convertir_un_devis_accepte_en_facture_brouillon(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -326,9 +326,9 @@ class DevisResourceTest extends TestCase
 
     public function test_la_conversion_nest_plus_proposee_une_fois_le_devis_deja_converti(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -342,9 +342,9 @@ class DevisResourceTest extends TestCase
 
     public function test_impossible_de_convertir_un_devis_pas_encore_accepte(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -361,9 +361,9 @@ class DevisResourceTest extends TestCase
      */
     public function test_modifier_un_devis_accepte_remplace_les_lignes_recalcule_les_totaux_et_le_repasse_en_brouillon(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -400,9 +400,9 @@ class DevisResourceTest extends TestCase
      */
     public function test_la_page_de_modification_annonce_le_retour_en_brouillon_d_un_devis_envoye_ou_accepte(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
         $brouillon = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
@@ -424,9 +424,9 @@ class DevisResourceTest extends TestCase
      */
     public function test_un_devis_refuse_ne_se_modifie_plus(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $devis = $this->envoyerDevis(Client::factory()->create(), Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]));
         Livewire::test(ListDevis::class)->callTableAction('refuser', $devis);
@@ -508,9 +508,9 @@ class DevisResourceTest extends TestCase
 
     public function test_laction_modifier_disparait_des_quun_devis_est_converti_en_facture(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -751,9 +751,9 @@ class DevisResourceTest extends TestCase
      */
     public function test_la_suppression_en_masse_garde_le_devis_deja_converti_en_facture(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);

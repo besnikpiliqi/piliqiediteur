@@ -236,20 +236,22 @@ class ActionsHorsEcranTest extends TestCase
     }
 
     /**
-     * Le geste, préparé dans le magasin par son propriétaire : appelé avec
-     * l'auteur, il fait l'action.
+     * Le geste, préparé dans le magasin par son propriétaire, ses ventes
+     * par le responsable de test, puisque le propriétaire ne vend jamais :
+     * appelé avec l'auteur, il fait l'action.
      *
      * @return Closure(User): mixed
      */
     private function geste(string $nom, Magasin $magasin): Closure
     {
         $proprietaire = $this->proprietaireDe($magasin);
+        $vendeur = $this->responsableDeTest($magasin);
         $societe = $magasin->societe;
 
         return match ($nom) {
             'créer une facture' => $this->avec([Client::factory()->create(), $this->lignes()], fn (array $vente, User $auteur) => app(CreerFactureAction::class)->handle($auteur, ...$vente)),
-            'modifier une facture' => $this->avec([$this->brouillon($proprietaire), $this->lignes(2)], fn (array $modification, User $auteur) => app(ModifierFactureAction::class)->handle($auteur, $modification[0], $modification[0]->client, $modification[1])),
-            'émettre une facture' => $this->avec($this->brouillon($proprietaire), fn (Facture $brouillon, User $auteur) => app(EmettreFactureAction::class)->handle($auteur, $brouillon)),
+            'modifier une facture' => $this->avec([$this->brouillon($vendeur), $this->lignes(2)], fn (array $modification, User $auteur) => app(ModifierFactureAction::class)->handle($auteur, $modification[0], $modification[0]->client, $modification[1])),
+            'émettre une facture' => $this->avec($this->brouillon($vendeur), fn (Facture $brouillon, User $auteur) => app(EmettreFactureAction::class)->handle($auteur, $brouillon)),
             'vendre à la caisse' => $this->avec([Client::factory()->create(), $this->lignes()], fn (array $vente, User $auteur) => self::vendreAuComptant($auteur, ...$vente, mode: ModePaiement::Especes)),
             'créer un devis' => $this->avec([Client::factory()->create(), $this->lignes()], fn (array $vente, User $auteur) => app(CreerDevisAction::class)->handle($auteur, ...$vente)),
             'modifier un devis' => $this->avec([$this->devis($proprietaire), $this->lignes(2)], fn (array $modification, User $auteur) => app(ModifierDevisAction::class)->handle($auteur, $modification[0], $modification[0]->client, $modification[1])),
@@ -257,26 +259,26 @@ class ActionsHorsEcranTest extends TestCase
             'accepter un devis' => $this->avec(app(EmettreDevisAction::class)->handle($proprietaire, $this->devis($proprietaire)), fn (Devis $devis, User $auteur) => app(AccepterDevisAction::class)->handle($auteur, $devis)),
             'refuser un devis' => $this->avec(app(EmettreDevisAction::class)->handle($proprietaire, $this->devis($proprietaire)), fn (Devis $devis, User $auteur) => app(RefuserDevisAction::class)->handle($auteur, $devis)),
             'facturer un devis' => $this->avec(app(AccepterDevisAction::class)->handle($proprietaire, app(EmettreDevisAction::class)->handle($proprietaire, $this->devis($proprietaire))), fn (Devis $devis, User $auteur) => app(CreerFactureDepuisDevisAction::class)->handle($auteur, $devis)),
-            'créer un avoir' => $this->avec($this->ticket($proprietaire), fn (Facture $ticket, User $auteur) => app(CreerAvoirAction::class)->handle($auteur, $ticket->client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]])),
-            'enregistrer un avoir' => $this->avec($this->ticket($proprietaire), fn (Facture $ticket, User $auteur) => app(EnregistrerAvoirAction::class)->handle($auteur, $ticket->client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour')),
-            'émettre un avoir' => $this->avec($this->ticket($proprietaire), function (Facture $ticket) use ($proprietaire): Closure {
+            'créer un avoir' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(CreerAvoirAction::class)->handle($auteur, $ticket->client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]])),
+            'enregistrer un avoir' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(EnregistrerAvoirAction::class)->handle($auteur, $ticket->client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour')),
+            'émettre un avoir' => $this->avec($this->ticket($vendeur), function (Facture $ticket) use ($proprietaire): Closure {
                 $avoir = app(CreerAvoirAction::class)->handle($proprietaire, $ticket->client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]);
 
                 return fn (User $auteur) => app(EmettreAvoirAction::class)->handle($auteur, $avoir);
             }),
-            'enregistrer un paiement' => $this->avec($this->ticket($proprietaire), fn (Facture $ticket, User $auteur) => $this->payer($auteur, $ticket)),
-            'contre-passer un paiement' => $this->avec($this->payer($proprietaire, $this->ticket($proprietaire)), fn ($paiement, User $auteur) => app(ContrePasserPaiementAction::class)->handle($auteur, $paiement, 'Erreur de saisie')),
-            'clôturer la journée' => $this->avec($this->ticket($proprietaire), fn (Facture $ticket, User $auteur) => app(CloturerCaisseAction::class)->handle($auteur, $magasin, today())),
-            'clôturer les journées en attente' => $this->avec($this->ticket($proprietaire), fn (Facture $ticket, User $auteur) => app(CloturerLesJourneesAction::class)->parUnePersonne($auteur, $magasin, now())),
+            'enregistrer un paiement' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => $this->payer($auteur, $ticket)),
+            'contre-passer un paiement' => $this->avec($this->payer($vendeur, $this->ticket($vendeur)), fn ($paiement, User $auteur) => app(ContrePasserPaiementAction::class)->handle($auteur, $paiement, 'Erreur de saisie')),
+            'clôturer la journée' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(CloturerCaisseAction::class)->handle($auteur, $magasin, today())),
+            'clôturer les journées en attente' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(CloturerLesJourneesAction::class)->parUnePersonne($auteur, $magasin, now())),
             'fermer la caisse d\'un vendeur' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), function (User $vendeur): Closure {
                 $this->ticket($vendeur);
 
                 return fn (User $auteur) => app(FermerSaCaisseAction::class)->handle($auteur, $vendeur);
             }),
-            'envoyer un document' => $this->avec($this->ticket($proprietaire), fn (Facture $ticket, User $auteur) => app(EnvoyerDocumentAction::class)->handle($auteur, $ticket, 'client@exemple.fr', null)),
-            'relancer une facture' => $this->avec($this->ticket($proprietaire), fn (Facture $ticket, User $auteur) => app(EnvoyerDocumentAction::class)->relancer($auteur, $ticket, 'client@exemple.fr')),
-            'ajouter une preuve' => $this->avec($this->ticket($proprietaire), fn (Facture $ticket, User $auteur) => app(AjouterPreuveOperationAction::class)->handle($auteur, $ticket, TypePreuve::Mrn, 'MRN-1234')),
-            'noter un bordereau de détaxe' => $this->avec($this->ticket($proprietaire), fn (Facture $ticket, User $auteur) => app(NoterBordereauDetaxeAction::class)->handle($auteur, $ticket, 'BD-1234')),
+            'envoyer un document' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(EnvoyerDocumentAction::class)->handle($auteur, $ticket, 'client@exemple.fr', null)),
+            'relancer une facture' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(EnvoyerDocumentAction::class)->relancer($auteur, $ticket, 'client@exemple.fr')),
+            'ajouter une preuve' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(AjouterPreuveOperationAction::class)->handle($auteur, $ticket, TypePreuve::Mrn, 'MRN-1234')),
+            'noter un bordereau de détaxe' => $this->avec($this->ticket($vendeur), fn (Facture $ticket, User $auteur) => app(NoterBordereauDetaxeAction::class)->handle($auteur, $ticket, 'BD-1234')),
             'saisir une facture d\'achat' => $this->avec([Fournisseur::factory()->create(), $this->lignesDAchat()], fn (array $achat, User $auteur) => app(CreerFactureAchatAction::class)->handle($auteur, ...$achat)),
             'modifier une facture d\'achat' => $this->avec([$this->factureAchat($proprietaire), $this->lignesDAchat(5)], fn (array $modification, User $auteur) => app(ModifierFactureAchatAction::class)->handle($auteur, $modification[0], $modification[0]->fournisseur, $modification[1])),
             'valider une facture d\'achat' => $this->avec($this->factureAchat($proprietaire), fn (FactureAchat $factureAchat, User $auteur) => app(ValiderFactureAchatAction::class)->handle($auteur, $factureAchat)),
@@ -389,7 +391,8 @@ class ActionsHorsEcranTest extends TestCase
     }
 
     /**
-     * Prépare le geste avec ce que le propriétaire a déjà fait : la
+     * Prépare le geste avec ce que le propriétaire ou le responsable de
+     * test a déjà fait : la
      * fermeture reçoit cette préparation, puis l'auteur ; ou, quand elle
      * n'attend que la préparation, rend elle-même le geste.
      *

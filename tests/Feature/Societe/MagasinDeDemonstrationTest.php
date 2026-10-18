@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
@@ -40,7 +42,9 @@ use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\App\Pages\Caisse;
+use App\Filament\Societe\Pages\TableauDeBord;
 use Filament\Facades\Filament;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -91,8 +95,9 @@ class MagasinDeDemonstrationTest extends TestCase
 
     /**
      * Une société qui n'a encore aucun magasin réel s'essaie dans sa
-     * démonstration comme une autre : elle l'ouvre, y vend, y encaisse et y
-     * clôture sa journée, et aucun magasin réel n'apparaît.
+     * démonstration comme une autre : son propriétaire l'ouvre, son équipe
+     * y vend, y encaisse et y clôture sa journée, et aucun magasin réel
+     * n'apparaît.
      */
     public function test_la_demonstration_fonctionne_sans_aucun_magasin_reel(): void
     {
@@ -105,6 +110,37 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->assertSame(['payee', 1], [$ticket->fresh()->statut->value, ClotureCaisse::query()->count()]);
         $this->assertSame(0, $societe->magasinsReels()->count());
         $this->assertSame([$demonstration->id], $societe->proprietaire->magasinsAccessibles()->modelKeys());
+    }
+
+    /**
+     * Le propriétaire ne vend pas, pas même dans le magasin de
+     * démonstration : il n'y a ni caisse ni autorisation de vente, l'action
+     * le refuse et rien ne s'écrit ; la fenêtre qui ouvre la démonstration
+     * le lui dit et l'invite à y créer un compte pour essayer la caisse,
+     * avec lequel la vente passe.
+     */
+    public function test_le_proprietaire_ne_vend_pas_dans_la_demonstration_et_la_fenetre_le_dit(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $proprietaire = $societe->proprietaire;
+        $this->dansLEspaceDeLaSociete($societe, $proprietaire);
+
+        Livewire::test(TableauDeBord::class)
+            ->mountAction('ouvrirLaDemonstration')
+            ->assertSee('votre équipe y vend, encaisse et clôture comme pour de vrai ; vous-même ne vendez pas : pour essayer la caisse, créez-y un compte de responsable ou de vendeur.')
+            ->callMountedAction();
+
+        $demonstration = $societe->demonstration()->sole();
+        $this->assertSame([], array_values(array_intersect(PermissionRegistry::deVente(), $proprietaire->autorisationsDans($demonstration))));
+        $this->assertFalse($proprietaire->tientUneCaisseDans($demonstration));
+        $this->dansLeMagasin($demonstration, $proprietaire);
+        $this->get(Caisse::getUrl(tenant: $demonstration))->assertForbidden();
+        $this->assertThrows(fn () => $this->vendre(), AuthorizationException::class, LecteurDesDroits::REFUS);
+        $this->assertSame(0, Facture::query()->count());
+
+        $this->actingAs($this->responsableDeTest($demonstration));
+
+        $this->assertMatchesRegularExpression('/^TK-DEMO-/', $this->vendre()->numero);
     }
 
     public function test_l_ouverture_et_la_fin_de_la_demonstration_s_inscrivent_en_jet_100_et_105(): void
@@ -389,20 +425,23 @@ class MagasinDeDemonstrationTest extends TestCase
     }
 
     /**
-     * Ouvre la démonstration de la société par son propriétaire, qui s'y
-     * connecte : elle devient le magasin actif.
+     * Ouvre la démonstration de la société par son propriétaire ; son
+     * responsable de test, le compte que l'équipe y crée pour essayer la
+     * caisse (le propriétaire ne vend pas), s'y connecte : elle devient le
+     * magasin actif.
      */
     private function ouvrirLaDemonstrationEtYEntrer(Societe $societe): Magasin
     {
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
         app(TenantContext::class)->set($demonstration);
-        $this->actingAs($societe->proprietaire);
+        $this->actingAs($this->responsableDeTest($demonstration));
 
         return $demonstration;
     }
 
     /**
-     * Un carnet vendu au comptoir de la démonstration, payé en espèces.
+     * Un carnet vendu au comptoir de la démonstration par la personne
+     * connectée, payé en espèces.
      */
     private function vendre(): Facture
     {

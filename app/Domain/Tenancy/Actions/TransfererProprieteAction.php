@@ -32,11 +32,16 @@ use SensitiveParameter;
  * propriétaire par société (voir GardesDesDroits) : le nouveau propriétaire
  * perd sa portée et ses autorisations de société, l'ancien devient
  * administrateur, le nouveau devient propriétaire, puis l'ancien reçoit
- * tous les magasins, présents et futurs, avec toutes les autorisations de
- * magasin et de société. Tout se relit sous les verrous des registres de
- * tous les magasins de la société puis des lignes des deux comptes ; le
- * changement s'inscrit au JET 130 de chaque magasin et au journal d'audit
- * (voir JournalDesDroits), et chacun des deux en est prévenu.
+ * tous les magasins, présents et futurs, avec exactement les autorisations
+ * de magasin qu'il avait comme propriétaire, toutes sauf celles de la
+ * vente (voir PermissionRegistry::duProprietaire()), que le nouveau
+ * propriétaire peut lui cocher, et toutes celles de la société. Tout se
+ * relit sous les verrous des registres de tous les magasins de la société
+ * puis des lignes des deux comptes ; le changement s'inscrit au JET 130 de
+ * chaque magasin et au journal d'audit (voir JournalDesDroits), et chacun
+ * des deux en est prévenu. Le nouveau propriétaire ne vend plus : une
+ * caisse qu'il avait ouverte comme administrateur se ferme comme celle de
+ * tout vendeur, par lui-même ou d'office par la clôture du jour.
  */
 class TransfererProprieteAction
 {
@@ -86,14 +91,14 @@ class TransfererProprieteAction
                 $this->porteeDesAdministrateurs->ecrire($auteurRelu, [
                     'tous' => true,
                     'magasins' => new Collection,
-                    'cases' => [0 => PermissionRegistry::toutes()],
+                    'cases' => [0 => PermissionRegistry::duProprietaire()],
                     'societe' => AutorisationsSociete::toutes(),
                 ]);
             });
         });
 
-        $auteur->refresh()->notify(new AvisDeLEquipe($societe, 'Propriété transmise', "Vous avez transmis la propriété de {$societe->getFilamentName()} à {$nouveau->name} : vous en êtes désormais administrateur de tous les magasins, avec toutes les autorisations."));
-        $nouveau->refresh()->notify(new AvisDeLEquipe($societe, 'Vous êtes propriétaire', "{$auteur->name} vous a transmis la propriété de {$societe->getFilamentName()} : vous avez désormais tous les droits dans la société et dans chacun de ses magasins.", nature: AvisDeLEquipe::ATTENTION));
+        $auteur->refresh()->notify(new AvisDeLEquipe($societe, 'Propriété transmise', "Vous avez transmis la propriété de {$societe->getFilamentName()} à {$nouveau->name} : vous en êtes désormais administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, que le nouveau propriétaire peut vous cocher, et toutes celles de la société."));
+        $nouveau->refresh()->notify(new AvisDeLEquipe($societe, 'Vous êtes propriétaire', "{$auteur->name} vous a transmis la propriété de {$societe->getFilamentName()} : vous avez désormais tous les droits dans la société et dans chacun de ses magasins, sauf celui de vendre : le propriétaire supervise et contrôle.", nature: AvisDeLEquipe::ATTENTION));
     }
 
     /**

@@ -48,6 +48,7 @@ use Closure;
 use Database\Factories\MagasinFactory;
 use Database\Factories\SocieteFactory;
 use Filament\Facades\Filament;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Application;
@@ -633,15 +634,39 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Le responsable de test du magasin : un membre responsable de ce seul
+     * magasin, qui y a toutes les autorisations sans case, vente comprise,
+     * que le propriétaire n'a jamais. Créé à la première demande par la
+     * fabrique (voir UserFactory::responsableDeTest()), sans action, donc
+     * sans rien inscrire au registre fiscal, au journal des événements ni
+     * au journal d'audit : il se crée à toute heure, même après le dernier
+     * verrou du registre ; retrouvé ensuite par son nom et son magasin.
+     * Statique : un processus concurrent l'appelle aussi, une fois que le
+     * test l'a obtenu avant de lancer ses processus.
+     */
+    protected static function responsableDeTest(Magasin $magasin): User
+    {
+        $existant = User::query()
+            ->where('societe_id', $magasin->societe_id)
+            ->where('name', 'Responsable de test')
+            ->whereHas('affectations', fn (Builder $affectations): Builder => $affectations->where('magasin_id', $magasin->getKey())->where('role', RoleMagasin::Responsable->value))
+            ->first();
+
+        return $existant ?? User::factory()->responsableDeTest($magasin, self::MOT_DE_PASSE_CHOISI)->create();
+    }
+
+    /**
      * L'auteur des actions qu'un test appelle directement, comme le ferait
-     * l'écran : la personne connectée, sinon le propriétaire de la société
-     * du magasin actif. Statique : un processus concurrent l'appelle aussi.
+     * l'écran : la personne connectée, sinon le responsable de test du
+     * magasin actif (voir responsableDeTest()), qui peut vendre, ce que le
+     * propriétaire ne fait jamais. Statique : un processus concurrent
+     * l'appelle aussi.
      */
     protected static function auteur(): User
     {
         $connecte = auth()->user();
 
-        return $connecte instanceof User ? $connecte : app(TenantContext::class)->magasin()->societe()->firstOrFail()->proprietaire()->firstOrFail();
+        return $connecte instanceof User ? $connecte : self::responsableDeTest(app(TenantContext::class)->magasin());
     }
 
     /**

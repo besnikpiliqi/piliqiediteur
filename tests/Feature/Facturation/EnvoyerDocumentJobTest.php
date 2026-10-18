@@ -233,7 +233,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $facture = $this->emettreFactureEchueLe(Client::factory()->create(), '2026-09-30');
         Queue::fake([EnvoyerDocumentJob::class]);
-        $relance = app(EnvoyerDocumentAction::class)->relancer(self::auteur(), $facture, 'client@exemple.fr');
+        $relance = app(EnvoyerDocumentAction::class)->relancer($this->proprietaireDe($magasin), $facture, 'client@exemple.fr');
         $this->payer($facture, 120);
 
         (new EnvoyerDocumentJob($magasin->id, $relance->id))->handle();
@@ -255,7 +255,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
         $facture = $this->emettreFacture(Client::factory()->create());
         Queue::fake([EnvoyerDocumentJob::class]);
-        $envoi = app(EnvoyerDocumentAction::class)->handle(self::auteur(), $facture, 'client@exemple.fr', null);
+        $envoi = app(EnvoyerDocumentAction::class)->handle($this->proprietaireDe($magasin), $facture, 'client@exemple.fr', null);
         $magasin->forceFill(['suspendu_le' => now()])->save();
 
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();
@@ -564,6 +564,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->travelTo('2026-10-09 10:00:00');
         Mail::fake();
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
+        $this->actingAs($this->proprietaireDe($magasin));
         $produit = $this->produit();
         $devis = app(CreerDevisAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ['date_validite' => '2026-10-31']);
         Queue::fake([EnvoyerDocumentJob::class]);

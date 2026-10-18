@@ -81,7 +81,7 @@ class LecteurDesDroitsTest extends TestCase
     public function test_une_action_sans_auteur_est_refusee(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $brouillon = $this->brouillon($this->proprietaireDe($magasin));
+        $brouillon = $this->brouillon($this->responsableDeTest($magasin));
 
         $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(null, $brouillon), TypeError::class);
         $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(new User, $brouillon), AuthorizationException::class, LecteurDesDroits::REFUS);
@@ -125,7 +125,7 @@ class LecteurDesDroitsTest extends TestCase
     {
         $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $this->vendreUnTicket($this->proprietaireDe($magasin));
+        $this->vendreUnTicket($this->responsableDeTest($magasin));
         $membre = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
         $this->travelTo('2026-10-09 19:00:00');
         $this->assertTrue($membre->can('cloturer', ClotureCaisse::class), 'L\'écran a vu le droit de clôturer.');
@@ -376,8 +376,9 @@ class LecteurDesDroitsTest extends TestCase
         $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $this->vendreUnTicket($proprietaire);
-        PanierCaisse::factory()->create(['user_id' => $proprietaire->id]);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->vendreUnTicket($responsable);
+        PanierCaisse::factory()->create(['user_id' => $responsable->id]);
         $this->actingAs($proprietaire);
         $this->travelTo('2026-10-10 00:05:00');
 

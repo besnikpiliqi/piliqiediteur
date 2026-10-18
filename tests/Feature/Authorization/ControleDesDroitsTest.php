@@ -12,8 +12,8 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
-use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
@@ -47,9 +47,9 @@ class ControleDesDroitsTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * Chaque autorisation du propriétaire, et si elle lui reste dans un
-     * magasin en lecture seule : consulter, clôturer la journée et gérer
-     * l'équipe seulement.
+     * Chaque autorisation, et si elle reste permise dans un magasin en
+     * lecture seule : consulter, clôturer la journée et gérer l'équipe
+     * seulement.
      *
      * @return array<string, array{0: string, 1: bool}>
      */
@@ -92,6 +92,7 @@ class ControleDesDroitsTest extends TestCase
             PermissionRegistry::FACTURE_CREATE,
             PermissionRegistry::FACTURE_EMETTRE,
             PermissionRegistry::FACTURE_ENVOYER,
+            PermissionRegistry::FACTURE_JUSTIFIER,
             PermissionRegistry::RELANCES_REGLER,
             PermissionRegistry::PARAMETRES_GERER,
             PermissionRegistry::PAIEMENT_CREER,
@@ -110,11 +111,17 @@ class ControleDesDroitsTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: string}>
+     * Chaque autorisation, et si le propriétaire l'a dans un magasin actif :
+     * toutes, sauf les quatre de la vente (précision 1 de l'éditeur : il ne
+     * vend jamais).
+     *
+     * @return array<string, array{0: string, 1: bool}>
      */
-    public static function autorisations(): array
+    public static function autorisationsDuProprietaire(): array
     {
-        return array_map(static fn (array $regle): array => [$regle[0]], self::autorisationsEnLectureSeule());
+        $deVente = [PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER, PermissionRegistry::STOCK_VENDRE_SANS_STOCK];
+
+        return array_map(static fn (array $regle): array => [$regle[0], ! in_array($regle[0], $deVente, true)], self::autorisationsEnLectureSeule());
     }
 
     /**
@@ -128,13 +135,13 @@ class ControleDesDroitsTest extends TestCase
         $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $couvertes);
     }
 
-    #[DataProvider('autorisations')]
-    public function test_le_proprietaire_d_un_magasin_actif_garde_chaque_autorisation(string $permission): void
+    #[DataProvider('autorisationsDuProprietaire')]
+    public function test_le_proprietaire_d_un_magasin_actif_garde_chaque_autorisation_sauf_celles_de_la_vente(string $permission, bool $accordee): void
     {
         $proprietaire = User::factory()->create();
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
 
-        $this->assertTrue($proprietaire->can($permission));
+        $this->assertSame($accordee, $proprietaire->can($permission));
     }
 
     #[DataProvider('autorisationsEnLectureSeule')]
@@ -172,7 +179,7 @@ class ControleDesDroitsTest extends TestCase
         $this->assertTrue($proprietaire->can('viewAny', Facture::class));
         $this->assertTrue($proprietaire->can('view', $brouillon));
         $this->assertTrue($proprietaire->can('cloturer', ClotureCaisse::class));
-        $this->assertTrue($proprietaire->can('fermer', ClotureCaissePersonnelle::class));
+        $this->assertTrue($vendeur->can('fermer', ClotureCaissePersonnelle::class));
         $this->assertTrue($proprietaire->can('fermerLaCaisseDe', [ClotureCaissePersonnelle::class, $vendeur]));
         $this->assertTrue($proprietaire->can('create', Affectation::class));
         $this->assertTrue($proprietaire->can('update', $sonAffectation));
@@ -196,9 +203,10 @@ class ControleDesDroitsTest extends TestCase
 
     /**
      * Le propriétaire de la société n'est rattaché à aucun magasin : il a
-     * toutes les autorisations dans chacun de ses magasins, sans case.
+     * toutes les autorisations dans chacun de ses magasins, sans case, sauf
+     * celles de la vente, qu'il n'a dans aucun.
      */
-    public function test_le_proprietaire_a_tous_les_droits_dans_chaque_magasin_sans_affectation(): void
+    public function test_le_proprietaire_a_tous_les_droits_sauf_la_vente_dans_chaque_magasin_sans_affectation(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
@@ -209,8 +217,12 @@ class ControleDesDroitsTest extends TestCase
         foreach ([$magasin, $autreMagasin] as $chaqueMagasin) {
             app(TenantContext::class)->set($chaqueMagasin);
 
-            foreach (PermissionRegistry::toutes() as $permission) {
+            foreach (PermissionRegistry::duProprietaire() as $permission) {
                 $this->assertTrue($proprietaire->can($permission), "{$permission} dans le magasin {$chaqueMagasin->nom}");
+            }
+
+            foreach ([PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER, PermissionRegistry::STOCK_VENDRE_SANS_STOCK] as $vente) {
+                $this->assertFalse($proprietaire->can($vente), "{$vente} dans le magasin {$chaqueMagasin->nom}");
             }
         }
     }
@@ -307,12 +319,16 @@ class ControleDesDroitsTest extends TestCase
 
         $proprietaire = $this->proprietaireDe($magasin);
 
-        foreach (PermissionRegistry::toutes() as $permission) {
+        foreach (PermissionRegistry::duProprietaire() as $permission) {
             $this->assertSame(
                 ! in_array($permission, PermissionRegistry::reserveesAuxOperationsCommerciales(), true),
                 $proprietaire->can($permission),
                 $permission,
             );
+        }
+
+        foreach ([PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE, PermissionRegistry::PAIEMENT_CREER, PermissionRegistry::STOCK_VENDRE_SANS_STOCK] as $vente) {
+            $this->assertFalse($proprietaire->can($vente), $vente);
         }
     }
 
@@ -342,35 +358,40 @@ class ControleDesDroitsTest extends TestCase
 
     /**
      * Le propriétaire passe les policies sans aucune case, mais les règles
-     * qui valent pour tous s'appliquent à lui : un magasin fermé ne vend
-     * plus, une facture émise ne se supprime jamais, une journée clôturée
-     * refuse toute vente, et une société qui n'est pas validée n'émet rien.
+     * qui valent pour tous s'appliquent à lui : une facture émise ne se
+     * supprime jamais, une journée clôturée refuse ses contre-passations,
+     * un magasin fermé n'envoie plus rien ni ne fait d'avoir, et une
+     * société qui n'est pas validée ne fait aucune opération commerciale.
+     * Les ventes se préparent sous le responsable de test : le propriétaire
+     * ne vend jamais (précision 1 de l'éditeur).
      */
     public function test_le_proprietaire_n_a_besoin_d_aucune_case_mais_reste_soumis_aux_regles_de_tous(): void
     {
         $this->travelTo('2026-10-09 19:00:00');
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $this->actingAs($proprietaire);
+        $responsable = $this->responsableDeTest($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $emise = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]));
-        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $emise = self::vendreAuComptant($responsable, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+        $paiement = $emise->allocationsPaiement()->sole()->paiement;
 
         $this->assertSame(0, Affectation::query()->where('user_id', $proprietaire->id)->count());
-        $this->assertTrue($proprietaire->can('emettre', $brouillon));
+        $this->assertTrue($proprietaire->can('view', $emise));
+        $this->assertTrue($proprietaire->can('contrePasser', $paiement));
         $this->assertFalse($proprietaire->can('delete', $emise));
         $this->assertFalse($proprietaire->can('update', $emise));
 
-        app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
-        $this->assertThrows(fn () => app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon), LogicException::class);
+        app(CloturerCaisseAction::class)->handle($proprietaire, $magasin, now());
+        $this->assertThrows(fn () => app(ContrePasserPaiementAction::class)->handle($proprietaire, $paiement, 'Saisie erronée'), LogicException::class, 'La journée du 09/10/2026 est clôturée : la contre-passation pourra être faite demain.');
 
+        $this->assertTrue($proprietaire->can(PermissionRegistry::AVOIR_CREER));
         $this->fermer($magasin);
-        $this->assertFalse($proprietaire->can('emettre', $brouillon));
-        $this->assertFalse($proprietaire->can(PermissionRegistry::FACTURE_CREATE));
+        $this->assertFalse($proprietaire->can(PermissionRegistry::AVOIR_CREER));
+        $this->assertFalse($proprietaire->can('envoyer', $emise));
 
         $aValider = $this->ouvrirUneSociete(['nom' => 'Boutique à valider', 'a_verifier' => true]);
         $proprietaireAValider = $this->proprietaireDe($aValider);
-        $this->assertFalse($proprietaireAValider->can(PermissionRegistry::FACTURE_EMETTRE));
+        $this->assertFalse($proprietaireAValider->can(PermissionRegistry::AVOIR_CREER));
         $this->assertTrue($proprietaireAValider->can(PermissionRegistry::PRODUIT_CREATE));
     }
 

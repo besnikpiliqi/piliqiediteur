@@ -49,7 +49,6 @@ use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Filament\App\Resources\ProduitResource;
-use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -159,7 +158,7 @@ class MagasinEnLectureSeuleTest extends TestCase
     {
         $magasin = $this->ouvrirLeMagasin();
         $this->vendreUnTicket();
-        app(FermerSaCaisseAction::class)->handle($this->proprietaireDe($magasin), $this->proprietaireDe($magasin));
+        app(FermerSaCaisseAction::class)->handle(self::auteur(), self::auteur());
         $this->passerEn($magasin, $situation);
 
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
@@ -450,13 +449,13 @@ class MagasinEnLectureSeuleTest extends TestCase
     }
 
     /**
-     * Le magasin du propriétaire connecté, magasin actif du panneau.
+     * Le magasin actif du panneau, où son responsable de test est connecté :
+     * le propriétaire ne vend jamais.
      */
     private function ouvrirLeMagasin(): Magasin
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
         Filament::setTenant($magasin);
 
         return $magasin;

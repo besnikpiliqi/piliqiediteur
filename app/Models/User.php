@@ -31,8 +31,10 @@ use Illuminate\Support\Str;
 /**
  * Un compte n'appartient qu'à une seule société (societe_id), avec son
  * rôle dans la société (voir RoleSociete) :
- * - son propriétaire, qui a tous les droits dans la société et dans chacun
- *   de ses magasins, sans case ni affectation ;
+ * - son propriétaire, qui supervise et contrôle : tous les droits dans la
+ *   société et dans chacun de ses magasins, sans case ni affectation, sauf
+ *   celui de vendre, qu'il n'a jamais (voir
+ *   PermissionRegistry::duProprietaire()) ;
  * - un administrateur, avec ses autorisations de société et sa portée
  *   (tous les magasins ou une sélection : ses affectations sans rôle, qui
  *   portent ses cases) ;
@@ -525,6 +527,20 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
+     * Tient-il une caisse dans ce magasin : y vend-il (facture.create) ou
+     * y encaisse-t-il (paiement.creer) ? Lu sur ses autorisations dans ce
+     * magasin (voir autorisationsDans()), pas sur le droit d'agir du
+     * moment : dans un magasin en lecture seule, où plus rien ne se vend,
+     * chacun ferme toujours sa caisse et consulte ses relevés. Jamais le
+     * propriétaire, qui ne vend pas ; un administrateur seulement quand le
+     * propriétaire lui a coché la vente.
+     */
+    public function tientUneCaisseDans(Magasin $magasin): bool
+    {
+        return array_intersect([PermissionRegistry::FACTURE_CREATE, PermissionRegistry::PAIEMENT_CREER], $this->autorisationsDans($magasin)) !== [];
+    }
+
+    /**
      * Oublie les autorisations lues sur cette instance : après une écriture
      * de droits, elles se relisent en base.
      */
@@ -610,7 +626,9 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     /**
      * Les autorisations que son rôle lui donne dans ce magasin de sa
      * société, quel que soit son statut ; null quand aucune n'y vaut :
-     * - le propriétaire : toutes ;
+     * - le propriétaire : toutes sauf celles de la vente (voir
+     *   PermissionRegistry::duProprietaire()), dans chaque magasin,
+     *   démonstration comprise : il ne vend jamais ;
      * - un expert-comptable : les consultations, dans un magasin réel ;
      *   rien dans le magasin de démonstration ;
      * - un administrateur : les cases de son affectation à ce magasin, ou
@@ -623,11 +641,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     private function autorisationsEnregistreesDans(Magasin $magasin): ?array
     {
-        $toutes = PermissionRegistry::toutes();
-        sort($toutes);
-
         if ($this->estProprietaire()) {
-            return $toutes;
+            return PermissionRegistry::duProprietaire();
         }
 
         if ($this->estExpertComptable()) {
@@ -647,7 +662,14 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             return null;
         }
 
-        return $affectation->role === RoleMagasin::Responsable ? $toutes : $affectation->autorisations();
+        if ($affectation->role !== RoleMagasin::Responsable) {
+            return $affectation->autorisations();
+        }
+
+        $toutes = PermissionRegistry::toutes();
+        sort($toutes);
+
+        return $toutes;
     }
 
     /**

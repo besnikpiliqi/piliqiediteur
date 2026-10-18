@@ -42,7 +42,7 @@ class CreateMembreDuMagasin extends CreateRecord
                     $magasin->societe,
                     ['name' => $data['name'], 'email' => $data['email']],
                     $data['mot_de_passe_provisoire'],
-                    [$magasin->getKey() => ['role' => $data['role'], 'autorisations' => $data['autorisations'] ?? []]],
+                    [$magasin->getKey() => ['role' => $data['role'], 'autorisations' => EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations')]],
                 );
             } catch (ValidationException $refus) {
                 throw ValidationException::withMessages(collect($refus->errors())->mapWithKeys(fn (array $messages, string $champ): array => ["data.{$champ}" => $messages])->all());

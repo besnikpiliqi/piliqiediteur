@@ -9,11 +9,14 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages\ListClotureCaissePersonnelles;
+use App\Filament\App\Resources\ClotureCaisseResource\Widgets\CaissesPersonnellesOuvertesApercu;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Models\User;
@@ -126,6 +129,87 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
             ->assertTableColumnStateSet('encaissements', ['Espèces : 30,00 €'], $releve->getKey())
             ->assertTableColumnStateSet('credit_avoir', '30.00', $releve->getKey())
             ->assertTableColumnStateSet('reste_du', '45.00', $releve->getKey());
+    }
+
+    /**
+     * Le menu et le titre de la page disent « Ma caisse » à qui tient une
+     * caisse dans le magasin sans voir les relevés de toute l'équipe, « Les
+     * caisses » à tous les autres : le propriétaire, un responsable, un
+     * vendeur qui voit les relevés de toute l'équipe, un administrateur sans
+     * vente et un expert-comptable.
+     */
+    public function test_le_menu_s_appelle_les_caisses_sauf_pour_qui_ne_voit_que_sa_caisse(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $comptes = [
+            'Ma caisse' => [$this->membre($magasin, RoleMagasin::Vendeur)],
+            'Les caisses' => [
+                $this->proprietaireDe($magasin),
+                $this->responsableDeTest($magasin),
+                $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]),
+                $this->administrateur($magasin),
+                $this->expertComptable($magasin),
+            ],
+        ];
+
+        foreach ($comptes as $libelle => $liste) {
+            foreach ($liste as $compte) {
+                $this->dansLeMagasin($magasin, $compte);
+
+                $this->assertSame($libelle, ClotureCaissePersonnelleResource::getNavigationLabel(), $compte->name);
+                $this->assertSame($libelle, Livewire::test(ListClotureCaissePersonnelles::class)->instance()->getTitle(), $compte->name);
+                $this->get(ClotureCaissePersonnelleResource::getUrl('index', tenant: $magasin))->assertOk()->assertSeeText($libelle);
+            }
+        }
+    }
+
+    /**
+     * Un administrateur sans vente n'a pas de caisse : pas de « Fermer ma
+     * caisse » ; autorisé à clôturer la journée, il ferme celle d'un
+     * vendeur, sinon il n'en a pas le bouton non plus.
+     */
+    public function test_un_administrateur_sans_vente_n_a_pas_fermer_ma_caisse_mais_ferme_celle_d_un_vendeur_s_il_peut_cloturer(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul']);
+        $this->dansLeMagasin($magasin, $vendeur);
+        $this->vendreAuComptoir(Client::factory()->create(), 12);
+        $administrateur = $this->administrateur($magasin);
+        $sansCloture = $this->administrateur($magasin, null, [], array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::CLOTURE_CAISSE_GERER])));
+
+        $this->dansLeMagasin($magasin, $sansCloture);
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->assertActionHidden('fermer_ma_caisse')
+            ->assertActionHidden('fermer_la_caisse_d_un_vendeur');
+        $this->dansLeMagasin($magasin, $administrateur);
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->assertActionHidden('fermer_ma_caisse')
+            ->callAction('fermer_la_caisse_d_un_vendeur', ['vendeur_id' => $vendeur->id])
+            ->assertNotified('Caisse de Paul fermée');
+
+        $releve = ClotureCaissePersonnelle::query()->sole();
+        $this->assertSame([(int) $vendeur->id, (int) $administrateur->id, ModeFermetureCaisse::Responsable, 1], [(int) $releve->vendeur_id, (int) $releve->fermee_par, $releve->mode_fermeture, $releve->nombre_ventes]);
+        $this->assertFalse($administrateur->tientUneCaisseDans($magasin));
+    }
+
+    /**
+     * Les caisses encore ouvertes s'affichent en tête de la page des
+     * caisses, pour qui clôture la journée ou voit les relevés de toute
+     * l'équipe, jamais pour un vendeur qui ne voit que sa caisse.
+     */
+    public function test_les_caisses_ouvertes_s_affichent_en_tete_de_la_page_des_caisses(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul']);
+        $this->dansLeMagasin($magasin, $vendeur);
+        $this->vendreAuComptoir(Client::factory()->create(), 12);
+
+        $this->dansLeMagasin($magasin, $this->proprietaireDe($magasin));
+        $this->get(ClotureCaissePersonnelleResource::getUrl('index', tenant: $magasin))->assertOk()->assertSeeLivewire(CaissesPersonnellesOuvertesApercu::class);
+        Livewire::test(CaissesPersonnellesOuvertesApercu::class)->assertSee('Fermées automatiquement à la clôture de la journée : Paul');
+        $this->dansLeMagasin($magasin, $vendeur);
+        $this->get(ClotureCaissePersonnelleResource::getUrl('index', tenant: $magasin))->assertOk()->assertDontSeeLivewire(CaissesPersonnellesOuvertesApercu::class);
+        $this->assertFalse(CaissesPersonnellesOuvertesApercu::canView());
     }
 
     private function vendreAuComptoir(Client $client, float $prixTtc): Facture

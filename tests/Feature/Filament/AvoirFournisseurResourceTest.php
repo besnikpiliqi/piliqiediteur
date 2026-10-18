@@ -86,9 +86,9 @@ class AvoirFournisseurResourceTest extends TestCase
      */
     public function test_laction_avoir_fournisseur_ne_propose_que_la_quantite_encore_en_stock(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();

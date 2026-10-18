@@ -39,19 +39,19 @@ class ActionsUniquesConcurrenceTest extends TestCase
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $proprietaire = $this->proprietaireDe($magasin);
+        $vendeur = self::responsableDeTest($magasin);
         $produit = Produit::factory()->create(['nom' => 'Câble USB', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $jeton = (string) Str::uuid();
         $magasinId = $magasin->id;
-        $proprietaireId = $proprietaire->id;
+        $vendeurId = $vendeur->id;
         $produitId = $produit->id;
         $concurrente = null;
-        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($magasinId, $proprietaireId, $produitId, $jeton): void {
+        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($magasinId, $vendeurId, $produitId, $jeton): void {
             app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
-            fwrite(STDOUT, (string) self::vendreUnCable(User::query()->findOrFail($proprietaireId), $produitId, $jeton)->id);
+            fwrite(STDOUT, (string) self::vendreUnCable(User::query()->findOrFail($vendeurId), $produitId, $jeton)->id);
         }, $concurrente);
 
-        $ticket = self::vendreUnCable($proprietaire, $produitId, $jeton);
+        $ticket = self::vendreUnCable($vendeur, $produitId, $jeton);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $concurrente->wait();

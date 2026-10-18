@@ -10,7 +10,6 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
-use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -46,10 +45,8 @@ class ParametresFiscauxSocieteTest extends TestCase
 
     /**
      * Le propriétaire règle le régime de la société depuis son
-     * administration : tous ses magasins vendent aussitôt selon lui, la
-     * franchise en base à 0 % avec sa mention. Il encaisse dans un magasin
-     * à la fois : il ferme sa caisse de chacun avant de vendre dans le
-     * suivant.
+     * administration : tous ses magasins vendent aussitôt selon lui, par
+     * leur équipe, la franchise en base à 0 % avec sa mention.
      */
     public function test_le_regime_de_la_societe_s_applique_a_tous_ses_magasins(): void
     {
@@ -65,12 +62,7 @@ class ParametresFiscauxSocieteTest extends TestCase
 
         $this->assertSame(RegimeTva::FranchiseEnBase, $lyon->societe->fresh()->regime_tva);
         foreach ([$lyon, $villeurbanne] as $magasin) {
-            $ticket = app(TenantContext::class)->runAs($magasin->fresh(), function (): Facture {
-                $ticket = self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
-                app(FermerSaCaisseAction::class)->handle(self::auteur(), self::auteur());
-
-                return $ticket;
-            });
+            $ticket = app(TenantContext::class)->runAs($magasin->fresh(), fn (): Facture => self::vendreAuComptant(self::responsableDeTest($magasin), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes));
             $this->assertSame([true, '0.00', '12.00'], [$ticket->franchise_en_base, $ticket->total_tva, $ticket->total_ttc]);
         }
     }
@@ -206,7 +198,7 @@ class ParametresFiscauxSocieteTest extends TestCase
         app(RepertoireSirene::class)->deplacer($lyon->societe->siren.$nic, '97200', 'FORT-DE-FRANCE');
         $martinique = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Fort-de-France', 'nic' => $nic]);
         $service = Service::factory()->create(['nom' => 'Pose écran']);
-        $this->actingAs($this->proprietaireDe($martinique));
+        $this->actingAs($this->responsableDeTest($martinique));
         Filament::setTenant($martinique);
 
         $component = Livewire::test(CreateFacture::class)

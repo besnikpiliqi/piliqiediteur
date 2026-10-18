@@ -7,8 +7,10 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CaissesDeLaSociete;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
@@ -36,6 +38,7 @@ use App\Filament\App\Resources\FactureResource;
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
@@ -313,7 +316,6 @@ class IsolationDesSocietesTest extends TestCase
         $this->assertTrue($magasinA->societe->aVenduUneFois());
 
         $enVerification = $this->inscrireUneSociete();
-        $this->actingAs($enVerification->proprietaire);
         $this->vendre(app(OuvrirLaDemonstrationAction::class)->handle($enVerification->proprietaire, $enVerification));
         $this->assertFalse($enVerification->fresh()->aVenduUneFois());
     }
@@ -336,6 +338,29 @@ class IsolationDesSocietesTest extends TestCase
 
         $this->assertSame([$magasinA->id => ['nombre' => 1, 'restant_du' => 1200, 'nombre_en_retard' => 0, 'restant_du_en_retard' => 0]], $vuParA);
         $this->assertSame([$magasinB->id => ['nombre' => 1, 'restant_du' => 9900, 'nombre_en_retard' => 0, 'restant_du_en_retard' => 0]], $vuParB);
+    }
+
+    /**
+     * Les caisses que lit la page « Les caisses » de l'espace
+     * d'administration d'une société (voir CaissesDeLaSociete) sont celles
+     * de ses seuls magasins : ni le magasin, ni le relevé, ni la caisse
+     * ouverte d'une autre société n'y entrent.
+     */
+    public function test_aucune_caisse_d_une_autre_societe_n_entre_dans_les_caisses_de_la_societe(): void
+    {
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'A']);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'B']);
+        $this->vendre($magasinA);
+        $venteDeB = $this->vendre($magasinB);
+        app(TenantContext::class)->runAs($magasinB, fn () => app(FermerSaCaisseAction::class)->handle(self::responsableDeTest($magasinB), self::responsableDeTest($magasinB)));
+        app(TenantContext::class)->clear();
+
+        $vuParA = app(CaissesDeLaSociete::class)->pour($this->proprietaireDe($magasinA), CarbonImmutable::today());
+        $vuParB = app(CaissesDeLaSociete::class)->pour($this->proprietaireDe($magasinB), CarbonImmutable::today());
+
+        $this->assertSame([[$magasinA->id, ['Responsable de test'], 0]], array_map(fn (array $caisses): array => [$caisses['magasin']->id, $caisses['caisses_ouvertes'], $caisses['releves']->count()], $vuParA));
+        $this->assertSame([[$magasinB->id, [], 1]], array_map(fn (array $caisses): array => [$caisses['magasin']->id, $caisses['caisses_ouvertes'], $caisses['releves']->count()], $vuParB));
+        $this->assertSame($venteDeB->total_ttc, $vuParB[0]['releves']->sole()->total_ttc);
     }
 
     /**
@@ -474,9 +499,14 @@ class IsolationDesSocietesTest extends TestCase
         }
     }
 
+    /**
+     * Un ticket de 12,00 € TTC réglé en espèces dans ce magasin par son
+     * responsable de test : le propriétaire ne vend jamais, pas même dans
+     * le magasin de démonstration.
+     */
     private function vendre(Magasin $magasin): Facture
     {
-        return app(TenantContext::class)->runAs($magasin, fn (): Facture => self::vendreAuComptant(self::auteur(),
+        return app(TenantContext::class)->runAs($magasin, fn (): Facture => self::vendreAuComptant(self::responsableDeTest($magasin),
             Client::factory()->create(),
             [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]],
             ModePaiement::Especes,

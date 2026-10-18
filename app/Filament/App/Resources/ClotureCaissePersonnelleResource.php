@@ -5,7 +5,10 @@ namespace App\Filament\App\Resources;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages;
+use App\Models\User;
+use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
@@ -19,6 +22,13 @@ use Illuminate\Database\Eloquent\Builder;
  * create/edit classique. Voir le docblock de ClotureCaissePersonnelle pour
  * ce qui la distingue de ClotureCaisse (la clôture officielle de la
  * journée du magasin).
+ *
+ * Le menu et la page s'appellent « Ma caisse » pour qui tient une caisse
+ * dans le magasin sans voir les relevés de toute l'équipe, « Les caisses »
+ * pour tous les autres (le propriétaire, un responsable, un administrateur
+ * qui ne fait que fermer la caisse d'un vendeur, un expert-comptable...),
+ * qui y voient aussi les caisses encore ouvertes (voir
+ * CaissesPersonnellesOuvertesApercu).
  */
 class ClotureCaissePersonnelleResource extends Resource
 {
@@ -28,13 +38,33 @@ class ClotureCaissePersonnelleResource extends Resource
 
     protected static ?string $navigationGroup = 'Ventes';
 
-    protected static ?string $navigationLabel = 'Ma caisse';
-
     protected static ?int $navigationSort = 5;
 
     protected static ?string $modelLabel = 'relevé de caisse';
 
     protected static ?string $pluralModelLabel = 'relevés de caisse';
+
+    public static function getNavigationLabel(): string
+    {
+        return static::libelle();
+    }
+
+    /**
+     * « Ma caisse » pour qui tient une caisse dans le magasin actif sans
+     * voir les relevés de toute l'équipe, « Les caisses » pour tous les
+     * autres.
+     */
+    public static function libelle(): string
+    {
+        $compte = auth()->user();
+        $magasin = Filament::getTenant();
+        $neVoitQueSaCaisse = $compte instanceof User
+            && $magasin instanceof Magasin
+            && $compte->tientUneCaisseDans($magasin)
+            && ! $compte->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES);
+
+        return $neVoitQueSaCaisse ? 'Ma caisse' : 'Les caisses';
+    }
 
     /**
      * Même confidentialité que ClotureCaisse : sans cloture_caisse.view_toutes,

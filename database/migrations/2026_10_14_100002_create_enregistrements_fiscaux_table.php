@@ -1,6 +1,7 @@
 <?php
 
 use App\Domain\CaisseSecurisee\Support\DeclencheursDeProtection;
+use App\Domain\Facturation\Support\GardesDeLaVente;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -10,7 +11,9 @@ use Illuminate\Support\Facades\Schema;
  * n'y fait qu'ajouter. Chaque ligne garde le contenu exact qu'elle signe
  * et la signature de la ligne précédente de sa chaîne ; la base refuse
  * toute modification, toute suppression et tout vidage (voir
- * DeclencheursDeProtection).
+ * DeclencheursDeProtection), et l'enregistrement d'un ticket, d'une
+ * facture ou d'un paiement au nom du propriétaire, qui ne vend jamais
+ * (voir GardesDeLaVente).
  */
 return new class extends Migration
 {
@@ -61,11 +64,13 @@ return new class extends Migration
         });
 
         DeclencheursDeProtection::ajoutSeul('enregistrements_fiscaux');
+        GardesDeLaVente::poser('enregistrements_fiscaux');
     }
 
     public function down(): void
     {
         Schema::dropIfExists('enregistrements_fiscaux');
         DeclencheursDeProtection::retirer('enregistrements_fiscaux');
+        GardesDeLaVente::retirer('enregistrements_fiscaux');
     }
 };

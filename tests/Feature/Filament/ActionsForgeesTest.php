@@ -71,11 +71,11 @@ class ActionsForgeesTest extends TestCase
         $brouillonDuCollegue = app(CreerFactureAction::class)->handle($collegue, Client::factory()->create(), $this->lignes());
         $ticketDuCollegue = app(EmettreFactureAction::class)->handle($collegue, app(CreerFactureAction::class)->handle($collegue, Client::factory()->create(), $this->lignes()));
         [$brouillonDeVilleurbanne, $devisDeVilleurbanne, $vendeurDeVilleurbanne] = app(TenantContext::class)->runAs($villeurbanne, function () use ($villeurbanne): array {
-            $proprietaire = $this->proprietaireDe($villeurbanne);
+            $vendeur = $this->responsableDeTest($villeurbanne);
 
             return [
-                app(CreerFactureAction::class)->handle($proprietaire, Client::factory()->create(), $this->lignes()),
-                app(CreerDevisAction::class)->handle($proprietaire, Client::factory()->create(), $this->lignes()),
+                app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), $this->lignes()),
+                app(CreerDevisAction::class)->handle($vendeur, Client::factory()->create(), $this->lignes()),
                 $this->membre($villeurbanne, RoleMagasin::Vendeur),
             ];
         });
@@ -148,7 +148,7 @@ class ActionsForgeesTest extends TestCase
                 return fn (): bool => EnvoiDocument::query()->doesntExist();
             })(),
             'clôturer la journée' => (function () use ($magasin): Closure {
-                $this->vendreParLeProprietaire($magasin);
+                $this->vendreParLeResponsable($magasin);
                 $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW]);
                 $this->dansLeMagasin($magasin, $vendeur);
                 $this->forgerLAction(Livewire::test(ListClotureCaisses::class)->assertActionHidden('cloturer'), 'cloturer');
@@ -228,10 +228,14 @@ class ActionsForgeesTest extends TestCase
         return [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]];
     }
 
-    private function vendreParLeProprietaire(Magasin $magasin): Facture
+    /**
+     * Un ticket émis dans ce magasin par son responsable de test : le
+     * propriétaire ne vend jamais.
+     */
+    private function vendreParLeResponsable(Magasin $magasin): Facture
     {
-        $proprietaire = $this->proprietaireDe($magasin);
+        $vendeur = $this->responsableDeTest($magasin);
 
-        return app(EmettreFactureAction::class)->handle($proprietaire, app(CreerFactureAction::class)->handle($proprietaire, Client::factory()->create(), $this->lignes()));
+        return app(EmettreFactureAction::class)->handle($vendeur, app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), $this->lignes()));
     }
 }

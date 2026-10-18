@@ -514,6 +514,7 @@ class RattachementTest extends TestCase
             ->mountAction('proposerUnRattachement')
             ->setActionData(['email' => 'paul@example.test', 'role' => RoleMagasin::Vendeur->value])
             ->set('mountedActionsData.0.autorisations', [PermissionRegistry::FACTURE_VIEW])
+            ->set('mountedActionsData.0.autorisations_vente', [])
             ->callMountedAction()
             ->assertHasNoActionErrors()
             ->assertNotified(ProposerUnRattachementAction::REPONSE);

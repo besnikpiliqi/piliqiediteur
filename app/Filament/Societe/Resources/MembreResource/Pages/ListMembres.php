@@ -136,7 +136,7 @@ class ListMembres extends ListRecords
                         ['name' => $data['name'], 'email' => $data['email']],
                         $data['mot_de_passe_provisoire'],
                         $data['portee'] === 'tous' ? null : array_map(intval(...), $data['magasins'] ?? []),
-                        array_values($data['autorisations_magasin'] ?? []),
+                        MembreResource::autorisationsSaisies($data, 'autorisations_magasin'),
                         array_values($data['autorisations_societe'] ?? []),
                     );
                     Notification::make()->title('L\'administrateur est créé : remettez-lui son mot de passe provisoire.')->success()->send();

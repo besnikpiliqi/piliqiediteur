@@ -87,9 +87,9 @@ class PaiementResourceTest extends TestCase
 
     public function test_enregistrer_un_paiement_complet_depuis_le_panneau_passe_la_facture_a_payee(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -152,9 +152,9 @@ class PaiementResourceTest extends TestCase
      */
     public function test_un_paiement_aux_identifiants_envoyes_en_chaines_regle_la_facture_du_client(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client);
@@ -181,9 +181,9 @@ class PaiementResourceTest extends TestCase
     {
         $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $clientDUnAutreMagasin = Client::factory()->create();
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         Livewire::test(CreatePaiement::class)
@@ -201,9 +201,9 @@ class PaiementResourceTest extends TestCase
 
     public function test_repartir_un_paiement_sur_plusieurs_factures_depuis_le_panneau(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -230,9 +230,9 @@ class PaiementResourceTest extends TestCase
 
     public function test_laction_rapide_encaisser_depuis_la_liste_des_factures(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -246,9 +246,9 @@ class PaiementResourceTest extends TestCase
 
     public function test_laction_rapide_encaisser_accepte_un_montant_partiel(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -269,9 +269,9 @@ class PaiementResourceTest extends TestCase
      */
     public function test_laction_rapide_encaisser_bloque_un_montant_superieur_au_restant_du(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -352,9 +352,9 @@ class PaiementResourceTest extends TestCase
      */
     public function test_impossible_dallouer_plus_que_le_restant_du_depuis_le_panneau(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -496,7 +496,7 @@ class PaiementResourceTest extends TestCase
     /**
      * Sans « Factures : voir (les siennes) », un membre ne se voit proposer
      * aucune facture, pas même son propre ticket de 12,00 € (créé par lui,
-     * émis par le propriétaire), dont il ne peut pas lire le reste dû (voir
+     * émis par un responsable), dont il ne peut pas lire le reste dû (voir
      * FacturePolicy::view()).
      */
     public function test_sans_voir_ses_factures_aucune_facture_n_est_proposee(): void
@@ -509,7 +509,7 @@ class PaiementResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $brouillon = app(CreerFactureAction::class)->handle($membre, $client, [['produit_id' => $produit->id, 'quantite' => 1]]);
-        app(EmettreFactureAction::class)->handle($this->proprietaireDe($magasin), $brouillon);
+        app(EmettreFactureAction::class)->handle($this->responsableDeTest($magasin), $brouillon);
         $this->actingAs($membre);
         Filament::setTenant($magasin);
 
@@ -518,10 +518,15 @@ class PaiementResourceTest extends TestCase
         $formulaire->assertFormFieldExists('allocations.0.facture_id', fn (Select $champ): bool => collect($champ->getOptions())->isEmpty());
     }
 
-    public function test_le_proprietaire_se_voit_proposer_les_factures_de_toute_l_equipe(): void
+    /**
+     * Qui voit les factures de toute l'équipe et enregistre les paiements
+     * (un responsable ; le propriétaire, qui voit tout, n'enregistre aucun
+     * paiement) se voit proposer les factures de tous les vendeurs.
+     */
+    public function test_un_responsable_se_voit_proposer_les_factures_de_toute_l_equipe(): void
     {
         ['magasin' => $magasin, 'client' => $client, 'factureDeA' => $factureDeA, 'factureDeB' => $factureDeB] = $this->clientQuiDoitAuxDeuxVendeurs();
-        $this->actingAs($this->proprietaireDe($magasin));
+        $this->actingAs($this->responsableDeTest($magasin));
 
         $formulaire = Livewire::test(CreatePaiement::class)->fillForm(['client_id' => $client->id, 'allocations' => [['facture_id' => null]]]);
 
@@ -604,9 +609,9 @@ class PaiementResourceTest extends TestCase
      */
     public function test_le_client_archive_reste_affiche_sur_ses_paiements_sans_etre_propose(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
         $client = Client::factory()->create(['nom' => 'Jeanne Archivée']);
         $paiement = Paiement::create([
@@ -1026,9 +1031,9 @@ class PaiementResourceTest extends TestCase
 
     private function connecterLeProprietaire(): Magasin
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         return $magasin;

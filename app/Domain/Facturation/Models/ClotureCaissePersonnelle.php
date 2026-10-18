@@ -14,9 +14,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 /**
  * Relevé « Fermer ma caisse » d'UN vendeur (voir FermerSaCaisseAction) --
- * tout membre qui vend ou encaisse, le propriétaire et les responsables
- * compris --, en quatre
- * rubriques séparées (B18) :
+ * tout compte qui vend ou encaisse, les responsables et un administrateur
+ * à qui le propriétaire a coché la vente compris, jamais le propriétaire,
+ * qui ne vend pas --, en quatre rubriques séparées (B18) :
  *  - les ventes : celles qu'il a émises et qu'aucune de ses fermetures
  *    n'a encore comptées, y compris celles d'un jour précédent ; leur
  *    nombre et leur TTC vendu, avec le HT et la TVA (total_ttc, total_ht,
@@ -40,7 +40,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * FermerSaCaisseAction).
  *
  * Qui l'a fermée (mode_fermeture, fermee_par, voir ModeFermetureCaisse et
- * libelleDeFermeture()) : le vendeur lui-même, un responsable pour lui, ou
+ * libelleDeFermeture()) : le vendeur lui-même, pour lui le propriétaire, un
+ * responsable ou une personne autorisée à clôturer la journée, ou
  * personne, d'office, après la clôture de la journée ou à minuit (voir
  * FermerLesCaissesPersonnellesAction) : une caisse personnelle restée
  * ouverte ne bloque jamais la clôture de la journée.
@@ -96,7 +97,8 @@ class ClotureCaissePersonnelle extends Model
 
     /**
      * Qui a fermé la caisse, tel que le relevé le dit : « Fermée par le
-     * vendeur », « Fermée par Claire Martin » (un responsable), ou
+     * vendeur », « Fermée par Claire Martin » (le propriétaire, un
+     * responsable ou une personne autorisée à clôturer la journée), ou
      * « Fermée automatiquement ».
      */
     public function libelleDeFermeture(): string

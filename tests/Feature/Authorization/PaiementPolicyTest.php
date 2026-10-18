@@ -66,9 +66,10 @@ class PaiementPolicyTest extends TestCase
     public function test_le_proprietaire_contre_passe_un_paiement(): void
     {
         $proprietaire = User::factory()->create();
-        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $paiement = $this->encaisserUnPaiementEnTantQue($this->responsableDeTest($magasin));
 
-        $this->assertTrue($proprietaire->can('contrePasser', $this->encaisserUnPaiementEnTantQue($proprietaire)));
+        $this->assertTrue($proprietaire->can('contrePasser', $paiement));
     }
 
     #[DataProvider('rolesQuiContrePassentDOffice')]
@@ -109,8 +110,9 @@ class PaiementPolicyTest extends TestCase
     public function test_ni_une_contre_passation_ni_un_paiement_deja_contre_passe_ne_se_contre_passent(): void
     {
         $proprietaire = User::factory()->create();
-        $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $paiement = $this->encaisserUnPaiementEnTantQue($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $paiement = $this->encaisserUnPaiementEnTantQue($this->responsableDeTest($magasin));
+        $this->actingAs($proprietaire);
 
         $contrePassation = app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiement, 'Saisi deux fois');
 

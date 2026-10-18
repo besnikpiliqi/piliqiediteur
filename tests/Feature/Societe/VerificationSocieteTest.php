@@ -1429,7 +1429,7 @@ class VerificationSocieteTest extends TestCase
      * Après la validation, une revérification négative (entreprise cessée,
      * établissement fermé au répertoire) s'inscrit et prévient le
      * propriétaire et l'éditeur, sans rien bloquer : les ventes et les
-     * paiements continuent.
+     * paiements de l'équipe continuent.
      */
     public function test_une_reverification_negative_n_arrete_ni_les_ventes_ni_les_paiements(): void
     {
@@ -1451,7 +1451,7 @@ class VerificationSocieteTest extends TestCase
         $this->assertContains('Écart au répertoire Sirene', $proprietaire->notifications()->get()->pluck('data.title')->all());
 
         app(TenantContext::class)->set($magasin->fresh());
-        $this->actingAs($proprietaire);
+        $this->actingAs($this->responsableDeTest($magasin));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $ticket = self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 2]]));

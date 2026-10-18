@@ -77,6 +77,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        self::responsableDeTest($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $magasinId = $magasin->id;
         $produitId = $produit->id;
@@ -362,7 +363,9 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
     }
 
     /**
-     * Le propriétaire vend un ticket de 12,00 € au comptoir.
+     * Le responsable de test du magasin, obtenu par le test avant de lancer
+     * l'autre processus, vend un ticket de 12,00 € au comptoir : le
+     * propriétaire ne vend jamais.
      */
     private static function vendre(int $magasinId, int $produitId): void
     {
@@ -370,7 +373,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         app(TenantContext::class)->set($magasin);
 
         self::vendreAuComptant(
-            User::query()->whereKey($magasin->societe->proprietaire()->value('id'))->firstOrFail(),
+            self::responsableDeTest($magasin),
             Client::query()->where('est_comptoir', true)->sole(),
             [['produit_id' => $produitId, 'quantite' => 1]],
             ModePaiement::Especes,

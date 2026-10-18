@@ -210,8 +210,8 @@ class EmissionSigneeTest extends TestCase
             'telephone' => '01 23 45 67 89',
             'regime_tva' => RegimeTva::ReelNormalMensuel,
         ]);
-        $proprietaire = $this->proprietaireDe(app(TenantContext::class)->magasin());
-        $this->actingAs($proprietaire);
+        $vendeur = $this->responsableDeTest(app(TenantContext::class)->magasin());
+        $this->actingAs($vendeur);
         $client = Client::factory()->create(['nom' => 'Alice Martin', 'adresse' => '3 place du Marché', 'code_postal' => '75011', 'ville' => 'Paris', 'email' => 'alice@example.test', 'telephone' => '06 00 00 00 01']);
         $cafe = $this->produit('CAF-250', 'Café moulu 250 g', 12);
         $livre = $this->produit('LIV-001', 'Livre de recettes', 5.50, 5.5);
@@ -261,7 +261,7 @@ class EmissionSigneeTest extends TestCase
                 'nature_operation' => 'vente_france',
                 'livraison' => ['adresse' => null, 'complement' => null, 'code_postal' => null, 'ville' => null, 'pays' => null, 'date' => null, 'transport_par' => null],
                 'consultation_vies_id' => null,
-                'cree_par' => $proprietaire->id,
+                'cree_par' => $vendeur->id,
                 'devis_id' => null,
                 'devise' => 'EUR',
                 'date_echeance' => '2026-11-08',
@@ -319,7 +319,7 @@ class EmissionSigneeTest extends TestCase
         ], $this->contenu($vente)['donnees']);
         $this->assertSame(['montant' => 2950, 'perpetuel_reel' => 2950, 'perpetuel_absolu' => 2950], $this->contenu($vente)['gt']);
         $this->assertSame([
-            'paiement' => ['client_id' => $client->id, 'mode' => 'carte_bancaire', 'montant' => 2950, 'reference' => 'TRX-42', 'notes' => null, 'recu_le' => '2026-10-09', 'cree_par' => $proprietaire->id],
+            'paiement' => ['client_id' => $client->id, 'mode' => 'carte_bancaire', 'montant' => 2950, 'reference' => 'TRX-42', 'notes' => null, 'recu_le' => '2026-10-09', 'cree_par' => $vendeur->id],
             'contre_passe' => null,
             'client' => $ficheDuClient,
             'allocations' => [['facture_id' => $ticket->id, 'numero' => 'TK-LYON1-2026-000001', 'montant' => 2950]],
@@ -583,8 +583,8 @@ class EmissionSigneeTest extends TestCase
     {
         $this->travelTo('2026-10-09 10:15:30');
         $this->magasinActif();
-        $proprietaire = $this->proprietaireDe(app(TenantContext::class)->magasin());
-        $this->actingAs($proprietaire);
+        $vendeur = $this->responsableDeTest(app(TenantContext::class)->magasin());
+        $this->actingAs($vendeur);
         $client = Client::factory()->create(['nom' => 'Claire Petit']);
         $produit = $this->produit('A-020', 'Article à 20 €', 20);
         $ticket = $this->encaisser($client, [[$produit, 2]]);
@@ -617,7 +617,7 @@ class EmissionSigneeTest extends TestCase
             ],
             'franchise_en_base' => false,
             'nature_operation' => 'vente_france',
-            'cree_par' => $proprietaire->id,
+            'cree_par' => $vendeur->id,
             'devise' => 'EUR',
             'motif' => 'Article abîmé',
             'corrige' => 'ticket',

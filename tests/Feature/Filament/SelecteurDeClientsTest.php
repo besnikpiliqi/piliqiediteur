@@ -16,7 +16,6 @@ use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource\Pages\CreateDevis;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
-use App\Models\User;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
@@ -35,7 +34,7 @@ class SelecteurDeClientsTest extends TestCase
 
     public function test_la_recherche_trouve_un_client_par_siren_email_ou_telephone_sans_accents(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $elephant = Client::factory()->create([
             'nom' => 'Société Éléphant', 'type_client' => TypeClient::Professionnel, 'siren' => '732829320', 'numero_tva' => 'FR44732829320',
             'email' => 'compta@elephant.fr', 'telephone' => '01 23 45 67 89', 'ville' => 'Besançon', 'code_postal' => '25000',
@@ -66,7 +65,7 @@ class SelecteurDeClientsTest extends TestCase
      */
     public function test_les_clients_se_trient_du_plus_recent_au_plus_ancien(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $this->travelTo(CarbonImmutable::parse('2026-09-01 09:00'));
         $ancien = Client::factory()->create(['nom' => 'Albert Ancien']);
@@ -87,7 +86,7 @@ class SelecteurDeClientsTest extends TestCase
      */
     public function test_choisir_un_client_le_pose_dans_la_caisse_avec_son_mode_prefere(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $client = Client::factory()->create(['nom' => 'Lucie Bernard', 'mode_paiement_prefere' => ModePaiement::CarteBancaire]);
 
         Livewire::test(SelecteurDeClients::class)
@@ -111,7 +110,7 @@ class SelecteurDeClientsTest extends TestCase
      */
     public function test_le_client_comptoir_reste_choisi_par_defaut(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $this->travelTo(now()->addDay());
         $recent = Client::factory()->create(['nom' => 'Lucie Bernard']);
@@ -136,7 +135,7 @@ class SelecteurDeClientsTest extends TestCase
     {
         $this->ouvrirUneSociete(['nom' => 'Autre Boutique']);
         $autreMagasin = Client::factory()->create(['nom' => 'Martin Concurrence', 'email' => 'contact@martin.fr']);
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
         $actif = Client::factory()->create(['nom' => 'Martin Boutique', 'email' => 'contact@martin.fr']);
         $archive = Client::factory()->create(['nom' => 'Martin Ancien', 'email' => 'contact@martin.fr']);
@@ -171,7 +170,7 @@ class SelecteurDeClientsTest extends TestCase
      */
     public function test_nouveau_client_cree_le_client_dans_le_magasin_et_le_choisit(): void
     {
-        $magasin = $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $magasin = $this->ouvrirLeMagasinEnTantQueResponsable();
 
         $tableau = Livewire::test(SelecteurDeClients::class)
             ->callTableAction('nouveauClient', data: ['nom' => 'Lucie Bernard', 'type_client' => TypeClient::Particulier->value, 'email' => 'lucie@exemple.fr'])
@@ -193,7 +192,7 @@ class SelecteurDeClientsTest extends TestCase
      */
     public function test_le_filtre_avec_un_credit_d_avoir_ne_garde_que_les_clients_qui_en_ont_un(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
         $avecCredit = Client::factory()->create(['nom' => 'Lucie Bernard']);
         $creditUtilise = Client::factory()->create(['nom' => 'Paul Martin']);
@@ -219,7 +218,7 @@ class SelecteurDeClientsTest extends TestCase
      */
     public function test_le_credit_d_avoir_et_son_filtre_se_lisent_en_un_nombre_fixe_de_requetes(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $produit = Produit::factory()->create(['prix_vente_ttc' => '33.33', 'taux_tva' => 20, 'suivi_stock' => false]);
         $avecCredit = $this->clientsAvecUnAvoir($produit, 'Avec crédit', 2);
         $creditUtilise = $this->clientsAvecUnAvoir($produit, 'Crédit utilisé', 1);
@@ -254,7 +253,7 @@ class SelecteurDeClientsTest extends TestCase
      */
     public function test_sans_l_autorisation_de_voir_les_clients_la_loupe_ne_montre_ni_coordonnees_ni_recherche_par_e_mail(): void
     {
-        $magasin = $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $magasin = $this->ouvrirLeMagasinEnTantQueResponsable();
         $client = Client::factory()->create([
             'nom' => 'Jean Secret', 'type_client' => TypeClient::Professionnel, 'siren' => '732829320', 'numero_tva' => 'FR44732829320',
             'email' => 'jean.secret@exemple.fr', 'telephone' => '06 98 76 54 32', 'ville' => 'Besançon',
@@ -292,7 +291,7 @@ class SelecteurDeClientsTest extends TestCase
      */
     public function test_la_loupe_sert_aussi_aux_factures_et_aux_devis(): void
     {
-        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $this->ouvrirLeMagasinEnTantQueResponsable();
         $client = Client::factory()->create(['nom' => 'Société Éléphant', 'type_client' => TypeClient::Professionnel, 'siren' => '732829320']);
 
         foreach ([CreateFacture::class, CreateDevis::class] as $page) {
@@ -309,11 +308,14 @@ class SelecteurDeClientsTest extends TestCase
         }
     }
 
-    private function ouvrirLeMagasinEnTantQueProprietaire(): Magasin
+    /**
+     * Le magasin, son responsable de test connecté : il vend, ce que le
+     * propriétaire ne fait jamais.
+     */
+    private function ouvrirLeMagasinEnTantQueResponsable(): Magasin
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
         Filament::setTenant($magasin);
 
         return $magasin;
@@ -321,12 +323,15 @@ class SelecteurDeClientsTest extends TestCase
 
     /**
      * Le nombre de requêtes de l'ouverture du tableau, puis celui de
-     * l'application du filtre « Avec un crédit d'avoir ».
+     * l'application du filtre « Avec un crédit d'avoir ». Les droits de la
+     * personne connectée, qu'elle relit une fois par instance, s'oublient
+     * avant chaque mesure : deux mesures partent du même état.
      *
      * @return array{0: int, 1: int}
      */
     private function requetesDuTableauEtDuFiltre(): array
     {
+        auth()->user()->oublierLesDroits();
         $requetes = 0;
         DB::listen(function () use (&$requetes): void {
             $requetes++;

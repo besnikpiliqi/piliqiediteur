@@ -100,12 +100,11 @@ class FacturePolicyTest extends TestCase
      * (un vendeur, les siennes), et avec la permission d'envoyer.
      */
     #[DataProvider('rolesQuiEnvoientLesFacturesDeLEquipe')]
-    public function test_envoyer_une_facture_du_proprietaire_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutEnvoyer): void
+    public function test_envoyer_une_facture_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutEnvoyer): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = $this->membre($magasin, $role, $autorisations, ['name' => 'Membre', 'email' => 'membre@example.test']);
-        $facture = $this->emettreUneFactureEnTantQue($proprietaire, $magasin);
+        $facture = $this->emettreUneFactureEnTantQue($this->responsableDeTest($magasin), $magasin);
 
         $this->assertSame($peutEnvoyer, $membre->can('envoyer', $facture));
     }
@@ -117,10 +116,9 @@ class FacturePolicyTest extends TestCase
      */
     public function test_l_expert_comptable_n_envoie_aucune_facture(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $expert = $this->expertComptable($magasin);
-        $facture = $this->emettreUneFactureEnTantQue($proprietaire, $magasin);
+        $facture = $this->emettreUneFactureEnTantQue($this->responsableDeTest($magasin), $magasin);
 
         $this->assertTrue($expert->can('view', $facture));
         $this->assertFalse($expert->can('envoyer', $facture));
@@ -136,9 +134,8 @@ class FacturePolicyTest extends TestCase
 
     public function test_personne_n_envoie_la_facture_d_un_autre_magasin(): void
     {
-        $proprietaireA = User::factory()->create();
-        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A'], $proprietaireA);
-        $factureDeA = $this->emettreUneFactureEnTantQue($proprietaireA, $magasinA);
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'Boutique A']);
+        $factureDeA = $this->emettreUneFactureEnTantQue($this->responsableDeTest($magasinA), $magasinA);
         $proprietaireB = User::factory()->create();
         $this->ouvrirUneSociete(['nom' => 'Boutique B'], $proprietaireB);
 
@@ -256,6 +253,8 @@ class FacturePolicyTest extends TestCase
         return [
             'vendeur aux cases de l\'administrateur' => [RoleMagasin::Vendeur, PermissionRegistry::modeleDeLAdministrateur(), true],
             'vendeur aux cases de l\'ancien comptable' => [RoleMagasin::Vendeur, self::casesDeLAncienComptable(), false],
+            'vendeur qui voit tout et note les preuves sans émettre' => [RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::FACTURE_JUSTIFIER], true],
+            'vendeur qui voit tout et émet sans noter les preuves' => [RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::FACTURE_VIEW_TOUTES, PermissionRegistry::FACTURE_CREATE, PermissionRegistry::FACTURE_EMETTRE], false],
             'vendeur' => [RoleMagasin::Vendeur, null, false],
             'observateur' => [RoleMagasin::Observateur, null, false],
         ];
@@ -264,16 +263,18 @@ class FacturePolicyTest extends TestCase
     /**
      * Noter une preuve d'exonération ou le bordereau de détaxe d'un ticket :
      * sur une vente que l'on voit (un vendeur, les siennes), avec
-     * l'autorisation d'émettre ; le comptable, qui voit tout sans émettre,
-     * ne le peut pas.
+     * l'autorisation de noter les preuves d'exonération et les bordereaux
+     * de détaxe (réponse (b) de l'éditeur à Q-V2), qu'on puisse émettre ou
+     * non ; le comptable, qui voit tout sans cette autorisation, ne le peut
+     * pas. La vente est émise par le responsable de test : le propriétaire
+     * ne vend jamais.
      */
     #[DataProvider('rolesQuiJustifientLesVentesDeLEquipe')]
-    public function test_justifier_une_vente_du_proprietaire_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutJustifier): void
+    public function test_justifier_une_vente_selon_le_role(RoleMagasin $role, ?array $autorisations, bool $peutJustifier): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $membre = $this->membre($magasin, $role, $autorisations);
-        $facture = $this->emettreUneFactureEnTantQue($proprietaire, $magasin);
+        $facture = $this->emettreUneFactureEnTantQue($this->responsableDeTest($magasin), $magasin);
 
         $this->assertSame($peutJustifier, $membre->can('justifier', $facture));
     }

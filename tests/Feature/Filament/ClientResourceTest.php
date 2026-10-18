@@ -159,9 +159,9 @@ class ClientResourceTest extends TestCase
      */
     public function test_le_solde_crediteur_du_client_est_visible_dans_la_liste(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
-        $this->actingAs($proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
         Filament::setTenant($magasin);
 
         $client = Client::factory()->create();
@@ -238,7 +238,7 @@ class ClientResourceTest extends TestCase
 
     public function test_la_recherche_du_client_de_la_caisse_ignore_la_casse_et_les_accents(): void
     {
-        $this->connecterLeProprietaire();
+        $this->connecterLeResponsable();
         $helene = Client::factory()->create(['nom' => 'Hélène Martin']);
         Client::factory()->create(['nom' => 'Paul Durand']);
 
@@ -252,7 +252,7 @@ class ClientResourceTest extends TestCase
      */
     public function test_la_recherche_du_client_d_une_facture_ignore_la_casse_et_les_accents(): void
     {
-        $this->connecterLeProprietaire();
+        $this->connecterLeResponsable();
         $helene = Client::factory()->create(['nom' => 'Hélène Martin']);
         Client::factory()->create(['nom' => 'Paul Durand']);
 
@@ -275,6 +275,17 @@ class ClientResourceTest extends TestCase
             'consultee_le' => CarbonImmutable::parse('2026-10-09 12:32:10', 'UTC'),
             'reponse' => '{"valid":true,"requestIdentifier":"WAPI1"}',
         ]);
+    }
+
+    /**
+     * Le responsable de test d'un nouveau magasin, connecté : il vend, ce
+     * que le propriétaire ne fait jamais.
+     */
+    private function connecterLeResponsable(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->actingAs($this->responsableDeTest($magasin));
+        Filament::setTenant($magasin);
     }
 
     private function connecterLeProprietaire(): void
@@ -329,7 +340,7 @@ class ClientResourceTest extends TestCase
     public function test_le_ticket_d_un_client_archive_reste_lisible_et_telechargeable(): void
     {
         $this->travelTo('2026-10-09 10:00:00');
-        $this->connecterLeProprietaire();
+        $this->connecterLeResponsable();
         $client = Client::factory()->create(['nom' => 'Jeanne Martin']);
         $produit = Produit::factory()->create(['nom' => 'Coque', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $ticket = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
@@ -354,7 +365,7 @@ class ClientResourceTest extends TestCase
      */
     public function test_un_client_archive_n_est_plus_propose_puis_le_redevient_une_fois_restaure(): void
     {
-        $this->connecterLeProprietaire();
+        $this->connecterLeResponsable();
         $client = Client::factory()->trashed()->create(['nom' => 'Jeanne Martin']);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 

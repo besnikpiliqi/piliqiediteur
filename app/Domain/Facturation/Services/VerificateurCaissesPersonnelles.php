@@ -30,8 +30,10 @@ use LogicException;
  * Quiconque enregistre un paiement a ainsi sa caisse (voir
  * ClotureCaissePersonnellePolicy::fermer()).
  *
- * Une personne n'encaisse que dans un magasin à la fois : tant que sa
- * caisse est ouverte dans un magasin de sa société, elle n'émet, n'encaisse
+ * Un compte autorisé à vendre n'encaisse que dans un magasin à la fois,
+ * même s'il a accès à plusieurs magasins (un administrateur à qui le
+ * propriétaire a coché la vente dans plusieurs magasins) : tant que sa
+ * caisse est ouverte dans un magasin de sa société, il n'émet, n'encaisse
  * ni ne contre-passe rien dans un autre (voir
  * refuserSiSaCaisseEstOuverteAilleurs()).
  */

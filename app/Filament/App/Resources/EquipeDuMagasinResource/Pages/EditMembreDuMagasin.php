@@ -32,7 +32,7 @@ class EditMembreDuMagasin extends EditRecord
         /** @var Affectation $affectation */
         $affectation = $this->getRecord();
 
-        return [...$data, 'role' => $affectation->role?->value, 'autorisations' => $affectation->autorisations()];
+        return [...$data, 'role' => $affectation->role?->value, ...EquipeDuMagasinResource::autorisationsAAfficher($affectation->autorisations(), 'autorisations')];
     }
 
     /**
@@ -43,7 +43,7 @@ class EditMembreDuMagasin extends EditRecord
         /** @var Affectation $record */
         return static::executerOuInterrompre(function () use ($record, $data): Affectation {
             app(ModifierMembreAction::class)->handle(auth()->user(), $record->utilisateur, [
-                $record->magasin_id => ['role' => $data['role'], 'autorisations' => $data['autorisations'] ?? []],
+                $record->magasin_id => ['role' => $data['role'], 'autorisations' => EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations')],
             ]);
 
             return $record->refresh();

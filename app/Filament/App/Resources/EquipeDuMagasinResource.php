@@ -2,7 +2,6 @@
 
 namespace App\Filament\App\Resources;
 
-use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Affectation;
@@ -10,6 +9,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages;
+use App\Filament\Concerns\CocheLesAutorisationsDeMagasin;
 use App\Filament\Concerns\GereLesComptes;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -48,6 +48,7 @@ use Illuminate\Database\Eloquent\Builder;
  */
 class EquipeDuMagasinResource extends Resource
 {
+    use CocheLesAutorisationsDeMagasin;
     use GereLesComptes;
 
     protected static ?string $model = Affectation::class;
@@ -96,7 +97,7 @@ class EquipeDuMagasinResource extends Resource
                 ->columns(2),
             Section::make('Dans ce magasin')->schema([
                 static::champRole(),
-                static::champAutorisations()->columnSpanFull(),
+                ...static::champsAutorisations(),
             ])->columns(2),
         ]);
     }
@@ -117,23 +118,29 @@ class EquipeDuMagasinResource extends Resource
             ->required()
             ->live()
             ->afterStateUpdated(function (Set $set, ?string $state): void {
-                $set('autorisations', RoleMagasin::tryFrom((string) $state)?->permissionsParDefaut() ?? []);
+                foreach (static::autorisationsAAfficher(RoleMagasin::tryFrom((string) $state)?->permissionsParDefaut() ?? [], 'autorisations') as $champ => $cases) {
+                    $set($champ, $cases);
+                }
             });
     }
 
     /**
-     * Ses cases dans ce magasin, et dans ce seul magasin ; aucune pour un
+     * Ses cases dans ce magasin, et dans ce seul magasin, celles de la
+     * vente à part (voir CocheLesAutorisationsDeMagasin) ; aucune pour un
      * responsable, qui a toutes les autorisations du magasin.
+     *
+     * @return list<CheckboxList>
      */
-    public static function champAutorisations(): CheckboxList
+    public static function champsAutorisations(): array
     {
-        return CheckboxList::make('autorisations')
-            ->label('Autorisations dans ce magasin')
-            ->helperText('Le rôle choisi les a précochées : cochez ou décochez ce que cette personne peut voir et faire dans ce magasin.')
-            ->options(PermissionRegistry::libelles())
-            ->columns(2)
-            ->bulkToggleable()
-            ->hidden(fn (Get $get): bool => RoleMagasin::tryFrom((string) $get('role')) === RoleMagasin::Responsable);
+        return static::champsDesAutorisationsDeMagasin(
+            'autorisations',
+            'Autorisations dans ce magasin',
+            'Le rôle choisi les a précochées : cochez ou décochez ce que cette personne peut voir et faire dans ce magasin.',
+            'Vente',
+            'Créer et émettre un ticket ou une facture, enregistrer un encaissement, vendre sans stock : cette personne aura sa caisse personnelle.',
+            fn (Get $get): bool => RoleMagasin::tryFrom((string) $get('role')) === RoleMagasin::Responsable,
+        );
     }
 
     public static function proprietaireConnecte(): bool

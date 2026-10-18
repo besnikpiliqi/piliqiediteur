@@ -22,7 +22,6 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
 use App\Filament\App\Widgets\FacturesApercu;
-use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
@@ -45,15 +44,14 @@ class PolitiqueDArrondiTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * Le magasin du propriétaire connecté, à l'identité légale complète :
-     * il vend aussi aux professionnels.
+     * Le magasin, à l'identité légale complète, et son responsable de test
+     * connecté, qui y vend, aussi aux professionnels.
      */
     private function magasin(): Magasin
     {
         $this->travelTo('2026-10-14 10:00:00');
-        $proprietaire = User::factory()->create();
-        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire));
-        $this->actingAs($proprietaire);
+        $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
+        $this->actingAs($this->responsableDeTest($magasin));
         Filament::setTenant($magasin);
 
         return $magasin;

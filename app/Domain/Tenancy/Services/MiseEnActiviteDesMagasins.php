@@ -14,7 +14,8 @@ use App\Models\User;
  * de la société pour chacun de ses magasins actifs (voir
  * ValiderLaSocieteAction), à la création d'un magasin dans une société
  * déjà validée (voir CreerEtablissementAction), et à la réouverture d'un
- * magasin (voir RouvrirMagasinAction). Son SIRET se réserve dans tout le
+ * magasin dans une société validée (voir RouvrirMagasinAction). Son SIRET
+ * se réserve dans tout le
  * logiciel s'il ne l'est pas déjà comme son SIRET actuel (voir
  * SiretsDesMagasins), une période d'activité s'ouvre (voir
  * PeriodesDActivite) et, pour sa première période seulement, les droits

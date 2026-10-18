@@ -24,7 +24,6 @@ use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Http\Responses\ReponseDeConnexion;
@@ -183,7 +182,6 @@ class AppServiceProvider extends ServiceProvider
             'ligne_avoir' => LigneAvoir::class,
             'magasin' => Magasin::class,
             'paiement' => Paiement::class,
-            'periode_activite' => PeriodeActivite::class,
             'produit' => Produit::class,
             'societe' => Societe::class,
             'soumission_ereporting' => SoumissionEReporting::class,

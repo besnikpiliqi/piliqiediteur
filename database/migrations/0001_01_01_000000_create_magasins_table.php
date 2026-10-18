@@ -58,10 +58,15 @@ return new class extends Migration
             $table->boolean('est_etablissement_principal')->default(false);
             // Actif ou fermé (voir StatutMagasin) : la société ferme et
             // rouvre elle-même ses magasins (voir FermerMagasinAction et
-            // RouvrirMagasinAction) ; fermé, il passe en lecture seule. Le
-            // motif de sa fermeture est celui de sa dernière période
-            // d'activité (voir PeriodeActivite).
+            // RouvrirMagasinAction) ; fermé, il passe en lecture seule.
             $table->string('statut', 20)->default('actif');
+            // Pourquoi il est fermé (voir MotifFermeture), nul tant qu'il est
+            // actif : posé à sa fermeture, effacé à sa réouverture. Une
+            // cession le change en dernier, celle d'un magasin déjà fermé
+            // comprise, sans toucher sa période d'activité close, qui garde
+            // le motif de sa fin (voir PeriodeActivite) : un magasin cédé
+            // ne se rouvre jamais (voir Magasin::booted()).
+            $table->string('motif_fermeture', 30)->nullable();
             // La suspension décidée par l'éditeur, indépendante de la
             // fermeture : jamais levée par une réouverture (voir
             // Magasin::estEnLectureSeule()).

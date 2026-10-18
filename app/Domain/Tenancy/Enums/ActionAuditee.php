@@ -33,6 +33,7 @@ enum ActionAuditee: string implements HasLabel
     case MagasinModifie = 'magasin_modifie';
     case SiretChange = 'siret_change';
     case MagasinFerme = 'magasin_ferme';
+    case MagasinCede = 'magasin_cede';
     case MagasinRouvert = 'magasin_rouvert';
     case EtablissementPrincipalChoisi = 'etablissement_principal_choisi';
     case DemonstrationOuverte = 'demonstration_ouverte';
@@ -90,6 +91,7 @@ enum ActionAuditee: string implements HasLabel
             self::MagasinModifie => 'Magasin modifié',
             self::SiretChange => 'SIRET du magasin changé',
             self::MagasinFerme => 'Magasin fermé',
+            self::MagasinCede => 'Magasin cédé après sa fermeture',
             self::MagasinRouvert => 'Magasin rouvert',
             self::EtablissementPrincipalChoisi => 'Établissement principal indiqué',
             self::DemonstrationOuverte => 'Magasin de démonstration ouvert',
@@ -162,8 +164,11 @@ enum ActionAuditee: string implements HasLabel
             // Pour une cession, l'indication d'établissement principal
             // retirée, s'il la portait, la valeur hors taxe du stock sorti
             // au coût moyen, le nombre de produits sortis et ceux restés en
-            // stock négatif, sans mouvement (voir FermerMagasinAction).
+            // stock négatif, sans mouvement (voir FermerMagasinAction) ; la
+            // cession d'un magasin déjà fermé change son seul motif de
+            // fermeture, de l'ancien à la cession.
             self::MagasinFerme => ['statut', 'motif', 'est_etablissement_principal', 'valeur_stock_sorti_ht', 'produits_sortis', 'produits_en_stock_negatif'],
+            self::MagasinCede => ['motif', 'est_etablissement_principal', 'valeur_stock_sorti_ht', 'produits_sortis', 'produits_en_stock_negatif'],
             self::MagasinRouvert => ['statut', 'etablissement_verifie'],
             self::EtablissementPrincipalChoisi => ['etablissement_principal'],
             // Les droits de chaque compte touché, avant et après, avec son

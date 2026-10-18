@@ -6,7 +6,7 @@ namespace App\Domain\Stock\Enums;
  * Chaque type dit à lui seul le sens du mouvement (voir estEntree()) : le
  * stock d'un produit se recalcule donc toujours depuis son grand livre,
  * sans lire la note d'aucun mouvement. La sortie de cession fait sortir,
- * au coût moyen, le stock d'un magasin fermé pour cession (voir
+ * au coût moyen, le stock d'un magasin cédé (voir
  * StockLedgerService::sortirPourCession()).
  */
 enum TypeMouvementStock: string

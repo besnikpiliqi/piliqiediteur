@@ -20,25 +20,40 @@ use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\ChoisirEtablissementPrincipalAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
+use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
+use App\Domain\Tenancy\Actions\ValiderLaSocieteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PeriodeActivite;
+use App\Domain\Tenancy\Models\SiretMagasin;
+use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Services\EvaluateurDeVerification;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
+use Closure;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
+use Illuminate\Support\Facades\DB;
+use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
 
 /**
- * Une vente à la caisse, ou une validation ou une correction d'achat, et
- * la fermeture du magasin au même instant, chacune dans son processus, sur
- * une vraie base PostgreSQL : la seconde attend le verrou que tient la
- * première (celui du registre fiscal pour une vente, celui de la ligne du
- * magasin pour un achat). Une vente qui passe avant entre dans la dernière
- * clôture de la fermeture ; une vente ou un achat qui attendait la
- * fermeture est refusé, le magasin étant fermé.
+ * Une vente à la caisse, ou une création, une validation ou une correction
+ * d'achat, et la fermeture du magasin au même instant, chacune dans son
+ * processus, sur une vraie base PostgreSQL : la seconde attend le verrou
+ * que tient la première (celui du registre fiscal pour une vente, celui de
+ * la ligne du magasin pour un achat). Une vente qui passe avant entre dans
+ * la dernière clôture de la fermeture ; une vente ou un achat qui attendait
+ * la fermeture est refusé, le magasin étant fermé. De même, une réouverture
+ * qui attendait la cession du magasin fermé est refusée, et une réouverture
+ * avant la validation de la société passe tout entière avant ou après la
+ * validation, qui met alors le magasin en activité.
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.
@@ -92,6 +107,110 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         }
 
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
+    }
+
+    /**
+     * La création d'une facture d'achat attend la fermeture du magasin, qui
+     * verrouille sa ligne : elle est ensuite refusée, le magasin étant
+     * fermé, et aucun brouillon n'entre dans le magasin fermé.
+     */
+    #[Group('concurrence')]
+    public function test_une_creation_d_achat_qui_attendait_la_fermeture_est_refusee(): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $magasinId = $magasin->id;
+        $fournisseurId = Fournisseur::factory()->create()->id;
+        $produitId = Produit::factory()->create(['cmup_ht' => 2, 'taux_tva' => 20, 'suivi_stock' => true, 'seuil_alerte' => 0])->id;
+        $creer = static function () use ($magasinId, $fournisseurId, $produitId): void {
+            $magasin = Magasin::query()->findOrFail($magasinId);
+            app(TenantContext::class)->set($magasin);
+            app(CreerFactureAchatAction::class)->handle(User::query()->whereKey($magasin->societe->proprietaire()->value('id'))->firstOrFail(), Fournisseur::query()->findOrFail($fournisseurId), [
+                ['produit_id' => $produitId, 'quantite' => 5, 'prix_unitaire_ht' => '2.00', 'taux_tva' => 20],
+            ]);
+        };
+        $concurrente = null;
+        $this->concurrencerDesQueLeRegistreEstVerrouille($creer, $concurrente);
+
+        self::fermer($magasinId);
+
+        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
+        $resultat = $concurrente->wait();
+        $this->assertTrue($resultat->failed());
+        $this->assertStringContainsString('Ce magasin est fermé : seules la consultation et les téléchargements restent possibles.', $resultat->errorOutput());
+        app(TenantContext::class)->set($magasin);
+        $this->assertSame(0, FactureAchat::query()->count());
+    }
+
+    /**
+     * La réouverture d'un magasin fermé temporairement attend sa cession,
+     * qui verrouille son registre : elle est ensuite refusée, le magasin
+     * étant cédé, qui reste fermé, sans nouvelle période d'activité.
+     */
+    #[Group('concurrence')]
+    public function test_une_reouverture_qui_attendait_la_cession_d_un_magasin_ferme_est_refusee(): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        self::fermer($magasin->id);
+        $magasinId = $magasin->id;
+        $rouvrir = static function () use ($magasinId): void {
+            $magasin = Magasin::query()->findOrFail($magasinId);
+            app(RouvrirMagasinAction::class)->handle(User::query()->whereKey($magasin->societe->proprietaire()->value('id'))->firstOrFail(), $magasin, 'password');
+        };
+        $concurrente = null;
+        $this->concurrencerDesQueLeRegistreEstVerrouille($rouvrir, $concurrente);
+
+        app(FermerMagasinAction::class)->handle($proprietaire, $magasin->fresh(), MotifFermeture::Cession, 'password', 'Ma Boutique');
+
+        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
+        $resultat = $concurrente->wait();
+        $this->assertTrue($resultat->failed());
+        $this->assertStringContainsString(RouvrirMagasinAction::MESSAGE_CEDE, $resultat->errorOutput());
+        $cede = $magasin->fresh();
+        $this->assertSame([StatutMagasin::Ferme, MotifFermeture::Cession, 1], [$cede->statut, $cede->motif_fermeture, PeriodeActivite::query()->where('magasin_id', $magasin->id)->count()]);
+    }
+
+    /**
+     * La validation de la société arrive pendant que la boutique, fermée
+     * avant elle, se rouvre : la réouverture tient la ligne de la société,
+     * que la validation attend ; la boutique rouverte, sans période
+     * d'activité, compte ensuite parmi les magasins actifs que la validation
+     * met en activité (SIRET réservé, première période). Sans ce verrou, la
+     * validation passerait sans la voir, et la boutique rouvrirait sans
+     * période d'activité dans une société validée, où elle vendrait sans
+     * ticket Z.
+     */
+    #[Group('concurrence')]
+    public function test_une_reouverture_avant_la_validation_simultanee_a_la_validation_met_le_magasin_en_activite(): void
+    {
+        $this->exigerUnServeurDeBaseDeDonnees();
+        $societe = $this->inscrireUneSociete();
+        $this->creerLeMagasinDuSiege($societe);
+        $boutique = $this->creerLeMagasinDuSiege($societe, 'Boutique', substr(FauxRepertoireSirene::siretDeLaBoutique($societe->siren), 9));
+        $proprietaire = $societe->proprietaire;
+        app(FermerMagasinAction::class)->handle($proprietaire, $boutique, MotifFermeture::Temporaire, self::MOT_DE_PASSE_CHOISI);
+        $this->mock(ValiderLaSocieteAction::class, fn (MockInterface $validation) => $validation->shouldReceive('siPossible')->andReturnFalse());
+        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->app->forgetInstance(ValiderLaSocieteAction::class);
+        $this->assertTrue(app(EvaluateurDeVerification::class)->evaluer($societe->fresh())->estValidable());
+        $societeId = $societe->id;
+        $valider = static function () use ($societeId): void {
+            app(ValiderLaSocieteAction::class)->siPossible(Societe::query()->findOrFail($societeId));
+        };
+        $concurrente = null;
+        $this->concurrencerDesQueLaSocieteEstLue($valider, $concurrente);
+
+        app(RouvrirMagasinAction::class)->handle($proprietaire, $boutique->fresh(), self::MOT_DE_PASSE_CHOISI);
+
+        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
+        $resultat = $concurrente->wait();
+        $this->assertTrue($resultat->successful(), $resultat->errorOutput());
+        $this->assertTrue($societe->fresh()->estValidee());
+        $this->assertSame(1, PeriodeActivite::query()->where('magasin_id', $boutique->id)->count());
+        $this->assertSame([(string) $boutique->siret], SiretMagasin::query()->where('magasin_id', $boutique->id)->whereNull('retire_le')->pluck('siret')->all());
+        $this->assertTrue($boutique->fresh()->peutVendre());
     }
 
     /**
@@ -203,6 +322,34 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         $this->assertStringContainsString(ChoisirEtablissementPrincipalAction::MESSAGE_CEDE, $resultat->errorOutput());
         $this->assertSame([true, false], [$magasin->fresh()->aEteCede(), $magasin->fresh()->est_etablissement_principal]);
         $this->assertSame([], $this->entreesDAudit($magasin->societe, ActionAuditee::EtablissementPrincipalChoisi));
+    }
+
+    /**
+     * Démarre l'opération concurrente dès que l'opération du test, sous le
+     * verrou du registre fiscal, a lu la ligne de la société (la
+     * réouverture la verrouille FOR NO KEY UPDATE), et attend qu'elle
+     * attende un verrou, ou qu'elle ait fini. $concurrente reçoit le
+     * processus démarré.
+     *
+     * @param  Closure(): void  $operationConcurrente
+     */
+    private function concurrencerDesQueLaSocieteEstLue(Closure $operationConcurrente, ?InvokedProcess &$concurrente): void
+    {
+        $connexionDuTest = DB::getDefaultConnection();
+        $registreVerrouille = false;
+
+        DB::listen(function (QueryExecuted $requete) use (&$concurrente, &$registreVerrouille, $operationConcurrente, $connexionDuTest): void {
+            if ($concurrente !== null || $requete->connectionName !== $connexionDuTest) {
+                return;
+            }
+
+            $registreVerrouille = $registreVerrouille || (str_contains($requete->sql, '"tetes_registre_fiscal"') && str_contains($requete->sql, 'for update'));
+
+            if ($registreVerrouille && str_contains($requete->sql, 'from "societes"')) {
+                $concurrente = $this->demarrerUnProcessusConcurrent($operationConcurrente);
+                $this->attendreQueLeProcessusAttendeUnVerrou($concurrente);
+            }
+        });
     }
 
     /**

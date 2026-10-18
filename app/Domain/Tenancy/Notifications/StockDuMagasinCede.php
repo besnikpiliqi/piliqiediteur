@@ -6,10 +6,10 @@ use App\Domain\Tenancy\Models\Magasin;
 use Filament\Notifications\Notification as NotificationFilament;
 
 /**
- * Le magasin vient d'être fermé pour cession (voir FermerMagasinAction) :
- * son propriétaire reçoit la valeur hors taxe du stock sorti au coût
- * moyen, à rapprocher du prix de cession, et la liste des produits restés
- * en stock négatif, qui n'ont fait aucun mouvement.
+ * Le magasin vient d'être cédé, ouvert ou déjà fermé (voir
+ * FermerMagasinAction) : son propriétaire reçoit la valeur hors taxe du
+ * stock sorti au coût moyen, à rapprocher du prix de cession, et la liste
+ * des produits restés en stock négatif, qui n'ont fait aucun mouvement.
  */
 class StockDuMagasinCede extends NotificationDuMagasin
 {

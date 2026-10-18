@@ -63,7 +63,9 @@ use Throwable;
  * L'événement SocieteValidee part une fois la transaction validée, après
  * le MagasinOuvert de chaque magasin mis en activité (étape 12 : les
  * abonnements). Un magasin réel fermé n'est ni réservé ni ouvert : sa
- * réouverture le mettra en activité (voir RouvrirMagasinAction). Si une
+ * réouverture le mettra en activité (voir RouvrirMagasinAction) ; un
+ * magasin rouvert avant la validation, actif, est compté avec les autres,
+ * la réouverture prenant le même verrou de la société. Si une
  * autre société a validé ce SIREN, ou réservé l'un de ces SIRET,
  * entre-temps, rien n'est écrit : la société devient une réclamation
  * possible, et l'éditeur en est prévenu, sans rien en révéler à personne

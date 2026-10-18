@@ -26,8 +26,11 @@ use Filament\Support\Contracts\HasLabel;
  * - Un paramètre ayant un impact sur la conformité suit aussi le
  *   changement d'un réglage fiscal ou d'un identifiant de la société, du
  *   SIRET d'un magasin et du taux de TVA d'un produit
- *   (JournaliseSesParametresDeConformite), et celui du statut d'un magasin
- *   (statut_magasin : ouverture et fermeture de la démonstration).
+ *   (JournaliseSesParametresDeConformite), celui du statut d'un magasin
+ *   (statut_magasin : ouverture et fermeture de la démonstration,
+ *   fermeture, avec son motif, et réouverture d'un magasin réel) et celui
+ *   du motif de fermeture d'un magasin déjà fermé que la société cède
+ *   (motif_fermeture).
  * - L'annulation de ticket suit l'émission d'un avoir sur des tickets de
  *   caisse (voir EmettreAvoirAction).
  * - La vente abandonnée avant validation suit la suppression d'un

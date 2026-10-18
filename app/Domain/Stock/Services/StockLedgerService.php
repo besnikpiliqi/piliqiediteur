@@ -187,13 +187,13 @@ class StockLedgerService
     }
 
     /**
-     * Sortie de tout le stock d'un produit d'un magasin fermé pour cession
-     * ($source : la période d'activité close pour ce motif, voir
-     * FermerMagasinAction) : ses articles sortent au CMUP du moment, gardé
-     * dans le mouvement (une annulation de la cession par l'éditeur les
-     * fera rentrer au même coût), et le CMUP ne change pas. Rien ne sort
-     * d'un produit qui ne suit pas son stock, ni d'un stock vide ou
-     * négatif, lu sous le verrou du produit : null.
+     * Sortie de tout le stock d'un produit d'un magasin cédé, ouvert ou
+     * déjà fermé ($source : le magasin cédé, voir FermerMagasinAction) :
+     * ses articles sortent au CMUP du moment, gardé dans le mouvement (une
+     * annulation de la cession par l'éditeur les fera rentrer au même
+     * coût), et le CMUP ne change pas. Rien ne sort d'un produit qui ne
+     * suit pas son stock, ni d'un stock vide ou négatif, lu sous le verrou
+     * du produit : null.
      *
      * Rien ne bouge ensuite dans ce stock : une vente ou un avoir, qui
      * verrouillent le registre fiscal du magasin, et une validation

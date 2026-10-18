@@ -112,7 +112,7 @@ class OuvrirLaDemonstrationAction
                 return $verrouille;
             }
 
-            $verrouille->forceFill(['statut' => StatutMagasin::Actif])->save();
+            $verrouille->forceFill(['statut' => StatutMagasin::Actif, 'motif_fermeture' => null])->save();
             $this->registre->journaliser(CodeEvenement::ParametreDeConformite, [
                 'parametre' => 'statut_magasin',
                 'magasin' => ['id' => $verrouille->getKey(), 'nom' => $verrouille->nom],

@@ -108,7 +108,7 @@ class MagasinDeLaSocietePolicy
     }
 
     /**
-     * Fermer le magasin pour cession : le propriétaire seul.
+     * Céder le magasin, ouvert ou déjà fermé : le propriétaire seul.
      */
     public function cederLeMagasin(User $user, Magasin $magasin): bool
     {

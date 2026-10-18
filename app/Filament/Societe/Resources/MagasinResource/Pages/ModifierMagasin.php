@@ -38,9 +38,11 @@ use Illuminate\Validation\ValidationException;
  * - l'indiquer comme établissement principal, ou retirer cette indication
  *   (voir ChoisirEtablissementPrincipalAction) ;
  * - le fermer, temporairement ou pour cessation d'activité (voir
- *   FermerMagasinAction), ou, pour le propriétaire seul, le céder en
- *   retapant son nom ;
- * - le rouvrir, sauf après une cession (voir RouvrirMagasinAction).
+ *   FermerMagasinAction), ou, pour le propriétaire seul, une fois la
+ *   société validée, le céder en retapant son nom, qu'il soit ouvert ou
+ *   déjà fermé ;
+ * - le rouvrir, avant comme après la validation de la société, sauf après
+ *   une cession (voir RouvrirMagasinAction).
  * Les gestes graves (SIRET, fermeture, cession, réouverture) redemandent
  * le mot de passe.
  *
@@ -262,8 +264,11 @@ class ModifierMagasin extends EditRecord
             ->label('Céder le magasin')
             ->icon('heroicon-o-arrow-right-start-on-rectangle')
             ->color('danger')
-            ->visible(fn (): bool => $this->peut('cederLeMagasin') && ! $this->magasin()->estFerme() && $this->magasin()->societe->estValidee())
-            ->modalDescription('La cession est définitive : le magasin est fermé et ne se rouvrira pas. Ses journées en attente sont clôturées, et tout son stock sort au coût moyen ; sa valeur hors taxe vous est remise, à rapprocher du prix de cession prévu à l\'acte avec votre expert-comptable. Ses factures, paiements et archives restent dans votre société. L\'activité reprise s\'ouvre dans le compte de la société qui la reprend.')
+            ->visible(fn (): bool => $this->peut('cederLeMagasin') && $this->magasin()->societe->estValidee() && ! $this->estCede())
+            ->modalDescription(fn (): string => ($this->magasin()->estFerme()
+                ? 'La cession est définitive : le magasin, déjà fermé, ne se rouvrira plus, et il n\'est ni rouvert ni recontrôlé au répertoire Sirene pour être cédé.'
+                : 'La cession est définitive : le magasin est fermé et ne se rouvrira pas. Ses journées en attente sont clôturées.')
+                .' Tout son stock sort au coût moyen ; sa valeur hors taxe vous est remise, à rapprocher du prix de cession prévu à l\'acte avec votre expert-comptable. Ses factures, paiements et archives restent dans votre société. L\'activité reprise s\'ouvre dans le compte de la société qui la reprend.')
             ->form([
                 TextInput::make('confirmation')
                     ->label(fn (): string => "Retapez le nom du magasin : {$this->magasin()->nom}")
@@ -281,14 +286,18 @@ class ModifierMagasin extends EditRecord
         return Action::make('rouvrir')
             ->label('Rouvrir le magasin')
             ->icon('heroicon-o-lock-open')
-            ->visible(fn (): bool => $this->peut('rouvrirLeMagasin') && $this->magasin()->estFerme() && ! $this->estCede() && $this->magasin()->societe->estValidee())
-            ->modalDescription('Son établissement est contrôlé au répertoire Sirene. Sa caisse reprend au premier jour non clôturé, avec le même registre, les mêmes séries et les mêmes grands totaux ; aucun ticket Z n\'est produit pour ses jours de fermeture. Une suspension décidée par l\'éditeur reste en place.')
+            ->visible(fn (): bool => $this->peut('rouvrirLeMagasin') && $this->magasin()->estFerme() && ! $this->estCede())
+            ->modalDescription(fn (): string => $this->magasin()->societe->estValidee()
+                ? 'Son établissement est contrôlé au répertoire Sirene. Sa caisse reprend au premier jour non clôturé, avec le même registre, les mêmes séries et les mêmes grands totaux ; aucun ticket Z n\'est produit pour ses jours de fermeture. Une suspension décidée par l\'éditeur reste en place.'
+                : 'Son établissement est contrôlé au répertoire Sirene. Votre société n\'étant pas encore validée, le magasin rouvert ne vend qu\'après sa validation, qui le met en activité avec vos autres magasins ouverts.')
             ->form([self::champMotDePasse()])
             ->action(fn (array $data) => $this->agir(
                 fn () => app(RouvrirMagasinAction::class)->handle($this->auteur(), $this->magasin(), (string) $data['mot_de_passe']),
-                fn (): string => $this->magasin()->etablissement_verifie_le === null
-                    ? "Le magasin {$this->magasin()->nom} est rouvert : le répertoire Sirene n'ayant pas répondu, son établissement sera vérifié avant toute vente."
-                    : "Le magasin {$this->magasin()->nom} est rouvert.",
+                fn (): string => match (true) {
+                    $this->magasin()->etablissement_verifie_le === null => "Le magasin {$this->magasin()->nom} est rouvert : le répertoire Sirene n'ayant pas répondu, son établissement sera vérifié avant toute vente.",
+                    ! $this->magasin()->societe->estValidee() => "Le magasin {$this->magasin()->nom} est rouvert : il vendra une fois votre société validée.",
+                    default => "Le magasin {$this->magasin()->nom} est rouvert.",
+                },
             ));
     }
 

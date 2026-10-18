@@ -7,10 +7,12 @@ use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Contacts\Models\Fournisseur;
+use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Enregistre une facture d'achat en brouillon, sans aucun impact sur le
@@ -21,7 +23,15 @@ use Illuminate\Support\Facades\DB;
  * produit, le registre fiscal du magasin est le premier verrou de la
  * transaction (voir ConstructeurLigneAchat::verrouillerLeRegistreSiUnTauxChange()).
  *
- * Son auteur, relu en base après ce verrou (voir LecteurDesDroits), doit
+ * Un magasin suspendu ou fermé n'enregistre plus de facture d'achat (voir
+ * Magasin::verifierQuIlEstOuvert()) : sa ligne se relit en base sous un
+ * verrou partagé, après le registre et avant l'auteur, comme à la
+ * validation (voir ValiderFactureAchatAction). Sa fermeture, qui la
+ * verrouille (voir FermerMagasinAction), passe donc tout entière avant
+ * la création, qui est refusée, ou après elle, le brouillon déjà
+ * enregistré restant consultable dans le magasin fermé.
+ *
+ * Son auteur, relu en base après ces verrous (voir LecteurDesDroits), doit
  * pouvoir enregistrer une facture d'achat, et, pour chaque ligne qui crée
  * ou corrige un produit, le faire au catalogue ; la facture l'enregistre
  * comme auteur, avec son nom figé.
@@ -39,12 +49,15 @@ class CreerFactureAchatAction
      * @param  array<string, mixed>  $attributs
      *
      * @throws AuthorizationException
+     * @throws LogicException quand le magasin est en lecture seule
      */
     public function handle(User $auteur, Fournisseur $fournisseur, array $lignes, array $attributs = []): FactureAchat
     {
         return DB::transaction(function () use ($auteur, $fournisseur, $lignes, $attributs) {
             $this->constructeurLignes->verrouillerLeRegistreSiUnTauxChange($lignes);
-            $compte = $this->lecteur->exiger($auteur, 'create', app(TenantContext::class)->magasin(), FactureAchat::class);
+            $magasin = app(TenantContext::class)->magasin();
+            Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
+            $compte = $this->lecteur->exiger($auteur, 'create', $magasin, FactureAchat::class);
 
             return $this->operateur->pendant($compte, function () use ($compte, $fournisseur, $lignes, $attributs): FactureAchat {
                 $factureAchat = (new FactureAchat([...$attributs, 'fournisseur_id' => $fournisseur->getKey()]))->forceFill(['cree_par' => $compte->getKey()]);

@@ -26,8 +26,8 @@ use Throwable;
  * opération (voir app:fermer-demonstrations-inactives). Sous le verrou de
  * son registre, en une transaction : ses journées en attente se clôturent
  * jusqu'au jour même, sa sortie du mode démonstration s'inscrit à son
- * journal des événements (JET 105), son statut passe à fermé (JET 270),
- * sa période d'activité se ferme ; puis ses caisses personnelles restées
+ * journal des événements (JET 105), son statut passe à fermé avec son
+ * motif (JET 270), sa période d'activité se ferme ; puis ses caisses personnelles restées
  * ouvertes se ferment d'office (R5), sans jamais annuler la fermeture.
  * Le registre l'inscrit au nom de la personne qui la ferme, ou du système ;
  * les journées se clôturent et les caisses se ferment au nom du système.
@@ -72,7 +72,7 @@ class FermerLaDemonstrationAction
 
             $this->cloturerLesJournees->parLeSysteme($verrouille, $maintenant);
             $this->registre->journaliser(CodeEvenement::SortieDuModeDemonstration, ['motif' => $motif->value]);
-            $verrouille->forceFill(['statut' => StatutMagasin::Ferme])->save();
+            $verrouille->forceFill(['statut' => StatutMagasin::Ferme, 'motif_fermeture' => $motif])->save();
             $this->registre->journaliser(CodeEvenement::ParametreDeConformite, [
                 'parametre' => 'statut_magasin',
                 'magasin' => ['id' => $verrouille->getKey(), 'nom' => $verrouille->nom],

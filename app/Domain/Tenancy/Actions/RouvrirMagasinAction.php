@@ -11,6 +11,7 @@ use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Exceptions\SiretDejaReserveException;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\MiseEnActiviteDesMagasins;
@@ -25,12 +26,12 @@ use SensitiveParameter;
 
 /**
  * La société rouvre l'un de ses magasins réels fermés temporairement ou
- * pour cessation d'activité ; un magasin cédé ne se rouvre jamais (voir
- * Magasin::aEteCede()).
+ * pour cessation d'activité, avant comme après sa validation ; un magasin
+ * cédé ne se rouvre jamais (voir Magasin::aEteCede()).
  *
  * Qui : le propriétaire, ou un administrateur autorisé à gérer les
- * magasins, pour un magasin de sa portée, dans une société validée qui
- * n'est pas en lecture seule (voir MagasinDeLaSocietePolicy::rouvrirLeMagasin()),
+ * magasins, pour un magasin de sa portée, dans une société qui n'est pas
+ * en lecture seule (voir MagasinDeLaSocietePolicy::rouvrirLeMagasin()),
  * en redonnant son mot de passe (voir MotDePasseRedemande). Jamais un
  * responsable ni un expert-comptable. La suspension décidée par l'éditeur
  * (suspendu_le) n'est jamais levée par une réouverture : un magasin
@@ -39,24 +40,36 @@ use SensitiveParameter;
  * Son établissement se contrôle d'abord au répertoire Sirene, avant toute
  * écriture (voir ControleSirene) : fermé, inconnu ou rattaché à une autre
  * entreprise, la réouverture est refusée, et rien ne change ; confirmé, le
- * magasin redevient vendable ; quand l'INSEE ne répond pas, il rouvre
- * « établissement à vérifier » et ne vend pas avant la reprise du contrôle
- * (voir app:reverifier-sirene). L'adresse ne se reprend du répertoire que
- * pour un établissement qu'il n'avait jamais confirmé sous ce SIRET (voir
- * ControleSirene::etablissementDejaConfirme()), à la réouverture comme à
- * la reprise du contrôle (voir ReverificationSirene) : celle qu'une
- * société a enregistrée après une confirmation reste la sienne, que
- * l'INSEE réponde ou non à la réouverture.
+ * magasin redevient vendable, une fois sa société validée ; quand l'INSEE
+ * ne répond pas, il rouvre « établissement à vérifier » et ne vend pas
+ * avant la reprise du contrôle (voir app:reverifier-sirene). L'adresse ne
+ * se reprend du répertoire que pour un établissement qu'il n'avait jamais
+ * confirmé sous ce SIRET (voir ControleSirene::etablissementDejaConfirme()),
+ * à la réouverture comme à la reprise du contrôle (voir
+ * ReverificationSirene) : celle qu'une société a enregistrée après une
+ * confirmation reste la sienne, que l'INSEE réponde ou non à la
+ * réouverture.
  *
- * En une transaction, le registre du magasin verrouillé en tête puis sa
- * ligne, relue pour refuser un magasin rouvert ou cédé entre-temps : son
- * statut repasse à actif (JET 270 statut_magasin), le contrôle Sirene
- * s'inscrit au registre des vérifications, une nouvelle période d'activité
- * s'ouvre (voir MiseEnActiviteDesMagasins, qui émet MagasinRouvert une
- * fois la transaction validée : son abonnement reprend, étape 12 ; ou
- * MagasinOuvert, avec son SIRET réservé et les droits implicites au JET
- * 130, pour un magasin fermé avant la validation de sa société, qui n'en
- * avait encore aucune) ; la réouverture s'inscrit au journal d'audit.
+ * En une transaction, le registre du magasin verrouillé en tête, puis la
+ * ligne de sa société (FOR NO KEY UPDATE sous PostgreSQL, comme à la
+ * création d'un magasin : elle attend la validation de la société, qui la
+ * verrouille FOR UPDATE, et la fait attendre), puis la ligne du magasin,
+ * relue pour refuser un magasin rouvert ou cédé entre-temps : son statut
+ * repasse à actif et son motif de fermeture s'efface (JET 270
+ * statut_magasin), le contrôle Sirene s'inscrit au registre des
+ * vérifications, et la réouverture s'inscrit au journal d'audit. Dans une
+ * société validée, telle que la relit ce verrou, une nouvelle période
+ * d'activité s'ouvre (voir MiseEnActiviteDesMagasins, qui émet
+ * MagasinRouvert une fois la transaction validée : son abonnement
+ * reprend, étape 12 ; ou MagasinOuvert, avec son SIRET réservé et les
+ * droits implicites au JET 130, pour un magasin fermé avant la validation
+ * de sa société, qui n'en avait encore aucune). Avant la validation, le
+ * magasin rouvert n'a ni période d'activité ni SIRET réservé, comme un
+ * magasin créé alors : la validation, qui compte ses magasins actifs sous
+ * le même verrou de la société, le met en activité avec eux (voir
+ * ValiderLaSocieteAction) ; une validation faite pendant la réouverture
+ * passe donc tout entière avant, et la réouverture le met en activité, ou
+ * tout entière après, et la validation le compte.
  *
  * Sa caisse reprend le même registre, les mêmes chaînes, séquences, séries
  * et grands totaux, sans rien remettre à zéro : le premier ticket Z est
@@ -71,8 +84,6 @@ class RouvrirMagasinAction
     public const MESSAGE_PAS_FERME = 'Ce magasin n\'est pas fermé.';
 
     public const MESSAGE_CEDE = 'Ce magasin a été cédé : il ne se rouvre pas.';
-
-    public const MESSAGE_SOCIETE_A_VERIFIER = 'Un magasin fermé ne se rouvre qu\'une fois la société validée.';
 
     public function __construct(
         private readonly ControleSirene $controleSirene,
@@ -130,6 +141,7 @@ class RouvrirMagasinAction
      */
     private function rouvrir(User $auteur, Magasin $magasin, array $consultation): Magasin
     {
+        $societe = Societe::query()->whereKey($magasin->societe_id)->lock('for no key update')->firstOrFail();
         $verrouille = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
         self::verifierQuIlSeRouvre($verrouille);
 
@@ -137,6 +149,7 @@ class RouvrirMagasinAction
         $jamaisConfirme = ! ControleSirene::etablissementDejaConfirme($verrouille);
         $verrouille->forceFill([
             'statut' => StatutMagasin::Actif,
+            'motif_fermeture' => null,
             'etablissement_verifie_le' => $etablissement === null ? null : now(),
             ...($etablissement !== null && $jamaisConfirme ? [...ControleSirene::adresseDe($etablissement), 'pays' => 'FR'] : []),
         ])->save();
@@ -147,7 +160,11 @@ class RouvrirMagasinAction
             'nouvelle_valeur' => StatutMagasin::Actif->value,
         ]);
         $this->controleSirene->noterEtablissement($verrouille, $consultation, $auteur);
-        $this->miseEnActivite->mettreEnActivite($verrouille, $auteur);
+
+        if ($societe->estValidee()) {
+            $this->miseEnActivite->mettreEnActivite($verrouille->setRelation('societe', $societe), $auteur);
+        }
+
         $this->journalAudit->inscrire(ActionAuditee::MagasinRouvert, $auteur, $verrouille, ['statut' => StatutMagasin::Ferme->value], [
             'statut' => StatutMagasin::Actif->value,
             'etablissement_verifie' => $verrouille->etablissement_verifie_le !== null,
@@ -157,8 +174,7 @@ class RouvrirMagasinAction
     }
 
     /**
-     * Le magasin se rouvre-t-il ? Fermé, pas cédé, dans une société
-     * validée.
+     * Le magasin se rouvre-t-il ? Fermé, et pas cédé.
      *
      * @throws LogicException
      */
@@ -170,10 +186,6 @@ class RouvrirMagasinAction
 
         if ($magasin->aEteCede()) {
             throw new LogicException(self::MESSAGE_CEDE);
-        }
-
-        if (! $magasin->societe->estValidee()) {
-            throw new LogicException(self::MESSAGE_SOCIETE_A_VERIFIER);
         }
     }
 }

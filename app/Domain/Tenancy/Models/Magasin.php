@@ -64,8 +64,10 @@ use LogicException;
  * et son établissement confirmé par le répertoire Sirene (voir
  * peutVendre()). Un magasin ne se supprime jamais (voir delete() et le
  * déclencheur de la table magasins) : sa société le ferme et le rouvre
- * (voir FermerMagasinAction et RouvrirMagasinAction), et un magasin cédé
- * ne se rouvre plus (voir aEteCede()). La société peut indiquer l'un de
+ * (voir FermerMagasinAction et RouvrirMagasinAction), son motif de
+ * fermeture disant pourquoi il est fermé (motif_fermeture), et un magasin
+ * cédé, ouvert ou déjà fermé, ne se rouvre plus (voir aEteCede() et
+ * booted()). La société peut indiquer l'un de
  * ses magasins comme son établissement principal, une simple information
  * (voir ChoisirEtablissementPrincipalAction).
  *
@@ -134,6 +136,7 @@ class Magasin extends Model implements HasName
 
     protected $casts = [
         'statut' => StatutMagasin::class,
+        'motif_fermeture' => MotifFermeture::class,
         'est_demonstration' => 'boolean',
         'etablissement_verifie_le' => 'datetime',
         'suspendu_le' => 'datetime',
@@ -203,9 +206,17 @@ class Magasin extends Model implements HasName
             if ((bool) $magasin->est_demonstration !== ($magasin->siret === null)) {
                 throw new LogicException('Seul le magasin de démonstration n\'a pas de SIRET, et il n\'en a jamais.');
             }
+
+            if (! $magasin->estFerme() && $magasin->motif_fermeture !== null) {
+                throw new LogicException('Un magasin ouvert n\'a pas de motif de fermeture : sa réouverture l\'efface.');
+            }
         });
 
         static::updating(function (Magasin $magasin) {
+            if ($magasin->getOriginal('motif_fermeture') === MotifFermeture::Cession && $magasin->isDirty(['statut', 'motif_fermeture'])) {
+                throw new LogicException('Un magasin cédé ne se rouvre jamais et reste cédé.');
+            }
+
             if ($magasin->isDirty('est_demonstration')) {
                 throw new LogicException('Un magasin réel ne devient jamais le magasin de démonstration, ni l\'inverse.');
             }
@@ -313,33 +324,13 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * A-t-il été cédé ? Fermé pour cession (voir FermerMagasinAction), sa
-     * dernière période d'activité ayant pris fin pour ce motif : il ne se
-     * rouvre jamais et ne se modifie plus. Les périodes se lisent filtrées
-     * par magasin.
+     * A-t-il été cédé ? Son motif de fermeture est la cession, qu'il ait été
+     * fermé pour cession ou cédé une fois fermé (voir FermerMagasinAction) :
+     * il ne se rouvre jamais et ne se modifie plus (voir booted()).
      */
     public function aEteCede(): bool
     {
-        return $this->motifDeSaFermeture() === MotifFermeture::Cession;
-    }
-
-    /**
-     * Pourquoi il est fermé : le motif de la fin de sa dernière période
-     * d'activité ; null s'il est actif, ou fermé avant la validation de sa
-     * société, quand il n'avait encore aucune période.
-     */
-    public function motifDeSaFermeture(): ?MotifFermeture
-    {
-        if (! $this->estFerme()) {
-            return null;
-        }
-
-        return PeriodeActivite::query()
-            ->where('magasin_id', $this->getKey())
-            ->orderByDesc('debut')
-            ->orderByDesc('id')
-            ->first()
-            ?->motif_fin;
+        return $this->motif_fermeture === MotifFermeture::Cession;
     }
 
     /**

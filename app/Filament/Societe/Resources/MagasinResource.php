@@ -20,8 +20,8 @@ use Illuminate\Database\Eloquent\Builder;
  * l'établissement principal indiqué et son état ; la création d'un magasin
  * (voir CreerMagasin), pour qui peut en créer ; et, pour qui gère les
  * magasins, chacun de ceux de sa portée (voir ModifierMagasin) : le
- * modifier, changer son SIRET, le fermer, le rouvrir, le céder, l'indiquer
- * comme établissement principal. Le magasin de démonstration se trouve sur
+ * modifier, changer son SIRET, le fermer, le rouvrir, le céder, ouvert ou
+ * fermé, l'indiquer comme établissement principal. Le magasin de démonstration se trouve sur
  * le tableau de bord. Un magasin ne se supprime jamais. La suspension d'un
  * magasin par l'éditeur se range à part de sa fermeture (suspendu_le) :
  * l'état la montre, et aucune réouverture ne la lève.
@@ -110,7 +110,7 @@ class MagasinResource extends RessourceDuPanneauSociete
      */
     public static function etat(Magasin $magasin): string
     {
-        $etat = match ($magasin->estFerme() ? $magasin->motifDeSaFermeture() : false) {
+        $etat = match ($magasin->estFerme() ? $magasin->motif_fermeture : false) {
             false => $magasin->motifDeLectureSeule() ?? 'Ouvert',
             MotifFermeture::Cession => 'Cédé',
             MotifFermeture::Cessation => 'Fermé : cessation d\'activité',

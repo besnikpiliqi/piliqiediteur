@@ -894,10 +894,10 @@ class MagasinResourceTest extends TestCase
 
     /**
      * Les gestes du cycle de vie ne s'offrent que selon le compte et l'état
-     * du magasin : fermer et céder un magasin ouvert, céder pour le seul
-     * propriétaire ; rouvrir un magasin fermé, jamais un magasin cédé, dont
-     * la fiche ne s'enregistre plus. Fermé depuis la fiche, le magasin le
-     * dit dans son état.
+     * du magasin : fermer un magasin ouvert ; le céder, ouvert ou déjà fermé
+     * (réponse M1 de l'éditeur), pour le seul propriétaire ; rouvrir un
+     * magasin fermé, jamais un magasin cédé, dont la fiche ne s'enregistre
+     * plus. Fermé depuis la fiche, le magasin le dit dans son état.
      */
     public function test_les_gestes_du_cycle_de_vie_s_offrent_selon_le_compte_et_l_etat_du_magasin(): void
     {
@@ -914,9 +914,12 @@ class MagasinResourceTest extends TestCase
             ->callAction('fermer', ['motif' => MotifFermeture::Temporaire->value, 'mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])
             ->assertNotified('Le magasin Ma Boutique est fermé.')
             ->assertActionHidden('fermer')
-            ->assertActionHidden('ceder')
+            ->assertActionVisible('ceder')
             ->assertActionVisible('rouvrir')
             ->assertSeeText('Fermé temporairement');
+        $this->ouvrirLaFiche($magasin, $administrateur)
+            ->assertActionHidden('ceder')
+            ->assertActionVisible('rouvrir');
         $this->ouvrirLaFiche($cede)
             ->callAction('ceder', ['confirmation' => 'Boutique cédée', 'mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])
             ->assertActionHidden('rouvrir')
@@ -929,6 +932,52 @@ class MagasinResourceTest extends TestCase
         $this->ouvrirLaFiche($magasin)
             ->callAction('rouvrir', ['mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])
             ->assertNotified('Le magasin Ma Boutique est rouvert.');
+        $this->assertSame(StatutMagasin::Actif, $magasin->fresh()->statut);
+    }
+
+    /**
+     * Un magasin fermé se cède depuis sa fiche, sans être rouvert : la
+     * fenêtre le dit, le magasin passe à « Cédé », et ni la réouverture ni
+     * une nouvelle cession ne s'offrent plus.
+     */
+    public function test_un_magasin_ferme_se_cede_depuis_sa_fiche(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->ouvrirLaFiche($magasin)->callAction('fermer', ['motif' => MotifFermeture::Cessation->value, 'mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE]);
+
+        $this->ouvrirLaFiche($magasin)
+            ->mountAction('ceder')
+            ->assertSeeText('le magasin, déjà fermé, ne se rouvrira plus, et il n\'est ni rouvert ni recontrôlé au répertoire Sirene pour être cédé.')
+            ->setActionData(['confirmation' => 'Ma Boutique', 'mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])
+            ->callMountedAction()
+            ->assertNotified('Le magasin Ma Boutique est cédé : la valeur de son stock sorti vous est remise dans vos notifications.')
+            ->assertActionHidden('ceder')
+            ->assertActionHidden('rouvrir')
+            ->assertSeeText('Cédé');
+
+        $this->assertSame(MotifFermeture::Cession, $magasin->fresh()->motif_fermeture);
+    }
+
+    /**
+     * Avant la validation de la société, la fiche ne propose jamais de céder
+     * le magasin ; fermé, elle propose de le rouvrir (réponse M2 de
+     * l'éditeur), et le dit : il ne vendra qu'une fois la société validée.
+     */
+    public function test_avant_la_validation_la_fiche_rouvre_un_magasin_ferme_sans_jamais_proposer_de_le_ceder(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
+
+        $this->ouvrirLaFiche($magasin)
+            ->assertActionHidden('ceder')
+            ->callAction('fermer', ['motif' => MotifFermeture::Temporaire->value, 'mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])
+            ->assertActionHidden('ceder')
+            ->mountAction('rouvrir')
+            ->assertSeeText('Votre société n\'étant pas encore validée, le magasin rouvert ne vend qu\'après sa validation, qui le met en activité avec vos autres magasins ouverts.')
+            ->setActionData(['mot_de_passe' => self::MOT_DE_PASSE_DU_PROPRIETAIRE])
+            ->callMountedAction()
+            ->assertNotified('Le magasin Ma Boutique est rouvert : il vendra une fois votre société validée.')
+            ->assertActionHidden('rouvrir');
+
         $this->assertSame(StatutMagasin::Actif, $magasin->fresh()->statut);
     }
 

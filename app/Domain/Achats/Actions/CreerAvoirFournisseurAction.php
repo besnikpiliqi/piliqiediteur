@@ -36,7 +36,11 @@ use LogicException;
  * facturation électronique de celui saisi ici.
  *
  * Son auteur, relu en base (voir LecteurDesDroits), doit pouvoir créer un
- * avoir fournisseur ; l'avoir l'enregistre comme auteur.
+ * avoir fournisseur et voir la facture d'achat qu'il crédite (voir
+ * FactureAchatPolicy::view()), comme un avoir client les factures qu'il
+ * corrige : sans « Factures d'achat : voir », ni ses lignes, ni son
+ * fournisseur ne s'ouvrent par un avoir ; l'avoir l'enregistre comme
+ * auteur.
  */
 class CreerAvoirFournisseurAction
 {
@@ -62,8 +66,10 @@ class CreerAvoirFournisseurAction
         $numeroFournisseur = self::numeroFournisseur($numeroFournisseur);
 
         return DB::transaction(function () use ($auteur, $factureAchat, $lignesSelectionnees, $motif, $numeroFournisseur) {
-            $compte = $this->lecteur->exiger($auteur, 'create', app(TenantContext::class)->magasin(), AvoirFournisseur::class);
+            $magasin = app(TenantContext::class)->magasin();
+            $compte = $this->lecteur->exiger($auteur, 'create', $magasin, AvoirFournisseur::class);
             $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->firstOrFail();
+            $this->lecteur->exiger($compte, 'view', $magasin, $factureAchat);
             $factureAchat->load('lignes');
 
             if ($factureAchat->statut !== StatutFactureAchat::Validee) {

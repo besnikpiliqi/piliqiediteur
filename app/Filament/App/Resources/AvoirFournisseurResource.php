@@ -82,7 +82,7 @@ class AvoirFournisseurResource extends Resource
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('factureAchat.numero')->label('Facture d\'achat créditée')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('factureAchat.fournisseur.nom')->label('Fournisseur')->rechercheSansAccents(),
-                Tables\Columns\TextColumn::make('numero_fournisseur')->label('N° fournisseur')->placeholder('—')->rechercheSansAccents()->toggleable(),
+                Tables\Columns\TextColumn::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->placeholder('—')->rechercheSansAccents()->toggleable(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('motif')->limit(40)->toggleable(),
                 Tables\Columns\TextColumn::make('source')->badge()->toggleable(),

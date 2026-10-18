@@ -228,6 +228,9 @@ class AvoirFournisseurResourceTest extends TestCase
         $this->assertSame([[(int) $premiere->lignes->sole()->id, 4]], $avoir->lignes->map(fn ($ligne): array => [(int) $ligne->ligne_achat_id, $ligne->quantite])->all());
         $this->assertSame([16, '16.2500'], [$cable->fresh()->stock_quantite, $cable->fresh()->cmup_ht]);
         $this->assertSame([10, 10], [$premiere->lignes->sole()->fresh()->quantite, $seconde->lignes->sole()->fresh()->quantite]);
+        Livewire::test(ListAvoirsFournisseur::class)
+            ->assertSee('N° de l\'avoir du fournisseur')
+            ->assertTableColumnStateSet('numero_fournisseur', 'AV-2026-0042', $avoir);
     }
 
     /**
@@ -381,6 +384,57 @@ class AvoirFournisseurResourceTest extends TestCase
 
         $this->assertSame(1, AvoirFournisseur::query()->count());
         $this->assertSame(3, $cable->fresh()->stock_quantite);
+    }
+
+    /**
+     * Un vendeur qui peut voir et créer les avoirs fournisseur, sans voir
+     * les factures d'achat : le menu ne lui offre pas le bouton, qui
+     * listerait les factures retournables, leurs fournisseurs et leurs
+     * lignes ; une demande forgée n'ouvre rien, et aucun avoir n'est créé.
+     */
+    public function test_sans_l_autorisation_de_voir_les_factures_d_achat_le_menu_n_offre_pas_le_bouton(): void
+    {
+        $magasin = $this->connecterLeProprietaire();
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $this->recevoir([[$cable, 5, '12.00']], Fournisseur::factory()->create(['nom' => 'Grossiste Confidentiel']));
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_CREER]));
+
+        Livewire::test(ListAvoirsFournisseur::class)
+            ->assertSuccessful()
+            ->assertActionHidden('creer_avoir_fournisseur')
+            ->call('mountAction', 'creer_avoir_fournisseur')
+            ->assertSet('mountedActions', [])
+            ->assertDontSee('Grossiste Confidentiel');
+
+        $this->assertSame(0, AvoirFournisseur::query()->count());
+        $this->assertSame(5, $cable->fresh()->stock_quantite);
+    }
+
+    /**
+     * Une ligne forgée dont l'identifiant est illisible n'est jamais
+     * cherchée en base, où PostgreSQL la refuserait par une erreur : à côté
+     * d'une vraie ligne du même produit, sa quantité est refusée par la
+     * validation, et aucun avoir n'est créé.
+     */
+    public function test_une_ligne_forgee_a_l_identifiant_illisible_est_refusee_par_la_validation(): void
+    {
+        $this->connecterLeProprietaire();
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir([[$cable, 5, '12.00']]);
+
+        $component = Livewire::test(ListAvoirsFournisseur::class)
+            ->mountAction('creer_avoir_fournisseur')
+            ->setActionData(['facture_achat_id' => $factureAchat->id, 'motif' => 'Requête forgée'])
+            ->set('mountedActionsData.0.lignes', [
+                'vraie' => ['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 1],
+                'forgee' => ['ligne_achat_id' => 'abc', 'quantite' => 1],
+            ])
+            ->callMountedAction();
+
+        $this->assertSame(['Le champ quantité à retourner doit être inférieur ou égal à 0.'], $component->errors()->get('mountedActionsData.0.lignes.forgee.quantite'));
+        $this->assertSame([], $component->errors()->get('mountedActionsData.0.lignes.vraie.quantite'));
+        $this->assertSame(0, AvoirFournisseur::query()->count());
+        $this->assertSame(5, $cable->fresh()->stock_quantite);
     }
 
     /**

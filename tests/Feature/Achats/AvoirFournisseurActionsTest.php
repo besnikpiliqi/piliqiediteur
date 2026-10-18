@@ -5,12 +5,15 @@ namespace Tests\Feature\Achats;
 use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\CreerFactureAchatAction;
 use App\Domain\Achats\Actions\EmettreAvoirFournisseurAction;
+use App\Domain\Achats\Actions\EnregistrerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Authorization\LecteurDesDroits;
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -20,10 +23,13 @@ use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\CategorieAudit;
+use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use InvalidArgumentException;
 use LogicException;
 use Tests\TestCase;
@@ -310,6 +316,31 @@ class AvoirFournisseurActionsTest extends TestCase
         app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchatA, [
             ['ligne_achat_id' => $factureAchatB->lignes->first()->id, 'quantite' => 1],
         ]);
+    }
+
+    /**
+     * Comme un avoir client les factures qu'il corrige, un avoir
+     * fournisseur exige de voir la facture d'achat qu'il crédite : un
+     * vendeur qui peut créer des avoirs fournisseur sans « Factures
+     * d'achat : voir » est refusé, même par une demande forgée, et rien
+     * n'est créé ni sorti du stock.
+     */
+    public function test_un_avoir_fournisseur_exige_de_voir_la_facture_d_achat_creditee(): void
+    {
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->receptionnerAchat(Fournisseur::factory()->create(), $produit, 5);
+        $vendeur = $this->membre(app(TenantContext::class)->magasin(), RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_FOURNISSEUR_VIEW, PermissionRegistry::AVOIR_FOURNISSEUR_CREER]);
+
+        $this->assertThrows(
+            fn () => app(EnregistrerAvoirFournisseurAction::class)->handle($vendeur, $factureAchat, [
+                ['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 2],
+            ], 'Requête forgée', 'AV-2026-0017', (string) Str::uuid()),
+            AuthorizationException::class,
+            LecteurDesDroits::REFUS,
+        );
+
+        $this->assertSame(0, AvoirFournisseur::query()->count());
+        $this->assertSame(5, $produit->fresh()->stock_quantite);
     }
 
     public function test_un_second_avoir_fournisseur_peut_retourner_le_reliquat(): void

@@ -252,8 +252,10 @@ class FactureAchatResource extends Resource
      * avertissement le réclame, sans refuser l'avoir, puisqu'il servira à
      * rapprocher celui que le fournisseur enverra par la plateforme de
      * facturation électronique. La fenêtre porte le jeton de la demande
-     * (R3). Le bouton n'apparaît qu'à qui peut créer un avoir fournisseur,
-     * jamais dans un magasin en lecture seule (voir ControleDesDroits).
+     * (R3). Le bouton n'apparaît qu'à qui peut créer un avoir fournisseur et
+     * voir la facture d'achat, ou depuis le menu les factures d'achat (voir
+     * peutCreerUnAvoirFournisseur()), jamais dans un magasin en lecture
+     * seule (voir ControleDesDroits).
      *
      * @template TAction of MountableAction
      *
@@ -314,9 +316,20 @@ class FactureAchatResource extends Resource
         };
     }
 
+    /**
+     * Le bouton ne s'offre qu'à qui peut créer un avoir fournisseur et voir
+     * la facture d'achat qu'il crédite : depuis le menu, où il liste les
+     * factures retournables, leurs fournisseurs et leurs lignes, à qui voit
+     * les factures d'achat (voir CreerAvoirFournisseurAction, qui le
+     * revérifie sur la facture choisie).
+     */
     private static function peutCreerUnAvoirFournisseur(?Model $record): bool
     {
-        if (! auth()->user()->can('create', AvoirFournisseur::class)) {
+        $utilisateur = auth()->user();
+        $factureAchat = self::factureDuRetour($record);
+
+        if (! $utilisateur->can('create', AvoirFournisseur::class)
+            || ! ($factureAchat === null ? $utilisateur->can('viewAny', FactureAchat::class) : $utilisateur->can('view', $factureAchat))) {
             return false;
         }
 
@@ -361,7 +374,7 @@ class FactureAchatResource extends Resource
                         ->label('Produit / description')
                         ->disabled()
                         ->dehydrated(false),
-                    self::champQuantiteRetournee('Quantité à retourner', fn (Get $get): int => LigneAchat::find($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0)
+                    self::champQuantiteRetournee('Quantité à retourner', fn (Get $get): int => self::ligneAchat($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0)
                         ->rule(self::regleStockDuProduitRetourne()),
                 ])
                 ->columns(3)
@@ -433,6 +446,16 @@ class FactureAchatResource extends Resource
         return self::estUnIdentifiant($identifiant) ? FactureAchat::query()->retournables()->with('fournisseur')->find((int) $identifiant) : null;
     }
 
+    /**
+     * La ligne d'achat du magasin que désigne une ligne du répéteur, s'il
+     * en désigne une ; un identifiant illisible n'est jamais cherché en
+     * base, et la quantité de sa ligne est donc plafonnée à zéro.
+     */
+    private static function ligneAchat(mixed $identifiant): ?LigneAchat
+    {
+        return self::estUnIdentifiant($identifiant) ? LigneAchat::query()->with('produit')->find((int) $identifiant) : null;
+    }
+
     private static function estUnIdentifiant(mixed $valeur): bool
     {
         return (is_int($valeur) || is_string($valeur)) && filter_var($valeur, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) !== false;
@@ -491,25 +514,28 @@ class FactureAchatResource extends Resource
     /**
      * Deux lignes du même produit se partagent son stock : leur total ne
      * peut pas le dépasser (voir AvoirFournisseur::verifierQueLeStockSuffit(),
-     * qui le revérifie à l'enregistrement).
+     * qui le revérifie à l'enregistrement). Une ligne dont l'identifiant est
+     * illisible n'est jamais cherchée en base : sa quantité, plafonnée à
+     * zéro, est déjà refusée.
      */
     private static function regleStockDuProduitRetourne(): Closure
     {
         return fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
-            $produit = LigneAchat::query()->find($get('ligne_achat_id'))?->produit;
+            $produit = self::ligneAchat($get('ligne_achat_id'))?->produit;
 
             if ($produit === null || ! $produit->suivi_stock) {
                 return;
             }
 
-            $lignes = collect($get('../../lignes') ?? []);
+            $lignes = collect($get('../../lignes') ?? [])
+                ->filter(fn (mixed $ligne): bool => is_array($ligne) && self::estUnIdentifiant($ligne['ligne_achat_id'] ?? null));
             $lignesDuProduit = LigneAchat::query()
-                ->whereIn('id', $lignes->pluck('ligne_achat_id')->filter())
+                ->whereIn('id', $lignes->map(fn (array $ligne): int => (int) $ligne['ligne_achat_id'])->values())
                 ->where('produit_id', $produit->id)
                 ->pluck('id')
                 ->all();
             $quantite = $lignes
-                ->filter(fn (array $ligne): bool => in_array((int) ($ligne['ligne_achat_id'] ?? 0), $lignesDuProduit, true))
+                ->filter(fn (array $ligne): bool => in_array((int) $ligne['ligne_achat_id'], $lignesDuProduit, true))
                 ->sum(fn (array $ligne): int => (int) ($ligne['quantite'] ?? 0));
 
             if ($quantite > $produit->stock_quantite) {

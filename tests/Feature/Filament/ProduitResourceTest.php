@@ -143,7 +143,7 @@ class ProduitResourceTest extends TestCase
             ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '2')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '40.00')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '33.33')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '33.333333')
             ->assertSee('80,00 €')
             ->assertDontSee('79,99 €')
             ->call('create')
@@ -154,7 +154,7 @@ class ProduitResourceTest extends TestCase
 
         $this->assertSame('80.00', $ligne->montant_ttc);
         $this->assertSame('40.00', $ligne->prix_unitaire_ttc);
-        $this->assertSame('33.33', $ligne->prix_unitaire_ht);
+        $this->assertSame('33.333333', $ligne->prix_unitaire_ht);
         $this->assertSame('80.00', $facture->total_ttc);
         $this->assertSame('66.67', $facture->total_ht);
         $this->assertSame('13.33', $facture->total_tva);

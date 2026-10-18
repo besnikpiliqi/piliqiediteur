@@ -4,23 +4,25 @@ namespace App\Domain\Facturation\Services;
 
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Barryvdh\DomPDF\PDF as PdfDocument;
 
 /**
  * Même présentation que la facture (voir FacturePdfGenerator), depuis les
  * lignes et les totaux enregistrés du devis, jamais depuis l'état courant
- * du catalogue. Un devis n'est pas signé au registre fiscal : il imprime
- * le magasin tel qu'il est aujourd'hui (voir Devis::emetteur()).
+ * du catalogue, sur la même page A4 numérotée (voir MiseEnPageA4). Un
+ * devis n'est pas signé au registre fiscal : il imprime le magasin tel
+ * qu'il est aujourd'hui (voir Devis::emetteur()).
  */
 class DevisPdfGenerator
 {
+    public function __construct(private readonly MiseEnPageA4 $miseEnPage) {}
+
     /**
      * @throws VenteNonAutoriseeException
      */
     public function generer(Devis $devis): PdfDocument
     {
-        return Pdf::loadHTML($this->html($devis));
+        return $this->miseEnPage->pdf($this->html($devis));
     }
 
     /**
@@ -34,7 +36,9 @@ class DevisPdfGenerator
         $devis->magasin->verifierQuIlPeutImprimer();
         $devis->loadMissing(['client', 'lignes', 'magasin']);
 
-        return view('devis.pdf', ['devis' => $devis, 'emetteur' => $devis->emetteur()])->render();
+        $emetteur = $devis->emetteur();
+
+        return view('devis.pdf', ['devis' => $devis, 'emetteur' => $emetteur, 'pied' => PiedDePage::pour($devis, $emetteur)])->render();
     }
 
     public function nomFichier(Devis $devis): string

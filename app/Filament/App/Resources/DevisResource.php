@@ -71,7 +71,7 @@ class DevisResource extends Resource
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE))),
                 DatePicker::make('date_validite')->label('Valide jusqu\'au'),
                 self::champNatureDeLOperation(),
-                Textarea::make('conditions_paiement')->label('Conditions de paiement')->columnSpanFull(),
+                Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(500)->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
 

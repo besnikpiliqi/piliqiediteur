@@ -179,6 +179,31 @@ class FactureResourceTest extends TestCase
      * Une vente choisit toujours un produit existant (ou un service, par son
      * bouton), jamais une ligne libre.
      */
+    /**
+     * Les conditions de paiement s'impriment dans le pied de chaque page du
+     * PDF : 500 caractères au plus, comme les mentions du magasin, pour que
+     * le pied tienne toujours au bas de la page (point 4).
+     */
+    public function test_des_conditions_de_paiement_de_plus_de_500_caracteres_sont_refusees(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
+
+        Livewire::test(CreateFacture::class)
+            ->fillForm([
+                'client_id' => Client::factory()->create()->id,
+                'conditions_paiement' => str_repeat('a', 501),
+                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 0]],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['conditions_paiement' => 'max']);
+
+        $this->assertSame(0, Facture::query()->count());
+    }
+
     public function test_une_ligne_sans_produit_est_refusee(): void
     {
         $proprietaire = User::factory()->create();
@@ -706,8 +731,9 @@ class FactureResourceTest extends TestCase
      * à 10 € sans TVA, une coque à 10 € TTC (20 %). Le HT du taux de 20 %,
      * 90,00 ÷ 1,2 = 75,00 €, se répartit 66,67 € et 8,33 € : le total HT
      * fait 85,00 € (jamais 84,99 €), la TVA 15,00 €, et HT + TVA = TTC. La
-     * fiche et le PDF montrent le HT et la TVA de chaque ligne, et le
-     * récapitulatif par taux.
+     * fiche montre le HT et la TVA de chaque ligne ; le PDF de ce ticket,
+     * le TTC de chaque ligne (2 x 40,00 € = 80,00 €, P3) ; tous deux, le
+     * récapitulatif par taux et les totaux.
      */
     public function test_la_facture_du_magasin_totalise_85_ht_et_le_montre_ligne_par_ligne(): void
     {
@@ -744,7 +770,7 @@ class FactureResourceTest extends TestCase
             ->assertDontSee('84,99');
 
         $pdf = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
-        $this->assertStringContainsString('66,67', $pdf);
+        $this->assertStringContainsString('<td class="montant">80,00 €</td>', $pdf);
         $this->assertStringContainsString('75,00', $pdf);
         $this->assertStringContainsString('85,00', $pdf);
         $this->assertStringNotContainsString('84,99', $pdf);
@@ -779,6 +805,29 @@ class FactureResourceTest extends TestCase
             ->assertSee('13,33')
             ->assertSee('85,00')
             ->assertSee('Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence.');
+    }
+
+    /**
+     * La fiche montre le PU HT de chaque ligne tel qu'il est enregistré,
+     * avec ses décimales utiles (Q1-b) : 0,833333 € pour un article à
+     * 1,00 € TTC à 20 %, 100,00 € pour un écran à 120,00 € TTC.
+     */
+    public function test_la_fiche_montre_le_pu_ht_avec_ses_decimales_utiles(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $vis = Produit::factory()->create(['prix_vente_ttc' => 1, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ecran = Produit::factory()->create(['prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $facture = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [
+            ['produit_id' => $vis->id, 'quantite' => 1000],
+            ['produit_id' => $ecran->id, 'quantite' => 1],
+        ]);
+
+        Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()])
+            ->assertSeeInOrder(['0,833333 €', '833,33', '100,00 €', '100,00']);
     }
 
     /**
@@ -868,12 +917,12 @@ class FactureResourceTest extends TestCase
         $component = Livewire::test(CreateFacture::class)->fillForm(['client_id' => $client->id]);
         $cle = array_key_first($component->get('data.lignes'));
 
-        // 10,05 € TTC / 1,20 = 8,375 -> 8,38 € HT.
+        // 10,05 € TTC / 1,20 = 8,375 € HT, au millionième d'euro (Q1-b).
         $component
             ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '3')
             ->set("data.lignes.{$cle}.prix_unitaire_ttc", '10.05')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '8.38')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '8.375')
             ->assertSee('30,15 €')
             ->call('create')
             ->assertHasNoFormErrors();
@@ -1283,7 +1332,7 @@ class FactureResourceTest extends TestCase
 
         $component
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '40.00')
-            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '33.33')
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '33.333333')
             ->call('save')
             ->assertHasNoFormErrors();
 

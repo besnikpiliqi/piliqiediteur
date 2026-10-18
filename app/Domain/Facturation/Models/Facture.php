@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Concerns\HorodateSonEmission;
 use App\Domain\CaisseSecurisee\Concerns\ProtegeLesDonneesValidees;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
+use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
@@ -30,6 +31,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\CopieClient;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\PreuvesRequises;
+use App\Domain\Facturation\Services\ReglementsALEmission;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
@@ -504,6 +506,22 @@ class Facture extends Model implements DocumentEnvoyable
             ->filter()
             ->values()
             ->all();
+    }
+
+    /**
+     * Ce qui a réglé la facture à son émission, relu dans son contenu
+     * signé, que son PDF imprime (Q5) ; rien pour un brouillon. Ce qu'elle
+     * reçoit ensuite se lit dans ses imputations (voir montantPaye() et
+     * montantCrediteParAvoir()).
+     *
+     * @throws DocumentSansEnregistrementSigneException
+     */
+    public function reglementsALEmission(): ReglementsALEmission
+    {
+        return ReglementsALEmission::depuisLeContexte(
+            $this->numero === null ? null : $this->contexteSigne(),
+            app(CalculateurLigne::class)->enCentiemes($this->total_ttc),
+        );
     }
 
     public function montantRestant(): float

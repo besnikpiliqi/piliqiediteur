@@ -19,6 +19,7 @@ use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AvoirPdfGeneratorTest extends TestCase
@@ -220,6 +221,78 @@ class AvoirPdfGeneratorTest extends TestCase
 
         $this->assertSame(12.0, $avoir->fresh()->montantNonAlloue());
         $this->assertStringNotContainsString('bon d&#039;avoir', $this->rendu($avoir));
+    }
+
+    /**
+     * Le PDF d'un avoir est, comme celui d'une facture, une vraie page A4
+     * en portrait, numérotée (point 4).
+     */
+    public function test_le_pdf_d_un_avoir_est_une_page_a4_numerotee(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $client = Client::factory()->professionnel()->create();
+        $avoir = $this->crediter($client, $this->emettreUneFacture($client));
+
+        $pages = $this->pagesDuPdf(app(AvoirPdfGenerator::class)->generer($avoir)->output());
+
+        $this->assertSame(['0.000 0.000 595.280 841.890'], array_column($pages, 'format'));
+        $this->assertContains('Page 1 sur 1', array_column($pages[0]['textes'], 'texte'));
+    }
+
+    /**
+     * Un avoir sur une facture imprime, comme elle, le PU HT et le total HT
+     * de chaque ligne ; un avoir sur un ticket, le PU TTC et le total TTC.
+     * Chacun indique la facture ou le ticket de chaque ligne, son numéro
+     * entier sur une seule ligne, comme la référence du produit (point 3).
+     */
+    public function test_un_avoir_sur_facture_imprime_les_colonnes_ht_et_un_avoir_sur_ticket_les_colonnes_ttc(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'MABOUT']));
+        $produit = Produit::factory()->create(['reference' => 'TAS-01', 'nom' => 'Tasse', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $professionnel = Client::factory()->professionnel()->create();
+        $particulier = Client::factory()->create();
+        $vendre = fn (Client $client): Facture => app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]]));
+
+        $surFacture = $this->tableauDesLignes($this->crediter($professionnel, $vendre($professionnel)));
+        $surTicket = $this->tableauDesLignes($this->crediter($particulier, $vendre($particulier)));
+
+        $this->assertStringContainsString('<tr><th>Référence</th><th>Désignation</th><th>Facture d\'origine</th><th class="montant">Qté</th><th class="montant">PU HT</th><th class="montant">Taux</th><th class="montant">Total HT</th></tr>', $surFacture);
+        $this->assertStringContainsString('<tr><td class="reference">TAS-01</td><td>Tasse</td><td class="numero">FAC-MABOUT-2026-000001</td><td class="montant">1</td><td class="montant">10,00 €</td><td class="montant">20 %</td><td class="montant">10,00 €</td></tr>', $surFacture);
+        $this->assertStringContainsString('<tr><th>Référence</th><th>Désignation</th><th>Facture d\'origine</th><th class="montant">Qté</th><th class="montant">PU TTC</th><th class="montant">Taux</th><th class="montant">Total TTC</th></tr>', $surTicket);
+        $this->assertStringContainsString('<tr><td class="reference">TAS-01</td><td>Tasse</td><td class="numero">TK-MABOUT-2026-000001</td><td class="montant">1</td><td class="montant">12,00 €</td><td class="montant">20 %</td><td class="montant">12,00 €</td></tr>', $surTicket);
+    }
+
+    /**
+     * Le pied de page de l'avoir d'un client comptoir porte l'identité de
+     * la société, les mentions du ticket qu'il rectifie et, en dernier, la
+     * mention de son bon d'avoir ; son en-tête ne garde que le magasin
+     * (point 4).
+     */
+    public function test_l_identite_de_la_societe_et_les_mentions_de_l_avoir_sont_dans_le_pied_de_page(): void
+    {
+        app(TenantContext::class)->set($this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'raison_sociale' => 'Martin et Fils', 'forme_juridique' => FormeJuridique::Sas, 'option_debits_tva' => true]));
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+
+        $html = $this->compacte($this->rendu($this->crediter($comptoir, $ticket)));
+
+        preg_match_all('#<div class="(?:identite|pied)">(.*?)</div>#', Str::betweenFirst($html, '<div id="pied-de-page">', '</div></div>').'</div>', $pied);
+        $this->assertSame([
+            'Martin et Fils SAS',
+            'Catégorie de l\'opération : Livraison de biens',
+            'Option pour le paiement de la taxe d\'après les débits',
+            'Ce n° vaut bon d\'avoir de 12,00 € à présenter lors d\'un prochain achat.',
+        ], array_map(fn (string $texte): string => html_entity_decode($texte, ENT_QUOTES), array_map(fn (string $texte): string => Str::before($texte, ' · '), $pied[1])));
+        $this->assertStringNotContainsString('SIREN', Str::betweenFirst($html, '<table class="en-tete">', '</table>'));
+    }
+
+    /**
+     * Le tableau des lignes du PDF de l'avoir, sans les blancs autour de
+     * ses balises.
+     */
+    private function tableauDesLignes(Avoir $avoir): string
+    {
+        return Str::betweenFirst($this->compacte($this->rendu($avoir)), '<table class="lignes">', '</table>');
     }
 
     private function emettreUneFacture(Client $client): Facture

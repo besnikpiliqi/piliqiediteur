@@ -15,7 +15,10 @@ use Illuminate\Support\Str;
  * fiscaux (régime de TVA, option pour les débits), et l'établissement qui
  * vend : le nom du magasin, son SIRET, son adresse, ses coordonnées et les
  * mentions de ses factures entre professionnels (voir IdentiteSociete,
- * ParametresFiscauxSociete et ParametresFactures).
+ * ParametresFiscauxSociete et ParametresFactures). L'établissement
+ * s'imprime en tête du document (voir lignesDeLEtablissement()),
+ * l'identité de la société dans le pied de chaque page (voir
+ * lignesDeLaSociete() et PiedDePage).
  *
  * Un ticket, une facture ou un avoir signe son émetteur au registre
  * fiscal à son émission (voir ContenuFiscal) et l'imprime ensuite tel
@@ -279,18 +282,36 @@ final readonly class Emetteur
     }
 
     /**
-     * Les lignes imprimées sous le nom du magasin, sans ce qui n'est pas
-     * renseigné : la dénomination et la forme juridique, « à capital
-     * variable » le cas échéant, suivies du capital social quand il est
-     * renseigné (H2) ; l'adresse du magasin, fermée par le pays, et son
-     * SIRET ; le siège social (l'adresse de l'entreprise d'un entrepreneur
-     * individuel), sauf s'il est à l'adresse du magasin, qui le dit alors
-     * (S3) ; le SIREN, puis l'immatriculation (K7) ; le n° de TVA ; le
-     * téléphone et l'adresse e-mail.
+     * L'établissement qui vend, imprimé en tête de chaque document sous le
+     * nom du magasin, sans ce qui n'est pas renseigné : son adresse, fermée
+     * par le pays, son SIRET, puis son téléphone et son adresse e-mail.
      *
      * @return list<string>
      */
-    public function lignesDIdentite(): array
+    public function lignesDeLEtablissement(): array
+    {
+        $adresse = self::lignesDAdresse($this->adresse, $this->complementAdresse, $this->codePostal, $this->ville);
+
+        return array_values(array_filter([
+            ...$adresse,
+            $adresse !== [] ? $this->pays : null,
+            filled($this->siret) ? "SIRET : {$this->siret}" : null,
+            implode(' · ', array_filter([filled($this->telephone) ? "Tél. {$this->telephone}" : null, $this->email], filled(...))),
+        ], filled(...)));
+    }
+
+    /**
+     * L'identité légale de la société, imprimée dans le pied de chaque page
+     * de chaque document, sans ce qui n'est pas renseigné : la dénomination
+     * et la forme juridique, « à capital variable » le cas échéant, suivies
+     * du capital social quand il est renseigné (H2) ; le siège social
+     * (l'adresse de l'entreprise d'un entrepreneur individuel), sauf s'il
+     * est à l'adresse du magasin, ce qui est alors dit sans la répéter
+     * (S3) ; le SIREN, puis l'immatriculation (K7) ; le n° de TVA.
+     *
+     * @return list<string>
+     */
+    public function lignesDeLaSociete(): array
     {
         $adresse = self::lignesDAdresse($this->adresse, $this->complementAdresse, $this->codePostal, $this->ville);
         $siege = self::lignesDAdresse($this->siegeAdresse, $this->siegeComplementAdresse, $this->siegeCodePostal, $this->siegeVille);
@@ -302,9 +323,6 @@ final readonly class Emetteur
 
         return array_values(array_filter([
             implode(' ', array_filter([$this->denominationImprimee(), $this->formeJuridique, $capital], filled(...))),
-            ...$adresse,
-            $adresse !== [] ? $this->pays : null,
-            filled($this->siret) ? "SIRET : {$this->siret}" : null,
             match (true) {
                 $siegeAuMagasin => "{$libelleDuSiege} et établissement",
                 $siege !== [] => "{$libelleDuSiege} : ".implode(', ', $siege),
@@ -313,7 +331,6 @@ final readonly class Emetteur
             filled($this->siren) ? "SIREN : {$this->siren}" : null,
             $this->immatriculation,
             filled($this->numeroTva) ? "TVA intracommunautaire : {$this->numeroTva}" : null,
-            implode(' · ', array_filter([filled($this->telephone) ? "Tél. {$this->telephone}" : null, $this->email], filled(...))),
         ], filled(...)));
     }
 

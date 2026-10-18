@@ -41,7 +41,7 @@ class LigneDevis extends Model
 
     protected $casts = [
         'quantite' => 'integer',
-        'prix_unitaire_ht' => 'decimal:2',
+        'prix_unitaire_ht' => 'decimal:6',
         'prix_unitaire_ttc' => 'decimal:2',
         'nature' => NatureLigne::class,
         'taux_tva' => 'decimal:2',

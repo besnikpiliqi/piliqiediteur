@@ -5,27 +5,31 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Barryvdh\DomPDF\PDF as PdfDocument;
 
 /**
  * Génère toujours depuis les données déjà figées de la facture (numéro,
- * client, lignes, totaux) et depuis l'émetteur que son contenu signé a
- * retenu (voir FigeSonEmetteur) -- jamais depuis l'état courant du
- * catalogue, de la fiche du client ou du magasin. Une facture émise
- * aujourd'hui doit produire le même document dans un an, même si les
- * produits référencés, son client ou l'identité du magasin ont changé
- * entre-temps. Un brouillon imprime le magasin tel qu'il est.
+ * client, lignes, totaux), depuis l'émetteur et les règlements que son
+ * contenu signé a retenus (voir FigeSonEmetteur et ReglementsALEmission)
+ * -- jamais depuis l'état courant du catalogue, de la fiche du client, du
+ * magasin ou des paiements reçus depuis. Une facture émise aujourd'hui
+ * doit produire le même document dans un an, même si les produits
+ * référencés, son client ou l'identité du magasin ont changé entre-temps.
+ * Un brouillon imprime le magasin tel qu'il est. Le document est une page
+ * A4 numérotée (voir MiseEnPageA4), avec l'identité de la société et les
+ * mentions dans le pied de chaque page (voir PiedDePage).
  */
 class FacturePdfGenerator
 {
+    public function __construct(private readonly MiseEnPageA4 $miseEnPage) {}
+
     /**
      * @throws DocumentSansEnregistrementSigneException
      * @throws VenteNonAutoriseeException
      */
     public function generer(Facture $facture): PdfDocument
     {
-        return Pdf::loadHTML($this->html($facture));
+        return $this->miseEnPage->pdf($this->html($facture));
     }
 
     /**
@@ -42,7 +46,14 @@ class FacturePdfGenerator
         $facture->magasin->verifierQuIlPeutImprimer();
         $facture->loadMissing(['client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir']);
 
-        return view('factures.pdf', ['facture' => $facture, 'emetteur' => $facture->emetteur()])->render();
+        $emetteur = $facture->emetteur();
+
+        return view('factures.pdf', [
+            'facture' => $facture,
+            'emetteur' => $emetteur,
+            'pied' => PiedDePage::pour($facture, $emetteur),
+            'reglements' => $facture->reglementsALEmission(),
+        ])->render();
     }
 
     public function nomFichier(Facture $facture): string

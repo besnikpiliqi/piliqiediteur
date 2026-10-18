@@ -634,6 +634,38 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Les pages d'un PDF produit par dompdf, dans leur ordre, lues sans
+     * aucun outil externe : le format de chacune (sa MediaBox, en points),
+     * et chaque texte qu'elle imprime, avec sa position en points depuis le
+     * coin bas gauche de la page. Dompdf écrit chaque morceau de ligne par
+     * un opérateur « BT x y Td … [(texte)] TJ ET », le texte en UTF-16 dans
+     * un flux compressé.
+     *
+     * @return list<array{format: string, textes: list<array{x: float, y: float, texte: string}>}>
+     */
+    protected function pagesDuPdf(string $pdf): array
+    {
+        preg_match_all('/<< \/Type \/Page\s(.*?)>>/s', $pdf, $pages);
+
+        return array_map(function (string $page) use ($pdf): array {
+            preg_match('/\/MediaBox \[([^\]]+)\]/', $page, $format);
+            preg_match('/\/Contents (\d+) 0 R/', $page, $contenu);
+            preg_match('/\n'.$contenu[1].' 0 obj\s*<<(.*?)>>\s*stream\r?\n(.*?)\r?\nendstream/s', $pdf, $flux);
+            $operateurs = str_contains($flux[1], '/FlateDecode') ? gzuncompress($flux[2]) : $flux[2];
+            preg_match_all('/BT ([-\d.]+) ([-\d.]+) Td \/F\d+ [\d.]+ Tf\s+\[\(((?:\\\\.|[^\\\\)])*)\)\] TJ ET/s', $operateurs, $textes, PREG_SET_ORDER);
+
+            return [
+                'format' => $format[1],
+                'textes' => array_map(fn (array $texte): array => [
+                    'x' => (float) $texte[1],
+                    'y' => (float) $texte[2],
+                    'texte' => mb_convert_encoding((string) preg_replace('/\\\\(.)/s', '$1', $texte[3]), 'UTF-8', 'UTF-16BE'),
+                ], $textes),
+            ];
+        }, $pages[1]);
+    }
+
+    /**
      * Complète l'identité légale de la société du magasin, comme son
      * propriétaire dans Administration de la société > Identité : il peut
      * alors émettre des factures à des professionnels (voir

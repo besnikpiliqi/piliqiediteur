@@ -144,7 +144,7 @@ class NatureOperationTest extends TestCase
         $ligne = $facture->lignes->sole();
         $this->assertSame([StatutFacture::Emise, 'FAC-LYON1-2026-000001'], [$facture->statut, $facture->numero]);
         $this->assertSame(['833.33', '0.00', '833.33'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
-        $this->assertSame(['0.00', '20.00', '1.00', '0.83'], [$ligne->taux_tva, $ligne->taux_tva_du_prix, $ligne->prix_unitaire_ttc, $ligne->prix_unitaire_ht]);
+        $this->assertSame(['0.00', '20.00', '1.00', '0.833333'], [$ligne->taux_tva, $ligne->taux_tva_du_prix, $ligne->prix_unitaire_ttc, $ligne->prix_unitaire_ht]);
         $this->assertSame(TransportPar::Magasin, $facture->transport_par);
         $this->assertStringContainsString('Exonération de TVA, article 262 I du CGI', $this->pdf($facture));
         $this->assertStringContainsString('New York', $this->pdf($facture));
@@ -152,13 +152,14 @@ class NatureOperationTest extends TestCase
     }
 
     /**
-     * Le PDF d'un export à un professionnel imprime, à côté du taux de 0 %,
-     * le prix TTC du catalogue et la TVA qui en est retirée, que cite sa
-     * note de calcul : 3 x 7,00 € ÷ 1,20 = 17,50 € HT, quand 3 x 5,83 €
-     * font 17,49 €. Les frais de port, saisis sans TVA, n'ont ni l'un ni
-     * l'autre.
+     * Le PDF d'un export à un professionnel, qui se paie hors taxe,
+     * n'imprime pour chaque ligne que son PU HT, au millionième d'euro, et
+     * son total HT, au taux de 0 % (point 3, Q1-b) : 3 x 7,00 € ÷ 1,20 =
+     * 17,50 € HT, et 3 x 5,833333 € retombe sur ces 17,50 € ; les frais de
+     * port, saisis sans TVA, à 15,00 €. Ni « Prix catalogue TTC » ni « TVA
+     * retirée », que le PDF n'a plus, et sa note de calcul n'en cite aucun.
      */
-    public function test_le_pdf_d_un_export_a_un_professionnel_imprime_le_prix_catalogue_et_la_tva_retiree(): void
+    public function test_le_pdf_d_un_export_a_un_professionnel_n_imprime_que_le_pu_ht_et_le_total_ht(): void
     {
         $this->magasin();
         $port = Service::factory()->fraisAccessoires()->create(['nom' => 'Frais de port']);
@@ -170,11 +171,13 @@ class NatureOperationTest extends TestCase
 
         $pdf = $this->pdf($facture);
         $this->assertSame(['32.50', '0.00', '32.50'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
-        $this->assertMatchesRegularExpression('#<th class="montant">PU HT</th>\s*<th class="montant">Prix catalogue TTC</th>\s*<th class="montant">TVA retirée</th>\s*<th class="montant">Taux TVA</th>#', $pdf);
-        $this->assertMatchesRegularExpression('#<td class="montant">3</td>\s*<td class="montant">5,83 €</td>\s*<td class="montant">7,00 €</td>\s*<td class="montant">20 %</td>\s*<td class="montant">0 %</td>\s*<td class="montant">17,50 €</td>#', $pdf);
-        $this->assertMatchesRegularExpression('#<td class="montant">1</td>\s*<td class="montant">15,00 €</td>\s*<td class="montant">—</td>\s*<td class="montant">—</td>\s*<td class="montant">0 %</td>\s*<td class="montant">15,00 €</td>#', $pdf);
+        $this->assertMatchesRegularExpression('#<th class="montant">Qté</th>\s*<th class="montant">PU HT</th>\s*<th class="montant">Taux</th>\s*<th class="montant">Total HT</th>#', $pdf);
+        $this->assertMatchesRegularExpression('#<td class="montant">3</td>\s*<td class="montant">5,833333 €</td>\s*<td class="montant">0 %</td>\s*<td class="montant">17,50 €</td>#', $pdf);
+        $this->assertMatchesRegularExpression('#<td class="montant">1</td>\s*<td class="montant">15,00 €</td>\s*<td class="montant">0 %</td>\s*<td class="montant">15,00 €</td>#', $pdf);
         $this->assertStringContainsString('HT de chaque taux = TTC du catalogue ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes', $pdf);
-        $this->assertStringNotContainsString('PU TTC', $pdf);
+        foreach (['PU TTC', 'Prix catalogue TTC', 'TVA retirée'] as $colonneAbsente) {
+            $this->assertStringNotContainsString($colonneAbsente, $pdf);
+        }
     }
 
     /**
@@ -183,8 +186,9 @@ class NatureOperationTest extends TestCase
      * = 125,00 € HT pour un professionnel, arrondi une fois, et non 3 x
      * 41,67 € = 125,01 €. Le vendeur, qui ne fixe aucun prix, le vend ainsi,
      * son prix laissé vide comme celui que l'écran montre, 41,67 € ; il ne
-     * met pas un autre prix sans TVA. Le PDF imprime, comme pour le
-     * produit, le prix catalogue TTC et la TVA retirée.
+     * met pas un autre prix sans TVA. La ligne enregistre et le PDF imprime,
+     * comme pour le produit, le PU HT au millionième d'euro, 41,666667 €
+     * (Q1-b), et le total HT.
      */
     public function test_un_service_a_son_prix_de_reference_se_calcule_sans_tva_francaise_comme_un_produit(): void
     {
@@ -199,19 +203,19 @@ class NatureOperationTest extends TestCase
 
         foreach ([$prixVide, $prixMontre] as $facture) {
             $ligne = $facture->lignes->sole();
-            $this->assertSame(['50.00', '20.00', '41.67', '0.00', '125.00'], [$ligne->prix_unitaire_ttc, $ligne->taux_tva_du_prix, $ligne->prix_unitaire_ht, $ligne->taux_tva, $ligne->montant_ht]);
+            $this->assertSame(['50.00', '20.00', '41.666667', '0.00', '125.00'], [$ligne->prix_unitaire_ttc, $ligne->taux_tva_du_prix, $ligne->prix_unitaire_ht, $ligne->taux_tva, $ligne->montant_ht]);
             $this->assertSame(['125.00', '0.00', '125.00'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
         }
         $this->assertSame('125.00', $export->total_ht);
         $this->assertThrows(fn () => $prestation(['prix_unitaire_ttc' => '40.00']), AuthorizationException::class, 'Vendre « Conseil » à 40,00 € au lieu de 41,67 €, son prix de référence, '.DerogationsDePrix::AUTORISATION.'.');
-        $this->assertMatchesRegularExpression('#<td class="montant">3</td>\s*<td class="montant">41,67 €</td>\s*<td class="montant">50,00 €</td>\s*<td class="montant">20 %</td>\s*<td class="montant">0 %</td>\s*<td class="montant">125,00 €</td>#', $this->pdf(app(EmettreFactureAction::class)->handle(self::auteur(), $prixVide)));
+        $this->assertMatchesRegularExpression('#<td class="montant">3</td>\s*<td class="montant">41,666667 €</td>\s*<td class="montant">0 %</td>\s*<td class="montant">125,00 €</td>#', $this->pdf(app(EmettreFactureAction::class)->handle(self::auteur(), $prixVide)));
     }
 
     /**
      * Un particulier qui achète à l'export paie, comme un professionnel, le
      * HT de son panier : 1 000 articles à 1,00 € TTC à 20 % font 1 000 ÷
-     * 1,20 = 833,33 €, sans TVA ; le PU HT imprimé, 0,83 €, n'en est que
-     * la conversion au centime.
+     * 1,20 = 833,33 €, sans TVA ; le PU HT, 0,833333 €, en est la
+     * conversion au millionième d'euro (Q1-b).
      */
     public function test_un_export_a_un_particulier_se_paie_au_ht_de_son_panier(): void
     {
@@ -220,7 +224,7 @@ class NatureOperationTest extends TestCase
         $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon(Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1000]], NatureOperation::ExportHorsUe, self::LIVRAISON_NEW_YORK));
 
         $this->assertSame('TK-LYON1-2026-000001', $ticket->numero);
-        $this->assertSame('0.83', $ticket->lignes->sole()->prix_unitaire_ht);
+        $this->assertSame('0.833333', $ticket->lignes->sole()->prix_unitaire_ht);
         $this->assertSame(['833.33', '0.00', '833.33'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
     }
 
@@ -309,7 +313,7 @@ class NatureOperationTest extends TestCase
 
         $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon(Client::factory()->create(), [['produit_id' => $this->produit('49.90')->id, 'quantite' => 3]], NatureOperation::LivraisonDom, self::LIVRAISON_FORT_DE_FRANCE));
 
-        $this->assertSame('41.58', $ticket->lignes->sole()->prix_unitaire_ht);
+        $this->assertSame('41.583333', $ticket->lignes->sole()->prix_unitaire_ht);
         $this->assertSame(['124.75', '0.00', '124.75'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
         $this->assertStringContainsString('Exonération de TVA en application de l&#039;article 294 du Code général des impôts', $this->pdf($ticket));
     }

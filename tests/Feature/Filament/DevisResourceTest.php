@@ -47,6 +47,30 @@ class DevisResourceTest extends TestCase
      * 49,90 € TTC à 20 % font 149,70 ÷ 1,2 = 124,75 €. La facture qui en
      * sera tirée les reprend (voir CreerFactureDepuisDevisAction).
      */
+    /**
+     * Les conditions de paiement d'un devis s'impriment, comme celles d'une
+     * facture, dans le pied de chaque page : 500 caractères au plus.
+     */
+    public function test_des_conditions_de_paiement_de_plus_de_500_caracteres_sont_refusees(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+        $this->actingAs($proprietaire);
+        Filament::setTenant($magasin);
+        $produit = Produit::factory()->create(['suivi_stock' => false]);
+
+        Livewire::test(CreateDevis::class)
+            ->fillForm([
+                'client_id' => Client::factory()->create()->id,
+                'conditions_paiement' => str_repeat('a', 501),
+                'lignes' => [['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 0]],
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['conditions_paiement' => 'max']);
+
+        $this->assertSame(0, Devis::query()->count());
+    }
+
     public function test_creer_un_devis_de_livraison_vers_un_dom_via_le_formulaire(): void
     {
         $proprietaire = User::factory()->create();

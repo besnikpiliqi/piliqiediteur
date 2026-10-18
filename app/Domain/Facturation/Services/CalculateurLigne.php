@@ -41,13 +41,19 @@ use InvalidArgumentException;
  *    fois), répartis 2,00 + 2,00 + 2,01. Un retour au fournisseur
  *    (retourDAchat()) rend la TVA du HT des articles retournés jusqu'ici,
  *    sans dépasser celle de la ligne, moins les retours précédents.
+ * 5. Le PU HT qu'une ligne de vente enregistre et que son document
+ *    imprime est son PU TTC ÷ (1 + taux), au millionième d'euro
+ *    (prixUnitaireHtExact()) : 1 000 articles à 1,00 € TTC à 20 % ont un
+ *    PU HT de 0,833333 €, et 1 000 x 0,833333 retombe à moins de deux
+ *    centimes sur les 833,33 € HT de la ligne.
  *
  * Ces calculs n'acceptent que des entiers (centimes, nombre d'articles,
  * centièmes de point de taux et de remise) et refusent un nombre à
  * virgule : un flottant comme 8.325 vaut réellement 8,32499999..., et un
  * seul centime d'écart avec le montant transmis à l'administration suffit
  * à faire rejeter une facture. Une saisie se lit en centièmes par
- * SaisieDecimale, une colonne décimale par enCentiemes().
+ * SaisieDecimale, une colonne décimale par enCentiemes(), le PU HT d'une
+ * ligne de vente par enMillioniemes().
  */
 class CalculateurLigne
 {
@@ -57,6 +63,12 @@ class CalculateurLigne
      * refusé plutôt que converti.
      */
     private const UNITES_MAXIMUM = 1e14;
+
+    /**
+     * La même borne pour un prix unitaire en millionièmes d'euro (voir
+     * prixUnitaireHtExact()).
+     */
+    private const MILLIONIEMES_MAXIMUM = 1_000_000_000_000_000_000;
 
     private const NOMBRE_A_VIRGULE = 'Le calcul attend des montants en centimes et des taux et remises en centièmes de point, en nombres entiers, jamais un nombre à virgule.';
 
@@ -214,11 +226,12 @@ class CalculateurLigne
     }
 
     /**
-     * Le PU HT d'une ligne de vente : son PU TTC ÷ (1 + le taux compris
-     * dans ce prix), au centime le plus proche, un demi-centime au centime
-     * supérieur -- 40,00 € TTC à 20 % font 33,33 € ; 10,00 € à 5,5 %,
-     * 9,48 €. Un affichage : les montants d'une ligne se calculent sur son
-     * TTC (voir chiffrerUneVente()).
+     * Un prix TTC sans sa TVA, au centime le plus proche, un demi-centime
+     * au centime supérieur -- 40,00 € TTC à 20 % font 33,33 € ; 10,00 € à
+     * 5,5 %, 9,48 € : le prix HT d'un produit que montrent sa fiche et le
+     * barème, et le prix sans TVA d'un service, saisi au centime, hors de
+     * la TVA française. Le PU HT qu'enregistre une ligne de vente est plus
+     * précis (voir prixUnitaireHtExact()).
      *
      * @param  int  $prixUnitaireTtc  en centimes
      * @param  int  $tauxTva  en centièmes de point
@@ -232,6 +245,37 @@ class CalculateurLigne
             $this->prix(['prix_unitaire_ttc' => $prixUnitaireTtc], 'prix_unitaire_ttc'),
             $this->taux(['taux_tva' => $tauxTva], 'taux_tva'),
         );
+    }
+
+    /**
+     * Le PU HT qu'enregistre une ligne de vente (Q1-b) : son PU TTC ÷ (1 +
+     * le taux compris dans ce prix), au millionième d'euro le plus proche,
+     * un demi-millionième au millionième supérieur -- 1,00 € TTC à 20 %
+     * fait 0,833333 € ; 12,00 €, 10,00 € ; 9,99 €, 8,325 €. Les montants de
+     * la ligne se calculent sur son TTC (voir chiffrerUneVente()), et la
+     * quantité x ce PU HT, remise déduite, s'écarte du HT de la ligne de
+     * moins de deux centimes jusqu'à 10 000 articles : moins d'un centime
+     * pour la part du HT de son taux que la ligne reçoit (la différence de
+     * deux arrondis au centime), un demi-centime au plus pour la remise,
+     * arrondie une fois au centime sur son TTC, et un demi-centime au plus
+     * pour le millionième (0,0000005 € x 10 000). C'est la tolérance de la
+     * facture électronique (règle Peppol R120 : 0,02 €).
+     *
+     * @param  int  $prixUnitaireTtc  en centimes
+     * @param  int  $tauxTva  en centièmes de point
+     * @return int en millionièmes d'euro
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireHtExact(int $prixUnitaireTtc, int $tauxTva): int
+    {
+        $diviseur = 10000 + $this->taux(['taux_tva' => $tauxTva], 'taux_tva');
+        $ttcEnMillioniemes = $this->multiplier($this->prix(['prix_unitaire_ttc' => $prixUnitaireTtc], 'prix_unitaire_ttc'), 10000);
+
+        // TTC x 10 000 ÷ (10 000 + taux), en deux temps : le produit
+        // dépasserait les entiers pour les plus grands prix des colonnes.
+        return $this->multiplier(intdiv($ttcEnMillioniemes, $diviseur), 10000)
+            + $this->diviserArrondi(($ttcEnMillioniemes % $diviseur) * 10000, $diviseur);
     }
 
     public function prixUnitaireTtcDepuisHt(float $prixUnitaireHt, float $tauxTva): float
@@ -577,6 +621,84 @@ class CalculateurLigne
         [$unites, $decimales] = explode('.', ltrim($this->enDecimal($centiemes), '-'));
 
         return ($centiemes < 0 ? '-' : '').number_format((int) $unites, 0, ',', ' ').','.$decimales.' €';
+    }
+
+    /**
+     * Un PU HT de ligne de vente enregistré au millionième d'euro
+     * (decimal(18,6), lu en chaîne par le cast decimal:6, voir
+     * prixUnitaireHtExact()), ou tout prix enregistré au centime, en
+     * millionièmes entiers : « 0.833333 » vaut 833333, « 10.01 » vaut
+     * 10010000, un entier compte des euros (12 vaut 12000000). Mêmes règles
+     * qu'enCentiemes() : une écriture décimale exacte, six décimales au
+     * plus, jamais un flottant, et la même borne, en millionièmes.
+     *
+     * @param  string|int  $valeur
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enMillioniemes(mixed $valeur): int
+    {
+        if (is_int($valeur)) {
+            $millioniemes = $this->multiplier($valeur, 1_000_000);
+        } elseif (is_string($valeur) && preg_match('/^(-?)(\d+)(?:\.(\d{1,6}))?$/D', $valeur, $morceaux) === 1) {
+            $unites = ltrim($morceaux[2], '0');
+
+            if (strlen($unites) > 12) {
+                throw new InvalidArgumentException('Montant hors limites.');
+            }
+
+            $millioniemes = ($morceaux[1] === '-' ? -1 : 1) * ((int) $unites * 1_000_000 + (int) str_pad($morceaux[3] ?? '', 6, '0'));
+        } else {
+            throw new InvalidArgumentException('Prix illisible : une chaîne décimale exacte (six décimales au plus) ou un entier est attendu.');
+        }
+
+        if (abs($millioniemes) >= self::MILLIONIEMES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return $millioniemes;
+    }
+
+    /**
+     * L'inverse d'enMillioniemes(), comme le cast decimal:6 : 833333
+     * s'écrit « 0.833333 », 10000000 « 10.000000 ».
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enDecimalAuMillionieme(int $millioniemes): string
+    {
+        if (abs($millioniemes) >= self::MILLIONIEMES_MAXIMUM) {
+            throw new InvalidArgumentException('Montant hors limites.');
+        }
+
+        return sprintf('%s%d.%06d', $millioniemes < 0 ? '-' : '', intdiv(abs($millioniemes), 1_000_000), abs($millioniemes) % 1_000_000);
+    }
+
+    /**
+     * Un prix en millionièmes avec ses décimales utiles, deux au moins,
+     * tel qu'un champ le montre : « 0.833333 », « 8.325 », « 12.00 ».
+     *
+     * @throws InvalidArgumentException
+     */
+    public function enDecimalUtile(int $millioniemes): string
+    {
+        [$unites, $decimales] = explode('.', $this->enDecimalAuMillionieme($millioniemes));
+
+        return $unites.'.'.str_pad(rtrim($decimales, '0'), 2, '0');
+    }
+
+    /**
+     * Un prix en millionièmes tel qu'un document l'imprime, avec ses
+     * décimales utiles, deux au moins : « 0,833333 € », « 8,325 € »,
+     * « 1 000,00 € ».
+     *
+     * @throws InvalidArgumentException
+     */
+    public function prixUnitaireEnEuros(int $millioniemes): string
+    {
+        [$unites, $decimales] = explode('.', ltrim($this->enDecimalUtile($millioniemes), '-'));
+
+        return ($millioniemes < 0 ? '-' : '').number_format((int) $unites, 0, ',', ' ').','.$decimales.' €';
     }
 
     /**

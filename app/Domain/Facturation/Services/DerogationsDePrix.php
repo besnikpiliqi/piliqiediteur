@@ -134,12 +134,13 @@ class DerogationsDePrix
         }
 
         // Le prix de la ligne et celui de référence tels que l'écran les
-        // montre : sans TVA hors de la TVA française.
-        $prixMontre = $contexte->retireLaTvaDuPrix() ? $ligne['prix_unitaire_ht'] : $ligne['prix_unitaire_ttc'];
+        // montre : sans TVA hors de la TVA française, où un service vendu à
+        // un autre prix que sa référence a pour PU TTC ce prix saisi, sans
+        // TVA (voir ConstructeurLigneDocument).
         $prixDeReference = $service->prixDeReferenceDans($contexte);
 
-        if ($this->calculateur->enCentiemes($prixMontre) !== $this->calculateur->enCentiemes($prixDeReference)) {
-            return "Vendre « {$article} » à ".self::euros($prixMontre).' au lieu de '.self::euros($prixDeReference).', son prix de référence, '.self::AUTORISATION.'.';
+        if ($prix !== $this->calculateur->enCentiemes($prixDeReference)) {
+            return "Vendre « {$article} » à ".self::euros($ligne['prix_unitaire_ttc']).' au lieu de '.self::euros($prixDeReference).', son prix de référence, '.self::AUTORISATION.'.';
         }
 
         return "Vendre « {$article} » à ".self::pourcentage($ligne['taux_tva_du_prix']).' % de TVA au lieu de '.self::pourcentage($service->taux_tva).' %, le taux de son prix de référence, '.self::AUTORISATION.'.';

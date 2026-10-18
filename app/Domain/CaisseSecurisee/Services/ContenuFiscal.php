@@ -21,8 +21,10 @@ use Illuminate\Support\Collection;
 /**
  * Les données qu'un document signe au registre fiscal (voir
  * RegistreFiscal), lues en base au moment où il est validé : montants en
- * centimes, taux et remises en centièmes de point, dates en texte, jamais
- * un nombre à virgule flottante (voir CalculateurLigne::enCentiemes()).
+ * centimes, PU HT des lignes de vente en millionièmes d'euro, taux et
+ * remises en centièmes de point, dates en texte, jamais un nombre à
+ * virgule flottante (voir CalculateurLigne::enCentiemes() et
+ * CalculateurLigne::enMillioniemes()).
  *
  * Un ticket, une facture ou un avoir (document()) signe deux blocs :
  *
@@ -280,7 +282,9 @@ class ContenuFiscal
     /**
      * Les lignes du document, dans leur ordre, la ventilation de leurs
      * montants par taux (du plus fort au plus faible) et les totaux du
-     * document, tels qu'enregistrés : rien n'est recalculé ici. Le sens
+     * document, tels qu'enregistrés : rien n'est recalculé ici. Le PU HT
+     * se signe avec ses six décimales, en millionièmes d'euro (voir
+     * CalculateurLigne::prixUnitaireHtExact()). Le sens
      * (-1 pour un avoir) s'applique aux quantités et aux montants, jamais
      * aux prix unitaires, aux taux ni aux remises.
      *
@@ -297,7 +301,7 @@ class ContenuFiscal
             'reference' => $ligne->reference,
             'description' => $ligne->description,
             'quantite' => $sens * $ligne->quantite,
-            'prix_unitaire_ht' => $this->calculateur->enCentiemes($ligne->prix_unitaire_ht),
+            'prix_unitaire_ht' => $this->calculateur->enMillioniemes($ligne->prix_unitaire_ht),
             'prix_unitaire_ttc' => $this->calculateur->enCentiemes($ligne->prix_unitaire_ttc),
             'taux_tva' => $this->calculateur->enCentiemes($ligne->taux_tva),
             'taux_tva_du_prix' => $this->calculateur->enCentiemes($ligne->taux_tva_du_prix),

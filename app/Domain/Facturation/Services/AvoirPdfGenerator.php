@@ -5,7 +5,6 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\CaisseSecurisee\Exceptions\DocumentSansEnregistrementSigneException;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Barryvdh\DomPDF\PDF as PdfDocument;
 
 /**
@@ -14,17 +13,20 @@ use Barryvdh\DomPDF\PDF as PdfDocument;
  * mention du bon d'avoir que son contenu signé a retenus (voir
  * FigeSonEmetteur et Avoir::mentionDuBonDAvoir()), jamais depuis l'état
  * courant du catalogue, de la fiche du client, du magasin, de la facture
- * créditée ou du crédit qui reste à l'avoir.
+ * créditée ou du crédit qui reste à l'avoir ; même page A4 (voir
+ * MiseEnPageA4), même pied (voir PiedDePage).
  */
 class AvoirPdfGenerator
 {
+    public function __construct(private readonly MiseEnPageA4 $miseEnPage) {}
+
     /**
      * @throws DocumentSansEnregistrementSigneException
      * @throws VenteNonAutoriseeException
      */
     public function generer(Avoir $avoir): PdfDocument
     {
-        return Pdf::loadHTML($this->html($avoir));
+        return $this->miseEnPage->pdf($this->html($avoir));
     }
 
     /**
@@ -38,7 +40,9 @@ class AvoirPdfGenerator
         $avoir->magasin->verifierQuIlPeutImprimer();
         $avoir->loadMissing(['client', 'lignes.ligneFacture.facture', 'magasin']);
 
-        return view('avoirs.pdf', ['avoir' => $avoir, 'emetteur' => $avoir->emetteur(), 'bonDAvoir' => $avoir->mentionDuBonDAvoir()])->render();
+        $emetteur = $avoir->emetteur();
+
+        return view('avoirs.pdf', ['avoir' => $avoir, 'emetteur' => $emetteur, 'pied' => PiedDePage::pour($avoir, $emetteur)])->render();
     }
 
     public function nomFichier(Avoir $avoir): string

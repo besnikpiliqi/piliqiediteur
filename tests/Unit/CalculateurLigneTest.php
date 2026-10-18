@@ -544,13 +544,58 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
-     * 40,00 € TTC = 33,33 € HT + 6,67 € de TVA ; 10,00 € TTC à 5,5 % =
-     * 9,48 € HT (10 / 1,055 = 9,4786...).
+     * Le prix HT qu'affichent la fiche d'un produit et le barème : 40,00 €
+     * TTC = 33,33 € HT ; 10,00 € TTC à 5,5 % = 9,48 € HT (10 / 1,055 =
+     * 9,4786...).
      */
-    public function test_le_pu_ht_dune_vente_est_la_conversion_de_son_ttc_au_centime(): void
+    public function test_un_prix_ttc_sans_sa_tva_s_affiche_au_centime(): void
     {
         $this->assertSame(3333, $this->calculateur()->prixUnitaireHtDepuisTtc(4000, 2000));
         $this->assertSame(948, $this->calculateur()->prixUnitaireHtDepuisTtc(1000, 550));
+    }
+
+    /**
+     * Le PU HT qu'enregistre une ligne de vente est son PU TTC ÷ (1 +
+     * taux), au millionième d'euro (Q1-b) : 1,00 € TTC à 20 % = 0,833333 € ;
+     * 12,00 € = 10,00 € ; 9,99 € = 8,325 € ; 10,00 € à 5,5 % = 9,478673 €.
+     * Un demi-millionième exact s'arrondit au millionième supérieur : 0,01 €
+     * à 28 % = 0,0078125 € -> 0,007813 €. Le plus grand prix des colonnes,
+     * à 100 %, se convertit sans dépasser les entiers.
+     */
+    public function test_le_pu_ht_se_calcule_avec_au_plus_six_decimales(): void
+    {
+        $calculateur = $this->calculateur();
+
+        $this->assertSame(
+            [833333, 10000000, 8325000, 9478673, 7813, 4999999999995000],
+            [
+                $calculateur->prixUnitaireHtExact(100, 2000),
+                $calculateur->prixUnitaireHtExact(1200, 2000),
+                $calculateur->prixUnitaireHtExact(999, 2000),
+                $calculateur->prixUnitaireHtExact(1000, 550),
+                $calculateur->prixUnitaireHtExact(1, 2800),
+                $calculateur->prixUnitaireHtExact(999999999999, 10000),
+            ],
+        );
+    }
+
+    /**
+     * Un PU HT au millionième se lit dans sa colonne decimal(18,6), s'écrit
+     * comme elle, se montre dans un champ avec ses décimales utiles, deux
+     * au moins, et s'imprime en euros de même ; un flottant ou une
+     * septième décimale ne se lit pas.
+     */
+    public function test_un_pu_ht_au_millionieme_se_lit_et_s_ecrit_avec_ses_decimales_utiles(): void
+    {
+        $calculateur = $this->calculateur();
+
+        $this->assertSame([833333, 10010000, 12000000], [$calculateur->enMillioniemes('0.833333'), $calculateur->enMillioniemes('10.01'), $calculateur->enMillioniemes(12)]);
+        $this->assertSame(['0.833333', '10.000000'], [$calculateur->enDecimalAuMillionieme(833333), $calculateur->enDecimalAuMillionieme(10000000)]);
+        $this->assertSame(['0.833333', '8.325', '12.00'], [$calculateur->enDecimalUtile(833333), $calculateur->enDecimalUtile(8325000), $calculateur->enDecimalUtile(12000000)]);
+        $this->assertSame(['0,833333 €', '1 000,00 €', '-8,325 €'], [$calculateur->prixUnitaireEnEuros(833333), $calculateur->prixUnitaireEnEuros(1000000000), $calculateur->prixUnitaireEnEuros(-8325000)]);
+        foreach ([0.833333, '0.8333333', '1,5'] as $illisible) {
+            $this->assertThrows(fn () => $calculateur->enMillioniemes($illisible), InvalidArgumentException::class, 'Prix illisible : une chaîne décimale exacte (six décimales au plus) ou un entier est attendu.');
+        }
     }
 
     /**

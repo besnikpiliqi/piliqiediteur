@@ -1,84 +1,71 @@
 {{--
-    Les lignes d'un document de vente : pour chaque article son PU HT, son
-    PU TTC et son taux, puis le HT, la TVA et le TTC de la ligne. La remise
-    n'apparaît que si une ligne en a une : elle explique alors pourquoi
-    PU x quantité diffère du total de la ligne.
+    Les lignes d'un document de vente (points 3 et 11), chacune avec la
+    référence de son produit, entière sur une seule ligne, et sa
+    désignation, qui passe à la ligne si la place manque :
 
-    Le HT de chaque taux se calcule sur son TTC et se répartit sur les
-    lignes : PU HT x quantité peut différer du HT de la ligne (1 000 x
-    0,83 € pour 833,33 €), ce que la note de calcul sous les lignes
-    explique (voir MentionsFiscales::calcul()).
+    - une facture, un avoir sur facture ou un devis à un professionnel
+      montrent la quantité, le PU HT, la remise s'il y en a, le taux et le
+      total HT : les mentions qu'une facture doit porter pour chaque ligne ;
+    - un ticket, un avoir sur ticket ou un devis à un particulier, qui paie
+      le prix affiché TTC, montrent le PU TTC et le total TTC ;
+    - une vente sans TVA française, qui se paie hors taxe (voir
+      ContexteDeVente::documentRetireLaTvaDuPrix()), montre toujours le PU
+      HT et le total HT, même sur un ticket : le PU TTC de ses lignes est
+      celui du catalogue, TVA française comprise, que le client ne paie
+      pas.
 
-    Une vente sans TVA française n'imprime pas de PU TTC : le client paie
-    le PU HT, sans la TVA française que comprend le prix du catalogue (voir
-    ContexteDeVente::documentRetireLaTvaDuPrix()). Elle imprime à la place
-    le prix TTC du catalogue de chaque produit, et de chaque service à son
-    prix de référence, et la TVA qui en est retirée, à côté de son taux de
-    0 % : les deux données que cite la note de calcul (3 x 7,00 € ÷ 1,20 =
-    17,50 € HT, quand 3 x 5,83 € font 17,49 €). Un
-    autre service, saisi sans TVA, n'a ni l'un ni l'autre.
+    La TVA et le TTC de chaque taux sont dans le tableau qui suit (voir
+    totaux.blade.php). La remise n'apparaît que si une ligne en a une. Le
+    PU HT s'imprime avec ses décimales utiles, tel qu'il est enregistré
+    (voir CalculateurLigne::prixUnitaireHtExact()) : la quantité x le PU
+    HT, remise déduite, retombe sur le total HT de la ligne à moins de deux
+    centimes. Un avoir indique la facture de chaque ligne, son numéro
+    entier sur une seule ligne. Rien ne se recalcule : chaque montant est
+    celui de la ligne enregistrée.
 
-    @param \Illuminate\Support\Collection $lignes
-    @param bool $avecFactureDOrigine un avoir indique la facture de chaque ligne
-    @param bool $sansTvaFrancaise vrai pour une vente sans TVA française
-    @param string|null $noteDeCalcul
+    @param \App\Domain\Facturation\Models\Facture|\App\Domain\Facturation\Models\Avoir|\App\Domain\Facturation\Models\Devis $document
 --}}
 @php
-    $avecRemise = $lignes->contains(fn ($ligne) => (float) $ligne->remise_pourcentage != 0);
-    $avecFactureDOrigine ??= false;
-    $sansTvaFrancaise ??= false;
-    $noteDeCalcul ??= null;
+    $calculateur = app(\App\Domain\Facturation\Services\CalculateurLigne::class);
+    $lignes = $document->lignes;
+    $enTtc = ! $document->estPourUnProfessionnel() && ! \App\Domain\Facturation\Services\ContexteDeVente::documentRetireLaTvaDuPrix($document);
+    $avecFactureDOrigine = $document instanceof \App\Domain\Facturation\Models\Avoir;
+    $avecRemise = $lignes->contains(fn ($ligne): bool => $calculateur->enCentiemes($ligne->remise_pourcentage) !== 0);
+    $noteDeCalcul = app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($document);
 @endphp
 
 <table class="lignes">
     <thead>
         <tr>
-            <th>Description</th>
+            <th>Référence</th>
+            <th>Désignation</th>
             @if($avecFactureDOrigine)
                 <th>Facture d'origine</th>
             @endif
             <th class="montant">Qté</th>
-            <th class="montant">PU HT</th>
-            @if($sansTvaFrancaise)
-                <th class="montant">Prix catalogue TTC</th>
-                <th class="montant">TVA retirée</th>
-            @else
-                <th class="montant">PU TTC</th>
-            @endif
-            <th class="montant">Taux TVA</th>
+            <th class="montant">{{ $enTtc ? 'PU TTC' : 'PU HT' }}</th>
             @if($avecRemise)
                 <th class="montant">Remise</th>
             @endif
-            <th class="montant">Total HT</th>
-            <th class="montant">TVA</th>
-            <th class="montant">Total TTC</th>
+            <th class="montant">Taux</th>
+            <th class="montant">{{ $enTtc ? 'Total TTC' : 'Total HT' }}</th>
         </tr>
     </thead>
     <tbody>
         @foreach($lignes as $ligne)
             <tr>
+                <td class="reference">{{ $ligne->reference ?? '' }}</td>
                 <td>{{ $ligne->description }}</td>
                 @if($avecFactureDOrigine)
-                    <td>{{ $ligne->ligneFacture?->facture?->numero ?? '—' }}</td>
+                    <td class="numero">{{ $ligne->ligneFacture?->facture?->numero ?? '—' }}</td>
                 @endif
                 <td class="montant">{{ \Illuminate\Support\Number::format($ligne->quantite, locale: 'fr') }}</td>
-                <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ht, 2, ',', ' ') }} €</td>
-                @if(! $sansTvaFrancaise)
-                    <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ttc, 2, ',', ' ') }} €</td>
-                @elseif($ligne->nature === \App\Domain\Facturation\Enums\NatureLigne::Bien || (float) $ligne->taux_tva_du_prix > 0)
-                    <td class="montant">{{ number_format((float) $ligne->prix_unitaire_ttc, 2, ',', ' ') }} €</td>
-                    <td class="montant">{{ \Illuminate\Support\Number::format((float) $ligne->taux_tva_du_prix, maxPrecision: 2, locale: 'fr') }} %</td>
-                @else
-                    <td class="montant">—</td>
-                    <td class="montant">—</td>
-                @endif
-                <td class="montant">{{ \Illuminate\Support\Number::format((float) $ligne->taux_tva, maxPrecision: 2, locale: 'fr') }} %</td>
+                <td class="montant">{{ $enTtc ? $calculateur->enEuros($calculateur->enCentiemes($ligne->prix_unitaire_ttc)) : $calculateur->prixUnitaireEnEuros($calculateur->enMillioniemes($ligne->prix_unitaire_ht)) }}</td>
                 @if($avecRemise)
                     <td class="montant">{{ \Illuminate\Support\Number::format((float) $ligne->remise_pourcentage, maxPrecision: 2, locale: 'fr') }} %</td>
                 @endif
-                <td class="montant">{{ number_format((float) $ligne->montant_ht, 2, ',', ' ') }} €</td>
-                <td class="montant">{{ number_format((float) $ligne->montant_tva, 2, ',', ' ') }} €</td>
-                <td class="montant">{{ number_format((float) $ligne->montant_ttc, 2, ',', ' ') }} €</td>
+                <td class="montant">{{ \Illuminate\Support\Number::format((float) $ligne->taux_tva, maxPrecision: 2, locale: 'fr') }} %</td>
+                <td class="montant">{{ $calculateur->enEuros($calculateur->enCentiemes($enTtc ? $ligne->montant_ttc : $ligne->montant_ht)) }}</td>
             </tr>
         @endforeach
     </tbody>

@@ -130,22 +130,33 @@ class EmetteurFigeTest extends TestCase
     ];
 
     /**
-     * L'en-tête de la Boutique du Port (voir magasinDuPort()).
+     * L'en-tête de la Boutique du Port (voir magasinDuPort()) : le magasin
+     * qui vend.
      */
     private const EN_TETE_DU_PORT = '<div class="magasin-nom">Boutique du Port</div>'
-        .'Martin et Fils SARL au capital de 10 000,00 €<br>12 quai des Pêcheurs<br>13002 Marseille<br>FR<br>'
-        .'SIRET : 12121212000012<br>Siège social : 1 rue de la République, 13001 Marseille<br>'
-        .'SIREN : 121212120<br>RCS Marseille<br>TVA intracommunautaire : FR56121212120<br>'
+        .'12 quai des Pêcheurs<br>13002 Marseille<br>FR<br>SIRET : 12121212000012<br>'
         .'Tél. 04 91 00 00 00 · contact@boutique-du-port.fr';
+
+    /**
+     * L'identité de la société de la Boutique du Port, dans le pied de
+     * chaque page.
+     */
+    private const SOCIETE_DU_PORT = 'Martin et Fils SARL au capital de 10 000,00 € · Siège social : 1 rue de la République, 13001 Marseille · '
+        .'SIREN : 121212120 · RCS Marseille · TVA intracommunautaire : FR56121212120';
 
     /**
      * L'en-tête de la Boutique des Quais (voir IDENTITE_DES_QUAIS).
      */
     private const EN_TETE_DES_QUAIS = '<div class="magasin-nom">Boutique des Quais</div>'
-        .'Martin Frères SAS au capital de 50 000,00 €<br>8 rue Neuve<br>Bâtiment B<br>69002 Lyon<br>FR<br>'
-        .'SIRET : 12121212000012<br>Siège social : 20 cours Lafayette, 69003 Lyon<br>'
-        .'SIREN : 121212120<br>RCS Lyon<br>TVA intracommunautaire : FR14987654324<br>'
+        .'8 rue Neuve<br>Bâtiment B<br>69002 Lyon<br>FR<br>SIRET : 12121212000012<br>'
         .'Tél. 04 72 00 00 00 · bonjour@boutique-des-quais.fr';
+
+    /**
+     * L'identité de la société de la Boutique des Quais, dans le pied de
+     * chaque page.
+     */
+    private const SOCIETE_DES_QUAIS = 'Martin Frères SAS au capital de 50 000,00 € · Siège social : 20 cours Lafayette, 69003 Lyon · '
+        .'SIREN : 121212120 · RCS Lyon · TVA intracommunautaire : FR14987654324';
 
     public function test_le_pdf_d_une_facture_emise_garde_l_identite_et_les_mentions_du_jour_de_son_emission(): void
     {
@@ -156,6 +167,7 @@ class EmetteurFigeTest extends TestCase
         $html = app(FacturePdfGenerator::class)->html($facture->fresh());
 
         $this->assertSame(self::EN_TETE_DU_PORT, $this->enTete($html));
+        $this->assertSame(self::SOCIETE_DU_PORT, $this->societe($html));
         $this->assertSame([self::PENALITES, self::INDEMNITE, self::ESCOMPTE_DU_PORT, self::CATEGORIE, self::OPTION_DEBITS], $this->pieds($html));
         $this->assertSame(RegimeTva::ReelNormalMensuel, $facture->fresh()->emetteur()->regimeTva);
     }
@@ -169,6 +181,7 @@ class EmetteurFigeTest extends TestCase
         $html = app(FacturePdfGenerator::class)->html($ticket->fresh());
 
         $this->assertSame(self::EN_TETE_DU_PORT, $this->enTete($html));
+        $this->assertSame(self::SOCIETE_DU_PORT, $this->societe($html));
         $this->assertSame([self::CATEGORIE, self::OPTION_DEBITS], $this->pieds($html));
     }
 
@@ -190,9 +203,9 @@ class EmetteurFigeTest extends TestCase
         $htmlDeLAvoir = app(AvoirPdfGenerator::class)->html($avoir->fresh());
         $htmlDeLaFacture = app(FacturePdfGenerator::class)->html($facture->fresh());
 
-        $this->assertSame(self::EN_TETE_DES_QUAIS, $this->enTete($htmlDeLAvoir));
+        $this->assertSame([self::EN_TETE_DES_QUAIS, self::SOCIETE_DES_QUAIS], [$this->enTete($htmlDeLAvoir), $this->societe($htmlDeLAvoir)]);
         $this->assertSame([self::CATEGORIE], $this->pieds($htmlDeLAvoir));
-        $this->assertSame(self::EN_TETE_DU_PORT, $this->enTete($htmlDeLaFacture));
+        $this->assertSame([self::EN_TETE_DU_PORT, self::SOCIETE_DU_PORT], [$this->enTete($htmlDeLaFacture), $this->societe($htmlDeLaFacture)]);
     }
 
     /**
@@ -211,9 +224,9 @@ class EmetteurFigeTest extends TestCase
         $htmlDuBrouillon = app(FacturePdfGenerator::class)->html($brouillon->fresh());
         $htmlDuDevis = app(DevisPdfGenerator::class)->html($devis->fresh());
 
-        $this->assertSame(self::EN_TETE_DES_QUAIS, $this->enTete($htmlDuBrouillon));
+        $this->assertSame([self::EN_TETE_DES_QUAIS, self::SOCIETE_DES_QUAIS], [$this->enTete($htmlDuBrouillon), $this->societe($htmlDuBrouillon)]);
         $this->assertSame([self::PENALITES, self::INDEMNITE, self::ESCOMPTE_DES_QUAIS, self::CATEGORIE], $this->pieds($htmlDuBrouillon));
-        $this->assertSame(self::EN_TETE_DES_QUAIS, $this->enTete($htmlDuDevis));
+        $this->assertSame([self::EN_TETE_DES_QUAIS, self::SOCIETE_DES_QUAIS], [$this->enTete($htmlDuDevis), $this->societe($htmlDuDevis)]);
     }
 
     /**
@@ -364,25 +377,25 @@ class EmetteurFigeTest extends TestCase
         $html = app(FacturePdfGenerator::class)->html($facture->fresh());
         $htmlDUnBrouillon = app(FacturePdfGenerator::class)->html(app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]));
 
-        $this->assertSame(self::EN_TETE_DU_PORT, $this->enTete($html));
-        $this->assertStringContainsString('Martin et Fils SAS à capital variable, au capital de 25 000,00 €<br>', $this->enTete($htmlDUnBrouillon));
-        $this->assertStringContainsString('Siège social : 2 boulevard Longchamp, 13004 Marseille<br>', $this->enTete($htmlDUnBrouillon));
+        $this->assertSame(self::SOCIETE_DU_PORT, $this->societe($html));
+        $this->assertStringStartsWith('Martin et Fils SAS à capital variable, au capital de 25 000,00 € · Siège social : 2 boulevard Longchamp, 13004 Marseille · ', $this->societe($htmlDUnBrouillon));
     }
 
     /**
      * Un siège à l'adresse du magasin, à la casse, aux accents et à la
-     * ponctuation près, ne se répète pas : l'adresse du magasin dit qu'elle
-     * est aussi celle du siège.
+     * ponctuation près, ne se répète pas : l'adresse du magasin s'imprime
+     * en tête, et l'identité de la société, dans le pied, dit sans la
+     * répéter qu'elle est aussi celle du siège.
      */
     public function test_le_siege_identique_a_l_adresse_du_magasin_n_est_imprime_qu_une_fois(): void
     {
         $this->magasinDuPort(['siege_adresse' => '12, Quai des pecheurs', 'siege_code_postal' => '13002', 'siege_ville' => 'MARSEILLE']);
         $ticket = $this->emettre(Client::factory()->create());
 
-        $enTete = $this->enTete(app(FacturePdfGenerator::class)->html($ticket->fresh()));
+        $html = app(FacturePdfGenerator::class)->html($ticket->fresh());
 
-        $this->assertStringContainsString('<br>12 quai des Pêcheurs<br>13002 Marseille<br>FR<br>SIRET : 12121212000012<br>Siège social et établissement<br>SIREN : 121212120<br>', $enTete);
-        $this->assertStringNotContainsString('Siège social :', $enTete);
+        $this->assertStringContainsString('</div>12 quai des Pêcheurs<br>13002 Marseille<br>FR<br>SIRET : 12121212000012<br>', $this->enTete($html));
+        $this->assertSame('Martin et Fils SARL au capital de 10 000,00 € · Siège social et établissement · SIREN : 121212120 · RCS Marseille · TVA intracommunautaire : FR56121212120', $this->societe($html));
     }
 
     /**
@@ -400,13 +413,10 @@ class EmetteurFigeTest extends TestCase
         ]);
         $ticket = $this->emettre(Client::factory()->create());
 
-        $enTete = $this->enTete(app(FacturePdfGenerator::class)->html($ticket->fresh()));
+        $html = app(FacturePdfGenerator::class)->html($ticket->fresh());
 
-        $this->assertSame('<div class="magasin-nom">Boutique du Port</div>'
-            .'Jean Martin EI<br>12 quai des Pêcheurs<br>13002 Marseille<br>FR<br>'
-            .'SIRET : 12121212000012<br>Adresse de l\'entreprise : 1 rue de la République, 13001 Marseille<br>'
-            .'SIREN : 121212120<br>RM 13<br>TVA intracommunautaire : FR56121212120<br>'
-            .'Tél. 04 91 00 00 00 · contact@boutique-du-port.fr', html_entity_decode($enTete, ENT_QUOTES));
+        $this->assertSame(self::EN_TETE_DU_PORT, $this->enTete($html));
+        $this->assertSame('Jean Martin EI · Adresse de l\'entreprise : 1 rue de la République, 13001 Marseille · SIREN : 121212120 · RM 13 · TVA intracommunautaire : FR56121212120', $this->societe($html));
     }
 
     /**
@@ -500,7 +510,7 @@ class EmetteurFigeTest extends TestCase
 
         $emetteur = Emetteur::duMagasin($demonstration->fresh());
 
-        $this->assertSame([Emetteur::DENOMINATION_DE_DEMONSTRATION], $emetteur->lignesDIdentite());
+        $this->assertSame([[], [Emetteur::DENOMINATION_DE_DEMONSTRATION]], [$emetteur->lignesDeLEtablissement(), $emetteur->lignesDeLaSociete()]);
         $signe = $emetteur->enTableau();
         $this->assertSame([null, null, null, null, null, true], [$signe['siren'], $signe['siret'], $signe['immatriculation'], $signe['numero_tva'], $signe['siege']['adresse'], $signe['demonstration']]);
         foreach (['Martin et Fils', (string) $societe->siren, 'RCS Lyon', 'Bellecour'] as $identiteReelle) {
@@ -598,6 +608,16 @@ class EmetteurFigeTest extends TestCase
     private function enTete(string $html): string
     {
         return Str::betweenFirst(preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], $html), '<table class="en-tete"><tr><td>', '</td>');
+    }
+
+    /**
+     * L'identité de la société, en tête du pied de page du document.
+     */
+    private function societe(string $html): string
+    {
+        preg_match('/<div class="identite">(.*?)<\/div>/s', $html, $identite);
+
+        return html_entity_decode(trim($identite[1]), ENT_QUOTES);
     }
 
     /**

@@ -56,7 +56,7 @@ class FranchiseEnBaseTest extends TestCase
         $ticket = $this->encaisser($this->produitA12Euros(), 3);
 
         $ligne = $ticket->lignes->sole();
-        $this->assertSame(['0.00', '12.00', '12.00'], [$ligne->taux_tva, $ligne->prix_unitaire_ht, $ligne->prix_unitaire_ttc]);
+        $this->assertSame(['0.00', '12.000000', '12.00'], [$ligne->taux_tva, $ligne->prix_unitaire_ht, $ligne->prix_unitaire_ttc]);
         $this->assertSame(['36.00', '0.00', '36.00'], [$ticket->total_ht, $ticket->total_tva, $ticket->total_ttc]);
         $this->assertTrue($ticket->franchise_en_base);
         $this->assertStringContainsString(self::MENTION, $this->pdfDeLaFacture($ticket));
@@ -121,7 +121,7 @@ class FranchiseEnBaseTest extends TestCase
         ]);
 
         $ligne = $facture->lignes->sole();
-        $this->assertSame(['0.00', '25.00', '25.00', '0.00', '25.00'], [$ligne->taux_tva, $ligne->prix_unitaire_ht, $ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc]);
+        $this->assertSame(['0.00', '25.000000', '25.00', '0.00', '25.00'], [$ligne->taux_tva, $ligne->prix_unitaire_ht, $ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc]);
     }
 
     public function test_un_avoir_sur_un_ticket_en_franchise_reprend_la_franchise_et_sa_mention(): void

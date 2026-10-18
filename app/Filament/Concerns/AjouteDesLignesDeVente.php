@@ -181,8 +181,11 @@ trait AjouteDesLignesDeVente
      * (voir ChoisitLaNatureDeLOperation::natureARouvrir()). Sinon, le champ
      * reste caché.
      *
-     * Sans TVA française, le prix d'un service se montre sans TVA : son PU
-     * HT, son prix de référence sans sa TVA compris.
+     * Sans TVA française, le prix d'un service se montre sans TVA, au
+     * centime, comme il se saisit : son prix de référence sans sa TVA (voir
+     * Service::prixDeReferenceDans()), ou l'autre prix saisi, déjà sans
+     * TVA. Le PU HT d'une ligne se montre avec ses décimales utiles, tel
+     * qu'il est enregistré (voir CalculateurLigne::prixUnitaireHtExact()).
      *
      * @return list<array<string, mixed>>
      */
@@ -190,6 +193,7 @@ trait AjouteDesLignesDeVente
     {
         $tauxImpose = $document->franchise_en_base || $document->nature_operation->exonere();
         $prixSansTva = ContexteDeVente::documentRetireLaTvaDuPrix($document);
+        $calculateur = app(CalculateurLigne::class);
 
         return $document->lignes->loadMissing('service')->map(fn (LigneFacture|LigneDevis $ligne): array => [
             'produit_id' => $ligne->produit_id,
@@ -197,8 +201,10 @@ trait AjouteDesLignesDeVente
             'description' => $ligne->description,
             'reference' => $ligne->reference,
             'quantite' => $ligne->quantite,
-            'prix_unitaire_ht' => $ligne->prix_unitaire_ht,
-            'prix_unitaire_ttc' => $prixSansTva && $ligne->service_id !== null ? $ligne->prix_unitaire_ht : $ligne->prix_unitaire_ttc,
+            'prix_unitaire_ht' => $calculateur->enDecimalUtile($calculateur->enMillioniemes($ligne->prix_unitaire_ht)),
+            'prix_unitaire_ttc' => $prixSansTva && $ligne->service_id !== null
+                ? $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc($calculateur->enCentiemes($ligne->prix_unitaire_ttc), $calculateur->enCentiemes($ligne->taux_tva_du_prix)))
+                : $ligne->prix_unitaire_ttc,
             'taux_tva' => self::pourcentageEnTexte(match (true) {
                 ! $tauxImpose || $ligne->service_id === null => $ligne->taux_tva,
                 app(CalculateurLigne::class)->enCentiemes($ligne->taux_tva_du_prix) > 0 => $ligne->taux_tva_du_prix,
@@ -305,7 +311,8 @@ trait AjouteDesLignesDeVente
     /**
      * PU HT, PU TTC et TVA d'une ligne de vente : seul le PU TTC se saisit
      * (le prix affiché au client, repris tel quel de la fiche du produit),
-     * le PU HT n'en est que la conversion au centime, affichée à côté.
+     * le PU HT n'en est que la conversion au millionième d'euro, affichée à
+     * côté telle que la ligne l'enregistrera.
      *
      * Le taux d'une ligne de produit est celui de sa fiche (voir
      * ConstructeurLigneDocument) : affiché, il ne se modifie pas et ne
@@ -409,16 +416,17 @@ trait AjouteDesLignesDeVente
 
     /**
      * Le PU HT d'une ligne de produit, affiché à côté de son PU TTC : sa
-     * conversion au centime au taux de la ligne (voir
-     * CalculateurLigne::prixUnitaireHtDepuisTtc()). Une saisie qui n'est
-     * pas encore un prix ou un taux valable ne change rien.
+     * conversion au millionième d'euro au taux de la ligne, avec ses
+     * décimales utiles, celle que la ligne enregistrera (voir
+     * CalculateurLigne::prixUnitaireHtExact()). Une saisie qui n'est pas
+     * encore un prix ou un taux valable ne change rien.
      */
     private static function suivreLePrixUnitaireHt(mixed $prixUnitaireTtc, mixed $tauxTva, Set $set): void
     {
         $calculateur = app(CalculateurLigne::class);
 
         try {
-            $set('prix_unitaire_ht', $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc(SaisieDecimale::enCentiemes($prixUnitaireTtc), SaisieDecimale::enCentiemes($tauxTva))));
+            $set('prix_unitaire_ht', $calculateur->enDecimalUtile($calculateur->prixUnitaireHtExact(SaisieDecimale::enCentiemes($prixUnitaireTtc), SaisieDecimale::enCentiemes($tauxTva))));
         } catch (InvalidArgumentException) {
             // Prix ou taux hors limites (voir leur validation) : rien à convertir.
         }
@@ -490,7 +498,7 @@ trait AjouteDesLignesDeVente
             return [
                 ...$ligne,
                 'prix_unitaire_ttc' => $produit->prix_vente_ttc,
-                'prix_unitaire_ht' => $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc(
+                'prix_unitaire_ht' => $calculateur->enDecimalUtile($calculateur->prixUnitaireHtExact(
                     $calculateur->enCentiemes($produit->prix_vente_ttc),
                     $contexte->franchiseEnBase ? 0 : $calculateur->enCentiemes($produit->taux_tva),
                 )),

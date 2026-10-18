@@ -143,8 +143,9 @@ class ConstructeurLigneDocument
      *
      * Une vente part toujours d'un prix TTC (voir CalculateurLigne) : le PU
      * TTC saisi, sinon le prix de vente TTC enregistré sur la fiche du
-     * produit ; son PU HT en est la conversion au centime, la même que sur
-     * la fiche, un affichage qui ne compte dans aucun montant. Une ligne de
+     * produit ; son PU HT en est la conversion au millionième d'euro (voir
+     * CalculateurLigne::prixUnitaireHtExact()), que le document imprime et
+     * qui ne compte dans aucun montant. Une ligne de
      * service (voir Service) prend le PU TTC saisi, sinon son prix de
      * référence TTC ; sans prix de référence, elle doit en saisir un. Seule
      * une personne autorisée met un autre prix que celui de la fiche ou de
@@ -229,7 +230,7 @@ class ConstructeurLigneDocument
             'description' => $produit?->nom ?? $service->nom,
             'reference' => $produit?->reference,
             'quantite' => $quantite,
-            'prix_unitaire_ht' => $this->calculateur->enDecimal($this->calculateur->prixUnitaireHtDepuisTtc($prixUnitaireTtc, $tauxTvaDuPrix)),
+            'prix_unitaire_ht' => $this->calculateur->enDecimalAuMillionieme($this->calculateur->prixUnitaireHtExact($prixUnitaireTtc, $tauxTvaDuPrix)),
             'prix_unitaire_ttc' => $this->calculateur->enDecimal($prixUnitaireTtc),
             'taux_tva' => $this->calculateur->enDecimal($tauxTva),
             'taux_tva_du_prix' => $this->calculateur->enDecimal($tauxTvaDuPrix),

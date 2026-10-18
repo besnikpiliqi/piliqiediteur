@@ -243,6 +243,23 @@ class VerificateurIntegriteTest extends TestCase
         $this->assertSame(['vente' => 3, 'encaissement' => 0, 'evenement' => 1], $rapport->enregistrementsVerifies());
     }
 
+    /**
+     * Le PU HT d'une ligne se signe au millionième d'euro (Q1-b) : changé
+     * d'un seul millionième en base, la ligne ne correspond plus à ce qui a
+     * été signé.
+     */
+    public function test_un_pu_ht_modifie_d_un_millionieme_en_base_est_detecte(): void
+    {
+        $magasin = $this->magasinActif();
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit('VIS', 1)->id, 'quantite' => 1000]]));
+
+        DB::table('lignes_facture')->where('magasin_id', $magasin->id)->where('id', $facture->lignes->sole()->id)->update(['prix_unitaire_ht' => '0.833334']);
+
+        $this->assertSame([
+            [90, "La facture {$facture->numero} ne correspond plus à ce qui a été signé à son émission (lignes)."],
+        ], $this->anomalies($this->verifier()));
+    }
+
     public function test_une_ligne_de_ticket_modifiee_en_base_est_detectee(): void
     {
         $magasin = $this->magasinActif();

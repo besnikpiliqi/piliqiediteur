@@ -46,7 +46,7 @@ class PanierCaisseFactory extends Factory
             'description' => $produit->nom,
             'reference' => $produit->reference,
             'quantite' => $quantite,
-            'prix_unitaire_ht' => $calculateur->enDecimal($calculateur->prixUnitaireHtDepuisTtc($calculateur->enCentiemes($produit->prix_vente_ttc), $calculateur->enCentiemes($produit->taux_tva))),
+            'prix_unitaire_ht' => $calculateur->enDecimalUtile($calculateur->prixUnitaireHtExact($calculateur->enCentiemes($produit->prix_vente_ttc), $calculateur->enCentiemes($produit->taux_tva))),
             'prix_unitaire_ttc' => (string) $produit->prix_vente_ttc,
             'taux_tva' => (string) (float) $produit->taux_tva,
             'remise_pourcentage' => '0',

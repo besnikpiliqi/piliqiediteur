@@ -102,7 +102,8 @@ class RepartitionTvaParCumulTest extends TestCase
             ['taux' => 550, 'ht' => 853, 'tva' => 47, 'ttc' => 900],
         ], $document['ventilation']);
         $this->assertSame(['ht' => 1270, 'tva' => 130, 'ttc' => 1400], $document['totaux']);
-        $this->assertStringContainsString('<td class="montant">3,34 €</td><td class="montant">0,66 €</td><td class="montant">4,00 €</td>', preg_replace('/>\s+</', '><', $html));
+        $this->assertStringContainsString('<td>Cheville</td><td class="montant">2</td><td class="montant">1,666667 €</td><td class="montant">20 %</td><td class="montant">3,34 €</td>', preg_replace('/>\s+</', '><', $html));
+        $this->assertStringContainsString('<td>20 %</td><td class="montant">4,17 €</td><td class="montant">0,83 €</td><td class="montant">5,00 €</td>', preg_replace('/>\s+</', '><', $html));
     }
 
     /**

@@ -10,8 +10,8 @@ use App\Domain\Tenancy\Enums\RegimeTva;
 
 /**
  * Les mentions fiscales qu'imprime un document, dans l'ordre, que les PDF
- * reprennent telles quelles et que l'émission signe au registre fiscal
- * (voir ContenuFiscal) :
+ * reprennent telles quelles dans le pied de chaque page (voir PiedDePage)
+ * et que l'émission signe au registre fiscal (voir ContenuFiscal) :
  *
  * - sur un ticket, une facture ou un avoir, la catégorie de l'opération
  *   (art. 242 nonies A de l'annexe II au CGI), tirée de la nature de ses
@@ -37,7 +37,8 @@ use App\Domain\Tenancy\Enums\RegimeTva;
  * S'y ajoute, sous les lignes de tout document hors franchise en base,
  * l'explication de son calcul (voir calcul()), qui ne se signe pas, et,
  * sur l'avoir d'un client comptoir, la mention de son bon d'avoir (voir
- * bonDAvoir()).
+ * bonDAvoir()). Le motif d'un taux de 0 % se répète aussi dans le tableau
+ * de la TVA, à côté de ce taux (voir motifDuTauxZero()).
  */
 class MentionsFiscales
 {
@@ -74,6 +75,18 @@ class MentionsFiscales
         }
 
         return $mentions;
+    }
+
+    /**
+     * Le motif qu'imprime, à côté de son taux de 0 %, le tableau de la TVA
+     * d'un document (point 11) : le texte qui exonère la vente ou la place
+     * hors du champ de la TVA française, sinon la franchise en base, lus
+     * sur le document comme ses mentions (voir pour()) ; aucun pour une
+     * vente en France, où un taux de 0 % n'a pas de texte à citer.
+     */
+    public function motifDuTauxZero(Facture|Avoir|Devis $document): ?string
+    {
+        return $document->nature_operation->mention() ?? ($document->franchise_en_base ? RegimeTva::MENTION_FRANCHISE : null);
     }
 
     /**

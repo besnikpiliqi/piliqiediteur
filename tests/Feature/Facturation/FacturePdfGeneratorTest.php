@@ -5,6 +5,7 @@ namespace Tests\Feature\Facturation;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
@@ -14,6 +15,7 @@ use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
@@ -29,6 +31,8 @@ use Tests\TestCase;
 class FacturePdfGeneratorTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const LIVRAISON_A_BERLIN = ['nature_operation' => NatureOperation::LivraisonIntracommunautaire, 'livraison_adresse' => 'Musterstraße 1', 'livraison_code_postal' => '10115', 'livraison_ville' => 'Berlin', 'livraison_pays' => 'DE', 'livraison_date' => '2026-10-12', 'transport_par' => 'magasin'];
 
     private const NOTE_DE_CALCUL = 'Montants calculés depuis les prix TTC : pour chaque taux, le HT est le TTC du taux ÷ (1 + taux), arrondi une fois au centime, puis réparti sur les lignes ; la TVA est la différence.';
 
@@ -186,10 +190,11 @@ class FacturePdfGeneratorTest extends TestCase
     }
 
     /**
-     * Les mentions du vendeur (voir IdentiteSociete) : raison sociale,
-     * forme juridique et capital social de la société (H2), adresse
-     * complète et SIRET du magasin, siège, SIREN, immatriculation (K7),
-     * n° de TVA, et coordonnées du magasin.
+     * Les mentions du vendeur (voir IdentiteSociete) : en tête, le magasin
+     * qui vend, son adresse complète, son SIRET et ses coordonnées ; dans
+     * le pied de chaque page (point 4), la raison sociale, la forme
+     * juridique et le capital social de la société (H2), son siège, son
+     * SIREN, son immatriculation (K7) et son n° de TVA.
      */
     public function test_la_facture_imprime_l_identite_legale_du_magasin(): void
     {
@@ -216,15 +221,18 @@ class FacturePdfGeneratorTest extends TestCase
         ]));
         $facture = $this->factureEmise();
 
-        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        $html = $this->compacte(app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir')));
 
         $this->assertStringContainsString(
-            '<div class="magasin-nom">Boutique du Port</div>'
-            .'Martin et Fils SARL au capital de 10 000,00 €<br>12 quai des Pêcheurs<br>Bâtiment B<br>13002 Marseille<br>FR<br>'
-            .'SIRET : 12121212000012<br>Siège social : 1 rue de la République, 13001 Marseille<br>'
-            .'SIREN : 121212120<br>RCS Marseille<br>TVA intracommunautaire : FR56121212120<br>'
-            .'Tél. 04 91 00 00 00 · contact@boutique-du-port.fr',
-            preg_replace(['/>\s+/', '/\s+</'], ['>', '<'], $html),
+            '<div class="magasin-nom">Boutique du Port</div>12 quai des Pêcheurs<br>Bâtiment B<br>13002 Marseille<br>FR<br>'
+            .'SIRET : 12121212000012<br>Tél. 04 91 00 00 00 · contact@boutique-du-port.fr</td>',
+            $html,
+        );
+        $this->assertStringContainsString(
+            '<div id="pied-de-page"><div class="identite">Martin et Fils SARL au capital de 10 000,00 € · '
+            .'Siège social : 1 rue de la République, 13001 Marseille · SIREN : 121212120 · RCS Marseille · '
+            .'TVA intracommunautaire : FR56121212120</div>',
+            $html,
         );
     }
 
@@ -262,16 +270,16 @@ class FacturePdfGeneratorTest extends TestCase
         $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
         $enTete = Str::betweenFirst($html, '<table class="en-tete">', '</table>');
-        $this->assertStringContainsString('<div class="magasin-nom">Boutique du Port</div>SIRET : 12121212000012<br>SIREN : 121212120</td>', $this->compacte($enTete));
-        $this->assertStringNotContainsString('Siège', $enTete);
-        $this->assertStringNotContainsString('TVA intracommunautaire', $enTete);
+        $this->assertStringContainsString('<div class="magasin-nom">Boutique du Port</div>SIRET : 12121212000012</td>', $this->compacte($enTete));
         $this->assertStringNotContainsString('Tél.', $enTete);
+        $this->assertStringContainsString('<div class="identite">SIREN : 121212120</div>', $this->compacte($html));
     }
 
     /**
      * Un capital social non renseigné ne s'imprime pas : pour une forme
      * qui n'est pas une société commerciale, dont il n'est pas exigé, la
-     * raison sociale et la forme juridique restent seules sur leur ligne.
+     * raison sociale et la forme juridique ouvrent seules l'identité de la
+     * société, dans le pied de page.
      */
     public function test_un_capital_social_non_renseigne_ne_s_imprime_pas(): void
     {
@@ -286,7 +294,7 @@ class FacturePdfGeneratorTest extends TestCase
 
         $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
-        $this->assertStringContainsString('</div>Martin et Fils Société civile<br>', $this->compacte($html));
+        $this->assertStringContainsString('<div class="identite">Martin et Fils Société civile · ', $this->compacte($html));
         $this->assertStringNotContainsString('au capital', $html);
     }
 
@@ -375,10 +383,11 @@ class FacturePdfGeneratorTest extends TestCase
     }
 
     /**
-     * Un montant déjà réglé (encaissement et/ou crédit d'avoir) doit
-     * apparaître sur le document remis au client -- sans ça, rien ne
-     * prouve sur le PDF qu'une vente entièrement couverte par un avoir a
-     * bien été soldée (voir AppliquerAvoirsDisponiblesAction).
+     * Un montant déjà réglé à l'émission (encaissement et/ou crédit
+     * d'avoir) doit apparaître sur le document remis au client -- sans ça,
+     * rien ne prouve sur le PDF qu'une vente entièrement couverte par un
+     * avoir a bien été soldée (voir AppliquerAvoirsDisponiblesAction). Le
+     * bloc « Règlements » nomme l'avoir et dit ce qui reste dû (Q5).
      */
     public function test_le_credit_applique_par_un_avoir_apparait_sur_le_pdf(): void
     {
@@ -402,12 +411,9 @@ class FacturePdfGeneratorTest extends TestCase
         ]);
         $nouvelleFacture = app(EmettreFactureAction::class)->handle(self::auteur(), $nouvelleFacture)->fresh();
 
-        $html = app(FacturePdfGenerator::class)->html($nouvelleFacture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        $reglements = $this->reglementsImprimes($nouvelleFacture);
 
-        $this->assertStringContainsString('Crédité par avoir', $html);
-        $this->assertStringContainsString($avoir->fresh()->numero, $html);
-        $this->assertStringContainsString('60,00', $html);
-        $this->assertStringNotContainsString('Restant dû', $html);
+        $this->assertSame(["Avoir {$avoir->fresh()->numero} : 60,00 €", 'Restant dû : 0,00 €'], $reglements);
     }
 
     private function payer(Client $client, Facture $facture, string $montant): Paiement
@@ -419,19 +425,33 @@ class FacturePdfGeneratorTest extends TestCase
         );
     }
 
-    private function libelleDuCredit(Facture $facture): string
+    /**
+     * Les lignes du bloc « Règlements » du PDF, « libellé : montant », dans
+     * l'ordre ; aucune quand le PDF n'a pas ce bloc.
+     *
+     * @return list<string>
+     */
+    private function reglementsImprimes(Facture $facture): array
     {
-        $html = app(FacturePdfGenerator::class)->html($facture->fresh());
+        $html = $this->compacte(app(FacturePdfGenerator::class)->html($facture->fresh()));
 
-        return trim((string) preg_replace('/\s+/', ' ', Str::betweenFirst($html, 'Crédité par avoir', '</td>')));
+        if (! str_contains($html, '<table class="reglements">')) {
+            return [];
+        }
+
+        preg_match_all('#<td class="libelle">(.*?)</td><td class="montant">(.*?)</td>#', Str::betweenFirst($html, '<table class="reglements">', '</table>'), $lignes, PREG_SET_ORDER);
+
+        return array_map(fn (array $ligne): string => html_entity_decode("{$ligne[1]} : {$ligne[2]}", ENT_QUOTES), $lignes);
     }
 
     /**
-     * Un avoir imputé sur sa facture à son émission (20,00 €), puis de
-     * nouveau par le bon paiement qui suit la contre-passation d'un
-     * paiement erroné (30,00 €), n'est nommé qu'une fois.
+     * Un ticket émis sans rien recevoir, puis réglé par un paiement erroné,
+     * un avoir imputé (20,00 €), la contre-passation de ce paiement et le
+     * bon paiement, qui impute de nouveau l'avoir (30,00 €) : le PDF
+     * reproduit le ticket tel qu'émis, sans aucun de ces règlements, que
+     * la fiche montre (Q5).
      */
-    public function test_un_avoir_impute_deux_fois_sur_la_facture_n_y_est_nomme_qu_une_fois(): void
+    public function test_un_avoir_impute_apres_l_emission_ne_s_imprime_pas_sur_le_pdf(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'LYON1']));
         $client = Client::factory()->create();
@@ -443,16 +463,18 @@ class FacturePdfGeneratorTest extends TestCase
 
         $this->payer($client, $ticket, '50.00');
 
-        $this->assertSame('(AV-LYON1-2026-000001)', $this->libelleDuCredit($ticket));
+        $this->assertSame([], $this->reglementsImprimes($ticket));
         $this->assertSame([50.0, 50.0, 0.0], [$ticket->fresh()->montantPaye(), $ticket->fresh()->montantCrediteParAvoir(), $ticket->fresh()->montantRestant()]);
     }
 
     /**
-     * Le crédit qu'une contre-passation a rendu à son avoir ne crédite plus
-     * la facture : seul l'avoir dont le crédit y reste imputé est nommé. Le
-     * second avoir est émis quand le ticket est réglé, et n'a donc rien à y
-     * imputer (B6) ; la contre-passation de ce règlement rouvre le ticket,
-     * et c'est le paiement erroné suivant qui y impute son crédit.
+     * Le PDF nomme l'avoir dont le crédit a réglé le ticket à son émission
+     * (50,00 €, restant dû 50,00 €), et lui seul (Q5). Le second avoir est
+     * émis quand le ticket est réglé, et n'a donc rien à y imputer (B6) ;
+     * la contre-passation de ce règlement rouvre le ticket, et c'est le
+     * paiement erroné suivant qui y impute son crédit, que sa propre
+     * contre-passation rend : aucun de ces règlements, venus après
+     * l'émission, ne s'imprime.
      */
     public function test_l_avoir_dont_la_contre_passation_a_rendu_le_credit_n_est_plus_nomme(): void
     {
@@ -471,7 +493,7 @@ class FacturePdfGeneratorTest extends TestCase
 
         app(ContrePasserPaiementAction::class)->handle(self::auteur(), $errone, 'Saisi sur le mauvais ticket');
 
-        $this->assertSame('(AV-LYON1-2026-000001)', $this->libelleDuCredit($ticket));
+        $this->assertSame(['Avoir AV-LYON1-2026-000001 : 50,00 €', 'Restant dû : 50,00 €'], $this->reglementsImprimes($ticket));
         $this->assertSame([0.0, 50.0, 50.0], [$ticket->fresh()->montantPaye(), $ticket->fresh()->montantCrediteParAvoir(), $ticket->fresh()->montantRestant()]);
     }
 
@@ -494,9 +516,8 @@ class FacturePdfGeneratorTest extends TestCase
 
     /**
      * Toute vente soumise à la TVA, ticket ou facture, se calcule taux par
-     * taux depuis ses prix TTC, et PU HT x quantité diffère du HT de la
-     * ligne (1 000 x 0,83 € pour 833,33 €) : une note sous les lignes
-     * explique le calcul (point 15).
+     * taux depuis ses prix TTC, et le HT de chaque taux se répartit sur ses
+     * lignes : une note sous les lignes explique le calcul (point 15).
      *
      * @return array<string, array{bool}>
      */
@@ -547,6 +568,415 @@ class FacturePdfGeneratorTest extends TestCase
         ]));
 
         $this->assertStringNotContainsString('<div class="note-calcul">', $this->rendu($facture));
+    }
+
+    /**
+     * Le PDF est une vraie page A4 en portrait (595,28 x 841,89 points),
+     * même pour une seule ligne, et jamais réduite : son pied et « Page 1
+     * sur 1 » sont au bas de la page, à moins de 4 cm du bord (point 4).
+     */
+    public function test_le_pdf_est_une_page_a4_meme_avec_une_seule_ligne(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['siren' => '121212120'])->create());
+        $facture = $this->factureEmise();
+
+        $pages = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($facture)->output());
+
+        $this->assertSame(['0.000 0.000 595.280 841.890'], array_column($pages, 'format'));
+        $this->assertLessThan(40 * 72 / 25.4, $this->texte($pages[0], fn (string $texte): bool => str_contains($texte, 'SIREN : 121212120'))['y']);
+        $this->assertLessThan(15 * 72 / 25.4, $this->texte($pages[0], fn (string $texte): bool => $texte === 'Page 1 sur 1')['y']);
+        $this->assertStringContainsString('@page { size: A4 portrait;', $this->rendu($facture));
+    }
+
+    /**
+     * La référence du produit s'imprime dans sa colonne, entière sur une
+     * seule ligne, même avec des espaces ; sa longue désignation passe à la
+     * ligne (point 3).
+     */
+    public function test_la_reference_du_produit_est_imprimee_dans_sa_colonne_sans_retour_a_la_ligne(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $designation = 'Câble USB-C vers USB-C tressé nylon, charge rapide 100 W, longueur deux mètres, coloris noir';
+        $produit = Produit::factory()->create(['reference' => 'CABLE USB-C 100W 2M NOIR', 'nom' => $designation, 'suivi_stock' => false]);
+        $facture = $this->emettre(Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        $textes = array_column($this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($facture)->output())[0]['textes'], 'texte');
+
+        $this->assertStringContainsString('<td class="reference">CABLE USB-C 100W 2M NOIR</td><td>'.e($designation).'</td>', $this->tableauDesLignes($facture));
+        $this->assertContains('CABLE USB-C 100W 2M NOIR', $textes);
+        $this->assertNotContains($designation, $textes);
+        $this->assertNotEmpty(array_filter($textes, fn (string $texte): bool => str_starts_with($texte, 'Câble USB-C')));
+    }
+
+    /**
+     * Une facture imprime, pour chaque ligne, la référence, la désignation,
+     * la quantité, le PU HT, le taux et le total HT, et ni PU TTC, ni TVA,
+     * ni total TTC : ils sont dans le tableau de la TVA et les totaux
+     * (point 3). 2 écrans à 120,00 € TTC à 20 % : PU HT 100,00 €, total HT
+     * 200,00 €.
+     */
+    public function test_une_facture_n_imprime_ni_pu_ttc_ni_tva_ni_total_ttc_par_ligne(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $produit = Produit::factory()->create(['reference' => 'ECR-15', 'nom' => 'Écran 15 pouces', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = $this->emettre(Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 2]]);
+
+        $tableau = $this->tableauDesLignes($facture);
+
+        $this->assertSame(['Référence', 'Désignation', 'Qté', 'PU HT', 'Taux', 'Total HT'], $this->entetes($tableau));
+        $this->assertStringContainsString('<tr><td class="reference">ECR-15</td><td>Écran 15 pouces</td><td class="montant">2</td><td class="montant">100,00 €</td><td class="montant">20 %</td><td class="montant">200,00 €</td></tr>', $tableau);
+    }
+
+    /**
+     * Un ticket, dont le client paie le prix affiché TTC, imprime pour
+     * chaque ligne le PU TTC et le total TTC (P3) : 2 articles à 25,00 €
+     * TTC font 50,00 €.
+     */
+    public function test_un_ticket_imprime_le_pu_ttc_et_le_total_ttc_de_chaque_ligne(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $produit = Produit::factory()->create(['reference' => 'TAS-01', 'nom' => 'Tasse', 'prix_vente_ttc' => 25, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ticket = $this->emettre(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 2]]);
+
+        $tableau = $this->tableauDesLignes($ticket);
+
+        $this->assertSame(['Référence', 'Désignation', 'Qté', 'PU TTC', 'Taux', 'Total TTC'], $this->entetes($tableau));
+        $this->assertStringContainsString('<tr><td class="reference">TAS-01</td><td>Tasse</td><td class="montant">2</td><td class="montant">25,00 €</td><td class="montant">20 %</td><td class="montant">50,00 €</td></tr>', $tableau);
+    }
+
+    /**
+     * 1 000 articles à 1,00 € TTC à 20 % : le PU HT s'enregistre et
+     * s'imprime au millionième, 0,833333 € (Q1-b), et 1 000 x 0,833333 =
+     * 833,333 € retombe sur les 833,33 € HT de la ligne à moins de deux
+     * centimes ; au centime, 1 000 x 0,83 € en ferait 830,00 €.
+     */
+    public function test_quantite_fois_pu_ht_imprime_redonne_le_total_ht_a_deux_centimes_pres(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $produit = Produit::factory()->create(['reference' => 'VIS-01', 'nom' => 'Vis', 'prix_vente_ttc' => 1, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = $this->emettre(Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 1000]]);
+
+        $tableau = $this->tableauDesLignes($facture);
+
+        $this->assertSame(['0.833333', '833.33'], [$facture->lignes->sole()->prix_unitaire_ht, $facture->lignes->sole()->montant_ht]);
+        $this->assertStringContainsString("<td class=\"montant\">1\u{202F}000</td><td class=\"montant\">0,833333 €</td><td class=\"montant\">20 %</td><td class=\"montant\">833,33 €</td>", $tableau);
+        $this->assertLessThan(20_000, abs(1000 * 833_333 - 833_330_000), 'Écart en millionièmes d\'euro entre 1 000 x le PU HT imprimé et le total HT de la ligne.');
+    }
+
+    /**
+     * Une vente sans TVA française se paie hors taxe : un ticket d'export
+     * à un particulier comme la facture d'une livraison intracommunautaire
+     * n'impriment que le PU HT et le total HT, au taux de 0 %, et leur note
+     * de calcul ne cite ni « Prix catalogue TTC » ni « TVA retirée », des
+     * colonnes que le PDF n'a plus (point 3). 3 articles à 7,00 € TTC à
+     * 20 % : PU HT 5,833333 €, 17,50 € HT ; 12 articles à 25,00 € : PU HT
+     * 20,833333 €, 250,00 € HT.
+     */
+    public function test_une_vente_sans_tva_francaise_ticket_ou_facture_n_imprime_que_les_colonnes_ht_et_sa_note_ne_cite_aucune_colonne_absente(): void
+    {
+        $this->travelTo('2026-10-09 10:15:00');
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $export = $this->emettre(Client::factory()->create(), [['produit_id' => $this->produitAVingtPourCent('EXP-01', '7.00')->id, 'quantite' => 3]], [
+            'nature_operation' => NatureOperation::ExportHorsUe,
+            'livraison_adresse' => '1 Main Street', 'livraison_code_postal' => '10001', 'livraison_ville' => 'New York', 'livraison_pays' => 'US',
+        ]);
+        $livraison = $this->emettre($this->clientAllemandVerifie(), [['produit_id' => $this->produitAVingtPourCent('LIC-01', '25.00')->id, 'quantite' => 12]], self::LIVRAISON_A_BERLIN);
+
+        foreach ([[$export, '3</td><td class="montant">5,833333 €</td><td class="montant">0 %</td><td class="montant">17,50 €'], [$livraison, '12</td><td class="montant">20,833333 €</td><td class="montant">0 %</td><td class="montant">250,00 €']] as [$vente, $ligne]) {
+            $html = $this->rendu($vente);
+
+            $this->assertSame(['Référence', 'Désignation', 'Qté', 'PU HT', 'Taux', 'Total HT'], $this->entetes($this->tableauDesLignes($vente)), $vente->numero);
+            $this->assertStringContainsString($ligne, $this->tableauDesLignes($vente), $vente->numero);
+            $this->assertStringContainsString('Vente sans TVA française', $html, $vente->numero);
+            foreach (['PU TTC', 'Prix catalogue TTC', 'TVA retirée'] as $colonneAbsente) {
+                $this->assertStringNotContainsString($colonneAbsente, $html, $vente->numero);
+            }
+        }
+    }
+
+    /**
+     * Un ticket du client comptoir réglé par un bon d'avoir de 20,00 € et
+     * 30,00 € en espèces imprime chacun de ses règlements, relus dans son
+     * contenu signé : la date, le mode et le montant du paiement, le numéro
+     * et le montant de l'avoir, puis le restant dû (points 3 et 23, Q5).
+     */
+    public function test_les_reglements_de_l_emission_s_impriment_par_mode(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $this->ouvrirUneSociete(['code' => 'LYON1']);
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $vendre = fn (float $prix, ?string $bon = null): Facture => app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => $prix, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $bon);
+        $premier = $vendre(20);
+        $bon = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $premier->lignes->sole()->id, 'quantite' => 1]]);
+
+        $ticket = $vendre(50, $bon->numero);
+
+        $this->assertSame(['09/10/2026 · Espèces : 30,00 €', 'Avoir AV-LYON1-2026-000001 : 20,00 €', 'Restant dû : 0,00 €'], $this->reglementsImprimes($ticket));
+    }
+
+    /**
+     * Le pied de page porte l'identité de la société et toutes les
+     * mentions, dans l'ordre : les conditions de paiement, les mentions
+     * entre professionnels, la catégorie de l'opération et l'option pour
+     * les débits ; l'en-tête ne garde que le magasin qui vend (point 4). Il
+     * s'imprime sous les lignes, sans jamais les recouvrir.
+     */
+    public function test_l_identite_de_la_societe_et_toutes_les_mentions_sont_dans_le_pied_de_page(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete([
+            'raison_sociale' => 'Martin et Fils', 'forme_juridique' => FormeJuridique::Sarl, 'capital_social' => '10000.00', 'capital_variable' => true,
+            'siren' => '121212120', 'immatriculation' => 'RCS Marseille', 'numero_tva' => 'FR56121212120',
+            'siege_adresse' => '1 rue de la République', 'siege_code_postal' => '13001', 'siege_ville' => 'Marseille', 'option_debits_tva' => true,
+        ])->create(['nom' => 'Boutique du Port', 'adresse' => '12 quai des Pêcheurs', 'code_postal' => '13002', 'ville' => 'Marseille']));
+        $facture = $this->emettre(Client::factory()->professionnel()->create(), [['produit_id' => Produit::factory()->create(['suivi_stock' => false])->id, 'quantite' => 1]], ['conditions_paiement' => 'Virement à 30 jours.']);
+
+        $html = $this->compacte($this->rendu($facture));
+        $page = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($facture)->output())[0];
+
+        $this->assertSame([
+            'Martin et Fils SARL à capital variable, au capital de 10 000,00 € · Siège social : 1 rue de la République, 13001 Marseille · SIREN : 121212120 · RCS Marseille · TVA intracommunautaire : FR56121212120',
+            'Virement à 30 jours.',
+            'Pénalités de retard : trois fois le taux d\'intérêt légal, exigibles dès le lendemain de la date d\'échéance.',
+            'Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.',
+            'Pas d\'escompte pour paiement anticipé.',
+            'Catégorie de l\'opération : Livraison de biens',
+            'Option pour le paiement de la taxe d\'après les débits',
+        ], $this->textesDuPied($html));
+        $this->assertStringNotContainsString('SIREN', Str::betweenFirst($html, '<table class="en-tete">', '</table>'));
+        $this->assertGreaterThan(
+            $this->texte($page, fn (string $texte): bool => str_starts_with($texte, 'Martin et Fils'))['y'],
+            $this->texte($page, fn (string $texte): bool => $texte === 'Total TTC')['y'],
+        );
+    }
+
+    /**
+     * Sur une facture de 60 lignes, le pied de page et « Page x sur y » se
+     * répètent en bas de chaque page, au même endroit, et aucune ligne ne
+     * descend jusqu'à lui (point 4).
+     */
+    public function test_le_pied_se_repete_sur_chaque_page_d_une_longue_facture(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['raison_sociale' => 'Martin et Fils'])->create());
+        $designation = 'Câble USB-C vers USB-C tressé nylon, charge rapide 100 W, longueur deux mètres, coloris noir';
+        $lignes = array_map(
+            fn (int $rang): array => ['produit_id' => Produit::factory()->create(['reference' => "CABLE-{$rang}", 'nom' => $designation, 'suivi_stock' => false])->id, 'quantite' => 1],
+            range(1, 60),
+        );
+        $facture = $this->emettre(Client::factory()->professionnel()->create(), $lignes);
+
+        $pages = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($facture)->output());
+
+        $this->assertGreaterThanOrEqual(3, count($pages));
+        foreach ($pages as $rang => $page) {
+            $this->assertSame(
+                $this->texte($pages[0], fn (string $texte): bool => str_starts_with($texte, 'Martin et Fils'))['y'],
+                $this->texte($page, fn (string $texte): bool => str_starts_with($texte, 'Martin et Fils'))['y'],
+                'Page '.($rang + 1),
+            );
+            $this->assertLePiedEstSousLesLignes($page, $this->textesDuPied($this->compacte($this->rendu($facture))), 'Page '.($rang + 1).' sur '.count($pages));
+        }
+    }
+
+    /**
+     * Un pied chargé, des mentions et des conditions de paiement de 500
+     * caractères chacune, réserve toute sa hauteur au bas de chaque page :
+     * les lignes s'arrêtent au-dessus de lui, page après page, et « Page x
+     * sur y » reste sous lui.
+     */
+    public function test_un_pied_charge_reserve_sa_hauteur_sans_recouvrir_les_lignes(): void
+    {
+        $mention = fn (string $debut): string => mb_substr($debut.str_repeat(' Mention réglée par le magasin, imprimée telle quelle.', 10), 0, 500);
+        app(TenantContext::class)->set(Magasin::factory()->create([
+            'mention_penalites_retard' => $mention('Pénalités de retard :'),
+            'mention_indemnite_recouvrement' => $mention('Indemnité forfaitaire :'),
+            'mention_escompte' => $mention('Escompte :'),
+        ]));
+        $lignes = array_map(
+            fn (int $rang): array => ['produit_id' => Produit::factory()->create(['reference' => "REF-{$rang}", 'nom' => "Article numéro {$rang}", 'suivi_stock' => false])->id, 'quantite' => 1],
+            range(1, 40),
+        );
+        $facture = $this->emettre(Client::factory()->professionnel()->create(), $lignes, ['conditions_paiement' => $mention('Conditions :')]);
+        $textesDuPied = $this->textesDuPied($this->compacte($this->rendu($facture)));
+
+        $pages = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($facture)->output());
+
+        $this->assertGreaterThanOrEqual(2, count($pages));
+        foreach ($pages as $rang => $page) {
+            $this->assertLePiedEstSousLesLignes($page, $textesDuPied, 'Page '.($rang + 1).' sur '.count($pages));
+        }
+    }
+
+    /**
+     * Le siège à l'adresse du magasin ne se répète pas dans le pied : il y
+     * est dit, sans son adresse, que le magasin est aussi le siège (S3).
+     */
+    public function test_le_siege_n_est_pas_repete_quand_il_est_l_etablissement(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete([
+            'raison_sociale' => 'Martin et Fils', 'siren' => '121212120',
+            'siege_adresse' => '12, quai des Pêcheurs', 'siege_code_postal' => '13002', 'siege_ville' => 'MARSEILLE',
+        ])->create(['adresse' => '12 quai des Pêcheurs', 'code_postal' => '13002', 'ville' => 'Marseille']));
+
+        $identite = $this->textesDuPied($this->compacte($this->rendu($this->factureEmise())))[0];
+
+        $this->assertStringContainsString(' · Siège social et établissement · SIREN : 121212120', $identite);
+        $this->assertStringNotContainsString('Pêcheurs', $identite);
+    }
+
+    /**
+     * Le tableau de la TVA imprime, à côté du taux de 0 %, le motif qui
+     * l'explique (point 11) : l'exonération d'une livraison
+     * intracommunautaire, la franchise en base d'un magasin qui en relève.
+     */
+    public function test_un_taux_a_zero_imprime_son_motif_dans_le_tableau_de_tva(): void
+    {
+        $this->travelTo('2026-10-09 10:15:00');
+        $tableauDeLaTva = fn (string $motif, string $base): string => '<thead><tr><th>Taux TVA</th><th>Motif</th><th class="montant">Base HT</th><th class="montant">TVA</th><th class="montant">Total TTC</th></tr></thead>'
+            .'<tbody><tr><td>0 %</td><td class="motif">'.e($motif).'</td><td class="montant">'.$base.'</td><td class="montant">0,00 €</td><td class="montant">'.$base.'</td></tr></tbody>';
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $livraison = $this->rendu($this->emettre($this->clientAllemandVerifie(), [['produit_id' => $this->produitAVingtPourCent('LIC-01', '25.00')->id, 'quantite' => 12]], self::LIVRAISON_A_BERLIN));
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['regime_tva' => RegimeTva::FranchiseEnBase])->create());
+        $franchise = $this->rendu($this->emettre(Client::factory()->create(), [['produit_id' => $this->produitAVingtPourCent('TAS-01', '12.00')->id, 'quantite' => 1]]));
+
+        $this->assertStringContainsString($tableauDeLaTva('Exonération de TVA, article 262 ter I du CGI', '250,00 €'), $this->compacte($livraison));
+        $this->assertStringContainsString($tableauDeLaTva('TVA non applicable, art. 293 B du CGI', '12,00 €'), $this->compacte($franchise));
+    }
+
+    /**
+     * Un ticket réglé en entier à la caisse n'imprime pas d'échéance ; un
+     * ticket émis sans être réglé imprime la sienne.
+     */
+    public function test_un_ticket_paye_a_la_caisse_n_imprime_pas_d_echeance(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $paye = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
+        $du = $this->emettre(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
+
+        $this->assertStringNotContainsString('Échéance', $this->rendu($paye));
+        $this->assertStringContainsString('Échéance le 08/11/2026', $this->rendu($du));
+    }
+
+    /**
+     * Une facture à un professionnel imprime toujours la date à laquelle le
+     * règlement doit intervenir (art. L441-9 du Code de commerce), même
+     * réglée par virement à son émission.
+     */
+    public function test_une_facture_a_un_professionnel_payee_a_l_emission_imprime_son_echeance(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        app(TenantContext::class)->set(Magasin::factory()->create());
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $facture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Virement, 'VIR-42');
+
+        $this->assertSame(['09/10/2026 · Virement · VIR-42 : 30,00 €', 'Restant dû : 0,00 €'], $this->reglementsImprimes($facture));
+        $this->assertStringContainsString('Échéance le 08/11/2026', $this->rendu($facture));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $lignes
+     * @param  array<string, mixed>  $attributs
+     */
+    private function emettre(Client $client, array $lignes, array $attributs = []): Facture
+    {
+        return app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, $lignes, $attributs));
+    }
+
+    private function produitAVingtPourCent(string $reference, string $prixTtc): Produit
+    {
+        return Produit::factory()->create(['reference' => $reference, 'nom' => "Article {$reference}", 'prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
+    }
+
+    /**
+     * Un professionnel établi en Allemagne dont le n° de TVA est vérifié
+     * valide sur VIES le jour même, comme l'écrit VerifierNumeroTvaAction.
+     */
+    private function clientAllemandVerifie(): Client
+    {
+        $client = Client::factory()->etranger('DE', 'DE123456789')->create(['nom' => 'Muster GmbH', 'code_postal' => '10115']);
+        ConsultationVies::forceCreate([
+            'client_id' => $client->id,
+            'numero_tva' => $client->numero_tva,
+            'valide' => true,
+            'identifiant_consultation' => 'WAPIAAAAW1234567',
+            'consultee_le' => now(),
+            'reponse' => '{"valid":true}',
+        ]);
+
+        return $client;
+    }
+
+    /**
+     * Le tableau des lignes du PDF, sans les blancs autour de ses balises.
+     */
+    private function tableauDesLignes(Facture $facture): string
+    {
+        return Str::betweenFirst($this->compacte($this->rendu($facture)), '<table class="lignes">', '</table>');
+    }
+
+    /**
+     * Les titres des colonnes d'un tableau.
+     *
+     * @return list<string>
+     */
+    private function entetes(string $tableau): array
+    {
+        preg_match_all('#<th(?: [^>]*)?>(.*?)</th>#', $tableau, $titres);
+
+        return array_map(fn (string $titre): string => html_entity_decode($titre, ENT_QUOTES), $titres[1]);
+    }
+
+    /**
+     * Le texte de chaque ligne du pied de page, l'identité de la société
+     * d'abord.
+     *
+     * @return list<string>
+     */
+    private function textesDuPied(string $html): array
+    {
+        preg_match_all('#<div class="(?:identite|pied)">(.*?)</div>#', Str::betweenFirst($html, '<div id="pied-de-page">', '</div></div>').'</div>', $textes);
+
+        return array_map(fn (string $texte): string => html_entity_decode($texte, ENT_QUOTES), $textes[1]);
+    }
+
+    /**
+     * Le pied de la page est sous toutes ses autres lignes, à 3 mm au moins,
+     * et « Page x sur y » sous le pied. Un texte de la page de 8 caractères
+     * au moins appartient au pied s'il est tout ou partie de l'une de ses
+     * lignes, que la largeur de la page a pu couper.
+     *
+     * @param  array{format: string, textes: list<array{x: float, y: float, texte: string}>}  $page
+     * @param  list<string>  $textesDuPied
+     */
+    private function assertLePiedEstSousLesLignes(array $page, array $textesDuPied, string $numero): void
+    {
+        $estDuPied = fn (string $texte): bool => mb_strlen($texte) >= 8 && collect($textesDuPied)->contains(
+            fn (string $ligne): bool => str_contains($ligne, $texte),
+        );
+        $pied = array_column(array_filter($page['textes'], fn (array $texte): bool => $estDuPied($texte['texte'])), 'y');
+        $corps = array_column(array_filter($page['textes'], fn (array $texte): bool => ! $estDuPied($texte['texte']) && $texte['texte'] !== $numero), 'y');
+
+        $this->assertNotEmpty($pied, $numero);
+        $this->assertGreaterThan(max($pied) + 3 * 72 / 25.4, min($corps), $numero);
+        $this->assertLessThan(min($pied), $this->texte($page, fn (string $texte): bool => $texte === $numero)['y'], $numero);
+    }
+
+    /**
+     * Le premier texte de la page qui répond au critère.
+     *
+     * @param  array{format: string, textes: list<array{x: float, y: float, texte: string}>}  $page
+     * @param  callable(string): bool  $critere
+     * @return array{x: float, y: float, texte: string}
+     */
+    private function texte(array $page, callable $critere): array
+    {
+        $trouves = array_values(array_filter($page['textes'], fn (array $texte): bool => $critere($texte['texte'])));
+        $this->assertNotEmpty($trouves, 'Texte introuvable sur la page.');
+
+        return $trouves[0];
     }
 
     private function rendu(Facture $facture): string

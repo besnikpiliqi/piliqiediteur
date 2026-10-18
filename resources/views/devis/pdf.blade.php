@@ -3,15 +3,21 @@
 <head>
     <meta charset="utf-8">
     <title>{{ $devis->numero ?? 'Devis (brouillon)' }}</title>
-    @include('documents.pdf.styles')
+    @include('documents.pdf.styles', ['pied' => $pied])
 </head>
 <body>
     {{-- Un devis modifié depuis son envoi est un brouillon qui garde son
          numéro et la date de son dernier envoi (voir ModifierDevisAction) :
          cette version n'a pas encore été émise, elle ne porte aucune date
          d'émission. $emetteur : la société et le magasin d'aujourd'hui, un
-         devis n'étant pas signé au registre fiscal (voir DevisPdfGenerator). --}}
+         devis n'étant pas signé au registre fiscal (voir DevisPdfGenerator) ;
+         $pied : l'identité de la société, les conditions de paiement, la
+         nature de l'opération et la franchise de TVA, s'il y a lieu (voir
+         PiedDePage). --}}
     @php($brouillon = $devis->statut === \App\Domain\Facturation\Enums\StatutDevis::Brouillon)
+
+    @include('documents.pdf.pied', ['pied' => $pied])
+
     @include('documents.pdf.en-tete', [
         'emetteur' => $emetteur,
         'titre' => 'Devis',
@@ -37,27 +43,13 @@
 
     @include('documents.pdf.livraison', ['lignes' => $devis->lignesDeLivraison()])
 
-    @include('documents.pdf.lignes', [
-        'lignes' => $devis->lignes,
-        'sansTvaFrancaise' => \App\Domain\Facturation\Services\ContexteDeVente::documentRetireLaTvaDuPrix($devis),
-        'noteDeCalcul' => app(\App\Domain\Facturation\Services\MentionsFiscales::class)->calcul($devis),
-    ])
+    @include('documents.pdf.lignes', ['document' => $devis])
 
     @include('documents.pdf.totaux', ['document' => $devis])
 
-    @if($devis->conditions_paiement)
-        <div class="pied">{{ $devis->conditions_paiement }}</div>
-    @endif
-
     @if($devis->notes)
-        <div class="pied">{{ $devis->notes }}</div>
+        <div class="remarque">{{ $devis->notes }}</div>
     @endif
-
-    {{-- La nature de l'opération et la franchise de TVA, s'il y a lieu :
-         voir MentionsFiscales. --}}
-    @foreach(app(\App\Domain\Facturation\Services\MentionsFiscales::class)->pour($devis, $emetteur) as $mention)
-        <div class="pied">{{ $mention }}</div>
-    @endforeach
 
     <div class="accord">Date et signature du client, précédées de la mention « Bon pour accord »</div>
 </body>

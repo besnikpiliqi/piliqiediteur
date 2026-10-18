@@ -161,7 +161,7 @@ class FactureResource extends Resource
                     ->label('Échéance')
                     ->content(fn (Get $get): string => self::echeanceAnnoncee($get('client_id'))),
                 self::champNatureDeLOperation(),
-                Textarea::make('conditions_paiement')->label('Conditions de paiement')->columnSpanFull(),
+                Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(500)->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
 
@@ -501,7 +501,9 @@ class FactureResource extends Resource
 
     /**
      * Lignes d'un document (facture, avoir, devis, facture d'achat, avoir
-     * fournisseur) : pour chaque article son PU HT, son PU TTC et son taux,
+     * fournisseur) : pour chaque article son PU HT, avec ses décimales
+     * utiles (voir CalculateurLigne::prixUnitaireHtExact()), son PU TTC et
+     * son taux,
      * puis le HT, la TVA et le TTC de la ligne, tels qu'enregistrés (voir
      * CalculateurLigne). Un achat n'a pas de PU TTC : sa TVA est sa part de
      * celle du total HT de son taux. La remise n'apparaît que si une ligne
@@ -537,7 +539,9 @@ class FactureResource extends Resource
                 TextEntry::make('description')
                     ->helperText(fn (?Model $record): ?string => $record instanceof LigneAchat && $record->nouveau_produit !== null ? 'Nouveau produit, créé à la validation' : null),
                 TextEntry::make('quantite')->label('Quantité')->numeric(),
-                TextEntry::make('prix_unitaire_ht')->label('PU HT')->money('EUR'),
+                TextEntry::make('prix_unitaire_ht')
+                    ->label('PU HT')
+                    ->formatStateUsing(fn (string $state): string => app(CalculateurLigne::class)->prixUnitaireEnEuros(app(CalculateurLigne::class)->enMillioniemes($state))),
                 TextEntry::make('prix_unitaire_ttc')
                     ->label($sansTvaFrancaise ? 'Prix catalogue TTC' : 'PU TTC')
                     ->state(fn (Model $record): mixed => ! $sansTvaFrancaise || $prixCatalogueSansTvaFrancaise($record) ? $record->prix_unitaire_ttc : null)

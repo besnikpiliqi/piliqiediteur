@@ -1,9 +1,11 @@
 {{--
-    L'émetteur à gauche : le nom du magasin, puis l'identité de la société
-    et de l'établissement, sans ce qui n'est pas renseigné (voir
-    Emetteur::lignesDIdentite()) ; nature et références du document à
-    droite. L'émetteur d'un document émis est celui qu'il a signé (voir
-    FigeSonEmetteur), jamais la société ni le magasin d'aujourd'hui.
+    Le magasin qui vend à gauche : son nom, puis l'adresse, le SIRET et les
+    coordonnées de l'établissement, sans ce qui n'est pas renseigné (voir
+    Emetteur::lignesDeLEtablissement()) ; nature et références du document
+    à droite. L'identité de la société est dans le pied de chaque page
+    (voir PiedDePage). L'émetteur d'un document émis est celui qu'il a
+    signé (voir FigeSonEmetteur), jamais la société ni le magasin
+    d'aujourd'hui.
 
     Un document du magasin de démonstration porte « DÉMONSTRATION — SANS
     VALEUR » en travers de chaque page, et son bandeau en tête, celui d'un
@@ -24,7 +26,7 @@
     <tr>
         <td>
             <div class="magasin-nom">{{ $emetteur->nom }}</div>
-            {!! collect($emetteur->lignesDIdentite())->map(fn (string $ligne): string => e($ligne))->implode('<br>') !!}
+            {!! collect($emetteur->lignesDeLEtablissement())->map(fn (string $ligne): string => e($ligne))->implode('<br>') !!}
         </td>
         <td>
             <div class="titre-document {{ $classeTitre ?? '' }}">{{ $titre }}</div>

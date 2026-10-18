@@ -33,10 +33,11 @@ return new class extends Migration
             // produit vendu hors de la TVA française, dont la ligne est à
             // 0 % et le PU TTC du catalogue comprend encore la TVA, retirée
             // du prix payé (voir ContexteDeVente). Son PU HT en est la
-            // conversion au centime, affichée ; ses montants se calculent
-            // taux par taux sur le TTC des lignes du document (voir
-            // CalculateurLigne::chiffrerUneVente()).
-            $table->decimal('prix_unitaire_ht', 12, 2);
+            // conversion au millionième d'euro, imprimée avec ses décimales
+            // utiles (voir CalculateurLigne::prixUnitaireHtExact()) ; ses
+            // montants se calculent taux par taux sur le TTC des lignes du
+            // document (voir CalculateurLigne::chiffrerUneVente()).
+            $table->decimal('prix_unitaire_ht', 18, 6);
             $table->decimal('prix_unitaire_ttc', 12, 2);
             $table->decimal('taux_tva', 5, 2);
             $table->decimal('taux_tva_du_prix', 5, 2);

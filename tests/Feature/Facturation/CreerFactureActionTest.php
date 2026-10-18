@@ -167,7 +167,7 @@ class CreerFactureActionTest extends TestCase
         ]);
 
         $ligne = $facture->lignes->sole();
-        $this->assertSame(['20.00', '10.00', '30.00', '6.00', '36.00'], [$ligne->taux_tva, $ligne->prix_unitaire_ht, $ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc]);
+        $this->assertSame(['20.00', '10.000000', '30.00', '6.00', '36.00'], [$ligne->taux_tva, $ligne->prix_unitaire_ht, $ligne->montant_ht, $ligne->montant_tva, $ligne->montant_ttc]);
     }
 
     /**
@@ -200,17 +200,17 @@ class CreerFactureActionTest extends TestCase
         $produit->update(['prix_vente_ttc' => 525, 'taux_tva' => 5]);
 
         $ligne = $facture->lignes->first()->fresh();
-        $this->assertSame('100.00', $ligne->prix_unitaire_ht);
+        $this->assertSame('100.000000', $ligne->prix_unitaire_ht);
         $this->assertSame('20.00', $ligne->taux_tva);
     }
 
     /**
      * Une vente part toujours de son PU TTC, quel que soit le client,
      * multiplié par la quantité ; son PU HT en est la conversion au
-     * centime, affichée : 40 € TTC x 2 = 80,00 € TTC ; 10,05 € TTC (8,375 €
-     * -> 8,38 € HT) x 3 = 30,15 € TTC. Le HT du taux, 110,15 ÷ 1,2 =
-     * 91,791... -> 91,79 €, se répartit par cumul : 66,67 € (80,00 ÷ 1,2),
-     * puis 25,12 €.
+     * millionième d'euro (Q1-b) : 40 € TTC (33,333333 € HT) x 2 = 80,00 €
+     * TTC ; 10,05 € TTC (8,375 € HT) x 3 = 30,15 € TTC. Le HT du taux,
+     * 110,15 ÷ 1,2 = 91,791... -> 91,79 €, se répartit par cumul : 66,67 €
+     * (80,00 ÷ 1,2), puis 25,12 €.
      */
     public function test_une_vente_part_toujours_du_pu_ttc(): void
     {
@@ -225,9 +225,9 @@ class CreerFactureActionTest extends TestCase
 
         [$ligneCoque, $ligneCable] = $facture->lignes->sortBy('ordre')->values()->all();
 
-        $this->assertSame(['33.33', '40.00'], [$ligneCoque->prix_unitaire_ht, $ligneCoque->prix_unitaire_ttc]);
+        $this->assertSame(['33.333333', '40.00'], [$ligneCoque->prix_unitaire_ht, $ligneCoque->prix_unitaire_ttc]);
         $this->assertSame(['66.67', '13.33', '80.00'], [$ligneCoque->montant_ht, $ligneCoque->montant_tva, $ligneCoque->montant_ttc]);
-        $this->assertSame(['8.38', '10.05'], [$ligneCable->prix_unitaire_ht, $ligneCable->prix_unitaire_ttc]);
+        $this->assertSame(['8.375000', '10.05'], [$ligneCable->prix_unitaire_ht, $ligneCable->prix_unitaire_ttc]);
         $this->assertSame(['25.12', '5.03', '30.15'], [$ligneCable->montant_ht, $ligneCable->montant_tva, $ligneCable->montant_ttc]);
         $this->assertSame(['91.79', '18.36', '110.15'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
@@ -235,8 +235,8 @@ class CreerFactureActionTest extends TestCase
     /**
      * Sans prix saisi, la ligne reprend tel quel le prix de vente TTC
      * enregistré sur la fiche du produit -- arrondi une seule fois, à son
-     * enregistrement -- et son PU HT en est la conversion au centime : rien
-     * ne se recalcule à la vente.
+     * enregistrement -- et son PU HT en est la conversion au millionième
+     * d'euro (Q1-b) : rien ne se recalcule à la vente.
      */
     public function test_sans_prix_saisi_la_ligne_reprend_tels_quels_les_prix_du_produit(): void
     {
@@ -255,8 +255,8 @@ class CreerFactureActionTest extends TestCase
             $this->assertSame($produit->prix_vente_ttc, $ligne->prix_unitaire_ttc);
         }
 
-        $this->assertSame(['33.33', '40.00'], [$ligneCoque->prix_unitaire_ht, $ligneCoque->prix_unitaire_ttc]);
-        $this->assertSame(['10.01', '12.01'], [$ligneCable->prix_unitaire_ht, $ligneCable->prix_unitaire_ttc]);
+        $this->assertSame(['33.333333', '40.00'], [$ligneCoque->prix_unitaire_ht, $ligneCoque->prix_unitaire_ttc]);
+        $this->assertSame(['10.008333', '12.01'], [$ligneCable->prix_unitaire_ht, $ligneCable->prix_unitaire_ttc]);
         $this->assertSame(['96.69', '19.34', '116.03'], [$facture->total_ht, $facture->total_tva, $facture->total_ttc]);
     }
 

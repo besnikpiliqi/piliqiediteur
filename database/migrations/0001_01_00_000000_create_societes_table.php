@@ -54,9 +54,9 @@ return new class extends Migration
             $table->string('siege_complement_adresse')->nullable();
             $table->string('siege_code_postal', 10)->nullable();
             $table->string('siege_ville', 100)->nullable();
-            // Nullable : tant qu'il n'est pas choisi, l'e-reporting
-            // périodique ignore la société (voir
-            // SoumettreEReportingPeriodique).
+            // Nullable : tant qu'il n'est pas choisi dans les paramètres
+            // fiscaux de la société, elle ne vend pas en franchise en base
+            // (voir Societe::estEnFranchiseDeTva()).
             $table->string('regime_tva', 30)->nullable();
             // Option pour les débits (CGI art. 269, 2-c) : ne concerne que
             // les prestations de services.

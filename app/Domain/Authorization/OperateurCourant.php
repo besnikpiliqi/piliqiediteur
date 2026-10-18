@@ -13,9 +13,8 @@ use Closure;
  *   base et contrôlé (voir LecteurDesDroits), jamais la personne connectée
  *   à sa place ;
  * - le système, posé par pendantLeSysteme() : une clôture automatique,
- *   une fermeture d'office, une relance automatique, un devis qui expire,
- *   une soumission d'e-reporting ; l'opérateur signé est nul, même pendant
- *   une requête authentifiée ;
+ *   une fermeture d'office, une relance automatique, un devis qui expire ;
+ *   l'opérateur signé est nul, même pendant une requête authentifiée ;
  * - rien de posé : seuls les événements techniques hors action
  *   (ouverture et fin de session, abandon d'une vente, ligne retirée du
  *   panier) s'inscrivent alors au nom de la personne connectée (voir

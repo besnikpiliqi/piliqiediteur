@@ -18,8 +18,8 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\SequenceDocument;
-use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
+use App\Domain\Facturation\Services\EReportingDesParticuliers;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Actions\CreerMandatPdpAction;
 use App\Domain\Tenancy\Actions\FermerLaDemonstrationAction;
@@ -217,6 +217,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $client = Client::query()->where('type_client', 'professionnel')->sole();
         $client->update(['email' => 'client@example.test']);
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => Produit::query()->where('reference', 'DEMO-TASSE')->value('id'), 'quantite' => 1]]));
+        $this->vendre();
 
         $this->assertThrows(fn () => app(EnvoyerDocumentAction::class)->handle($societe->proprietaire, $facture, 'client@example.test', null), VenteNonAutoriseeException::class, 'Le magasin de démonstration n\'écrit à aucun client et ne transmet rien.');
         $this->assertThrows(fn () => app(CreerMandatPdpAction::class)->handle($demonstration, $societe->proprietaire), LogicException::class, 'Le magasin de démonstration ne transmet rien à la plateforme.');
@@ -224,9 +225,9 @@ class MagasinDeDemonstrationTest extends TestCase
         Mail::assertNothingSent();
 
         $this->verifierLIdentiteDuProprietaire($societe);
-        $this->travel(2)->months();
-        $this->artisan('app:soumettre-ereporting-periodique')->assertSuccessful();
-        $this->assertFalse(SoumissionEReporting::withoutGlobalScope(MagasinScope::class)->where('magasin_id', $demonstration->id)->exists());
+        $apercu = app(TenantContext::class)->runAs($demonstration, fn () => app(EReportingDesParticuliers::class)->apercu(ClotureCaisse::query()->sole()));
+        $this->assertSame([true, false], [$apercu->demonstration, $apercu->aDeclarer()]);
+        $this->assertSame(0, app(TenantContext::class)->runAs($demonstration, fn (): int => EReportingDesParticuliers::journeesADeclarer($demonstration)->count()));
     }
 
     public function test_ses_documents_portent_une_identite_fictive_et_le_filigrane(): void

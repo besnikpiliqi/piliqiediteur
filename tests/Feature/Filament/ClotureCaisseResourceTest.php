@@ -4,12 +4,14 @@ namespace Tests\Feature\Filament;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
@@ -445,9 +447,52 @@ class ClotureCaisseResourceTest extends TestCase
         Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()])
             ->assertSuccessful()
             ->assertSee('TVA par taux')
-            ->assertSee('Biens et services')
+            ->assertSee('Aperçu de l\'e-reporting (non transmis)')
             ->assertSee('66,67')
             ->assertSee('76,67');
+    }
+
+    /**
+     * Point 26 : la fiche montre en français ce que l'e-reporting déclarera
+     * pour la journée chiffrée du point 26 (trois tickets, une facture à un
+     * professionnel, le retour d'un câble) : les totaux par catégorie et
+     * par taux, leur contrôle contre le net de la clôture, l'encaissement
+     * de la réparation et le statut, sans aucun code ni nom de champ de la
+     * plateforme.
+     */
+    public function test_la_fiche_montre_l_apercu_de_l_e_reporting_en_francais(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $magasin = $this->ouvrirLeMagasin();
+        $particulier = Client::factory()->create();
+        $cable = Produit::factory()->create(['prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $livre = Produit::factory()->create(['prix_vente_ttc' => 10.55, 'taux_tva' => 5.5, 'suivi_stock' => false]);
+        $deuxCables = self::vendreAuComptant(self::auteur(), $particulier, [['produit_id' => $cable->id, 'quantite' => 2]], ModePaiement::Especes);
+        self::vendreAuComptant(self::auteur(), $particulier, [
+            ['produit_id' => $livre->id, 'quantite' => 1],
+            ['service_id' => Service::factory()->create()->id, 'prix_unitaire_ttc' => 60, 'taux_tva' => 20, 'quantite' => 1],
+        ], ModePaiement::CarteBancaire);
+        self::vendreAuComptant(self::auteur(), $particulier, [['produit_id' => $cable->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
+        $this->completerIdentiteLegale($magasin);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $cable->id, 'quantite' => 1]]));
+        app(EnregistrerPaiementAction::class)->handle(self::auteur(), $facture->client, ['mode_paiement' => ModePaiement::Virement->value, 'montant' => '50.00', 'recu_le' => '2026-10-05'], [['facture_id' => $facture->id, 'montant' => '50.00']]);
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $particulier, [['ligne_facture_id' => $deuxCables->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $this->travelTo('2026-10-05 19:00:00');
+        $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, '2026-10-05');
+
+        $fiche = Livewire::test(ViewClotureCaisse::class, ['record' => $cloture->getRouteKey()]);
+
+        $fiche->assertSeeInOrder([
+            'Aperçu de l\'e-reporting (non transmis)',
+            '05/10/2026', 'Livraisons de biens', '20 %', '83,33 €', '16,67 €',
+            '05/10/2026', 'Livraisons de biens', '5,5 %', '10,00 €', '0,55 €',
+            '05/10/2026', 'Prestations de services', '20 %', '50,00 €', '10,00 €',
+            '143,33 € HT, 27,22 € de TVA',
+            'Égal au net des ventes aux particuliers de la clôture.',
+            'Encaissements des prestations de services', '05/10/2026', '20 %', '60,00 €',
+            'Non transmis : plateforme pas encore raccordée (étape 2).',
+        ]);
+        $fiche->assertDontSee(['TLB1', 'TPS1', 'TNT1', 'LivraisonsDeBiens', 'tax_exclusive_amount', 'category_code', 'taxable_amount']);
     }
 
     /**

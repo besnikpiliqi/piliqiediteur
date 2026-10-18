@@ -604,8 +604,8 @@ class MagasinResourceTest extends TestCase
 
     /**
      * Un magasin qui n'a encore rien vendu ne numérote aucun document la
-     * nuit, ni clôture de caisse ni déclaration d'e-reporting : son code
-     * reste modifiable jusqu'à son premier document.
+     * nuit, aucune clôture de caisse en particulier : son code reste
+     * modifiable jusqu'à son premier document.
      */
     public function test_un_magasin_sans_vente_garde_son_code_modifiable_apres_les_commandes_de_la_nuit(): void
     {
@@ -613,7 +613,6 @@ class MagasinResourceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'regime_tva' => RegimeTva::ReelSimplifie]);
         $this->travelTo('2026-10-10 01:00:00');
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
-        $this->artisan('app:soumettre-ereporting-periodique')->assertSuccessful();
 
         $this->ouvrirLaFiche($magasin)->fillForm(['code' => 'LYON1'])->call('save')->assertHasNoFormErrors();
 

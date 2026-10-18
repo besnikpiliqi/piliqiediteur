@@ -11,7 +11,7 @@ Il couvre :
 - la caisse sécurisée (art. 286 I-3° bis du CGI) : ventes, encaissements et journal des événements signés et chaînés, consultables et exportables par le magasin ;
 - les factures d'achat, les avoirs fournisseur, le stock et son coût moyen pondéré ;
 - l'envoi des documents par e-mail et les relances des factures impayées ;
-- l'e-reporting et la transmission des factures électroniques, par une passerelle factice tant que la plateforme agréée n'est pas raccordée.
+- l'aperçu de l'e-reporting de chaque journée clôturée, dont l'envoi attend le raccordement de la plateforme agréée, et la transmission des factures électroniques, par une passerelle factice d'ici là.
 
 ## Technique
 
@@ -47,7 +47,7 @@ DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=piliqi_test DB_US
 
 `caisse:verifier` vérifie l'intégrité de la caisse sécurisée de chaque magasin (chaînes signées, documents, numérotation), l'inscrit au journal des événements et échoue au moindre défaut ; le planificateur la lance chaque nuit à 3 h, complète une fois par mois pour chaque magasin.
 
-En développement, trois commandes tournent côte à côte : le serveur du panneau, la file d'attente (e-mails, courriers et transmissions à la plateforme) et le planificateur (clôture automatique de minuit et caisses personnelles, factures en retard, e-reporting, vérification de la caisse sécurisée, relances, revérifications Sirene, démonstrations inactives, effacement des traces, des pièces, des jetons et des demandes d'inscription expirés, journal d'audit expiré).
+En développement, trois commandes tournent côte à côte : le serveur du panneau, la file d'attente (e-mails, courriers et transmissions à la plateforme) et le planificateur (clôture automatique de minuit et caisses personnelles, factures en retard, vérification de la caisse sécurisée, relances, revérifications Sirene, démonstrations inactives, effacement des traces, des pièces, des jetons et des demandes d'inscription expirés, journal d'audit expiré).
 
 ```sh
 php artisan serve

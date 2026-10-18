@@ -25,7 +25,6 @@ enum TypeDocument: string
     case FactureAchat = 'facture_achat';
     case AvoirFournisseur = 'avoir_fournisseur';
     case ClotureCaisse = 'cloture_caisse';
-    case SoumissionEReporting = 'soumission_ereporting';
     case Produit = 'produit';
 
     /**
@@ -45,7 +44,6 @@ enum TypeDocument: string
             self::FactureAchat => 'FA',
             self::AvoirFournisseur => 'AF',
             self::ClotureCaisse => 'Z',
-            self::SoumissionEReporting => 'ER',
             self::Produit => 'PRD',
         };
     }

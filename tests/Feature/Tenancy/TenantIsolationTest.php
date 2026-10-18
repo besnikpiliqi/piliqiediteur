@@ -42,7 +42,6 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Models\PreuveOperation;
-use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -61,11 +60,11 @@ use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\EnregistrementFiscalResource;
 use App\Filament\App\Resources\EquipeDuMagasinResource;
+use App\Filament\App\Resources\EReportingResource;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FournisseurResource;
 use App\Filament\App\Resources\ProduitResource;
-use App\Filament\App\Resources\SoumissionEReportingResource;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -138,9 +137,9 @@ class TenantIsolationTest extends TestCase
      * le jeton d'une demande traitée, que par ActionsUniques.
      * ActionTraitee, Avoir, AvoirAllocation, BordereauDetaxe,
      * ConsultationVies, EnregistrementFiscal, Paiement, PaiementAllocation,
-     * PreuveOperation, SoumissionEReporting, TeteRegistreFiscal et
-     * TraceEvenement sont aussi dans modelesCrees(), écrits directement par
-     * ces tests (voir creerEnregistrement()).
+     * PreuveOperation, TeteRegistreFiscal et TraceEvenement sont aussi dans
+     * modelesCrees(), écrits directement par ces tests (voir
+     * creerEnregistrement()).
      *
      * @var list<class-string<Model>>
      */
@@ -160,7 +159,6 @@ class TenantIsolationTest extends TestCase
         Paiement::class,
         PaiementAllocation::class,
         PreuveOperation::class,
-        SoumissionEReporting::class,
         TeteRegistreFiscal::class,
         TraceEvenement::class,
         TransmissionPdp::class,
@@ -206,7 +204,7 @@ class TenantIsolationTest extends TestCase
                 $modele,
                 static fn (array $attributs = []): Model => $modele::factory()->create($attributs),
             ]])
-            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, SoumissionEReporting::class, TeteRegistreFiscal::class, TraceEvenement::class])
+            ->merge(collect([ActionTraitee::class, Avoir::class, AvoirAllocation::class, BordereauDetaxe::class, ConsultationVies::class, EnregistrementFiscal::class, Paiement::class, PaiementAllocation::class, PreuveOperation::class, TeteRegistreFiscal::class, TraceEvenement::class])
                 ->mapWithKeys(static fn (string $modele): array => [class_basename($modele) => [
                     $modele,
                     static fn (array $attributs = []): Model => self::creerEnregistrement($modele, $attributs),
@@ -447,6 +445,7 @@ class TenantIsolationTest extends TestCase
             'client, modification' => [ClientResource::class, 'edit', static fn (): Model => Client::factory()->create()],
             'clôture de caisse, détail' => [ClotureCaisseResource::class, 'view', static fn (): Model => ClotureCaisse::factory()->create()],
             'devis, détail' => [DevisResource::class, 'view', static fn (): Model => Devis::factory()->create()],
+            'e-reporting, journée' => [EReportingResource::class, 'view', static fn (): Model => ClotureCaisse::factory()->create(['nombre_ventes' => 1])],
             'devis, modification' => [DevisResource::class, 'edit', static fn (): Model => Devis::factory()->create()],
             'facture d\'achat, détail' => [FactureAchatResource::class, 'view', static fn (): Model => FactureAchat::factory()->create()],
             'facture d\'achat, modification' => [FactureAchatResource::class, 'edit', static fn (): Model => FactureAchat::factory()->create()],
@@ -458,7 +457,6 @@ class TenantIsolationTest extends TestCase
                 ->where('user_id', app(CreerMembreAction::class)->handle($magasin->societe->proprietaire, $magasin->societe, ['name' => 'Paul', 'email' => 'paul@example.test'], 'provisoire-des-tests', [$magasin->getKey() => ['role' => RoleMagasin::Vendeur]])->getKey())
                 ->firstOrFail()],
             'produit, modification' => [ProduitResource::class, 'edit', static fn (): Model => Produit::factory()->create()],
-            'soumission e-reporting, détail' => [SoumissionEReportingResource::class, 'view', static fn (): Model => self::creerEnregistrement(SoumissionEReporting::class)],
         ];
     }
 
@@ -496,10 +494,9 @@ class TenantIsolationTest extends TestCase
      * brouillon, un paiement ou une imputation non signés, une
      * vérification VIES sans appel à VIES, une preuve d'exonération ou un
      * bordereau de détaxe sur un brouillon, une ligne du registre fiscal
-     * sans l'événement d'initialisation du magasin, une ligne de verrou,
-     * une soumission d'e-reporting sans clôture. Seule
-     * l'isolation est vérifiée ici. Comme une fabrique, il accepte des
-     * attributs hors $fillable.
+     * sans l'événement d'initialisation du magasin, une ligne de verrou.
+     * Seule l'isolation est vérifiée ici. Comme une fabrique, il accepte
+     * des attributs hors $fillable.
      *
      * @param  class-string<Model>  $modele
      * @param  array<string, mixed>  $attributs
@@ -557,11 +554,6 @@ class TenantIsolationTest extends TestCase
                 'facture_id' => Facture::factory()->create()->getKey(),
                 'type' => TypePreuve::Mrn,
                 'reference' => '26FR000000123456E1',
-            ],
-            SoumissionEReporting::class => [
-                'periode_debut' => '2026-09-01',
-                'periode_fin' => '2026-09-30',
-                'date_limite_transmission' => '2026-10-10',
             ],
             TeteRegistreFiscal::class => [],
             TraceEvenement::class => [

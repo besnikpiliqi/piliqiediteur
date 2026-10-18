@@ -3,7 +3,6 @@
 namespace App\Integrations\Pdp;
 
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Tenancy\Enums\StatutMandatPdp;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\MandatPdp;
@@ -16,7 +15,7 @@ use Illuminate\Support\Str;
 /**
  * Passerelle factice : accepte tout instantanément. Permet de développer et
  * tester tout le pipeline (mandat, émission, transmission) sans dépendre
- * d'un réseau externe. L'implémentation SUPER PDP (étape 11 de la feuille
+ * d'un réseau externe. L'implémentation SUPER PDP (étape 2 de la feuille
  * de route) la remplacera, en changeant uniquement le binding dans
  * PdpServiceProvider.
  */
@@ -42,15 +41,6 @@ class FakePdpGateway implements PdpGatewayInterface
             statut: StatutTransmissionPdp::Acceptee,
             transmissionExterneId: 'FAKE-TRANSMISSION-'.Str::uuid(),
             format: 'facturx',
-        );
-    }
-
-    public function soumettreEReporting(SoumissionEReporting $soumission): ResultatSoumissionPdp
-    {
-        return new ResultatSoumissionPdp(
-            statut: StatutTransmissionPdp::Acceptee,
-            transmissionExterneId: 'FAKE-EREPORTING-'.Str::uuid(),
-            format: 'ereporting',
         );
     }
 }

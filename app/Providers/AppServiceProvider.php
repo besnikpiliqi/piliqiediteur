@@ -18,7 +18,6 @@ use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\Paiement;
-use App\Domain\Facturation\Models\SoumissionEReporting;
 use App\Domain\Recherche\ConnecteurSqlite;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -45,7 +44,6 @@ use App\Policies\PaiementPolicy;
 use App\Policies\ProduitPolicy;
 use App\Policies\ServicePolicy;
 use App\Policies\SocietePolicy;
-use App\Policies\SoumissionEReportingPolicy;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Field;
@@ -123,7 +121,6 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(ClotureCaissePersonnelle::class, ClotureCaissePersonnellePolicy::class);
         Gate::policy(FactureAchat::class, FactureAchatPolicy::class);
         Gate::policy(AvoirFournisseur::class, AvoirFournisseurPolicy::class);
-        Gate::policy(SoumissionEReporting::class, SoumissionEReportingPolicy::class);
         Gate::policy(EnregistrementFiscal::class, EnregistrementFiscalPolicy::class);
         Gate::policy(Societe::class, SocietePolicy::class);
         Gate::policy(Magasin::class, MagasinDeLaSocietePolicy::class);
@@ -184,7 +181,6 @@ class AppServiceProvider extends ServiceProvider
             'paiement' => Paiement::class,
             'produit' => Produit::class,
             'societe' => Societe::class,
-            'soumission_ereporting' => SoumissionEReporting::class,
             'utilisateur' => User::class,
         ]);
     }

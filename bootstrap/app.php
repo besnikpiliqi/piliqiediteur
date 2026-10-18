@@ -11,7 +11,6 @@ use App\Console\Commands\PurgerJournalAudit;
 use App\Console\Commands\PurgerTraces;
 use App\Console\Commands\RelancerFacturesImpayees;
 use App\Console\Commands\ReverifierSirene;
-use App\Console\Commands\SoumettreEReportingPeriodique;
 use App\Console\Commands\SuivreEnvoisRecommandes;
 use App\Console\Commands\VerifierIntegriteFiscale;
 use App\Console\Commands\VerifierJournalAudit;
@@ -55,12 +54,6 @@ return Application::configure(basePath: dirname(__DIR__))
         // expirent : leur client ne peut plus les accepter (voir
         // ExpirerDevis).
         $schedule->command(ExpirerDevis::class)->dailyAt('00:30');
-        // L'e-reporting n'est transmis que par période entière déjà
-        // terminée (décade, mois ou bimestre selon le régime de TVA, voir
-        // CalculateurPeriodeEReporting), jamais quotidiennement. Il agrège
-        // les clôtures de la période : il passe donc après la clôture
-        // automatique de minuit, qui a clôturé sa dernière journée.
-        $schedule->command(SoumettreEReportingPeriodique::class)->dailyAt('01:00');
         // À 3 h, une fois ces traitements de la nuit terminés : la
         // vérification de l'intégrité de la caisse sécurisée de chaque
         // magasin, incrémentale, complète une fois par mois à un jour

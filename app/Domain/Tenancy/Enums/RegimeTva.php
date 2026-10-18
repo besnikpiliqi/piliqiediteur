@@ -10,9 +10,10 @@ use Filament\Support\Contracts\HasLabel;
  * Il détermine la cadence de transmission de l'e-reporting (art. 290 et
  * 290 A du CGI, art. 242 nonies O et P de l'annexe II), PAS la cadence de
  * la déclaration de TVA elle-même : les deux sont des obligations
- * distinctes qui peuvent suivre des rythmes différents. Voir
- * CalculateurPeriodeEReporting pour le détail des périodes et échéances
- * propres à chaque régime.
+ * distinctes qui peuvent suivre des rythmes différents. C'est la
+ * plateforme agréée qui tient ce calendrier, d'après le régime de la
+ * société : PILIQI lui enverra chaque clôture journalière ayant des
+ * opérations (voir EReportingDesParticuliers).
  *
  * En franchise en base, le magasin vend sans TVA (voir estFranchise()) :
  * ses ventes sont à 0 %, au même prix TTC, avec la mention

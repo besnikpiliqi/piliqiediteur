@@ -43,7 +43,6 @@ class DocumentNumberingServiceTest extends TestCase
             'facture d\'achat' => [TypeDocument::FactureAchat, 'FA-LYON1-2026-000001'],
             'avoir fournisseur' => [TypeDocument::AvoirFournisseur, 'AF-LYON1-2026-000001'],
             'clôture de caisse' => [TypeDocument::ClotureCaisse, 'Z-LYON1-2026-000001'],
-            'soumission d\'e-reporting' => [TypeDocument::SoumissionEReporting, 'ER-LYON1-2026-000001'],
         ];
     }
 

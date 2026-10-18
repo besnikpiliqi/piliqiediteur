@@ -482,9 +482,10 @@ class CalculateurLigne
     }
 
     /**
-     * Cumul de documents déjà totalisés (factures d'une clôture de caisse,
-     * clôtures d'une période d'e-reporting) : les mêmes sommes séparées des
-     * HT, des TVA et des TTC qu'entre les lignes d'un document.
+     * Cumul de documents déjà totalisés (tickets en attente de clôture,
+     * chiffre d'affaires, relevé « Fermer ma caisse ») : les mêmes sommes
+     * séparées des HT, des TVA et des TTC qu'entre les lignes d'un
+     * document.
      *
      * @param  iterable<array{total_ht: float|string, total_tva: float|string, total_ttc: float|string}|ArrayAccess<string, mixed>>  $documents
      * @return array{total_ht: float, total_tva: float, total_ttc: float}

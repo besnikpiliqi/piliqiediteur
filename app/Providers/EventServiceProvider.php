@@ -9,10 +9,8 @@ use App\Domain\Achats\Listeners\IncrementerStockApresValidationFactureAchat;
 use App\Domain\CaisseSecurisee\Listeners\JournaliserFinDeSession;
 use App\Domain\Facturation\Events\AvoirEmis;
 use App\Domain\Facturation\Events\FactureEmise;
-use App\Domain\Facturation\Events\SoumissionEReportingGeneree;
 use App\Domain\Facturation\Listeners\AppliquerAvoirDisponibleApresEmissionFacture;
 use App\Domain\Facturation\Listeners\DeclencherTransmissionPdpApresEmissionFacture;
-use App\Domain\Facturation\Listeners\DeclencherTransmissionPdpApresSoumissionEReporting;
 use App\Domain\Facturation\Listeners\DecrementerStockApresEmissionFacture;
 use App\Domain\Facturation\Listeners\ImputerAvoirSurSesFacturesApresEmission;
 use App\Domain\Facturation\Listeners\RestaurerStockApresEmissionAvoir;
@@ -41,7 +39,6 @@ class EventServiceProvider extends ServiceProvider
         Event::listen(FactureEmise::class, DeclencherTransmissionPdpApresEmissionFacture::class);
         Event::listen(AvoirEmis::class, RestaurerStockApresEmissionAvoir::class);
         Event::listen(AvoirEmis::class, ImputerAvoirSurSesFacturesApresEmission::class);
-        Event::listen(SoumissionEReportingGeneree::class, DeclencherTransmissionPdpApresSoumissionEReporting::class);
         Event::listen(FactureAchatValidee::class, IncrementerStockApresValidationFactureAchat::class);
         Event::listen(AvoirFournisseurEmis::class, DecrementerStockApresEmissionAvoirFournisseur::class);
         Event::listen(StockPasseSousLeSeuilDAlerte::class, NotifierLeStockSousLeSeuilDAlerte::class);

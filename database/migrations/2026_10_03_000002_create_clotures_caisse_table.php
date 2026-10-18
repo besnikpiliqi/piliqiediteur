@@ -48,16 +48,12 @@ return new class extends Migration
             $table->unsignedBigInteger('derniere_sequence_vente')->nullable();
             $table->unsignedBigInteger('derniere_sequence_encaissement')->nullable();
             $table->timestamp('cloturee_a')->nullable();
-            // Soumission d'e-reporting périodique qui a déjà inclus cette
-            // clôture, pour ne jamais l'agréger deux fois (voir
-            // GenererSoumissionEReportingAction). nullOnDelete : la
-            // clôture, document fiscal, reste intacte quoi qu'il arrive à
-            // la soumission.
-            $table->foreignId('soumission_ereporting_id')->nullable()->constrained('soumissions_ereporting')->nullOnDelete();
             $table->timestamps();
             // PAS de softDeletes() ici, volontairement : une clôture de
             // caisse est un document fiscal au même titre qu'une facture
-            // (obligation de conservation pour l'e-reporting).
+            // (obligation de conservation), et l'e-reporting des ventes aux
+            // particuliers de sa journée se lit sur elle (voir
+            // EReportingDesParticuliers).
 
             // Une seule clôture par jour et par magasin : la même journée
             // ne peut jamais être agrégée deux fois (voir

@@ -18,12 +18,13 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Enums\CategorieEReporting;
 use App\Domain\Facturation\Enums\ModePaiement;
-use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Facturation\Services\EReportingDesParticuliers;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
@@ -240,8 +241,10 @@ class CloturerCaisseActionTest extends TestCase
     }
 
     /**
-     * La déclaration des ventes aux particuliers sépare les biens des
-     * services : un écran à 60 € et sa pose à 30 €, puis l'écran rendu.
+     * La déclaration des ventes aux particuliers de la journée sépare les
+     * livraisons de biens des prestations de services (voir
+     * EReportingDesParticuliers) : un écran à 60 € et sa pose à 30 €, puis
+     * l'écran rendu.
      */
     public function test_la_cloture_separe_les_biens_et_les_services(): void
     {
@@ -259,9 +262,9 @@ class CloturerCaisseActionTest extends TestCase
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
 
         $this->assertSame([
-            ['nature' => NatureLigne::Bien, 'taux_tva' => '20.00', 'montant_ht' => 50.0, 'montant_tva' => 10.0, 'montant_ttc' => 60.0],
-            ['nature' => NatureLigne::Service, 'taux_tva' => '20.00', 'montant_ht' => 25.0, 'montant_tva' => 5.0, 'montant_ttc' => 30.0],
-        ], $cloture->ventilation_par_nature);
+            ['categorie' => CategorieEReporting::LivraisonsDeBiens, 'taux' => 2000, 'ht' => 5000, 'tva' => 1000, 'motif' => null, 'remarque' => null],
+            ['categorie' => CategorieEReporting::PrestationsDeServices, 'taux' => 2000, 'ht' => 2500, 'tva' => 500, 'motif' => null, 'remarque' => null],
+        ], app(EReportingDesParticuliers::class)->apercu($cloture)->transactions);
     }
 
     /**

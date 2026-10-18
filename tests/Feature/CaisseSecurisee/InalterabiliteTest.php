@@ -334,7 +334,6 @@ class InalterabiliteTest extends TestCase
             'paiement_allocations',
             'avoir_allocations',
             'sequences_documents',
-            'soumissions_ereporting',
             'transmissions_pdp',
             'tetes_registre_fiscal',
             'enregistrements_fiscaux',

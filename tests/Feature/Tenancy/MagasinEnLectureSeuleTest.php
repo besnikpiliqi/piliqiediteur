@@ -24,6 +24,7 @@ use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Enums\CategorieEReporting;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutDevis;
@@ -35,8 +36,7 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
-use App\Domain\Facturation\Models\SoumissionEReporting;
-use App\Domain\Tenancy\Enums\RegimeTva;
+use App\Domain\Facturation\Services\EReportingDesParticuliers;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
@@ -332,27 +332,24 @@ class MagasinEnLectureSeuleTest extends TestCase
 
     /**
      * Les ventes du jour du changement de statut sont clôturées à minuit,
-     * puis déclarées une fois leur période d'e-reporting terminée.
+     * et leur journée reste à déclarer, avec l'aperçu de ce que
+     * l'e-reporting déclarera (le ticket de 12,00 € à 20 %).
      */
     #[DataProvider('situationsApresLaValidation')]
     public function test_les_dernieres_ventes_sont_declarees(string $situation, string $motif): void
     {
         $this->travelTo('2026-10-05 10:00:00');
         $magasin = $this->ouvrirLeMagasin();
-        $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::ReelNormalMensuel]);
         $this->vendreUnTicket();
         $this->passerEn($magasin, $situation);
         $this->travelTo('2026-10-06 00:00:00');
+
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
-        $this->travelTo('2026-10-11 01:00:00');
 
-        $this->artisan('app:soumettre-ereporting-periodique')->assertSuccessful();
-
-        $soumission = SoumissionEReporting::query()->sole();
-        $this->assertSame(
-            ['2026-10-01', '2026-10-10', 1, '12.00'],
-            [$soumission->periode_debut->toDateString(), $soumission->periode_fin->toDateString(), $soumission->nombre_clotures, $soumission->total_ttc],
-        );
+        $cloture = EReportingDesParticuliers::journeesADeclarer($magasin->fresh())->sole();
+        $transactions = app(EReportingDesParticuliers::class)->apercu($cloture)->transactions;
+        $this->assertSame('2026-10-05', $cloture->date_cloture->toDateString());
+        $this->assertSame([[CategorieEReporting::LivraisonsDeBiens, 2000, 1000, 200]], array_map(fn (array $transaction): array => [$transaction['categorie'], $transaction['taux'], $transaction['ht'], $transaction['tva']], $transactions));
     }
 
     #[DataProvider('situationsEnLectureSeule')]

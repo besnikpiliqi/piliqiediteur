@@ -8,7 +8,6 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\InstantFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
-use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Models\Magasin;
@@ -18,7 +17,6 @@ use Database\Factories\ClotureCaisseFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Collection;
@@ -35,13 +33,13 @@ use LogicException;
  * information, les encaissements par mode, le crédit d'avoir imputé et les
  * grands totaux perpétuels (voir RecapitulatifDeCloture). Une clôture par
  * jour du calendrier à partir de la première vente, dans l'ordre (voir
- * CloturerLesJourneesAction).
+ * CloturerLesJourneesAction). Ce que l'e-reporting déclarera pour sa
+ * journée se lit sur elle (voir EReportingDesParticuliers).
  *
- * Écrite une seule fois : numérotée en base, elle ne se modifie plus (sauf
- * la soumission d'e-reporting qui la reprend) et ne se supprime jamais
- * (voir ProtegeLesDonneesValidees). PAS de SoftDeletes ici, volontairement,
- * pour un document fiscal au même titre qu'une facture, dont la loi impose
- * la conservation.
+ * Écrite une seule fois : numérotée en base, elle ne se modifie plus et ne
+ * se supprime jamais (voir ProtegeLesDonneesValidees). PAS de SoftDeletes
+ * ici, volontairement, pour un document fiscal au même titre qu'une
+ * facture, dont la loi impose la conservation.
  */
 class ClotureCaisse extends Model
 {
@@ -90,17 +88,6 @@ class ClotureCaisse extends Model
     protected function regleDInalterabilite(): string
     {
         return 'Une clôture de caisse ne se modifie plus : son récapitulatif et ses totaux s\'écrivent une seule fois, à la clôture.';
-    }
-
-    /**
-     * La soumission d'e-reporting qui reprend la clôture la note sur elle
-     * (voir GenererSoumissionEReportingAction).
-     *
-     * @return list<string>
-     */
-    protected function colonnesModifiablesUneFoisValidee(): array
-    {
-        return ['soumission_ereporting_id', 'updated_at'];
     }
 
     /**
@@ -211,24 +198,10 @@ class ClotureCaisse extends Model
     }
 
     /**
-     * @return Collection<int, array{nature: ?NatureLigne, taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
+     * @return Collection<int, array{taux_tva: mixed, montant_ht: mixed, montant_tva: mixed, montant_ttc: mixed}>
      */
     protected function lignesAVentiler(): Collection
     {
         return self::montantsDesLignes($this->lignes)->concat(self::montantsDeduits($this->lignesAvoir));
-    }
-
-    /**
-     * Une clôture n'est jamais transmise au PDP individuellement :
-     * voir le docblock de SoumissionEReporting, qui agrège plusieurs
-     * clôtures sur toute une période d'e-reporting avant transmission.
-     */
-    public function soumissionEReporting(): BelongsTo
-    {
-        // Clé étrangère explicite : la convention par défaut de Laravel
-        // devinerait "soumission_e_reporting_id" (elle coupe aussi entre
-        // deux majuscules consécutives), qui ne correspond pas à la
-        // colonne réelle "soumission_ereporting_id" de la migration.
-        return $this->belongsTo(SoumissionEReporting::class, 'soumission_ereporting_id');
     }
 }

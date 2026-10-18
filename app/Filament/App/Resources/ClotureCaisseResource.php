@@ -32,7 +32,8 @@ use Illuminate\Support\Collection;
  * La fiche montre le récapitulatif écrit à la clôture, sans rien
  * recalculer (points 15 et 24, voir RecapitulatifDeCloture) : ventes et
  * avoirs, net, factures aux professionnels, encaissements par mode, crédit
- * d'avoir utilisé et grands totaux. Chaque ticket et chaque avoir qu'elle
+ * d'avoir utilisé et grands totaux ; puis l'aperçu de ce que l'e-reporting
+ * déclarera pour la journée (point 26, voir EReportingResource). Chaque ticket et chaque avoir qu'elle
  * compte s'ouvre d'un clic (point 25) pour qui peut voir ce document ; une
  * personne qui ne voit que ses ventes y voit les totaux du magasin et le
  * détail de ses seuls documents, les autres comptés en nombre et en total,
@@ -119,7 +120,7 @@ class ClotureCaisseResource extends Resource
             // Le récapitulatif écrit à la clôture (voir
             // RecapitulatifDeCloture), jamais recalculé ici.
             InfolistSection::make('Ventes et avoirs')
-                ->description('Montants enregistrés des documents, additionnés une seule fois à la clôture. Le net des ventes aux particuliers est la base de l\'e-reporting ; « TVA par taux » et « Biens et services » le détaillent.')
+                ->description('Montants enregistrés des documents, additionnés une seule fois à la clôture. Le net des ventes aux particuliers est la base de l\'e-reporting : « TVA par taux » le détaille, et l\'aperçu de l\'e-reporting le range par catégorie.')
                 ->schema([
                     RepeatableEntry::make('rubriques')
                         ->hiddenLabel()
@@ -133,7 +134,6 @@ class ClotureCaisseResource extends Resource
                         ])
                         ->columns(5),
                     FactureResource::ventilationTvaEntry(),
-                    FactureResource::ventilationParNatureEntry(),
                 ]),
 
             InfolistSection::make('Encaissements')
@@ -171,16 +171,7 @@ class ClotureCaisseResource extends Resource
                 ])
                 ->columns(2),
 
-            InfolistSection::make('E-reporting')->schema([
-                // L'e-reporting n'est pas transmis clôture par clôture : il
-                // est agrégé par période (décade/mois/bimestre selon le
-                // régime de TVA, voir CalculateurPeriodeEReporting) puis
-                // transmis en une seule soumission (voir
-                // SoumissionEReporting et la page "Soumissions e-reporting").
-                TextEntry::make('soumissionEReporting.numero')
-                    ->label('Incluse dans la soumission')
-                    ->placeholder('Pas encore incluse (période en cours)'),
-            ]),
+            EReportingResource::sectionDeLApercu(),
 
             // Le détail des documents que la personne peut voir (règle
             // « Vendeurs ») : chaque numéro ouvre sa fiche ; les autres ne
@@ -325,7 +316,7 @@ class ClotureCaisseResource extends Resource
      * Un taux en centièmes de point tel qu'il s'écrit : 2000 donne
      * « 20 % », 550 « 5,5 % ».
      */
-    private static function taux(int $centiemes): string
+    public static function taux(int $centiemes): string
     {
         return rtrim(rtrim(sprintf('%d,%02d', intdiv($centiemes, 100), $centiemes % 100), '0'), ',').' %';
     }

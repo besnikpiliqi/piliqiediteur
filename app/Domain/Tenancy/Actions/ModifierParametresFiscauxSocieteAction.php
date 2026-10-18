@@ -19,7 +19,7 @@ use LogicException;
 /**
  * Enregistre les réglages fiscaux de la société, communs à tous ses
  * magasins, un seul assujetti : son régime de TVA (dont dépendent la
- * cadence de l'e-reporting, voir CalculateurPeriodeEReporting, et la
+ * cadence à laquelle la plateforme agréée transmet son e-reporting, et la
  * franchise en base de ses ventes), l'option pour le paiement de la taxe
  * d'après les débits, et le mois de fin de son exercice (décembre par
  * défaut), verrouillé dès la première vente de l'un de ses magasins (voir

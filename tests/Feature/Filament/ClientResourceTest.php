@@ -220,15 +220,18 @@ class ClientResourceTest extends TestCase
 
     /**
      * La liste des clients se cherche sans tenir compte de la casse ni des
-     * accents, et ne montre jamais l'homonyme d'un autre magasin.
+     * accents, et ne montre jamais l'homonyme d'un autre magasin. Les
+     * e-mails sont fixés, sans « helene » : la recherche porte aussi sur
+     * l'e-mail, et un e-mail tiré au hasard pourrait faire trouver Paul, ou
+     * trouver Hélène autrement que par son nom.
      */
     public function test_la_recherche_de_la_liste_des_clients_ignore_la_casse_et_les_accents(): void
     {
         $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
-        $homonymeDUnAutreMagasin = Client::factory()->create(['nom' => 'Hélène Martin']);
+        $homonymeDUnAutreMagasin = Client::factory()->create(['nom' => 'Hélène Martin', 'email' => 'h.martin@example.net']);
         $this->connecterLeProprietaire();
-        $helene = Client::factory()->create(['nom' => 'Hélène Martin']);
-        $paul = Client::factory()->create(['nom' => 'Paul Durand']);
+        $helene = Client::factory()->create(['nom' => 'Hélène Martin', 'email' => 'h.martin@example.net']);
+        $paul = Client::factory()->create(['nom' => 'Paul Durand', 'email' => 'p.durand@example.net']);
 
         Livewire::test(ListClients::class)
             ->searchTable('HELENE')
@@ -236,11 +239,15 @@ class ClientResourceTest extends TestCase
             ->assertCanNotSeeTableRecords([$paul, $homonymeDUnAutreMagasin]);
     }
 
+    /**
+     * Le client de la caisse se cherche, lui aussi, sans casse ni accents,
+     * avec des e-mails fixés sans « helene » pour la même raison.
+     */
     public function test_la_recherche_du_client_de_la_caisse_ignore_la_casse_et_les_accents(): void
     {
         $this->connecterLeResponsable();
-        $helene = Client::factory()->create(['nom' => 'Hélène Martin']);
-        Client::factory()->create(['nom' => 'Paul Durand']);
+        $helene = Client::factory()->create(['nom' => 'Hélène Martin', 'email' => 'h.martin@example.net']);
+        Client::factory()->create(['nom' => 'Paul Durand', 'email' => 'p.durand@example.net']);
 
         Livewire::test(Caisse::class)
             ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('helene') === [$helene->id => 'Hélène Martin']);
@@ -248,13 +255,14 @@ class ClientResourceTest extends TestCase
 
     /**
      * Le client d'une facture se choisit dans une liste recherchée côté
-     * serveur (relationProposable()), elle aussi sans casse ni accents.
+     * serveur (relationProposable()), elle aussi sans casse ni accents,
+     * avec des e-mails fixés sans « helene ».
      */
     public function test_la_recherche_du_client_d_une_facture_ignore_la_casse_et_les_accents(): void
     {
         $this->connecterLeResponsable();
-        $helene = Client::factory()->create(['nom' => 'Hélène Martin']);
-        Client::factory()->create(['nom' => 'Paul Durand']);
+        $helene = Client::factory()->create(['nom' => 'Hélène Martin', 'email' => 'h.martin@example.net']);
+        Client::factory()->create(['nom' => 'Paul Durand', 'email' => 'p.durand@example.net']);
 
         Livewire::test(CreateFacture::class)
             ->assertFormFieldExists('client_id', fn (Select $champ): bool => $champ->getSearchResults('HÉLENE') === [$helene->id => 'Hélène Martin']);

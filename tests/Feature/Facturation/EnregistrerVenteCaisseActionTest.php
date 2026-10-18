@@ -198,10 +198,14 @@ class EnregistrerVenteCaisseActionTest extends TestCase
 
     /**
      * Le client comptoir d'un nouveau magasin, créé avec lui (voir
-     * CreerEtablissementAction) ; ce magasin devient le magasin actif.
+     * CreerEtablissementAction) le 9 octobre 2026 à 10 h, heure de Paris :
+     * les numéros des tickets et des bons d'avoir portent l'année 2026 quel
+     * que soit le jour où le test tourne ; ce magasin devient le magasin
+     * actif.
      */
     private function clientComptoir(): Client
     {
+        $this->travelTo('2026-10-09 10:00:00');
         app(TenantContext::class)->set($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
 
         return Client::query()->where('est_comptoir', true)->sole();

@@ -733,6 +733,7 @@ class AvoirResourceTest extends TestCase
      */
     public function test_un_numero_d_un_autre_magasin_est_introuvable(): void
     {
+        $this->travelTo('2026-10-17 10:32:00');
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON1']);
         $ticketDeVilleurbanne = $this->emettreUnTicketDansLeMagasin($this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne', 'code' => 'VILL1']));
         $ticketDUneAutreSociete = $this->emettreUnTicketDansLeMagasin($this->ouvrirUneSociete(['nom' => 'Lyon', 'code' => 'LYON1']));

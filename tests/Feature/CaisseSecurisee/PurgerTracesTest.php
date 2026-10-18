@@ -20,9 +20,10 @@ use Tests\TestCase;
 /**
  * app:purger-traces efface chaque nuit les traces techniques (adresse IP et
  * navigateur) de plus d'un an, dans tous les magasins, sans toucher aux
- * événements qu'elles accompagnaient. Les dates des tests sont passées :
- * la base n'efface une trace qu'une fois expirée à son heure réelle (voir
- * TraceEvenementTest).
+ * événements qu'elles accompagnaient. La base n'efface une trace qu'une
+ * fois expirée à sa propre heure (voir TraceEvenementTest) : les dates des
+ * tests sont passées, ou construites depuis cette heure (voir
+ * maintenantSelonLaBase()).
  */
 class PurgerTracesTest extends TestCase
 {
@@ -94,9 +95,9 @@ class PurgerTracesTest extends TestCase
     {
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
-        $ancienne = $this->traceQuiExpireLe(CarbonImmutable::now()->subYear());
-        $presqueExpiree = $this->traceQuiExpireLe(CarbonImmutable::now()->addMinutes(30));
-        $this->travel(1)->hours();
+        $ancienne = $this->traceQuiExpireLe($this->maintenantSelonLaBase()->subYear());
+        $presqueExpiree = $this->traceQuiExpireLe($this->maintenantSelonLaBase()->addMinutes(30));
+        $this->travelTo($this->maintenantSelonLaBase()->addHour());
 
         $this->artisan('app:purger-traces')
             ->expectsOutput('1 trace(s) technique(s) effacée(s).')

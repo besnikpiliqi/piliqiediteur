@@ -268,6 +268,7 @@ class TransfererProprieteTest extends TestCase
      */
     public function test_le_nouveau_proprietaire_qui_avait_vendu_voit_sa_caisse_fermee_par_la_cloture_du_jour(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeur = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();
@@ -299,6 +300,7 @@ class TransfererProprieteTest extends TestCase
      */
     public function test_le_nouveau_proprietaire_ferme_lui_meme_sa_caisse_puis_contre_passe_dans_un_autre_magasin(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
@@ -345,6 +347,7 @@ class TransfererProprieteTest extends TestCase
      */
     public function test_un_brouillon_de_l_administrateur_devenu_proprietaire_devient_a_son_emission_la_vente_de_qui_l_emet(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeur = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();

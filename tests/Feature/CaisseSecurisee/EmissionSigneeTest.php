@@ -667,7 +667,7 @@ class EmissionSigneeTest extends TestCase
      */
     public function test_une_vente_couverte_par_un_credit_d_avoir_signe_le_credit_et_aucun_reglement(): void
     {
-        $this->freezeTime();
+        $this->travelTo('2026-10-09 10:15:30');
         $this->magasinActif();
         $client = Client::factory()->create();
         $produit = $this->produit('A-060', 'Article à 60 €', 60);
@@ -686,7 +686,7 @@ class EmissionSigneeTest extends TestCase
 
     public function test_un_paiement_de_trois_factures_signe_un_encaissement_avec_ses_trois_imputations(): void
     {
-        $this->freezeTime();
+        $this->travelTo('2026-10-09 10:15:30');
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create();
         $produit = $this->produit('A-020', 'Article à 20 €', 20);

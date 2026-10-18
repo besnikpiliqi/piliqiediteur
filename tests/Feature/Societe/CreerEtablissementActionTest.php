@@ -175,7 +175,7 @@ class CreerEtablissementActionTest extends TestCase
         $premier = $this->ouvrirUneSociete(['nom' => 'Lyon centre']);
         $societe = $premier->societe;
         $nic = $this->nic($societe, '0005');
-        $this->pendantLeControleSirene(fn () => Magasin::factory()->for($societe)->create($champ === 'code' ? ['code' => 'PARIS'] : ['siret' => $societe->siren.$nic]));
+        $this->pendantLeControleSirene(fn () => Magasin::factory()->for($societe)->create($champ === 'code' ? ['code' => 'PARIS'] : ['siret' => $societe->siren.$nic, 'code' => 'CONCUR']));
         $entrees = $this->nombreDEntreesAudit($societe);
 
         $this->assertThrows(

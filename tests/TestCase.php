@@ -43,6 +43,7 @@ use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\EtablissementSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
+use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Closure;
 use Database\Factories\MagasinFactory;
@@ -109,12 +110,35 @@ abstract class TestCase extends BaseTestCase
     /**
      * Aucun test n'interroge un service réel : une requête HTTP sortante
      * sans réponse simulée (Http::fake()) échoue au lieu de partir.
+     *
+     * Aucun test ne dépend du hasard : Faker est semé au début de chaque
+     * test par une graine tirée du nom de sa classe, de sa méthode et de
+     * son jeu de données (voir graineDeFaker()), si bien qu'un test tire
+     * les mêmes valeurs à chaque exécution, dans quelque ordre et quelque
+     * processus qu'il tourne. Faker sème le générateur de PHP (mt_srand) :
+     * la graine atteint ainsi le générateur de la locale de l'application
+     * que partagent fake() et les fabriques. Un générateur de Faker resté
+     * d'un test précédent ressème au hasard ce générateur de PHP en se
+     * détruisant (Faker\Generator::__destruct()), et le ramasse-miettes
+     * peut le détruire en plein test : il est donc détruit avant que ce
+     * test ne sème le sien.
      */
     protected function setUp(): void
     {
         parent::setUp();
 
+        gc_collect_cycles();
+        fake()->seed($this->graineDeFaker());
         Http::preventStrayRequests();
+    }
+
+    /**
+     * La graine de Faker de ce test : l'empreinte CRC32 du nom de sa
+     * classe, de sa méthode et de son jeu de données.
+     */
+    protected function graineDeFaker(): int
+    {
+        return crc32(static::class.'::'.$this->nameWithDataSet());
     }
 
     /**
@@ -851,6 +875,23 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * L'instant présent à l'horloge du serveur de base de données, en UTC à
+     * la seconde : celle que lisent les déclencheurs qui ne laissent
+     * effacer une ligne qu'une fois expirée (voir DeclencheursDeProtection).
+     * Elle peut différer de l'heure de l'application, voyagée par un test
+     * ou décalée par faketime : une échéance comparée par la base se
+     * construit depuis elle.
+     */
+    protected function maintenantSelonLaBase(): CarbonImmutable
+    {
+        $maintenant = DB::connection()->getDriverName() === 'pgsql'
+            ? DB::selectOne("select to_char(now() at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS') as maintenant")->maintenant
+            : DB::selectOne('select CURRENT_TIMESTAMP as maintenant')->maintenant;
+
+        return CarbonImmutable::createFromFormat('Y-m-d H:i:s', $maintenant, 'UTC');
+    }
+
+    /**
      * Retire un déclencheur de protection (voir DeclencheursDeProtection),
      * comme le ferait un administrateur de la base, pour falsifier une
      * table en ajout seul le temps d'un test. Le DDL de PostgreSQL et de
@@ -915,7 +956,10 @@ abstract class TestCase extends BaseTestCase
      * (voir tests/Fixtures/processus-concurrent.php), sans attendre sa
      * fin : une seconde caisse qui agit au même instant. L'opération ne
      * voit que ce que le test a validé ; elle est statique et ne capture
-     * que des valeurs simples (des identifiants).
+     * que des valeurs simples (des identifiants). Quand le test a figé son
+     * heure, l'autre processus se fige au même instant : sinon il lirait
+     * l'heure réelle, et ce qu'il fait tomberait un autre jour que ce que
+     * fait le test.
      */
     protected function demarrerUnProcessusConcurrent(Closure $operation): InvokedProcess
     {
@@ -923,6 +967,7 @@ abstract class TestCase extends BaseTestCase
             'base' => DB::connection()->getDatabaseName(),
             'caisse_securisee' => config('caisse_securisee'),
             'journal_audit' => config('journal_audit'),
+            'maintenant' => Carbon::getTestNow()?->format('Y-m-d\TH:i:s.uP'),
             'operation' => new SerializableClosure($operation),
         ]);
 

@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\TenantContext;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -57,6 +58,7 @@ class EffacerPiecesVerificationTest extends TestCase
      */
     public function test_toutes_les_pieces_echues_s_effacent_en_un_passage_meme_au_dela_d_un_lot(): void
     {
+        Storage::fake(PiecesDeVerification::DISQUE);
         $societe = $this->inscrireUneSociete(null, 'Luc Bernard');
         $deposeeLe = now()->subDays(PieceVerification::CONSERVATION_EN_JOURS + 1);
         DB::table('pieces_verification')->insert(array_fill(0, 1001, [
@@ -80,30 +82,39 @@ class EffacerPiecesVerificationTest extends TestCase
      * Un fichier envoyé au formulaire de dépôt et jamais déposé, et un
      * dossier où l'éditeur lisait des pièces déchiffrées, restés depuis
      * plus d'une heure, s'effacent ; ceux d'un envoi ou d'un examen en
-     * cours restent.
+     * cours restent. Les dossiers d'examen sont ceux du disque
+     * « verification » simulé, propre au processus de test.
+     *
+     * L'heure de l'application se cale sur l'heure de modification que
+     * relisent les fichiers : faketime décale celle-ci (stat) sans décaler
+     * celle qu'on y écrit (touch), et seuls les écarts entre fichiers
+     * restent exacts.
      */
     public function test_les_envois_abandonnes_et_les_dossiers_d_examen_restes_s_effacent_apres_une_heure(): void
     {
+        Storage::fake(PiecesDeVerification::DISQUE);
         $envois = FileUploadConfiguration::storage();
         $envois->put(FileUploadConfiguration::path('abandonne.pdf'), 'CNI EN CLAIR');
         $envois->put(FileUploadConfiguration::path('en-cours.pdf'), 'CNI EN CLAIR');
-        touch($envois->path(FileUploadConfiguration::path('abandonne.pdf')), now()->subMinutes(61)->getTimestamp());
+        $abandonne = $envois->path(FileUploadConfiguration::path('abandonne.pdf'));
+        $envoiEnCours = $envois->path(FileUploadConfiguration::path('en-cours.pdf'));
         $reste = PiecesDeVerification::nouveauDossierDExamen();
-        $enCours = PiecesDeVerification::nouveauDossierDExamen();
+        $examenEnCours = PiecesDeVerification::nouveauDossierDExamen();
+        File::ensureDirectoryExists($reste, 0700);
+        File::put("{$reste}/piece-1-identite", 'CNI EN CLAIR');
+        File::ensureDirectoryExists($examenEnCours, 0700);
+        $maintenant = now()->getTimestamp();
+        touch($abandonne, $maintenant - 61 * 60);
+        touch($reste, $maintenant - 61 * 60);
+        touch($envoiEnCours, $maintenant);
+        touch($examenEnCours, $maintenant);
+        clearstatcache();
+        $this->travelTo(CarbonImmutable::createFromTimestamp(filemtime($envoiEnCours)));
 
-        try {
-            File::ensureDirectoryExists($reste, 0700);
-            File::put("{$reste}/piece-1-identite", 'CNI EN CLAIR');
-            touch($reste, now()->subMinutes(61)->getTimestamp());
-            File::ensureDirectoryExists($enCours, 0700);
+        $this->artisan('app:effacer-pieces-verification')->assertSuccessful();
 
-            $this->artisan('app:effacer-pieces-verification')->assertSuccessful();
-
-            $this->assertSame([false, true], [$envois->exists(FileUploadConfiguration::path('abandonne.pdf')), $envois->exists(FileUploadConfiguration::path('en-cours.pdf'))]);
-            $this->assertSame([false, true], [File::isDirectory($reste), File::isDirectory($enCours)]);
-        } finally {
-            File::deleteDirectory($reste);
-            File::deleteDirectory($enCours);
-        }
+        $this->assertSame([false, true], [File::exists($abandonne), File::exists($envoiEnCours)]);
+        $this->assertSame([false, true], [File::isDirectory($reste), File::isDirectory($examenEnCours)]);
+        $this->assertSame([$examenEnCours], PiecesDeVerification::dossiersDExamen());
     }
 }

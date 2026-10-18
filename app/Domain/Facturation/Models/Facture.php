@@ -406,14 +406,24 @@ class Facture extends Model implements DocumentEnvoyable
         return $this->morphMany(TransmissionPdp::class, 'transmissible');
     }
 
+    /**
+     * Ses imputations de paiements, dans l'ordre où elles ont été
+     * enregistrées (un paiement saisi par erreur, puis sa
+     * contre-passation) : la base de données ne garantit aucun ordre sans
+     * tri, et la fiche les montre dans celui-ci (voir FactureResource).
+     */
     public function allocationsPaiement(): HasMany
     {
-        return $this->hasMany(PaiementAllocation::class);
+        return $this->hasMany(PaiementAllocation::class)->orderBy('id');
     }
 
+    /**
+     * Ses imputations de crédit d'avoir, dans l'ordre où elles ont été
+     * enregistrées (voir allocationsPaiement()).
+     */
     public function allocationsAvoir(): HasMany
     {
-        return $this->hasMany(AvoirAllocation::class);
+        return $this->hasMany(AvoirAllocation::class)->orderBy('id');
     }
 
     /**

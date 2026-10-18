@@ -115,11 +115,11 @@ class HistoriqueAuNomFigeTest extends TestCase
         $magasin = $this->completerIdentiteLegale($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
         $responsable = $this->nomme($this->responsable($magasin), 'Claire Martin');
         $vendeur = $this->nomme($this->membre($magasin, RoleMagasin::Vendeur, PermissionRegistry::toutes()), 'Paul Martin');
-        $ticket = $this->vendre($vendeur, Client::factory()->create(['email' => 'client@exemple.fr']), []);
+        $ticket = $this->vendre($vendeur, Client::factory()->create(['nom' => 'Client du ticket', 'email' => 'client@exemple.fr']), []);
         $paiement = app(EnregistrerPaiementAction::class)->handle($vendeur, $ticket->client, ['mode_paiement' => ModePaiement::Especes->value, 'montant' => '12.00', 'recu_le' => today()->toDateString()], [['facture_id' => $ticket->id, 'montant' => '12.00']]);
         app(NoterBordereauDetaxeAction::class)->handle($vendeur, $ticket, 'BD-2026-0001');
         app(EnvoyerDocumentAction::class)->handle($vendeur, $ticket, 'client@exemple.fr', null);
-        $versLaMartinique = $this->vendre($vendeur, Client::factory()->create(), ['nature_operation' => NatureOperation::LivraisonDom, 'livraison_adresse' => '1 rue Victor Hugo', 'livraison_code_postal' => '97200', 'livraison_ville' => 'Fort-de-France', 'livraison_pays' => 'FR']);
+        $versLaMartinique = $this->vendre($vendeur, Client::factory()->create(['nom' => 'Client de Fort-de-France']), ['nature_operation' => NatureOperation::LivraisonDom, 'livraison_adresse' => '1 rue Victor Hugo', 'livraison_code_postal' => '97200', 'livraison_ville' => 'Fort-de-France', 'livraison_pays' => 'FR']);
         app(AjouterPreuveOperationAction::class)->handle($vendeur, $versLaMartinique, TypePreuve::Cn23, 'CN23-0001');
         $releve = app(FermerSaCaisseAction::class)->handle($responsable, $vendeur);
 

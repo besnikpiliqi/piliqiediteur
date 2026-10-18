@@ -34,8 +34,14 @@ class VerifierIntegriteActionTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Le magasin LYON1, actif, le 9 octobre 2026 à 10 h, heure de Paris :
+     * ses numéros et ses séries portent l'année 2026 quel que soit le jour
+     * où le test tourne.
+     */
     private function magasinActif(): Magasin
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $magasin = Magasin::factory()->create(['code' => 'LYON1']);
         app(TenantContext::class)->set($magasin);
 

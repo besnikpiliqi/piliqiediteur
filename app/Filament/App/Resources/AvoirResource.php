@@ -442,7 +442,8 @@ class AvoirResource extends Resource
                 ->schema([
                     // Le crédit qu'un paiement saisi par erreur avait
                     // imputé y figure avec sa contre-passation, en négatif,
-                    // qui le rend à l'avoir (voir ContrePasserPaiementAction).
+                    // qui le rend à l'avoir (voir ContrePasserPaiementAction),
+                    // dans l'ordre où ils ont été imputés.
                     RepeatableEntry::make('allocations')
                         ->label('')
                         ->schema([

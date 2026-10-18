@@ -264,8 +264,9 @@ class VerificationSocieteTest extends TestCase
     public function test_le_mandat_d_un_dirigeant_nomme_depuis_moins_de_30_jours_exige_le_controle_de_l_adresse(): void
     {
         Mail::fake();
+        $this->travelTo('2026-10-09 10:00:00');
         $siren = SocieteFactory::sirenFictif();
-        $this->rne()->dirigeants($siren, [new RepresentantRne('DUPONT', null, ['Jeanne'], '1980-01', 'Présidente', true, null, now()->subDays(5)->toDateString())]);
+        $this->rne()->dirigeants($siren, [new RepresentantRne('DUPONT', null, ['Jeanne'], '1980-01', 'Présidente', true, null, '2026-10-04')]);
         $societe = $this->inscrireUneSociete($siren, 'Luc Bernard');
         $this->verifierLIdentiteDuProprietaire($societe, self::IDENTITE_SANS_DIRIGEANT);
         app(DemanderAccordDUnDirigeantAction::class)->handle($societe->proprietaire, $societe, 0, 'jeanne.dupont@example.test');
@@ -283,7 +284,7 @@ class VerificationSocieteTest extends TestCase
         $etat = $this->etat($societe);
         $this->assertFalse($societe->fresh()->estValidee());
         $this->assertSame([EtatDeVerification::PREUVE_MANDAT, [SignalDeRisque::DirigeantRecent]], [$etat->preuveDeQualite, $etat->signauxActifs]);
-        $this->assertSame(now()->subDays(5)->toDateString(), $this->lignes($societe, TypeVerification::Mandat)->sole()->details['debut_fonction']);
+        $this->assertSame('2026-10-04', $this->lignes($societe, TypeVerification::Mandat)->sole()->details['debut_fonction']);
 
         $this->envoyerUnCourrierParLEditeur($societe);
         $this->assertTrue($this->saisirLeCode($societe));
@@ -553,6 +554,7 @@ class VerificationSocieteTest extends TestCase
      */
     public function test_le_code_est_hache_unique_temporaire_et_a_usage_unique(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $societe = $this->inscrireUneSociete();
         $premier = $this->envoyerUnCourrierParLEditeur($societe);
         $code = (string) $this->envois()->codeDuDernierPli();
@@ -593,9 +595,9 @@ class VerificationSocieteTest extends TestCase
         $conserverJusquAu = fn (CarbonImmutable $fin): int => DB::table('codes_confirmation')->where('id', $code->id)->update(['conserver_jusqu_au' => $fin->utc()->format('Y-m-d H:i:s')]);
 
         $this->assertThrows($effacer, QueryException::class, 'codes_confirmation : suppression refusée avant la fin de la conservation');
-        $this->assertSame(1, $conserverJusquAu(CarbonImmutable::now()->addDay()));
+        $this->assertSame(1, $conserverJusquAu($this->maintenantSelonLaBase()->addDay()));
         $this->assertThrows($effacer, QueryException::class, 'codes_confirmation : suppression refusée avant la fin de la conservation');
-        $this->assertSame(1, $conserverJusquAu(CarbonImmutable::now()->subMinute()));
+        $this->assertSame(1, $conserverJusquAu($this->maintenantSelonLaBase()->subMinute()));
 
         $this->assertSame(1, $effacer());
     }
@@ -1378,7 +1380,7 @@ class VerificationSocieteTest extends TestCase
         $this->procedureDeLEditeur('editeur:societe:pieces', $societe)
             ->expectsQuestion('Appuyez sur Entrée une fois l\'examen terminé : le dossier sera effacé', '')
             ->assertSuccessful();
-        $this->assertSame([], glob(storage_path('app/private/examen-*')) ?: []);
+        $this->assertSame([], PiecesDeVerification::dossiersDExamen());
         $this->assertSame(['kbis'], $this->audit($societe, ActionAuditee::PiecesConsultees)->sole()->nouvelles_valeurs['pieces']);
 
         $this->procedureDeLEditeur('editeur:societe:valider', $societe)->assertSuccessful();

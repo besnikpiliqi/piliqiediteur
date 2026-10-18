@@ -22,7 +22,8 @@ use Tests\TestCase;
  * passe pas par le modèle (voir
  * DeclencheursDeProtection::effacementApresExpiration()). L'heure de
  * référence est celle du serveur de base de données : les traces de ces
- * tests expirent par rapport à l'heure réelle, jamais à une heure voyagée.
+ * tests expirent par rapport à elle (voir maintenantSelonLaBase()), jamais
+ * par rapport à l'heure de l'application, voyagée ou non.
  */
 class TraceEvenementTest extends TestCase
 {
@@ -77,8 +78,8 @@ class TraceEvenementTest extends TestCase
     public function test_une_trace_ne_se_modifie_jamais(): void
     {
         $this->magasinActif();
-        $active = $this->trace($this->journaliser(), CarbonImmutable::now()->addYear());
-        $expiree = $this->trace($this->journaliser(), CarbonImmutable::now()->subDay());
+        $active = $this->trace($this->journaliser(), $this->maintenantSelonLaBase()->addYear());
+        $expiree = $this->trace($this->journaliser(), $this->maintenantSelonLaBase()->subDay());
 
         foreach ([$active, $expiree] as $trace) {
             $this->assertThrows(
@@ -101,7 +102,7 @@ class TraceEvenementTest extends TestCase
     public function test_une_trace_ne_se_reecrit_pas_par_une_insertion_qui_la_remplace(): void
     {
         $this->magasinActif();
-        $trace = $this->trace($this->journaliser(), CarbonImmutable::now()->addYear());
+        $trace = $this->trace($this->journaliser(), $this->maintenantSelonLaBase()->addYear());
         $ligne = fn (): array => (array) DB::table('traces_evenements')->where('enregistrement_fiscal_id', $trace->getKey())->first();
         $avant = $ligne();
         $valeurs = '(?, ?, ?, ?, ?, ?)';
@@ -123,7 +124,7 @@ class TraceEvenementTest extends TestCase
     public function test_une_trace_ne_s_efface_pas_avant_son_expiration(): void
     {
         $this->magasinActif();
-        $trace = $this->trace($this->journaliser(), CarbonImmutable::now()->addMinutes(5));
+        $trace = $this->trace($this->journaliser(), $this->maintenantSelonLaBase()->addMinutes(5));
 
         $this->assertThrows(
             $this->dansUnPointDeSauvegarde(fn () => DB::table('traces_evenements')->where('enregistrement_fiscal_id', $trace->getKey())->delete()),
@@ -143,7 +144,7 @@ class TraceEvenementTest extends TestCase
     {
         $this->magasinActif();
         $evenement = $this->journaliser();
-        $this->trace($evenement, CarbonImmutable::now()->subMinute());
+        $this->trace($evenement, $this->maintenantSelonLaBase()->subMinute());
 
         $effacees = DB::table('traces_evenements')->where('enregistrement_fiscal_id', $evenement->getKey())->delete();
 

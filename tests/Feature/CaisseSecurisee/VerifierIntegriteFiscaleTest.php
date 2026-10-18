@@ -91,6 +91,7 @@ class VerifierIntegriteFiscaleTest extends TestCase
 
     public function test_la_moindre_anomalie_fait_echouer_la_commande_et_l_affiche(): void
     {
+        $this->travelTo('2026-10-02 03:00:00');
         $magasin = $this->magasinQuiAVendu(['nom' => 'Boutique Lefèvre']);
         DB::table('sequences_documents')->where('magasin_id', $magasin->id)->where('type_document', 'ticket_caisse')->update(['prochain_numero' => 3]);
 

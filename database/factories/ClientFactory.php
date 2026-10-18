@@ -23,7 +23,9 @@ class ClientFactory extends Factory
         return [
             'nom' => fake()->name(),
             'type_client' => TypeClient::Particulier,
-            'telephone' => fake()->phoneNumber(),
+            // Toujours au format que le formulaire accepte (TextInput::tel()) :
+            // fr_FR tire aussi « +33 (0)X … », qu'il refuserait.
+            'telephone' => fake()->numerify('01 ## ## ## ##'),
             'email' => fake()->safeEmail(),
             'pays' => 'FR',
         ];

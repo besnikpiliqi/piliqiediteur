@@ -156,6 +156,7 @@ class MagasinEnLectureSeuleTest extends TestCase
     #[DataProvider('situationsEnLectureSeule')]
     public function test_la_journee_se_cloture_toujours_a_la_main(string $situation, string $motif): void
     {
+        $this->travelTo('2026-10-05 10:00:00');
         $magasin = $this->ouvrirLeMagasin();
         $this->vendreUnTicket();
         app(FermerSaCaisseAction::class)->handle(self::auteur(), self::auteur());
@@ -164,7 +165,7 @@ class MagasinEnLectureSeuleTest extends TestCase
         Livewire::test(ListClotureCaisses::class)->callAction('cloturer');
 
         $cloture = ClotureCaisse::query()->sole();
-        $this->assertSame([today()->toDateString(), 1, '12.00'], [$cloture->date_cloture->toDateString(), $cloture->nombre_ventes, $cloture->total_ttc]);
+        $this->assertSame(['2026-10-05', 1, '12.00'], [$cloture->date_cloture->toDateString(), $cloture->nombre_ventes, $cloture->total_ttc]);
     }
 
     /**
@@ -316,10 +317,10 @@ class MagasinEnLectureSeuleTest extends TestCase
     #[DataProvider('situationsEnLectureSeule')]
     public function test_la_cloture_automatique_traite_le_magasin(string $situation, string $motif): void
     {
+        $this->travelTo('2026-10-04 10:00:00');
         $magasin = $this->ouvrirLeMagasin();
-        $this->travel(-1)->days();
         $ticket = $this->vendreUnTicket();
-        $this->travelBack();
+        $this->travelTo('2026-10-05 10:00:00');
         $this->passerEn($magasin, $situation);
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();

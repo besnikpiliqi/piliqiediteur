@@ -168,6 +168,7 @@ class EmettreFactureActionTest extends TestCase
 
     public function test_les_tickets_et_les_factures_ont_des_numerotations_independantes(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $clientParticulier = Client::factory()->create();
         $clientPro = Client::factory()->professionnel()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -180,10 +181,9 @@ class EmettreFactureActionTest extends TestCase
         $facture1 = $creerEtEmettre($clientPro);
         $ticket2 = $creerEtEmettre($clientParticulier);
 
-        $annee = now()->format('Y');
-        $this->assertSame("TK-LYON1-{$annee}-000001", $ticket1->numero);
-        $this->assertSame("FAC-LYON1-{$annee}-000001", $facture1->numero);
-        $this->assertSame("TK-LYON1-{$annee}-000002", $ticket2->numero);
+        $this->assertSame('TK-LYON1-2026-000001', $ticket1->numero);
+        $this->assertSame('FAC-LYON1-2026-000001', $facture1->numero);
+        $this->assertSame('TK-LYON1-2026-000002', $ticket2->numero);
     }
 
     /**

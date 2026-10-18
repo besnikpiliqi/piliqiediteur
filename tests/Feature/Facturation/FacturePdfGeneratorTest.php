@@ -479,6 +479,7 @@ class FacturePdfGeneratorTest extends TestCase
      */
     public function test_un_avoir_impute_par_une_contre_passation_apres_l_emission_n_est_pas_nomme(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'LYON1']));
         $client = Client::factory()->create();
         $article = fn (float $prixTtc): Produit => Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
@@ -772,7 +773,7 @@ class FacturePdfGeneratorTest extends TestCase
             'siren' => '121212120', 'immatriculation' => 'RCS Marseille', 'numero_tva' => 'FR56121212120',
             'siege_adresse' => '1 rue de la République', 'siege_code_postal' => '13001', 'siege_ville' => 'Marseille', 'option_debits_tva' => true,
         ])->create(['nom' => 'Boutique du Port', 'adresse' => '12 quai des Pêcheurs', 'code_postal' => '13002', 'ville' => 'Marseille']));
-        $facture = $this->emettre(Client::factory()->professionnel()->create(), [['produit_id' => Produit::factory()->create(['suivi_stock' => false])->id, 'quantite' => 1]], ['conditions_paiement' => 'Virement à 30 jours.']);
+        $facture = $this->emettre(Client::factory()->professionnel()->create(['nom' => 'Acme SARL']), [['produit_id' => Produit::factory()->create(['suivi_stock' => false])->id, 'quantite' => 1]], ['conditions_paiement' => 'Virement à 30 jours.']);
 
         $html = $this->compacte($this->rendu($facture));
         $page = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($facture)->output())[0];
@@ -800,13 +801,15 @@ class FacturePdfGeneratorTest extends TestCase
      */
     public function test_le_pied_se_repete_sur_chaque_page_d_une_longue_facture(): void
     {
-        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete(['raison_sociale' => 'Martin et Fils'])->create());
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete([
+            'raison_sociale' => 'Martin et Fils', 'siege_adresse' => '1 rue de la République', 'siege_code_postal' => '13001', 'siege_ville' => 'Marseille',
+        ])->create(['nom' => 'Boutique du Port', 'adresse' => '12 quai des Pêcheurs', 'code_postal' => '13002', 'ville' => 'Marseille']));
         $designation = 'Câble USB-C vers USB-C tressé nylon, charge rapide 100 W, longueur deux mètres, coloris noir';
         $lignes = array_map(
             fn (int $rang): array => ['produit_id' => Produit::factory()->create(['reference' => "CABLE-{$rang}", 'nom' => $designation, 'suivi_stock' => false])->id, 'quantite' => 1],
             range(1, 60),
         );
-        $facture = $this->emettre(Client::factory()->professionnel()->create(), $lignes);
+        $facture = $this->emettre(Client::factory()->professionnel()->create(['nom' => 'Acme SARL']), $lignes);
 
         $pages = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($facture)->output());
 
@@ -830,7 +833,10 @@ class FacturePdfGeneratorTest extends TestCase
     public function test_un_pied_charge_reserve_sa_hauteur_sans_recouvrir_les_lignes(): void
     {
         $mention = fn (string $debut): string => mb_substr($debut.str_repeat(' Mention réglée par le magasin, imprimée telle quelle.', 10), 0, 500);
-        app(TenantContext::class)->set(Magasin::factory()->create([
+        app(TenantContext::class)->set(Magasin::factory()->avecLaSociete([
+            'raison_sociale' => 'Martin et Fils', 'siege_adresse' => '1 rue de la République', 'siege_code_postal' => '13001', 'siege_ville' => 'Marseille',
+        ])->create([
+            'nom' => 'Boutique du Port', 'adresse' => '12 quai des Pêcheurs', 'code_postal' => '13002', 'ville' => 'Marseille',
             'mention_penalites_retard' => $mention('Pénalités de retard :'),
             'mention_indemnite_recouvrement' => $mention('Indemnité forfaitaire :'),
             'mention_escompte' => $mention('Escompte :'),
@@ -839,7 +845,7 @@ class FacturePdfGeneratorTest extends TestCase
             fn (int $rang): array => ['produit_id' => Produit::factory()->create(['reference' => "REF-{$rang}", 'nom' => "Article numéro {$rang}", 'suivi_stock' => false])->id, 'quantite' => 1],
             range(1, 40),
         );
-        $facture = $this->emettre(Client::factory()->professionnel()->create(), $lignes, ['conditions_paiement' => $mention('Conditions :')]);
+        $facture = $this->emettre(Client::factory()->professionnel()->create(['nom' => 'Acme SARL']), $lignes, ['conditions_paiement' => $mention('Conditions :')]);
         $textesDuPied = $this->textesDuPied($this->compacte($this->rendu($facture)));
 
         $pages = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($facture)->output());

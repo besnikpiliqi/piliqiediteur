@@ -320,6 +320,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
      */
     public function test_la_reouverture_attend_la_confirmation_sirene_si_l_insee_ne_repond_pas(): void
     {
+        $this->travelTo('2026-10-05 10:00:00');
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $this->fermer($magasin, MotifFermeture::Temporaire);
         $this->repertoire()->rendreInjoignable();
@@ -577,6 +578,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
      */
     public function test_un_magasin_rouvert_avant_la_validation_entre_en_activite_a_la_validation(): void
     {
+        $this->travelTo('2026-10-05 10:00:00');
         Event::fake([MagasinOuvert::class]);
         $societe = $this->inscrireUneSociete();
         $siege = $this->creerLeMagasinDuSiege($societe);

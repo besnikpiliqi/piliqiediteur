@@ -15,6 +15,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
@@ -24,6 +25,10 @@ use LogicException;
  * Même logique que EmettreFactureAction côté vente : la facture d'achat ne
  * reçoit son numéro interne qu'à la validation, moment où le stock est
  * incrémenté (voir FactureAchatValidee/IncrementerStockApresValidationFactureAchat).
+ * L'instant de la validation se prend et s'enregistre en UTC (voir
+ * FactureAchat::casts()) : le dernier achat d'un produit se choisit par
+ * lui (voir Produit::achatsValides()), et l'heure de Paris se répète la
+ * nuit du passage à l'heure d'hiver.
  * Chacun de ses produits existants doit encore être au catalogue : une
  * réception ne se perd jamais en silence. Son fournisseur aussi : archivé
  * depuis la saisie, il ne deviendrait pas le fournisseur de ses produits
@@ -119,7 +124,7 @@ class ValiderFactureAchatAction
         $factureAchat->forceFill([
             'numero' => $numero,
             'statut' => StatutFactureAchat::Validee,
-            'date_validation' => now(),
+            'date_validation' => CarbonImmutable::now('UTC'),
         ])->save();
 
         // Synchrone et dans la même transaction, voir le commentaire de

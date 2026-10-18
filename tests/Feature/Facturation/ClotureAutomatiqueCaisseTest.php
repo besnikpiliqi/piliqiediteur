@@ -65,6 +65,11 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         ]));
     }
 
+    /**
+     * Une facture du magasin émise la veille, le 8 octobre 2026 à 15 h,
+     * heure de Paris ; le test reprend ensuite le lendemain, le 9 octobre à
+     * 15 h, quel que soit le jour où il tourne.
+     */
     private function emettreFactureHier(Magasin $magasin): Facture
     {
         app(TenantContext::class)->set($magasin);
@@ -78,9 +83,9 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         // L'émission se date à l'instant du registre fiscal (voir
         // EmettreFactureAction), et une facture émise ne se modifie plus :
         // une vente d'hier s'émet hier.
-        $this->travel(-1)->days();
+        $this->travelTo('2026-10-08 15:00:00');
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
-        $this->travelBack();
+        $this->travelTo('2026-10-09 15:00:00');
 
         return $facture;
     }
@@ -122,6 +127,7 @@ class ClotureAutomatiqueCaisseTest extends TestCase
      */
     public function test_cloture_meme_si_le_vendeur_na_pas_ferme_sa_caisse_personnelle(): void
     {
+        $this->travelTo('2026-10-09 15:00:00');
         $magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($magasin);
 
@@ -132,9 +138,9 @@ class ClotureAutomatiqueCaisseTest extends TestCase
         $facture = app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]);
-        $this->travel(-1)->days();
+        $this->travelTo('2026-10-08 15:00:00');
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
-        $this->travelBack();
+        $this->travelTo('2026-10-09 15:00:00');
 
         // Le vendeur n'a jamais fermé sa caisse personnelle (voir
         // VerificateurCaissesPersonnelles) : ça ne doit rien changer ici.

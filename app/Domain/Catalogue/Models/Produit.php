@@ -253,9 +253,10 @@ class Produit extends Model
 
     /**
      * Ses lignes d'achat validées, dans l'ordre où elles ont été reçues :
-     * par date de validation de leur facture d'achat (une facture créée
-     * avant une autre peut être validée après elle), puis par facture et
-     * par ordre de ligne.
+     * par instant de validation de leur facture d'achat, en UTC, qui ne
+     * recule pas quand l'heure de Paris se répète au passage à l'heure
+     * d'hiver (une facture créée avant une autre peut être validée après
+     * elle), puis par facture et par ordre de ligne.
      *
      * @param  'asc'|'desc'  $sens
      */

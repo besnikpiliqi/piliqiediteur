@@ -49,7 +49,9 @@ class MagasinFactory extends Factory
             'ville' => fake()->city(),
             'pays' => 'FR',
             'email' => fake()->unique()->companyEmail(),
-            'telephone' => fake()->phoneNumber(),
+            // Toujours au format que le formulaire accepte (TextInput::tel()) :
+            // fr_FR tire aussi « +33 (0)X … », qu'il refuserait.
+            'telephone' => fake()->numerify('01 ## ## ## ##'),
         ];
     }
 

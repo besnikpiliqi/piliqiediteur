@@ -31,7 +31,11 @@ return new class extends Migration
             $table->string('numero_fournisseur', 60)->nullable();
             $table->string('statut', 20)->default('brouillon');
             $table->date('date_facture')->nullable();
-            $table->timestamp('date_validation')->nullable();
+            // L'instant de la validation, en UTC (voir HorodatageUtc) :
+            // l'heure de Paris se répète la nuit du passage à l'heure
+            // d'hiver, et le dernier achat validé d'un produit se choisit
+            // par cet instant (voir Produit::achatsValides()).
+            $table->dateTime('date_validation')->nullable();
             $table->string('devise', 3)->default('EUR');
             $table->text('notes')->nullable();
             $table->decimal('total_ht', 12, 2)->default(0);

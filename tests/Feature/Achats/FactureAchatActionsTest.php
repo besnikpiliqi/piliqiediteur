@@ -25,6 +25,7 @@ use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Events\QueryExecuted;
@@ -1018,8 +1019,9 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
         $f1 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 8]]);
         $f2 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseur, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]]);
+        $this->travelTo('2026-10-09 10:00:00');
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), $f2);
-        $this->travel(1)->minute();
+        $this->travelTo('2026-10-09 10:01:00');
         $f1 = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $f1);
         $this->assertSame('8.0000', $produit->fresh()->cmup_ht);
 
@@ -1028,6 +1030,34 @@ class FactureAchatActionsTest extends TestCase
         ]);
 
         $this->assertSame('9.0000', $produit->fresh()->cmup_ht);
+    }
+
+    /**
+     * Le dernier achat se reconnaît à l'instant de sa validation, même
+     * quand l'heure de Paris se répète, la nuit du passage à l'heure
+     * d'hiver : F2 (5 €, chez A) est validée à 2 h 59 heure d'été, F1
+     * (8 €, chez B) une minute plus tard, à 2 h 00 heure d'hiver. Corrigée
+     * à 9 €, F1 reste le dernier achat : le produit, qui ne suit pas son
+     * stock, en reprend le coût, et reste chez B.
+     */
+    public function test_le_dernier_achat_reste_le_plus_recemment_valide_quand_l_heure_de_paris_se_repete(): void
+    {
+        $chezA = Fournisseur::factory()->create();
+        $chezB = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
+        $f1 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $chezB, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 8]]);
+        $f2 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $chezA, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]]);
+        $this->travelTo(CarbonImmutable::parse('2026-10-25 00:59:30', 'UTC'));
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), $f2);
+        $this->travelTo(CarbonImmutable::parse('2026-10-25 01:00:30', 'UTC'));
+        $f1 = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $f1);
+
+        app(ModifierFactureAchatAction::class)->handle(self::auteur(), $f1, $chezB, [
+            ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 9],
+        ]);
+
+        $this->assertSame(['9.0000', $chezB->id], [$produit->fresh()->cmup_ht, $produit->fresh()->fournisseur_id]);
+        $this->assertSame(['2026-10-25 02:59:30 +02:00', '2026-10-25 02:00:30 +01:00'], [$f2->fresh()->date_validation->format('Y-m-d H:i:s P'), $f1->fresh()->date_validation->format('Y-m-d H:i:s P')]);
     }
 
     /**
@@ -1235,11 +1265,12 @@ class FactureAchatActionsTest extends TestCase
         $fournisseurDeLaFactureRecue = Fournisseur::factory()->create();
         $dernierFournisseur = Fournisseur::factory()->create();
         $produit = Produit::factory()->create(['nom' => 'Écran (nom du fournisseur)', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $this->travelTo('2026-10-09 10:00:00');
         app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), $fournisseurDeLaFactureRecue, [
             ['produit_id' => $produit->id, 'quantite' => 2, 'prix_unitaire_ht' => 40],
         ], ['source' => SourceFactureAchat::Api]));
         $this->assertSame($fournisseurDeLaFactureRecue->id, $produit->fresh()->fournisseur_id);
-        $this->travel(1)->minute();
+        $this->travelTo('2026-10-09 10:01:00');
 
         $this->recevoir($dernierFournisseur, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 38]]);
 
@@ -1281,8 +1312,9 @@ class FactureAchatActionsTest extends TestCase
         $ancien = Fournisseur::factory()->create();
         $dernier = Fournisseur::factory()->create();
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $this->travelTo('2026-10-09 10:00:00');
         $ancienneFacture = $this->recevoir($ancien, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]]);
-        $this->travel(1)->minute();
+        $this->travelTo('2026-10-09 10:01:00');
         $this->recevoir($dernier, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 6]]);
 
         app(ModifierFactureAchatAction::class)->handle(self::auteur(), $ancienneFacture, $ancien, [
@@ -1304,8 +1336,9 @@ class FactureAchatActionsTest extends TestCase
         $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
         $seulAchat = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
         $autre = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $this->travelTo('2026-10-09 10:00:00');
         $this->recevoir($ancien, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]]);
-        $this->travel(1)->minute();
+        $this->travelTo('2026-10-09 10:01:00');
         $derniereFacture = $this->recevoir($dernier, [
             ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 6],
             ['produit_id' => $seulAchat->id, 'quantite' => 1, 'prix_unitaire_ht' => 6],

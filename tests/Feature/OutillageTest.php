@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Contacts\Models\Client;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Laravel\Boost\Install\GuidelineConfig;
 use Laravel\Boost\Install\SkillComposer;
 use Laravel\Boost\Support\Config;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -15,10 +17,72 @@ use Tests\TestCase;
  * Filament Shield et Sanctum, retirés, n'exposent plus ni route ni
  * commande, et rien de ce que lisent les agents ne renvoie à un outil
  * absent du projet. La base, PostgreSQL ou SQLite, trie les textes dans
- * le même ordre.
+ * le même ordre. Les aides des tests lisent les PDF de dompdf sans
+ * dépendre du hasard de leur contenu, et aucun test ne dépend du hasard
+ * de Faker.
  */
 class OutillageTest extends TestCase
 {
+    /**
+     * Les pages d'un PDF se lisent même quand un flux compressé finit par
+     * un retour chariot : dompdf écrit « stream », un saut de ligne, le
+     * flux, un saut de ligne et « endstream », avec la longueur exacte du
+     * flux (/Length) ; une lecture jusqu'au mot « endstream » prenait ce
+     * dernier octet pour la fin de la ligne et ne décompressait plus le
+     * flux (voir pagesDuPdf()).
+     */
+    public function test_les_pages_d_un_pdf_se_lisent_quand_un_flux_compresse_finit_par_un_retour_chariot(): void
+    {
+        $nombreDePages = 0;
+        do {
+            $texte = 'Page 1 sur '.++$nombreDePages;
+            $flux = gzcompress('BT 40.000 30.000 Td /F1 9.0 Tf  [('.mb_convert_encoding($texte, 'UTF-16BE', 'UTF-8').')] TJ ET');
+        } while (! str_ends_with($flux, "\r"));
+        $pdf = "%PDF-1.7\n"
+            ."1 0 obj\n<< /Type /Font\n/Subtype /Type0\n/DescendantFonts [2 0 R] >>\nendobj\n"
+            ."2 0 obj\n<< /Type /Font\n/Subtype /CIDFontType2\n/DW 600 >>\nendobj\n"
+            ."3 0 obj\n<< /Font << /F1 1 0 R >> >>\nendobj\n"
+            ."4 0 obj\n<< /Type /Page\n/MediaBox [0.000 0.000 595.280 841.890]\n/Resources 3 0 R\n/Contents 5 0 R\n>>\nendobj\n"
+            ."5 0 obj\n<< /Filter /FlateDecode\n/Length ".strlen($flux)." >>\nstream\n".$flux."\nendstream\nendobj\n";
+
+        $pages = $this->pagesDuPdf($pdf);
+
+        $this->assertSame('0.000 0.000 595.280 841.890', $pages[0]['format']);
+        $this->assertSame([$texte], array_column($pages[0]['textes'], 'texte'));
+    }
+
+    /**
+     * @return array<string, array{0: string}>
+     */
+    public static function deuxJeuxDeDonnees(): array
+    {
+        return ['premier jeu' => ['premier'], 'second jeu' => ['second']];
+    }
+
+    /**
+     * Faker est semé au début de chaque test par la graine tirée du nom de
+     * sa classe, de sa méthode et de son jeu de données (voir
+     * TestCase::setUp()) : la rejouer redonne les valeurs que le test a
+     * tirées, par fake() comme par une fabrique, si bien qu'un test tire
+     * les mêmes valeurs à chaque exécution, quel que soit l'ordre des tests
+     * ou le processus qui le fait tourner. Le générateur d'un test
+     * précédent, que le ramasse-miettes peut détruire à tout moment, et qui
+     * ressème alors au hasard celui de PHP (Faker\Generator::__destruct()),
+     * est déjà détruit quand le test commence : le ramasse-miettes lancé
+     * ici n'en trouve plus.
+     */
+    #[DataProvider('deuxJeuxDeDonnees')]
+    public function test_faker_est_seme_par_test_et_redonne_les_memes_valeurs_a_chaque_execution(string $jeu): void
+    {
+        $tirer = fn (): array => [fake()->name(), Client::factory()->make()->only(['nom', 'telephone', 'email']), fake()->numerify('#######')];
+        gc_collect_cycles();
+        $valeursDuTest = $tirer();
+
+        fake()->seed(crc32(self::class.'::test_faker_est_seme_par_test_et_redonne_les_memes_valeurs_a_chaque_execution with data set "'.$jeu.' jeu"'));
+
+        $this->assertSame($valeursDuTest, $tirer());
+    }
+
     public function test_aucune_route_d_un_paquet_retire_n_est_exposee(): void
     {
         $reponse = $this->get('/sanctum/csrf-cookie');

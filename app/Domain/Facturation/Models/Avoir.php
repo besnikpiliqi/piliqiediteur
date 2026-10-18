@@ -279,9 +279,14 @@ class Avoir extends Model implements DocumentEnvoyable
         return $this->statut === StatutAvoir::Emise;
     }
 
+    /**
+     * Ses imputations, dans l'ordre où elles ont été enregistrées : la
+     * base de données ne garantit aucun ordre sans tri, et la fiche les
+     * montre dans celui-ci (voir AvoirResource).
+     */
     public function allocations(): HasMany
     {
-        return $this->hasMany(AvoirAllocation::class);
+        return $this->hasMany(AvoirAllocation::class)->orderBy('id');
     }
 
     /**

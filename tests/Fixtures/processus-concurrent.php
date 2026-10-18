@@ -6,10 +6,13 @@
  * TestCase::demarrerUnProcessusConcurrent()). La demande arrive sérialisée
  * sur l'entrée standard : la base du test (celle de son processus de test
  * parallèle), la configuration de la caisse sécurisée et du journal
- * d'audit des tests et l'opération. Le processus réussit si l'opération
- * réussit ; sinon il écrit l'erreur et échoue.
+ * d'audit des tests, l'heure figée du test, s'il l'a figée, et
+ * l'opération. Le processus réussit si l'opération réussit ; sinon il
+ * écrit l'erreur et échoue.
  */
 
+use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\DB;
 
@@ -26,6 +29,10 @@ config([
     'journal_audit' => $demande['journal_audit'],
 ]);
 DB::purge();
+
+if ($demande['maintenant'] !== null) {
+    Carbon::setTestNow(CarbonImmutable::parse($demande['maintenant']));
+}
 
 try {
     $demande['operation']->getClosure()();

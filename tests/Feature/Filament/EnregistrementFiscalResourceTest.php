@@ -216,6 +216,7 @@ class EnregistrementFiscalResourceTest extends TestCase
      */
     public function test_l_evenement_de_cloture_nomme_son_ticket_z(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->connecterProprietaire();
         $cloture = app(CloturerCaisseAction::class)->handle(self::auteur(), $magasin, now());
 

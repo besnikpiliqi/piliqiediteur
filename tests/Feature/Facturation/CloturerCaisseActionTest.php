@@ -46,10 +46,16 @@ class CloturerCaisseActionTest extends TestCase
 
     private Magasin $magasin;
 
+    /**
+     * Les tests commencent le 9 octobre 2026 à 10 h, heure de Paris : la
+     * journée qu'ils clôturent ne dépend pas du jour où ils tournent, et
+     * minuit ne passe jamais entre une vente et sa clôture.
+     */
     protected function setUp(): void
     {
         parent::setUp();
 
+        $this->travelTo('2026-10-09 10:00:00');
         $this->magasin = Magasin::factory()->create();
         app(TenantContext::class)->set($this->magasin);
     }
@@ -192,10 +198,10 @@ class CloturerCaisseActionTest extends TestCase
     public function test_un_avoir_se_deduit_des_ventes_du_jour_de_son_emission(): void
     {
         $client = Client::factory()->create();
-        $this->travelTo(now()->subDay());
+        $this->travelTo('2026-10-08 10:00:00');
         $venteDHier = $this->emettreFacturePour($client, 60); // 60 TTC
         app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, now());
-        $this->travelBack();
+        $this->travelTo('2026-10-09 10:00:00');
         $this->emettreFacturePour($client, 120); // 120 TTC
         $avoir = app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteDHier->lignes->firstOrFail()->id, 'quantite' => 1],

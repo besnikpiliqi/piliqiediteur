@@ -258,7 +258,8 @@ class FactureResource extends Resource
                 ->schema([
                     // Un paiement saisi par erreur y figure avec sa
                     // contre-passation, en négatif (voir
-                    // ContrePasserPaiementAction).
+                    // ContrePasserPaiementAction), dans l'ordre où ils ont
+                    // été enregistrés.
                     RepeatableEntry::make('allocationsPaiement')
                         ->label('')
                         ->schema([
@@ -283,7 +284,8 @@ class FactureResource extends Resource
                 ->schema([
                     // Le crédit qu'avait imputé un paiement saisi par
                     // erreur y figure avec sa contre-passation, en négatif
-                    // (voir ContrePasserPaiementAction).
+                    // (voir ContrePasserPaiementAction), dans l'ordre où ils
+                    // ont été imputés.
                     RepeatableEntry::make('allocationsAvoir')
                         ->label('')
                         ->schema([

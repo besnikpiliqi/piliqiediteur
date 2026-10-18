@@ -71,6 +71,7 @@ class ActionsUniquesTest extends TestCase
 
     public function test_un_paiement_repete_n_est_enregistre_qu_une_fois(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $this->brouillon());
         $jeton = (string) Str::uuid();

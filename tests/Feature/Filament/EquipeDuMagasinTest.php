@@ -480,7 +480,7 @@ class EquipeDuMagasinTest extends TestCase
      */
     public function test_l_ecran_de_l_equipe_ne_liste_que_les_affectations_de_membre_du_magasin_actif(): void
     {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], User::factory()->create(['email' => 'proprietaire@ma-boutique.test']));
         $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);

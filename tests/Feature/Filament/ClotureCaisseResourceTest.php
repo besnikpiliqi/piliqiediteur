@@ -356,6 +356,7 @@ class ClotureCaisseResourceTest extends TestCase
 
     public function test_la_page_de_detail_affiche_les_factures_agregees(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirLeMagasin();
         $facture = $this->emettreFactureParticulier(Client::factory()->create());
         app(FermerSaCaisseAction::class)->handle($this->responsableDeTest($magasin), $this->responsableDeTest($magasin));
@@ -369,6 +370,7 @@ class ClotureCaisseResourceTest extends TestCase
 
     public function test_la_page_de_detail_affiche_les_avoirs_deduits(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirLeMagasin();
         $client = Client::factory()->create();
         $avoir = $this->emettreAvoir($client, $this->emettreFactureParticulier($client));
@@ -514,6 +516,7 @@ class ClotureCaisseResourceTest extends TestCase
      */
     public function test_la_fiche_affiche_les_encaissements_par_mode_et_la_somme_des_avoirs(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirLeMagasin();
         $this->vendreAuComptantUnTicketDe(60, ModePaiement::Especes);
         $client = Client::factory()->create();
@@ -540,6 +543,7 @@ class ClotureCaisseResourceTest extends TestCase
      */
     public function test_les_numeros_des_tickets_et_des_avoirs_ouvrent_leur_fiche(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirLeMagasin();
         $client = Client::factory()->create();
         $ticket = $this->vendreAuComptantUnTicketDe(30, ModePaiement::Especes, $client);
@@ -562,12 +566,13 @@ class ClotureCaisseResourceTest extends TestCase
      */
     public function test_un_vendeur_qui_ne_voit_que_ses_ventes_ne_voit_dans_la_cloture_que_le_detail_de_ses_documents(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirLeMagasin();
         $proprietaire = $this->proprietaireDe($magasin);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
-        $collegue = $this->membre($magasin, RoleMagasin::Vendeur);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER], ['name' => 'Claire Vendeuse']);
+        $collegue = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Luc Collègue']);
         $this->actingAs($vendeur);
-        $sonTicket = $this->vendreAuComptantUnTicketDe(12, ModePaiement::Especes);
+        $sonTicket = $this->vendreAuComptantUnTicketDe(12, ModePaiement::Especes, Client::factory()->create(['nom' => 'Jeanne Cliente']));
         $this->actingAs($collegue);
         $clientDuCollegue = Client::factory()->create(['nom' => 'Paul Martin']);
         $ticketDuCollegue = $this->vendreAuComptantUnTicketDe(30, ModePaiement::CarteBancaire, $clientDuCollegue);

@@ -10,6 +10,7 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
@@ -40,6 +41,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -405,6 +407,36 @@ class FactureResourceTest extends TestCase
         $fiche = Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()]);
 
         $fiche->assertSeeInOrder(['Paiements reçus', '14/10/2026', 'Carte bancaire', 'REF-XYZ-123']);
+    }
+
+    /**
+     * Les paiements reçus d'une facture se lisent dans l'ordre où ils ont
+     * été enregistrés, la contre-passation d'un chèque saisi par erreur
+     * entre lui et le bon paiement : l'application les trie, sans laisser
+     * la base de données choisir leur ordre.
+     */
+    public function test_la_fiche_montre_les_paiements_et_leurs_contre_passations_dans_l_ordre_de_leur_enregistrement(): void
+    {
+        $this->travelTo('2026-10-14 10:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create(['nom' => 'Jeanne Cliente']);
+        $cable = Produit::factory()->create(['prix_vente_ttc' => '10.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => $cable->id, 'quantite' => 1]]));
+        $payer = fn (ModePaiement $mode, string $reference) => app(EnregistrerPaiementAction::class)->handle($responsable, $client, ['mode_paiement' => $mode->value, 'montant' => '10.00', 'reference' => $reference, 'recu_le' => '2026-10-14'], [['facture_id' => $facture->id, 'montant' => '10.00']]);
+        $cheque = $payer(ModePaiement::Cheque, 'CHQ-0001');
+        app(ContrePasserPaiementAction::class)->handle($responsable, $cheque, 'Chèque saisi par erreur');
+        $payer(ModePaiement::Virement, 'VIR-0002');
+
+        $fiche = Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()]);
+
+        preg_match_all('/Nature (\S+) Reçu le \S+ Mode (\S+) .*? Référence (\S+)/u', Str::squish(strip_tags(Str::between($fiche->html(), 'Paiements reçus', 'Transmission électronique'))), $lignes, PREG_SET_ORDER);
+        $this->assertSame(
+            [['Paiement', 'Chèque', 'CHQ-0001'], ['Contre-passation', 'Chèque', 'CHQ-0001'], ['Paiement', 'Virement', 'VIR-0002']],
+            array_map(fn (array $ligne): array => array_slice($ligne, 1), $lignes),
+        );
     }
 
     /**

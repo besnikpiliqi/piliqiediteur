@@ -108,6 +108,7 @@ class TypeClientFigeTest extends TestCase
 
     public function test_une_facture_garde_le_siren_fige_de_son_client_redevenu_particulier(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $this->magasin();
         $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '100000009', 'siret' => '10000000900017']);
         $facture = $this->emettre($client);
@@ -137,6 +138,7 @@ class TypeClientFigeTest extends TestCase
     #[DataProvider('changementsDeType')]
     public function test_un_brouillon_dont_le_client_a_change_de_type_ne_s_emet_qu_une_fois_reenregistre(bool $professionnelAuBrouillon, array $nouvelleFiche, string $nouveauType, string $numeroApresReenregistrement): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $this->magasin();
         $client = $professionnelAuBrouillon ? Client::factory()->professionnel()->create() : Client::factory()->create();
         $lignes = $this->uneLigneA120Euros();
@@ -193,6 +195,7 @@ class TypeClientFigeTest extends TestCase
      */
     public function test_l_avoir_d_une_facture_garde_les_identifiants_du_professionnel_redevenu_particulier(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $this->magasin();
         $client = Client::factory()->professionnel()->create(['nom' => 'Atelier Durand', 'siren' => '100000009', 'siret' => '10000000900017', 'numero_tva' => 'FR88100000009']);
         $facture = $this->emettre($client);

@@ -101,6 +101,7 @@ class MagasinDeDemonstrationTest extends TestCase
      */
     public function test_la_demonstration_fonctionne_sans_aucun_magasin_reel(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $societe = $this->inscrireUneSociete();
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
 
@@ -164,6 +165,7 @@ class MagasinDeDemonstrationTest extends TestCase
 
     public function test_la_demonstration_vend_encaisse_et_cloture_dans_son_propre_registre(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $societe = $this->inscrireUneSociete();
         $reel = $this->creerLeMagasinDuSiege($societe);
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);

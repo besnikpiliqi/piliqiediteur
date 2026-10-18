@@ -5,6 +5,7 @@ namespace App\Domain\Achats\Models;
 use App\Domain\Achats\Enums\SourceFactureAchat;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutFactureAchat;
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
@@ -58,16 +59,25 @@ class FactureAchat extends Model
         'escompte_pourcentage',
     ];
 
-    protected $casts = [
-        'statut' => StatutFactureAchat::class,
-        'source' => SourceFactureAchat::class,
-        'date_facture' => 'date',
-        'date_validation' => 'datetime',
-        'total_ht' => 'decimal:2',
-        'total_tva' => 'decimal:2',
-        'total_ttc' => 'decimal:2',
-        'escompte_pourcentage' => 'decimal:2',
-    ];
+    /**
+     * date_validation est l'instant de la validation, enregistré en UTC et
+     * relu à l'heure de Paris (voir HorodatageUtc).
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'statut' => StatutFactureAchat::class,
+            'source' => SourceFactureAchat::class,
+            'date_facture' => 'date',
+            'date_validation' => HorodatageUtc::class.':'.config('app.timezone'),
+            'total_ht' => 'decimal:2',
+            'total_tva' => 'decimal:2',
+            'total_ttc' => 'decimal:2',
+            'escompte_pourcentage' => 'decimal:2',
+        ];
+    }
 
     protected static function booted(): void
     {

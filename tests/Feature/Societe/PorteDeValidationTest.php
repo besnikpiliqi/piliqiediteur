@@ -146,6 +146,7 @@ class PorteDeValidationTest extends TestCase
      */
     public function test_un_magasin_dont_l_etablissement_n_est_pas_verifie_ne_vend_pas(): void
     {
+        $this->travelTo('2026-10-05 10:00:00');
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'code' => 'MABOUT']);
         $magasin->forceFill(['etablissement_verifie_le' => null])->save();
         $ticket = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]);
@@ -158,7 +159,7 @@ class PorteDeValidationTest extends TestCase
         $this->assertSame(StatutFacture::Brouillon, $ticket->fresh()->statut);
 
         $magasin->forceFill(['etablissement_verifie_le' => now()])->save();
-        $this->assertSame('TK-MABOUT-'.now()->format('Y').'-000001', app(EmettreFactureAction::class)->handle(self::auteur(), $ticket)->numero);
+        $this->assertSame('TK-MABOUT-2026-000001', app(EmettreFactureAction::class)->handle(self::auteur(), $ticket)->numero);
     }
 
     /**

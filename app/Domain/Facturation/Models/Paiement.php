@@ -74,9 +74,15 @@ class Paiement extends Model
         return $this->belongsTo(Client::class)->withTrashed();
     }
 
+    /**
+     * Ses imputations sur les factures qu'il règle, dans l'ordre où elles
+     * ont été enregistrées : la base de données ne garantit aucun ordre
+     * sans tri, et la liste des paiements les nomme dans celui-ci (voir
+     * PaiementResource).
+     */
     public function allocations(): HasMany
     {
-        return $this->hasMany(PaiementAllocation::class);
+        return $this->hasMany(PaiementAllocation::class)->orderBy('id');
     }
 
     /**

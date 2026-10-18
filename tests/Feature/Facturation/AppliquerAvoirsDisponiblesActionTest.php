@@ -139,21 +139,19 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
         // Les deux achats d'abord, AVANT tout avoir : sans quoi le crédit du
         // premier avoir s'appliquerait automatiquement au second achat
         // lui-même (émission de factureB), faussant tout le scénario.
-        $this->travelTo(now()->subDays(3));
+        $this->travelTo('2026-10-06 10:00:00');
         $factureA = $this->vendreEnCaisse($client, $produitRetourne, 1);
-        $this->travelBack();
 
-        $this->travelTo(now()->subDays(2));
+        $this->travelTo('2026-10-07 10:00:00');
         $factureB = $this->vendreEnCaisse($client, $produitRetourne, 1);
-        $this->travelBack();
 
-        $this->travelTo(now()->subDays(2));
+        $this->travelTo('2026-10-07 11:00:00');
         $avoirAncien = $this->emettreAvoirPourClient($client, $factureA, 1); // 12 € TTC
-        $this->travelBack();
 
-        $this->travelTo(now()->subDay());
+        $this->travelTo('2026-10-08 10:00:00');
         $avoirRecent = $this->emettreAvoirPourClient($client, $factureB, 1); // 12 € TTC
-        $this->travelBack();
+
+        $this->travelTo('2026-10-09 10:00:00');
 
         // Nouvel achat de 18 € : l'avoir le plus ancien (12 €) est consommé
         // intégralement, puis 6 € du plus récent -- jamais l'inverse.

@@ -131,6 +131,7 @@ class DevisPolicyTest extends TestCase
      */
     public function test_un_devis_numerote_apres_son_chargement_ne_se_supprime_pas(): void
     {
+        $this->travelTo('2026-10-05 10:00:00');
         $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $chargeBrouillon = $this->creerUnDevis();
         app(EmettreDevisAction::class)->handle(self::auteur(), $chargeBrouillon);

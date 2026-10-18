@@ -638,6 +638,7 @@ class EReportingDesParticuliersTest extends TestCase
      */
     public function test_le_magasin_de_demonstration_n_a_rien_a_declarer(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $societe = $this->inscrireUneSociete();
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
         app(TenantContext::class)->set($demonstration);

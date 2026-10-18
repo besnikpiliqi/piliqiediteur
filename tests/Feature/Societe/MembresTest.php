@@ -359,6 +359,7 @@ class MembresTest extends TestCase
      */
     public function test_le_vingt_et_unieme_compte_du_jour_est_refuse(): void
     {
+        $this->travelTo('2026-10-09 10:00:00');
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $responsable = $this->responsable($magasin);

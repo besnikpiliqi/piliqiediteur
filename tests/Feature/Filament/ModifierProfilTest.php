@@ -185,7 +185,7 @@ class ModifierProfilTest extends TestCase
     {
         Mail::fake();
         $this->travelTo('2026-10-15 10:00:00');
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], User::factory()->create(['name' => 'Jeanne Dupont']));
         $proprietaire = $this->proprietaireDe($magasin);
         $adresse = $proprietaire->email;
         foreach (range(1, DebitDesEmails::PAR_HEURE_ET_PAR_PERSONNE) as $numero) {
@@ -205,7 +205,7 @@ class ModifierProfilTest extends TestCase
         $this->assertSame(['Trop d\'e-mails envoyés en une heure : réessayez dans 60 minute(s).'], $page->errors()->get('data.email'));
 
         $proprietaire->refresh();
-        $this->assertNotSame('Jeanne Martin', $proprietaire->name);
+        $this->assertSame('Jeanne Dupont', $proprietaire->name);
         $this->assertSame([$adresse, null], [$proprietaire->email, $proprietaire->nouvelle_adresse]);
         Mail::assertNothingOutgoing();
     }

@@ -35,8 +35,9 @@ class PiecesDeVerification
     public const MOTIF_SIREN_CORRIGE = 'siren_corrige';
 
     /**
-     * Le début du nom des dossiers temporaires, dans storage/app/private,
-     * où l'éditeur lit les pièces déchiffrées (voir editeur:societe:pieces).
+     * Le début du nom des dossiers temporaires, à la racine du disque
+     * « verification », à côté des dossiers chiffrés des sociétés, où
+     * l'éditeur lit les pièces déchiffrées (voir editeur:societe:pieces).
      */
     public const PREFIXE_DES_DOSSIERS_D_EXAMEN = 'examen-';
 
@@ -47,18 +48,24 @@ class PiecesDeVerification
      */
     public static function nouveauDossierDExamen(): string
     {
-        return storage_path('app/private/'.self::PREFIXE_DES_DOSSIERS_D_EXAMEN.bin2hex(random_bytes(8)));
+        return Storage::disk(self::DISQUE)->path(self::PREFIXE_DES_DOSSIERS_D_EXAMEN.bin2hex(random_bytes(8)));
     }
 
     /**
      * Les dossiers d'examen qui existent encore (voir
-     * app:effacer-pieces-verification).
+     * app:effacer-pieces-verification), par leur chemin.
      *
      * @return list<string>
      */
     public static function dossiersDExamen(): array
     {
-        return glob(storage_path('app/private/'.self::PREFIXE_DES_DOSSIERS_D_EXAMEN.'*'), GLOB_ONLYDIR) ?: [];
+        $disque = Storage::disk(self::DISQUE);
+
+        return collect($disque->directories())
+            ->filter(fn (string $dossier): bool => str_starts_with($dossier, self::PREFIXE_DES_DOSSIERS_D_EXAMEN))
+            ->map(fn (string $dossier): string => $disque->path($dossier))
+            ->values()
+            ->all();
     }
 
     /**

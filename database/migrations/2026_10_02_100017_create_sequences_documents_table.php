@@ -12,8 +12,8 @@ return new class extends Migration
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->restrictOnDelete();
             // Une valeur de TypeDocument : devis, facture, ticket_caisse,
-            // avoir, facture_achat, avoir_fournisseur, cloture_caisse,
-            // produit.
+            // avoir, facture_achat, avoir_fournisseur,
+            // inventaire_ouverture, cloture_caisse, produit.
             $table->string('type_document', 40);
             // clé de période : "" (pas de reset), "2026" (reset annuel), etc.
             $table->string('period_key', 20)->default('');

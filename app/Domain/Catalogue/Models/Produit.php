@@ -7,11 +7,14 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\CaisseSecurisee\Concerns\JournaliseSesParametresDeConformite;
+use App\Domain\Catalogue\Services\OrigineDesProduits;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
 use App\Domain\Facturation\Services\SaisieDecimale;
+use App\Domain\Stock\Enums\StatutInventaireOuverture;
+use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\Magasin;
@@ -30,6 +33,13 @@ use InvalidArgumentException;
 use LogicException;
 
 /**
+ * Un produit naît seulement de la validation d'une facture d'achat ou d'un
+ * inventaire d'ouverture : toute autre création est refusée ici même,
+ * quel que soit le code qui la tente (voir OrigineDesProduits). Il se
+ * modifie ensuite dans « Produits », sauf son fournisseur et ses données
+ * d'achat (coût moyen, stock), que seuls les achats, les retours et les
+ * inventaires font évoluer.
+ *
  * Son taux de TVA est un paramètre ayant un impact sur la conformité :
  * chaque changement s'inscrit au journal des événements du magasin (JET
  * 270, voir JournaliseSesParametresDeConformite).
@@ -45,7 +55,6 @@ class Produit extends Model
         'nom',
         'taille',
         'couleur',
-        'cmup_ht',
         'prix_vente_ttc',
         'taux_tva',
         'suivi_stock',
@@ -55,8 +64,12 @@ class Produit extends Model
     // stock_quantite n'est volontairement PAS fillable : seul
     // StockLedgerService est autorisé à la modifier, via les mouvements de
     // stock. Toute autre écriture casserait la cohérence du ledger.
-    // fournisseur_id non plus : c'est celui de son dernier achat validé
-    // (voir rattacherAuFournisseur()), jamais un choix de formulaire.
+    // cmup_ht non plus : posé par la validation qui crée le produit, au
+    // coût de sa ligne d'achat ou d'inventaire d'ouverture, puis recalculé
+    // par StockLedgerService à chaque entrée achetée et à chaque retour au
+    // fournisseur. fournisseur_id non plus : c'est celui de son dernier
+    // achat validé (voir rattacherAuFournisseur()), jamais un choix de
+    // formulaire.
 
     /**
      * Les valeurs par défaut de la base, dès la création du modèle : la
@@ -88,7 +101,14 @@ class Produit extends Model
         // saving() (pas creating()) : couvre aussi bien la création qu'une
         // édition où la référence serait vidée -- la colonne reste NOT
         // NULL en base, jamais question de la laisser vide après coup.
+        // Une création hors d'une validation d'achat ou d'inventaire
+        // d'ouverture est refusée avant tout le reste, sans consommer de
+        // référence automatique.
         static::saving(function (Produit $produit) {
+            if (! $produit->exists) {
+                app(OrigineDesProduits::class)->exigerUneOrigine();
+            }
+
             $produit->verifierQueSaReferenceEstLibre();
             $produit->arrondirLePrixDeVente();
             $produit->arrondirLeCmup();
@@ -167,6 +187,36 @@ class Produit extends Model
     public function lignesAchat(): HasMany
     {
         return $this->hasMany(LigneAchat::class);
+    }
+
+    public function lignesInventaireOuverture(): HasMany
+    {
+        return $this->hasMany(LigneInventaireOuverture::class);
+    }
+
+    /**
+     * Les produits jamais reçus : sur aucune ligne d'une facture d'achat
+     * validée ni d'un inventaire d'ouverture validé. Seuls ceux-là entrent
+     * dans un inventaire d'ouverture, en plus des nouveaux produits qu'il
+     * crée (voir ConstructeurLigneInventaire) : un produit déjà reçu
+     * n'est jamais inventorié de nouveau.
+     *
+     * @param  Builder<Produit>  $query
+     */
+    public function scopeJamaisRecus(Builder $query): void
+    {
+        $query
+            ->whereDoesntHave('lignesAchat', fn (Builder $lignes): Builder => $lignes->whereHas('factureAchat', fn (Builder $factureAchat): Builder => $factureAchat->where('statut', StatutFactureAchat::Validee)))
+            ->whereDoesntHave('lignesInventaireOuverture', fn (Builder $lignes): Builder => $lignes->whereHas('inventaireOuverture', fn (Builder $inventaire): Builder => $inventaire->where('statut', StatutInventaireOuverture::Valide)));
+    }
+
+    /**
+     * A-t-il déjà été reçu, par un achat ou un inventaire d'ouverture
+     * validés (voir scopeJamaisRecus()) ?
+     */
+    public function aDejaEteRecu(): bool
+    {
+        return static::withTrashed()->whereKey($this->getKey())->jamaisRecus()->doesntExist();
     }
 
     /**

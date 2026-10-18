@@ -7,7 +7,9 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Catalogue\Enums\OrigineProduit;
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Catalogue\Services\OrigineDesProduits;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentChiffre;
 use App\Domain\Facturation\Services\QuantiteEntiere;
@@ -49,9 +51,9 @@ use LogicException;
  * lignes, et non seulement dans le formulaire, dont l'état se forge : la
  * fiche d'un produit existant se corrige avec le droit de la modifier, et
  * celle d'un nouveau produit se saisit ou se change avec le droit d'en
- * créer. La validation crée ensuite le produit que cette saisie a
- * autorisé, sans redemander ce droit (voir verifierLesNouveauxProduits()).
- * Sans utilisateur connecté (facture récupérée automatiquement chez le
+ * créer (voir verifierLesNouveauxProduits()). Valider une facture qui crée
+ * des produits exige aussi ce droit de celui qui la valide (voir
+ * ValiderFactureAchatAction). Sans utilisateur connecté (facture récupérée automatiquement chez le
  * fournisseur), il n'y a aucun droit à vérifier.
  *
  * Corriger le taux de TVA d'un produit existant s'inscrit au journal des
@@ -86,6 +88,7 @@ class ConstructeurLigneAchat
     public function __construct(
         private readonly CalculateurLigne $calculateur,
         private readonly RegistreFiscal $registre,
+        private readonly OrigineDesProduits $origine,
     ) {}
 
     /**
@@ -176,7 +179,10 @@ class ConstructeurLigneAchat
      * moment-là : les références automatiques suivent l'ordre des
      * validations, et une référence saisie qu'un autre produit a prise
      * entre-temps est refusée (voir Produit::verifierQueSaReferenceEstLibre()).
-     * La ligne reçoit alors le produit et sa référence.
+     * La ligne reçoit alors le produit et sa référence. C'est la seule
+     * création de produit d'un achat : elle ouvre, le temps de son
+     * enregistrement, le contexte d'origine d'un achat, sans lequel le
+     * modèle refuse toute création (voir OrigineDesProduits).
      *
      * @throws LogicException
      */
@@ -190,7 +196,8 @@ class ConstructeurLigneAchat
                     ?? throw new LogicException("Indiquez le prix de vente TTC du nouveau produit « {$produit->nom} » avant de valider la facture d'achat.");
             }
 
-            $produit->forceFill(['fournisseur_id' => $factureAchat->fournisseur_id, 'cmup_ht' => $ligne->coutUnitaireHt()])->save();
+            $produit->forceFill(['fournisseur_id' => $factureAchat->fournisseur_id, 'cmup_ht' => $ligne->coutUnitaireHt()]);
+            $this->origine->pendant(OrigineProduit::Achat, fn (): bool => $produit->save());
 
             $ligne->update(['produit_id' => $produit->id, 'reference' => $produit->reference, 'nouveau_produit' => null]);
         }
@@ -210,9 +217,10 @@ class ConstructeurLigneAchat
      * telle quelle une fiche que le brouillon gardait déjà ($fichesDejaSaisies)
      * ne crée rien de plus que ce que sa saisie a autorisé : un membre qui
      * ne peut pas créer de produits corrige les autres lignes d'un
-     * brouillon, ou le valide, sans toucher au nouveau produit qu'un
-     * collègue y a saisi ; il ne change pas cette fiche et ne la recopie
-     * pas sur une seconde ligne, chaque fiche gardée ne servant qu'une fois.
+     * brouillon sans toucher au nouveau produit qu'un collègue y a saisi ;
+     * il ne change pas cette fiche et ne la recopie pas sur une seconde
+     * ligne, chaque fiche gardée ne servant qu'une fois, et ne valide pas
+     * ce brouillon (voir ValiderFactureAchatAction).
      *
      * @param  list<LigneAchat>  $lignes
      * @param  list<array<string, mixed>>  $fichesDejaSaisies  voir ficheComparable()
@@ -448,7 +456,7 @@ class ConstructeurLigneAchat
         $utilisateur = Gate::forUser($auteur);
 
         if (! $produit->exists && $utilisateur->denies('create', Produit::class)) {
-            throw new LogicException("Vous ne pouvez pas créer de produit : « {$produit->nom} » doit d'abord être ajouté au catalogue.");
+            throw new LogicException("Vous ne pouvez pas créer de produit : « {$produit->nom} » ne peut être saisi que par une personne autorisée à créer des produits.");
         }
 
         if ($produit->exists && $utilisateur->denies('update', $produit)) {

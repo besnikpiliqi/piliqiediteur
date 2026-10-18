@@ -11,13 +11,14 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
+use App\Filament\App\Resources\InventaireOuvertureResource\Pages\CreateInventaireOuverture;
 use App\Filament\App\Resources\ProduitResource;
-use App\Filament\App\Resources\ProduitResource\Pages\CreateProduit;
 use App\Filament\App\Resources\ProduitResource\Pages\EditProduit;
 use App\Filament\App\Resources\ProduitResource\Pages\ListProduits;
 use App\Models\User;
@@ -51,19 +52,17 @@ class ProduitResourceTest extends TestCase
         Filament::setTenant($magasin);
     }
 
+    /**
+     * Le produit naît de la validation de sa facture d'achat, avec le prix
+     * de vente TTC saisi sur sa ligne.
+     */
     public function test_le_prix_de_vente_ttc_saisi_est_enregistre_tel_quel_et_son_ht_seulement_affiche(): void
     {
         $this->connecterProprietaire();
 
-        Livewire::test(CreateProduit::class)
-            ->fillForm([
-                'nom' => 'Ecran Iphone 18 Pro',
-                'cmup_ht' => 25,
-                'prix_vente_ttc' => 40,
-                'taux_tva' => 20,
-            ])
-            ->call('create')
-            ->assertHasNoFormErrors();
+        app(ValiderFactureAchatAction::class)->handle(self::auteur(), app(CreerFactureAchatAction::class)->handle(self::auteur(), Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Ecran Iphone 18 Pro', 'prix_vente_ttc' => 40, 'taux_tva' => 20], 'quantite' => 1, 'prix_unitaire_ht' => 25],
+        ]));
 
         $produit = Produit::query()->where('nom', 'Ecran Iphone 18 Pro')->firstOrFail();
 
@@ -169,18 +168,30 @@ class ProduitResourceTest extends TestCase
         $this->assertEquals(8.3334, DB::table('produits')->where('id', $produit->id)->value('cmup_ht'));
     }
 
-    public function test_le_cmup_ne_se_saisit_qu_a_la_creation_du_produit(): void
+    /**
+     * Le fournisseur et le coût moyen d'un produit ne se modifient pas dans
+     * « Produits » : seuls les achats, les retours et les inventaires les
+     * font évoluer. Le coût s'affiche sans se saisir, et une requête forgée
+     * qui envoie un autre coût ou un autre fournisseur ne change rien.
+     */
+    public function test_le_fournisseur_et_le_cout_ne_se_modifient_pas_dans_produits(): void
     {
         $this->connecterProprietaire();
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste du Sud']);
+        $autreFournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste du Nord']);
         $produit = Produit::factory()->create(['cmup_ht' => 6.8]);
+        $produit->rattacherAuFournisseur($fournisseur->id);
 
         Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
             ->assertFormFieldIsDisabled('cmup_ht')
             ->assertFormSet(['cmup_ht' => '6.80'])
+            ->assertSee('Grossiste du Sud')
+            ->set('data.cmup_ht', '1.00')
+            ->set('data.fournisseur_id', $autreFournisseur->id)
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertSame('6.8000', $produit->fresh()->cmup_ht);
+        $this->assertSame(['6.8000', $fournisseur->id], [$produit->fresh()->cmup_ht, $produit->fresh()->fournisseur_id]);
     }
 
     /**
@@ -203,7 +214,7 @@ class ProduitResourceTest extends TestCase
             ->assertFormSet(['cmup_ht' => '0.47'])
             ->assertSee('Grossiste du Sud')
             ->assertSee('Celui de sa dernière facture d\'achat validée, saisie à la main ou reçue automatiquement.');
-        Livewire::test(CreateProduit::class)
+        Livewire::test(EditProduit::class, ['record' => Produit::factory()->create()->getRouteKey()])
             ->assertSee('Aucun achat validé');
 
         app(ModifierFactureAchatAction::class)->handle(self::auteur(), $factureAchat, $fournisseur, [
@@ -260,13 +271,14 @@ class ProduitResourceTest extends TestCase
     {
         $this->connecterProprietaire();
         Produit::factory()->create(['reference' => 'ECR-1']);
+        $autre = Produit::factory()->create(['reference' => 'ECR-2', 'nom' => 'Autre écran']);
 
-        Livewire::test(CreateProduit::class)
-            ->fillForm(['reference' => 'ECR-1', 'nom' => 'Autre écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
-            ->call('create')
+        Livewire::test(EditProduit::class, ['record' => $autre->getRouteKey()])
+            ->fillForm(['reference' => 'ECR-1'])
+            ->call('save')
             ->assertHasFormErrors(['reference' => fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_REFERENCE_PRISE]]);
 
-        $this->assertSame(1, Produit::query()->count());
+        $this->assertSame('ECR-2', $autre->fresh()->reference);
     }
 
     /**
@@ -278,13 +290,14 @@ class ProduitResourceTest extends TestCase
     {
         $this->connecterProprietaire();
         Produit::factory()->create(['reference' => 'ABC']);
+        $autre = Produit::factory()->create(['reference' => 'XYZ-1', 'nom' => 'Autre écran']);
 
-        Livewire::test(CreateProduit::class)
-            ->fillForm(['reference' => 'abc', 'nom' => 'Autre écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
-            ->call('create')
+        Livewire::test(EditProduit::class, ['record' => $autre->getRouteKey()])
+            ->fillForm(['reference' => 'abc'])
+            ->call('save')
             ->assertHasFormErrors(['reference' => fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_REFERENCE_PRISE]]);
 
-        $this->assertSame(['ABC'], Produit::query()->pluck('reference')->all());
+        $this->assertSame(['ABC', 'XYZ-1'], Produit::query()->orderBy('reference')->pluck('reference')->all());
     }
 
     /**
@@ -296,6 +309,7 @@ class ProduitResourceTest extends TestCase
     public function test_une_reference_prise_juste_apres_la_validation_du_formulaire_est_refusee_par_une_notification(): void
     {
         $this->connecterProprietaire();
+        $autre = Produit::factory()->create(['reference' => 'XYZ-1', 'nom' => 'Autre écran']);
         $magasinId = app(TenantContext::class)->id();
         $autreMembreAEnregistre = false;
         DB::listen(static function (QueryExecuted $requete) use (&$autreMembreAEnregistre, $magasinId): void {
@@ -305,14 +319,14 @@ class ProduitResourceTest extends TestCase
             }
         });
 
-        Livewire::test(CreateProduit::class)
-            ->fillForm(['reference' => 'abc', 'nom' => 'Autre écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
-            ->call('create')
+        Livewire::test(EditProduit::class, ['record' => $autre->getRouteKey()])
+            ->fillForm(['reference' => 'abc'])
+            ->call('save')
             ->assertHasNoFormErrors()
             ->assertNotified('La référence « abc » est déjà celle d\'un autre produit.')
             ->assertFormSet(['reference' => 'abc', 'nom' => 'Autre écran']);
 
-        $this->assertSame(['ABC'], Produit::query()->pluck('reference')->all());
+        $this->assertSame(['ABC', 'XYZ-1'], Produit::query()->orderBy('reference')->pluck('reference')->all());
     }
 
     /**
@@ -324,10 +338,11 @@ class ProduitResourceTest extends TestCase
         $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         Produit::factory()->create(['reference' => 'ABC']);
         $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['reference' => 'XYZ-1', 'nom' => 'Écran']);
 
-        Livewire::test(CreateProduit::class)
-            ->fillForm(['reference' => 'abc', 'nom' => 'Écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
-            ->call('create')
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->fillForm(['reference' => 'abc'])
+            ->call('save')
             ->assertHasNoFormErrors();
 
         $this->assertDatabaseHas('produits', ['reference' => 'abc', 'magasin_id' => app(TenantContext::class)->id()]);
@@ -343,20 +358,21 @@ class ProduitResourceTest extends TestCase
     {
         $this->connecterProprietaire();
         Produit::factory()->trashed()->create(['reference' => 'ECR-1']);
+        $autre = Produit::factory()->create(['reference' => 'ECR-2', 'nom' => 'Autre écran']);
 
-        Livewire::test(CreateProduit::class)
-            ->fillForm(['reference' => 'ECR-1', 'nom' => 'Autre écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
-            ->call('create')
+        Livewire::test(EditProduit::class, ['record' => $autre->getRouteKey()])
+            ->fillForm(['reference' => 'ECR-1'])
+            ->call('save')
             ->assertHasFormErrors(['reference' => fn (array $reglesEnEchec, array $messages): bool => $messages === [self::MESSAGE_REFERENCE_PRISE]]);
 
-        $this->assertSame(1, Produit::withTrashed()->count());
+        $this->assertSame('ECR-2', $autre->fresh()->reference);
     }
 
     /**
      * Le fournisseur d'un produit est celui de son dernier achat validé :
      * il ne se choisit pas sur la fiche, et un fournisseur glissé dans une
-     * requête forgée -- ici celui d'un autre magasin -- est ignoré, à la
-     * création comme à la modification.
+     * requête forgée -- ici celui d'un autre magasin -- est ignoré à la
+     * modification.
      */
     public function test_un_fournisseur_force_sur_la_fiche_est_ignore(): void
     {
@@ -365,17 +381,11 @@ class ProduitResourceTest extends TestCase
         $this->connecterProprietaire();
         $produit = Produit::factory()->create();
 
-        Livewire::test(CreateProduit::class)
-            ->fillForm(['nom' => 'Écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 20, 'taux_tva' => 20])
-            ->set('data.fournisseur_id', $fournisseurDUnAutreMagasin->id)
-            ->call('create')
-            ->assertHasNoFormErrors();
         Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
             ->set('data.fournisseur_id', $fournisseurDUnAutreMagasin->id)
             ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertNull(Produit::query()->where('nom', 'Écran')->sole()->fournisseur_id);
         $this->assertNull($produit->fresh()->fournisseur_id);
     }
 
@@ -421,14 +431,15 @@ class ProduitResourceTest extends TestCase
     public function test_un_taux_inhabituel_est_signale_et_s_enregistre(): void
     {
         $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
 
-        Livewire::test(CreateProduit::class)
-            ->fillForm(['nom' => 'Écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 12, 'taux_tva' => '19.6'])
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->fillForm(['taux_tva' => '19.6'])
             ->assertSee('Taux inhabituel pour un magasin en métropole (en vigueur : 20 ; 10 ; 5,5 ; 2,1 %) : vérifiez votre saisie.')
-            ->call('create')
+            ->call('save')
             ->assertHasNoFormErrors();
 
-        $this->assertSame('19.60', Produit::query()->sole()->taux_tva);
+        $this->assertSame('19.60', $produit->fresh()->taux_tva);
     }
 
     /**
@@ -439,25 +450,34 @@ class ProduitResourceTest extends TestCase
     {
         $this->connecterProprietaire();
         $this->reglerLaSociete(Filament::getTenant(), ['regime_tva' => RegimeTva::FranchiseEnBase]);
+        $produit = Produit::factory()->create(['taux_tva' => 20]);
 
-        Livewire::test(CreateProduit::class)
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
             ->assertFormSet(['taux_tva' => '20'])
             ->assertSee('Votre société est en franchise en base : vos ventes sont facturées sans TVA (art. 293 B du CGI), au prix TTC indiqué.');
     }
 
     /**
-     * Un taux vidé n'est ni 0 % ni le taux par défaut : il est demandé,
+     * Un taux vidé n'est ni 0 % ni le taux par défaut : à la création d'un
+     * produit, sur la ligne d'un inventaire d'ouverture, il est demandé,
      * plutôt que d'échouer sur la base.
      */
     public function test_un_taux_de_tva_vide_est_demande_a_la_creation(): void
     {
         $this->connecterProprietaire();
+        $page = Livewire::test(CreateInventaireOuverture::class);
+        $cle = array_key_first($page->get('data.lignes'));
 
-        Livewire::test(CreateProduit::class)
-            ->fillForm(['nom' => 'Écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 12, 'taux_tva' => ''])
+        $page
+            ->set("data.lignes.{$cle}.produit.nom", 'Écran')
+            ->set("data.lignes.{$cle}.produit.prix_vente_ttc", '12')
+            ->set("data.lignes.{$cle}.produit.taux_tva", '')
+            ->set("data.lignes.{$cle}.quantite", 1)
+            ->set("data.lignes.{$cle}.cout_unitaire_ht", '10')
             ->call('create')
-            ->assertHasFormErrors(['taux_tva' => 'required']);
+            ->assertHasFormErrors(["lignes.{$cle}.produit.taux_tva" => 'required']);
 
+        $this->assertSame(0, InventaireOuverture::query()->count());
         $this->assertSame(0, Produit::query()->count());
     }
 
@@ -481,8 +501,9 @@ class ProduitResourceTest extends TestCase
     public function test_le_detail_du_prix_de_vente_attend_le_taux_de_tva(): void
     {
         $this->connecterProprietaire();
+        $produit = Produit::factory()->create();
 
-        Livewire::test(CreateProduit::class)
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
             ->fillForm(['prix_vente_ttc' => '12', 'taux_tva' => '20'])
             ->assertSee('Soit 10,00 € HT + 2,00 € de TVA')
             ->fillForm(['taux_tva' => ''])
@@ -497,22 +518,26 @@ class ProduitResourceTest extends TestCase
         return [
             'prix de vente négatif' => ['prix_vente_ttc', '-12', 'min'],
             'prix de vente démesuré' => ['prix_vente_ttc', '99999999999', 'max'],
-            'prix d\'achat négatif' => ['cmup_ht', '-5', 'min'],
-            'prix d\'achat démesuré' => ['cmup_ht', '99999999999', 'max'],
         ];
     }
 
+    /**
+     * Le coût d'un nouveau produit se saisit sur la ligne de sa facture
+     * d'achat ou de son inventaire d'ouverture (voir
+     * InventaireOuvertureResourceTest::test_un_cout_negatif_ou_demesure_est_refuse()).
+     */
     #[DataProvider('prixHorsLimites')]
     public function test_un_prix_negatif_ou_demesure_est_refuse(string $champ, string $prix, string $regle): void
     {
         $this->connecterProprietaire();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20]);
 
-        Livewire::test(CreateProduit::class)
-            ->fillForm(['nom' => 'Écran', 'cmup_ht' => 10, 'prix_vente_ttc' => 12, 'taux_tva' => 20, $champ => $prix])
-            ->call('create')
+        Livewire::test(EditProduit::class, ['record' => $produit->getRouteKey()])
+            ->fillForm([$champ => $prix])
+            ->call('save')
             ->assertHasFormErrors([$champ => $regle]);
 
-        $this->assertSame(0, Produit::query()->count());
+        $this->assertSame('12.00', $produit->fresh()->prix_vente_ttc);
     }
 
     /**
@@ -667,6 +692,34 @@ class ProduitResourceTest extends TestCase
             ->assertNotified('Le produit « Chargeur ancien modèle » est archivé : restaurez-le depuis le catalogue, ou retirez-le du document.');
 
         $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * Un produit naît seulement de la validation d'une facture d'achat ou
+     * d'un inventaire d'ouverture : la liste des produits n'a plus de
+     * bouton « Nouveau », et le dit.
+     */
+    public function test_la_liste_des_produits_n_a_plus_de_bouton_nouveau(): void
+    {
+        $this->connecterProprietaire();
+
+        Livewire::test(ListProduits::class)
+            ->assertActionDoesNotExist('create')
+            ->assertSee('Un produit naît de la validation d\'une facture d\'achat ou d\'un inventaire d\'ouverture');
+    }
+
+    /**
+     * L'adresse de l'ancienne page de création d'un produit ne mène plus
+     * nulle part, même pour le propriétaire.
+     */
+    public function test_la_page_de_creation_d_un_produit_n_existe_plus(): void
+    {
+        $proprietaire = User::factory()->create();
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique'], $proprietaire);
+
+        $this->actingAs($proprietaire)->get("/app/{$magasin->uuid}/produits/create")->assertNotFound();
+
+        $this->assertSame(0, Produit::query()->count());
     }
 
     /**

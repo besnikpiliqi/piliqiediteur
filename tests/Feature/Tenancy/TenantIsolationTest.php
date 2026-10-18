@@ -42,6 +42,8 @@ use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\PanierCaisse;
 use App\Domain\Facturation\Models\PreuveOperation;
+use App\Domain\Stock\Models\InventaireOuverture;
+use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -64,6 +66,7 @@ use App\Filament\App\Resources\EReportingResource;
 use App\Filament\App\Resources\FactureAchatResource;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FournisseurResource;
+use App\Filament\App\Resources\InventaireOuvertureResource;
 use App\Filament\App\Resources\ProduitResource;
 use App\Integrations\Pdp\Models\TransmissionPdp;
 use App\Models\User;
@@ -124,6 +127,7 @@ class TenantIsolationTest extends TestCase
         Facture::class,
         FactureAchat::class,
         Fournisseur::class,
+        InventaireOuverture::class,
         PanierCaisse::class,
         Produit::class,
         Service::class,
@@ -155,6 +159,7 @@ class TenantIsolationTest extends TestCase
         LigneAvoirFournisseur::class,
         LigneDevis::class,
         LigneFacture::class,
+        LigneInventaireOuverture::class,
         MouvementStock::class,
         Paiement::class,
         PaiementAllocation::class,
@@ -452,6 +457,8 @@ class TenantIsolationTest extends TestCase
             'facture, détail' => [FactureResource::class, 'view', static fn (): Model => Facture::factory()->create()],
             'facture, modification' => [FactureResource::class, 'edit', static fn (): Model => Facture::factory()->create()],
             'fournisseur, modification' => [FournisseurResource::class, 'edit', static fn (): Model => Fournisseur::factory()->create()],
+            'inventaire d\'ouverture, détail' => [InventaireOuvertureResource::class, 'view', static fn (): Model => InventaireOuverture::factory()->create()],
+            'inventaire d\'ouverture, modification' => [InventaireOuvertureResource::class, 'edit', static fn (): Model => InventaireOuverture::factory()->create()],
             'membre de l\'équipe, modification' => [EquipeDuMagasinResource::class, 'edit', static fn (Magasin $magasin): Model => Affectation::query()
                 ->where('magasin_id', $magasin->getKey())
                 ->where('user_id', app(CreerMembreAction::class)->handle($magasin->societe->proprietaire, $magasin->societe, ['name' => 'Paul', 'email' => 'paul@example.test'], 'provisoire-des-tests', [$magasin->getKey() => ['role' => RoleMagasin::Vendeur]])->getKey())

@@ -24,6 +24,7 @@ enum TypeDocument: string
     case Avoir = 'avoir';
     case FactureAchat = 'facture_achat';
     case AvoirFournisseur = 'avoir_fournisseur';
+    case InventaireOuverture = 'inventaire_ouverture';
     case ClotureCaisse = 'cloture_caisse';
     case Produit = 'produit';
 
@@ -43,6 +44,7 @@ enum TypeDocument: string
             self::Avoir => 'AV',
             self::FactureAchat => 'FA',
             self::AvoirFournisseur => 'AF',
+            self::InventaireOuverture => 'INV',
             self::ClotureCaisse => 'Z',
             self::Produit => 'PRD',
         };

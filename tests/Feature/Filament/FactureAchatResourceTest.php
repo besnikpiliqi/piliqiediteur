@@ -928,13 +928,16 @@ class FactureAchatResourceTest extends TestCase
 
     /**
      * Un membre qui ne peut pas créer de produits rouvre le brouillon où le
-     * propriétaire a saisi un nouveau produit, corrige la quantité de
-     * l'autre ligne, puis le valide : la fiche gardée, relue et renvoyée par
-     * le formulaire, n'a pas changé (le suivi du stock et le seuil d'alerte
-     * que le propriétaire n'avait pas donnés prennent leur valeur par
-     * défaut), et la Coque naît à la validation.
+     * propriétaire a saisi un nouveau produit et corrige la quantité de
+     * l'autre ligne : la fiche gardée, relue et renvoyée par le formulaire,
+     * n'a pas changé (le suivi du stock et le seuil d'alerte que le
+     * propriétaire n'avait pas donnés prennent leur valeur par défaut).
+     * Valider ce brouillon créerait la Coque : sa validation lui dit qu'il
+     * faut aussi le droit de créer des produits, et rien n'est créé
+     * (complément 3) ; validé par le propriétaire, le brouillon fait naître
+     * la Coque.
      */
-    public function test_sans_droit_de_creer_des_produits_un_brouillon_qui_garde_le_nouveau_produit_d_un_collegue_se_corrige_et_se_valide(): void
+    public function test_sans_droit_de_creer_des_produits_un_brouillon_qui_garde_le_nouveau_produit_d_un_collegue_se_corrige_sans_se_valider(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $existant = Produit::factory()->create(['nom' => 'Écran iPhone 13', 'taux_tva' => 20, 'suivi_stock' => true]);
@@ -959,8 +962,14 @@ class FactureAchatResourceTest extends TestCase
             ->assertHasNoFormComponentActionErrors()
             ->call('save')
             ->assertHasNoFormErrors()
-            ->assertNotNotified('Vous ne pouvez pas créer de produit : « Coque » doit d\'abord être ajouté au catalogue.');
+            ->assertNotNotified('Vous ne pouvez pas créer de produit : « Coque » ne peut être saisi que par une personne autorisée à créer des produits.');
         $this->assertSame([2, 4], $brouillon->lignes()->orderBy('ordre')->pluck('quantite')->all());
+        Livewire::test(ListFacturesAchat::class)
+            ->callTableAction('valider', $brouillon)
+            ->assertNotified('Valider cette facture crée de nouveaux produits : il faut aussi le droit de créer des produits.');
+        $this->assertSame([StatutFactureAchat::Brouillon, 0], [$brouillon->fresh()->statut, Produit::query()->where('nom', 'Coque')->count()]);
+
+        $this->actingAs($this->proprietaireDe($magasin));
         Livewire::test(ListFacturesAchat::class)->callTableAction('valider', $brouillon);
 
         $coque = Produit::query()->where('nom', 'Coque')->sole();

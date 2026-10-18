@@ -3,7 +3,8 @@
 namespace App\Domain\Tenancy\Models;
 
 use App\Domain\CaisseSecurisee\Concerns\JournaliseSesParametresDeConformite;
-use App\Domain\Catalogue\Models\Produit;
+use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Catalogue\Services\BaremePrixDeVente;
 use App\Domain\Contacts\Models\Client;
@@ -15,6 +16,7 @@ use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
+use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\CodeMagasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Database\Factories\MagasinFactory;
@@ -248,6 +250,24 @@ class Magasin extends Model implements HasName
         return SequenceDocument::query()
             ->where('magasin_id', $this->getKey())
             ->where('type_document', '!=', TypeDocument::Produit->value)
+            ->exists();
+    }
+
+    /**
+     * A-t-il déjà vendu ? Un enregistrement de la chaîne des ventes dans
+     * son registre fiscal (un ticket, une facture ou un avoir émis) : sa
+     * première vente, après laquelle un inventaire d'ouverture ne se
+     * saisit plus (voir ValiderInventaireOuvertureAction). Lu sous le
+     * verrou de son registre, que toute vente prend en premier, il ne
+     * laisse passer aucune vente en même temps. Le registre n'a que le
+     * filtre par magasin explicite ci-dessous : la lecture vaut aussi hors
+     * du magasin actif.
+     */
+    public function aVendu(): bool
+    {
+        return EnregistrementFiscal::withoutGlobalScope(MagasinScope::class)
+            ->where('magasin_id', $this->getKey())
+            ->where('chaine', ChaineFiscale::Vente->value)
             ->exists();
     }
 
@@ -722,13 +742,14 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * clients(), fournisseurs(), produits() et services() servent aux
-     * créations que Filament enregistre lui-même (CreateClient,
-     * CreateFournisseur, CreateProduit et la fenêtre « Nouveau » de
-     * ManageServices) : il y rattache la fiche au magasin par la relation
-     * que nomme Resource::getTenantRelationshipName(), le pluriel du
-     * modèle. Les créations qui surchargent handleRecordCreation() ne s'en
-     * servent pas. L'isolation, elle, reste BelongsToMagasin + MagasinScope.
+     * clients(), fournisseurs() et services() servent aux créations que
+     * Filament enregistre lui-même (CreateClient, CreateFournisseur et la
+     * fenêtre « Nouveau » de ManageServices) : il y rattache la fiche au
+     * magasin par la relation que nomme Resource::getTenantRelationshipName(),
+     * le pluriel du modèle. Les créations qui surchargent
+     * handleRecordCreation() ne s'en servent pas, et un produit ne se crée
+     * jamais par un écran (voir OrigineDesProduits). L'isolation, elle, reste
+     * BelongsToMagasin + MagasinScope.
      */
     public function clients(): HasMany
     {
@@ -738,11 +759,6 @@ class Magasin extends Model implements HasName
     public function fournisseurs(): HasMany
     {
         return $this->hasMany(Fournisseur::class);
-    }
-
-    public function produits(): HasMany
-    {
-        return $this->hasMany(Produit::class);
     }
 
     public function services(): HasMany

@@ -71,6 +71,7 @@ class HistoriqueAuNomFigeTest extends TestCase
         'clotures_caisse_personnelles' => ['vendeur_id' => 'vendeur_nom', 'fermee_par' => 'fermee_par_nom'],
         'factures_achat' => ['cree_par' => 'cree_par_nom'],
         'avoirs_fournisseur' => ['cree_par' => 'cree_par_nom'],
+        'inventaires_ouverture' => ['cree_par' => 'cree_par_nom', 'valide_par' => 'valide_par_nom'],
         'mouvements_stock' => ['cree_par' => 'cree_par_nom'],
         'envois_documents' => ['envoye_par' => 'envoye_par_nom'],
         'preuves_operation' => ['note_par' => 'note_par_nom'],

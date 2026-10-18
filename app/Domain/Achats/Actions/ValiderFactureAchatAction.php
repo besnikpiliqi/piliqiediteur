@@ -17,6 +17,7 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use LogicException;
 
 /**
@@ -39,8 +40,10 @@ use LogicException;
  * entrer dans le stock qu'elle a sorti.
  *
  * Son auteur est relu sous le verrou de sa ligne, avant la facture d'achat
- * et ses produits (voir LecteurDesDroits) : il doit pouvoir la valider ;
- * un droit retiré pendant que son écran restait ouvert est vu. Les
+ * et ses produits (voir LecteurDesDroits) : il doit pouvoir la valider,
+ * et, quand elle crée des produits, en créer (voir ProduitPolicy::create()),
+ * ce que la facture relue sous son verrou dit ; un droit retiré pendant que
+ * son écran restait ouvert est vu. Les
  * mouvements de stock de la réception notent son nom. Ses produits
  * existants se verrouillent, par identifiant croissant, après la facture
  * d'achat et avant la numérotation (voir Produit::verrouillerPourLeStock()).
@@ -52,6 +55,8 @@ use LogicException;
  */
 class ValiderFactureAchatAction
 {
+    public const REFUS_SANS_DROIT_DE_CREER_DES_PRODUITS = 'Valider cette facture crée de nouveaux produits : il faut aussi le droit de créer des produits.';
+
     public function __construct(
         private readonly DocumentNumberingService $numerotation,
         private readonly ConstructeurLigneAchat $constructeurLignes,
@@ -78,19 +83,24 @@ class ValiderFactureAchatAction
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'valider', $magasin, $factureAchat);
 
-            return $this->operateur->pendant($compte, fn (): FactureAchat => $this->valider($factureAchat));
+            return $this->operateur->pendant($compte, fn (): FactureAchat => $this->valider($compte, $factureAchat));
         }));
     }
 
     /**
+     * @throws AuthorizationException
      * @throws LogicException
      */
-    private function valider(FactureAchat $factureAchat): FactureAchat
+    private function valider(User $compte, FactureAchat $factureAchat): FactureAchat
     {
         $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->firstOrFail();
 
         if (! $factureAchat->statut->peutTransitionnerVers(StatutFactureAchat::Validee)) {
             throw new LogicException("Impossible de valider une facture d'achat au statut [{$factureAchat->statut->value}].");
+        }
+
+        if ($factureAchat->lignes()->whereNull('produit_id')->exists() && Gate::forUser($compte)->denies('create', Produit::class)) {
+            throw new AuthorizationException(self::REFUS_SANS_DROIT_DE_CREER_DES_PRODUITS);
         }
 
         if ($factureAchat->fournisseur->trashed()) {

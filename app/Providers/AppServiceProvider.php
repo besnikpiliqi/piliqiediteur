@@ -8,6 +8,7 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Catalogue\Services\OrigineDesProduits;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Models\Avoir;
@@ -20,6 +21,7 @@ use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Recherche\ConnecteurSqlite;
 use App\Domain\Recherche\RechercheSansAccents;
+use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
@@ -38,6 +40,7 @@ use App\Policies\EnregistrementFiscalPolicy;
 use App\Policies\FactureAchatPolicy;
 use App\Policies\FacturePolicy;
 use App\Policies\FournisseurPolicy;
+use App\Policies\InventaireOuverturePolicy;
 use App\Policies\MagasinDeLaSocietePolicy;
 use App\Policies\MembrePolicy;
 use App\Policies\PaiementPolicy;
@@ -76,6 +79,9 @@ class AppServiceProvider extends ServiceProvider
      * imbriquées comprises (voir RegistreFiscal), et s'oublie entre deux
      * requêtes ou deux jobs.
      *
+     * Le contexte d'origine des produits (voir OrigineDesProduits) vit de
+     * même le temps d'une requête ou d'un job, jamais au-delà.
+     *
      * Chaque connexion SQLite reçoit la fonction des recherches sans casse
      * ni accents (voir ConnecteurSqlite).
      *
@@ -86,6 +92,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->scoped(RegistreFiscal::class);
+        $this->app->scoped(OrigineDesProduits::class);
         $this->app->bind('db.connector.sqlite', ConnecteurSqlite::class);
         $this->app->bind(LoginResponse::class, ReponseDeConnexion::class);
     }
@@ -121,6 +128,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(ClotureCaissePersonnelle::class, ClotureCaissePersonnellePolicy::class);
         Gate::policy(FactureAchat::class, FactureAchatPolicy::class);
         Gate::policy(AvoirFournisseur::class, AvoirFournisseurPolicy::class);
+        Gate::policy(InventaireOuverture::class, InventaireOuverturePolicy::class);
         Gate::policy(EnregistrementFiscal::class, EnregistrementFiscalPolicy::class);
         Gate::policy(Societe::class, SocietePolicy::class);
         Gate::policy(Magasin::class, MagasinDeLaSocietePolicy::class);
@@ -176,6 +184,7 @@ class AppServiceProvider extends ServiceProvider
             'envoi_document' => EnvoiDocument::class,
             'facture' => Facture::class,
             'facture_achat' => FactureAchat::class,
+            'inventaire_ouverture' => InventaireOuverture::class,
             'ligne_avoir' => LigneAvoir::class,
             'magasin' => Magasin::class,
             'paiement' => Paiement::class,

@@ -14,9 +14,9 @@ return new class extends Migration
             // Le grand livre garde ses produits, archivés compris : une fiche
             // utilisée ne s'efface jamais.
             $table->foreignId('produit_id')->constrained('produits')->restrictOnDelete();
-            // vente, reception_achat, retour_fournisseur, retour_client,
-            // ajustement_entree, ajustement_sortie, sortie_cession (voir
-            // TypeMouvementStock).
+            // vente, reception_achat, inventaire_ouverture,
+            // retour_fournisseur, retour_client, ajustement_entree,
+            // ajustement_sortie, sortie_cession (voir TypeMouvementStock).
             $table->string('type', 30);
             // Nombre entier d'articles, toujours positif : le sens (+/-)
             // est déterminé par `type`, jamais par le signe stocké -- évite
@@ -25,8 +25,10 @@ return new class extends Migration
             $table->unsignedInteger('quantite');
             // Coût unitaire HT auquel un retour fournisseur sort du stock,
             // celui de sa ligne d'achat (voir
-            // StockLedgerService::retournerAuFournisseur()), ou le CMUP
-            // auquel le stock d'un magasin cédé sort (voir
+            // StockLedgerService::retournerAuFournisseur()), auquel le
+            // stock d'un inventaire d'ouverture entre (voir
+            // StockLedgerService::entrerALInventaireDOuverture()), ou le
+            // CMUP auquel le stock d'un magasin cédé sort (voir
             // StockLedgerService::sortirPourCession()) ; null pour les
             // autres mouvements, au CMUP du moment.
             $table->decimal('cout_unitaire_ht', 14, 4)->nullable();

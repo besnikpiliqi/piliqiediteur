@@ -18,8 +18,8 @@ use LogicException;
  * Le jeton unique des demandes (R3) : une émission, une vente à la caisse,
  * une émission de devis, un paiement, un encaissement en plusieurs modes,
  * une contre-passation, un avoir, un envoi, une fermeture de caisse, une
- * clôture du jour et une validation d'achat ou d'avoir fournisseur portent
- * chacune un jeton, que l'écran crée à l'ouverture du formulaire ou de la
+ * clôture du jour et une validation d'achat, d'avoir fournisseur ou
+ * d'inventaire d'ouverture portent chacune un jeton, que l'écran crée à l'ouverture du formulaire ou de la
  * fenêtre (le panier de la caisse a le sien, voir PanierDeCaisse) et garde
  * jusqu'à son succès.
  * Une demande répétée après une réponse perdue renvoie le résultat déjà
@@ -78,6 +78,8 @@ class ActionsUniques
     public const VALIDER_FACTURE_ACHAT = 'facture_achat.valider';
 
     public const ENREGISTRER_AVOIR_FOURNISSEUR = 'avoir_fournisseur.enregistrer';
+
+    public const VALIDER_INVENTAIRE_OUVERTURE = 'inventaire_ouverture.valider';
 
     /**
      * Exécute l'opération une seule fois pour ce jeton dans le magasin

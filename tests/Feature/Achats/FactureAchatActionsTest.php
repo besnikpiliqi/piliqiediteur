@@ -26,6 +26,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Closure;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -460,7 +461,7 @@ class FactureAchatActionsTest extends TestCase
             ]);
             $this->fail('Aucun produit ne doit être créé sans le droit d\'en créer.');
         } catch (LogicException $exception) {
-            $this->assertSame('Vous ne pouvez pas créer de produit : « Câble USB-C » doit d\'abord être ajouté au catalogue.', $exception->getMessage());
+            $this->assertSame('Vous ne pouvez pas créer de produit : « Câble USB-C » ne peut être saisi que par une personne autorisée à créer des produits.', $exception->getMessage());
         }
 
         $this->assertSame(0, Produit::query()->count());
@@ -470,17 +471,27 @@ class FactureAchatActionsTest extends TestCase
     /**
      * Un membre qui ne peut pas créer de produits corrige la quantité d'une
      * autre ligne du brouillon où le propriétaire a saisi un nouveau
-     * produit, puis valide ce brouillon : la fiche gardée telle quelle ne
-     * redemande pas le droit de créer, et la Coque naît à la validation.
+     * produit : la fiche gardée telle quelle ne redemande pas le droit de
+     * créer. Valider ce brouillon crée la Coque : sans ce droit, sa
+     * validation est refusée, sans rien créer ni valider (complément 3) ;
+     * le propriétaire le valide, et la Coque naît alors.
      * 2 x 2,00 € + 4 x 3,00 € = 16,00 € HT + 3,20 € de TVA = 19,20 € TTC.
      */
-    public function test_sans_droit_de_creer_des_produits_un_membre_corrige_et_valide_le_brouillon_qui_garde_le_nouveau_produit_d_un_collegue(): void
+    public function test_sans_droit_de_creer_des_produits_un_membre_corrige_le_brouillon_qui_garde_le_nouveau_produit_d_un_collegue_sans_pouvoir_le_valider(): void
     {
         [$fournisseur, $brouillon, $lignes, $existant] = $this->brouillonDuProprietaireAvecUnNouveauProduitPuisUnMembreSansDroitDeCreer();
         $lignes[0]['quantite'] = 2;
 
         app(ModifierFactureAchatAction::class)->handle(self::auteur(), $brouillon, $fournisseur, $lignes);
-        app(ValiderFactureAchatAction::class)->handle(self::auteur(), $brouillon);
+        $this->assertThrows(
+            fn () => app(ValiderFactureAchatAction::class)->handle(self::auteur(), $brouillon),
+            AuthorizationException::class,
+            'Valider cette facture crée de nouveaux produits : il faut aussi le droit de créer des produits.',
+        );
+        $this->assertSame([StatutFactureAchat::Brouillon, null, 0], [$brouillon->fresh()->statut, $brouillon->fresh()->numero, $existant->fresh()->stock_quantite]);
+        $this->assertSame(0, Produit::query()->where('nom', 'Coque')->count());
+
+        app(ValiderFactureAchatAction::class)->handle($this->proprietaireDe($brouillon->magasin), $brouillon);
 
         $coque = Produit::query()->where('nom', 'Coque')->sole();
         $this->assertSame([$fournisseur->id, '3.0000', '15.00', 4], [$coque->fournisseur_id, $coque->cmup_ht, $coque->prix_vente_ttc, $coque->stock_quantite]);
@@ -504,7 +515,7 @@ class FactureAchatActionsTest extends TestCase
         $this->assertThrows(
             fn () => app(ModifierFactureAchatAction::class)->handle(self::auteur(), $brouillon, $fournisseur, $modification($lignes)),
             LogicException::class,
-            'Vous ne pouvez pas créer de produit : « Coque » doit d\'abord être ajouté au catalogue.',
+            'Vous ne pouvez pas créer de produit : « Coque » ne peut être saisi que par une personne autorisée à créer des produits.',
         );
 
         $this->assertSame(
@@ -523,6 +534,52 @@ class FactureAchatActionsTest extends TestCase
             'prix de vente changé' => [fn (array $lignes): array => [$lignes[0], array_replace_recursive($lignes[1], ['produit' => ['prix_vente_ttc' => 12]])]],
             'fiche recopiée sur une seconde ligne' => [fn (array $lignes): array => [...$lignes, $lignes[1]]],
         ];
+    }
+
+    /**
+     * Valider une facture d'achat qui crée des produits exige le droit de
+     * créer des produits (complément 3) : un membre qui peut valider les
+     * achats sans pouvoir créer de produits est refusé, et rien n'est créé,
+     * ni numéroté, ni reçu en stock.
+     */
+    public function test_valider_une_facture_qui_cree_des_produits_exige_le_droit_de_creer_des_produits(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $brouillon = app(CreerFactureAchatAction::class)->handle($this->proprietaireDe($magasin), Fournisseur::factory()->create(), [
+            ['produit' => ['nom' => 'Câble USB-C', 'prix_vente_ttc' => 10, 'taux_tva' => 20], 'quantite' => 3, 'prix_unitaire_ht' => 2],
+        ]);
+        $membre = $this->membre($magasin, RoleMagasin::Observateur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_VIEW]);
+
+        $this->assertThrows(
+            fn () => app(ValiderFactureAchatAction::class)->handle($membre, $brouillon),
+            AuthorizationException::class,
+            'Valider cette facture crée de nouveaux produits : il faut aussi le droit de créer des produits.',
+        );
+
+        $this->assertSame([StatutFactureAchat::Brouillon, null], [$brouillon->fresh()->statut, $brouillon->fresh()->numero]);
+        $this->assertSame(0, Produit::query()->count());
+        $this->assertSame(0, MouvementStock::query()->count());
+        $this->assertFalse(SequenceDocument::query()->where('magasin_id', $magasin->id)->exists());
+    }
+
+    /**
+     * Sans nouveau produit, valider une facture d'achat n'exige que le
+     * droit de valider : le même membre reçoit le stock d'un produit déjà
+     * au catalogue.
+     */
+    public function test_valider_une_facture_sans_nouveau_produit_n_exige_pas_le_droit_de_creer_des_produits(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 0]);
+        $brouillon = app(CreerFactureAchatAction::class)->handle($this->proprietaireDe($magasin), Fournisseur::factory()->create(), [
+            ['produit_id' => $produit->id, 'quantite' => 3, 'prix_unitaire_ht' => 2],
+        ]);
+        $membre = $this->membre($magasin, RoleMagasin::Observateur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER, PermissionRegistry::FACTURE_ACHAT_VALIDER, PermissionRegistry::PRODUIT_VIEW]);
+
+        app(ValiderFactureAchatAction::class)->handle($membre, $brouillon);
+
+        $this->assertSame(StatutFactureAchat::Validee, $brouillon->fresh()->statut);
+        $this->assertSame(3, $produit->fresh()->stock_quantite);
     }
 
     public function test_une_quantite_achetee_non_entiere_est_refusee(): void

@@ -4,18 +4,20 @@ namespace App\Filament\App\Resources\ProduitResource\Pages;
 
 use App\Filament\App\Resources\ProduitResource;
 use App\Filament\App\Resources\ProduitResource\Widgets\ValeurStockApercu;
-use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 
+/**
+ * La liste des produits, sans bouton « Nouveau » : un produit naît de la
+ * validation d'une facture d'achat ou d'un inventaire d'ouverture (voir
+ * ProduitResource::canCreate()), ce que dit le sous-titre de la page.
+ */
 class ListProduits extends ListRecords
 {
     protected static string $resource = ProduitResource::class;
 
-    protected function getHeaderActions(): array
+    public function getSubheading(): string
     {
-        return [
-            Actions\CreateAction::make(),
-        ];
+        return 'Un produit naît de la validation d\'une facture d\'achat ou d\'un inventaire d\'ouverture ; il se modifie ensuite ici, sauf son fournisseur et son coût.';
     }
 
     protected function getHeaderWidgets(): array

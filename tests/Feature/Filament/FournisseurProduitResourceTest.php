@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Filament;
 
+use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Filament\App\Resources\FactureAchatResource\Pages\CreateFactureAchat;
+use App\Filament\App\Resources\FactureAchatResource\Pages\ListFacturesAchat;
 use App\Filament\App\Resources\FournisseurResource\Pages\CreateFournisseur;
 use App\Filament\App\Resources\FournisseurResource\Pages\ListFournisseurs;
-use App\Filament\App\Resources\ProduitResource\Pages\CreateProduit;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -47,6 +49,10 @@ class FournisseurProduitResourceTest extends TestCase
         $this->assertDatabaseHas('fournisseurs', ['nom' => 'Grossiste Textile', 'magasin_id' => $magasin->id]);
     }
 
+    /**
+     * Un produit naît de la validation de la facture d'achat qui le reçoit,
+     * saisie et validée depuis ses écrans.
+     */
     public function test_un_proprietaire_peut_creer_un_produit(): void
     {
         $proprietaire = User::factory()->create();
@@ -54,16 +60,21 @@ class FournisseurProduitResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
-        Livewire::test(CreateProduit::class)
-            ->fillForm([
+        Livewire::test(CreateFactureAchat::class)
+            ->fillForm(['fournisseur_id' => Fournisseur::factory()->create()->id])
+            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit', data: [
+                'origine' => 'nouveau',
                 'reference' => 'REF-001',
                 'nom' => 'T-shirt blanc',
-                'cmup_ht' => 5,
-                'prix_vente_ttc' => 18,
-                'taux_tva' => 20,
+                'quantite' => 1,
+                'prix_unitaire_ht' => '5',
+                'prix_vente_ttc' => '18',
+                'taux_tva' => '20',
             ])
+            ->assertHasNoFormComponentActionErrors()
             ->call('create')
             ->assertHasNoFormErrors();
+        Livewire::test(ListFacturesAchat::class)->callTableAction('valider', FactureAchat::query()->sole());
 
         $this->assertDatabaseHas('produits', ['reference' => 'REF-001', 'magasin_id' => $magasin->id, 'prix_vente_ttc' => 18]);
     }

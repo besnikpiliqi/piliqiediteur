@@ -42,10 +42,11 @@ class ProduitResource extends Resource
     protected static ?string $pluralModelLabel = 'produits';
 
     /**
-     * Voir StockLedgerService::receptionner() et
+     * Voir StockLedgerService::entrerALInventaireDOuverture(),
+     * StockLedgerService::receptionner() et
      * StockLedgerService::retournerAuFournisseur().
      */
-    private const AIDE_CMUP = 'Le coût moyen du stock, recalculé à chaque facture d\'achat validée, au prix réellement payé, remise et escompte déduits, et à chaque retour au fournisseur, au coût de la ligne d\'achat retournée.';
+    private const AIDE_CMUP = 'Le coût moyen du stock : celui de l\'achat ou de l\'inventaire d\'ouverture qui a créé le produit, recalculé à chaque facture d\'achat validée, au prix réellement payé, remise et escompte déduits, et à chaque retour au fournisseur, au coût de la ligne d\'achat retournée.';
 
     /**
      * Référence, code-barres, nom, taille et couleur : la fiche produit et
@@ -218,11 +219,14 @@ class ProduitResource extends Resource
     }
 
     /**
-     * Un produit reçu sur une facture d'achat récupérée automatiquement
-     * garde ce que son fournisseur en dit (voir
-     * Produit::vientDUneFactureAchatApi()) : ces champs-là restent
-     * affichés mais ne se modifient pas. Son prix de vente, sa TVA et le
-     * suivi de son stock restent ceux du magasin.
+     * La fiche d'un produit existant, la seule page de formulaire de cette
+     * ressource : tout s'y modifie, sauf son fournisseur et ses données
+     * d'achat (coût moyen, stock), seulement affichés, que seuls les
+     * achats, les retours et les inventaires font évoluer. Un produit reçu
+     * sur une facture d'achat récupérée automatiquement garde aussi ce que
+     * son fournisseur en dit (voir Produit::vientDUneFactureAchatApi()) :
+     * ces champs-là restent affichés mais ne se modifient pas. Son prix de
+     * vente, sa TVA et le suivi de son stock restent ceux du magasin.
      */
     public static function form(Form $form): Form
     {
@@ -247,20 +251,17 @@ class ProduitResource extends Resource
                 ])->columns(2),
 
             Section::make('Prix et TVA')->schema([
-                // Saisi une fois, à la création ; ensuite seuls les achats
-                // le font évoluer : chaque facture d'achat validée ou
-                // corrigée, et chaque retour au fournisseur (voir
-                // StockLedgerService).
+                // Posé par la validation qui a créé le produit, au coût de
+                // sa ligne d'achat ou d'inventaire d'ouverture ; ensuite
+                // seuls les achats le font évoluer : chaque facture d'achat
+                // validée ou corrigée, et chaque retour au fournisseur (voir
+                // StockLedgerService). Il ne se modifie jamais ici.
                 TextInput::make('cmup_ht')
-                    ->label(fn (string $operation): string => $operation === 'create' ? 'Prix d\'achat HT' : 'Coût moyen pondéré (CMUP) HT')
-                    ->numeric()
-                    ->minValue(0)
-                    ->maxValue(Caisse::MONTANT_MAXIMUM)
+                    ->label('Coût moyen pondéré (CMUP) HT')
                     ->prefix('€')
-                    ->required()
                     ->formatStateUsing(fn (mixed $state): mixed => blank($state) ? $state : number_format((float) $state, 2, '.', ''))
-                    ->helperText(fn (string $operation): ?string => $operation === 'create' ? null : self::AIDE_CMUP)
-                    ->disabledOn('edit'),
+                    ->helperText(self::AIDE_CMUP)
+                    ->disabled(),
                 ...self::prixVenteTtcSchema(),
             ])->columns(3),
 
@@ -269,9 +270,8 @@ class ProduitResource extends Resource
                 TextInput::make('stock_quantite')
                     ->label('Stock actuel')
                     ->disabled()
-                    ->dehydrated(false)
-                    ->visible(fn (string $operation, Get $get): bool => $operation === 'edit' && $get('suivi_stock'))
-                    ->helperText('Tenu à jour par les ventes, les retours clients, les factures d\'achat et les avoirs fournisseur : il ne se saisit pas ici.'),
+                    ->visible(fn (Get $get): bool => (bool) $get('suivi_stock'))
+                    ->helperText('Tenu à jour par les ventes, les retours clients, les factures d\'achat, les avoirs fournisseur et l\'inventaire d\'ouverture : il ne se saisit pas ici.'),
             ])->columns(3),
         ]);
     }
@@ -333,11 +333,23 @@ class ProduitResource extends Resource
             ]);
     }
 
+    /**
+     * Un produit ne se crée pas ici : il naît seulement de la validation
+     * d'une facture d'achat ou d'un inventaire d'ouverture (voir
+     * OrigineDesProduits), qui exige aussi le droit de créer des produits
+     * (voir ProduitPolicy::create()). Aucune action de création ne
+     * s'affiche donc dans cette ressource, et elle n'a pas de page de
+     * création.
+     */
+    public static function canCreate(): bool
+    {
+        return false;
+    }
+
     public static function getPages(): array
     {
         return [
             'index' => Pages\ListProduits::route('/'),
-            'create' => Pages\CreateProduit::route('/create'),
             'edit' => Pages\EditProduit::route('/{record}/edit'),
         ];
     }

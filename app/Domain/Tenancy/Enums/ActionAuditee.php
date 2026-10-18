@@ -61,6 +61,7 @@ enum ActionAuditee: string implements HasLabel
     case AdresseDeConnexionChangee = 'adresse_de_connexion_changee';
     case VenteSansStock = 'vente_sans_stock';
     case AvoirFournisseurEmis = 'avoir_fournisseur_emis';
+    case InventaireOuvertureValide = 'inventaire_ouverture_valide';
 
     /**
      * Les mots qui, dans un nom de champ (entre ses traits de soulignement,
@@ -120,6 +121,7 @@ enum ActionAuditee: string implements HasLabel
             self::AdresseDeConnexionChangee => 'Adresse de connexion changée',
             self::VenteSansStock => 'Vente au-delà du stock',
             self::AvoirFournisseurEmis => 'Avoir fournisseur émis',
+            self::InventaireOuvertureValide => 'Inventaire d\'ouverture validé',
         };
     }
 
@@ -190,6 +192,11 @@ enum ActionAuditee: string implements HasLabel
             // pour chaque ligne, la référence et la quantité retournées
             // (voir EmettreAvoirFournisseurAction).
             self::AvoirFournisseurEmis => ['avoir', 'facture_achat', 'numero_fournisseur', 'total_ht', 'total_tva', 'total_ttc', 'lignes'],
+            // Le numéro de l'inventaire d'ouverture, sa valeur hors taxe
+            // et, pour chaque ligne, la référence du produit, la quantité
+            // entrée en stock, son coût unitaire HT et si la validation a
+            // créé le produit (voir ValiderInventaireOuvertureAction).
+            self::InventaireOuvertureValide => ['inventaire', 'valeur_ht', 'lignes'],
         };
     }
 }

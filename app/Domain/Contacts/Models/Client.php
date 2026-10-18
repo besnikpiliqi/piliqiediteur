@@ -257,4 +257,48 @@ class Client extends Model
             ->get()
             ->sum(fn (Avoir $avoir): int => $avoir->creditEnCentimes());
     }
+
+    /**
+     * Le crédit d'avoir disponible de chacun de ces clients (voir
+     * soldeCrediteurEnCentimes()), en centimes, par identifiant : une
+     * requête trouve ceux qui ont un avoir émis, et seuls ceux-là se
+     * relisent -- le tableau des clients (voir SelecteurDeClients) ne lit
+     * pas les avoirs de chaque rangée.
+     *
+     * @param  iterable<Client>  $clients
+     * @return array<int, int>
+     */
+    public static function creditsDAvoirEnCentimes(iterable $clients): array
+    {
+        $clients = collect($clients);
+        $avecUnAvoir = Avoir::query()
+            ->where('statut', StatutAvoir::Emise)
+            ->whereIn('client_id', $clients->map(fn (Client $client): int => $client->getKey())->all())
+            ->distinct()
+            ->pluck('client_id')
+            ->map(fn (int|string $identifiant): int => (int) $identifiant)
+            ->all();
+
+        return $clients->mapWithKeys(fn (Client $client): array => [
+            $client->getKey() => in_array($client->getKey(), $avecUnAvoir, true) ? $client->soldeCrediteurEnCentimes() : 0,
+        ])->all();
+    }
+
+    /**
+     * Les clients qui ont un crédit d'avoir disponible (voir
+     * soldeCrediteurEnCentimes(), jamais le client comptoir) : parmi ceux
+     * qui ont un avoir émis, ceux dont le crédit, calculé en centimes,
+     * reste positif -- jamais une somme que la base ferait sur une colonne
+     * décimale.
+     *
+     * @param  Builder<static>  $query
+     */
+    public function scopeAvecUnCreditDAvoir(Builder $query): void
+    {
+        $avecUnAvoir = static::query()
+            ->whereHas('avoirs', fn (Builder $avoirs): Builder => $avoirs->where('statut', StatutAvoir::Emise))
+            ->get();
+
+        $query->whereKey(array_keys(array_filter(self::creditsDAvoirEnCentimes($avecUnAvoir), fn (int $credit): bool => $credit > 0)));
+    }
 }

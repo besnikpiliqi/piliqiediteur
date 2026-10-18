@@ -17,6 +17,7 @@ use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Facturation\Services\DocumentChiffre;
+use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Tenancy\Models\Magasin;
@@ -40,6 +41,7 @@ use Filament\Notifications\Notification;
 use Filament\Support\Enums\ActionSize;
 use Filament\Support\Enums\MaxWidth;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use InvalidArgumentException;
 use Livewire\Component as LivewireComponent;
@@ -49,7 +51,14 @@ use WeakMap;
 /**
  * Les lignes d'une vente (caisse, facture, devis) : chacune vend un produit
  * du catalogue ou un service du magasin, jamais une ligne libre (voir
- * ConstructeurLigneDocument). Deux boutons sous les lignes les ajoutent.
+ * ConstructeurLigneDocument). Deux boutons sous les lignes les ajoutent :
+ * « Ajouter un produit » ouvre le grand tableau des produits (point 13,
+ * voir SelecteurDeProduits), « Ajouter un service » la liste des services ;
+ * au-dessus des lignes, le champ de la douchette ajoute le produit d'un
+ * code-barres ou d'une référence sans ouvrir le tableau. Les produits
+ * choisis arrivent au prix de leur fiche, et s'ajoutent à la ligne du même
+ * produit qui n'a ni remise ni prix dérogatoire (voir
+ * ajouterLesProduitsChoisis()).
  *
  * Les totaux affichés pendant la saisie passent par le même
  * constructeur que l'enregistrement réel, avec le client choisi, la nature
@@ -91,11 +100,23 @@ trait AjouteDesLignesDeVente
     private static ?WeakMap $calculsDeLaRequete = null;
 
     /**
+     * Un produit choisi qui n'est pas, ou plus, au catalogue du magasin :
+     * archivé depuis son choix, ou d'un autre magasin (requête forgée),
+     * sans dire lequel.
+     */
+    public const PRODUIT_INTROUVABLE = 'Un produit choisi n\'est plus au catalogue du magasin : il a pu être archivé. Choisissez de nouveau.';
+
+    /**
+     * Le champ de la douchette, au-dessus des lignes (voir
+     * ajouterLeProduitScanne()), puis les lignes et leurs deux boutons
+     * d'ajout.
+     *
      * @return array<Component>
      */
     public static function lignesDeVente(): array
     {
         return [
+            self::champDeLaDouchette(),
             Repeater::make('lignes')
                 ->label('')
                 ->schema(self::ligneSchema())
@@ -110,6 +131,26 @@ trait AjouteDesLignesDeVente
                 self::actionAjouterUnService(),
             ])->alignCenter(),
         ];
+    }
+
+    /**
+     * « Scanner ou taper une référence » : une douchette USB tape les
+     * chiffres scannés dans le champ actif, puis Entrée, qui ajoute le
+     * produit (ou une unité de plus à sa ligne) sans ouvrir le tableau des
+     * produits (voir RecoitLesProduitsChoisis::scannerUneReference()) ;
+     * Entrée ne valide jamais le formulaire de la page. Le champ n'est
+     * jamais enregistré.
+     */
+    private static function champDeLaDouchette(): TextInput
+    {
+        return TextInput::make('douchette')
+            ->label('Scanner ou taper une référence')
+            ->placeholder('Code-barres ou référence exacte, puis Entrée')
+            ->prefixIcon('heroicon-m-qr-code')
+            ->autocomplete(false)
+            ->maxLength(60)
+            ->dehydrated(false)
+            ->extraInputAttributes(['x-on:keydown.enter.prevent' => '$wire.scannerUneReference()']);
     }
 
     /**
@@ -241,17 +282,18 @@ trait AjouteDesLignesDeVente
                 ->live()
                 ->columnSpan(2)
                 ->visible(fn (Get $get): bool => ! self::estUneLigneDeService($get))
-                ->afterStateUpdated(function (?int $state, Get $get, Set $set) {
+                ->afterStateUpdated(function (?int $state, Set $set) {
                     $produit = $state ? Produit::find($state) : null;
 
                     if ($produit === null) {
                         return;
                     }
 
-                    $set('description', $produit->nom);
-                    $set('reference', $produit->reference);
-                    $set('prix_unitaire_ttc', $produit->prix_vente_ttc);
-                    self::appliquerLeTauxDuProduit($produit, $get, $set);
+                    $ligne = self::ligneDuProduit($produit);
+
+                    foreach (['description', 'reference', 'prix_unitaire_ttc', 'prix_unitaire_ht', 'taux_tva'] as $champ) {
+                        $set($champ, $ligne[$champ]);
+                    }
 
                     // Sans l'autorisation, changer le produit d'une ligne
                     // remisée en retire la remise, qu'il ne peut accorder.
@@ -568,13 +610,276 @@ trait AjouteDesLignesDeVente
         return app(TenantContext::class)->magasin();
     }
 
+    /**
+     * « Ajouter un produit » ouvre le grand tableau des produits (point
+     * 13, voir SelecteurDeProduits), sur tout l'écran, avec le client et
+     * la nature de l'opération du document, dont dépend le total de la
+     * sélection. La fenêtre n'a pas de bouton de validation : le tableau
+     * envoie sa sélection à la page (voir RecoitLesProduitsChoisis), qui
+     * la ferme une fois les lignes ajoutées.
+     */
     private static function actionAjouterUnProduit(): Action
     {
         return Action::make('ajouterUnProduit')
             ->label('Ajouter un produit')
             ->color('gray')
             ->size(ActionSize::Small)
-            ->action(fn (HasForms $livewire) => self::ajouterUneLigne($livewire));
+            ->modalHeading('Ajouter des produits')
+            ->modalDescription('Cliquez sur les produits à ajouter, réglez leurs quantités en bas, puis ajoutez-les tous d\'un coup.')
+            ->modalWidth(MaxWidth::Screen)
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('Fermer')
+            ->modalContent(fn (Get $get): View => view('filament.app.livewire.fenetre-du-selecteur-de-produits', [
+                'clientId' => $get('client_id'),
+                'nature' => $get('nature_operation'),
+            ]));
+    }
+
+    /**
+     * La personne connectée saisit-elle des ventes dans le magasin actif
+     * (caisse, facture, devis) ? Seule à ouvrir les tableaux des produits
+     * et des clients (voir SelecteurDeProduits et SelecteurDeClients),
+     * qui le revérifient à chaque requête.
+     */
+    public static function peutSaisirUneVente(): bool
+    {
+        return auth()->user()?->canAny([PermissionRegistry::FACTURE_CREATE, PermissionRegistry::DEVIS_CREATE, PermissionRegistry::DEVIS_UPDATE]) ?? false;
+    }
+
+    /**
+     * La personne connectée est-elle autorisée, dans le magasin actif, à
+     * vendre sans stock (R1) ? Sans, un produit épuisé ne se choisit pas.
+     */
+    public static function peutVendreSansStock(): bool
+    {
+        return auth()->user()?->can(PermissionRegistry::STOCK_VENDRE_SANS_STOCK) ?? false;
+    }
+
+    /**
+     * Pourquoi ce produit ne se choisit pas pour une vente : il est épuisé,
+     * et la personne n'est pas autorisée à vendre sans stock (R1, voir
+     * peutVendreSansStock(), lu une fois par qui appelle). Null quand il se
+     * choisit. À l'émission, VerificateurDeStock reste le contrôle du
+     * stock, quantités comprises.
+     */
+    public static function refusDuProduit(Produit $produit, bool $vendSansStock): ?string
+    {
+        return $produit->estEpuise() && ! $vendSansStock
+            ? "« {$produit->nom} » est épuisé : seule une personne autorisée à vendre sans stock peut le vendre."
+            : null;
+    }
+
+    /**
+     * La ligne qui vend ce produit au prix de sa fiche, comme quand on le
+     * choisit dans une ligne : sa description, sa référence, son PU TTC,
+     * son taux (0 % en franchise en base) et le PU HT qui en découle, avec
+     * ses décimales utiles (voir CalculateurLigne::prixUnitaireHtExact()),
+     * sans remise.
+     *
+     * @return array{produit_id: int, service_id: null, description: string, reference: string, quantite: int, prix_unitaire_ttc: string, prix_unitaire_ht: string, taux_tva: string, remise_pourcentage: string}
+     */
+    public static function ligneDuProduit(Produit $produit, int $quantite = 1): array
+    {
+        $calculateur = app(CalculateurLigne::class);
+        $tauxTva = self::magasin()->societe->estEnFranchiseDeTva() ? '0' : self::pourcentageEnTexte($produit->taux_tva);
+
+        return [
+            'produit_id' => $produit->getKey(),
+            'service_id' => null,
+            'description' => $produit->nom,
+            'reference' => $produit->reference,
+            'quantite' => $quantite,
+            'prix_unitaire_ttc' => $produit->prix_vente_ttc,
+            'prix_unitaire_ht' => $calculateur->enDecimalUtile($calculateur->prixUnitaireHtExact($calculateur->enCentiemes($produit->prix_vente_ttc), SaisieDecimale::enCentiemes($tauxTva))),
+            'taux_tva' => $tauxTva,
+            'remise_pourcentage' => '0',
+        ];
+    }
+
+    /**
+     * Les produits d'une sélection du tableau des produits, revérifiés :
+     * chacun du catalogue du magasin actif (MagasinScope), non archivé, et
+     * que la personne peut vendre (voir refusDuProduit()), avec sa
+     * quantité, un nombre entier d'articles, au moins 1 ; un produit
+     * choisi deux fois cumule ses quantités. Dans l'ordre de la sélection.
+     *
+     * @param  mixed  $selection  une liste de {produit_id, quantite}, telle que l'envoie le navigateur
+     * @return list<array{produit: Produit, quantite: int}>
+     *
+     * @throws InvalidArgumentException la raison du refus, à montrer telle quelle
+     */
+    public static function produitsChoisis(mixed $selection): array
+    {
+        if (! is_array($selection) || $selection === []) {
+            throw new InvalidArgumentException('Choisissez au moins un produit.');
+        }
+
+        $quantites = [];
+
+        foreach ($selection as $choix) {
+            $identifiant = is_array($choix) ? ($choix['produit_id'] ?? null) : null;
+
+            if (! is_int($identifiant) && ! (is_string($identifiant) && ctype_digit($identifiant))) {
+                throw new InvalidArgumentException(self::PRODUIT_INTROUVABLE);
+            }
+
+            $quantites[(int) $identifiant] = self::quantiteCumulee($quantites[(int) $identifiant] ?? 0, QuantiteEntiere::depuisSaisie($choix['quantite'] ?? null));
+        }
+
+        $produits = Produit::query()->whereKey(array_keys($quantites))->get()->keyBy('id');
+        $vendSansStock = self::peutVendreSansStock();
+        $choisis = [];
+
+        foreach ($quantites as $identifiant => $quantite) {
+            $produit = $produits->get($identifiant) ?? throw new InvalidArgumentException(self::PRODUIT_INTROUVABLE);
+            $refus = self::refusDuProduit($produit, $vendSansStock);
+
+            if ($refus !== null) {
+                throw new InvalidArgumentException($refus);
+            }
+
+            $choisis[] = ['produit' => $produit, 'quantite' => $quantite];
+        }
+
+        return $choisis;
+    }
+
+    /**
+     * Ajoute au document les produits d'une sélection du tableau des
+     * produits, revérifiée (voir produitsChoisis()) : chacun sur une
+     * nouvelle ligne au prix de sa fiche (R2), ou, si une ligne du même
+     * produit existe déjà sans remise ni prix dérogatoire, en augmentant sa
+     * quantité ; une ligne remisée ou à un autre prix n'est jamais
+     * touchée, sa quantité exigeant l'autorisation des remises. Les lignes
+     * encore vides (aucun produit ni service choisi) disparaissent. Une
+     * sélection refusée n'ajoute rien, et la raison s'affiche.
+     *
+     * @return bool les lignes ont été ajoutées
+     */
+    public static function ajouterLesProduitsChoisis(HasForms $livewire, mixed $selection): bool
+    {
+        /** @var Repeater $repeteur */
+        $repeteur = $livewire->getForm('form')->getComponent('data.lignes');
+
+        try {
+            $choisis = self::produitsChoisis($selection);
+            $lignes = array_filter($repeteur->getState() ?? [], fn (mixed $ligne): bool => is_array($ligne) && (filled($ligne['produit_id'] ?? null) || filled($ligne['service_id'] ?? null)));
+            $nouveaux = [];
+
+            foreach ($choisis as ['produit' => $produit, 'quantite' => $quantite]) {
+                $cle = self::ligneSansDerogationDuProduit($lignes, $produit);
+
+                if ($cle === null) {
+                    $nouveaux[] = self::ligneDuProduit($produit, $quantite);
+
+                    continue;
+                }
+
+                $lignes[$cle]['quantite'] = self::quantiteCumulee(QuantiteEntiere::depuisSaisie($lignes[$cle]['quantite']), $quantite);
+            }
+        } catch (InvalidArgumentException $refus) {
+            Notification::make()->title($refus->getMessage())->danger()->send();
+
+            return false;
+        }
+
+        $repeteur->state($lignes);
+
+        foreach ($nouveaux as $ligne) {
+            self::ajouterUneLigne($livewire, $ligne);
+        }
+
+        $repeteur->callAfterStateUpdated();
+
+        return true;
+    }
+
+    /**
+     * La douchette, ou une référence tapée : le produit du magasin dont le
+     * code-barres ou la référence (sans tenir compte de la casse, comme
+     * son unicité, voir Produit::normaliserReference()) est exactement le
+     * texte saisi, ajouté comme une sélection d'un article (voir
+     * ajouterLesProduitsChoisis()). Aucun, ou plusieurs : la page le dit,
+     * et le tableau des produits reste le moyen de choisir.
+     *
+     * @return bool le produit a été ajouté
+     */
+    public static function ajouterLeProduitScanne(HasForms $livewire, mixed $saisie): bool
+    {
+        $code = is_string($saisie) ? trim($saisie) : '';
+
+        if ($code === '') {
+            return false;
+        }
+
+        $produits = Produit::query()
+            ->where(fn (Builder $produits): Builder => $produits->where('code_barres', $code)->orWhere('reference_normalisee', Produit::normaliserReference($code)))
+            ->limit(2)
+            ->get();
+
+        if ($produits->count() !== 1) {
+            Notification::make()
+                ->title($produits->isEmpty()
+                    ? "Aucun produit du magasin n'a le code-barres ni la référence « {$code} »."
+                    : "Plusieurs produits ont le code « {$code} » : choisissez le bon dans le tableau des produits.")
+                ->warning()
+                ->send();
+
+            return false;
+        }
+
+        return self::ajouterLesProduitsChoisis($livewire, [['produit_id' => $produits->sole()->getKey(), 'quantite' => 1]]);
+    }
+
+    /**
+     * La clé de la première ligne de ce produit au prix de sa fiche, sans
+     * remise : celle dont la quantité peut augmenter sans l'autorisation
+     * des remises (voir DerogationsDePrix). Null s'il n'y en a pas.
+     *
+     * @param  array<array-key, array<string, mixed>>  $lignes
+     */
+    private static function ligneSansDerogationDuProduit(array $lignes, Produit $produit): int|string|null
+    {
+        $prixDeLaFiche = app(CalculateurLigne::class)->enCentiemes($produit->prix_vente_ttc);
+
+        foreach ($lignes as $cle => $ligne) {
+            if ((string) ($ligne['produit_id'] ?? '') !== (string) $produit->getKey() || filled($ligne['service_id'] ?? null)) {
+                continue;
+            }
+
+            try {
+                $sansDerogation = SaisieDecimale::enCentiemes(filled($ligne['remise_pourcentage'] ?? null) ? $ligne['remise_pourcentage'] : 0) === 0
+                    && SaisieDecimale::enCentiemes($ligne['prix_unitaire_ttc'] ?? null) === $prixDeLaFiche;
+                QuantiteEntiere::depuisSaisie($ligne['quantite'] ?? null);
+            } catch (InvalidArgumentException) {
+                // Une ligne en cours de saisie (prix, remise ou quantité
+                // illisible) ne se complète pas.
+                continue;
+            }
+
+            if ($sansDerogation) {
+                return $cle;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Deux quantités d'un même produit ajoutées l'une à l'autre ; au-delà
+     * de ce qu'un entier peut compter, la sélection est refusée.
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function quantiteCumulee(int $quantite, int $ajoutee): int
+    {
+        $somme = $quantite + $ajoutee;
+
+        if (! is_int($somme)) {
+            throw new InvalidArgumentException('La quantité d\'un produit compterait plus d\'articles qu\'une vente ne peut en compter : baissez-la.');
+        }
+
+        return $somme;
     }
 
     /**

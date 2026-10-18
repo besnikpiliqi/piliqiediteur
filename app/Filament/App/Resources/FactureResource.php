@@ -148,7 +148,7 @@ class FactureResource extends Resource
                     // Un client archivé ne reçoit plus de nouveau document,
                     // même si ceux qu'il a déjà le gardent (voir
                     // Facture::client() et AppServiceProvider::limiterLesChoixAuMagasin()).
-                    ->relationProposable('client', 'nom')
+                    ->relationProposable('client', 'nom', ClientResource::COLONNES_DE_RECHERCHE)
                     ->searchable()
                     ->preload()
                     ->required()
@@ -157,7 +157,8 @@ class FactureResource extends Resource
                     ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id')))
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
-                    ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE))),
+                    ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE)))
+                    ->suffixAction(ClientResource::actionChercherUnClient()),
                 // L'échéance ne se saisit pas : elle se calcule à l'émission,
                 // date d'émission + délai du client choisi, sinon délai du
                 // magasin (B7, voir EmettreFactureAction).

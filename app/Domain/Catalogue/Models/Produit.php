@@ -443,4 +443,36 @@ class Produit extends Model
     {
         $query->where('suivi_stock', true)->where('stock_quantite', '<', 0);
     }
+
+    /**
+     * Son stock suivi est à zéro ou au-dessous : seule une personne
+     * autorisée à vendre sans stock dans ce magasin le vend (R1, voir
+     * VerificateurDeStock). Un produit qui ne suit pas son stock n'est
+     * jamais épuisé.
+     */
+    public function estEpuise(): bool
+    {
+        return $this->suivi_stock && $this->stock_quantite <= 0;
+    }
+
+    /**
+     * Les produits épuisés (voir estEpuise()).
+     *
+     * @param  Builder<Produit>  $query
+     */
+    public function scopeEpuises(Builder $query): void
+    {
+        $query->where('suivi_stock', true)->where('stock_quantite', '<=', 0);
+    }
+
+    /**
+     * Les produits qui se vendent sans manquer : ceux qui ont du stock, et
+     * ceux qui ne suivent pas le leur.
+     *
+     * @param  Builder<Produit>  $query
+     */
+    public function scopeEnStock(Builder $query): void
+    {
+        $query->where(fn (Builder $produits): Builder => $produits->where('suivi_stock', false)->orWhere('stock_quantite', '>', 0));
+    }
 }

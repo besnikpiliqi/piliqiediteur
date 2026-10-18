@@ -8,6 +8,8 @@ use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RecoitLeClientChoisi;
+use App\Filament\Concerns\RecoitLesProduitsChoisis;
 use App\Filament\Concerns\RevientALaListe;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
@@ -22,7 +24,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class EditDevis extends EditRecord
 {
-    use GereLesExceptionsMetier, RevientALaListe;
+    use GereLesExceptionsMetier, RecoitLeClientChoisi, RecoitLesProduitsChoisis, RevientALaListe;
 
     protected static string $resource = DevisResource::class;
 

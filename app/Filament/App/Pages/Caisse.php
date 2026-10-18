@@ -27,6 +27,8 @@ use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\AvertitDUneVenteSansStock;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RecoitLeClientChoisi;
+use App\Filament\Concerns\RecoitLesProduitsChoisis;
 use App\Filament\Concerns\SaisitUnReglementEnParts;
 use Filament\Actions;
 use Filament\Facades\Filament;
@@ -57,10 +59,13 @@ use LogicException;
  * l'émission et l'encaissement intégral en une seule opération -- une
  * vente comptoir n'est jamais "à régler plus tard".
  *
- * Réutilise les lignes de vente de DevisResource (même recherche produit
- * par nom/référence/code-barres, mêmes boutons « Ajouter un produit » et
- * « Ajouter un service », voir AjouteDesLignesDeVente) : aucune raison de
- * dupliquer cette logique pour un troisième formulaire de lignes.
+ * Réutilise les lignes de vente de DevisResource (même tableau des
+ * produits, même douchette, même bouton « Ajouter un service », voir
+ * AjouteDesLignesDeVente) et la loupe du champ « Client » des factures et
+ * des devis (le tableau des clients, voir SelecteurDeClients) : aucune
+ * raison de dupliquer cette logique pour un troisième formulaire de
+ * lignes. Le client comptoir reste choisi par défaut ; un autre client
+ * choisi présélectionne son mode de paiement préféré.
  *
  * La caisse n'introduit aucune permission dédiée : elle n'est qu'une façon
  * plus rapide de faire ce qu'un vendeur peut déjà faire ailleurs, créer
@@ -120,7 +125,7 @@ use LogicException;
  */
 class Caisse extends Page implements HasForms
 {
-    use AvertitDUneVenteSansStock, GereLesExceptionsMetier, InteractsWithForms, SaisitUnReglementEnParts;
+    use AvertitDUneVenteSansStock, GereLesExceptionsMetier, InteractsWithForms, RecoitLeClientChoisi, RecoitLesProduitsChoisis, SaisitUnReglementEnParts;
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
 
@@ -374,13 +379,15 @@ class Caisse extends Page implements HasForms
                     // Un client archivé n'est plus proposé pour une vente, ni
                     // accepté ; celui d'un panier enregistré avant son
                     // archivage reste affiché, le temps d'en choisir un autre.
-                    // La recherche ignore la casse et les accents.
-                    ->getSearchResultsUsing(fn (string $search) => RechercheSansAccents::appliquer(Client::query(), $search, ['nom'])
+                    // La recherche cherche ce que cherche la loupe, sans
+                    // casse ni accents.
+                    ->getSearchResultsUsing(fn (string $search) => RechercheSansAccents::appliquer(Client::query(), $search, ClientResource::COLONNES_DE_RECHERCHE)
                         ->orderBy('nom')
                         ->orderBy('id')
                         ->limit(50)
                         ->pluck('nom', 'id'))
                     ->getOptionLabelUsing(fn ($value) => Client::withTrashed()->find($value)?->nom)
+                    ->suffixAction(ClientResource::actionChercherUnClient())
                     ->rule(fn (): Exists => Client::regleExisteDansLeMagasin())
                     // Form explicitement modelé sur Client : ce Select
                     // n'utilise pas relationship(), qui le ferait sinon.

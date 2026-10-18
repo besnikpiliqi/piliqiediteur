@@ -25,7 +25,8 @@ use Normalizer;
  * ses paramètres.
  *
  * Seule aide des recherches : colonnes des tableaux Filament
- * (rechercheSansAccents(), voir AppServiceProvider), listes de choix
+ * (rechercheSansAccents(), voir AppServiceProvider, ou dans(), comme les
+ * tableaux des produits et des clients d'une vente), listes de choix
  * d'une fiche liée (relationProposable()) et recherches écrites à la main
  * (produits, clients et services de la caisse, nom du client d'un
  * document).

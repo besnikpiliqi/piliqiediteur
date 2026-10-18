@@ -60,7 +60,7 @@ class DevisResource extends Resource
                     // Un client archivé ne reçoit plus de nouveau document,
                     // même si ceux qu'il a déjà le gardent (voir
                     // Devis::client() et AppServiceProvider::limiterLesChoixAuMagasin()).
-                    ->relationProposable('client', 'nom')
+                    ->relationProposable('client', 'nom', ClientResource::COLONNES_DE_RECHERCHE)
                     ->searchable()
                     ->preload()
                     ->required()
@@ -69,7 +69,8 @@ class DevisResource extends Resource
                     ->helperText(fn (Get $get) => ClientResource::soldeCrediteurHelperText($get('client_id')))
                     ->createOptionForm(ClientResource::creationRapideSchema())
                     ->createOptionModalHeading('Nouveau client')
-                    ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE))),
+                    ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE)))
+                    ->suffixAction(ClientResource::actionChercherUnClient()),
                 DatePicker::make('date_validite')->label('Valide jusqu\'au'),
                 self::champNatureDeLOperation(),
                 Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(PiedDePage::CARACTERES_DES_CONDITIONS_DE_PAIEMENT)->columnSpanFull(),

@@ -6,13 +6,15 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Concerns\GereLesExceptionsMetier;
+use App\Filament\Concerns\RecoitLeClientChoisi;
+use App\Filament\Concerns\RecoitLesProduitsChoisis;
 use App\Filament\Concerns\RevientALaListe;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Database\Eloquent\Model;
 
 class CreateFacture extends CreateRecord
 {
-    use GereLesExceptionsMetier, RevientALaListe;
+    use GereLesExceptionsMetier, RecoitLeClientChoisi, RecoitLesProduitsChoisis, RevientALaListe;
 
     protected static string $resource = FactureResource::class;
 

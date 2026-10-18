@@ -238,7 +238,9 @@ class AppServiceProvider extends ServiceProvider
      * relationProposable() plutôt que relationship() : seules les fiches
      * non archivées sont proposées, plus celle déjà rattachée (voir
      * Proposable), et la recherche ignore la casse et les accents (voir
-     * RechercheSansAccents).
+     * RechercheSansAccents) ; elle cherche dans l'attribut affiché, ou dans
+     * les colonnes données (celles du client d'une vente, voir
+     * ClientResource::COLONNES_DE_RECHERCHE).
      *
      * La valeur déjà enregistrée sur la fiche modifiée n'est jamais
      * revérifiée : elle n'a pas été choisie dans ce formulaire, et une
@@ -264,7 +266,7 @@ class AppServiceProvider extends ServiceProvider
             );
         });
 
-        Select::macro('relationProposable', function (string $relation, string $attributAffiche): Select {
+        Select::macro('relationProposable', function (string $relation, string $attributAffiche, ?array $colonnesDeRecherche = null): Select {
             /** @var Select $this */
             return $this->relationship(
                 $relation,
@@ -272,13 +274,13 @@ class AppServiceProvider extends ServiceProvider
                 static fn (Builder $query, Select $component, ?Model $record): Builder => $query->proposables(
                     $record?->getOriginal($component->getRelationship()->getForeignKeyName()),
                 ),
-            )->getSearchResultsUsing(static function (Select $component, string $search) use ($attributAffiche): array {
+            )->getSearchResultsUsing(static function (Select $component, string $search) use ($attributAffiche, $colonnesDeRecherche): array {
                 /** @var BelongsTo<Model, Model> $relation */
                 $relation = Relation::noConstraints(static fn (): Relation => $component->getRelationship());
                 $cle = $relation->getRelated()->getKeyName();
                 $proposables = $relation->getQuery()->proposables($component->getRecord()?->getOriginal($relation->getForeignKeyName()));
 
-                return RechercheSansAccents::appliquer($proposables, $search, [$attributAffiche])
+                return RechercheSansAccents::appliquer($proposables, $search, $colonnesDeRecherche ?? [$attributAffiche])
                     ->orderBy($attributAffiche)
                     ->orderBy($cle)
                     ->limit($component->getOptionsLimit())

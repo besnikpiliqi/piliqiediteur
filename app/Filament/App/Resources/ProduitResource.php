@@ -316,7 +316,7 @@ class ProduitResource extends Resource
                     ])
                     ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
                         'en_stock' => $query->where('suivi_stock', true)->where('stock_quantite', '>', 0),
-                        'epuise' => $query->where('suivi_stock', true)->where('stock_quantite', '<=', 0),
+                        'epuise' => $query->epuises(),
                         'negatif' => $query->enStockNegatif(),
                         default => $query,
                     }),

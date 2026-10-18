@@ -16,6 +16,7 @@ use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
 use Filament\Actions\MountableAction;
+use Filament\Forms\Components\Actions\Action as FormAction;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
@@ -29,6 +30,7 @@ use Filament\Forms\Get;
 use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Support\Enums\MaxWidth;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
@@ -46,6 +48,20 @@ class ClientResource extends Resource
     private const MESSAGE_PROPRE_ENTREPRISE = 'Ce SIREN est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
 
     private const MESSAGE_PROPRE_NUMERO_TVA = 'Ce n° de TVA est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
+
+    /**
+     * Ce que cherche le texte tapé pour trouver un client d'une vente,
+     * dans la liste du champ « Client » comme dans le tableau de sa loupe
+     * (voir SelecteurDeClients), sans casse ni accents.
+     */
+    public const COLONNES_DE_RECHERCHE = ['nom', 'siren', 'siret', 'numero_tva', 'email', 'telephone', 'ville', 'code_postal'];
+
+    /**
+     * Un client choisi qui n'est pas, ou plus, proposé pour une vente :
+     * archivé depuis, ou d'un autre magasin (requête forgée), sans dire
+     * lequel.
+     */
+    public const CLIENT_INTROUVABLE = 'Ce client n\'est plus proposé pour une vente : il a pu être archivé. Choisissez-en un autre.';
 
     protected static ?string $model = Client::class;
 
@@ -229,8 +245,9 @@ class ClientResource extends Resource
 
     /**
      * Formulaire allégé utilisé dans la modale "+" du Select client_id de
-     * DevisResource/FactureResource et de la Caisse (createOptionForm) :
-     * un vendeur en train de facturer n'a besoin que de l'essentiel pour
+     * DevisResource/FactureResource et de la Caisse (createOptionForm), et
+     * dans « Nouveau client » du tableau des clients (voir
+     * SelecteurDeClients) : un vendeur en train de facturer n'a besoin que de l'essentiel pour
      * créer un nouveau client à la volée, pas de toute la fiche complète --
      * sauf pour un professionnel, qui a besoin de ses identifiants et de
      * son adresse dès la création.
@@ -418,6 +435,26 @@ class ClientResource extends Resource
             'view' => Pages\ViewClient::route('/{record}'),
             'edit' => Pages\EditClient::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * La loupe à côté du champ « Client » de la caisse, d'une facture ou
+     * d'un devis : elle ouvre le tableau des clients (point 22, voir
+     * SelecteurDeClients) sur tout l'écran. La fenêtre n'a pas de bouton de
+     * validation : un clic sur un client l'envoie à la page (voir
+     * RecoitLeClientChoisi), qui la ferme.
+     */
+    public static function actionChercherUnClient(): FormAction
+    {
+        return FormAction::make('chercherUnClient')
+            ->label('Chercher un client')
+            ->icon('heroicon-m-magnifying-glass')
+            ->modalHeading('Chercher un client')
+            ->modalDescription('Cliquez sur le client de la vente.')
+            ->modalWidth(MaxWidth::Screen)
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('Fermer')
+            ->modalContent(fn (): View => view('filament.app.livewire.fenetre-du-selecteur-de-clients'));
     }
 
     /**

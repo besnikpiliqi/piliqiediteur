@@ -31,6 +31,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Filament\App\Livewire\SelecteurDeProduits;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\AvoirResource;
 use App\Filament\App\Resources\AvoirResource\Pages\CreateAvoir;
@@ -531,12 +532,9 @@ class CaisseTest extends TestCase
         $this->ouvrirLaCaisseDUnMagasin();
         $comptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
         $tshirt = Produit::factory()->create(['nom' => 'T-shirt', 'prix_vente_ttc' => 25, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $component = Livewire::test(Caisse::class)->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit');
-        $cle = array_key_first($component->get('data.lignes'));
 
-        $component
-            ->set("data.lignes.{$cle}.produit_id", $tshirt->id)
-            ->set("data.lignes.{$cle}.quantite", '2')
+        Livewire::test(Caisse::class)
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $tshirt->id, 'quantite' => 2]])
             ->assertSee('Total HT 41,67 € · TVA 8,33 € · Total TTC 50,00 €')
             ->call('encaisser')
             ->assertHasNoFormErrors();
@@ -556,14 +554,12 @@ class CaisseTest extends TestCase
     {
         $this->ouvrirLaCaisseDUnMagasin();
         $tshirt = Produit::factory()->create(['nom' => 'T-shirt', 'prix_vente_ttc' => 25, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $casquette = Produit::factory()->create(['nom' => 'Casquette', 'prix_vente_ttc' => 25, 'taux_tva' => 20, 'suivi_stock' => false]);
         $component = Livewire::test(Caisse::class)
-            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
-            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit');
-        [$premiere, $seconde] = array_keys($component->get('data.lignes'));
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $tshirt->id, 'quantite' => 1], ['produit_id' => $casquette->id, 'quantite' => 1]]);
 
+        $this->assertCount(2, $component->get('data.lignes'));
         $component
-            ->set("data.lignes.{$premiere}.produit_id", $tshirt->id)
-            ->set("data.lignes.{$seconde}.produit_id", $tshirt->id)
             ->assertSee('Total HT 41,67 € · TVA 8,33 € · Total TTC 50,00 €')
             ->assertDontSee('25,00 €')
             ->assertDontSee('20,83 €')
@@ -660,19 +656,52 @@ class CaisseTest extends TestCase
         $this->assertSame(0, Facture::query()->count());
     }
 
-    public function test_ajouter_un_produit_ajoute_une_ligne_vide_avec_les_valeurs_par_defaut(): void
+    /**
+     * Point 13 : « Ajouter un produit » n'ajoute plus une ligne vide à
+     * remplir, il ouvre le grand tableau des produits ; les lignes
+     * n'arrivent qu'avec les produits choisis.
+     */
+    public function test_ajouter_un_produit_ouvre_le_tableau_des_produits_sans_ajouter_de_ligne(): void
     {
         $this->ouvrirLaCaisseDUnMagasin();
 
         $component = Livewire::test(Caisse::class)
-            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit');
+            ->mountFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->assertFormComponentActionMounted('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->assertSeeLivewire(SelecteurDeProduits::class);
 
-        $ligne = $this->seuleLigne($component);
-        $this->assertNull($ligne['service_id']);
-        $this->assertNull($ligne['produit_id']);
-        $this->assertSame(1, $ligne['quantite']);
-        $this->assertSame('20', $ligne['taux_tva']);
-        $component->assertFormFieldIsVisible('lignes.'.array_key_first($component->get('data.lignes')).'.produit_id');
+        $this->assertSame([], $component->get('data.lignes'));
+    }
+
+    /**
+     * La douchette tape le code-barres dans « Scanner ou taper une
+     * référence », puis Entrée : le produit s'ajoute au prix de sa fiche
+     * sans ouvrir le tableau des produits, un second passage augmente sa
+     * quantité, une référence se reconnaît sans tenir compte de la casse,
+     * et le champ se vide pour le scan suivant ; un code inconnu reste dans
+     * le champ, avec la raison.
+     */
+    public function test_scanner_un_code_barres_ajoute_le_produit_sans_ouvrir_le_tableau(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $cable = Produit::factory()->create(['nom' => 'Câble USB', 'reference' => 'CAB-USB', 'code_barres' => '3456789012345', 'prix_vente_ttc' => '12.50', 'taux_tva' => 20, 'suivi_stock' => false]);
+
+        $caisse = Livewire::test(Caisse::class)
+            ->set('data.douchette', '3456789012345')
+            ->call('scannerUneReference')
+            ->assertFormComponentActionNotMounted('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->assertSet('data.douchette', null);
+        $ligne = $this->seuleLigne($caisse);
+        $this->assertSame([$cable->id, 1, '12.50'], [$ligne['produit_id'], $ligne['quantite'], $ligne['prix_unitaire_ttc']]);
+
+        $caisse->set('data.douchette', 'cab-usb')->call('scannerUneReference');
+        $this->assertSame(2, $this->seuleLigne($caisse)['quantite']);
+
+        $caisse->set('data.douchette', '0000000000000')
+            ->call('scannerUneReference')
+            ->assertNotified('Aucun produit du magasin n\'a le code-barres ni la référence « 0000000000000 ».')
+            ->assertSet('data.douchette', '0000000000000');
+        $this->assertSame(2, $this->seuleLigne($caisse)['quantite']);
     }
 
     /**
@@ -686,11 +715,10 @@ class CaisseTest extends TestCase
         $this->reglerLaSociete($magasin, ['regime_tva' => RegimeTva::FranchiseEnBase]);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $component = Livewire::test(Caisse::class)
-            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit');
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $produit->id, 'quantite' => 1]]);
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->assertFormFieldIsDisabled("lignes.{$cle}.taux_tva")
             ->assertSet("data.lignes.{$cle}.taux_tva", '0')
             ->assertSet("data.lignes.{$cle}.prix_unitaire_ht", '12.00')
@@ -738,12 +766,11 @@ class CaisseTest extends TestCase
         $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 50, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 3]);
         $mainDOeuvre = Service::factory()->create(['nom' => 'Main-d\'œuvre']);
         $component = Livewire::test(Caisse::class)
-            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit');
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $ecran->id, 'quantite' => 1]]);
         $component->callFormComponentAction('ajouterUnServiceAction', 'ajouterUnService', data: ['services' => [$mainDOeuvre->id]]);
-        [$cleProduit, $cleService] = array_keys($component->get('data.lignes'));
+        [, $cleService] = array_keys($component->get('data.lignes'));
 
         $component
-            ->set("data.lignes.{$cleProduit}.produit_id", $ecran->id)
             ->set("data.lignes.{$cleService}.prix_unitaire_ttc", '15.03')
             ->assertSee('Total HT 54,19 € · TVA 10,84 € · Total TTC 65,03 €')
             ->call('encaisser')
@@ -1308,14 +1335,15 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * Une ligne encore vide n'est pas une vente commencée : la retirer
-     * n'inscrit rien, et il n'y a pas de vente à abandonner.
+     * Une ligne encore vide (son produit effacé) n'est pas une vente
+     * commencée : la retirer n'inscrit rien, et il n'y a pas de vente à
+     * abandonner.
      */
     public function test_un_panier_vide_n_inscrit_rien_au_journal(): void
     {
         $magasin = $this->ouvrirLaCaisseDUnMagasin();
         $caisse = Livewire::test(Caisse::class)
-            ->callFormComponentAction('ajouterUnProduitAction', 'ajouterUnProduit')
+            ->fillForm(['lignes' => [['produit_id' => null, 'quantite' => 1]]])
             ->assertActionHidden('abandonnerLaVente');
 
         $caisse->callFormComponentAction('lignes', 'delete', arguments: ['item' => array_key_first($caisse->get('data.lignes'))]);

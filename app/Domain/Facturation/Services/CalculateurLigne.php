@@ -377,6 +377,21 @@ class CalculateurLigne
     }
 
     /**
+     * Le taux de marque d'un article : son bénéfice ÷ son prix de vente
+     * HT, en centièmes de point, arrondi une seule fois au plus proche --
+     * 12,50 € de bénéfice sur 20,83 € HT font 60,01 % (6001). Un bénéfice
+     * négatif donne un taux négatif ; sans prix de vente, aucun taux
+     * (null).
+     *
+     * @param  int  $benefice  en centimes
+     * @param  int  $prixVenteHt  en centimes
+     */
+    public function tauxDeMarque(int $benefice, int $prixVenteHt): ?int
+    {
+        return $prixVenteHt <= 0 ? null : $this->diviserArrondi($this->multiplier($benefice, 10000), $prixVenteHt);
+    }
+
+    /**
      * Un coût moyen (voir coutMoyenPondere()) tel qu'il est enregistré,
      * au dix-millième d'euro.
      */

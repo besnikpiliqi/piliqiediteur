@@ -1112,6 +1112,24 @@ class CalculateurLigneTest extends TestCase
     }
 
     /**
+     * Le taux de marque, bénéfice ÷ prix de vente HT, en centièmes de point,
+     * arrondi une fois au plus proche : 12,50 € sur 20,83 € font 60,01 %
+     * (0,600096...) ; une perte de 1,00 € sur 20,83 €, -4,80 % ; 1,00 €
+     * sur 16,00 €, exactement 6,25 % ; un demi-centième de point
+     * s'arrondit vers l'extérieur : 0,01 € sur 40,00 € font 0,025 %, soit
+     * 0,03 %, et -0,03 % pour une perte ; sans prix de vente, aucun taux.
+     */
+    public function test_le_taux_de_marque_ne_s_arrondit_qu_une_fois(): void
+    {
+        $this->assertSame(6001, $this->calculateur()->tauxDeMarque(1250, 2083));
+        $this->assertSame(-480, $this->calculateur()->tauxDeMarque(-100, 2083));
+        $this->assertSame(625, $this->calculateur()->tauxDeMarque(100, 1600));
+        $this->assertSame(3, $this->calculateur()->tauxDeMarque(1, 4000));
+        $this->assertSame(-3, $this->calculateur()->tauxDeMarque(-1, 4000));
+        $this->assertNull($this->calculateur()->tauxDeMarque(500, 0));
+    }
+
+    /**
      * Le prix de vente se calcule depuis le HT exact et ne s'arrondit qu'une
      * fois : 1,0042 € HT x 1,2 = 1,20504 € -> 1,21 € (et non 1,00 € x 1,2 =
      * 1,20 €) ; à la dizaine, 54,1663 € HT x 1,2 = 64,99956 € -> 60 € (et

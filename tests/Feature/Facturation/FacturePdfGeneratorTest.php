@@ -72,7 +72,7 @@ class FacturePdfGeneratorTest extends TestCase
 
         $this->assertStringStartsWith('%PDF', $generateur->generer($facture)->output());
         $this->assertSame("ticket-{$facture->numero}.pdf", $generateur->nomFichier($facture));
-        $this->assertStringContainsString('Jeanne Archivée', app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir')));
+        $this->assertStringContainsString('Jeanne Archivée', $this->rendu($facture));
     }
 
     /**
@@ -149,7 +149,7 @@ class FacturePdfGeneratorTest extends TestCase
             ['produit_id' => $produit->id, 'quantite' => 1],
         ]));
 
-        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        $html = $this->rendu($facture);
 
         $this->assertSame($optionDebits, str_contains($html, e("Option pour le paiement de la taxe d'après les débits")));
     }
@@ -184,7 +184,7 @@ class FacturePdfGeneratorTest extends TestCase
             $natures,
         )));
 
-        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        $html = $this->rendu($facture);
 
         $this->assertStringContainsString(e("Catégorie de l'opération : {$categorie}").'</div>', $html);
     }
@@ -221,7 +221,7 @@ class FacturePdfGeneratorTest extends TestCase
         ]));
         $facture = $this->factureEmise();
 
-        $html = $this->compacte(app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir')));
+        $html = $this->compacte($this->rendu($facture));
 
         $this->assertStringContainsString(
             '<div class="magasin-nom">Boutique du Port</div>12 quai des Pêcheurs<br>Bâtiment B<br>13002 Marseille<br>FR<br>'
@@ -267,7 +267,7 @@ class FacturePdfGeneratorTest extends TestCase
         ]));
         $facture = $this->ticketEmis();
 
-        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        $html = $this->rendu($facture);
 
         $enTete = Str::betweenFirst($html, '<table class="en-tete">', '</table>');
         $this->assertStringContainsString('<div class="magasin-nom">Boutique du Port</div>SIRET : 12121212000012</td>', $this->compacte($enTete));
@@ -292,7 +292,7 @@ class FacturePdfGeneratorTest extends TestCase
         ])->create());
         $facture = $this->factureEmise();
 
-        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        $html = $this->rendu($facture);
 
         $this->assertStringContainsString('<div class="identite">Martin et Fils Société civile · ', $this->compacte($html));
         $this->assertStringNotContainsString('au capital', $html);
@@ -311,10 +311,9 @@ class FacturePdfGeneratorTest extends TestCase
             'Indemnité forfaitaire pour frais de recouvrement en cas de retard de paiement : 40 €.',
             'Pas d\'escompte pour paiement anticipé.',
         ];
-        $rendu = fn (Facture $facture): string => app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
 
-        $facture = $rendu($this->factureEmise());
-        $ticket = $rendu($this->ticketEmis());
+        $facture = $this->rendu($this->factureEmise());
+        $ticket = $this->rendu($this->ticketEmis());
 
         $this->assertStringContainsString('Échéance le ', $facture);
         $this->assertSame([3, 0], [
@@ -331,7 +330,7 @@ class FacturePdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->create(['mention_escompte' => 'Escompte de 1 % pour paiement sous 8 jours.']));
 
-        $html = app(FacturePdfGenerator::class)->html($this->factureEmise()->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        $html = $this->rendu($this->factureEmise());
 
         $this->assertStringContainsString('<div class="pied">Escompte de 1 % pour paiement sous 8 jours.</div>', $html);
         $this->assertStringNotContainsString(e('Pas d\'escompte pour paiement anticipé.'), $html);
@@ -507,7 +506,7 @@ class FacturePdfGeneratorTest extends TestCase
         ]);
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), $facture);
 
-        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        $html = $this->rendu($facture);
 
         $this->assertStringNotContainsString('Payé', $html);
         $this->assertStringNotContainsString('Crédité par avoir', $html);
@@ -609,6 +608,38 @@ class FacturePdfGeneratorTest extends TestCase
     }
 
     /**
+     * Une référence de 60 caractères, la plus longue que la fiche d'un
+     * produit accepte, sur une facture remisée aux grands montants : le
+     * tableau reste dans la largeur de la page, chaque colonne obligatoire
+     * (quantité, PU HT, remise, taux, total HT) et chaque texte entre les
+     * marges. La longue référence s'imprime entière sur une seule ligne,
+     * dans un corps réduit pour tenir dans sa colonne ; une référence
+     * courte du même tableau garde le corps des lignes. 9 000 x 9 999,97 €
+     * TTC remisés de 12,5 % : 78 749 763,75 € TTC, soit 65 624 803,13 € HT
+     * à 20 %, PU HT 8 333,308333 €.
+     */
+    public function test_une_reference_de_60_caracteres_et_de_grands_montants_laissent_toutes_les_colonnes_dans_la_page(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'ABCDEFGHIJ']));
+        $reference = 'CABLE-USB-C-VERS-USB-C-TRESSE-NYLON-100W-2M-NOIR-MODELE-2026';
+        $longue = Produit::factory()->create(['reference' => $reference, 'nom' => 'Câble USB-C vers USB-C tressé nylon', 'prix_vente_ttc' => '9999.97', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $courte = Produit::factory()->create(['reference' => 'TAS-01', 'nom' => 'Tasse', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = $this->emettre(Client::factory()->professionnel()->create(), [
+            ['produit_id' => $longue->id, 'quantite' => 9000, 'remise_pourcentage' => 12.5],
+            ['produit_id' => $courte->id, 'quantite' => 1],
+        ]);
+
+        $page = $this->pagesDuPdf(app(FacturePdfGenerator::class)->generer($facture)->output())[0];
+
+        $this->assertChaqueTexteTientEntreLesMarges($page);
+        foreach (['QTÉ', 'PU HT', 'REMISE', 'TAUX', 'TOTAL HT', $reference, "9\u{202F}000", '8 333,308333 €', '12,5 %', '65 624 803,13 €'] as $texte) {
+            $this->assertContains($texte, array_column($page['textes'], 'texte'));
+        }
+        $this->assertMatchesRegularExpression('#<td class="reference" style="font-size: [1-7]\.\dpt">'.$reference.'</td>#', $this->tableauDesLignes($facture));
+        $this->assertStringContainsString('<td class="reference">TAS-01</td>', $this->tableauDesLignes($facture));
+    }
+
+    /**
      * Une facture imprime, pour chaque ligne, la référence, la désignation,
      * la quantité, le PU HT, le taux et le total HT, et ni PU TTC, ni TVA,
      * ni total TTC : ils sont dans le tableau de la TVA et les totaux
@@ -660,7 +691,14 @@ class FacturePdfGeneratorTest extends TestCase
 
         $this->assertSame(['0.833333', '833.33'], [$facture->lignes->sole()->prix_unitaire_ht, $facture->lignes->sole()->montant_ht]);
         $this->assertStringContainsString("<td class=\"montant\">1\u{202F}000</td><td class=\"montant\">0,833333 €</td><td class=\"montant\">20 %</td><td class=\"montant\">833,33 €</td>", $tableau);
-        $this->assertLessThan(20_000, abs(1000 * 833_333 - 833_330_000), 'Écart en millionièmes d\'euro entre 1 000 x le PU HT imprimé et le total HT de la ligne.');
+        preg_match_all('#<td class="montant">(.*?)</td>#', $tableau, $cases);
+        [$quantite, $prixUnitaireHt, , $totalHt] = $cases[1];
+        $enMillioniemes = fn (string $montant): int => (int) round((float) str_replace(',', '.', (string) preg_replace('/[^\d,]/u', '', $montant)) * 1_000_000);
+        $this->assertLessThan(
+            20_000,
+            abs((int) preg_replace('/\D/u', '', $quantite) * $enMillioniemes($prixUnitaireHt) - $enMillioniemes($totalHt)),
+            'Écart en millionièmes d\'euro entre la quantité x le PU HT imprimés et le total HT imprimé de la ligne.',
+        );
     }
 
     /**
@@ -981,7 +1019,7 @@ class FacturePdfGeneratorTest extends TestCase
 
     private function rendu(Facture $facture): string
     {
-        return app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        return app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin'));
     }
 
     /**

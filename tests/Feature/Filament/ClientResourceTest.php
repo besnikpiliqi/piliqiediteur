@@ -1041,8 +1041,7 @@ class ClientResourceTest extends TestCase
     /**
      * Un magasin suspendu ou fermé reste consultable : ses vérifications
      * VIES aussi, mais il n'en fait plus, même par une requête forgée.
-     */
-    /**
+     *
      * @param  array<string, mixed>  $situation
      */
     #[DataProvider('situationsEnLectureSeule')]

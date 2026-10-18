@@ -5,6 +5,7 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
+use InvalidArgumentException;
 
 /**
  * Le pied fixé en bas de chaque page d'un PDF de vente (point 4), au-dessus
@@ -24,6 +25,14 @@ use App\Domain\Facturation\Models\Facture;
  */
 final readonly class PiedDePage
 {
+    /**
+     * La plus longue saisie des conditions de paiement d'une facture ou
+     * d'un devis, en caractères : comme chacune des mentions du magasin,
+     * elle s'imprime dans le pied de chaque page, qui doit laisser aux
+     * lignes leur place sur la page.
+     */
+    public const CARACTERES_DES_CONDITIONS_DE_PAIEMENT = 500;
+
     /**
      * Les caractères comptés par ligne imprimée : en corps 7 sur la largeur
      * d'une page A4 moins ses marges, une ligne en tient 125 en majuscules
@@ -68,6 +77,21 @@ final readonly class PiedDePage
                 $document instanceof Avoir ? $document->mentionDuBonDAvoir() : null,
             ], filled(...))),
         );
+    }
+
+    /**
+     * Refuse des conditions de paiement plus longues que
+     * CARACTERES_DES_CONDITIONS_DE_PAIEMENT, avant que la facture ou le
+     * devis ne s'enregistre : le même refus sur tous les moteurs de base
+     * de données, leur colonne étant un texte libre.
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function verifierLesConditionsDePaiement(mixed $conditions): void
+    {
+        if (is_string($conditions) && mb_strlen($conditions) > self::CARACTERES_DES_CONDITIONS_DE_PAIEMENT) {
+            throw new InvalidArgumentException('Les conditions de paiement comptent '.self::CARACTERES_DES_CONDITIONS_DE_PAIEMENT.' caractères au plus : elles s\'impriment dans le pied de chaque page du document.');
+        }
     }
 
     /**

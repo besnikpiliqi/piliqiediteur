@@ -16,8 +16,10 @@ use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
 use App\Domain\Facturation\Services\LignesRetirees;
+use App\Domain\Facturation\Services\PiedDePage;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use InvalidArgumentException;
 use LogicException;
 
 /**
@@ -71,12 +73,15 @@ class ModifierFactureAction
      * @param  array<string, mixed>  $attributs
      *
      * @throws AuthorizationException
+     * @throws InvalidArgumentException quand les conditions de paiement sont trop longues pour le pied du PDF (voir PiedDePage)
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
     public function handle(User $auteur, Facture $facture, Client $client, array $lignes, array $attributs = []): Facture
     {
+        PiedDePage::verifierLesConditionsDePaiement($attributs['conditions_paiement'] ?? null);
+
         return $this->registre->sousVerrou($facture->magasin, function () use ($auteur, $facture, $client, $lignes, $attributs): Facture {
             $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
 

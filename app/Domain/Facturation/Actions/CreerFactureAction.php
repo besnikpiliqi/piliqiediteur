@@ -9,10 +9,12 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
+use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 /**
  * Crée une facture brouillon pour un client déjà résolu par une requête
@@ -47,9 +49,12 @@ class CreerFactureAction
      * @param  array<string, mixed>  $attributs  conditions_paiement, notes, et la nature et la livraison (voir NoteSaNatureDOperation::noterSaNatureDOperation())
      *
      * @throws AuthorizationException quand l'auteur ne peut pas créer de facture, ou introduit une remise ou un prix sans y être autorisé
+     * @throws InvalidArgumentException quand les conditions de paiement sont trop longues pour le pied du PDF (voir PiedDePage)
      */
     public function handle(User $auteur, Client $client, array $lignes, array $attributs = []): Facture
     {
+        PiedDePage::verifierLesConditionsDePaiement($attributs['conditions_paiement'] ?? null);
+
         return DB::transaction(function () use ($auteur, $client, $lignes, $attributs) {
             $magasin = app(TenantContext::class)->magasin();
             $compte = $this->lecteur->exiger($auteur, 'create', $magasin, Facture::class);

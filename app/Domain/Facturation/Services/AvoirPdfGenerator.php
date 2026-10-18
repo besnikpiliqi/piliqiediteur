@@ -14,7 +14,8 @@ use Barryvdh\DomPDF\PDF as PdfDocument;
  * FigeSonEmetteur et Avoir::mentionDuBonDAvoir()), jamais depuis l'état
  * courant du catalogue, de la fiche du client, du magasin, de la facture
  * créditée ou du crédit qui reste à l'avoir ; même page A4 (voir
- * MiseEnPageA4), même pied (voir PiedDePage).
+ * MiseEnPageA4), même pied (voir PiedDePage), même tableau des lignes
+ * (voir TableauDesLignes).
  */
 class AvoirPdfGenerator
 {
@@ -42,7 +43,12 @@ class AvoirPdfGenerator
 
         $emetteur = $avoir->emetteur();
 
-        return view('avoirs.pdf', ['avoir' => $avoir, 'emetteur' => $emetteur, 'pied' => PiedDePage::pour($avoir, $emetteur)])->render();
+        return view('avoirs.pdf', [
+            'avoir' => $avoir,
+            'emetteur' => $emetteur,
+            'pied' => PiedDePage::pour($avoir, $emetteur),
+            'tableau' => TableauDesLignes::pour($avoir),
+        ])->render();
     }
 
     public function nomFichier(Avoir $avoir): string

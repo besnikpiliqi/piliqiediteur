@@ -10,10 +10,12 @@ use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
+use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use LogicException;
 
 /**
@@ -49,10 +51,13 @@ class ModifierDevisAction
      * @param  array<string, mixed>  $attributs
      *
      * @throws AuthorizationException
+     * @throws InvalidArgumentException quand les conditions de paiement sont trop longues pour le pied du PDF (voir PiedDePage)
      * @throws LogicException
      */
     public function handle(User $auteur, Devis $devis, Client $client, array $lignes, array $attributs = []): Devis
     {
+        PiedDePage::verifierLesConditionsDePaiement($attributs['conditions_paiement'] ?? null);
+
         return DB::transaction(function () use ($auteur, $devis, $client, $lignes, $attributs) {
             $devis = Devis::query()->whereKey($devis->getKey())->lockForUpdate()->firstOrFail();
 

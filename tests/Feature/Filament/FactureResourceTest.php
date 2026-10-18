@@ -176,10 +176,6 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * Une vente choisit toujours un produit existant (ou un service, par son
-     * bouton), jamais une ligne libre.
-     */
-    /**
      * Les conditions de paiement s'impriment dans le pied de chaque page du
      * PDF : 500 caractères au plus, comme les mentions du magasin, pour que
      * le pied tienne toujours au bas de la page (point 4).
@@ -204,6 +200,10 @@ class FactureResourceTest extends TestCase
         $this->assertSame(0, Facture::query()->count());
     }
 
+    /**
+     * Une vente choisit toujours un produit existant (ou un service, par son
+     * bouton), jamais une ligne libre.
+     */
     public function test_une_ligne_sans_produit_est_refusee(): void
     {
         $proprietaire = User::factory()->create();
@@ -769,7 +769,7 @@ class FactureResourceTest extends TestCase
             ->assertSee('75,00')
             ->assertDontSee('84,99');
 
-        $pdf = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        $pdf = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin'));
         $this->assertStringContainsString('<td class="montant">80,00 €</td>', $pdf);
         $this->assertStringContainsString('75,00', $pdf);
         $this->assertStringContainsString('85,00', $pdf);
@@ -862,7 +862,7 @@ class FactureResourceTest extends TestCase
             ->assertDontSee('20.00 %')
             ->assertDontSee('0.00 %');
 
-        $pdf = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        $pdf = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin'));
         $this->assertStringContainsString('<td class="montant">2</td>', $pdf);
         $this->assertStringContainsString('<td class="montant">20 %</td>', $pdf);
         $this->assertStringContainsString('<td class="montant">0 %</td>', $pdf);
@@ -1686,7 +1686,7 @@ class FactureResourceTest extends TestCase
         $avecRemise = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 2, 'remise_pourcentage' => 12.5]]);
         $sansRemise = app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 2]]);
 
-        $rendre = fn (Facture $facture): string => app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        $rendre = fn (Facture $facture): string => app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin'));
 
         $pdf = $rendre($avecRemise);
         $this->assertStringContainsString('<th class="montant">Remise</th>', $pdf);

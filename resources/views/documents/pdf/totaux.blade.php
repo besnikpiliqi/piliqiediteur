@@ -18,7 +18,7 @@
     $avecMotif = $motif !== null && collect($ventilation)->contains($estUnTauxZero);
 @endphp
 
-<table class="lignes">
+<table class="tva">
     <thead>
         <tr>
             <th>Taux TVA</th>

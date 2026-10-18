@@ -9,6 +9,7 @@ use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\RefuserDevisAction;
 use App\Domain\Facturation\Enums\StatutDevis;
 use App\Domain\Facturation\Models\Devis;
+use App\Domain\Facturation\Services\PiedDePage;
 use App\Filament\App\Resources\DevisResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDeVente;
 use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
@@ -71,7 +72,7 @@ class DevisResource extends Resource
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE))),
                 DatePicker::make('date_validite')->label('Valide jusqu\'au'),
                 self::champNatureDeLOperation(),
-                Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(500)->columnSpanFull(),
+                Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(PiedDePage::CARACTERES_DES_CONDITIONS_DE_PAIEMENT)->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
 

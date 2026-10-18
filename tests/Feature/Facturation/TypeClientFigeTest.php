@@ -62,7 +62,7 @@ class TypeClientFigeTest extends TestCase
 
     private function rendu(Facture $facture): string
     {
-        return app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        return app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin'));
     }
 
     /**

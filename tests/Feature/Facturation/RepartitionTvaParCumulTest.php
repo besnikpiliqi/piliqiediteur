@@ -91,7 +91,7 @@ class RepartitionTvaParCumulTest extends TestCase
             ->where('document_id', $facture->getKey())
             ->sole()
             ->contenuSigne()['donnees']['document'];
-        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir'));
+        $html = app(FacturePdfGenerator::class)->html($facture->load('client', 'lignes', 'magasin'));
 
         $this->assertSame(
             [['ht' => 83, 'tva' => 17, 'ttc' => 100], ['ht' => 853, 'tva' => 47, 'ttc' => 900], ['ht' => 334, 'tva' => 66, 'ttc' => 400]],

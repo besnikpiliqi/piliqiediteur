@@ -42,12 +42,6 @@ class DevisResourceTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * La nature d'un devis et sa livraison s'enregistrent avec lui, et ses
-     * lignes se calculent sans TVA, au HT de leur prix catalogue : 3 x
-     * 49,90 € TTC à 20 % font 149,70 ÷ 1,2 = 124,75 €. La facture qui en
-     * sera tirée les reprend (voir CreerFactureDepuisDevisAction).
-     */
-    /**
      * Les conditions de paiement d'un devis s'impriment, comme celles d'une
      * facture, dans le pied de chaque page : 500 caractères au plus.
      */
@@ -71,6 +65,12 @@ class DevisResourceTest extends TestCase
         $this->assertSame(0, Devis::query()->count());
     }
 
+    /**
+     * La nature d'un devis et sa livraison s'enregistrent avec lui, et ses
+     * lignes se calculent sans TVA, au HT de leur prix catalogue : 3 x
+     * 49,90 € TTC à 20 % font 149,70 ÷ 1,2 = 124,75 €. La facture qui en
+     * sera tirée les reprend (voir CreerFactureDepuisDevisAction).
+     */
     public function test_creer_un_devis_de_livraison_vers_un_dom_via_le_formulaire(): void
     {
         $proprietaire = User::factory()->create();

@@ -17,7 +17,9 @@ use Barryvdh\DomPDF\PDF as PdfDocument;
  * référencés, son client ou l'identité du magasin ont changé entre-temps.
  * Un brouillon imprime le magasin tel qu'il est. Le document est une page
  * A4 numérotée (voir MiseEnPageA4), avec l'identité de la société et les
- * mentions dans le pied de chaque page (voir PiedDePage).
+ * mentions dans le pied de chaque page (voir PiedDePage), et ses lignes
+ * dans un tableau qui tient toujours dans la largeur de la page (voir
+ * TableauDesLignes).
  */
 class FacturePdfGenerator
 {
@@ -44,7 +46,7 @@ class FacturePdfGenerator
     public function html(Facture $facture): string
     {
         $facture->magasin->verifierQuIlPeutImprimer();
-        $facture->loadMissing(['client', 'lignes', 'magasin', 'allocationsPaiement', 'allocationsAvoir.avoir']);
+        $facture->loadMissing(['client', 'lignes', 'magasin']);
 
         $emetteur = $facture->emetteur();
 
@@ -52,6 +54,7 @@ class FacturePdfGenerator
             'facture' => $facture,
             'emetteur' => $emetteur,
             'pied' => PiedDePage::pour($facture, $emetteur),
+            'tableau' => TableauDesLignes::pour($facture),
             'reglements' => $facture->reglementsALEmission(),
         ])->render();
     }

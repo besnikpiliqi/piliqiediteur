@@ -552,12 +552,6 @@ class PaiementResourceTest extends TestCase
     }
 
     /**
-     * Le client doit 120,00 € sur le ticket du vendeur A et 50,00 € sur
-     * celui du vendeur B, deux vendeurs aux autorisations de leur rôle.
-     *
-     * @return array{magasin: Magasin, vendeurB: User, client: Client, factureDeA: Facture, factureDeB: Facture}
-     */
-    /**
      * Un paiement que ce membre a enregistré : la liste ne lit que son
      * auteur.
      */
@@ -574,6 +568,12 @@ class PaiementResourceTest extends TestCase
         return $paiement;
     }
 
+    /**
+     * Le client doit 120,00 € sur le ticket du vendeur A et 50,00 € sur
+     * celui du vendeur B, deux vendeurs aux autorisations de leur rôle.
+     *
+     * @return array{magasin: Magasin, vendeurB: User, client: Client, factureDeA: Facture, factureDeB: Facture}
+     */
     private function clientQuiDoitAuxDeuxVendeurs(): array
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);

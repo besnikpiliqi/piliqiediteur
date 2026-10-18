@@ -21,12 +21,27 @@ final class MiseEnPageA4
      * Le point d'une page PDF vaut 1/72 de pouce : un millimètre en vaut
      * 72 ÷ 25,4.
      */
-    private const POINTS_PAR_MILLIMETRE = 72 / 25.4;
+    public const POINTS_PAR_MILLIMETRE = 72 / 25.4;
 
     /**
-     * La marge de droite de la page, en millimètres, comme celle de la vue.
+     * La largeur d'une page A4 en portrait, en points, celle que dompdf
+     * lui donne (210 mm).
      */
-    private const MARGE_DROITE = 14;
+    public const LARGEUR_DE_LA_PAGE = 595.28;
+
+    /**
+     * Les marges du haut, de gauche et de droite de la page, en
+     * millimètres, que la vue écrit dans sa règle @page (celle du bas
+     * réserve en plus la hauteur du pied, voir PiedDePage).
+     */
+    public const MARGE = 14;
+
+    /**
+     * La largeur où s'imprime le document, entre les marges de gauche et
+     * de droite, en points : aucun tableau ne la dépasse (voir
+     * TableauDesLignes).
+     */
+    public const LARGEUR_UTILE = self::LARGEUR_DE_LA_PAGE - 2 * self::MARGE * self::POINTS_PAR_MILLIMETRE;
 
     /**
      * Le haut du numéro de page, en millimètres au-dessus du bas de la
@@ -51,7 +66,7 @@ final class MiseEnPageA4
         $largeur = $dompdf->getFontMetrics()->getTextWidth('Page 999 sur 999', $police, self::CORPS_DU_NUMERO);
 
         $canevas->page_text(
-            $canevas->get_width() - self::MARGE_DROITE * self::POINTS_PAR_MILLIMETRE - $largeur,
+            $canevas->get_width() - self::MARGE * self::POINTS_PAR_MILLIMETRE - $largeur,
             $canevas->get_height() - self::NUMERO_AU_DESSUS_DU_BAS * self::POINTS_PAR_MILLIMETRE,
             'Page {PAGE_NUM} sur {PAGE_COUNT}',
             $police,

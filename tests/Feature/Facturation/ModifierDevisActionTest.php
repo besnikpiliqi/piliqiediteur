@@ -16,6 +16,7 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use InvalidArgumentException;
 use LogicException;
 use Tests\TestCase;
 
@@ -28,6 +29,25 @@ class ModifierDevisActionTest extends TestCase
         parent::setUp();
 
         app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'MABOUT']));
+    }
+
+    /**
+     * Comme celles d'une facture, les conditions de paiement d'un devis
+     * s'impriment dans le pied de chaque page : l'action refuse elle-même
+     * plus de 500 caractères, à la création comme à la modification, et le
+     * devis garde alors les siennes.
+     */
+    public function test_des_conditions_de_paiement_de_plus_de_500_caracteres_sont_refusees_a_la_creation_comme_a_la_modification(): void
+    {
+        $client = Client::factory()->create();
+        $lignes = [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20])->id, 'quantite' => 1]];
+        $devis = app(CreerDevisAction::class)->handle(self::auteur(), $client, $lignes, ['conditions_paiement' => str_repeat('a', 500)]);
+        $refus = 'Les conditions de paiement comptent 500 caractères au plus : elles s\'impriment dans le pied de chaque page du document.';
+
+        $this->assertThrows(fn () => app(CreerDevisAction::class)->handle(self::auteur(), $client, $lignes, ['conditions_paiement' => str_repeat('a', 501)]), InvalidArgumentException::class, $refus);
+        $this->assertThrows(fn () => app(ModifierDevisAction::class)->handle(self::auteur(), $devis, $client, $lignes, ['conditions_paiement' => str_repeat('a', 501)]), InvalidArgumentException::class, $refus);
+
+        $this->assertSame([str_repeat('a', 500)], Devis::query()->pluck('conditions_paiement')->all());
     }
 
     public function test_un_devis_brouillon_est_modifiable(): void

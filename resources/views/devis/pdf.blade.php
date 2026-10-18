@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <title>{{ $devis->numero ?? 'Devis (brouillon)' }}</title>
-    @include('documents.pdf.styles', ['pied' => $pied])
+    @include('documents.pdf.styles', ['pied' => $pied, 'tableau' => $tableau])
 </head>
 <body>
     {{-- Un devis modifié depuis son envoi est un brouillon qui garde son
@@ -13,7 +13,8 @@
          devis n'étant pas signé au registre fiscal (voir DevisPdfGenerator) ;
          $pied : l'identité de la société, les conditions de paiement, la
          nature de l'opération et la franchise de TVA, s'il y a lieu (voir
-         PiedDePage). --}}
+         PiedDePage) ; $tableau : ses lignes, mesurées pour tenir dans la
+         largeur de la page (voir TableauDesLignes). --}}
     @php($brouillon = $devis->statut === \App\Domain\Facturation\Enums\StatutDevis::Brouillon)
 
     @include('documents.pdf.pied', ['pied' => $pied])
@@ -43,7 +44,7 @@
 
     @include('documents.pdf.livraison', ['lignes' => $devis->lignesDeLivraison()])
 
-    @include('documents.pdf.lignes', ['document' => $devis])
+    @include('documents.pdf.lignes', ['document' => $devis, 'tableau' => $tableau])
 
     @include('documents.pdf.totaux', ['document' => $devis])
 

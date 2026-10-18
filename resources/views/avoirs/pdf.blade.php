@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <title>{{ $avoir->numero ?? 'Avoir (brouillon)' }}</title>
-    @include('documents.pdf.styles', ['pied' => $pied])
+    @include('documents.pdf.styles', ['pied' => $pied, 'tableau' => $tableau])
 </head>
 <body>
     {{-- Un avoir cite le numéro et la date d'émission de chaque document
@@ -12,7 +12,9 @@
          l'avoir. $emetteur : celui que l'avoir a signé (voir
          AvoirPdfGenerator et FigeSonEmetteur) ; $pied : l'identité de la
          société, les mentions de la facture qu'il rectifie et, pour le
-         client comptoir, la mention de son bon d'avoir (voir PiedDePage). --}}
+         client comptoir, la mention de son bon d'avoir (voir PiedDePage) ;
+         $tableau : ses lignes, mesurées pour tenir dans la largeur de la
+         page (voir TableauDesLignes). --}}
     @php
         $documentsCorriges = $avoir->facturesConcernees()->map(
             fn (\App\Domain\Facturation\Models\Facture $facture): string => 'Sur '.mb_strtolower($facture->libelleDocument()).' '.$facture->numero
@@ -39,7 +41,7 @@
         'titre' => 'Émis à',
     ])
 
-    @include('documents.pdf.lignes', ['document' => $avoir])
+    @include('documents.pdf.lignes', ['document' => $avoir, 'tableau' => $tableau])
 
     @include('documents.pdf.totaux', ['document' => $avoir, 'signe' => '-'])
 

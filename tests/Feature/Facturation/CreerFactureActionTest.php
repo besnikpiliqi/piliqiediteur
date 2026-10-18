@@ -6,6 +6,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
@@ -128,6 +129,25 @@ class CreerFactureActionTest extends TestCase
         ]), InvalidArgumentException::class, 'Montant hors limites.');
 
         $this->assertSame(0, Facture::query()->count());
+    }
+
+    /**
+     * Les conditions de paiement s'impriment dans le pied de chaque page du
+     * PDF : l'action refuse elle-même plus de 500 caractères, avec le même
+     * message sur tous les moteurs de base de données, à la création comme
+     * à la modification d'un brouillon, qui garde alors les siennes.
+     */
+    public function test_des_conditions_de_paiement_de_plus_de_500_caracteres_sont_refusees_a_la_creation_comme_a_la_modification(): void
+    {
+        $client = Client::factory()->create();
+        $lignes = [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20])->id, 'quantite' => 1]];
+        $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), $client, $lignes, ['conditions_paiement' => str_repeat('a', 500)]);
+        $refus = 'Les conditions de paiement comptent 500 caractères au plus : elles s\'impriment dans le pied de chaque page du document.';
+
+        $this->assertThrows(fn () => app(CreerFactureAction::class)->handle(self::auteur(), $client, $lignes, ['conditions_paiement' => str_repeat('a', 501)]), InvalidArgumentException::class, $refus);
+        $this->assertThrows(fn () => app(ModifierFactureAction::class)->handle(self::auteur(), $brouillon, $client, $lignes, ['conditions_paiement' => str_repeat('a', 501)]), InvalidArgumentException::class, $refus);
+
+        $this->assertSame([str_repeat('a', 500)], Facture::query()->pluck('conditions_paiement')->all());
     }
 
     public function test_une_facture_sans_lignes_leve_une_exception(): void

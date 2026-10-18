@@ -153,11 +153,6 @@ class RattachementTest extends TestCase
     }
 
     /**
-     * L'acceptation relit l'auteur et les magasins proposés : un auteur
-     * suspendu entre-temps, ou un magasin sorti de sa portée, ne rattache
-     * plus personne.
-     */
-    /**
      * Une société ne fait pas de PILIQI un relais d'envoi vers les comptes
      * d'une autre : chaque proposition compte au débit des e-mails de son
      * auteur, qu'un e-mail parte ou non, et la limite atteinte se dit de la
@@ -214,6 +209,11 @@ class RattachementTest extends TestCase
         $this->assertStringContainsString('Paul [Confirmez votre identité](https://pirate.example/identite)', $rendus[1]);
     }
 
+    /**
+     * L'acceptation relit l'auteur et les magasins proposés : un auteur
+     * suspendu entre-temps, ou un magasin sorti de sa portée, ne rattache
+     * plus personne.
+     */
     public function test_l_acceptation_reverifie_l_auteur_et_les_magasins(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Nouvelle Boutique']);

@@ -28,6 +28,7 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\MentionsFiscales;
+use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Facturation\Services\PreuvesRequises;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
@@ -161,7 +162,7 @@ class FactureResource extends Resource
                     ->label('Échéance')
                     ->content(fn (Get $get): string => self::echeanceAnnoncee($get('client_id'))),
                 self::champNatureDeLOperation(),
-                Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(500)->columnSpanFull(),
+                Textarea::make('conditions_paiement')->label('Conditions de paiement')->maxLength(PiedDePage::CARACTERES_DES_CONDITIONS_DE_PAIEMENT)->columnSpanFull(),
                 Textarea::make('notes')->columnSpanFull(),
             ])->columns(2),
 

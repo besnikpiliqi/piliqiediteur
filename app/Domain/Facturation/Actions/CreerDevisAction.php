@@ -8,10 +8,12 @@ use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Services\ConstructeurLigneDocument;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\DerogationsDePrix;
+use App\Domain\Facturation\Services\PiedDePage;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 /**
  * Crée un devis brouillon pour un client déjà résolu par une requête
@@ -39,9 +41,12 @@ class CreerDevisAction
      * @param  array<string, mixed>  $attributs  date_validite, conditions_paiement, notes, et la nature et la livraison (voir NoteSaNatureDOperation::noterSaNatureDOperation())
      *
      * @throws AuthorizationException
+     * @throws InvalidArgumentException quand les conditions de paiement sont trop longues pour le pied du PDF (voir PiedDePage)
      */
     public function handle(User $auteur, Client $client, array $lignes, array $attributs = []): Devis
     {
+        PiedDePage::verifierLesConditionsDePaiement($attributs['conditions_paiement'] ?? null);
+
         return DB::transaction(function () use ($auteur, $client, $lignes, $attributs) {
             $compte = $this->lecteur->exiger($auteur, 'create', app(TenantContext::class)->magasin(), Devis::class);
             $devis = new Devis($attributs);

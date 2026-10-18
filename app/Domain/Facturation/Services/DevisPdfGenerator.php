@@ -9,7 +9,8 @@ use Barryvdh\DomPDF\PDF as PdfDocument;
 /**
  * Même présentation que la facture (voir FacturePdfGenerator), depuis les
  * lignes et les totaux enregistrés du devis, jamais depuis l'état courant
- * du catalogue, sur la même page A4 numérotée (voir MiseEnPageA4). Un
+ * du catalogue, sur la même page A4 numérotée (voir MiseEnPageA4), avec
+ * le même tableau des lignes (voir TableauDesLignes). Un
  * devis n'est pas signé au registre fiscal : il imprime le magasin tel
  * qu'il est aujourd'hui (voir Devis::emetteur()).
  */
@@ -38,7 +39,12 @@ class DevisPdfGenerator
 
         $emetteur = $devis->emetteur();
 
-        return view('devis.pdf', ['devis' => $devis, 'emetteur' => $emetteur, 'pied' => PiedDePage::pour($devis, $emetteur)])->render();
+        return view('devis.pdf', [
+            'devis' => $devis,
+            'emetteur' => $emetteur,
+            'pied' => PiedDePage::pour($devis, $emetteur),
+            'tableau' => TableauDesLignes::pour($devis),
+        ])->render();
     }
 
     public function nomFichier(Devis $devis): string

@@ -637,32 +637,107 @@ abstract class TestCase extends BaseTestCase
      * Les pages d'un PDF produit par dompdf, dans leur ordre, lues sans
      * aucun outil externe : le format de chacune (sa MediaBox, en points),
      * et chaque texte qu'elle imprime, avec sa position en points depuis le
-     * coin bas gauche de la page. Dompdf écrit chaque morceau de ligne par
-     * un opérateur « BT x y Td … [(texte)] TJ ET », le texte en UTF-16 dans
-     * un flux compressé.
+     * coin bas gauche de la page et sa largeur imprimée, en points, d'après
+     * son corps et la chasse de chacun de ses caractères dans sa police
+     * (voir chassesDesPolices()). Dompdf écrit chaque morceau de ligne par
+     * un opérateur « BT x y Td /Fn corps Tf [(texte)] TJ ET », le texte en
+     * UTF-16 dans un flux compressé, ses parenthèses, ses barres obliques
+     * inverses et ses retours chariot échappés.
      *
-     * @return list<array{format: string, textes: list<array{x: float, y: float, texte: string}>}>
+     * @return list<array{format: string, textes: list<array{x: float, y: float, largeur: float, texte: string}>}>
      */
     protected function pagesDuPdf(string $pdf): array
     {
+        $chasses = $this->chassesDesPolices($pdf);
         preg_match_all('/<< \/Type \/Page\s(.*?)>>/s', $pdf, $pages);
 
-        return array_map(function (string $page) use ($pdf): array {
+        return array_map(function (string $page) use ($pdf, $chasses): array {
             preg_match('/\/MediaBox \[([^\]]+)\]/', $page, $format);
             preg_match('/\/Contents (\d+) 0 R/', $page, $contenu);
             preg_match('/\n'.$contenu[1].' 0 obj\s*<<(.*?)>>\s*stream\r?\n(.*?)\r?\nendstream/s', $pdf, $flux);
             $operateurs = str_contains($flux[1], '/FlateDecode') ? gzuncompress($flux[2]) : $flux[2];
-            preg_match_all('/BT ([-\d.]+) ([-\d.]+) Td \/F\d+ [\d.]+ Tf\s+\[\(((?:\\\\.|[^\\\\)])*)\)\] TJ ET/s', $operateurs, $textes, PREG_SET_ORDER);
+            preg_match_all('/BT ([-\d.]+) ([-\d.]+) Td \/(F\d+) ([\d.]+) Tf\s+\[\(((?:\\\\.|[^\\\\)])*)\)\] TJ ET/s', $operateurs, $textes, PREG_SET_ORDER);
 
             return [
                 'format' => $format[1],
-                'textes' => array_map(fn (array $texte): array => [
-                    'x' => (float) $texte[1],
-                    'y' => (float) $texte[2],
-                    'texte' => mb_convert_encoding((string) preg_replace('/\\\\(.)/s', '$1', $texte[3]), 'UTF-8', 'UTF-16BE'),
-                ], $textes),
+                'textes' => array_map(function (array $texte) use ($chasses): array {
+                    $octets = (string) preg_replace_callback('/\\\\(.)/s', fn (array $echappe): string => $echappe[1] === 'r' ? "\r" : $echappe[1], $texte[5]);
+                    $police = $chasses[$texte[3]];
+
+                    return [
+                        'x' => (float) $texte[1],
+                        'y' => (float) $texte[2],
+                        'largeur' => array_sum(array_map(
+                            fn (int $caractere): int => $police['chasses'][$caractere] ?? $police['defaut'],
+                            $octets === '' ? [] : array_values(unpack('n*', $octets)),
+                        )) * (float) $texte[4] / 1000,
+                        'texte' => mb_convert_encoding($octets, 'UTF-8', 'UTF-16BE'),
+                    ];
+                }, $textes),
             ];
         }, $pages[1]);
+    }
+
+    /**
+     * Chaque texte de la page s'imprime entre ses marges de gauche et de
+     * droite : une page A4 de 595,28 points de large, avec 14 mm de marge
+     * de chaque côté (point 4).
+     *
+     * @param  array{format: string, textes: list<array{x: float, y: float, largeur: float, texte: string}>}  $page
+     */
+    protected function assertChaqueTexteTientEntreLesMarges(array $page): void
+    {
+        $marge = 14 * 72 / 25.4;
+        $horsDesMarges = array_values(array_filter(
+            $page['textes'],
+            fn (array $texte): bool => $texte['x'] < $marge - 0.01 || 595.28 - $marge + 0.01 < $texte['x'] + $texte['largeur'],
+        ));
+
+        $this->assertSame([], array_map(fn (array $texte): string => sprintf('%s (de %.2f à %.2f points)', $texte['texte'], $texte['x'], $texte['x'] + $texte['largeur']), $horsDesMarges));
+    }
+
+    /**
+     * La chasse des caractères de chaque police d'un PDF de dompdf, par nom
+     * de police (F1, F2…), en millièmes du corps : chaque police renvoie à
+     * une police descendante (DescendantFonts) dont le tableau /W donne la
+     * chasse de chaque caractère employé, désigné par son code Unicode
+     * (« code [chasse chasse …] », ou « premier dernier chasse » pour une
+     * suite), et /DW celle des autres.
+     *
+     * @return array<string, array{defaut: int, chasses: array<int, int>}>
+     */
+    private function chassesDesPolices(string $pdf): array
+    {
+        $objet = function (string $numero) use ($pdf): string {
+            preg_match('/\n'.$numero.' 0 obj\s*<<(.*?)>>\s*endobj/s', $pdf, $trouve);
+
+            return $trouve[1];
+        };
+        preg_match_all('/\/(F\d+) (\d+) 0 R/', $pdf, $polices, PREG_SET_ORDER);
+
+        $chassesDesPolices = [];
+        foreach ($polices as [, $nom, $numero]) {
+            preg_match('/\/DescendantFonts \[(\d+) 0 R\]/', $objet($numero), $descendante);
+            $definition = $objet($descendante[1]);
+            preg_match('/\/DW (\d+)/', $definition, $defaut);
+            preg_match('/\/W \[((?:\s*\d+\s*\[[^\]]*\]|\s*\d+\s+\d+\s+\d+)*)\s*\]/', $definition, $tableau);
+            preg_match_all('/(\d+)\s*\[([^\]]*)\]|(\d+)\s+(\d+)\s+(\d+)/', $tableau[1] ?? '', $entrees, PREG_SET_ORDER);
+
+            $chasses = [];
+            foreach ($entrees as $entree) {
+                if (($entree[3] ?? '') !== '') {
+                    $chasses += array_fill_keys(range((int) $entree[3], (int) $entree[4]), (int) $entree[5]);
+                } else {
+                    foreach (preg_split('/\s+/', trim($entree[2]), flags: PREG_SPLIT_NO_EMPTY) as $decalage => $chasse) {
+                        $chasses[(int) $entree[1] + $decalage] = (int) $chasse;
+                    }
+                }
+            }
+
+            $chassesDesPolices[$nom] = ['defaut' => (int) ($defaut[1] ?? 1000), 'chasses' => $chasses];
+        }
+
+        return $chassesDesPolices;
     }
 
     /**

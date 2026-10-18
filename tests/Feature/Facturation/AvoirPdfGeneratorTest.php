@@ -263,6 +263,36 @@ class AvoirPdfGeneratorTest extends TestCase
     }
 
     /**
+     * Un avoir a une colonne de plus que la facture, son n° de facture
+     * d'origine, le plus long qu'un code de magasin de 10 caractères donne :
+     * avec une référence de 60 caractères, une remise et de grands
+     * montants, le tableau reste dans la largeur de la page, chaque colonne
+     * obligatoire et chaque texte entre les marges ; la référence s'imprime
+     * entière sur une seule ligne, dans un corps réduit. 8 000 des 9 000
+     * articles à 9 999,97 € TTC remisés de 12,5 % : 69 999 790,00 € TTC,
+     * soit 58 333 158,33 € HT à 20 %.
+     */
+    public function test_une_reference_de_60_caracteres_et_de_grands_montants_laissent_toutes_les_colonnes_de_l_avoir_dans_la_page(): void
+    {
+        app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'ABCDEFGHIJ']));
+        $reference = 'CABLE-USB-C-VERS-USB-C-TRESSE-NYLON-100W-2M-NOIR-MODELE-2026';
+        $client = Client::factory()->professionnel()->create();
+        $produit = Produit::factory()->create(['reference' => $reference, 'nom' => 'Câble USB-C vers USB-C tressé nylon', 'prix_vente_ttc' => '9999.97', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
+            ['produit_id' => $produit->id, 'quantite' => 9000, 'remise_pourcentage' => 12.5],
+        ]));
+        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 8000]]);
+
+        $page = $this->pagesDuPdf(app(AvoirPdfGenerator::class)->generer($avoir)->output())[0];
+
+        $this->assertChaqueTexteTientEntreLesMarges($page);
+        foreach (['FACTURE D\'ORIGINE', 'QTÉ', 'PU HT', 'REMISE', 'TAUX', 'TOTAL HT', $reference, 'FAC-ABCDEFGHIJ-2026-000001', "8\u{202F}000", '8 333,308333 €', '12,5 %', '58 333 158,33 €'] as $texte) {
+            $this->assertContains($texte, array_column($page['textes'], 'texte'));
+        }
+        $this->assertMatchesRegularExpression('#<td class="reference" style="font-size: [1-7]\.\dpt">'.$reference.'</td>#', $this->tableauDesLignes($avoir));
+    }
+
+    /**
      * Le pied de page de l'avoir d'un client comptoir porte l'identité de
      * la société, les mentions du ticket qu'il rectifie et, en dernier, la
      * mention de son bon d'avoir ; son en-tête ne garde que le magasin

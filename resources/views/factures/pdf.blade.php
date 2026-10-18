@@ -9,8 +9,9 @@
         d'aujourd'hui pour un brouillon (voir FacturePdfGenerator et
         FigeSonEmetteur) ; $pied : l'identité de la société, les conditions
         de paiement et les mentions, en bas de chaque page (voir
-        PiedDePage) ; $reglements : ce qui l'a réglée à son émission (voir
-        ReglementsALEmission).
+        PiedDePage) ; $tableau : ses lignes, mesurées pour tenir dans la
+        largeur de la page (voir TableauDesLignes) ; $reglements : ce qui
+        l'a réglée à son émission (voir ReglementsALEmission).
 
         L'échéance s'imprime sur toute facture à un professionnel, même
         réglée à son émission (date à laquelle le règlement doit intervenir,
@@ -24,7 +25,7 @@
     @endphp
     <meta charset="utf-8">
     <title>{{ $facture->numero ?? "{$libelleDocument} (brouillon)" }}</title>
-    @include('documents.pdf.styles', ['pied' => $pied])
+    @include('documents.pdf.styles', ['pied' => $pied, 'tableau' => $tableau])
 </head>
 <body>
     @include('documents.pdf.pied', ['pied' => $pied])
@@ -48,7 +49,7 @@
 
     @include('documents.pdf.livraison', ['lignes' => $facture->lignesDeLivraison()])
 
-    @include('documents.pdf.lignes', ['document' => $facture])
+    @include('documents.pdf.lignes', ['document' => $facture, 'tableau' => $tableau])
 
     @include('documents.pdf.totaux', ['document' => $facture])
 

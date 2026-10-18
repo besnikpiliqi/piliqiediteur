@@ -367,12 +367,6 @@ class EmissionSigneeTest extends TestCase
     }
 
     /**
-     * Une livraison intracommunautaire signe sa nature, sa livraison, sa
-     * ligne à 0 % au prix sans la TVA de son produit, sa mention et la
-     * vérification VIES qu'elle retient ; la vérification de l'intégrité
-     * la recalcule sans anomalie.
-     */
-    /**
      * Le PU HT d'une ligne se signe avec ses six décimales, en millionièmes
      * d'euro (Q1-b), quand ses montants restent en centimes : 1 000 x
      * 1,00 € TTC à 20 % ont un PU HT de 0,833333 € pour 833,33 € HT.
@@ -388,6 +382,12 @@ class EmissionSigneeTest extends TestCase
         $this->assertSame(['prix_unitaire_ht' => 833333, 'prix_unitaire_ttc' => 100, 'ht' => 83333], Arr::only($ligne, ['prix_unitaire_ht', 'prix_unitaire_ttc', 'ht']));
     }
 
+    /**
+     * Une livraison intracommunautaire signe sa nature, sa livraison, sa
+     * ligne à 0 % au prix sans la TVA de son produit, sa mention et la
+     * vérification VIES qu'elle retient ; la vérification de l'intégrité
+     * la recalcule sans anomalie.
+     */
     public function test_une_livraison_intracommunautaire_signe_sa_nature_sa_livraison_et_sa_verification_vies(): void
     {
         $this->travelTo('2026-10-09 10:15:30');

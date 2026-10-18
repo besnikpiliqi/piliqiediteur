@@ -94,10 +94,7 @@ return new class extends Migration
             $table->dateTime('date_emission')->nullable();
             $table->date('date_echeance')->nullable();
             $table->string('devise', 3)->default('EUR');
-            // Imprimées dans le pied de chaque page du PDF (voir PiedDePage) :
-            // 500 caractères au plus, comme les mentions du magasin, pour que
-            // le pied tienne toujours au bas de la page.
-            $table->string('conditions_paiement', 500)->nullable();
+            $table->text('conditions_paiement')->nullable();
             $table->text('notes')->nullable();
             $table->decimal('total_ht', 12, 2)->default(0);
             $table->decimal('total_tva', 12, 2)->default(0);

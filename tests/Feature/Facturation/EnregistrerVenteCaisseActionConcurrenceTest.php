@@ -141,8 +141,9 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
      * 20,00 € au même instant, chacune avec une part de 8,00 € en espèces,
      * ce que leur écran proposait. La première impute les 12,00 € et
      * encaisse 8,00 € ; la seconde, qui ne trouve plus de crédit, est
-     * refusée avec le nouveau total, sans rien enregistrer (points 1 et
-     * 23 : les parts égalent exactement le total à payer).
+     * refusée, le refus disant que le total a changé et ce qui reste à
+     * répartir, sans rien enregistrer (points 1 et 23 : les parts égalent
+     * exactement le total à payer).
      */
     public function test_deux_ventes_simultanees_au_meme_client_n_imputent_son_credit_qu_une_fois(): void
     {
@@ -167,7 +168,7 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $concurrente->wait();
         $this->assertFalse($resultat->successful());
-        $this->assertStringContainsString('Le total à payer est de 20,00 €, crédit d\'avoir déduit. Il reste 12,00 € à répartir.', $resultat->errorOutput());
+        $this->assertStringContainsString('Le total à payer a changé (crédit d\'avoir du client) : 12,00 € à répartir.', $resultat->errorOutput());
         $this->assertSame([$achatRendu->id, $premiere->id], Facture::query()->orderBy('id')->pluck('id')->all());
         $this->assertSame(['12.00'], AvoirAllocation::query()->where('avoir_id', $avoir->id)->pluck('montant_alloue')->all());
         $this->assertSame([StatutFacture::Payee, 12.0, 8.0, 0.0], [$premiere->statut, $premiere->montantCrediteParAvoir(), $premiere->montantPaye(), $premiere->montantRestant()]);

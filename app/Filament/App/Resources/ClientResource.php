@@ -379,11 +379,12 @@ class ClientResource extends Resource
                 Tables\Columns\TextColumn::make('telephone'),
                 Tables\Columns\TextColumn::make('ville'),
                 // Un avoir n'est jamais remboursé par ce logiciel (pas
-                // d'intégration bancaire) : ce qu'il n'a pas imputé à son
-                // émission sur les factures impayées de ce client, ou ce
-                // qu'une contre-passation lui a rendu, reste un crédit
-                // (voir Client::soldeCrediteur()) -- affiché ici en
-                // permanence tant qu'il n'est pas intégralement consommé.
+                // d'intégration bancaire) : ce qu'il n'a pu imputer ni à
+                // son émission ni à la contre-passation d'un paiement, le
+                // client n'ayant plus de facture due, reste un crédit
+                // (voir Client::soldeCrediteurEnCentimes()), que sa
+                // prochaine facture absorbe -- affiché ici tant qu'il
+                // n'est pas intégralement consommé.
                 Tables\Columns\TextColumn::make('solde_crediteur')
                     ->label('Solde créditeur')
                     ->state(fn (Client $record) => $record->soldeCrediteur())

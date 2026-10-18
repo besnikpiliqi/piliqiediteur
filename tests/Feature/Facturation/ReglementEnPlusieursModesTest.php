@@ -6,6 +6,7 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
@@ -28,6 +29,7 @@ use App\Models\User;
 use Closure;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
@@ -128,8 +130,8 @@ class ReglementEnPlusieursModesTest extends TestCase
     public static function partsQuiNegalentPasLeReste(): array
     {
         return [
-            '79,99 €' => [7999, 'Le total à payer est de 80,00 €, crédit d\'avoir déduit. Il reste 0,01 € à répartir.'],
-            '80,01 €' => [8001, 'Le total à payer est de 80,00 €, crédit d\'avoir déduit. Les parts dépassent le total de 0,01 €.'],
+            '79,99 €' => [7999, 'Le total à payer a changé (crédit d\'avoir du client) : 0,01 € à répartir.'],
+            '80,01 €' => [8001, 'Le total à payer a changé (crédit d\'avoir du client) : les parts le dépassent de 0,01 €.'],
         ];
     }
 
@@ -203,8 +205,9 @@ class ReglementEnPlusieursModesTest extends TestCase
 
     /**
      * L'écran proposait 60,00 € (80,00 € moins 20,00 € de crédit) ; une
-     * facture émise entre-temps a pris ce crédit : la vente est refusée
-     * avec le nouveau total, sans rien enregistrer.
+     * facture émise entre-temps a pris ce crédit : la vente est refusée,
+     * le refus disant que le total a changé et ce qui reste à répartir,
+     * sans rien enregistrer.
      */
     public function test_un_credit_consomme_entre_l_ecran_et_la_validation_refuse_la_vente_sans_rien_enregistrer(): void
     {
@@ -219,7 +222,7 @@ class ReglementEnPlusieursModesTest extends TestCase
         $this->assertThrows(
             fn () => self::vendre($martin, self::article(80), [new PartDeReglement(ModePaiement::Especes, $partAffichee)]),
             LogicException::class,
-            'Le total à payer est de 80,00 €, crédit d\'avoir déduit. Il reste 20,00 € à répartir.',
+            'Le total à payer a changé (crédit d\'avoir du client) : 20,00 € à répartir.',
         );
 
         $this->assertSame([$factures, $paiements], [Facture::query()->count(), Paiement::query()->count()]);
@@ -418,9 +421,10 @@ class ReglementEnPlusieursModesTest extends TestCase
 
     /**
      * Q6 : un bon d'avoir ne règle jamais une facture d'un client nommé
-     * faite depuis « Factures », et seul un paiement signe ce qui règle un
-     * document après son émission : un bon se présente avec au moins une
-     * part payée.
+     * faite depuis « Factures », et seul un paiement d'un mode signe ce qui
+     * règle un document après son émission : un bon se présente avec au
+     * moins une part payée (limite écrite dans CLAUDE.md, en attendant la
+     * décision de l'éditeur).
      */
     public function test_un_bon_d_avoir_ne_regle_hors_de_la_caisse_qu_un_ticket_du_client_comptoir_avec_une_part_payee(): void
     {
@@ -431,9 +435,86 @@ class ReglementEnPlusieursModesTest extends TestCase
         $paiementsAvant = Paiement::query()->count();
 
         $this->assertThrows(fn () => app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $facture, [new PartDeReglement(ModePaiement::Especes, 3000)], [$bon->numero], '2026-10-09'), LogicException::class, Avoir::BON_D_AVOIR_HORS_DE_LA_CAISSE);
-        $this->assertThrows(fn () => app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [], [$bon->numero], '2026-10-09'), LogicException::class, 'Un bon d\'avoir se présente avec au moins une part payée, qui le signe.');
+        $this->assertThrows(fn () => app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [], [$bon->numero], '2026-10-09'), LogicException::class, Avoir::BON_D_AVOIR_SANS_PART_PAYEE);
 
         $this->assertSame([$paiementsAvant, 2000], [Paiement::query()->count(), $bon->fresh()->creditEnCentimes()]);
         $this->assertSame([50.0, 50.0], [$facture->fresh()->montantRestant(), $ticket->fresh()->montantRestant()]);
+    }
+
+    /**
+     * Un ticket du client comptoir doit encore 20,00 € : un bon de 30,00 €
+     * ou de 20,00 € couvrirait tout ce reste, et aucune part payée ne
+     * pourrait le signer (même 0,01 € dépasserait ce reste) ; le règlement
+     * est refusé sans rien enregistrer, le ticket reste dû et le bon garde
+     * son crédit.
+     *
+     * @return array<string, array{0: float, 1: list<int>}>
+     */
+    public static function bonsQuiCouvrentToutLeResteDu(): array
+    {
+        return [
+            'bon de 30,00 € seul' => [30, []],
+            'bon de 30,00 € et 0,01 €' => [30, [1]],
+            'bon de 20,00 € et 0,01 €' => [20, [1]],
+        ];
+    }
+
+    /**
+     * @param  list<int>  $especes  les parts en espèces, en centimes
+     */
+    #[DataProvider('bonsQuiCouvrentToutLeResteDu')]
+    public function test_un_bon_qui_couvre_tout_ce_que_doit_un_ticket_deja_emis_est_refuse_sans_rien_enregistrer(float $montantDuBon, array $especes): void
+    {
+        $magasin = $this->magasin();
+        $bon = $this->bonDAvoir($montantDuBon);
+        $ticket = $this->factureDue($this->comptoir(), 20);
+        $paiementsAvant = Paiement::query()->count();
+
+        $this->assertThrows(
+            fn () => app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, array_map(fn (int $montant): PartDeReglement => new PartDeReglement(ModePaiement::Especes, $montant), $especes), [$bon->numero], '2026-10-09'),
+            LogicException::class,
+            Avoir::BON_D_AVOIR_SANS_PART_PAYEE,
+        );
+
+        $this->assertSame([$paiementsAvant, (int) ($montantDuBon * 100)], [Paiement::query()->count(), $bon->fresh()->creditEnCentimes()]);
+        $this->assertSame([StatutFacture::Emise, 20.0], [$ticket->fresh()->statut, $ticket->fresh()->montantRestant()]);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
+    }
+
+    /**
+     * Un ticket du client comptoir doit 50,00 € ; il se règle d'un seul
+     * geste par un bon de 20,00 €, 20,00 € par carte, première part, qui
+     * signe le bon, et 10,00 € en espèces. Contre-passer la carte, saisie
+     * dans le mauvais mode, rend au bon ses 20,00 € et le ticket redevient
+     * dû de 40,00 € ; contre-passer plutôt les espèces laisse le bon imputé
+     * et le ticket dû de 10,00 €. Comportement annoncé par la fenêtre de la
+     * contre-passation, en attendant la décision de l'éditeur sur la
+     * signature des bons présentés pour un ticket déjà émis.
+     *
+     * @return array<string, array{0: ModePaiement, 1: float, 2: int}>
+     */
+    public static function partsContrePassees(): array
+    {
+        return [
+            'la carte, qui signe le bon' => [ModePaiement::CarteBancaire, 40.0, 2000],
+            'les espèces' => [ModePaiement::Especes, 10.0, 0],
+        ];
+    }
+
+    #[DataProvider('partsContrePassees')]
+    public function test_contre_passer_la_part_qui_signe_le_bon_le_rend_et_contre_passer_une_autre_part_le_laisse_impute(ModePaiement $partErronee, float $resteDu, int $creditDuBon): void
+    {
+        $magasin = $this->magasin();
+        $bon = $this->bonDAvoir(20);
+        $ticket = $this->factureDue($this->comptoir(), 50);
+        app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 2000), new PartDeReglement(ModePaiement::Especes, 1000)], [$bon->numero], '2026-10-09');
+        $this->assertSame([StatutFacture::Payee, 0], [$ticket->fresh()->statut, $bon->fresh()->creditEnCentimes()]);
+
+        $paiementErrone = Paiement::query()->where('mode_paiement', $partErronee)->whereHas('allocations', fn (Builder $allocations): Builder => $allocations->where('facture_id', $ticket->id))->sole();
+
+        app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiementErrone, 'Saisi dans le mauvais mode');
+
+        $this->assertSame([$resteDu, $creditDuBon], [$ticket->fresh()->montantRestant(), $bon->fresh()->creditEnCentimes()]);
+        $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }
 }

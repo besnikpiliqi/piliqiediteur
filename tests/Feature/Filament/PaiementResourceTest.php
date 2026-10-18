@@ -9,14 +9,18 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
@@ -26,10 +30,12 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Exceptions;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class PaiementResourceTest extends TestCase
@@ -913,6 +919,109 @@ class PaiementResourceTest extends TestCase
             ->assertHasFormErrors(['montant' => 'max', 'allocations.0.montant' => 'max']);
 
         $this->assertSame([0, StatutFacture::Emise], [Paiement::query()->count(), $facture->fresh()->statut]);
+    }
+
+    /**
+     * Un bon d'avoir du client comptoir de ce montant, AV-MABOUT-2026-000001
+     * pour le premier : un ticket vendu au comptoir puis repris en entier.
+     */
+    private function bonDAvoir(float $montant): Avoir
+    {
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $ticket = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => $montant, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
+
+        return app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+    }
+
+    /**
+     * Q6, limite en attendant l'éditeur : sur un ticket du client comptoir
+     * qui doit encore 20,00 €, « Encaisser » refuse dès la saisie un bon de
+     * 30,00 €, qui couvrirait tout ce reste, sous le numéro du bon ; et un
+     * bon de 10,00 € présenté sans part payée, sous le règlement. Rien
+     * n'est enregistré.
+     *
+     * @return array<string, array{0: float, 1: string}>
+     */
+    public static function bonsSansPartPayee(): array
+    {
+        return [
+            'bon qui couvre tout le reste dû' => [30, 'bon'],
+            'bon sans part payée' => [10, 'parts'],
+        ];
+    }
+
+    #[DataProvider('bonsSansPartPayee')]
+    public function test_encaisser_refuse_des_la_saisie_un_bon_d_avoir_sans_part_payee(float $montantDuBon, string $champEnErreur): void
+    {
+        $this->connecterLeProprietaire();
+        $bon = $this->bonDAvoir($montantDuBon);
+        $ticket = $this->emettreFactureDepuisLePanneau(Client::query()->where('est_comptoir', true)->sole(), 20);
+        $paiementsAvant = Paiement::query()->count();
+        $liste = Livewire::test(ListFactures::class)->mountTableAction('encaisser', $ticket);
+        $cle = array_key_first($liste->get('mountedTableActionsData.0.parts'));
+
+        $liste
+            ->setTableActionData(["parts.{$cle}.mode" => FactureResource::PART_AVOIR, "parts.{$cle}.bon" => $bon->numero])
+            ->callMountedTableAction()
+            ->assertHasTableActionErrors([$champEnErreur === 'bon' ? "parts.{$cle}.bon" : 'parts'])
+            ->assertSee(Avoir::BON_D_AVOIR_SANS_PART_PAYEE);
+
+        $this->assertSame([$paiementsAvant, (int) ($montantDuBon * 100)], [Paiement::query()->count(), $bon->fresh()->creditEnCentimes()]);
+        $this->assertSame([StatutFacture::Emise, 20.0], [$ticket->fresh()->statut, $ticket->fresh()->montantRestant()]);
+    }
+
+    /**
+     * Q6 : sur un ticket du client comptoir qui doit 20,00 €, un bon de
+     * 10,00 € et 10,00 € en espèces le règlent d'un seul geste ; l'aide du
+     * bon dit que la première part payée le signe.
+     */
+    public function test_encaisser_regle_un_ticket_du_client_comptoir_avec_un_bon_d_avoir_et_une_part_payee(): void
+    {
+        $this->connecterLeProprietaire();
+        $bon = $this->bonDAvoir(10);
+        $ticket = $this->emettreFactureDepuisLePanneau(Client::query()->where('est_comptoir', true)->sole(), 20);
+        $liste = Livewire::test(ListFactures::class)->mountTableAction('encaisser', $ticket);
+        $especes = array_key_first($liste->get('mountedTableActionsData.0.parts'));
+
+        $liste
+            ->setTableActionData([
+                "parts.{$especes}.mode" => ModePaiement::Especes->value,
+                "parts.{$especes}.montant" => '10',
+                'parts.bon' => ['mode' => FactureResource::PART_AVOIR, 'bon' => $bon->numero, 'montant' => null, 'reference' => null, 'montant_saisi' => false],
+            ])
+            ->assertSee(FactureResource::BON_SIGNE_PAR_LA_PREMIERE_PART)
+            ->callMountedTableAction()
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSame([StatutFacture::Payee, 10.0, 10.0], [$ticket->fresh()->statut, $ticket->fresh()->montantPaye(), $ticket->fresh()->montantCrediteParAvoir()]);
+        $this->assertSame(0, $bon->fresh()->creditEnCentimes());
+    }
+
+    /**
+     * La fenêtre de la contre-passation du paiement qui signe un bon
+     * d'avoir annonce qu'elle rend au bon son crédit, et, pour le client
+     * comptoir, que seuls les avoirs qui corrigent les tickets rouverts
+     * s'y imputeront ; celle d'un paiement sans bon n'en parle pas.
+     */
+    public function test_la_fenetre_de_contre_passation_annonce_le_bon_d_avoir_qu_elle_rend(): void
+    {
+        $this->connecterLeProprietaire();
+        $bon = $this->bonDAvoir(10);
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $ticket = $this->emettreFactureDepuisLePanneau($comptoir, 50);
+        app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000), new PartDeReglement(ModePaiement::Especes, 1000)], [$bon->numero], today()->toDateString());
+        $partsDuTicket = Paiement::query()->whereHas('allocations', fn (Builder $allocations): Builder => $allocations->where('facture_id', $ticket->id));
+        $carte = (clone $partsDuTicket)->where('mode_paiement', ModePaiement::CarteBancaire)->sole();
+        $especes = (clone $partsDuTicket)->where('mode_paiement', ModePaiement::Especes)->sole();
+
+        Livewire::test(ListPaiements::class)
+            ->mountTableAction('contre_passer', $carte)
+            ->assertSee("Le bon d'avoir {$bon->numero} (10,00 €), présenté avec lui, retrouvera le crédit qu'il y avait imputé, que le ticket devra de nouveau : son numéro pourra resservir.")
+            ->assertSee('Les avoirs qui corrigent les tickets rouverts s\'y imputeront aussitôt.')
+            ->assertDontSee('Le crédit d\'avoir disponible du client');
+        Livewire::test(ListPaiements::class)
+            ->mountTableAction('contre_passer', $especes)
+            ->assertDontSee($bon->numero);
     }
 
     private function connecterLeProprietaire(): Magasin

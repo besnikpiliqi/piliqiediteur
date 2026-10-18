@@ -7,6 +7,7 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
+use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -257,6 +258,41 @@ class PaiementResource extends Resource
         return number_format($montant, 2, ',', ' ').' €';
     }
 
+    /**
+     * Ce que la contre-passation de ce paiement va faire (voir
+     * ContrePasserPaiementAction) : l'annuler, rouvrir ce qu'il réglait,
+     * rendre aux bons d'avoir présentés avec lui le crédit qu'ils y avaient
+     * imputé (le paiement de la première part d'un encaissement les signe,
+     * voir EncaisserEnPlusieursModesAction), et imputer aussitôt le crédit
+     * disponible : celui du client, ou pour le client comptoir, seulement
+     * celui des avoirs qui corrigent les tickets rouverts.
+     */
+    private static function descriptionDeLaContrePassation(Paiement $paiement): string
+    {
+        $calculateur = app(CalculateurLigne::class);
+        $bons = $paiement->creditsImputes()->with('avoir')->orderBy('id')->get()
+            ->map(fn (AvoirAllocation $credit): string => sprintf('%s (%s)', $credit->avoir->numero, $calculateur->enEuros($calculateur->enCentiemes($credit->montant_alloue))));
+        $phrases = [sprintf(
+            'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui, et les factures qu\'il réglait redeviendront dues.',
+            self::enEuros((float) $paiement->montant),
+            $paiement->mode_paiement->getLabel(),
+            $paiement->recu_le->format('d/m/Y'),
+        )];
+
+        if ($bons->count() === 1) {
+            $phrases[] = "Le bon d'avoir {$bons->sole()}, présenté avec lui, retrouvera le crédit qu'il y avait imputé, que le ticket devra de nouveau : son numéro pourra resservir.";
+        } elseif ($bons->count() > 1) {
+            $phrases[] = "Les bons d'avoir {$bons->join(', ', ' et ')}, présentés avec lui, retrouveront le crédit qu'ils y avaient imputé, que le ticket devra de nouveau : leurs numéros pourront resservir.";
+        }
+
+        $phrases[] = ($paiement->client?->estComptoir() ?? false)
+            ? 'Les avoirs qui corrigent les tickets rouverts s\'y imputeront aussitôt.'
+            : 'Le crédit d\'avoir disponible du client s\'y imputera aussitôt.';
+        $phrases[] = 'Saisissez ensuite le bon paiement, pour ce qui restera dû.';
+
+        return implode(' ', $phrases);
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -302,13 +338,7 @@ class PaiementResource extends Resource
                         Textarea::make('motif')->label('Motif')->required()->maxLength(1000),
                     ])
                     ->requiresConfirmation()
-                    ->modalDescription(fn (Paiement $record): string => sprintf(
-                        'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui, et les factures qu\'il réglait redeviendront dues%s ; le crédit d\'avoir disponible du client s\'y imputera aussitôt. Saisissez ensuite le bon paiement, pour ce qui restera dû.',
-                        self::enEuros((float) $record->montant),
-                        $record->mode_paiement->getLabel(),
-                        $record->recu_le->format('d/m/Y'),
-                        $record->creditsImputes()->exists() ? ' ; le crédit d\'avoir qu\'il y avait imputé redeviendra disponible' : '',
-                    ))
+                    ->modalDescription(fn (Paiement $record): string => self::descriptionDeLaContrePassation($record))
                     ->visible(fn (Paiement $record): bool => auth()->user()->can('contrePasser', $record))
                     ->action(fn (Paiement $record, array $data) => static::executerSansCasser(fn () => app(ContrePasserPaiementAction::class)->handle(auth()->user(), $record, $data['motif'], $data['jeton']))),
             ])

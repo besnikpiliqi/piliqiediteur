@@ -128,7 +128,9 @@ use LogicException;
  *     limite de ce qui reste dû (voir imputerLesBonsDAvoir()) ; ses parts
  *     doivent égaler exactement ce qui reste alors à payer : sinon, parce
  *     que le crédit du client ou un bon a changé depuis l'écran, rien
- *     n'est enregistré et le refus dit le nouveau total. Chaque part
+ *     n'est enregistré et le refus dit ce qui reste à répartir, ou de
+ *     combien les parts dépassent (« Le total à payer a changé (crédit
+ *     d'avoir du client) : 20,00 € à répartir. »). Chaque part
  *     devient un paiement de son mode (voir EnregistrerPaiementAction,
  *     signé dans la chaîne des encaissements). Une facture dont il ne
  *     reste rien à payer, parce que ce crédit ou ces bons la couvrent ou
@@ -145,7 +147,9 @@ use LogicException;
  */
 class EmettreFactureAction
 {
-    public const TOTAL_A_PAYER_CHANGE = 'Le total à payer est de %s, crédit d\'avoir déduit. %s';
+    public const TOTAL_A_PAYER_CHANGE = 'Le total à payer a changé (crédit d\'avoir du client) : %s à répartir.';
+
+    public const TOTAL_A_PAYER_CHANGE_PARTS_EN_TROP = 'Le total à payer a changé (crédit d\'avoir du client) : les parts le dépassent de %s.';
 
     public function __construct(
         private readonly DocumentNumberingService $numerotation,
@@ -328,11 +332,10 @@ class EmettreFactureAction
     private function encaisserComptant(User $compte, Facture $facture, ReglementComptant $reglement, string $recuLe): void
     {
         $this->imputerLesBonsDAvoir($facture, $reglement->bonsDAvoir);
-        $resteAPayer = $facture->fresh()->resteDuEnCentimes();
-        $ecart = $reglement->ecartAvec($resteAPayer);
+        $ecart = $reglement->totalDesParts() - $facture->fresh()->resteDuEnCentimes();
 
-        if ($ecart !== null) {
-            throw new LogicException(sprintf(self::TOTAL_A_PAYER_CHANGE, $this->calculateur->enEuros($resteAPayer), $ecart));
+        if ($ecart !== 0) {
+            throw new LogicException(sprintf($ecart < 0 ? self::TOTAL_A_PAYER_CHANGE : self::TOTAL_A_PAYER_CHANGE_PARTS_EN_TROP, $this->calculateur->enEuros(abs($ecart))));
         }
 
         foreach ($reglement->parts as $part) {

@@ -31,11 +31,16 @@ use LogicException;
  * ProtegeLesDonneesValidees) : il se contre-passe (B4). La contre-passation
  * est un paiement opposé, l'inverse exact de l'original (K9) : même client,
  * même mode, même référence, montant et imputations de signe contraire,
- * le crédit d'avoir que l'original avait imputé compris (un bon d'avoir
- * présenté avec lui, voir EnregistrerPaiementAction), le motif pour notes.
- * Elle désigne l'original, qui reste tel quel, et les factures qu'il
- * réglait redeviennent dues de tout ce qu'il y avait réglé (voir
- * Facture::constaterUnReglement()).
+ * le crédit d'avoir que l'original avait imputé compris, le motif pour
+ * notes. Elle désigne l'original, qui reste tel quel, et les factures
+ * qu'il réglait redeviennent dues de tout ce qu'il y avait réglé (voir
+ * Facture::constaterUnReglement()). Seul le paiement de la première part
+ * d'un encaissement impute des bons d'avoir, ceux présentés pour un
+ * ticket du client comptoir resté dû (voir EncaisserEnPlusieursModesAction) :
+ * le contre-passer leur rend ce crédit, que le ticket doit de nouveau et
+ * que leur numéro peut resservir ; contre-passer une autre part de cet
+ * encaissement les laisse imputés. La fenêtre de la contre-passation le
+ * dit (voir PaiementResource).
  *
  * Aussitôt, dans la même transaction, le crédit d'avoir disponible du
  * client s'impute sur ce qui reste dû, dans le même ordre qu'à l'émission

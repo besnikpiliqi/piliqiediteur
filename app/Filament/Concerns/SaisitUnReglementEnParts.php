@@ -4,6 +4,7 @@ namespace App\Filament\Concerns;
 
 use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\ApercuDuReglement;
 use App\Domain\Facturation\Services\CalculateurLigne;
@@ -39,13 +40,15 @@ use LogicException;
  * La première part se préremplit avec le mode préféré du client et ce
  * qu'il reste à répartir ; « Ajouter un autre mode » ajoute une part
  * préremplie avec ce qui reste après les autres. Une part restée sans
- * montant ne règle rien. À la caisse, le
- * prélèvement n'est pas proposé, les parts doivent égaler exactement ce
- * qu'il reste à payer, et seule la part en espèces a un montant reçu et
- * une monnaie à rendre ; sur une facture, elles ne dépassent jamais ce
- * qui reste dû. L'écran le dit pendant la saisie (« Il reste 10,00 € à
- * répartir. ») et refuse un règlement qui ne tombe pas juste ;
- * l'enregistrement le revérifie sous le verrou du registre.
+ * montant ne règle rien. À la caisse, le prélèvement n'est pas proposé,
+ * les parts doivent égaler exactement ce qu'il reste à payer, et seule la
+ * part en espèces a un montant reçu et une monnaie à rendre ; sur une
+ * facture, elles ne dépassent jamais ce qui reste dû, et un bon d'avoir
+ * s'y présente avec au moins une part payée, qui le signe, sans jamais
+ * couvrir seul tout ce qui reste dû (voir EncaisserEnPlusieursModesAction).
+ * L'écran le dit pendant la saisie (« Il reste 10,00 € à répartir. ») et
+ * refuse un règlement qui ne tombe pas juste ; l'enregistrement le
+ * revérifie sous le verrou du registre.
  */
 trait SaisitUnReglementEnParts
 {
@@ -53,6 +56,12 @@ trait SaisitUnReglementEnParts
      * La valeur du choix « Avoir » d'une part.
      */
     public const PART_AVOIR = 'avoir';
+
+    /**
+     * L'aide d'un bon d'avoir présenté pour un document déjà émis (voir
+     * EncaisserEnPlusieursModesAction).
+     */
+    public const BON_SIGNE_PAR_LA_PREMIERE_PART = 'Le bon se signe avec la première part payée : contre-passer cette part rendrait au bon son crédit.';
 
     /**
      * Le crédit déjà imputé, les parts et ce qu'il reste à répartir.
@@ -219,10 +228,14 @@ trait SaisitUnReglementEnParts
                 ->visible($estAvoir)
                 ->required($estAvoir)
                 ->live(onBlur: true)
-                ->helperText(function (Get $get, ?Model $record) use ($apercu): ?Htmlable {
+                ->helperText(function (Get $get, ?Model $record) use ($apercu, $aLaCaisse): Htmlable|string|null {
                     $refus = self::refusDuBon($apercu($get, $record, '../../'), $get('bon'));
 
-                    return $refus === null ? null : ClientResource::enEvidence($refus);
+                    return match (true) {
+                        $refus !== null => ClientResource::enEvidence($refus),
+                        $aLaCaisse => null,
+                        default => self::BON_SIGNE_PAR_LA_PREMIERE_PART,
+                    };
                 })
                 ->rule(fn (Get $get, ?Model $record): Closure => function (string $attribute, mixed $numero, Closure $echec) use ($get, $record, $apercu): void {
                     $refus = self::refusDuBon($apercu($get, $record, '../../'), $numero);
@@ -293,7 +306,9 @@ trait SaisitUnReglementEnParts
     /**
      * Ce qui sépare les parts saisies de ce qu'elles doivent couvrir : à
      * la caisse, exactement le reste à payer ; sur une facture, au plus ce
-     * qui reste dû. Null quand le règlement tombe juste.
+     * qui reste dû, avec au moins une part payée quand un bon d'avoir est
+     * présenté (voir EncaisserEnPlusieursModesAction). Null quand le
+     * règlement tombe juste.
      *
      * @param  array<array-key, mixed>  $parts
      */
@@ -311,7 +326,11 @@ trait SaisitUnReglementEnParts
             return ReglementComptant::ecartEntre($total, $apercu->resteARepartir);
         }
 
-        return $total > $apercu->resteARepartir ? sprintf(EncaisserEnPlusieursModesAction::PARTS_EN_TROP, self::formaterCentimes($total), self::formaterCentimes($apercu->resteARepartir)) : null;
+        return match (true) {
+            $total > $apercu->resteARepartir => sprintf(EncaisserEnPlusieursModesAction::PARTS_EN_TROP, self::formaterCentimes($total), self::formaterCentimes($apercu->resteARepartir)),
+            $apercu->bons !== [] && $total === 0 => Avoir::BON_D_AVOIR_SANS_PART_PAYEE,
+            default => null,
+        };
     }
 
     /**

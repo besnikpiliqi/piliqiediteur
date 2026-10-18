@@ -33,8 +33,15 @@ use LogicException;
  * (Q6), par leur numéro, jamais une autre facture : ils s'imputent sur lui
  * avant les parts, chacun pour son crédit restant, et se signent avec le
  * paiement de la première part (voir EnregistrerPaiementAction), puisque
- * seul un paiement signe ce qui règle un document après son émission ; un
- * bon se présente donc avec au moins une part payée.
+ * seul un paiement d'un mode signe ce qui règle un document après son
+ * émission, et que le format signé n'a pas d'autre enregistrement pour
+ * cela. Un bon s'y présente donc avec au moins une part payée, et les bons
+ * n'y règlent jamais seuls tout ce qui reste dû : le règlement est refusé
+ * sans rien enregistrer (Avoir::BON_D_AVOIR_SANS_PART_PAYEE). La
+ * contre-passation de ce premier paiement, qui en est l'inverse exact,
+ * rend aux bons le crédit qu'ils y avaient imputé et le ticket en
+ * redevient dû ; celle d'une autre part les laisse imputés (voir
+ * ContrePasserPaiementAction).
  *
  * Le registre fiscal du magasin actif se verrouille avant toute lecture ;
  * l'auteur, relu sous le verrou de sa ligne, doit pouvoir enregistrer un
@@ -73,9 +80,7 @@ class EncaisserEnPlusieursModesAction
     public function handle(User $auteur, Facture $facture, array $parts, array $bonsDAvoir, string $recuLe, ?string $jeton = null): Facture
     {
         if ($parts === []) {
-            throw new LogicException($bonsDAvoir === []
-                ? 'Saisissez au moins une part du règlement.'
-                : 'Un bon d\'avoir se présente avec au moins une part payée, qui le signe.');
+            throw new LogicException($bonsDAvoir === [] ? 'Saisissez au moins une part du règlement.' : Avoir::BON_D_AVOIR_SANS_PART_PAYEE);
         }
 
         PartDeReglement::refuserUnModeEnDouble($parts);
@@ -146,8 +151,9 @@ class EncaisserEnPlusieursModesAction
     }
 
     /**
-     * Les parts, une fois les bons imputés, ne dépassent pas ce qui reste
-     * dû de la facture, relue sous verrou.
+     * Les bons laissent dû une partie de la facture, relue sous verrou, que
+     * les parts payées signent (voir le commentaire de classe), et les
+     * parts n'en dépassent pas ce reste.
      *
      * @param  list<PartDeReglement>  $parts
      * @param  list<Avoir>  $bons
@@ -160,6 +166,10 @@ class EncaisserEnPlusieursModesAction
 
         foreach ($bons as $bon) {
             $resteDu -= min($bon->creditEnCentimes(), max(0, $resteDu));
+        }
+
+        if ($bons !== [] && $resteDu <= 0) {
+            throw new LogicException(Avoir::BON_D_AVOIR_SANS_PART_PAYEE);
         }
 
         $totalDesParts = PartDeReglement::total($parts);

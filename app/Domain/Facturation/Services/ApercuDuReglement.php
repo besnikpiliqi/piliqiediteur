@@ -47,13 +47,15 @@ final readonly class ApercuDuReglement
     {
         $creditDuClient = min($client?->soldeCrediteurEnCentimes() ?? 0, max(0, $totalTtc));
 
-        return self::avecLesBons($totalTtc, $creditDuClient, $totalTtc - $creditDuClient, $numerosDesBons, true);
+        return self::avecLesBons($totalTtc, $creditDuClient, $totalTtc - $creditDuClient, $numerosDesBons, true, false);
     }
 
     /**
      * L'encaissement d'une facture ou d'un ticket déjà émis : ce qui en
      * reste dû, le crédit du client y étant déjà imputé, moins les bons,
-     * que seul un ticket du client comptoir accepte (Q6).
+     * que seul un ticket du client comptoir accepte (Q6), et qui n'y
+     * règlent jamais seuls tout ce qui reste dû : un bon qui le couvrirait
+     * est refusé (voir EncaisserEnPlusieursModesAction).
      *
      * @param  list<string|null>  $numerosDesBons  dans l'ordre saisi, un numéro encore vide ignoré
      */
@@ -64,13 +66,14 @@ final readonly class ApercuDuReglement
         $creditImpute = $somme($facture->allocationsAvoir()->pluck('montant_alloue'));
         $resteDu = max(0, $calculateur->enCentiemes($facture->total_ttc) - $somme($facture->allocationsPaiement()->pluck('montant_alloue')) - $creditImpute);
 
-        return self::avecLesBons($resteDu, $creditImpute, $resteDu, $numerosDesBons, $facture->client?->estComptoir() ?? false);
+        return self::avecLesBons($resteDu, $creditImpute, $resteDu, $numerosDesBons, $facture->client?->estComptoir() ?? false, true);
     }
 
     /**
      * @param  list<string|null>  $numerosDesBons
+     * @param  bool  $avecUnePartPayee  les bons laissent une part à payer, qui les signe
      */
-    private static function avecLesBons(int $total, int $creditDuClient, int $reste, array $numerosDesBons, bool $bonsAcceptes): self
+    private static function avecLesBons(int $total, int $creditDuClient, int $reste, array $numerosDesBons, bool $bonsAcceptes, bool $avecUnePartPayee): self
     {
         $bons = [];
         $refuses = [];
@@ -101,6 +104,8 @@ final readonly class ApercuDuReglement
                 $refuses[$numero] = Avoir::BON_D_AVOIR_INTROUVABLE;
             } elseif ($montant <= 0) {
                 $refuses[$numero] = sprintf(Avoir::BON_D_AVOIR_SANS_EMPLOI, $numero);
+            } elseif ($avecUnePartPayee && $montant >= $reste) {
+                $refuses[$numero] = Avoir::BON_D_AVOIR_SANS_PART_PAYEE;
             } else {
                 $bons[$numero] = $montant;
                 $reste -= $montant;

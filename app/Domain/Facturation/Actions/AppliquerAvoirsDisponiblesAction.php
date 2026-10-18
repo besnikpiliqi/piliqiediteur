@@ -12,17 +12,19 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * À l'émission d'une facture (voir EmettreFactureAction), le crédit
- * d'avoir disponible de son client (voir Client::soldeCrediteur()) règle
- * ce qui en reste dû, dans la transaction qui la signe. Ce crédit est ce
- * qu'un avoir n'a pu imputer à son émission, ni la contre-passation d'un
- * paiement sur ce qu'elle a rouvert, le client n'ayant plus aucune facture
- * due (voir ImputationDuCredit). Un avoir n'est jamais remboursé (B5). À
- * la caisse, il s'affiche comme la part « Avoir (crédit du client) » du
- * règlement, remplie d'office (voir ApercuDuReglement).
+ * d'avoir disponible de son client (voir Client::soldeCrediteurEnCentimes())
+ * règle ce qui en reste dû, dans la transaction qui la signe. Ce crédit
+ * est ce qu'un avoir n'a pu imputer à son émission, ni la contre-passation
+ * d'un paiement sur ce qu'elle a rouvert, le client n'ayant plus aucune
+ * facture due (voir ImputationDuCredit). Un avoir n'est jamais remboursé
+ * (B5). À la caisse, il s'affiche comme la part « Avoir (crédit du
+ * client) » du règlement, remplie d'office (voir ApercuDuReglement).
  *
  * Les avoirs les plus anciens sont consommés en premier, et peuvent se
  * répartir sur plusieurs factures successives comme plusieurs avoirs sur
- * une même facture si le crédit d'un seul n'y suffit pas.
+ * une même facture si le crédit d'un seul n'y suffit pas. Tout se compte
+ * en centimes : ce qui reste dû de la facture, relue verrouillée, et le
+ * crédit de chaque avoir, relu verrouillé.
  *
  * Jamais pour le client comptoir : le crédit d'un avoir fait au comptoir
  * n'appartient qu'à qui en présente le numéro, son bon d'avoir (voir
@@ -36,57 +38,50 @@ class AppliquerAvoirsDisponiblesAction
     {
         DB::transaction(function () use ($facture) {
             $facture = Facture::query()->whereKey($facture->getKey())->lockForUpdate()->firstOrFail();
-
-            $montantRestant = $facture->montantRestant();
-
-            if ($montantRestant <= 0) {
-                return;
-            }
-
             /** @var Client $client */
             $client = $facture->client;
+            $resteDu = $facture->resteDuEnCentimes();
 
-            if ($client->estComptoir()) {
+            if ($resteDu <= 0 || $client->estComptoir()) {
                 return;
             }
 
-            $avoirsDisponibles = Avoir::query()
+            $avoirs = Avoir::query()
                 ->where('client_id', $facture->client_id)
                 ->where('statut', StatutAvoir::Emise)
                 ->orderBy('date_emission')
                 ->orderBy('id')
                 ->lockForUpdate()
-                ->get()
-                ->filter(fn (Avoir $avoir) => $avoir->montantNonAlloue() > 0);
+                ->get();
+            $impute = 0;
 
-            $montantTotalApplique = 0.0;
-
-            foreach ($avoirsDisponibles as $avoir) {
-                if ($montantRestant <= 0) {
+            foreach ($avoirs as $avoir) {
+                if ($impute === $resteDu) {
                     break;
                 }
 
-                $montantApplique = min($avoir->montantNonAlloue(), $montantRestant);
+                $montant = min($avoir->creditEnCentimes(), $resteDu - $impute);
+
+                if ($montant <= 0) {
+                    continue;
+                }
 
                 AvoirAllocation::create([
                     'avoir_id' => $avoir->id,
                     'facture_id' => $facture->id,
-                    'montant_alloue' => $montantApplique,
+                    'montant_alloue' => $this->calculateur->enDecimal($montant),
                 ]);
 
-                $montantRestant = $this->calculateur->soustraire($montantRestant, $montantApplique);
-                $montantTotalApplique = $this->calculateur->sommer([$montantTotalApplique, $montantApplique]);
+                $impute += $montant;
             }
 
             // Rien n'a été crédité (aucun avoir disponible pour ce client) :
             // ne JAMAIS toucher au statut dans ce cas, sous peine de faire
             // passer une facture fraîchement émise et totalement impayée à
             // "partiellement payée" à tort.
-            if ($montantTotalApplique <= 0) {
-                return;
+            if ($impute > 0) {
+                $facture->constaterUnReglement();
             }
-
-            $facture->constaterUnReglement();
         });
     }
 }

@@ -544,7 +544,7 @@ class AvoirResourceTest extends TestCase
         $avoirAuComptoir = $this->chercher(Livewire::test(CreateAvoir::class), $venteAuComptoir->numero);
 
         $avoirAuClient->assertSee('L\'avoir réduit d\'abord ce qui reste dû des documents qu\'il corrige. Le crédit restant est imputé sur les factures impayées du client, de la plus ancienne à la plus récente.');
-        $avoirAuComptoir->assertSee('L\'avoir réduit d\'abord ce qui reste dû des tickets qu\'il corrige ; son crédit restant vaut bon d\'avoir : son numéro le fait utiliser lors d\'une prochaine vente à la caisse, quel qu\'en soit le client, ou sur un ticket du client comptoir resté dû.');
+        $avoirAuComptoir->assertSee('L\'avoir réduit d\'abord ce qui reste dû des tickets qu\'il corrige ; son crédit restant vaut bon d\'avoir : son numéro le fait utiliser lors d\'une prochaine vente à la caisse, quel qu\'en soit le client, ou, avec au moins une part payée, sur un ticket du client comptoir resté dû.');
     }
 
     /**

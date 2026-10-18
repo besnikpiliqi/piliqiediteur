@@ -41,7 +41,8 @@ use LogicException;
  * resté dû (Q6, voir EncaisserEnPlusieursModesAction) s'imputent sur ce
  * ticket juste avant lui, chacun pour son crédit restant dans la limite de
  * ce qui reste dû, et désignent ce paiement, qui les signe : ils ne font
- * entrer aucun argent et ne comptent pas dans son montant.
+ * entrer aucun argent et ne comptent pas dans son montant, et sa
+ * contre-passation leur rend ce crédit (voir ContrePasserPaiementAction).
  *
  * Le client arrive déjà résolu par une requête limitée au magasin, jamais
  * en client_id brut : chaque facture imputée doit appartenir à CE client.

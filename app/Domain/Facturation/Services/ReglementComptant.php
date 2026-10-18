@@ -16,8 +16,8 @@ use LogicException;
  *
  * Le crédit et les bons ne font entrer aucun argent : ils s'imputent sur
  * la vente, jamais comme un paiement d'un mode. Les parts doivent égaler
- * exactement ce qu'ils laissent à payer (voir ecartAvec()) : sinon, rien
- * n'est enregistré. La monnaie rendue sur la part en espèces ne
+ * exactement ce qu'ils laissent à payer (voir EmettreFactureAction) :
+ * sinon, rien n'est enregistré. La monnaie rendue sur la part en espèces ne
  * s'enregistre pas : elle vient d'un montant reçu plus grand que cette
  * part, que seul l'écran de la caisse compte.
  */
@@ -61,20 +61,10 @@ final readonly class ReglementComptant
     }
 
     /**
-     * Ce qui sépare les parts de ce qu'il reste à payer une fois le crédit
-     * et les bons imputés : « Il reste 10,00 € à répartir. » ou « Les parts
-     * dépassent le total de 10,00 €. » ; null quand elles l'égalent.
-     *
-     * @param  int  $resteAPayer  en centimes
-     */
-    public function ecartAvec(int $resteAPayer): ?string
-    {
-        return self::ecartEntre($this->totalDesParts(), $resteAPayer);
-    }
-
-    /**
-     * Le même écart, pour des parts que l'écran de la caisse montre avant
-     * l'encaissement.
+     * Ce qui sépare les parts que l'écran de la caisse montre de ce qu'il
+     * reste à payer une fois le crédit et les bons imputés : « Il reste
+     * 10,00 € à répartir. » ou « Les parts dépassent le total de
+     * 10,00 €. » ; null quand elles l'égalent.
      *
      * @param  int  $totalDesParts  en centimes
      * @param  int  $resteAPayer  en centimes

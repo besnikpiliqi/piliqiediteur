@@ -67,6 +67,14 @@ class Avoir extends Model implements DocumentEnvoyable
 
     public const BON_D_AVOIR_SANS_EMPLOI = 'Le bon d\'avoir %s n\'a plus rien à régler : le total à payer est déjà couvert.';
 
+    /**
+     * Le refus d'un bon d'avoir présenté pour un ticket déjà émis sans
+     * part payée après lui (voir EncaisserEnPlusieursModesAction) : seul
+     * un paiement d'un mode signe ce qui règle un document après son
+     * émission.
+     */
+    public const BON_D_AVOIR_SANS_PART_PAYEE = 'Sur un ticket déjà émis, un bon d\'avoir ne règle jamais seul tout ce qui reste dû : ajoutez une part payée, qui le signe.';
+
     protected $table = 'avoirs';
 
     // numero, statut, date_emission, totaux, type et copie du client,
@@ -259,7 +267,8 @@ class Avoir extends Model implements DocumentEnvoyable
     }
 
     /**
-     * Le crédit de l'avoir qui reste à imputer (voir creditEnCentimes()).
+     * Le crédit de l'avoir qui reste à imputer, en euros, pour l'afficher
+     * (voir AvoirResource) ; tout calcul se fait sur creditEnCentimes().
      */
     public function montantNonAlloue(): float
     {

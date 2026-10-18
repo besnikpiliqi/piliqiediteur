@@ -100,13 +100,13 @@ class MentionsFiscales
      */
     public function bonDAvoir(Avoir $avoir): ?string
     {
-        $credit = $avoir->montantNonAlloue();
+        $credit = $avoir->creditEnCentimes();
 
         if (! $avoir->client?->estComptoir() || $credit <= 0) {
             return null;
         }
 
-        return 'Ce n° vaut bon d\'avoir de '.number_format($credit, 2, ',', ' ').' € à présenter lors d\'un prochain achat.';
+        return 'Ce n° vaut bon d\'avoir de '.app(CalculateurLigne::class)->enEuros($credit).' à présenter lors d\'un prochain achat.';
     }
 
     /**

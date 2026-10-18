@@ -47,8 +47,9 @@ class FactureAchat extends Model
 
     protected $table = 'factures_achat';
 
-    // numero, statut, date_validation, totaux : jamais en mass assignment,
-    // uniquement via CreerFactureAchatAction/ValiderFactureAchatAction.
+    // numero, rang_validation, statut, date_validation, totaux : jamais en
+    // mass assignment, uniquement via
+    // CreerFactureAchatAction/ValiderFactureAchatAction.
     protected $fillable = [
         'fournisseur_id',
         'numero_fournisseur',
@@ -61,7 +62,9 @@ class FactureAchat extends Model
 
     /**
      * date_validation est l'instant de la validation, enregistré en UTC et
-     * relu à l'heure de Paris (voir HorodatageUtc).
+     * relu à l'heure de Paris (voir HorodatageUtc) ; rang_validation, son
+     * rang parmi les validations du magasin (voir
+     * ValiderFactureAchatAction).
      *
      * @return array<string, string>
      */
@@ -72,6 +75,7 @@ class FactureAchat extends Model
             'source' => SourceFactureAchat::class,
             'date_facture' => 'date',
             'date_validation' => HorodatageUtc::class.':'.config('app.timezone'),
+            'rang_validation' => 'integer',
             'total_ht' => 'decimal:2',
             'total_tva' => 'decimal:2',
             'total_ttc' => 'decimal:2',
@@ -115,9 +119,21 @@ class FactureAchat extends Model
         return $this->hasMany(AvoirFournisseur::class);
     }
 
+    /**
+     * Ses avoirs fournisseur émis, dans l'ordre de leur émission, que la
+     * fiche de la facture d'achat suit (voir FactureAchatResource) : par
+     * date d'émission, en UTC, puis par numéro, donné sous verrou à
+     * l'émission, pour deux avoirs émis dans la même seconde (voir
+     * EmettreAvoirFournisseurAction). La base de données ne garantit aucun
+     * ordre sans tri, et un brouillon créé avant un autre peut être émis
+     * après lui.
+     */
     public function avoirsFournisseurEmis(): HasMany
     {
-        return $this->avoirsFournisseur()->where('statut', StatutAvoirFournisseur::Emise);
+        return $this->avoirsFournisseur()
+            ->where('statut', StatutAvoirFournisseur::Emise)
+            ->orderBy('date_emission')
+            ->orderBy('numero');
     }
 
     /**

@@ -9,8 +9,11 @@ namespace App\Domain\Facturation\Enums;
  * magasin ont chacun leur rang 000001, distingués par le code de leur
  * type. Sert aussi aux références de produits (PRD-000001), générées
  * quand elles ne sont pas saisies, une suite par magasin jamais remise à
- * zéro : DocumentNumberingService n'est qu'un compteur sûr en
- * concurrence, pas une notion exclusivement fiscale.
+ * zéro, et au rang de validation des factures d'achat, dans la série de
+ * leur type sans clé de période (voir
+ * DocumentNumberingService::rangSuivant()) : DocumentNumberingService
+ * n'est qu'un compteur sûr en concurrence, pas une notion exclusivement
+ * fiscale.
  */
 enum TypeDocument: string
 {

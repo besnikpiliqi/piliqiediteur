@@ -282,7 +282,10 @@ class FactureAchatResource extends Resource
      * a retourné chaque avoir fournisseur émis : « Retourné : 4 (avoir
      * AF-MABOUT-2026-000001 du 17/10/2026) », le numéro menant à la fiche
      * de l'avoir pour qui peut la voir ; rien pour une ligne jamais
-     * retournée.
+     * retournée. Les retours se lisent dans l'ordre de leur émission, comme
+     * les avoirs de la facture (voir FactureAchat::avoirsFournisseurEmis()) :
+     * par instant d'émission, en UTC, qui ne recule pas quand l'heure de
+     * Paris se répète, puis par numéro.
      */
     public static function retoursDeLaLigne(LigneAchat $ligne): ?Htmlable
     {
@@ -290,7 +293,7 @@ class FactureAchatResource extends Resource
             ->whereHas('avoirFournisseur', fn (Builder $avoir): Builder => $avoir->where('statut', StatutAvoirFournisseur::Emise))
             ->with('avoirFournisseur')
             ->get()
-            ->sortBy(fn (LigneAvoirFournisseur $retour): array => [$retour->avoirFournisseur->date_emission->getTimestamp(), $retour->avoirFournisseur->getKey()])
+            ->sortBy(fn (LigneAvoirFournisseur $retour): array => [$retour->avoirFournisseur->date_emission->getTimestamp(), $retour->avoirFournisseur->numero])
             ->map(function (LigneAvoirFournisseur $retour): string {
                 $avoir = $retour->avoirFournisseur;
                 $numero = auth()->user()?->can('view', $avoir)
@@ -415,10 +418,10 @@ class FactureAchatResource extends Resource
 
     /**
      * Les factures d'achat proposées depuis le menu : les cinquante plus
-     * récentes de celles qui ont des articles à retourner ou, avec un
-     * terme, celles dont le numéro, le n° du fournisseur ou le nom du
-     * fournisseur le contient, sans tenir compte de la casse ni des
-     * accents.
+     * récemment validées (voir ValiderFactureAchatAction) de celles qui
+     * ont des articles à retourner ou, avec un terme, celles dont le
+     * numéro, le n° du fournisseur ou le nom du fournisseur le contient,
+     * sans tenir compte de la casse ni des accents.
      *
      * @return array<int, string>
      */
@@ -428,8 +431,7 @@ class FactureAchatResource extends Resource
             ->retournables()
             ->when(filled($recherche), fn (Builder $factures): Builder => RechercheSansAccents::appliquer($factures, (string) $recherche, ['numero', 'numero_fournisseur', 'fournisseur.nom']))
             ->with('fournisseur')
-            ->orderByDesc('date_validation')
-            ->orderByDesc('id')
+            ->orderByDesc('rang_validation')
             ->limit(50)
             ->get()
             ->mapWithKeys(fn (FactureAchat $facture): array => [$facture->getKey() => self::libelleDeLaFactureAchat($facture)])

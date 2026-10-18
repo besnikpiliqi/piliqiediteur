@@ -494,7 +494,11 @@ class ClotureCaisseResourceTest extends TestCase
             'Encaissements des prestations de services', '05/10/2026', '20 %', '60,00 €',
             'Non transmis : plateforme pas encore raccordée (étape 2).',
         ]);
-        $fiche->assertDontSee(['TLB1', 'TPS1', 'TNT1', 'LivraisonsDeBiens', 'tax_exclusive_amount', 'category_code', 'taxable_amount']);
+        // Les codes des catégories se cherchent comme mots entiers : un
+        // identifiant de composant Livewire, fait de lettres et de
+        // chiffres, peut en contenir un, jamais isolé.
+        $this->assertDoesNotMatchRegularExpression('/\b(TLB1|TPS1|TNT1)\b/', $fiche->html());
+        $fiche->assertDontSee(['LivraisonsDeBiens', 'tax_exclusive_amount', 'category_code', 'taxable_amount']);
     }
 
     /**

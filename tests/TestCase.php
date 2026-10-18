@@ -63,6 +63,8 @@ use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\SerializableClosure\SerializableClosure;
 use Livewire\Features\SupportTesting\Testable;
+use Random\Engine\Xoshiro256StarStar;
+use Random\Randomizer;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -111,34 +113,55 @@ abstract class TestCase extends BaseTestCase
      * Aucun test n'interroge un service réel : une requête HTTP sortante
      * sans réponse simulée (Http::fake()) échoue au lieu de partir.
      *
-     * Aucun test ne dépend du hasard : Faker est semé au début de chaque
-     * test par une graine tirée du nom de sa classe, de sa méthode et de
-     * son jeu de données (voir graineDeFaker()), si bien qu'un test tire
-     * les mêmes valeurs à chaque exécution, dans quelque ordre et quelque
-     * processus qu'il tourne. Faker sème le générateur de PHP (mt_srand) :
-     * la graine atteint ainsi le générateur de la locale de l'application
-     * que partagent fake() et les fabriques. Un générateur de Faker resté
-     * d'un test précédent ressème au hasard ce générateur de PHP en se
-     * détruisant (Faker\Generator::__destruct()), et le ramasse-miettes
-     * peut le détruire en plein test : il est donc détruit avant que ce
-     * test ne sème le sien.
+     * Aucun test ne dépend du hasard : Faker et Str::random() sont semés
+     * au début de chaque test par une graine tirée du nom de sa classe, de
+     * sa méthode et de son jeu de données (voir graineDuTest()), si bien
+     * qu'un test tire les mêmes valeurs à chaque exécution, dans quelque
+     * ordre et quelque processus qu'il tourne. Faker sème le générateur de
+     * PHP (mt_srand) : la graine atteint ainsi le générateur de la locale
+     * de l'application que partagent fake() et les fabriques. Un
+     * générateur de Faker resté d'un test précédent ressème au hasard ce
+     * générateur de PHP en se détruisant (Faker\Generator::__destruct()),
+     * et le ramasse-miettes peut le détruire en plein test : il est donc
+     * détruit avant que ce test ne sème le sien. Str::random() donne
+     * l'identifiant de chaque composant Livewire et le jeton CSRF d'une
+     * page, que lisent les assertions sur le HTML : il tire ses chaînes
+     * d'un générateur à lui (voir chainesAleatoiresSemees()), que Laravel
+     * remet au hasard à la fin du test (Str::resetFactoryState()).
      */
     protected function setUp(): void
     {
         parent::setUp();
 
         gc_collect_cycles();
-        fake()->seed($this->graineDeFaker());
+        fake()->seed($this->graineDuTest());
+        Str::createRandomStringsUsing(self::chainesAleatoiresSemees($this->graineDuTest()));
         Http::preventStrayRequests();
     }
 
     /**
-     * La graine de Faker de ce test : l'empreinte CRC32 du nom de sa
+     * La graine du hasard de ce test : l'empreinte CRC32 du nom de sa
      * classe, de sa méthode et de son jeu de données.
      */
-    protected function graineDeFaker(): int
+    protected function graineDuTest(): int
     {
         return crc32(static::class.'::'.$this->nameWithDataSet());
+    }
+
+    /**
+     * Le tirage de Str::random() semé par cette graine : des lettres et
+     * des chiffres, comme le tirage de Laravel, toujours les mêmes dans le
+     * même ordre pour une même graine.
+     *
+     * @return Closure(int): string
+     */
+    protected static function chainesAleatoiresSemees(int $graine): Closure
+    {
+        $hasard = new Randomizer(new Xoshiro256StarStar($graine));
+
+        return fn (int $longueur): string => $longueur > 0
+            ? $hasard->getBytesFromString('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', $longueur)
+            : '';
     }
 
     /**
@@ -889,6 +912,28 @@ abstract class TestCase extends BaseTestCase
             : DB::selectOne('select CURRENT_TIMESTAMP as maintenant')->maintenant;
 
         return CarbonImmutable::createFromFormat('Y-m-d H:i:s', $maintenant, 'UTC');
+    }
+
+    /**
+     * Range ces tables, sous PostgreSQL, dans l'ordre inverse de leurs
+     * identifiants (CLUSTER sur un index décroissant ; le DDL et la
+     * réécriture s'annulent avec la transaction du test) : une requête
+     * sans tri rend alors leurs lignes à l'envers de leur enregistrement,
+     * comme après qu'un VACUUM a libéré une place qu'une ligne plus récente
+     * a reprise, ou après une restauration. SQLite range toujours les
+     * lignes d'une table dans l'ordre de leur identifiant : rien n'y
+     * change, et le test n'y vérifie que l'ordre que donne l'application.
+     */
+    protected function inverserLOrdrePhysiqueDesLignes(string ...$tables): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        foreach ($tables as $table) {
+            DB::statement("CREATE INDEX {$table}_ordre_inverse ON {$table} (id DESC)");
+            DB::statement("CLUSTER {$table} USING {$table}_ordre_inverse");
+        }
     }
 
     /**

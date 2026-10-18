@@ -413,7 +413,9 @@ class FactureResourceTest extends TestCase
      * Les paiements reçus d'une facture se lisent dans l'ordre où ils ont
      * été enregistrés, la contre-passation d'un chèque saisi par erreur
      * entre lui et le bon paiement : l'application les trie, sans laisser
-     * la base de données choisir leur ordre.
+     * la base de données choisir leur ordre, même quand leurs lignes sont
+     * rangées à l'envers dans leur table (voir
+     * inverserLOrdrePhysiqueDesLignes()).
      */
     public function test_la_fiche_montre_les_paiements_et_leurs_contre_passations_dans_l_ordre_de_leur_enregistrement(): void
     {
@@ -429,6 +431,7 @@ class FactureResourceTest extends TestCase
         $cheque = $payer(ModePaiement::Cheque, 'CHQ-0001');
         app(ContrePasserPaiementAction::class)->handle($responsable, $cheque, 'Chèque saisi par erreur');
         $payer(ModePaiement::Virement, 'VIR-0002');
+        $this->inverserLOrdrePhysiqueDesLignes('paiement_allocations');
 
         $fiche = Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()]);
 
@@ -437,6 +440,38 @@ class FactureResourceTest extends TestCase
             [['Paiement', 'Chèque', 'CHQ-0001'], ['Contre-passation', 'Chèque', 'CHQ-0001'], ['Paiement', 'Virement', 'VIR-0002']],
             array_map(fn (array $ligne): array => array_slice($ligne, 1), $lignes),
         );
+    }
+
+    /**
+     * Les avoirs émis sur une facture se lisent dans l'ordre de leur
+     * émission, ni dans celui de leur création ni dans celui de leurs
+     * lignes en base : le brouillon B, créé le premier, n'est émis
+     * qu'après A, C l'est en dernier, tous dans la même seconde, et leurs
+     * lignes sont ensuite rangées à l'envers dans leur table (voir
+     * inverserLOrdrePhysiqueDesLignes()), comme après qu'une clôture du
+     * jour a modifié A et qu'un VACUUM a libéré sa place.
+     */
+    public function test_la_fiche_montre_les_avoirs_emis_dans_l_ordre_de_leur_emission(): void
+    {
+        $this->travelTo('2026-10-14 10:00:00');
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $responsable = $this->responsableDeTest($magasin);
+        $this->actingAs($responsable);
+        Filament::setTenant($magasin);
+        $client = Client::factory()->create(['nom' => 'Jeanne Cliente']);
+        $cable = Produit::factory()->create(['prix_vente_ttc' => '10.00', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $facture = app(EmettreFactureAction::class)->handle($responsable, app(CreerFactureAction::class)->handle($responsable, $client, [['produit_id' => $cable->id, 'quantite' => 3]]));
+        $retourDUnCable = fn (string $motif): Avoir => app(CreerAvoirAction::class)->handle($responsable, $client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]], $motif);
+        $brouillon = $retourDUnCable('Retour B');
+        app(EmettreAvoirAction::class)->handle($responsable, $retourDUnCable('Retour A'));
+        app(EmettreAvoirAction::class)->handle($responsable, $brouillon);
+        app(EmettreAvoirAction::class)->handle($responsable, $retourDUnCable('Retour C'));
+        $this->inverserLOrdrePhysiqueDesLignes('avoirs');
+
+        $fiche = Livewire::test(ViewFacture::class, ['record' => $facture->getRouteKey()]);
+
+        preg_match_all('/AV-MABOUT-2026-\d{6}|Retour [ABC]/', Str::after($fiche->html(), 'Avoirs émis'), $mentions);
+        $this->assertSame(['AV-MABOUT-2026-000001', 'Retour A', 'AV-MABOUT-2026-000002', 'Retour B', 'AV-MABOUT-2026-000003', 'Retour C'], $mentions[0]);
     }
 
     /**

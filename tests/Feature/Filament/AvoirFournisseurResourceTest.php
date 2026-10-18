@@ -29,10 +29,12 @@ use App\Filament\App\Resources\FactureAchatResource\Pages\ViewFactureAchat;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Notifications\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -346,6 +348,65 @@ class AvoirFournisseurResourceTest extends TestCase
         $page->assertSeeInOrder(['Total après avoirs fournisseur', '54,00 €'])
             ->assertInfolistActionVisible('lignes.0.retourner_ce_produitAction', 'retourner_ce_produit')
             ->assertInfolistActionVisible('lignes.1.retourner_ce_produitAction', 'retourner_ce_produit');
+    }
+
+    /**
+     * Les avoirs fournisseur d'une facture d'achat et les retours de sa
+     * ligne se lisent dans l'ordre de leur émission, ni dans celui de leur
+     * création ni dans celui de leurs lignes en base : le brouillon B,
+     * créé le premier, n'est émis qu'après A, C l'est en dernier, tous dans
+     * la même seconde, et leurs lignes sont ensuite rangées à l'envers dans
+     * leurs tables (voir inverserLOrdrePhysiqueDesLignes()).
+     */
+    public function test_les_avoirs_et_les_retours_se_lisent_dans_l_ordre_de_leur_emission(): void
+    {
+        $this->travelTo('2026-10-17 10:32:00');
+        $this->connecterLeProprietaire();
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir([[$cable, 5, '12.00']]);
+        $retourDUnCable = fn (string $motif): AvoirFournisseur => app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
+            ['ligne_achat_id' => $factureAchat->lignes[0]->id, 'quantite' => 1],
+        ], $motif);
+        $brouillon = $retourDUnCable('Retour B');
+        app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $retourDUnCable('Retour A'));
+        app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $brouillon);
+        app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $retourDUnCable('Retour C'));
+        $this->inverserLOrdrePhysiqueDesLignes('avoirs_fournisseur', 'lignes_avoir_fournisseur');
+
+        $html = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()])->html();
+
+        preg_match_all('/Retourné : 1 \(avoir <a [^>]*>(AF-MABOUT-2026-\d{6})</', Str::before($html, 'Avoirs fournisseur émis'), $retours);
+        preg_match_all('/Retour [ABC]/', Str::after($html, 'Avoirs fournisseur émis'), $motifs);
+        $this->assertSame(['AF-MABOUT-2026-000001', 'AF-MABOUT-2026-000002', 'AF-MABOUT-2026-000003'], $retours[1]);
+        $this->assertSame(['Retour A', 'Retour B', 'Retour C'], $motifs[0]);
+    }
+
+    /**
+     * Les retours d'une ligne se lisent dans l'ordre de leur émission même
+     * quand l'heure de Paris se répète, la nuit du passage à l'heure
+     * d'hiver : le premier avoir est émis à 2 h 50 heure d'été, le second
+     * vingt minutes plus tard, à 2 h 10 heure d'hiver. L'instant de chaque
+     * émission, enregistré en UTC, se relit à son heure de Paris, décalage
+     * compris.
+     */
+    public function test_les_retours_d_une_ligne_restent_dans_l_ordre_de_leur_emission_quand_l_heure_de_paris_se_repete(): void
+    {
+        $this->travelTo('2026-10-24 10:32:00');
+        $this->connecterLeProprietaire();
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir([[$cable, 5, '12.00']]);
+        $this->travelTo(CarbonImmutable::parse('2026-10-25 00:50:00', 'UTC'));
+        $premier = $this->retourner($factureAchat, 0, 1);
+        $this->travelTo(CarbonImmutable::parse('2026-10-25 01:10:00', 'UTC'));
+        $second = $this->retourner($factureAchat, 0, 2);
+
+        $page = Livewire::test(ViewFactureAchat::class, ['record' => $factureAchat->getRouteKey()]);
+
+        $page->assertSeeHtmlInOrder(['Retourné : 1 (avoir', 'AF-MABOUT-2026-000001</a> du 25/10/2026)', 'Retourné : 2 (avoir', 'AF-MABOUT-2026-000002</a> du 25/10/2026)']);
+        $this->assertSame(
+            ['2026-10-25 02:50:00 +02:00', '2026-10-25 02:10:00 +01:00'],
+            [$premier->fresh()->date_emission->format('Y-m-d H:i:s P'), $second->fresh()->date_emission->format('Y-m-d H:i:s P')],
+        );
     }
 
     /**

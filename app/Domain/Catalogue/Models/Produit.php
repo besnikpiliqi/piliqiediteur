@@ -253,10 +253,10 @@ class Produit extends Model
 
     /**
      * Ses lignes d'achat validées, dans l'ordre où elles ont été reçues :
-     * par instant de validation de leur facture d'achat, en UTC, qui ne
-     * recule pas quand l'heure de Paris se répète au passage à l'heure
-     * d'hiver (une facture créée avant une autre peut être validée après
-     * elle), puis par facture et par ordre de ligne.
+     * par rang de validation de leur facture d'achat (une facture créée
+     * avant une autre peut être validée après elle, dans la même seconde
+     * ou dans l'heure qui se répète au passage à l'heure d'hiver), unique
+     * dans le magasin, puis par ordre de ligne.
      *
      * @param  'asc'|'desc'  $sens
      */
@@ -264,8 +264,7 @@ class Produit extends Model
     {
         return $this->lignesAchat()
             ->whereHas('factureAchat', fn (Builder $factureAchat) => $factureAchat->where('statut', StatutFactureAchat::Validee))
-            ->orderBy(FactureAchat::query()->select('date_validation')->whereColumn('factures_achat.id', 'lignes_achat.facture_achat_id'), $sens)
-            ->orderBy('facture_achat_id', $sens)
+            ->orderBy(FactureAchat::query()->select('rang_validation')->whereColumn('factures_achat.id', 'lignes_achat.facture_achat_id'), $sens)
             ->orderBy('ordre', $sens)
             ->orderBy('id', $sens);
     }

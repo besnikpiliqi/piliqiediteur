@@ -32,7 +32,11 @@ return new class extends Migration
             // plateforme de facturation électronique de celui saisi ici.
             $table->string('numero_fournisseur', 60)->nullable();
             $table->string('statut', 20)->default('brouillon');
-            $table->timestamp('date_emission')->nullable();
+            // L'instant de l'émission, en UTC (voir HorodatageUtc) :
+            // l'heure de Paris se répète la nuit du passage à l'heure
+            // d'hiver, et les retours d'une ligne d'achat se lisent dans
+            // l'ordre de leur émission (voir FactureAchatResource).
+            $table->dateTime('date_emission')->nullable();
             $table->string('devise', 3)->default('EUR');
             $table->text('motif')->nullable();
             $table->decimal('total_ht', 12, 2)->default(0);

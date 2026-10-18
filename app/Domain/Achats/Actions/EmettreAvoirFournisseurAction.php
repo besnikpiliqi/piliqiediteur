@@ -17,6 +17,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
 use LogicException;
@@ -25,6 +26,10 @@ use LogicException;
  * Même logique que EmettreAvoirAction côté vente : l'avoir fournisseur ne
  * reçoit son numéro qu'à l'émission, moment où le stock est décrémenté
  * (voir AvoirFournisseurEmis/DecrementerStockApresEmissionAvoirFournisseur).
+ * L'instant de l'émission se prend et s'enregistre en UTC (voir
+ * AvoirFournisseur::casts()) : l'heure de Paris se répète la nuit du
+ * passage à l'heure d'hiver, et les avoirs d'une facture d'achat se lisent
+ * dans l'ordre de leur émission (voir FactureAchat::avoirsFournisseurEmis()).
  * Un magasin suspendu ou fermé n'en émet plus (voir
  * Magasin::verifierQuIlEstOuvert()) : sa ligne se relit sous un verrou
  * partagé, premier verrou de la transaction, et la fermeture du magasin,
@@ -90,7 +95,7 @@ class EmettreAvoirFournisseurAction
         $avoirFournisseur->forceFill([
             'numero' => $numero,
             'statut' => StatutAvoirFournisseur::Emise,
-            'date_emission' => now(),
+            'date_emission' => CarbonImmutable::now('UTC'),
         ])->save();
 
         // Synchrone et dans la même transaction, voir le commentaire de

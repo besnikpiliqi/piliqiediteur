@@ -633,10 +633,10 @@ class Caisse extends Page implements HasForms
     {
         $calculateur = app(CalculateurLigne::class);
         $parts = [
-            ...$facture->allocationsPaiement()->with('paiement')->orderBy('id')->get()->map(
+            ...$facture->allocationsPaiement()->with('paiement')->get()->map(
                 fn (PaiementAllocation $allocation): string => self::formaterCentimes($calculateur->enCentiemes($allocation->montant_alloue)).' '.$allocation->paiement->mode_paiement->dansUnePhrase(),
             ),
-            ...$facture->allocationsAvoir()->with('avoir.client')->orderBy('id')->get()->map(
+            ...$facture->allocationsAvoir()->with('avoir.client')->get()->map(
                 fn (AvoirAllocation $allocation): string => self::formaterCentimes($calculateur->enCentiemes($allocation->montant_alloue)).(($allocation->avoir->client?->estComptoir() ?? false) ? ' du bon d\'avoir ' : ' du crédit d\'avoir ').$allocation->avoir->numero,
             ),
         ];

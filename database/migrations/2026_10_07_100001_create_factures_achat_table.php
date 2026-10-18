@@ -33,9 +33,15 @@ return new class extends Migration
             $table->date('date_facture')->nullable();
             // L'instant de la validation, en UTC (voir HorodatageUtc) :
             // l'heure de Paris se répète la nuit du passage à l'heure
-            // d'hiver, et le dernier achat validé d'un produit se choisit
-            // par cet instant (voir Produit::achatsValides()).
+            // d'hiver.
             $table->dateTime('date_validation')->nullable();
+            // Son rang de validation dans le magasin (1, 2, 3…, toutes
+            // années confondues), pris sous verrou à la validation (voir
+            // ValiderFactureAchatAction) : il ne recule jamais, même quand
+            // deux validations tombent dans la même seconde, et le dernier
+            // achat validé d'un produit se choisit par lui (voir
+            // Produit::achatsValides()).
+            $table->unsignedBigInteger('rang_validation')->nullable();
             $table->string('devise', 3)->default('EUR');
             $table->text('notes')->nullable();
             $table->decimal('total_ht', 12, 2)->default(0);
@@ -48,6 +54,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['magasin_id', 'numero']);
+            $table->unique(['magasin_id', 'rang_validation']);
             $table->index(['magasin_id', 'fournisseur_id']);
         });
     }

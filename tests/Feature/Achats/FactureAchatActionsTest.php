@@ -1033,12 +1033,43 @@ class FactureAchatActionsTest extends TestCase
     }
 
     /**
-     * Le dernier achat se reconnaît à l'instant de sa validation, même
-     * quand l'heure de Paris se répète, la nuit du passage à l'heure
-     * d'hiver : F2 (5 €, chez A) est validée à 2 h 59 heure d'été, F1
-     * (8 €, chez B) une minute plus tard, à 2 h 00 heure d'hiver. Corrigée
-     * à 9 €, F1 reste le dernier achat : le produit, qui ne suit pas son
-     * stock, en reprend le coût, et reste chez B.
+     * Le dernier achat reste le plus récemment validé quand deux
+     * validations tombent dans la même seconde (deux personnes, ou une
+     * validation par l'API) : F1 (8 €, chez B) est créée avant F2 (5 €,
+     * chez A), mais F2 est validée la première, au même instant figé. Le
+     * rang de validation, pris sous verrou, les départage dans l'ordre de
+     * leur validation, pas dans celui de leur création : corrigée à 9 €,
+     * F1 reste le dernier achat, le produit, qui ne suit pas son stock, en
+     * reprend le coût et reste chez B.
+     */
+    public function test_le_dernier_achat_reste_le_plus_recemment_valide_quand_deux_validations_tombent_dans_la_meme_seconde(): void
+    {
+        $chezA = Fournisseur::factory()->create();
+        $chezB = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
+        $f1 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $chezB, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 8]]);
+        $f2 = app(CreerFactureAchatAction::class)->handle(self::auteur(), $chezA, [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 5]]);
+        $this->travelTo('2026-10-09 10:00:00');
+        $f2 = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $f2);
+        $f1 = app(ValiderFactureAchatAction::class)->handle(self::auteur(), $f1);
+
+        app(ModifierFactureAchatAction::class)->handle(self::auteur(), $f1, $chezB, [
+            ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 9],
+        ]);
+
+        $this->assertEquals($f1->date_validation, $f2->date_validation);
+        $this->assertSame([1, 2], [$f2->fresh()->rang_validation, $f1->fresh()->rang_validation]);
+        $this->assertSame(['9.0000', $chezB->id], [$produit->fresh()->cmup_ht, $produit->fresh()->fournisseur_id]);
+    }
+
+    /**
+     * Le dernier achat reste le plus récemment validé même quand l'heure
+     * de Paris se répète, la nuit du passage à l'heure d'hiver : F2 (5 €,
+     * chez A) est validée à 2 h 59 heure d'été, F1 (8 €, chez B) une
+     * minute plus tard, à 2 h 00 heure d'hiver. Corrigée à 9 €, F1 reste le
+     * dernier achat : le produit, qui ne suit pas son stock, en reprend le
+     * coût, et reste chez B. L'instant de chaque validation, enregistré en
+     * UTC, se relit à son heure de Paris, décalage compris.
      */
     public function test_le_dernier_achat_reste_le_plus_recemment_valide_quand_l_heure_de_paris_se_repete(): void
     {

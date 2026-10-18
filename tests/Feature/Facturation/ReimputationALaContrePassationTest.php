@@ -30,6 +30,8 @@ use Tests\TestCase;
  * les factures que chaque avoir corrige, puis sur ses autres factures
  * dues, de la plus ancienne à la plus récente, jamais pour le client
  * comptoir ; chaque imputation désigne la contre-passation, qui la signe.
+ * Les imputations se relisent toujours dans l'ordre de leur
+ * enregistrement.
  */
 class ReimputationALaContrePassationTest extends TestCase
 {
@@ -157,6 +159,40 @@ class ReimputationALaContrePassationTest extends TestCase
         $this->assertSame([StatutFacture::Payee, 0.0], [$f1->fresh()->statut, $f1->fresh()->montantRestant()]);
         $this->assertSame([StatutFacture::PartiellementPayee, 20.0], [$f2->fresh()->statut, $f2->fresh()->montantRestant()]);
         $this->assertSame(0, $client->soldeCrediteurEnCentimes());
+    }
+
+    /**
+     * Les imputations se relisent dans l'ordre où elles ont été
+     * enregistrées, même quand leurs lignes sont rangées à l'envers dans
+     * leur table (voir inverserLOrdrePhysiqueDesLignes()) : celles d'un
+     * paiement (F1 puis F2), les paiements de F1 (le virement, puis sa
+     * contre-passation), les crédits d'avoir imputés sur F1 (l'avoir de
+     * 30,00 €, puis celui de 50,00 €) et les factures sur lesquelles
+     * s'impute l'avoir de 50,00 € (F1, puis F2). La base de données ne
+     * garantit aucun ordre sans tri : les relations les trient (voir
+     * Facture::allocationsPaiement(), Facture::allocationsAvoir(),
+     * Avoir::allocations() et Paiement::allocations()).
+     */
+    public function test_les_imputations_se_relisent_dans_l_ordre_de_leur_enregistrement_quel_que_soit_l_ordre_des_lignes_en_base(): void
+    {
+        $this->magasin();
+        $client = Client::factory()->professionnel()->create();
+        $g1 = $this->facture($client, 30);
+        $g2 = $this->facture($client, 50);
+        $this->payerParVirement($client, $g1, $g2);
+        $f1 = $this->facture($client, 60);
+        $f2 = $this->facture($client, 40);
+        $virement = $this->payerParVirement($client, $f1, $f2);
+        $avoirDe30 = $this->avoirSur($g1);
+        $avoirDe50 = $this->avoirSur($g2);
+        $this->contrePasser($virement);
+
+        $this->inverserLOrdrePhysiqueDesLignes('paiement_allocations', 'avoir_allocations');
+
+        $this->assertSame([$f1->id, $f2->id], $virement->allocations()->pluck('facture_id')->all());
+        $this->assertSame(['60.00', '-60.00'], $f1->allocationsPaiement()->pluck('montant_alloue')->all());
+        $this->assertSame([$avoirDe30->id, $avoirDe50->id], $f1->allocationsAvoir()->pluck('avoir_id')->all());
+        $this->assertSame([$f1->id, $f2->id], $avoirDe50->allocations()->pluck('facture_id')->all());
     }
 
     /**

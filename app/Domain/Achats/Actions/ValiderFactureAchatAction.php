@@ -25,10 +25,14 @@ use LogicException;
  * Même logique que EmettreFactureAction côté vente : la facture d'achat ne
  * reçoit son numéro interne qu'à la validation, moment où le stock est
  * incrémenté (voir FactureAchatValidee/IncrementerStockApresValidationFactureAchat).
- * L'instant de la validation se prend et s'enregistre en UTC (voir
- * FactureAchat::casts()) : le dernier achat d'un produit se choisit par
- * lui (voir Produit::achatsValides()), et l'heure de Paris se répète la
- * nuit du passage à l'heure d'hiver.
+ * Elle reçoit aussi son rang de validation dans le magasin, après son
+ * numéro, sous le verrou de la série de ses rangs (voir
+ * DocumentNumberingService::rangSuivant()), qui ne recule jamais, même
+ * quand deux validations tombent dans la même seconde : le dernier achat
+ * d'un produit se choisit par lui (voir Produit::achatsValides()), et non
+ * par l'instant de la validation, qui se prend et s'enregistre en UTC
+ * (voir FactureAchat::casts()), l'heure de Paris se répétant la nuit du
+ * passage à l'heure d'hiver.
  * Chacun de ses produits existants doit encore être au catalogue : une
  * réception ne se perd jamais en silence. Son fournisseur aussi : archivé
  * depuis la saisie, il ne deviendrait pas le fournisseur de ses produits
@@ -123,6 +127,7 @@ class ValiderFactureAchatAction
 
         $factureAchat->forceFill([
             'numero' => $numero,
+            'rang_validation' => $this->numerotation->rangSuivant($factureAchat->magasin, TypeDocument::FactureAchat),
             'statut' => StatutFactureAchat::Validee,
             'date_validation' => CarbonImmutable::now('UTC'),
         ])->save();

@@ -5,6 +5,7 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Tenancy\Models\Magasin;
+use Closure;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -43,6 +44,10 @@ use Illuminate\Support\Facades\DB;
  * silencieux : la logique reste correcte en mono-processus, mais la
  * garantie contre les accès simultanés ne vaut que sous PostgreSQL, en
  * production.
+ *
+ * Le même compteur donne aussi un rang sans numéro à écrire (voir
+ * rangSuivant()) : la série d'un type de document sans clé de période,
+ * que sa numérotation, toujours annuelle, n'utilise jamais.
  */
 class DocumentNumberingService
 {
@@ -73,8 +78,8 @@ class DocumentNumberingService
 
     public function suivant(Magasin $magasin, TypeDocument $type, string $periodKey = ''): string
     {
-        return DB::transaction(function () use ($magasin, $type, $periodKey) {
-            $sequence = $this->sequenceVerrouillee($magasin, $type, $periodKey);
+        return DB::transaction(function () use ($magasin, $type, $periodKey): string {
+            $sequence = $this->sequenceVerrouillee($magasin, $type, $periodKey, fn (): string => $this->prefixe($magasin, $type, $periodKey));
 
             $numero = $sequence->prefixe.str_pad(
                 (string) $sequence->prochain_numero,
@@ -89,7 +94,31 @@ class DocumentNumberingService
         });
     }
 
-    private function sequenceVerrouillee(Magasin $magasin, TypeDocument $type, string $periodKey): SequenceDocument
+    /**
+     * Le rang suivant d'un type de document daté dans le magasin : 1, 2,
+     * 3…, toutes années confondues, sans préfixe, dans l'ordre où les
+     * opérations le prennent. Il se prend sous le verrou de la série du
+     * type sans clé de période, que gardent jusqu'à leur fin les
+     * transactions qui l'ont pris : il ne recule jamais, même entre deux
+     * opérations de la même seconde. Une facture d'achat reçoit ainsi son
+     * rang de validation (voir ValiderFactureAchatAction).
+     */
+    public function rangSuivant(Magasin $magasin, TypeDocument $type): int
+    {
+        return DB::transaction(function () use ($magasin, $type): int {
+            $sequence = $this->sequenceVerrouillee($magasin, $type, '', fn (): string => '');
+            $rang = (int) $sequence->prochain_numero;
+
+            $sequence->increment('prochain_numero');
+
+            return $rang;
+        });
+    }
+
+    /**
+     * @param  Closure(): string  $prefixe  le préfixe d'une série à créer
+     */
+    private function sequenceVerrouillee(Magasin $magasin, TypeDocument $type, string $periodKey, Closure $prefixe): SequenceDocument
     {
         $critere = [
             'magasin_id' => $magasin->getKey(),
@@ -104,7 +133,7 @@ class DocumentNumberingService
         }
 
         SequenceDocument::query()->createOrFirst($critere, [
-            'prefixe' => $this->prefixe($magasin, $type, $periodKey),
+            'prefixe' => $prefixe(),
             'prochain_numero' => 1,
             'rembourrage' => self::CHIFFRES_DU_RANG,
         ]);

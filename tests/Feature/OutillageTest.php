@@ -6,9 +6,12 @@ use App\Domain\Contacts\Models\Client;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use Laravel\Boost\Install\GuidelineConfig;
 use Laravel\Boost\Install\SkillComposer;
 use Laravel\Boost\Support\Config;
+use Livewire\Component;
+use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -19,7 +22,7 @@ use Tests\TestCase;
  * absent du projet. La base, PostgreSQL ou SQLite, trie les textes dans
  * le même ordre. Les aides des tests lisent les PDF de dompdf sans
  * dépendre du hasard de leur contenu, et aucun test ne dépend du hasard
- * de Faker.
+ * de Faker ni de celui de Str::random().
  */
 class OutillageTest extends TestCase
 {
@@ -81,6 +84,34 @@ class OutillageTest extends TestCase
         fake()->seed(crc32(self::class.'::test_faker_est_seme_par_test_et_redonne_les_memes_valeurs_a_chaque_execution with data set "'.$jeu.' jeu"'));
 
         $this->assertSame($valeursDuTest, $tirer());
+    }
+
+    /**
+     * Str::random() est semé au début de chaque test par la même graine
+     * que Faker (voir TestCase::setUp()) : la rejouer redonne les chaînes
+     * que le test a tirées, dont l'identifiant d'un composant Livewire,
+     * qui revient partout dans son HTML. Une assertion qui vérifie
+     * l'absence d'un mot court (« Luc ») dans ce HTML ne dépend donc plus
+     * du hasard de cet identifiant.
+     */
+    #[DataProvider('deuxJeuxDeDonnees')]
+    public function test_str_random_est_seme_par_test_et_redonne_les_memes_chaines_a_chaque_execution(string $jeu): void
+    {
+        $tirer = fn (): array => [
+            Str::random(),
+            Livewire::test(new class extends Component
+            {
+                public function render(): string
+                {
+                    return '<div>Composant de test</div>';
+                }
+            })->id(),
+        ];
+        $chainesDuTest = $tirer();
+
+        Str::createRandomStringsUsing(self::chainesAleatoiresSemees(crc32(self::class.'::test_str_random_est_seme_par_test_et_redonne_les_memes_chaines_a_chaque_execution with data set "'.$jeu.' jeu"')));
+
+        $this->assertSame($chainesDuTest, $tirer());
     }
 
     public function test_aucune_route_d_un_paquet_retire_n_est_exposee(): void

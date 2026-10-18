@@ -59,12 +59,19 @@ class CaissesDeLaSocieteTest extends TestCase
             ->assertDontSee('12,00 €');
     }
 
+    /**
+     * Les magasins et les vendeurs qui ne doivent pas figurer sur la page
+     * ont des noms qu'aucun identifiant de composant Livewire, fait de
+     * lettres et de chiffres et répété dans tout le HTML, ne peut contenir
+     * (une espace, un accent) : leur absence ne dépend pas de cet
+     * identifiant.
+     */
     public function test_un_administrateur_ne_voit_que_les_magasins_de_sa_selection_ou_il_voit_les_releves_de_toute_l_equipe(): void
     {
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
-        $paris = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Paris']);
-        $nice = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Nice']);
-        foreach ([[$lyon, 'Paul'], [$paris, 'Jeanne'], [$nice, 'Luc']] as [$magasin, $nom]) {
+        $paris = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Paris Opéra']);
+        $nice = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Nice Étoile']);
+        foreach ([[$lyon, 'Paul'], [$paris, 'Jeanne Roux'], [$nice, 'Luc Morel']] as [$magasin, $nom]) {
             $this->vendeurQuiVend($magasin, $nom, 12);
         }
         $sansLesReleves = array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES]));
@@ -75,12 +82,18 @@ class CaissesDeLaSocieteTest extends TestCase
         $this->assertSame([$lyon->id], array_map(fn (array $magasin): int => $magasin['magasin']->id, app(CaissesDeLaSociete::class)->pour($administrateur, today()->toImmutable())));
         Livewire::test(LesCaisses::class)
             ->assertSee('Caisses encore ouvertes : Paul.')
-            ->assertDontSee(['Paris', 'Jeanne', 'Nice', 'Luc']);
+            ->assertDontSee(['Paris Opéra', 'Jeanne Roux', 'Nice Étoile', 'Luc Morel']);
         $this->dansLEspaceDeLaSociete($lyon->societe, $aveugle);
         $this->assertFalse(LesCaisses::canAccess());
         $this->get(LesCaisses::getUrl(panel: 'societe', tenant: $lyon->societe))->assertForbidden();
     }
 
+    /**
+     * Le code de la démonstration se cherche tel que la page l'écrirait,
+     * entre parenthèses après le nom du magasin : aucun identifiant de
+     * composant Livewire, fait de lettres et de chiffres, ne contient une
+     * parenthèse.
+     */
     public function test_la_demonstration_et_les_magasins_d_une_autre_societe_n_y_figurent_jamais(): void
     {
         $reel = $this->ouvrirUneSociete(['nom' => 'Lyon', 'a_verifier' => true]);
@@ -94,7 +107,7 @@ class CaissesDeLaSocieteTest extends TestCase
         $this->assertSame([$reel->id], array_map(fn (array $magasin): int => $magasin['magasin']->id, app(CaissesDeLaSociete::class)->pour($proprietaire, today()->toImmutable())));
         Livewire::test(LesCaisses::class)
             ->assertSee('Lyon')
-            ->assertDontSee([$demonstration->code, 'Responsable de test', 'Bordeaux', 'Inès']);
+            ->assertDontSee([$demonstration->nom, '('.$demonstration->code.')', 'Responsable de test', 'Bordeaux', 'Inès']);
     }
 
     /**
@@ -147,8 +160,8 @@ class CaissesDeLaSocieteTest extends TestCase
     public function test_une_requete_livewire_forgee_ne_montre_aucun_magasin_hors_de_la_portee(): void
     {
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
-        $paris = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Paris']);
-        $jeanne = $this->vendeurQuiVend($paris, 'Jeanne', 12);
+        $paris = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Paris Opéra']);
+        $jeanne = $this->vendeurQuiVend($paris, 'Jeanne Roux', 12);
         app(TenantContext::class)->runAs($paris, fn () => app(FermerSaCaisseAction::class)->handle($jeanne, $jeanne));
         $ailleurs = $this->ouvrirUneSociete(['nom' => 'Bordeaux']);
         $administrateur = $this->administrateur($lyon, [$lyon->id]);
@@ -156,7 +169,7 @@ class CaissesDeLaSocieteTest extends TestCase
         $page = Livewire::test(LesCaisses::class);
 
         foreach (['2026-10-18', today()->toDateString(), 'pas une date', '2026-02-30'] as $jour) {
-            $page->set('jour', $jour)->assertSee('Lyon')->assertDontSee(['Paris', 'Jeanne', $paris->uuid, 'Bordeaux', $ailleurs->uuid]);
+            $page->set('jour', $jour)->assertSee('Lyon')->assertDontSee(['Paris Opéra', 'Jeanne Roux', $paris->uuid, 'Bordeaux', $ailleurs->uuid]);
         }
         foreach (['caisses', 'urlDesReleves', 'jourChoisi', 'getViewData'] as $methode) {
             $this->assertThrows(fn () => Livewire::test(LesCaisses::class)->call($methode, $paris->getKey()), MethodNotFoundException::class);

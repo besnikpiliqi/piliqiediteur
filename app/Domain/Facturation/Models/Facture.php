@@ -445,11 +445,21 @@ class Facture extends Model implements DocumentEnvoyable
      * Un avoir peut être partiel (voir CreerAvoirAction) : une facture peut
      * donc faire l'objet de plusieurs avoirs successifs au fil du temps,
      * tant qu'il reste au moins une ligne dont la quantité facturée n'a
-     * pas été intégralement créditée.
+     * pas été intégralement créditée. Ils se lisent dans l'ordre de leur
+     * émission, que la fiche de la facture suit (voir FactureResource) :
+     * par date d'émission, un instant fiscal qui ne recule jamais dans le
+     * magasin (voir InstantFiscal), puis par numéro, donné sous verrou à
+     * l'émission, pour deux avoirs émis dans la même seconde. La base de
+     * données ne garantit aucun ordre sans tri : un avoir modifié après
+     * son émission (sa clôture) change de place dans sa table, et un
+     * brouillon créé avant un autre peut être émis après lui.
      */
     public function avoirsEmisConcernes(): Builder
     {
-        return $this->avoirsConcernes()->where('statut', StatutAvoir::Emise);
+        return $this->avoirsConcernes()
+            ->where('statut', StatutAvoir::Emise)
+            ->orderBy('date_emission')
+            ->orderBy('numero');
     }
 
     /**

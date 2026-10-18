@@ -4,6 +4,7 @@ namespace App\Domain\Achats\Models;
 
 use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
+use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
@@ -55,14 +56,23 @@ class AvoirFournisseur extends Model
         'source',
     ];
 
-    protected $casts = [
-        'statut' => StatutAvoirFournisseur::class,
-        'source' => SourceAvoirFournisseur::class,
-        'date_emission' => 'datetime',
-        'total_ht' => 'decimal:2',
-        'total_tva' => 'decimal:2',
-        'total_ttc' => 'decimal:2',
-    ];
+    /**
+     * date_emission est l'instant de l'émission, enregistré en UTC et relu
+     * à l'heure de Paris (voir HorodatageUtc).
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'statut' => StatutAvoirFournisseur::class,
+            'source' => SourceAvoirFournisseur::class,
+            'date_emission' => HorodatageUtc::class.':'.config('app.timezone'),
+            'total_ht' => 'decimal:2',
+            'total_tva' => 'decimal:2',
+            'total_ttc' => 'decimal:2',
+        ];
+    }
 
     protected static function booted(): void
     {

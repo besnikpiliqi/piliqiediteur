@@ -146,7 +146,7 @@ class ContrePasserPaiementAction
         $contrePassation->forceFill(['contre_passe_paiement_id' => $original->getKey(), 'cree_par' => $compte->getKey()])->save();
         $factures = [];
 
-        foreach ($original->allocations()->orderBy('id')->get() as $allocation) {
+        foreach ($original->allocations()->get() as $allocation) {
             $factures[$allocation->facture_id] ??= Facture::query()->whereKey($allocation->facture_id)->lockForUpdate()->firstOrFail();
 
             PaiementAllocation::create([

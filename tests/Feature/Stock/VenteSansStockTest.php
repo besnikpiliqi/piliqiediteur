@@ -13,7 +13,6 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
@@ -317,7 +316,7 @@ class VenteSansStockTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::query()->findOrFail($produit->magasin_id));
 
-        return app(EnregistrerVenteCaisseAction::class)->handle($auteur, $this->comptoir(), [['produit_id' => $produit->id, 'quantite' => $quantite]], ModePaiement::Especes, confirmation: $confirmation);
+        return self::vendreAuComptant($auteur, $this->comptoir(), [['produit_id' => $produit->id, 'quantite' => $quantite]], ModePaiement::Especes, confirmation: $confirmation);
     }
 
     /**

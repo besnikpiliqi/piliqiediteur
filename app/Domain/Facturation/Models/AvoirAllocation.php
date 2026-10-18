@@ -10,10 +10,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Ce qu'un avoir crédite d'une facture : né pendant l'émission de l'un ou
  * de l'autre et signé avec lui, ou pendant l'enregistrement d'un paiement
- * (paiement_id) et signé avec ce paiement ; jamais modifié ni supprimé
- * (voir ProtegeLesDonneesValidees et les déclencheurs de la table). La
+ * (paiement_id) et signé avec ce paiement : un bon d'avoir présenté avec
+ * lui (voir EnregistrerPaiementAction), ou le crédit qu'une
+ * contre-passation impute sur ce qu'elle rouvre (voir
+ * ContrePasserPaiementAction) ; jamais modifié ni supprimé (voir
+ * ProtegeLesDonneesValidees et les déclencheurs de la table). La
  * contre-passation d'un paiement rend le crédit qu'il avait imputé par
- * une imputation négative qui la désigne (voir ContrePasserPaiementAction).
+ * une imputation négative qui la désigne. Une imputation de crédit ne fait
+ * entrer aucun argent : elle n'est jamais un paiement d'un mode.
  */
 class AvoirAllocation extends Model
 {
@@ -54,8 +58,8 @@ class AvoirAllocation extends Model
 
     /**
      * Le paiement qui a imputé ce crédit, ou la contre-passation qui l'a
-     * rendu ; null pour un crédit imputé à l'émission d'un avoir ou d'une
-     * facture.
+     * rendu ou réimputé ; null pour un crédit imputé à l'émission d'un
+     * avoir ou d'une facture.
      */
     public function paiement(): BelongsTo
     {

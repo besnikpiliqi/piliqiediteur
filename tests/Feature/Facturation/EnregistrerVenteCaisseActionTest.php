@@ -43,7 +43,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $facture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+        $facture = self::vendreAuComptant(self::auteur(),
             $client,
             [['produit_id' => $produit->id, 'quantite' => 2]],
             ModePaiement::Especes,
@@ -60,7 +60,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 5]);
 
-        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+        self::vendreAuComptant(self::auteur(),
             $client,
             [['produit_id' => $produit->id, 'quantite' => 3]],
             ModePaiement::CarteBancaire,
@@ -74,7 +74,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $client = Client::factory()->create();
         $service = Service::factory()->create(['nom' => 'Retouche']);
 
-        $facture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+        $facture = self::vendreAuComptant(self::auteur(),
             $client,
             [['service_id' => $service->id, 'quantite' => 1, 'prix_unitaire_ttc' => 18, 'taux_tva' => 20]],
             ModePaiement::Especes,
@@ -89,7 +89,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $client = Client::factory()->create();
 
         $this->expectException(LogicException::class);
-        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [], ModePaiement::Especes);
+        self::vendreAuComptant(self::auteur(), $client, [], ModePaiement::Especes);
     }
 
     /**
@@ -106,7 +106,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
 
         // Premier achat payé puis intégralement retourné : 60 € de crédit
         // disponible.
-        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+        $premiereFacture = self::vendreAuComptant(self::auteur(),
             $client,
             [['produit_id' => $produit->id, 'quantite' => 1]],
             ModePaiement::Especes,
@@ -121,7 +121,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
 
         // Nouvel achat comptoir du même montant : intégralement couvert par
         // le crédit, sans aucun encaissement en espèces.
-        $facture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+        $facture = self::vendreAuComptant(self::auteur(),
             $client,
             [['produit_id' => $produit->id, 'quantite' => 1]],
             ModePaiement::Especes,
@@ -139,7 +139,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+        self::vendreAuComptant(self::auteur(),
             $client,
             [['produit_id' => $produit->id, 'quantite' => 1]],
             ModePaiement::CarteBancaire,
@@ -162,7 +162,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $facture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+        $facture = self::vendreAuComptant(self::auteur(),
             $client,
             [['produit_id' => $produit->id, 'quantite' => 1, 'remise_pourcentage' => 100]],
             ModePaiement::Especes,
@@ -182,7 +182,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $produit = Produit::factory()->create(['suivi_stock' => false]);
 
         try {
-            app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+            self::vendreAuComptant(self::auteur(),
                 $client,
                 [['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ttc' => -50]],
                 ModePaiement::Especes,
@@ -213,7 +213,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
      */
     private function bonDAvoir(Client $comptoir, float $prixTtc): Avoir
     {
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
 
         return app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
     }
@@ -228,7 +228,7 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $bon = $this->bonDAvoir($comptoir, 30);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: 'AV-MABOUT-2026-000001');
+        $ticket = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes, bonsDAvoir: ['AV-MABOUT-2026-000001']);
 
         $this->assertSame([StatutFacture::Payee, 20.0, 0.0, 0.0], [$ticket->fresh()->statut, $ticket->montantCrediteParAvoir(), $ticket->montantPaye(), $ticket->montantRestant()]);
         $this->assertSame(1, Paiement::query()->count());
@@ -247,10 +247,10 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $comptoir = $this->clientComptoir();
         $bon = $this->bonDAvoir($comptoir, 12);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
-        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $bon->numero);
+        self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes, bonsDAvoir: [$bon->numero]);
 
         try {
-            app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $bon->numero);
+            self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes, bonsDAvoir: [$bon->numero]);
             $this->fail('Un bon d\'avoir épuisé aurait dû être refusé.');
         } catch (LogicException $refus) {
             $this->assertSame('Ce bon d\'avoir est introuvable ou déjà utilisé.', $refus->getMessage());
@@ -259,6 +259,6 @@ class EnregistrerVenteCaisseActionTest extends TestCase
         $this->assertSame(['TK-MABOUT-2026-000001', 'TK-MABOUT-2026-000002'], Facture::query()->orderBy('id')->pluck('numero')->all());
         $this->assertSame(2, Paiement::query()->count());
         $this->assertSame(['12.00'], AvoirAllocation::query()->where('avoir_id', $bon->id)->pluck('montant_alloue')->all());
-        $this->assertSame('TK-MABOUT-2026-000003', app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes)->numero);
+        $this->assertSame('TK-MABOUT-2026-000003', self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes)->numero);
     }
 }

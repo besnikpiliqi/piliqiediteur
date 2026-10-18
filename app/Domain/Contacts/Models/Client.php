@@ -220,36 +220,41 @@ class Client extends Model
     }
 
     /**
+     * Crédit encore disponible pour ce client (voir
+     * soldeCrediteurEnCentimes()).
+     */
+    public function soldeCrediteur(): float
+    {
+        return (float) app(CalculateurLigne::class)->enDecimal($this->soldeCrediteurEnCentimes());
+    }
+
+    /**
      * Crédit encore disponible pour ce client, tous avoirs confondus,
-     * particulier ou professionnel : un avoir n'est jamais remboursé (B5).
-     * À son émission, il règle d'abord les factures qu'il corrige, puis les
-     * autres factures impayées du client, de la plus ancienne à la plus
-     * récente (voir ImputerAvoirSurSesFacturesAction) ; ce qui reste est ce
-     * crédit, comme celui que la contre-passation d'un paiement rend à ses
-     * avoirs (voir ContrePasserPaiementAction). La prochaine facture du
-     * client l'absorbe (voir AppliquerAvoirsDisponiblesAction), ou un
-     * paiement le solde sur les factures qu'il règle (voir
-     * EnregistrerPaiementAction). Il peut donc coexister avec des factures
-     * dues : celles qu'une contre-passation a rouvertes sans y imputer ce
-     * crédit, qui attend le bon paiement (K9).
+     * particulier ou professionnel, en centimes : un avoir n'est jamais
+     * remboursé (B5). À son émission, il règle d'abord les factures qu'il
+     * corrige, puis les autres factures impayées du client, de la plus
+     * ancienne à la plus récente (voir ImputationDuCredit) ; ce qui reste
+     * est ce crédit. La prochaine facture du client l'absorbe à son
+     * émission (voir AppliquerAvoirsDisponiblesAction), et la
+     * contre-passation d'un paiement l'impute aussitôt sur ce qu'elle
+     * rouvre (complément 1, voir ContrePasserPaiementAction) : il ne
+     * coexiste donc jamais avec une facture due du client.
      *
      * Le client comptoir (voir estComptoir()) n'a jamais de solde
      * créditeur : il est partagé par toutes les ventes anonymes du magasin,
      * et le crédit d'un avoir fait au comptoir n'appartient qu'à qui en
-     * présente le numéro, son bon d'avoir (voir
-     * EnregistrerVenteCaisseAction), jamais à la vente comptoir suivante.
+     * présente le numéro, son bon d'avoir (voir ApercuDuReglement), jamais
+     * à la vente comptoir suivante.
      */
-    public function soldeCrediteur(): float
+    public function soldeCrediteurEnCentimes(): int
     {
         if ($this->estComptoir()) {
-            return 0.0;
+            return 0;
         }
 
-        return app(CalculateurLigne::class)->sommer(
-            $this->avoirs()
-                ->where('statut', StatutAvoir::Emise)
-                ->get()
-                ->map(fn (Avoir $avoir) => $avoir->montantNonAlloue()),
-        );
+        return (int) $this->avoirs()
+            ->where('statut', StatutAvoir::Emise)
+            ->get()
+            ->sum(fn (Avoir $avoir): int => $avoir->creditEnCentimes());
     }
 }

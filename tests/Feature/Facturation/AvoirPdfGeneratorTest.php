@@ -10,7 +10,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
@@ -197,9 +196,9 @@ class AvoirPdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
         $avoir = $this->crediter($comptoir, $ticket);
-        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $avoir->numero);
+        self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes, bonsDAvoir: [$avoir->numero]);
 
         $html = $this->rendu($avoir->fresh());
 
@@ -215,7 +214,7 @@ class AvoirPdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set(Magasin::factory()->create());
         $client = Client::factory()->create();
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
 
         $avoir = $this->crediter($client, $ticket);
 
@@ -302,7 +301,7 @@ class AvoirPdfGeneratorTest extends TestCase
     {
         app(TenantContext::class)->set($this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'raison_sociale' => 'Martin et Fils', 'forme_juridique' => FormeJuridique::Sas, 'option_debits_tva' => true]));
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
 
         $html = $this->compacte($this->rendu($this->crediter($comptoir, $ticket)));
 

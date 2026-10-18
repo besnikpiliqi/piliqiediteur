@@ -8,12 +8,15 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\TypeDocument;
-use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Facturation\Services\ApercuDuReglement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\PanierDeCaisse;
+use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Recherche\RechercheSansAccents;
 use App\Domain\Stock\Exceptions\ConfirmationVenteSansStockRequiseException;
 use App\Domain\Stock\Services\ConfirmationVenteSansStock;
@@ -24,25 +27,22 @@ use App\Filament\App\Resources\ClientResource;
 use App\Filament\App\Resources\DevisResource;
 use App\Filament\Concerns\AvertitDUneVenteSansStock;
 use App\Filament\Concerns\GereLesExceptionsMetier;
-use Closure;
+use App\Filament\Concerns\SaisitUnReglementEnParts;
 use Filament\Actions;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Actions\Action;
-use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
-use Filament\Forms\Set;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
-use Filament\Support\Enums\MaxWidth;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
@@ -86,11 +86,19 @@ use LogicException;
  * (voir ControleDesDroits), et le domaine refuse tout ticket et toute
  * facture (voir Magasin::verifierQuIlPeutVendre()).
  *
- * Pour toute vente, quel qu'en soit le client, « Utiliser un bon
- * d'avoir » demande le numéro d'un avoir fait au client comptoir (K6) :
- * son crédit restant est déduit de ce que le crédit d'avoir du client
- * laisse à payer, puis imputé sur la facture à l'encaissement, qui relit
- * le bon sous le verrou du registre (voir EnregistrerVenteCaisseAction).
+ * La vente se règle d'un seul geste, en un ou plusieurs modes (points 1
+ * et 23, voir SaisitUnReglementEnParts) : le crédit d'avoir du client
+ * s'affiche comme la part « Avoir (crédit du client) », imputée d'office ;
+ * pour toute vente, quel qu'en soit le client, une part « Avoir » demande
+ * le numéro d'un avoir fait au client comptoir (K6), dont le crédit
+ * restant règle ce que le crédit du client et les bons saisis avant lui
+ * laissent à payer ; les parts payées (espèces, carte bancaire, chèque,
+ * virement, jamais le prélèvement) règlent exactement le reste, et seule
+ * la part en espèces rend la monnaie. Tant qu'elle est la seule part payée
+ * et que le vendeur n'en a pas saisi le montant, la première part suit ce
+ * qui reste à payer (voir rendering()). L'encaissement relit le crédit et les bons
+ * sous le verrou du registre et refuse un règlement devenu faux (voir
+ * EmettreFactureAction).
  *
  * Une vente au-delà du stock (R1) est refusée à qui n'est pas autorisé à
  * vendre sans stock ; à qui l'est, la caisse montre d'abord
@@ -108,7 +116,7 @@ use LogicException;
  */
 class Caisse extends Page implements HasForms
 {
-    use AvertitDUneVenteSansStock, GereLesExceptionsMetier, InteractsWithForms;
+    use AvertitDUneVenteSansStock, GereLesExceptionsMetier, InteractsWithForms, SaisitUnReglementEnParts;
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';
 
@@ -181,6 +189,10 @@ class Caisse extends Page implements HasForms
      * (voir AjouteDesLignesDeVente::lignesAuxPrixPermis()) : un panier
      * repris après un changement du prix d'une fiche s'encaisse au nouveau
      * prix, qu'il voit avant d'encaisser.
+     *
+     * La seule part payée du règlement, tant que le vendeur n'en a pas
+     * saisi le montant, prend ce qui reste à payer : le panier, le client
+     * ou les bons d'avoir qui changent changent le montant qu'elle propose.
      */
     public function rendering(): void
     {
@@ -191,13 +203,39 @@ class Caisse extends Page implements HasForms
         } catch (LogicException|RefusFiscalException $refus) {
             static::notifierLeRefus($refus);
 
-            $this->remplirFormulaire(app(PanierDeCaisse::class)->enCours(auth()->user()), [
-                'mode_paiement' => $this->data['mode_paiement'] ?? ModePaiement::Especes->value,
-                'montant_recu' => $this->data['montant_recu'] ?? null,
-                'reference' => $this->data['reference'] ?? null,
-                'bon_d_avoir' => $this->data['bon_d_avoir'] ?? null,
-            ]);
+            $this->remplirFormulaire(app(PanierDeCaisse::class)->enCours(auth()->user()), $this->data['parts'] ?? null);
         }
+
+        $this->suivreLeResteAPayer();
+    }
+
+    /**
+     * La seule part payée du règlement (les parts « Avoir » mises à part),
+     * tant que le vendeur n'en a pas saisi le montant, prend ce qui reste
+     * à payer une fois le crédit du client et les bons imputés.
+     */
+    private function suivreLeResteAPayer(): void
+    {
+        $cle = $this->seulePartPayee();
+
+        if ($cle === null || ($this->data['parts'][$cle]['montant_saisi'] ?? false)) {
+            return;
+        }
+
+        $reste = $this->apercuDuReglement($this->data['lignes'] ?? [], $this->data['client_id'] ?? null, self::bonsDesParts($this->data['parts']))->resteARepartir;
+        $this->data['parts'][$cle]['montant'] = $reste > 0 ? app(CalculateurLigne::class)->enDecimal($reste) : null;
+    }
+
+    /**
+     * La clé de la seule part du règlement qui n'est pas une part « Avoir »
+     * ; null s'il n'y en a aucune ou plusieurs.
+     */
+    private function seulePartPayee(): ?string
+    {
+        $parts = $this->data['parts'] ?? null;
+        $payees = array_keys(array_filter(is_array($parts) ? $parts : [], fn (mixed $part): bool => is_array($part) && ($part['mode'] ?? null) !== self::PART_AVOIR));
+
+        return count($payees) === 1 ? (string) $payees[0] : null;
     }
 
     /**
@@ -246,33 +284,76 @@ class Caisse extends Page implements HasForms
 
     /**
      * Le formulaire avec le client et les lignes du panier, ou vide (le
-     * client comptoir, aucune ligne) sans panier, et le mode de paiement
-     * préféré de ce client (B8).
+     * client comptoir, aucune ligne) sans panier, et un règlement d'une
+     * seule part, dans le mode de paiement préféré de ce client (B8),
+     * sauf celui que le vendeur avait déjà saisi.
      *
-     * @param  array<string, mixed>  $paiement
+     * @param  array<array-key, mixed>|null  $parts  le règlement déjà saisi, gardé
      */
-    private function remplirFormulaire(?PanierCaisse $panier, array $paiement = []): void
+    private function remplirFormulaire(?PanierCaisse $panier, ?array $parts = null): void
     {
         $clientId = $panier?->client_id ?? Client::query()->where('est_comptoir', true)->value('id');
 
         $this->form->fill([
             'client_id' => $clientId,
             'lignes' => array_values($panier->lignes ?? []),
-            'mode_paiement' => self::modePrefere($clientId)->value,
-            'montant_recu' => null,
-            'reference' => null,
-            'bon_d_avoir' => null,
-            ...$paiement,
+            'parts' => $parts ?? [self::partVide(self::modePrefere($clientId))],
         ]);
     }
 
     /**
+     * Une part dans ce mode, dont le montant suivra ce qui reste à payer.
+     *
+     * @return array{mode: string, montant: null, montant_saisi: false, reference: null, bon: null, montant_recu: null}
+     */
+    private static function partVide(ModePaiement $mode): array
+    {
+        return ['mode' => $mode->value, 'montant' => null, 'montant_saisi' => false, 'reference' => null, 'bon' => null, 'montant_recu' => null];
+    }
+
+    /**
+     * Le client choisi donne son mode préféré (B8) à la seule part payée du
+     * règlement ; les bons d'avoir saisis restent : ils règlent la vente de
+     * tout client.
+     */
+    private function preselectionnerLeModePrefere(mixed $clientId): void
+    {
+        $cle = $this->seulePartPayee();
+
+        if ($cle !== null) {
+            $this->data['parts'][$cle]['mode'] = self::modePrefere($clientId)->value;
+        }
+    }
+
+    /**
      * Le mode de paiement préféré du client, présélectionné à
-     * l'encaissement (B8), sinon les espèces.
+     * l'encaissement (B8), sinon les espèces ; jamais le prélèvement, qui
+     * ne règle pas une vente à la caisse.
      */
     private static function modePrefere(mixed $clientId): ModePaiement
     {
-        return (blank($clientId) ? null : Client::withTrashed()->find($clientId)?->mode_paiement_prefere) ?? ModePaiement::Especes;
+        $mode = blank($clientId) ? null : Client::withTrashed()->find($clientId)?->mode_paiement_prefere;
+
+        return $mode !== null && in_array($mode, ModePaiement::aLaCaisse(), true) ? $mode : ModePaiement::Especes;
+    }
+
+    /**
+     * L'aperçu du règlement de la vente saisie (voir ApercuDuReglement) :
+     * le total TTC calculé par le même constructeur de lignes que la vente
+     * encaissée (voir ConstructeurLigneDocument::apercu()), pour le client
+     * choisi, puis son crédit et les bons d'avoir des parts « Avoir ». Le
+     * client d'un panier archivé depuis garde son crédit affiché, comme son
+     * nom (voir ClientResource::soldeCrediteurHelperText()).
+     *
+     * @param  mixed  $lignes  les lignes saisies
+     * @param  list<string>  $bons  les numéros des bons d'avoir saisis
+     */
+    private function apercuDuReglement(mixed $lignes, mixed $clientId, array $bons): ApercuDuReglement
+    {
+        $totalTtc = app(CalculateurLigne::class)->enCentiemes(DevisResource::apercuDesLignes(is_array($lignes) ? $lignes : [], $clientId)->totaux['total_ttc']);
+        $client = blank($clientId) || is_bool($clientId) || filter_var($clientId, FILTER_VALIDATE_INT) === false ? null : Client::withTrashed()->find((int) $clientId);
+
+        return ApercuDuReglement::aLaCaisse($client, $totalTtc, $bons);
     }
 
     public function form(Form $form): Form
@@ -305,9 +386,7 @@ class Caisse extends Page implements HasForms
                     ->createOptionModalHeading('Nouveau client')
                     ->createOptionAction(fn (Action $action) => $action->visible(auth()->user()->can(PermissionRegistry::CLIENT_CREATE)))
                     ->createOptionUsing(fn (array $data) => Client::create($data)->getKey())
-                    // Le bon d'avoir saisi reste : il règle la vente de tout
-                    // client.
-                    ->afterStateUpdated(fn (mixed $state, Set $set) => $set('mode_paiement', self::modePrefere($state)->value))
+                    ->afterStateUpdated(fn (mixed $state) => $this->preselectionnerLeModePrefere($state))
                     ->required(),
             ]),
 
@@ -316,111 +395,18 @@ class Caisse extends Page implements HasForms
                 DevisResource::totauxDuDocument(parTaux: true),
             ]),
 
-            Section::make('Paiement')->schema([
+            Section::make('Règlement')->schema([
                 Placeholder::make('total_a_payer')
-                    // Ses actions exigent une clé : son chemin, comme celle
-                    // d'un champ.
-                    ->key(fn (Placeholder $component): string => $component->getStatePath())
                     ->label('Total à payer')
-                    ->content(fn (Get $get) => $this->formaterMontant($this->resteAPayer($get)))
-                    ->helperText(fn (Get $get) => $this->detailCreditApplique($get))
-                    ->hintActions([self::actionUtiliserUnBonDAvoir(), self::actionRetirerLeBonDAvoir()]),
-                // Posé par « Utiliser un bon d'avoir » : l'encaissement le
-                // revérifie (voir EnregistrerVenteCaisseAction).
-                Hidden::make('bon_d_avoir')->rules(['nullable', 'string', 'max:40']),
-                Select::make('mode_paiement')
-                    ->label('Mode de paiement')
-                    ->options(ModePaiement::class)
-                    ->default(ModePaiement::Especes)
-                    ->required()
-                    ->live(),
-                TextInput::make('montant_recu')
-                    ->label('Montant reçu')
-                    ->numeric()
-                    ->prefix('€')
-                    // Facultatif (sert à calculer la monnaie), mais s'il est
-                    // saisi il doit couvrir ce qui reste à payer : sinon la
-                    // vente serait enregistrée payée avec un tiroir-caisse
-                    // en manque.
-                    ->minValue(fn (Get $get): float => $this->resteAPayer($get))
-                    ->maxValue(self::MONTANT_MAXIMUM)
-                    ->validationMessages(['min' => 'Le montant reçu ne couvre pas le reste à payer.'])
-                    // Et non live(onBlur: true) : la monnaie à rendre doit se
-                    // mettre à jour pendant la saisie, pas seulement quand le
-                    // vendeur clique ailleurs.
-                    ->saisieEnDirect()
-                    ->visible(fn (Get $get) => $this->modePaiementSelectionne($get) === ModePaiement::Especes),
-                Placeholder::make('monnaie_a_rendre')
-                    ->label('Monnaie à rendre')
-                    ->visible(fn (Get $get) => $this->modePaiementSelectionne($get) === ModePaiement::Especes)
-                    ->content(function (Get $get) {
-                        try {
-                            $rendu = app(CalculateurLigne::class)->soustraire($get('montant_recu'), $this->resteAPayer($get));
-                        } catch (InvalidArgumentException) {
-                            return '—';
-                        }
-
-                        return $this->formaterMontant(max(0, $rendu));
-                    }),
-                TextInput::make('reference')
-                    ->label('Référence (optionnel)')
-                    ->helperText('N° de transaction CB, de chèque...')
-                    ->maxLength(100),
-            ])->columns(2),
+                    ->content(fn (Get $get): string => self::formaterCentimes($this->apercuDuReglement($get('lignes'), $get('client_id'), [])->total)),
+                ...self::composantsDuReglement(
+                    fn (Get $get, ?Model $record, string $racine): ApercuDuReglement => $this->apercuDuReglement($get($racine.'lignes'), $get($racine.'client_id'), self::bonsDesParts($get($racine.'parts'))),
+                    fn (Get $get, ?Model $record, string $racine): ModePaiement => self::modePrefere($get($racine.'client_id')),
+                    true,
+                    'Avoir (crédit du client)',
+                ),
+            ]),
         ])->statePath('data');
-    }
-
-    /**
-     * Le numéro d'un avoir fait au client comptoir vaut bon d'avoir (K6),
-     * pour la vente de tout client : le numéro saisi doit désigner un
-     * avoir du client comptoir du magasin dont il reste du crédit.
-     * L'encaissement le revérifie sous le verrou du registre (voir
-     * EnregistrerVenteCaisseAction).
-     */
-    private static function actionUtiliserUnBonDAvoir(): Action
-    {
-        return Action::make('utiliserUnBonDAvoir')
-            ->label('Utiliser un bon d\'avoir')
-            ->icon('heroicon-o-ticket')
-            ->modalHeading('Utiliser un bon d\'avoir')
-            ->modalDescription('Saisissez le n° de l\'avoir remis au client : son crédit restant est déduit du total à payer.')
-            ->modalSubmitActionLabel('Utiliser')
-            ->modalWidth(MaxWidth::Medium)
-            ->form([
-                TextInput::make('numero')
-                    ->label('N° de l\'avoir')
-                    ->placeholder('AV-...')
-                    ->required()
-                    ->maxLength(40)
-                    ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
-                        if (self::bonDAvoirUtilisable($value) === null) {
-                            $fail(Avoir::BON_D_AVOIR_INTROUVABLE);
-                        }
-                    }),
-            ])
-            ->visible(fn (Get $get): bool => blank($get('bon_d_avoir')))
-            ->action(fn (array $data, Set $set) => $set('bon_d_avoir', mb_strtoupper(trim($data['numero']))));
-    }
-
-    private static function actionRetirerLeBonDAvoir(): Action
-    {
-        return Action::make('retirerLeBonDAvoir')
-            ->label('Retirer le bon d\'avoir')
-            ->icon('heroicon-o-x-mark')
-            ->color('gray')
-            ->visible(fn (Get $get): bool => filled($get('bon_d_avoir')))
-            ->action(fn (Set $set) => $set('bon_d_avoir', null));
-    }
-
-    /**
-     * L'avoir du client comptoir de ce numéro, s'il lui reste du crédit
-     * (voir Avoir::scopeBonDAvoir()) ; null sinon.
-     */
-    private static function bonDAvoirUtilisable(mixed $numero): ?Avoir
-    {
-        $bon = is_string($numero) && filled($numero) ? Avoir::query()->bonDAvoir($numero)->first() : null;
-
-        return $bon !== null && $bon->montantNonAlloue() > 0 ? $bon : null;
     }
 
     /**
@@ -594,7 +580,6 @@ class Caisse extends Page implements HasForms
         $data = $this->form->getState();
 
         $client = Client::query()->findOrFail($data['client_id']);
-        $modePaiement = $this->modePaiementDepuisValeur($data['mode_paiement']);
 
         try {
             $this->enregistrerLePanier();
@@ -602,9 +587,7 @@ class Caisse extends Page implements HasForms
                 auth()->user(),
                 $client,
                 $data['lignes'],
-                $modePaiement,
-                $data['reference'] ?? null,
-                $data['bon_d_avoir'] ?? null,
+                new ReglementComptant(self::partsPayees($data['parts'] ?? []), self::bonsDesParts($data['parts'] ?? [])),
                 $confirmation,
                 $this->jetonDeLaVente,
             );
@@ -628,136 +611,31 @@ class Caisse extends Page implements HasForms
     }
 
     /**
-     * Le crédit disponible du client (voir AppliquerAvoirsDisponiblesAction)
-     * et le bon d'avoir présenté au comptoir peuvent déjà avoir couvert tout
-     * ou partie de la vente au moment de l'émission, avant même que la
-     * caisse n'encaisse quoi que ce soit en espèces/CB -- le message doit
-     * refléter ce qui a RÉELLEMENT été encaissé, pas le total brut de la
-     * facture, sous peine de fausser la caisse du vendeur en fin de
-     * journée.
+     * Ce qui a réglé la vente, part par part : chaque paiement dans son
+     * mode, puis chaque crédit d'avoir imputé, celui du client ou un bon
+     * d'avoir (« 50,00 € en espèces, 30,00 € par carte bancaire et 20,00 €
+     * du bon d'avoir AV-... ») -- ce qui a RÉELLEMENT été encaissé, pas le
+     * total brut de la facture, sous peine de fausser la caisse du vendeur
+     * en fin de journée.
      */
     private function resumeEncaissement(Facture $facture): string
     {
-        $credite = $facture->montantCrediteParAvoir();
+        $calculateur = app(CalculateurLigne::class);
+        $parts = [
+            ...$facture->allocationsPaiement()->with('paiement')->orderBy('id')->get()->map(
+                fn (PaiementAllocation $allocation): string => self::formaterCentimes($calculateur->enCentiemes($allocation->montant_alloue)).' '.$allocation->paiement->mode_paiement->dansUnePhrase(),
+            ),
+            ...$facture->allocationsAvoir()->with('avoir.client')->orderBy('id')->get()->map(
+                fn (AvoirAllocation $allocation): string => self::formaterCentimes($calculateur->enCentiemes($allocation->montant_alloue)).(($allocation->avoir->client?->estComptoir() ?? false) ? ' du bon d\'avoir ' : ' du crédit d\'avoir ').$allocation->avoir->numero,
+            ),
+        ];
 
-        if ($credite <= 0) {
-            return $this->formaterMontant((float) $facture->total_ttc).' encaissé.';
+        if ($parts === []) {
+            return 'Rien à encaisser.';
         }
 
-        $avoirs = $facture->numerosDesAvoirsImputes();
-        $numeros = implode(', ', $avoirs);
-        $paye = $facture->montantPaye();
+        $derniere = array_pop($parts);
 
-        if ($paye <= 0) {
-            return "Réglée intégralement par avoir ({$this->formaterMontant($credite)}, {$numeros}).";
-        }
-
-        $parLesAvoirs = count($avoirs) > 1 ? 'par les avoirs' : 'par l\'avoir';
-
-        return "{$this->formaterMontant($paye)} encaissé ({$this->formaterMontant($credite)} crédité {$parLesAvoirs} {$numeros}).";
-    }
-
-    /**
-     * Calculé par le même constructeur de lignes que la vente encaissée
-     * (voir EnregistrerVenteCaisseAction et
-     * ConstructeurLigneDocument::apercu()), pour le client choisi et le
-     * régime de TVA du magasin : le total -- et donc la monnaie à rendre
-     * affichée au vendeur -- est au centime près celui qui sera encaissé.
-     */
-    private function totalTtc(Get $get): float
-    {
-        return (float) DevisResource::apercuDesLignes($get('lignes') ?? [], $get('client_id'))->totaux['total_ttc'];
-    }
-
-    /**
-     * Ce que la caisse encaisse vraiment : le total moins le crédit d'avoir
-     * du client et le bon d'avoir présenté, que l'émission de la facture
-     * déduit automatiquement (voir AppliquerAvoirsDisponiblesAction et
-     * EnregistrerVenteCaisseAction) -- sans quoi la monnaie à rendre serait
-     * fausse du montant de ces crédits.
-     */
-    private function resteAPayer(Get $get): float
-    {
-        $totalTtc = $this->totalTtc($get);
-
-        try {
-            return app(CalculateurLigne::class)->soustraire($totalTtc, ...array_values($this->creditsAppliques($get, $totalTtc)));
-        } catch (InvalidArgumentException) {
-            return 0.0;
-        }
-    }
-
-    /**
-     * Les montants qu'imputera l'émission, dans son ordre et dans la
-     * limite du total : d'abord le crédit disponible du client (jamais
-     * pour le client comptoir, voir Client::soldeCrediteur()), puis le
-     * crédit restant du bon d'avoir présenté, sur ce que le premier laisse
-     * à payer (voir EmettreFactureAction). Celui d'un panier dont le
-     * client a été archivé depuis reste affiché, comme son nom et le texte
-     * d'aide du crédit (voir ClientResource::soldeCrediteurHelperText()).
-     *
-     * @return array{client: float, bon: float}
-     */
-    private function creditsAppliques(Get $get, float $totalTtc): array
-    {
-        $creditDuClient = min(Client::withTrashed()->find($get('client_id'))?->soldeCrediteur() ?? 0.0, $totalTtc);
-        $creditDuBon = min(
-            self::bonDAvoirUtilisable($get('bon_d_avoir'))?->montantNonAlloue() ?? 0.0,
-            app(CalculateurLigne::class)->soustraire($totalTtc, $creditDuClient),
-        );
-
-        return ['client' => $creditDuClient, 'bon' => $creditDuBon];
-    }
-
-    /**
-     * Le détail du total à payer : ce qu'en déduisent le crédit du client
-     * et le bon d'avoir présenté, ou, en couleur, le refus d'un bon
-     * d'avoir épuisé depuis qu'il a été saisi (par une autre caisse).
-     */
-    private function detailCreditApplique(Get $get): string|Htmlable|null
-    {
-        $bonDAvoir = $get('bon_d_avoir');
-
-        if (filled($bonDAvoir) && self::bonDAvoirUtilisable($bonDAvoir) === null) {
-            return ClientResource::enEvidence(Avoir::BON_D_AVOIR_INTROUVABLE);
-        }
-
-        $totalTtc = $this->totalTtc($get);
-        $credits = $this->creditsAppliques($get, $totalTtc);
-        $deductions = array_filter([
-            $credits['client'] > 0 ? $this->formaterMontant($credits['client']).' de crédit d\'avoir du client' : null,
-            $credits['bon'] > 0 ? $this->formaterMontant($credits['bon'])." du bon d'avoir {$bonDAvoir}" : null,
-        ]);
-
-        if ($deductions === []) {
-            return null;
-        }
-
-        return 'Total '.$this->formaterMontant($totalTtc).' moins '.implode(' et ', $deductions).'.';
-    }
-
-    private function formaterMontant(float $montant): string
-    {
-        return number_format($montant, 2, ',', ' ').' €';
-    }
-
-    /**
-     * $get('mode_paiement') renvoie l'instance de l'enum (pas sa valeur
-     * scalaire) une fois le Select live interagi -- voir
-     * ClientResource::visibleSiProfessionnel() pour le même piège déjà
-     * rencontré et corrigé ailleurs dans l'application.
-     */
-    private function modePaiementSelectionne(Get $get): ?ModePaiement
-    {
-        return $this->modePaiementDepuisValeur($get('mode_paiement'));
-    }
-
-    private function modePaiementDepuisValeur(mixed $valeur): ?ModePaiement
-    {
-        if ($valeur instanceof ModePaiement) {
-            return $valeur;
-        }
-
-        return $valeur ? ModePaiement::tryFrom((string) $valeur) : null;
+        return 'Réglée par '.($parts === [] ? $derniere : implode(', ', $parts).' et '.$derniere).'.';
     }
 }

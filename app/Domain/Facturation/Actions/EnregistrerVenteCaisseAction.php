@@ -8,8 +8,6 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Enums\ModePaiement;
-use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\ReglementComptant;
@@ -29,27 +27,29 @@ use LogicException;
  * une vente comptoir est toujours payée intégralement et immédiatement,
  * contrairement à une facture B2B classique qui peut rester impayée ou se
  * régler plus tard. Compose donc en une seule transaction la création puis
- * l'émission de la facture avec son règlement comptant (voir
- * EmettreFactureAction) : le ticket signé au registre fiscal porte ce
- * règlement, ou le crédit d'avoir qui l'a couvert.
+ * l'émission de la facture avec son règlement, d'un seul geste, en un ou
+ * plusieurs modes (voir ReglementComptant et EmettreFactureAction) : le
+ * ticket signé au registre fiscal porte chaque paiement, et le crédit
+ * d'avoir qui l'a couvert.
  *
  * Le numéro d'un avoir fait au client comptoir vaut bon d'avoir (K6) :
- * présenté à une vente, quel qu'en soit le client, il impute son crédit
- * restant sur ce que le crédit d'avoir du client laisse dû de la nouvelle
- * facture (voir EmettreFactureAction), et le reste se paie dans le mode
- * choisi. Un numéro qui ne désigne aucun avoir du client comptoir du
- * magasin (celui d'un client nommé, ou d'un autre magasin) ou dont le
- * crédit est épuisé est refusé, sans rien enregistrer.
+ * présenté dans la part « Avoir » d'une vente, quel qu'en soit le client,
+ * il impute son crédit restant sur ce que le crédit d'avoir du client et
+ * les bons saisis avant lui laissent dû de la nouvelle facture, et les
+ * parts payées règlent le reste. Un numéro qui ne désigne aucun avoir du
+ * client comptoir du magasin (celui d'un client nommé, ou d'un autre
+ * magasin) ou dont le crédit est épuisé est refusé, comme des parts qui
+ * n'égalent pas ce qui reste à payer, sans rien enregistrer.
  *
  * Le registre fiscal du magasin actif se verrouille avant toute lecture
  * de la transaction et la création du brouillon (voir RegistreFiscal) :
- * sans clé de signature, rien n'est créé. Le bon d'avoir et son crédit
+ * sans clé de signature, rien n'est créé. Les bons d'avoir et leur crédit
  * restant se relisent sous ce verrou, comme ce que le règlement laisse dû
- * (voir EnregistrerPaiementAction) : deux caisses qui présentent le même
- * bon au même instant passent l'une après l'autre, et la seconde ne
- * trouve plus que ce que la première a laissé. Le panier de caisse du
- * vendeur, sa vente étant encaissée, se vide dans la même transaction
- * (voir PanierDeCaisse).
+ * (voir EmettreFactureAction) : deux caisses qui présentent le même bon au
+ * même instant passent l'une après l'autre, et la seconde ne trouve plus
+ * que ce que la première a laissé. Le panier de caisse du vendeur, sa
+ * vente étant encaissée, se vide dans la même transaction (voir
+ * PanierDeCaisse).
  *
  * Son auteur, le vendeur, est relu sous le verrou de sa ligne après celui
  * du registre (voir LecteurDesDroits) : il doit pouvoir créer et émettre
@@ -62,9 +62,11 @@ use LogicException;
  * confirmé l'avertissement (R1, voir EmettreFactureAction).
  *
  * La vente porte le jeton de son panier (R3, voir ActionsUniques et
- * PanierDeCaisse) : répétée après une réponse perdue, elle rend le ticket
- * déjà enregistré, sans second ticket ni second encaissement. L'émission
- * et le paiement qu'elle compose n'en consomment aucun.
+ * PanierDeCaisse), lié à ses lignes, à ses parts et à ses bons d'avoir :
+ * répétée après une réponse perdue, elle rend le ticket déjà enregistré,
+ * sans second ticket ni second encaissement ; le même jeton avec d'autres
+ * parts est refusé. L'émission et les paiements qu'elle compose n'en
+ * consomment aucun.
  */
 class EnregistrerVenteCaisseAction
 {
@@ -79,7 +81,6 @@ class EnregistrerVenteCaisseAction
 
     /**
      * @param  list<array<string, mixed>>  $lignes
-     * @param  string|null  $bonDAvoir  le numéro du bon d'avoir présenté (AV-...)
      * @param  ConfirmationVenteSansStock|null  $confirmation  l'avertissement d'une vente sans stock, confirmé (R1)
      * @param  string|null  $jeton  le jeton du panier (R3)
      *
@@ -90,17 +91,15 @@ class EnregistrerVenteCaisseAction
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(User $auteur, Client $client, array $lignes, ModePaiement $modePaiement, ?string $reference = null, ?string $bonDAvoir = null, ?ConfirmationVenteSansStock $confirmation = null, ?string $jeton = null): Facture
+    public function handle(User $auteur, Client $client, array $lignes, ReglementComptant $reglement, ?ConfirmationVenteSansStock $confirmation = null, ?string $jeton = null): Facture
     {
         $magasin = app(TenantContext::class)->magasin();
 
         return $this->actionsUniques->executer($jeton, ActionsUniques::VENDRE_A_LA_CAISSE, $auteur, [
             'client_id' => $client->getKey(),
             'lignes' => self::lignesCanoniques($lignes),
-            'mode_paiement' => $modePaiement->value,
-            'reference' => $reference,
-            'bon_d_avoir' => $bonDAvoir,
-        ], fn () => $this->registre->verrouiller($magasin), fn (): Facture => $this->vendre($auteur, $magasin, $client, $lignes, $modePaiement, $reference, $bonDAvoir, $confirmation));
+            'reglement' => $reglement->enTableau(),
+        ], fn () => $this->registre->verrouiller($magasin), fn (): Facture => $this->vendre($auteur, $magasin, $client, $lignes, $reglement, $confirmation));
     }
 
     /**
@@ -111,9 +110,9 @@ class EnregistrerVenteCaisseAction
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    private function vendre(User $auteur, Magasin $magasin, Client $client, array $lignes, ModePaiement $modePaiement, ?string $reference, ?string $bonDAvoir, ?ConfirmationVenteSansStock $confirmation): Facture
+    private function vendre(User $auteur, Magasin $magasin, Client $client, array $lignes, ReglementComptant $reglement, ?ConfirmationVenteSansStock $confirmation): Facture
     {
-        return DB::transaction(function () use ($auteur, $magasin, $client, $lignes, $modePaiement, $reference, $bonDAvoir, $confirmation) {
+        return DB::transaction(function () use ($auteur, $magasin, $client, $lignes, $reglement, $confirmation) {
             $this->registre->verrouiller($magasin);
             Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
             $vendeur = $this->lecteur->exigerSousVerrou($auteur, PermissionRegistry::FACTURE_CREATE, $magasin);
@@ -126,11 +125,10 @@ class EnregistrerVenteCaisseAction
                 throw new LogicException('Ce client n\'est pas un client du magasin.');
             }
 
-            $bon = $bonDAvoir === null ? null : $this->bonDAvoirUtilisable($bonDAvoir);
             $facture = $this->emettreFacture->handle(
                 $vendeur,
                 $this->creerFacture->handle($vendeur, $client, $lignes),
-                new ReglementComptant($modePaiement, $reference, $bon),
+                $reglement,
                 $confirmation,
             );
 
@@ -157,23 +155,5 @@ class EnregistrerVenteCaisseAction
             ),
             array_values($lignes),
         );
-    }
-
-    /**
-     * Le bon d'avoir de ce numéro, relu verrouillé sous le verrou du
-     * registre : un avoir émis au client comptoir du magasin dont il reste
-     * du crédit.
-     *
-     * @throws LogicException
-     */
-    private function bonDAvoirUtilisable(string $numero): Avoir
-    {
-        $bon = Avoir::query()->bonDAvoir($numero)->lockForUpdate()->first();
-
-        if ($bon === null || $bon->montantNonAlloue() <= 0) {
-            throw new LogicException(Avoir::BON_D_AVOIR_INTROUVABLE);
-        }
-
-        return $bon;
     }
 }

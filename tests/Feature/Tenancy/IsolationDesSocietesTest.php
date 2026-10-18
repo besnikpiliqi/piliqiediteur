@@ -7,7 +7,6 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
@@ -443,7 +442,7 @@ class IsolationDesSocietesTest extends TestCase
         $contexte->set($lyon);
         $client = Client::factory()->create(['nom' => 'Client de Lyon']);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 5]);
-        $vente = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        $vente = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
 
         $vuDeVilleurbanne = $contexte->runAs($villeurbanne, fn (): array => [
             Client::query()->where('nom', 'Client de Lyon')->exists(),
@@ -477,7 +476,7 @@ class IsolationDesSocietesTest extends TestCase
 
     private function vendre(Magasin $magasin): Facture
     {
-        return app(TenantContext::class)->runAs($magasin, fn (): Facture => app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+        return app(TenantContext::class)->runAs($magasin, fn (): Facture => self::vendreAuComptant(self::auteur(),
             Client::factory()->create(),
             [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]],
             ModePaiement::Especes,

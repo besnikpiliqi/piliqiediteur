@@ -93,7 +93,7 @@ class MentionsFiscales
      * La mention que l'avoir d'un client comptoir imprime quand il lui
      * reste du crédit après son émission, une fois imputé sur les tickets
      * qu'il corrige : son numéro vaut bon d'avoir (voir
-     * EnregistrerVenteCaisseAction). Calculée et signée à l'émission (voir
+     * EmettreFactureAction). Calculée et signée à l'émission (voir
      * ContenuFiscal), elle se relit ensuite dans le contenu signé (voir
      * Avoir::mentionDuBonDAvoir()) : le montant du bon reste celui de son
      * émission, même une fois utilisé. Null pour tout autre avoir.

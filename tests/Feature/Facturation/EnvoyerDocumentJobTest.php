@@ -24,6 +24,7 @@ use App\Domain\Facturation\Mail\DocumentMail;
 use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Notifications\EnvoiDocumentEchoue;
+use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
@@ -106,7 +107,7 @@ class EnvoyerDocumentJobTest extends TestCase
         $this->magasin();
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(),
             app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $this->produit()->id, 'quantite' => 1]]),
-            new ReglementComptant(ModePaiement::CarteBancaire),
+            new ReglementComptant([new PartDeReglement(ModePaiement::CarteBancaire, 12000)]),
         );
         $envoi = EnvoiDocument::factory()->for($facture, 'document')->create(['message' => 'Merci de votre visite.']);
 

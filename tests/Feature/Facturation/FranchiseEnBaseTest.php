@@ -14,7 +14,6 @@ use App\Domain\Facturation\Actions\CreerFactureDepuisDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutDevis;
@@ -310,7 +309,7 @@ class FranchiseEnBaseTest extends TestCase
 
     private function encaisser(Produit $produit, int $quantite, ?Client $client = null): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client ?? Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]], ModePaiement::Especes);
+        return self::vendreAuComptant(self::auteur(), $client ?? Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]], ModePaiement::Especes);
     }
 
     private function assertEmissionRefusee(Facture $brouillon): void

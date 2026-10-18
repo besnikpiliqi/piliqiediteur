@@ -8,7 +8,6 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -168,7 +167,7 @@ class ClientResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $facture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
+        $facture = self::vendreAuComptant(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ], ModePaiement::Especes);
         $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
@@ -333,7 +332,7 @@ class ClientResourceTest extends TestCase
         $this->connecterLeProprietaire();
         $client = Client::factory()->create(['nom' => 'Jeanne Martin']);
         $produit = Produit::factory()->create(['nom' => 'Coque', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
 
         Livewire::test(EditClient::class, ['record' => $client->getRouteKey()])
             ->callAction('archiver')

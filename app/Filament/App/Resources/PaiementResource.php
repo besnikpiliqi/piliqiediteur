@@ -28,7 +28,6 @@ use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\Rules\Exists;
 use InvalidArgumentException;
@@ -89,10 +88,6 @@ class PaiementResource extends Resource
                     ->rule(fn (): Exists => Client::regleExisteDansLeMagasin(Client::query()->quiPeuventRegler()))
                     ->searchable()
                     ->live()
-                    // Son crédit d'avoir solde ce que les montants imputés
-                    // laissent dû des factures que le paiement règle (voir
-                    // EnregistrerPaiementAction).
-                    ->helperText(fn (Get $get): ?Htmlable => self::aideDuCreditDisponible(ClientResource::soldeCrediteurDe($get('client_id'))))
                     // Son mode de paiement préféré est présélectionné (B8) ;
                     // sans préférence, le mode déjà choisi reste.
                     ->afterStateUpdated(function (mixed $state, Set $set): void {
@@ -169,17 +164,13 @@ class PaiementResource extends Resource
                                 ->searchable()
                                 ->live()
                                 ->required()
-                                // Le montant proposé laisse au crédit d'avoir
-                                // du client ce qu'il peut solder (voir
-                                // montantAProposer()), une fois déduit ce
-                                // qu'il soldera des autres factures choisies.
-                                ->afterStateUpdated(function (mixed $state, Set $set, Get $get): void {
-                                    $facture = self::factureVisible($state);
+                                // Le montant proposé est ce qui en reste dû :
+                                // le crédit d'avoir du client y est déjà
+                                // imputé (voir ImputationDuCredit).
+                                ->afterStateUpdated(function (mixed $state, Set $set): void {
+                                    $montantRestant = self::factureVisible($state)?->montantRestant();
 
-                                    $set('montant', $facture === null ? null : self::montantAProposer(
-                                        $facture->montantRestant(),
-                                        self::creditLaissePourLaFacture(ClientResource::soldeCrediteurDe($get('../../client_id')) ?? 0.0, $get('../../allocations'), $facture),
-                                    ));
+                                    $set('montant', $montantRestant !== null && $montantRestant > 0 ? $montantRestant : null);
                                 }),
                             TextInput::make('montant')
                                 ->label('Montant imputé')
@@ -261,69 +252,6 @@ class PaiementResource extends Resource
         }
     }
 
-    /**
-     * Le montant à proposer pour régler une facture : ce qui en reste dû,
-     * moins le crédit d'avoir du client, qui soldera ce que le montant
-     * reçu laisse dû (voir EnregistrerPaiementAction) ; rien quand ce
-     * crédit couvre tout.
-     */
-    public static function montantAProposer(float $resteDu, float $creditDisponible): ?float
-    {
-        $montant = app(CalculateurLigne::class)->soustraire($resteDu, max(0.0, $creditDisponible));
-
-        return $montant > 0 ? $montant : null;
-    }
-
-    /**
-     * Le crédit d'avoir du client qui reste pour solder cette facture, une
-     * fois déduit ce qu'il soldera des autres factures du paiement : ce que
-     * leur montant imputé laisse dû.
-     *
-     * @param  mixed  $allocations  les lignes du répétiteur
-     */
-    private static function creditLaissePourLaFacture(float $creditDisponible, mixed $allocations, Facture $facture): float
-    {
-        $calculateur = app(CalculateurLigne::class);
-        $credit = $creditDisponible;
-
-        foreach (is_array($allocations) ? $allocations : [] as $allocation) {
-            $autre = (int) ($allocation['facture_id'] ?? 0) !== $facture->getKey()
-                ? self::factureVisible($allocation['facture_id'] ?? null)
-                : null;
-            $montantImpute = self::montantSaisi($allocation['montant'] ?? null);
-
-            if ($autre !== null && $montantImpute !== null) {
-                $credit = $calculateur->soustraire($credit, max(0.0, $calculateur->soustraire($autre->montantRestant(), $montantImpute)));
-            }
-        }
-
-        return max(0.0, $credit);
-    }
-
-    /**
-     * L'aide sous le client ou le montant d'un paiement : le crédit d'avoir
-     * du client ne s'y impute que sur ce que le montant reçu laisse dû
-     * (voir EnregistrerPaiementAction), contrairement aux formulaires de
-     * vente, où il s'impute à l'émission (voir
-     * ClientResource::soldeCrediteurHelperText()). Pour une seule facture,
-     * elle dit quel montant suffit pour la régler.
-     */
-    public static function aideDuCreditDisponible(?float $creditDisponible, ?float $resteDu = null): ?Htmlable
-    {
-        if ($creditDisponible === null) {
-            return null;
-        }
-
-        $credit = 'Crédit disponible pour ce client : '.self::enEuros($creditDisponible).'.';
-        $montantQuiSuffit = $resteDu === null ? null : self::montantAProposer($resteDu, $creditDisponible);
-
-        return ClientResource::enEvidence(match (true) {
-            $resteDu === null => "{$credit} Il soldera ce que les montants imputés laissent dû sur les factures choisies, de la plus ancienne à la plus récente.",
-            $montantQuiSuffit === null => "{$credit} Il soldera ce que le montant reçu laisse dû, et couvre déjà tout ce qui reste dû.",
-            default => "{$credit} Il soldera ce que le montant reçu laisse dû : ".self::enEuros($montantQuiSuffit).' suffisent pour régler la facture.',
-        });
-    }
-
     private static function enEuros(float $montant): string
     {
         return number_format($montant, 2, ',', ' ').' €';
@@ -375,7 +303,7 @@ class PaiementResource extends Resource
                     ])
                     ->requiresConfirmation()
                     ->modalDescription(fn (Paiement $record): string => sprintf(
-                        'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui, et les factures qu\'il réglait redeviendront dues%s. Saisissez ensuite le bon paiement.',
+                        'Ce paiement de %s (%s, reçu le %s) sera annulé par un paiement opposé daté d\'aujourd\'hui, et les factures qu\'il réglait redeviendront dues%s ; le crédit d\'avoir disponible du client s\'y imputera aussitôt. Saisissez ensuite le bon paiement, pour ce qui restera dû.',
                         self::enEuros((float) $record->montant),
                         $record->mode_paiement->getLabel(),
                         $record->recu_le->format('d/m/Y'),

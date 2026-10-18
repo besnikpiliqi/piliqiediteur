@@ -9,10 +9,13 @@ use App\Domain\CaisseSecurisee\Exceptions\HorlogeRegressiveException;
 use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
+use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\ImputationDuCredit;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
@@ -28,13 +31,20 @@ use LogicException;
  * ProtegeLesDonneesValidees) : il se contre-passe (B4). La contre-passation
  * est un paiement opposé, l'inverse exact de l'original (K9) : même client,
  * même mode, même référence, montant et imputations de signe contraire,
- * le crédit d'avoir que l'original avait imputé compris, le motif pour
- * notes. Ce crédit revient donc à ses avoirs, disponible de nouveau. Elle
- * désigne l'original, qui reste tel quel, et les factures qu'il réglait
- * redeviennent dues de tout ce qu'il y avait réglé (voir
- * Facture::constaterUnReglement()). On saisit ensuite le bon paiement, avec
- * lequel le crédit disponible du client solde le reste de ses factures
- * (voir EnregistrerPaiementAction).
+ * le crédit d'avoir que l'original avait imputé compris (un bon d'avoir
+ * présenté avec lui, voir EnregistrerPaiementAction), le motif pour notes.
+ * Elle désigne l'original, qui reste tel quel, et les factures qu'il
+ * réglait redeviennent dues de tout ce qu'il y avait réglé (voir
+ * Facture::constaterUnReglement()).
+ *
+ * Aussitôt, dans la même transaction, le crédit d'avoir disponible du
+ * client s'impute sur ce qui reste dû, dans le même ordre qu'à l'émission
+ * d'un avoir (complément 1, voir ImputationDuCredit) : d'abord sur les
+ * factures que chaque avoir corrige, puis sur les autres factures dues du
+ * client, de la plus ancienne à la plus récente, jamais sur une autre
+ * vente du client comptoir. Ces imputations désignent la contre-passation,
+ * qui les signe avec les siennes. On saisit ensuite le bon paiement, qui
+ * ne règle que ce qui reste dû.
  *
  * Elle est datée du jour où elle est faite, à l'heure de Paris, jamais
  * d'une journée déjà clôturée : une fois la journée clôturée, elle attend
@@ -48,8 +58,8 @@ use LogicException;
  * PostgreSQL), et chaque facture qu'il réglait, relue verrouillée, voient
  * ce que les transactions précédentes ont validé. La contre-passation est
  * signée dans la chaîne des encaissements (type « contre_passation », voir
- * ContenuFiscal), imputations et crédits inversés compris, dans la même
- * transaction.
+ * ContenuFiscal), imputations et crédits inversés et crédit réimputé
+ * compris, dans la même transaction.
  *
  * Son auteur est relu sous le verrou de sa ligne, après celui du registre
  * (voir LecteurDesDroits) : il doit pouvoir contre-passer ce paiement (voir
@@ -70,6 +80,8 @@ class ContrePasserPaiementAction
         private readonly OperateurCourant $operateur,
         private readonly VerificateurCaissesPersonnelles $caissesPersonnelles,
         private readonly ActionsUniques $actionsUniques,
+        private readonly ImputationDuCredit $imputation,
+        private readonly CalculateurLigne $calculateur,
     ) {}
 
     /**
@@ -154,10 +166,34 @@ class ContrePasserPaiementAction
             $facture->constaterUnReglement();
         }
 
+        $this->reimputerLeCreditDisponible($contrePassation);
+
         $contrePassation = $contrePassation->fresh();
         $this->registre->enregistrer(ChaineFiscale::Encaissement, 'contre_passation', $this->contenuFiscal->encaissement($contrePassation), $contrePassation);
 
         return $contrePassation;
+    }
+
+    /**
+     * Le crédit d'avoir disponible du client s'impute sur ce qui reste dû
+     * (complément 1) : chaque imputation désigne la contre-passation, qui
+     * la signe.
+     */
+    private function reimputerLeCreditDisponible(Paiement $contrePassation): void
+    {
+        /** @var Client $client */
+        $client = $contrePassation->client;
+
+        foreach ($this->imputation->apresUneContrePassation($client) as ['avoir' => $avoir, 'facture' => $facture, 'montant' => $montant]) {
+            AvoirAllocation::create([
+                'avoir_id' => $avoir->getKey(),
+                'facture_id' => $facture->getKey(),
+                'paiement_id' => $contrePassation->getKey(),
+                'montant_alloue' => $this->calculateur->enDecimal($montant),
+            ]);
+
+            $facture->constaterUnReglement();
+        }
     }
 
     /**

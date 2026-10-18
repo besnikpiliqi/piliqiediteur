@@ -10,7 +10,6 @@ use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\Avoir;
@@ -72,7 +71,7 @@ class PolitiqueDArrondiTest extends TestCase
      */
     private function vendreALaCaisse(Client $client, array $articles): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, self::lignes($articles), ModePaiement::Especes);
+        return self::vendreAuComptant(self::auteur(), $client, self::lignes($articles), ModePaiement::Especes);
     }
 
     /**

@@ -24,6 +24,8 @@ use App\Domain\Facturation\Enums\TransportPar;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
@@ -83,7 +85,7 @@ class EmissionSigneeTest extends TestCase
      */
     private function encaisser(Client $client, array $articles, ModePaiement $mode = ModePaiement::CarteBancaire, ?string $reference = null): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+        return self::vendreAuComptant(self::auteur(),
             $client,
             array_map(static fn (array $article): array => ['produit_id' => $article[0]->id, 'quantite' => $article[1]], $articles),
             $mode,
@@ -794,8 +796,9 @@ class EmissionSigneeTest extends TestCase
         $client = Client::query()->findOrFail(Client::factory()->create()->id);
 
         $this->actingAs(self::auteur());
+        $reglement = new ReglementComptant([new PartDeReglement(ModePaiement::CarteBancaire, 2000)]);
 
-        $requetes = $this->requetesDe(fn () => $this->encaisser($client, [[$produit, 1]]));
+        $requetes = $this->requetesDe(fn () => app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], $reglement));
 
         $this->assertSame(0, $this->position($requetes, 'select * from "tetes_registre_fiscal"'));
         $this->assertLessThan($this->position($requetes, 'insert into "factures"'), $this->position($requetes, 'select * from "tetes_registre_fiscal"'));

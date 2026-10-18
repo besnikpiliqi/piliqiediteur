@@ -10,8 +10,8 @@ use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\AjouterPreuveOperationAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
-use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -24,6 +24,7 @@ use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\PaiementAllocation;
 use App\Domain\Facturation\Models\PreuveOperation;
+use App\Domain\Facturation\Services\ApercuDuReglement;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\ControleNatureOperation;
@@ -39,7 +40,9 @@ use App\Filament\Concerns\ChoisitLaNatureDeLOperation;
 use App\Filament\Concerns\EnvoieLesDocuments;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
+use App\Filament\Concerns\SaisitUnReglementEnParts;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
+use Filament\Actions\MountableAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Actions\Action;
 use Filament\Forms\Components\DatePicker;
@@ -60,7 +63,6 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
@@ -72,6 +74,7 @@ class FactureResource extends Resource
     use EnvoieLesDocuments;
     use GereLesExceptionsMetier;
     use SaisitUneQuantiteRetournee;
+    use SaisitUnReglementEnParts;
     use SupprimeEnMasseLigneParLigne;
 
     protected static ?string $model = Facture::class;
@@ -706,53 +709,7 @@ class FactureResource extends Resource
                     ->visible(fn (Facture $record) => $record->statut === StatutFacture::Brouillon)
                     ->using(fn (Facture $record): ?bool => static::executerOuInterrompre(fn (): ?bool => $record->delete())),
                 self::emettre(),
-                Tables\Actions\Action::make('encaisser')
-                    ->label('Encaisser')
-                    ->icon('heroicon-o-banknotes')
-                    ->color('success')
-                    ->form([
-                        self::champDuJeton(),
-                        // Le mode de paiement préféré du client est
-                        // présélectionné (B8).
-                        Select::make('mode_paiement')
-                            ->label('Mode de paiement')
-                            ->options(ModePaiement::class)
-                            ->default(fn (Facture $record): ?string => $record->client?->mode_paiement_prefere?->value)
-                            ->required(),
-                        TextInput::make('montant')
-                            ->label('Montant reçu')
-                            ->numeric()
-                            ->required()
-                            // Un encaissement ne doit jamais dépasser le
-                            // solde dû : un éventuel trop-perçu ne devient
-                            // pas un crédit (contrairement à un avoir) --
-                            // le vendeur doit saisir au plus le restant dû,
-                            // mais peut librement saisir moins (acompte).
-                            // Le crédit d'avoir du client solde ensuite ce
-                            // que le montant reçu laisse dû (voir
-                            // EnregistrerPaiementAction) : le montant
-                            // proposé le lui laisse.
-                            ->maxValue(fn (Facture $record) => $record->montantRestant())
-                            ->default(fn (Facture $record): ?float => PaiementResource::montantAProposer($record->montantRestant(), ClientResource::soldeCrediteurDe($record->client_id) ?? 0.0))
-                            ->helperText(fn (Facture $record): ?Htmlable => PaiementResource::aideDuCreditDisponible(ClientResource::soldeCrediteurDe($record->client_id), $record->montantRestant())),
-                        TextInput::make('reference')->label('Référence')->maxLength(100),
-                        DatePicker::make('recu_le')
-                            ->label('Reçu le')
-                            ->required()
-                            ->default(today())
-                            ->maxDate(today())
-                            ->validationMessages(['before_or_equal' => 'Un paiement ne peut pas être reçu à une date future.']),
-                    ])
-                    ->requiresConfirmation()
-                    ->visible(fn (Facture $record): bool => auth()->user()->can('encaisser', $record))
-                    ->action(fn (Facture $record, array $data) => static::executerSansCasser(fn () => app(EnregistrerPaiementAction::class)->handle(auth()->user(), $record->client, [
-                        'mode_paiement' => $data['mode_paiement'],
-                        'montant' => $data['montant'],
-                        'reference' => $data['reference'] ?? null,
-                        'recu_le' => $data['recu_le'],
-                    ], [
-                        ['facture_id' => $record->id, 'montant' => $data['montant']],
-                    ], $data['jeton']))),
+                self::encaisser(Tables\Actions\Action::make('encaisser')),
                 self::telechargerLePdf(Tables\Actions\Action::make('telecharger_pdf')),
                 self::envoyerParEmail(Tables\Actions\Action::make('envoyer_par_email')),
                 self::relancer(Tables\Actions\Action::make('relancer')),
@@ -809,6 +766,57 @@ class FactureResource extends Resource
                     static::suppressionEnMasse(),
                 ]),
             ]);
+    }
+
+    /**
+     * « Encaisser » une facture ou un ticket émis, sur la liste comme sur
+     * la fiche, d'un seul geste, en un ou plusieurs modes (point 23, voir
+     * SaisitUnReglementEnParts et EncaisserEnPlusieursModesAction) : la
+     * première part prend le mode préféré du client (B8) et ce qui reste
+     * dû, le crédit d'avoir déjà imputé se montre en lecture, et un ticket
+     * du client comptoir accepte en plus des bons d'avoir (Q6). Les parts
+     * ne dépassent jamais ce qui reste dû : un trop-perçu ne devient pas un
+     * crédit, seul un acompte reste permis. La fenêtre porte le jeton de la
+     * demande (R3).
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function encaisser(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label('Encaisser')
+            ->icon('heroicon-o-banknotes')
+            ->color('success')
+            ->modalHeading('Encaisser')
+            ->form([
+                self::champDuJeton(),
+                ...self::composantsDuReglement(
+                    fn (Get $get, ?Model $record, string $racine): ApercuDuReglement => $record instanceof Facture
+                        ? ApercuDuReglement::surLaFacture($record, self::bonsDesParts($get($racine.'parts')))
+                        : new ApercuDuReglement(0, 0, [], [], 0),
+                    fn (Get $get, ?Model $record, string $racine): ?ModePaiement => $record instanceof Facture ? $record->client?->mode_paiement_prefere : null,
+                    false,
+                    'Avoir (crédit déjà imputé)',
+                ),
+                DatePicker::make('recu_le')
+                    ->label('Reçu le')
+                    ->required()
+                    ->default(today())
+                    ->maxDate(today())
+                    ->validationMessages(['before_or_equal' => 'Un paiement ne peut pas être reçu à une date future.']),
+            ])
+            ->visible(fn (Facture $record): bool => auth()->user()->can('encaisser', $record))
+            ->action(fn (Facture $record, array $data) => static::executerSansCasser(fn () => app(EncaisserEnPlusieursModesAction::class)->handle(
+                auth()->user(),
+                $record,
+                self::partsPayees($data['parts'] ?? []),
+                self::bonsDesParts($data['parts'] ?? []),
+                $data['recu_le'],
+                $data['jeton'],
+            )));
     }
 
     /**

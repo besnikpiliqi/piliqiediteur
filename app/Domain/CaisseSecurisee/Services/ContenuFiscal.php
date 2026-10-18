@@ -49,9 +49,9 @@ use Illuminate\Support\Collection;
  *   catégorie de l'opération, les mentions fiscales imprimées (voir
  *   MentionsFiscales), pour une facture la vérification VIES qu'elle
  *   retient (n° vérifié, résultat, n° de consultation, instant), et ce
- *   qui a réglé le document dans la même
- *   transaction (paiements et crédits d'avoir d'une facture, bon d'avoir
- *   d'un ticket au comptoir compris, imputations d'un avoir sur les
+ *   qui a réglé le document dans la même transaction (le paiement de
+ *   chaque part et les crédits d'avoir d'une facture, bons d'avoir
+ *   présentés à la caisse compris, imputations d'un avoir sur les
  *   factures de son client) ; le crédit qu'impute un paiement est signé
  *   par ce paiement. Un document qui vient d'être émis n'a pas pu en
  *   recevoir avant : un brouillon n'attend aucun règlement. L'avoir d'un
@@ -60,11 +60,13 @@ use Illuminate\Support\Collection;
  *
  * Un paiement (encaissement()) signe son mode, son montant, sa référence,
  * sa date de réception, la fiche de son client ce jour-là, ce qu'il règle
- * de chaque facture et le crédit d'avoir qu'il y impute (voir
- * EnregistrerPaiementAction). Une contre-passation (voir
- * ContrePasserPaiementAction) signe en plus le paiement qu'elle annule et
- * la séquence de son enregistrement ; son montant, ses imputations et le
- * crédit qu'elle rend sont négatifs.
+ * de chaque facture et le crédit d'avoir qu'il y impute, les bons d'avoir
+ * présentés avec lui (voir EnregistrerPaiementAction). Une
+ * contre-passation (voir ContrePasserPaiementAction) signe en plus le
+ * paiement qu'elle annule et la séquence de son enregistrement ; son
+ * montant, ses imputations et le crédit qu'elle rend sont négatifs, le
+ * crédit d'avoir qu'elle impute aussitôt sur ce qu'elle rouvre est
+ * positif.
  */
 class ContenuFiscal
 {

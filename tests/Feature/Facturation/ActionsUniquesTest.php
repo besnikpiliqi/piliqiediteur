@@ -14,7 +14,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -147,7 +146,7 @@ class ActionsUniquesTest extends TestCase
             'mode_paiement' => 'especes',
         ]);
         $this->assertSame(PanierCaisse::query()->sole()->jeton, $caisse->get('jetonDeLaVente'));
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($proprietaire, $comptoir, $caisse->instance()->form->getState()['lignes'], ModePaiement::Especes, jeton: $caisse->get('jetonDeLaVente'));
+        $ticket = self::vendreAuComptant($proprietaire, $comptoir, $caisse->instance()->form->getState()['lignes'], ModePaiement::Especes, jeton: $caisse->get('jetonDeLaVente'));
 
         $caisse->call('encaisser')
             ->assertNotified("Vente encaissée : facture {$ticket->numero}")
@@ -309,7 +308,7 @@ class ActionsUniquesTest extends TestCase
         $cable = Produit::query()->firstWhere('reference', 'CABLE-USB')
             ?? Produit::factory()->create(['nom' => 'Câble USB', 'reference' => 'CABLE-USB', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        return app(EnregistrerVenteCaisseAction::class)->handle($vendeur, Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $cable->id, 'quantite' => 1]], ModePaiement::Especes, jeton: $jeton);
+        return self::vendreAuComptant($vendeur, Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $cable->id, 'quantite' => 1]], ModePaiement::Especes, jeton: $jeton);
     }
 
     private function payer(Facture $facture, string $montant, string $jeton): Paiement

@@ -424,9 +424,7 @@ class ClientResource extends Resource
      * vente (Devis/Facture/Caisse), pour que le vendeur voie le crédit
      * disponible avant même de valider -- il sera appliqué
      * automatiquement à l'émission (voir AppliquerAvoirsDisponiblesAction),
-     * y compris pour le client d'un brouillon archivé depuis. Les
-     * formulaires de paiement ont leur propre texte (voir
-     * PaiementResource::aideDuCreditDisponible()).
+     * y compris pour le client d'un brouillon archivé depuis.
      */
     public static function soldeCrediteurHelperText(mixed $clientId): ?Htmlable
     {
@@ -439,7 +437,7 @@ class ClientResource extends Resource
      * Le crédit d'avoir disponible du client (voir Client::soldeCrediteur()),
      * null quand il n'en a pas.
      */
-    public static function soldeCrediteurDe(mixed $clientId): ?float
+    private static function soldeCrediteurDe(mixed $clientId): ?float
     {
         if (blank($clientId)) {
             return null;

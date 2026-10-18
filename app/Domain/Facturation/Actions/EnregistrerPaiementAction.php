@@ -10,7 +10,6 @@ use App\Domain\CaisseSecurisee\Exceptions\ModuleFiscalNonConfigureException;
 use App\Domain\CaisseSecurisee\Services\ContenuFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
@@ -33,16 +32,16 @@ use LogicException;
  * total qu'il impute sur elles (B3) : un trop-perçu ne devient jamais un
  * crédit, et chaque imputation reste au plus égale à ce qui reste dû de sa
  * facture. Ses imputations naissent avec lui et sont signées avec lui :
- * aucune ne s'ajoute après coup.
+ * aucune ne s'ajoute après coup. Il ne règle que ce qui reste dû : le
+ * crédit d'avoir du client s'est déjà imputé à l'émission de ses factures,
+ * à celle de ses avoirs ou à la contre-passation d'un paiement (voir
+ * ImputationDuCredit).
  *
- * Après ses imputations, le crédit d'avoir disponible du client solde ce
- * qui reste dû des factures qu'il règle, de la plus ancienne à la plus
- * récente, les avoirs les plus anciens d'abord (K9) : c'est le cas d'une
- * facture rouverte par la contre-passation d'un paiement saisi par erreur
- * (voir ContrePasserPaiementAction), qui a rendu à ses avoirs le crédit
- * que ce paiement avait imputé, ou quand le client a reçu un avoir
- * entre-temps. Jamais pour le client comptoir, qui n'a pas de crédit (voir
- * Client::soldeCrediteur()).
+ * Les bons d'avoir présentés pour régler un ticket du client comptoir
+ * resté dû (Q6, voir EncaisserEnPlusieursModesAction) s'imputent sur ce
+ * ticket juste avant lui, chacun pour son crédit restant dans la limite de
+ * ce qui reste dû, et désignent ce paiement, qui les signe : ils ne font
+ * entrer aucun argent et ne comptent pas dans son montant.
  *
  * Le client arrive déjà résolu par une requête limitée au magasin, jamais
  * en client_id brut : chaque facture imputée doit appartenir à CE client.
@@ -53,8 +52,8 @@ use LogicException;
  * la transaction (voir RegistreFiscal) : deux paiements simultanés d'une
  * même facture se suivent, et le second relit sous ce verrou la facture et
  * ce qui en reste dû après le premier, qu'une lecture faite avant le
- * verrou aurait pu ignorer. Le paiement, ses imputations et le crédit
- * qu'il impute sont signés ensemble dans la chaîne des encaissements (voir
+ * verrou aurait pu ignorer. Le paiement, ses imputations et les bons qu'il
+ * impute sont signés ensemble dans la chaîne des encaissements (voir
  * ContenuFiscal), dans la même transaction : sans clé de signature, rien
  * n'est enregistré.
  *
@@ -70,7 +69,8 @@ use LogicException;
  * ActionsUniques), cherché sous le verrou du registre : répété après une
  * réponse perdue, il rend le paiement déjà enregistré, sans second
  * encaissement ; le même jeton pour un autre montant est refusé. Une vente
- * au comptoir l'appelle sans jeton : la vente porte le sien.
+ * à la caisse et un encaissement en plusieurs modes l'appellent sans
+ * jeton : ils portent le leur.
  */
 class EnregistrerPaiementAction
 {
@@ -88,13 +88,14 @@ class EnregistrerPaiementAction
      * @param  array{mode_paiement: string, montant: float|string, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement
      * @param  array<int, array{facture_id: int|string, montant: float|string}>  $allocations
      * @param  string|null  $jeton  le jeton de la demande (R3), null quand une autre action l'appelle
+     * @param  list<Avoir>  $bonsDAvoir  les bons d'avoir présentés pour le ticket du client comptoir que règle ce paiement, relus sous le verrou du registre
      *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function handle(User $auteur, Client $client, array $donneesPaiement, array $allocations, ?string $jeton = null): Paiement
+    public function handle(User $auteur, Client $client, array $donneesPaiement, array $allocations, ?string $jeton = null, array $bonsDAvoir = []): Paiement
     {
         if (Carbon::parse($donneesPaiement['recu_le'])->startOfDay()->gt(today())) {
             throw new LogicException('Un paiement ne peut pas être reçu à une date future.');
@@ -119,7 +120,7 @@ class EnregistrerPaiementAction
             'imputations' => array_map(fn (float $montantImpute): string => number_format($montantImpute, 2, '.', ''), $imputations),
         ];
 
-        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_PAIEMENT, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $client, $donneesPaiement, $montant, $imputations, $magasin) {
+        return $this->actionsUniques->executer($jeton, ActionsUniques::ENREGISTRER_PAIEMENT, $auteur, $parametres, fn () => $this->registre->verrouiller($magasin), fn (): Paiement => DB::transaction(function () use ($auteur, $client, $donneesPaiement, $montant, $imputations, $bonsDAvoir, $magasin) {
             $this->registre->verrouiller($magasin);
             Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, Paiement::class);
@@ -129,20 +130,21 @@ class EnregistrerPaiementAction
                 throw new LogicException('Ce client n\'est pas un client du magasin.');
             }
 
-            return $this->operateur->pendant($compte, fn (): Paiement => $this->enregistrer($compte, $magasin, $client, $donneesPaiement, $montant, $imputations));
+            return $this->operateur->pendant($compte, fn (): Paiement => $this->enregistrer($compte, $magasin, $client, $donneesPaiement, $montant, $imputations, $bonsDAvoir));
         }));
     }
 
     /**
      * @param  array{mode_paiement: string, montant: float|string, reference?: ?string, notes?: ?string, recu_le: string}  $donneesPaiement
      * @param  array<int, float>  $imputations
+     * @param  list<Avoir>  $bonsDAvoir
      *
      * @throws AuthorizationException
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    private function enregistrer(User $compte, Magasin $magasin, Client $client, array $donneesPaiement, float $montant, array $imputations): Paiement
+    private function enregistrer(User $compte, Magasin $magasin, Client $client, array $donneesPaiement, float $montant, array $imputations, array $bonsDAvoir): Paiement
     {
         $paiement = new Paiement([
             ...$donneesPaiement,
@@ -150,10 +152,14 @@ class EnregistrerPaiementAction
             'montant' => $montant,
         ]);
         $paiement->forceFill(['cree_par' => $compte->getKey()])->save();
-        $factures = [];
 
         foreach ($imputations as $factureId => $montantImpute) {
             $facture = Facture::query()->whereKey($factureId)->lockForUpdate()->firstOrFail();
+
+            if ($bonsDAvoir !== []) {
+                $this->imputerLesBonsDAvoir($paiement, $facture, $client, $bonsDAvoir, count($imputations));
+            }
+
             $this->verifierQuElleAttendCeReglement($facture, $client, $montantImpute);
             $this->lecteur->exiger($compte, 'encaisser', $magasin, $facture);
 
@@ -164,11 +170,6 @@ class EnregistrerPaiementAction
             ]);
 
             $facture->constaterUnReglement();
-            $factures[] = $facture;
-        }
-
-        if (! $client->estComptoir()) {
-            $this->imputerLeCreditDisponible($paiement, $factures);
         }
 
         $paiement = $paiement->fresh();
@@ -237,56 +238,39 @@ class EnregistrerPaiementAction
     }
 
     /**
-     * Le crédit d'avoir disponible du client solde ce qui reste dû des
-     * factures que règle le paiement, de la plus ancienne à la plus
-     * récente, les avoirs les plus anciens d'abord : chaque crédit imputé
-     * désigne ce paiement, qui le signe.
+     * Les bons d'avoir présentés pour un ticket du client comptoir resté
+     * dû (Q6) s'imputent sur lui avant ce paiement, dans l'ordre saisi,
+     * chacun pour son crédit restant dans la limite de ce qui reste dû : un
+     * avoir émis au client comptoir du magasin, relu sous le verrou du
+     * registre. Chaque imputation désigne ce paiement, qui la signe.
      *
-     * @param  list<Facture>  $factures  relues sous verrou
+     * @param  list<Avoir>  $bonsDAvoir
+     *
+     * @throws LogicException
      */
-    private function imputerLeCreditDisponible(Paiement $paiement, array $factures): void
+    private function imputerLesBonsDAvoir(Paiement $paiement, Facture $ticket, Client $client, array $bonsDAvoir, int $nombreDeFactures): void
     {
-        $facturesDues = collect($factures)
-            ->filter(fn (Facture $facture): bool => $facture->montantRestant() > 0)
-            ->sortBy(fn (Facture $facture): array => [$facture->date_emission?->getTimestamp(), $facture->id]);
-
-        if ($facturesDues->isEmpty()) {
-            return;
+        if ($nombreDeFactures !== 1 || ! $client->estComptoir() || ! $ticket->statut->attendUnReglement()) {
+            throw new LogicException(Avoir::BON_D_AVOIR_HORS_DE_LA_CAISSE);
         }
 
-        $avoirs = Avoir::query()
-            ->where('client_id', $paiement->client_id)
-            ->where('statut', StatutAvoir::Emise)
-            ->orderBy('date_emission')
-            ->orderBy('id')
-            ->lockForUpdate()
-            ->get();
+        foreach ($bonsDAvoir as $bon) {
+            $montant = min($bon->creditEnCentimes(), $ticket->fresh()->resteDuEnCentimes());
 
-        foreach ($facturesDues as $facture) {
-            $resteDu = $facture->montantRestant();
-
-            foreach ($avoirs as $avoir) {
-                if ($resteDu <= 0) {
-                    break;
-                }
-
-                $montantImpute = min($avoir->montantNonAlloue(), $resteDu);
-
-                if ($montantImpute <= 0) {
-                    continue;
-                }
-
-                AvoirAllocation::create([
-                    'avoir_id' => $avoir->id,
-                    'facture_id' => $facture->id,
-                    'paiement_id' => $paiement->id,
-                    'montant_alloue' => $montantImpute,
-                ]);
-
-                $resteDu = $this->calculateur->soustraire($resteDu, $montantImpute);
+            if ((int) $bon->magasin_id !== (int) $ticket->magasin_id || ! ($bon->client?->estComptoir() ?? false)) {
+                throw new LogicException(Avoir::BON_D_AVOIR_INTROUVABLE);
             }
 
-            $facture->constaterUnReglement();
+            if ($montant <= 0) {
+                throw new LogicException(sprintf(Avoir::BON_D_AVOIR_SANS_EMPLOI, $bon->numero));
+            }
+
+            AvoirAllocation::create([
+                'avoir_id' => $bon->getKey(),
+                'facture_id' => $ticket->getKey(),
+                'paiement_id' => $paiement->getKey(),
+                'montant_alloue' => $this->calculateur->enDecimal($montant),
+            ]);
         }
     }
 

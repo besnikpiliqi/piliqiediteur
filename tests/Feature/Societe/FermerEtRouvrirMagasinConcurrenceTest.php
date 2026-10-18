@@ -11,7 +11,6 @@ use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
@@ -370,7 +369,7 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         $magasin = Magasin::query()->findOrFail($magasinId);
         app(TenantContext::class)->set($magasin);
 
-        app(EnregistrerVenteCaisseAction::class)->handle(
+        self::vendreAuComptant(
             User::query()->whereKey($magasin->societe->proprietaire()->value('id'))->firstOrFail(),
             Client::query()->where('est_comptoir', true)->sole(),
             [['produit_id' => $produitId, 'quantite' => 1]],

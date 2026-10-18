@@ -18,6 +18,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\ControleNatureOperation;
 use App\Domain\Facturation\Services\DocumentNumberingService;
@@ -121,18 +122,22 @@ use LogicException;
  *     contrôle avant la numérotation (voir VerificateurDeStock) ;
  *  4. FactureEmise sort le stock des produits déjà verrouillés, applique
  *     le crédit d'avoir du client et prépare la transmission PDP ;
- *  5. le règlement comptant d'une vente au comptoir impute d'abord le
- *     bon d'avoir présenté, s'il y en a un, sur ce que le crédit du client
- *     laisse dû (voir imputerLeBonDAvoir()) ;
- *     une facture dont il ne reste alors rien à payer, parce que ce crédit
- *     ou ce bon la couvre ou qu'elle ne coûte rien (remise de 100 %), passe
- *     « payée » sans encaissement : elle n'attend aucun règlement et ne
- *     sera jamais en retard (G1) ; sinon ce règlement, s'il y en a un, paie
- *     ce qui reste dû (voir EnregistrerPaiementAction, signé dans la
- *     chaîne des encaissements) ;
+ *  5. le règlement d'une vente à la caisse (voir ReglementComptant)
+ *     impute ensuite les bons d'avoir présentés, dans l'ordre saisi, chacun
+ *     pour son crédit restant, relu sous le verrou du registre, dans la
+ *     limite de ce qui reste dû (voir imputerLesBonsDAvoir()) ; ses parts
+ *     doivent égaler exactement ce qui reste alors à payer : sinon, parce
+ *     que le crédit du client ou un bon a changé depuis l'écran, rien
+ *     n'est enregistré et le refus dit le nouveau total. Chaque part
+ *     devient un paiement de son mode (voir EnregistrerPaiementAction,
+ *     signé dans la chaîne des encaissements). Une facture dont il ne
+ *     reste rien à payer, parce que ce crédit ou ces bons la couvrent ou
+ *     qu'elle ne coûte rien (remise de 100 %), passe « payée » sans
+ *     encaissement : elle n'attend aucun règlement et ne sera jamais en
+ *     retard (G1) ;
  *  6. le document, tel qu'il est alors en base, est signé dans la chaîne
- *     des ventes (voir ContenuFiscal) : client figé, règlement, crédit et
- *     bon d'avoir compris ;
+ *     des ventes (voir ContenuFiscal) : client figé, paiements de chaque
+ *     part, crédit et bons d'avoir compris ;
  *  7. une vente sans stock s'inscrit au journal d'audit, dont la tête de
  *     la chaîne du magasin se verrouille en dernier ; puis le jeton.
  * Sans clé de signature, ou si l'horloge du serveur a reculé, rien de tout
@@ -140,6 +145,8 @@ use LogicException;
  */
 class EmettreFactureAction
 {
+    public const TOTAL_A_PAYER_CHANGE = 'Le total à payer est de %s, crédit d\'avoir déduit. %s';
+
     public function __construct(
         private readonly DocumentNumberingService $numerotation,
         private readonly RegistreFiscal $registre,
@@ -152,10 +159,11 @@ class EmettreFactureAction
         private readonly VerificateurDeStock $stock,
         private readonly JournalAudit $journalAudit,
         private readonly ActionsUniques $actionsUniques,
+        private readonly CalculateurLigne $calculateur,
     ) {}
 
     /**
-     * @param  ReglementComptant|null  $reglement  le règlement d'une vente au comptoir, encaissé à l'émission
+     * @param  ReglementComptant|null  $reglement  le règlement d'une vente à la caisse, encaissé à l'émission
      * @param  ConfirmationVenteSansStock|null  $confirmation  l'avertissement d'une vente sans stock, confirmé (R1)
      * @param  string|null  $jeton  le jeton de la demande (R3), null quand une autre action l'appelle
      *
@@ -172,7 +180,7 @@ class EmettreFactureAction
 
         return $this->actionsUniques->executer($jeton, ActionsUniques::EMETTRE_FACTURE, $auteur, [
             'facture_id' => $facture->getKey(),
-            'reglement' => $reglement === null ? null : [$reglement->mode->value, $reglement->reference, $reglement->bonDAvoir?->numero],
+            'reglement' => $reglement?->enTableau(),
         ], fn () => $this->registre->verrouiller($magasin), fn (): Facture => DB::transaction(function () use ($auteur, $facture, $reglement, $confirmation, $magasin) {
             $instant = $this->registre->verrouiller($magasin);
             Magasin::query()->findOrFail($magasin->getKey())->verifierQuIlPeutVendre();
@@ -239,14 +247,14 @@ class EmettreFactureAction
 
         $facture = $facture->fresh();
 
-        if ($reglement?->bonDAvoir !== null && $facture->montantRestant() > 0) {
-            $this->imputerLeBonDAvoir($facture, $reglement->bonDAvoir);
+        if ($reglement !== null) {
+            $this->encaisserComptant($compte, $facture, $reglement, $instant->enHeureLocale()->toDateString());
         }
 
-        if ($facture->montantRestant() <= 0) {
+        $facture = $facture->fresh();
+
+        if ($facture->resteDuEnCentimes() <= 0) {
             $facture->constaterUnReglement();
-        } elseif ($reglement !== null) {
-            $this->encaisserComptant($compte, $facture, $reglement, $instant->enHeureLocale()->toDateString());
         }
 
         $facture = $facture->fresh();
@@ -308,49 +316,71 @@ class EmettreFactureAction
     }
 
     /**
-     * Le bon d'avoir présenté au comptoir (voir EnregistrerVenteCaisseAction)
-     * impute son crédit restant sur la facture, quel qu'en soit le client,
-     * au plus ce qu'en laisse dû le crédit du client, déjà imputé (voir
-     * AppliquerAvoirsDisponiblesAction) : un avoir du client comptoir du
-     * magasin de la facture, dont le crédit, relu sous le verrou du
-     * registre, n'est pas épuisé.
+     * Une vente à la caisse est soldée dès son émission : les bons d'avoir
+     * présentés s'imputent sur ce que le crédit du client laisse dû, puis
+     * chaque part paie son montant, dans son mode. Les parts doivent égaler
+     * exactement ce qui reste à payer.
      *
      * @throws LogicException
-     */
-    private function imputerLeBonDAvoir(Facture $facture, Avoir $bon): void
-    {
-        $montant = min($bon->montantNonAlloue(), $facture->montantRestant());
-
-        if ((int) $bon->magasin_id !== (int) $facture->magasin_id || ! ($bon->client?->estComptoir() ?? false) || $montant <= 0) {
-            throw new LogicException(Avoir::BON_D_AVOIR_INTROUVABLE);
-        }
-
-        AvoirAllocation::create([
-            'avoir_id' => $bon->id,
-            'facture_id' => $facture->id,
-            'montant_alloue' => $montant,
-        ]);
-    }
-
-    /**
-     * Une vente au comptoir est soldée dès son émission : ce qui reste dû
-     * après le crédit d'avoir du client et le bon d'avoir présenté est
-     * encaissé.
+     * @throws ModuleFiscalNonConfigureException
+     * @throws HorlogeRegressiveException
      */
     private function encaisserComptant(User $compte, Facture $facture, ReglementComptant $reglement, string $recuLe): void
     {
-        $montantRestant = $facture->montantRestant();
+        $this->imputerLesBonsDAvoir($facture, $reglement->bonsDAvoir);
+        $resteAPayer = $facture->fresh()->resteDuEnCentimes();
+        $ecart = $reglement->ecartAvec($resteAPayer);
 
-        $this->enregistrerPaiement->handle(
-            $compte,
-            $facture->client,
-            [
-                'mode_paiement' => $reglement->mode->value,
-                'montant' => $montantRestant,
-                'reference' => $reglement->reference,
-                'recu_le' => $recuLe,
-            ],
-            [['facture_id' => $facture->id, 'montant' => $montantRestant]],
-        );
+        if ($ecart !== null) {
+            throw new LogicException(sprintf(self::TOTAL_A_PAYER_CHANGE, $this->calculateur->enEuros($resteAPayer), $ecart));
+        }
+
+        foreach ($reglement->parts as $part) {
+            $montant = $this->calculateur->enDecimal($part->montant);
+
+            $this->enregistrerPaiement->handle(
+                $compte,
+                $facture->client,
+                ['mode_paiement' => $part->mode->value, 'montant' => $montant, 'reference' => $part->reference, 'recu_le' => $recuLe],
+                [['facture_id' => $facture->getKey(), 'montant' => $montant]],
+            );
+        }
+    }
+
+    /**
+     * Les bons d'avoir présentés à la caisse imputent chacun son crédit
+     * restant sur la facture, quel qu'en soit le client, dans l'ordre
+     * saisi, au plus ce qu'en laissent dû le crédit du client, déjà imputé
+     * (voir AppliquerAvoirsDisponiblesAction), et les bons qui le
+     * précèdent : un avoir émis au client comptoir du magasin (voir
+     * Avoir::scopeBonDAvoir()), relu verrouillé sous le verrou du
+     * registre, dont le crédit n'est pas épuisé. Un bon qui ne trouve plus
+     * rien à régler est refusé.
+     *
+     * @param  list<string>  $numeros
+     *
+     * @throws LogicException
+     */
+    private function imputerLesBonsDAvoir(Facture $facture, array $numeros): void
+    {
+        foreach ($numeros as $numero) {
+            $bon = Avoir::query()->bonDAvoir($numero)->lockForUpdate()->first();
+
+            if ($bon === null || $bon->creditEnCentimes() <= 0) {
+                throw new LogicException(Avoir::BON_D_AVOIR_INTROUVABLE);
+            }
+
+            $montant = min($bon->creditEnCentimes(), $facture->fresh()->resteDuEnCentimes());
+
+            if ($montant <= 0) {
+                throw new LogicException(sprintf(Avoir::BON_D_AVOIR_SANS_EMPLOI, $bon->numero));
+            }
+
+            AvoirAllocation::create([
+                'avoir_id' => $bon->getKey(),
+                'facture_id' => $facture->getKey(),
+                'montant_alloue' => $this->calculateur->enDecimal($montant),
+            ]);
+        }
     }
 }

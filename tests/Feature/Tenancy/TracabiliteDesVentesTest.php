@@ -11,7 +11,6 @@ use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
@@ -180,7 +179,7 @@ class TracabiliteDesVentesTest extends TestCase
         app(TenantContext::class)->set($this->villeurbanne);
 
         $this->assertThrows(
-            fn () => app(EnregistrerVenteCaisseAction::class)->handle($vendeur, $client, $lignes, ModePaiement::Especes),
+            fn () => self::vendreAuComptant($vendeur, $client, $lignes, ModePaiement::Especes),
             LogicException::class,
             'Fermez d\'abord votre caisse de Lyon : vous n\'encaissez que dans un magasin à la fois.',
         );
@@ -221,7 +220,7 @@ class TracabiliteDesVentesTest extends TestCase
      */
     private function vendre(User $vendeur, Magasin $magasin): Facture
     {
-        return app(TenantContext::class)->runAs($magasin, fn (): Facture => app(EnregistrerVenteCaisseAction::class)->handle($vendeur, Client::factory()->create(), $this->lignes(), ModePaiement::Especes));
+        return app(TenantContext::class)->runAs($magasin, fn (): Facture => self::vendreAuComptant($vendeur, Client::factory()->create(), $this->lignes(), ModePaiement::Especes));
     }
 
     /**

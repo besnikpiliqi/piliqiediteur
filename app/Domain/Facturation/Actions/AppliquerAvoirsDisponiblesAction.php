@@ -14,15 +14,11 @@ use Illuminate\Support\Facades\DB;
  * À l'émission d'une facture (voir EmettreFactureAction), le crédit
  * d'avoir disponible de son client (voir Client::soldeCrediteur()) règle
  * ce qui en reste dû, dans la transaction qui la signe. Ce crédit est ce
- * qu'un avoir n'a pu imputer à son émission, le client n'ayant plus
- * aucune facture due (voir ImputerAvoirSurSesFacturesAction), ou ce que
- * la contre-passation d'un paiement a rendu à ses avoirs (voir
- * ContrePasserPaiementAction). Un avoir n'est jamais remboursé (B5).
- *
- * Une contre-passation rouvre aussi les factures que réglait le paiement
- * erroné, sans y imputer ce crédit, qui attend le bon paiement (K9, voir
- * EnregistrerPaiementAction) : une facture émise entre-temps le prend,
- * même si une facture plus ancienne ainsi rouverte reste due.
+ * qu'un avoir n'a pu imputer à son émission, ni la contre-passation d'un
+ * paiement sur ce qu'elle a rouvert, le client n'ayant plus aucune facture
+ * due (voir ImputationDuCredit). Un avoir n'est jamais remboursé (B5). À
+ * la caisse, il s'affiche comme la part « Avoir (crédit du client) » du
+ * règlement, remplie d'office (voir ApercuDuReglement).
  *
  * Les avoirs les plus anciens sont consommés en premier, et peuvent se
  * répartir sur plusieurs factures successives comme plusieurs avoirs sur
@@ -30,7 +26,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Jamais pour le client comptoir : le crédit d'un avoir fait au comptoir
  * n'appartient qu'à qui en présente le numéro, son bon d'avoir (voir
- * EnregistrerVenteCaisseAction), jamais à la vente comptoir suivante.
+ * EmettreFactureAction), jamais à la vente comptoir suivante.
  */
 class AppliquerAvoirsDisponiblesAction
 {

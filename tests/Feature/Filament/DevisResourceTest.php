@@ -10,7 +10,6 @@ use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\NatureOperation;
@@ -139,7 +138,7 @@ class DevisResourceTest extends TestCase
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 60, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $facture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
+        $facture = self::vendreAuComptant(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ], ModePaiement::Especes);
         $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [

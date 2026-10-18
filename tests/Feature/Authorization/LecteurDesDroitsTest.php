@@ -26,7 +26,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
@@ -210,7 +209,7 @@ class LecteurDesDroitsTest extends TestCase
                     $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
                     $client = Client::factory()->create();
 
-                    return fn () => app(EnregistrerVenteCaisseAction::class)->handle($membre, $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+                    return fn () => self::vendreAuComptant($membre, $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
                 },
                 PermissionRegistry::FACTURE_EMETTRE,
                 static fn (): int => Facture::query()->count(),
@@ -270,7 +269,7 @@ class LecteurDesDroitsTest extends TestCase
         $this->actingAs($this->proprietaireDe($magasin));
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($vendeuse, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant($vendeuse, Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
 
         $paiement = Paiement::query()->sole();
         $this->assertSame([$vendeuse->id, 'Zoé Lefèvre'], [$ticket->cree_par, $ticket->cree_par_nom]);

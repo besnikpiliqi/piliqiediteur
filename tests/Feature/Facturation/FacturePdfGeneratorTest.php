@@ -19,6 +19,8 @@ use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
@@ -396,7 +398,7 @@ class FacturePdfGeneratorTest extends TestCase
 
         // Premier achat payé puis intégralement retourné : 60 € de crédit
         // disponible.
-        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
+        $premiereFacture = self::vendreAuComptant(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ], ModePaiement::Especes);
         $avoir = app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
@@ -470,18 +472,18 @@ class FacturePdfGeneratorTest extends TestCase
      * Le PDF nomme l'avoir dont le crédit a réglé le ticket à son émission
      * (50,00 €, restant dû 50,00 €), et lui seul (Q5). Le second avoir est
      * émis quand le ticket est réglé, et n'a donc rien à y imputer (B6) ;
-     * la contre-passation de ce règlement rouvre le ticket, et c'est le
-     * paiement erroné suivant qui y impute son crédit, que sa propre
-     * contre-passation rend : aucun de ces règlements, venus après
+     * la contre-passation de ce règlement rouvre le ticket et y impute
+     * aussitôt son crédit (complément 1), puis un paiement erroné est
+     * contre-passé à son tour : aucun de ces règlements, venus après
      * l'émission, ne s'imprime.
      */
-    public function test_l_avoir_dont_la_contre_passation_a_rendu_le_credit_n_est_plus_nomme(): void
+    public function test_un_avoir_impute_par_une_contre_passation_apres_l_emission_n_est_pas_nomme(): void
     {
         app(TenantContext::class)->set(Magasin::factory()->create(['code' => 'LYON1']));
         $client = Client::factory()->create();
         $article = fn (float $prixTtc): Produit => Produit::factory()->create(['prix_vente_ttc' => $prixTtc, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $premierAchat = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $article(50)->id, 'quantite' => 1]], ModePaiement::Especes);
-        $secondAchat = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $article(30)->id, 'quantite' => 1]], ModePaiement::Especes);
+        $premierAchat = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $article(50)->id, 'quantite' => 1]], ModePaiement::Especes);
+        $secondAchat = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $article(30)->id, 'quantite' => 1]], ModePaiement::Especes);
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $premierAchat->lignes->sole()->id, 'quantite' => 1]]);
         $ticket = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $article(100)->id, 'quantite' => 1]]));
         $reglementRejete = $this->payer($client, $ticket, '50.00');
@@ -493,7 +495,7 @@ class FacturePdfGeneratorTest extends TestCase
         app(ContrePasserPaiementAction::class)->handle(self::auteur(), $errone, 'Saisi sur le mauvais ticket');
 
         $this->assertSame(['Avoir AV-LYON1-2026-000001 : 50,00 €', 'Restant dû : 50,00 €'], $this->reglementsImprimes($ticket));
-        $this->assertSame([0.0, 50.0, 50.0], [$ticket->fresh()->montantPaye(), $ticket->fresh()->montantCrediteParAvoir(), $ticket->fresh()->montantRestant()]);
+        $this->assertSame([0.0, 80.0, 20.0], [$ticket->fresh()->montantPaye(), $ticket->fresh()->montantCrediteParAvoir(), $ticket->fresh()->montantRestant()]);
     }
 
     public function test_aucune_mention_de_reglement_sur_une_facture_non_payee(): void
@@ -733,23 +735,27 @@ class FacturePdfGeneratorTest extends TestCase
     }
 
     /**
-     * Un ticket du client comptoir réglé par un bon d'avoir de 20,00 € et
-     * 30,00 € en espèces imprime chacun de ses règlements, relus dans son
-     * contenu signé : la date, le mode et le montant du paiement, le numéro
-     * et le montant de l'avoir, puis le restant dû (points 3 et 23, Q5).
+     * Un ticket du client comptoir de 80,00 € réglé d'un seul geste par un
+     * bon d'avoir de 20,00 €, 30,00 € en espèces et 30,00 € par carte
+     * imprime chacun de ses règlements, relus dans son contenu signé : la
+     * date, le mode et le montant de chaque paiement, le numéro et le
+     * montant de l'avoir, puis le restant dû (points 3 et 23, Q5).
      */
     public function test_les_reglements_de_l_emission_s_impriment_par_mode(): void
     {
         $this->travelTo('2026-10-09 10:00:00');
         $this->ouvrirUneSociete(['code' => 'LYON1']);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $vendre = fn (float $prix, ?string $bon = null): Facture => app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => $prix, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $bon);
-        $premier = $vendre(20);
+        $article = fn (float $prix): array => [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => $prix, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]];
+        $premier = self::vendreAuComptant(self::auteur(), $comptoir, $article(20));
         $bon = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $premier->lignes->sole()->id, 'quantite' => 1]]);
 
-        $ticket = $vendre(50, $bon->numero);
+        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, $article(80), new ReglementComptant([
+            new PartDeReglement(ModePaiement::Especes, 3000),
+            new PartDeReglement(ModePaiement::CarteBancaire, 3000),
+        ], [$bon->numero]));
 
-        $this->assertSame(['09/10/2026 · Espèces : 30,00 €', 'Avoir AV-LYON1-2026-000001 : 20,00 €', 'Restant dû : 0,00 €'], $this->reglementsImprimes($ticket));
+        $this->assertSame(['09/10/2026 · Espèces : 30,00 €', '09/10/2026 · Carte bancaire : 30,00 €', 'Avoir AV-LYON1-2026-000001 : 20,00 €', 'Restant dû : 0,00 €'], $this->reglementsImprimes($ticket));
     }
 
     /**
@@ -890,7 +896,7 @@ class FacturePdfGeneratorTest extends TestCase
         app(TenantContext::class)->set(Magasin::factory()->create());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $paye = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
+        $paye = self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
         $du = $this->emettre(Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]]);
 
         $this->assertStringNotContainsString('Échéance', $this->rendu($paye));
@@ -908,7 +914,7 @@ class FacturePdfGeneratorTest extends TestCase
         app(TenantContext::class)->set(Magasin::factory()->create());
         $produit = Produit::factory()->create(['prix_vente_ttc' => 30, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        $facture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Virement, 'VIR-42');
+        $facture = self::vendreAuComptant(self::auteur(), Client::factory()->professionnel()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Virement, 'VIR-42');
 
         $this->assertSame(['09/10/2026 · Virement · VIR-42 : 30,00 €', 'Restant dû : 0,00 €'], $this->reglementsImprimes($facture));
         $this->assertStringContainsString('Échéance le 08/11/2026', $this->rendu($facture));

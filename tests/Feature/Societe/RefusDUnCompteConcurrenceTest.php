@@ -6,7 +6,6 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
@@ -48,7 +47,7 @@ class RefusDUnCompteConcurrenceTest extends TestCase
         $concurrente = null;
         $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($vendeurId, $magasinId, $produitId): void {
             app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
-            app(EnregistrerVenteCaisseAction::class)->handle(User::query()->findOrFail($vendeurId), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $produitId, 'quantite' => 1]], ModePaiement::Especes);
+            self::vendreAuComptant(User::query()->findOrFail($vendeurId), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $produitId, 'quantite' => 1]], ModePaiement::Especes);
         }, $concurrente);
 
         app(RefuserSonCompteAction::class)->handle($vendeur);

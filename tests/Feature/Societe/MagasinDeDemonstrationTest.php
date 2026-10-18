@@ -12,7 +12,6 @@ use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaisse;
@@ -161,7 +160,7 @@ class MagasinDeDemonstrationTest extends TestCase
             ->mountFormComponentAction('ajouterUnServiceAction', 'ajouterUnService')
             ->assertSee('Emballage cadeau')
             ->assertSee('Livraison à domicile');
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle($vendeur,
+        $ticket = self::vendreAuComptant($vendeur,
             Client::query()->where('est_comptoir', true)->sole(),
             Service::query()->orderBy('nom')->pluck('id')->map(fn (int $service): array => ['service_id' => $service, 'quantite' => 1])->all(),
             ModePaiement::Especes,
@@ -379,7 +378,7 @@ class MagasinDeDemonstrationTest extends TestCase
      */
     private function vendre(): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+        return self::vendreAuComptant(self::auteur(),
             Client::query()->where('est_comptoir', true)->sole(),
             [['produit_id' => Produit::query()->where('reference', 'DEMO-CARNET')->value('id'), 'quantite' => 1]],
             ModePaiement::Especes,

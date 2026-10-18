@@ -4,7 +4,6 @@ namespace Tests\Feature\Tenancy;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -47,10 +46,10 @@ class TracabiliteDesVentesConcurrenceTest extends TestCase
         $concurrente = null;
         $this->concurrencerDesQueLaLigneDuVendeurEstVerrouillee(static function () use ($vendeurId, $villeurbanneId, $produitDeVilleurbanne): void {
             app(TenantContext::class)->set(Magasin::query()->findOrFail($villeurbanneId));
-            app(EnregistrerVenteCaisseAction::class)->handle(User::query()->findOrFail($vendeurId), Client::factory()->create(), [['produit_id' => $produitDeVilleurbanne, 'quantite' => 1]], ModePaiement::Especes);
+            self::vendreAuComptant(User::query()->findOrFail($vendeurId), Client::factory()->create(), [['produit_id' => $produitDeVilleurbanne, 'quantite' => 1]], ModePaiement::Especes);
         }, $concurrente);
 
-        $venteDeLyon = app(EnregistrerVenteCaisseAction::class)->handle($vendeur, Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $venteDeLyon = self::vendreAuComptant($vendeur, Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $concurrente->wait();

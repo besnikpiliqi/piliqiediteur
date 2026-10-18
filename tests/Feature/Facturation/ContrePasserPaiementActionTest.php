@@ -11,6 +11,7 @@ use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EncaisserEnPlusieursModesAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
@@ -20,6 +21,7 @@ use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -36,8 +38,9 @@ use Tests\TestCase;
 /**
  * Un paiement saisi par erreur se corrige par sa contre-passation (B4) :
  * un paiement opposé, lié à l'original et signé, qui rouvre les factures
- * qu'il réglait ; on saisit ensuite le bon paiement, avec lequel le crédit
- * d'avoir disponible du client s'impute (K9).
+ * qu'il réglait, sur lesquelles le crédit d'avoir disponible du client
+ * s'impute aussitôt (complément 1) ; on saisit ensuite le bon paiement,
+ * pour ce qui reste dû.
  */
 class ContrePasserPaiementActionTest extends TestCase
 {
@@ -291,96 +294,88 @@ class ContrePasserPaiementActionTest extends TestCase
     }
 
     /**
-     * K9 : la contre-passation annule exactement l'erreur ; le bon
-     * paiement de 10,00 € en espèces impute ensuite le crédit d'avoir du
-     * client sur le reste de la facture (90,00 €), et il reste 10,00 € de
-     * crédit.
+     * Complément 1 : à la contre-passation, le crédit d'avoir disponible du
+     * client (90,00 €, d'un avoir sur une facture déjà réglée) s'impute
+     * aussitôt sur la facture rouverte, et la contre-passation le signe ;
+     * le bon paiement de 10,00 € en espèces ne règle plus que ce qui reste
+     * dû, sans imputer aucun crédit.
      */
-    public function test_le_bon_paiement_impute_le_credit_d_avoir_disponible_sur_le_reste_de_la_facture(): void
+    public function test_le_bon_paiement_ne_regle_que_ce_que_le_credit_impute_a_la_contre_passation_laisse_du(): void
     {
         $this->travelTo('2026-10-09 10:00:00');
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create();
-        $dejaPayee = $this->facture($client);
-        $this->payer($client, '100.00', [$dejaPayee->id => '100.00'], ModePaiement::Virement);
+        $dejaPayee = $this->facture($client, 90);
+        $this->payer($client, '90.00', [$dejaPayee->id => '90.00'], ModePaiement::Virement);
         $facture = $this->facture($client);
         $errone = $this->payer($client, '100.00', [$facture->id => '100.00']);
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $dejaPayee->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
-        $this->contrePasser($errone);
-        $this->assertSame([100.0, 100.0], [$client->soldeCrediteur(), $facture->fresh()->montantRestant()]);
+        $this->assertSame(90.0, $client->soldeCrediteur());
 
+        $contrePassation = $this->contrePasser($errone);
         $bon = $this->payer($client, '10.00', [$facture->id => '10.00']);
 
         $facture->refresh();
         $this->assertSame([StatutFacture::Payee, 10.0, 90.0, 0.0], [$facture->statut, $facture->montantPaye(), $facture->montantCrediteParAvoir(), $facture->montantRestant()]);
-        $this->assertSame([[$avoir->id, $facture->id, '90.00']], $bon->creditsImputes->map(fn ($credit): array => [$credit->avoir_id, $credit->facture_id, $credit->montant_alloue])->all());
-        $this->assertSame(10.0, $client->soldeCrediteur());
+        $this->assertSame([[$avoir->id, $facture->id, '90.00']], $contrePassation->creditsImputes->map(fn ($credit): array => [$credit->avoir_id, $credit->facture_id, $credit->montant_alloue])->all());
+        $this->assertSame([], $bon->creditsImputes->all());
+        $this->assertSame(0.0, $client->soldeCrediteur());
         $this->assertSame([[
             'avoir_id' => $avoir->id,
             'avoir_numero' => 'AV-LYON1-2026-000001',
             'facture_id' => $facture->id,
             'facture_numero' => 'FAC-LYON1-2026-000002',
             'montant' => 9000,
-        ]], $this->donneesSignees($bon)['credits_imputes']);
+        ]], $this->donneesSignees($contrePassation)['credits_imputes']);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
     }
 
     /**
-     * Un client a 100,00 € de crédit et deux factures dues de 100,00 € :
-     * A, la plus ancienne, et R. Elles étaient réglées par un virement
-     * quand l'avoir a été émis, qui n'a donc rien eu à régler (B6), puis la
-     * contre-passation du virement, rejeté, les a rouvertes. Le paiement de
-     * 10,00 € saisi par erreur sur R y impute aussi 90,00 € de crédit.
+     * Un ticket du client comptoir de 50,00 €, resté dû, que règle un
+     * encaissement saisi par erreur : 30,00 € en espèces et un bon d'avoir
+     * de 20,00 € (Q6), signé avec ce paiement.
      *
-     * @return array{client: Client, ancienne: Facture, recente: Facture, avoir: Avoir, errone: Paiement}
+     * @return array{ticket: Facture, bon: Avoir, errone: Paiement}
      */
     private function paiementErroneQuiImputeDuCredit(): array
     {
         $this->travelTo('2026-10-09 10:00:00');
-        $client = Client::factory()->professionnel()->create();
-        $dejaPayee = $this->facture($client);
-        $this->payer($client, '100.00', [$dejaPayee->id => '100.00'], ModePaiement::Virement);
-        $this->travelTo('2026-10-09 10:01:00');
-        $ancienne = $this->facture($client);
-        $this->travelTo('2026-10-09 10:02:00');
-        $recente = $this->facture($client);
-        $virementRejete = $this->payer($client, '200.00', [$ancienne->id => '100.00', $recente->id => '100.00'], ModePaiement::Virement);
-        $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $dejaPayee->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
-        $this->contrePasser($virementRejete, 'Virement rejeté');
-        $errone = $this->payer($client, '10.00', [$recente->id => '10.00']);
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $ticketRendu = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
+        $bon = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $ticketRendu->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+        $ticket = $this->facture($comptoir, 50);
+        app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::Especes, 3000)], [$bon->numero], today()->toDateString());
+        $errone = Paiement::query()->where('montant', '30.00')->sole();
 
-        return compact('client', 'ancienne', 'recente', 'avoir', 'errone');
+        return compact('ticket', 'bon', 'errone');
     }
 
     /**
      * K9 : la contre-passation est l'inverse exact du paiement erroné, le
-     * crédit qu'il avait imputé compris, qui revient à son avoir. Le bon
-     * paiement de 10,00 € sur A y impute ensuite 90,00 € de crédit : A est
-     * payée, R reste due en entier et il reste 10,00 € de crédit, comme
-     * sans l'erreur.
+     * crédit du bon d'avoir qu'il avait imputé compris, qui revient au bon :
+     * le ticket redevient dû en entier, comme sans l'erreur, et le bon, qui
+     * ne le corrige pas, ne s'y réimpute pas (jamais sur une autre vente du
+     * client comptoir).
      */
     public function test_la_contre_passation_rend_le_credit_que_le_paiement_errone_avait_impute(): void
     {
-        $this->magasinActif();
-        ['client' => $client, 'ancienne' => $ancienne, 'recente' => $recente, 'avoir' => $avoir, 'errone' => $errone] = $this->paiementErroneQuiImputeDuCredit();
-        $this->assertSame([StatutFacture::Payee, 10.0], [$recente->fresh()->statut, $client->soldeCrediteur()]);
+        ['ticket' => $ticket, 'bon' => $bon, 'errone' => $errone] = $this->paiementErroneQuiImputeDuCredit();
+        $this->assertSame([StatutFacture::Payee, 0], [$ticket->fresh()->statut, $bon->fresh()->creditEnCentimes()]);
 
-        $contrePassation = $this->contrePasser($errone, 'Saisi sur la mauvaise facture');
-        $this->payer($client, '10.00', [$ancienne->id => '10.00']);
+        $contrePassation = $this->contrePasser($errone, 'Saisi sur le mauvais ticket');
 
-        $this->assertSame([[$avoir->id, $recente->id, '-90.00']], $contrePassation->creditsImputes->map(fn ($credit): array => [$credit->avoir_id, $credit->facture_id, $credit->montant_alloue])->all());
+        $this->assertSame([[$bon->id, $ticket->id, '-20.00']], $contrePassation->creditsImputes->map(fn ($credit): array => [$credit->avoir_id, $credit->facture_id, $credit->montant_alloue])->all());
         $this->assertSame([[
-            'avoir_id' => $avoir->id,
-            'avoir_numero' => 'AV-LYON1-2026-000001',
-            'facture_id' => $recente->id,
-            'facture_numero' => 'FAC-LYON1-2026-000003',
-            'montant' => -9000,
+            'avoir_id' => $bon->id,
+            'avoir_numero' => 'AV-MABOUT-2026-000001',
+            'facture_id' => $ticket->id,
+            'facture_numero' => 'TK-MABOUT-2026-000002',
+            'montant' => -2000,
         ]], $this->donneesSignees($contrePassation)['credits_imputes']);
-        $ancienne->refresh();
-        $this->assertSame([StatutFacture::Payee, 10.0, 90.0, 0.0], [$ancienne->statut, $ancienne->montantPaye(), $ancienne->montantCrediteParAvoir(), $ancienne->montantRestant()]);
-        $recente->refresh();
-        $this->assertSame([StatutFacture::Emise, 0.0, 0.0, 100.0], [$recente->statut, $recente->montantPaye(), $recente->montantCrediteParAvoir(), $recente->montantRestant()]);
-        $this->assertSame(10.0, $client->soldeCrediteur());
+        $ticket->refresh();
+        $this->assertSame([StatutFacture::Emise, 0.0, 0.0, 50.0], [$ticket->statut, $ticket->montantPaye(), $ticket->montantCrediteParAvoir(), $ticket->montantRestant()]);
+        $this->assertSame(2000, $bon->fresh()->creditEnCentimes());
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
     }
 
@@ -399,7 +394,6 @@ class ContrePasserPaiementActionTest extends TestCase
             $this->markTestSkipped('SQLite n\'écrit aucun verrou de ligne : ce test ne tourne que sous PostgreSQL.');
         }
 
-        $this->magasinActif();
         $tablesEnAjoutSeul = collect(DB::select("select distinct c.relname as nom from pg_trigger t join pg_class c on c.oid = t.tgrelid where t.tgname like '%\\_ajout\\_seul\\_update'"))->pluck('nom')->sort()->values()->all();
         $this->assertSame(['avoir_allocations', 'bordereaux_detaxe', 'consultations_vies', 'enregistrements_fiscaux', 'paiement_allocations', 'paiements', 'preuves_operation'], $tablesEnAjoutSeul);
         $verrous = [];
@@ -411,19 +405,20 @@ class ContrePasserPaiementActionTest extends TestCase
             }
         });
 
-        ['client' => $client, 'ancienne' => $ancienne, 'errone' => $errone] = $this->paiementErroneQuiImputeDuCredit();
-        $this->contrePasser($errone, 'Saisi sur la mauvaise facture');
-        $this->payer($client, '10.00', [$ancienne->id => '10.00']);
+        ['ticket' => $ticket, 'bon' => $bon, 'errone' => $errone] = $this->paiementErroneQuiImputeDuCredit();
+        $this->contrePasser($errone, 'Saisi sur le mauvais ticket');
+        app(EncaisserEnPlusieursModesAction::class)->handle(self::auteur(), $ticket, [new PartDeReglement(ModePaiement::CarteBancaire, 3000)], [$bon->numero], today()->toDateString());
 
         $this->assertSame([], $verrous);
     }
 
     /**
-     * Un avoir déjà imputé sur la facture qu'il corrige, dont il reste du
-     * crédit, s'y impute de nouveau quand le bon paiement règle la facture
-     * rouverte par la contre-passation.
+     * Complément 1 : un avoir déjà imputé sur la facture qu'il corrige,
+     * dont il reste du crédit, s'y impute de nouveau dès la contre-passation
+     * qui la rouvre, au plus ses propres lignes moins ce qu'il y a déjà
+     * imputé ; le bon paiement règle le reste.
      */
-    public function test_le_credit_d_un_avoir_deja_impute_sur_la_facture_s_y_impute_de_nouveau_apres_la_contre_passation(): void
+    public function test_le_credit_d_un_avoir_deja_impute_sur_la_facture_s_y_impute_de_nouveau_a_la_contre_passation(): void
     {
         $this->magasinActif();
         $client = Client::factory()->professionnel()->create();
@@ -432,21 +427,24 @@ class ContrePasserPaiementActionTest extends TestCase
         $errone = $this->payer($client, '80.00', [$facture->id => '80.00']);
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $facture->lignes()->sole()->id, 'quantite' => 1]]);
         $this->assertSame([StatutFacture::Payee, 30.0], [$facture->fresh()->statut, $avoir->fresh()->montantNonAlloue()]);
-        $this->contrePasser($errone);
 
+        $contrePassation = $this->contrePasser($errone);
         $bon = $this->payer($client, '50.00', [$facture->id => '50.00']);
 
         $this->assertSame(
-            [[null, '20.00'], [$bon->id, '30.00']],
+            [[null, '20.00'], [$contrePassation->id, '30.00']],
             $avoir->allocations()->orderBy('id')->get()->map(fn ($allocation): array => [$allocation->paiement_id, $allocation->montant_alloue])->all(),
         );
+        $this->assertSame([], $bon->creditsImputes->all());
         $this->assertSame([StatutFacture::Payee, 0.0, 0.0], [$facture->fresh()->statut, $facture->fresh()->montantRestant(), $avoir->fresh()->montantNonAlloue()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier(app(TenantContext::class)->magasin())->anomalies());
     }
 
     /**
-     * Le crédit solde d'abord la facture la plus ancienne que règle le bon
-     * paiement, en puisant d'abord dans l'avoir le plus ancien.
+     * Complément 1 : à la contre-passation, le crédit solde d'abord la
+     * facture rouverte la plus ancienne, en puisant d'abord dans l'avoir le
+     * plus ancien ; le bon paiement règle ensuite ce qui reste dû de la
+     * plus récente, sans aucun crédit.
      */
     public function test_le_credit_solde_d_abord_la_facture_la_plus_ancienne_avec_l_avoir_le_plus_ancien(): void
     {
@@ -460,15 +458,16 @@ class ContrePasserPaiementActionTest extends TestCase
         $errone = $this->payer($client, '100.00', [$ancienne->id => '60.00', $recente->id => '40.00']);
         $avoirAncien = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $retourneeA->lignes()->sole()->id, 'quantite' => 1]]);
         $avoirRecent = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $retourneeB->lignes()->sole()->id, 'quantite' => 1]]);
-        $this->contrePasser($errone);
 
-        $bon = $this->payer($client, '30.00', [$recente->id => '20.00', $ancienne->id => '10.00']);
+        $contrePassation = $this->contrePasser($errone);
+        $bon = $this->payer($client, '20.00', [$recente->id => '20.00']);
 
         $this->assertSame(
-            [[$avoirAncien->id, $ancienne->id, '30.00'], [$avoirRecent->id, $ancienne->id, '20.00'], [$avoirRecent->id, $recente->id, '20.00']],
-            $bon->creditsImputes->sortBy('id')->map(fn ($credit): array => [$credit->avoir_id, $credit->facture_id, $credit->montant_alloue])->values()->all(),
+            [[$avoirAncien->id, $ancienne->id, '30.00'], [$avoirRecent->id, $ancienne->id, '30.00'], [$avoirRecent->id, $recente->id, '20.00']],
+            $contrePassation->creditsImputes->sortBy('id')->map(fn ($credit): array => [$credit->avoir_id, $credit->facture_id, $credit->montant_alloue])->values()->all(),
         );
+        $this->assertSame([], $bon->creditsImputes->all());
         $this->assertSame([StatutFacture::Payee, StatutFacture::Payee], [$ancienne->fresh()->statut, $recente->fresh()->statut]);
-        $this->assertSame(10.0, $client->soldeCrediteur());
+        $this->assertSame(0.0, $client->soldeCrediteur());
     }
 }

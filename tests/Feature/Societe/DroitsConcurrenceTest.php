@@ -19,7 +19,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
@@ -345,7 +344,7 @@ class DroitsConcurrenceTest extends TestCase
      */
     private static function vendreSansStock(User $vendeur, int $produitId): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle(
+        return self::vendreAuComptant(
             $vendeur,
             Client::query()->where('est_comptoir', true)->sole(),
             [['produit_id' => $produitId, 'quantite' => 1]],
@@ -423,7 +422,7 @@ class DroitsConcurrenceTest extends TestCase
             'avoir' => app(EnregistrerAvoirAction::class)->handle($vendeur, Facture::query()->findOrFail($documentId)->client, [['ligne_facture_id' => Facture::query()->findOrFail($documentId)->lignes->sole()->id, 'quantite' => 1]], 'Retour'),
             'contre-passation' => app(ContrePasserPaiementAction::class)->handle($vendeur, Paiement::query()->findOrFail($documentId), 'Erreur de saisie'),
             'clôture manuelle' => app(CloturerCaisseAction::class)->handle($vendeur, app(TenantContext::class)->magasin(), today()),
-            'caisse' => app(EnregistrerVenteCaisseAction::class)->handle($vendeur, Client::query()->where('est_comptoir', true)->sole(), self::lignes(), ModePaiement::Especes),
+            'caisse' => self::vendreAuComptant($vendeur, Client::query()->where('est_comptoir', true)->sole(), self::lignes(), ModePaiement::Especes),
         };
     }
 

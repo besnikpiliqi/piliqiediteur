@@ -32,7 +32,6 @@ use App\Domain\Facturation\Actions\EmettreDevisAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Actions\EnvoyerDocumentAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Actions\ModifierDevisAction;
@@ -251,7 +250,7 @@ class ActionsHorsEcranTest extends TestCase
             'créer une facture' => $this->avec([Client::factory()->create(), $this->lignes()], fn (array $vente, User $auteur) => app(CreerFactureAction::class)->handle($auteur, ...$vente)),
             'modifier une facture' => $this->avec([$this->brouillon($proprietaire), $this->lignes(2)], fn (array $modification, User $auteur) => app(ModifierFactureAction::class)->handle($auteur, $modification[0], $modification[0]->client, $modification[1])),
             'émettre une facture' => $this->avec($this->brouillon($proprietaire), fn (Facture $brouillon, User $auteur) => app(EmettreFactureAction::class)->handle($auteur, $brouillon)),
-            'vendre à la caisse' => $this->avec([Client::factory()->create(), $this->lignes()], fn (array $vente, User $auteur) => app(EnregistrerVenteCaisseAction::class)->handle($auteur, ...$vente, modePaiement: ModePaiement::Especes)),
+            'vendre à la caisse' => $this->avec([Client::factory()->create(), $this->lignes()], fn (array $vente, User $auteur) => self::vendreAuComptant($auteur, ...$vente, mode: ModePaiement::Especes)),
             'créer un devis' => $this->avec([Client::factory()->create(), $this->lignes()], fn (array $vente, User $auteur) => app(CreerDevisAction::class)->handle($auteur, ...$vente)),
             'modifier un devis' => $this->avec([$this->devis($proprietaire), $this->lignes(2)], fn (array $modification, User $auteur) => app(ModifierDevisAction::class)->handle($auteur, $modification[0], $modification[0]->client, $modification[1])),
             'envoyer un devis' => $this->avec($this->devis($proprietaire), fn (Devis $devis, User $auteur) => app(EmettreDevisAction::class)->handle($auteur, $devis)),

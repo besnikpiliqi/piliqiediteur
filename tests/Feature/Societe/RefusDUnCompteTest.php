@@ -7,7 +7,6 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\AccepterUnRattachementAction;
@@ -461,7 +460,7 @@ class RefusDUnCompteTest extends TestCase
             }
         });
 
-        $this->assertThrows(fn () => app(EnregistrerVenteCaisseAction::class)->handle($vendeur, $comptoir, $lignes, ModePaiement::Especes), AuthorizationException::class, LecteurDesDroits::REFUS);
+        $this->assertThrows(fn () => self::vendreAuComptant($vendeur, $comptoir, $lignes, ModePaiement::Especes), AuthorizationException::class, LecteurDesDroits::REFUS);
 
         $this->assertSame(0, Facture::query()->count());
     }

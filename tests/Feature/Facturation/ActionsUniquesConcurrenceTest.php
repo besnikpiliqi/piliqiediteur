@@ -7,7 +7,6 @@ use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
@@ -68,7 +67,7 @@ class ActionsUniquesConcurrenceTest extends TestCase
      */
     private static function vendreUnCable(User $vendeur, int $produitId, string $jeton): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle(
+        return self::vendreAuComptant(
             $vendeur,
             Client::query()->where('est_comptoir', true)->sole(),
             [['produit_id' => $produitId, 'quantite' => 1]],

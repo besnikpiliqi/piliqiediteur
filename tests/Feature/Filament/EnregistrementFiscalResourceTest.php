@@ -11,7 +11,6 @@ use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -65,7 +64,7 @@ class EnregistrementFiscalResourceTest extends TestCase
     {
         $produit = Produit::factory()->create(['nom' => 'Article à 12 €', 'prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]], ModePaiement::Especes);
+        self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => $quantite]], ModePaiement::Especes);
     }
 
     /**
@@ -195,7 +194,7 @@ class EnregistrementFiscalResourceTest extends TestCase
     {
         $this->connecterProprietaire();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
         $paiement = Paiement::query()->sole();
 
         $composant = Livewire::test(ListEnregistrementsFiscaux::class);
@@ -521,7 +520,7 @@ class EnregistrementFiscalResourceTest extends TestCase
         $this->connecterProprietaire();
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 2]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 2]], ModePaiement::Especes);
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $clePublique = Arr::first(config('caisse_securisee.cles_publiques'));
         $cleId = hash('sha256', base64_decode(str_replace(['-----BEGIN PUBLIC KEY-----', '-----END PUBLIC KEY-----', "\n"], '', $clePublique)));

@@ -63,6 +63,10 @@ class Avoir extends Model implements DocumentEnvoyable
      */
     public const BON_D_AVOIR_INTROUVABLE = 'Ce bon d\'avoir est introuvable ou déjà utilisé.';
 
+    public const BON_D_AVOIR_HORS_DE_LA_CAISSE = 'Un bon d\'avoir ne règle qu\'une vente à la caisse ou un ticket du client comptoir resté dû.';
+
+    public const BON_D_AVOIR_SANS_EMPLOI = 'Le bon d\'avoir %s n\'a plus rien à régler : le total à payer est déjà couvert.';
+
     protected $table = 'avoirs';
 
     // numero, statut, date_emission, totaux, type et copie du client,
@@ -172,11 +176,11 @@ class Avoir extends Model implements DocumentEnvoyable
 
     /**
      * L'avoir émis au client comptoir du magasin actif sous ce numéro, tel
-     * que le vendeur le saisit à la caisse pour utiliser son bon d'avoir
-     * (voir EnregistrerVenteCaisseAction), sans tenir compte de la casse
-     * ni des espaces autour. Un avoir d'un client nommé ou d'un autre
-     * magasin (MagasinScope) n'en est jamais un ; son crédit restant (voir
-     * montantNonAlloue()) dit s'il sert encore.
+     * que le vendeur le saisit dans la part « Avoir » d'un règlement pour
+     * utiliser son bon d'avoir (voir ApercuDuReglement), sans tenir compte
+     * de la casse ni des espaces autour. Un avoir d'un client nommé ou d'un
+     * autre magasin (MagasinScope) n'en est jamais un ; son crédit restant
+     * (voir creditEnCentimes()) dit s'il sert encore.
      */
     public function scopeBonDAvoir(Builder $query, string $numero): Builder
     {
@@ -254,29 +258,37 @@ class Avoir extends Model implements DocumentEnvoyable
         return $this->hasMany(AvoirAllocation::class);
     }
 
-    public function montantAlloue(): float
-    {
-        return app(CalculateurLigne::class)->sommer($this->allocations()->pluck('montant_alloue'));
-    }
-
     /**
-     * Le crédit de l'avoir qui reste à imputer : un avoir émis n'est jamais
-     * remboursé (B5). À son émission, il règle les factures qu'il corrige,
-     * puis les autres factures impayées de son client (voir
-     * ImputerAvoirSurSesFacturesAction) ; ce qui reste s'applique ensuite
-     * aux prochaines factures du même client (voir
-     * AppliquerAvoirsDisponiblesAction et EnregistrerPaiementAction),
-     * jusqu'à épuisement. Celui d'un avoir fait au client comptoir est son
-     * bon d'avoir, que seule la présentation de son numéro impute sur une
-     * vente à la caisse, quel qu'en soit le client (voir
-     * EnregistrerVenteCaisseAction).
+     * Le crédit de l'avoir qui reste à imputer (voir creditEnCentimes()).
      */
     public function montantNonAlloue(): float
     {
+        return (float) app(CalculateurLigne::class)->enDecimal($this->creditEnCentimes());
+    }
+
+    /**
+     * Le crédit de l'avoir qui reste à imputer, en centimes : son total TTC
+     * moins ce qu'il a imputé, contre-passations déduites ; rien tant qu'il
+     * n'est pas émis. Un avoir émis n'est jamais remboursé (B5). À son
+     * émission, il règle les factures qu'il corrige, puis les autres
+     * factures impayées de son client (voir ImputationDuCredit) ; ce qui
+     * reste s'impute sur la prochaine facture du client (voir
+     * AppliquerAvoirsDisponiblesAction), ou sur ce que rouvre la
+     * contre-passation d'un paiement (voir ContrePasserPaiementAction).
+     * Celui d'un avoir fait au client comptoir est son bon d'avoir, que
+     * seule la présentation de son numéro impute sur une vente à la caisse,
+     * quel qu'en soit le client, ou sur un ticket du client comptoir resté
+     * dû (voir EmettreFactureAction et EncaisserEnPlusieursModesAction).
+     */
+    public function creditEnCentimes(): int
+    {
         if ($this->statut !== StatutAvoir::Emise) {
-            return 0.0;
+            return 0;
         }
 
-        return app(CalculateurLigne::class)->soustraire($this->total_ttc, $this->montantAlloue());
+        $calculateur = app(CalculateurLigne::class);
+
+        return $calculateur->enCentiemes($this->total_ttc) - (int) $this->allocations()->pluck('montant_alloue')
+            ->sum(fn (string $montant): int => $calculateur->enCentiemes($montant));
     }
 }

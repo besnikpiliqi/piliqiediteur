@@ -61,7 +61,7 @@ class AppliquerAvoirsDisponiblesActionTest extends TestCase
      */
     private function vendreEnCaisse(Client $client, Produit $produit, int $quantite = 1): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
+        return self::vendreAuComptant(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => $quantite],
         ], ModePaiement::Especes);
     }

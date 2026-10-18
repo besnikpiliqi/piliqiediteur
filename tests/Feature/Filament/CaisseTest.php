@@ -18,7 +18,6 @@ use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\CreerAvoirAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureLigne;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -242,7 +241,7 @@ class CaisseTest extends TestCase
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 24, 'taux_tva' => 20, 'suivi_stock' => false]);
         $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:05', 'UTC'));
-        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $clientComptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        self::vendreAuComptant(self::auteur(), $clientComptoir, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
         $this->travelTo(CarbonImmutable::parse('2026-10-09 08:00:04', 'UTC'));
         Exceptions::fake([HorlogeRegressiveException::class]);
 
@@ -300,16 +299,17 @@ class CaisseTest extends TestCase
         $clientComptoir = Client::query()->where('nom', 'Client comptoir')->firstOrFail();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
 
-        Livewire::test(Caisse::class)
+        $caisse = Livewire::test(Caisse::class)
             ->fillForm([
                 'client_id' => $clientComptoir->id,
                 'lignes' => [
                     ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => '8.33', 'prix_unitaire_ttc' => '10.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
                     ['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ht' => '8.33', 'prix_unitaire_ttc' => '10.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
                 ],
-                'mode_paiement' => 'especes',
-                'montant_recu' => 25,
-            ])
+            ]);
+
+        $caisse
+            ->set("data.parts.{$this->premierePart($caisse)}.montant_recu", 25)
             ->assertSeeHtml('20,00 €')
             ->assertSeeHtml('5,00 €')
             ->call('encaisser');
@@ -339,7 +339,7 @@ class CaisseTest extends TestCase
         $component
             ->set("data.lignes.{$cle}.produit_id", $produit->id)
             ->set("data.lignes.{$cle}.quantite", '2')
-            ->set('data.montant_recu', '100')
+            ->set("data.parts.{$this->premierePart($component)}.montant_recu", '100')
             ->assertSeeHtml('80,00 €')
             ->assertSeeHtml('20,00 €')
             ->assertDontSeeHtml('79,99 €')
@@ -350,11 +350,12 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * Le crédit d'avoir du client est déduit automatiquement à l'émission
-     * (voir AppliquerAvoirsDisponiblesAction) : la caisse doit donc
-     * annoncer ce qui reste vraiment à payer, et rendre la monnaie sur ce
-     * reste -- 50 € moins 10 € de crédit = 40 € ; 60 € reçus, 20 € rendus
-     * (et non 10 €, ce qui laisserait la caisse avec 10 € de trop).
+     * Le crédit d'avoir du client est imputé d'office à l'émission (voir
+     * AppliquerAvoirsDisponiblesAction) : la caisse le montre comme la part
+     * « Avoir (crédit du client) » (point 1), la part en espèces propose ce
+     * qui reste vraiment à payer, et la monnaie se rend sur cette part --
+     * 50 € moins 10 € de crédit = 40 € ; 60 € reçus, 20 € rendus (et non
+     * 10 €, ce qui laisserait la caisse avec 10 € de trop).
      */
     public function test_la_caisse_deduit_le_credit_davoir_du_client_du_total_et_de_la_monnaie_a_rendre(): void
     {
@@ -365,7 +366,7 @@ class CaisseTest extends TestCase
 
         $client = Client::factory()->create(['nom' => 'Mme Martin']);
         $produitRendu = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $venteInitiale = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produitRendu->id, 'quantite' => 1]], ModePaiement::Especes);
+        $venteInitiale = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $produitRendu->id, 'quantite' => 1]], ModePaiement::Especes);
         app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteInitiale->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
@@ -377,10 +378,14 @@ class CaisseTest extends TestCase
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id)
-            ->set('data.montant_recu', '60')
-            ->assertSeeHtml('40,00 €')
-            ->assertSeeHtml('Total 50,00 € moins 10,00 € de crédit d&#039;avoir du client.')
+            ->set("data.lignes.{$cle}.produit_id", $produit->id);
+        $part = $this->premierePart($component);
+
+        $component
+            ->assertFormSet(["parts.{$part}.mode" => ModePaiement::Especes->value, "parts.{$part}.montant" => '40.00'])
+            ->assertSee('Avoir (crédit du client)')
+            ->assertSee('Imputé d\'office sur la vente.')
+            ->set("data.parts.{$part}.montant_recu", '60')
             ->assertSeeHtml('20,00 €')
             ->call('encaisser');
 
@@ -461,8 +466,8 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * En espèces, un montant reçu saisi qui ne couvre pas ce qui reste à
-     * payer est refusé : sinon la vente serait enregistrée payée avec un
+     * En espèces, un montant reçu saisi qui ne couvre pas la part en
+     * espèces est refusé : sinon la vente serait enregistrée payée avec un
      * tiroir-caisse en manque.
      */
     public function test_un_montant_recu_insuffisant_est_refuse(): void
@@ -478,10 +483,13 @@ class CaisseTest extends TestCase
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id)
-            ->set('data.montant_recu', '30')
+            ->set("data.lignes.{$cle}.produit_id", $produit->id);
+        $part = $this->premierePart($component);
+
+        $component
+            ->set("data.parts.{$part}.montant_recu", '30')
             ->call('encaisser')
-            ->assertHasFormErrors(['montant_recu' => 'min']);
+            ->assertHasFormErrors(["parts.{$part}.montant_recu" => 'min']);
 
         $this->assertSame(0, Facture::query()->count());
     }
@@ -577,16 +585,17 @@ class CaisseTest extends TestCase
         $sacoche = Produit::factory()->create(['prix_vente_ttc' => '49.90', 'taux_tva' => 20, 'suivi_stock' => false]);
         $livre = Produit::factory()->create(['prix_vente_ttc' => '4.20', 'taux_tva' => 5.5, 'suivi_stock' => false]);
 
-        Livewire::test(Caisse::class)
+        $caisse = Livewire::test(Caisse::class)
             ->fillForm([
                 'client_id' => $professionnel->id,
                 'lignes' => [
                     ['produit_id' => $sacoche->id, 'description' => $sacoche->nom, 'quantite' => 2, 'prix_unitaire_ttc' => '49.90', 'remise_pourcentage' => 0],
                     ['produit_id' => $livre->id, 'description' => $livre->nom, 'quantite' => 3, 'prix_unitaire_ttc' => '4.20', 'remise_pourcentage' => 0],
                 ],
-                'mode_paiement' => 'especes',
-                'montant_recu' => 120,
-            ])
+            ]);
+
+        $caisse
+            ->set("data.parts.{$this->premierePart($caisse)}.montant_recu", 120)
             ->assertSee('À 20 % : 83,17 € HT + 16,63 € de TVA = 99,80 € TTC')
             ->assertSee('À 5,5 % : 11,94 € HT + 0,66 € de TVA = 12,60 € TTC')
             ->assertSee('Total HT 95,11 € · TVA 17,29 € · Total TTC 112,40 €')
@@ -616,11 +625,14 @@ class CaisseTest extends TestCase
         $cle = array_key_first($component->get('data.lignes'));
 
         $component
-            ->set("data.lignes.{$cle}.produit_id", $produit->id)
-            ->set('data.montant_recu', '100000000000000000')
+            ->set("data.lignes.{$cle}.produit_id", $produit->id);
+        $part = $this->premierePart($component);
+
+        $component
+            ->set("data.parts.{$part}.montant_recu", '100000000000000000')
             ->assertSuccessful()
             ->call('encaisser')
-            ->assertHasFormErrors(['montant_recu' => 'max']);
+            ->assertHasFormErrors(["parts.{$part}.montant_recu" => 'max']);
 
         $this->assertSame(0, Facture::query()->count());
     }
@@ -1064,8 +1076,9 @@ class CaisseTest extends TestCase
 
     /**
      * Le client d'un panier archivé depuis reste affiché le temps d'en
-     * choisir un autre : son crédit d'avoir aussi, annoncé sous le client
-     * et déduit du reste à payer, comme pour tout client (voir
+     * choisir un autre : son crédit d'avoir aussi, annoncé sous le client,
+     * montré comme la part « Avoir (crédit du client) » et déduit de la
+     * part payée, comme pour tout client (voir
      * ClientResource::soldeCrediteurHelperText()).
      */
     public function test_le_credit_d_un_client_archive_reste_annonce_et_deduit_du_reste_a_payer(): void
@@ -1073,7 +1086,7 @@ class CaisseTest extends TestCase
         $this->ouvrirLaCaisseDUnMagasin();
         $client = Client::factory()->create();
         $produitRendu = Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $venteInitiale = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produitRendu->id, 'quantite' => 1]], ModePaiement::Especes);
+        $venteInitiale = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $produitRendu->id, 'quantite' => 1]], ModePaiement::Especes);
         app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $venteInitiale->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
@@ -1086,7 +1099,8 @@ class CaisseTest extends TestCase
 
         $component
             ->assertSee('Crédit disponible pour ce client : 10,00 € (sera appliqué automatiquement).')
-            ->assertSeeHtml('Total 50,00 € moins 10,00 € de crédit d&#039;avoir du client.');
+            ->assertSee('Avoir (crédit du client)')
+            ->assertFormSet(["parts.{$this->premierePart($component)}.montant" => '40.00']);
     }
 
     public function test_un_client_archive_est_refuse_a_l_encaissement(): void
@@ -1172,7 +1186,7 @@ class CaisseTest extends TestCase
 
         $this->get(Caisse::getUrl(tenant: $magasin))->assertForbidden();
         $this->assertThrows(
-            fn () => app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes),
+            fn () => self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes),
             VenteNonAutoriseeException::class,
             'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation.',
         );
@@ -1481,8 +1495,9 @@ class CaisseTest extends TestCase
     }
 
     /**
-     * B8 : choisir un client présélectionne son mode de paiement préféré,
-     * et les espèces pour un client qui n'en a pas.
+     * B8 : choisir un client présélectionne son mode de paiement préféré
+     * sur la part payée du règlement, et les espèces pour un client qui
+     * n'en a pas.
      */
     public function test_choisir_un_client_preselectionne_son_mode_de_paiement_prefere(): void
     {
@@ -1490,12 +1505,15 @@ class CaisseTest extends TestCase
         $carte = Client::factory()->create(['mode_paiement_prefere' => ModePaiement::CarteBancaire]);
         $sansPreference = Client::factory()->create(['mode_paiement_prefere' => null]);
 
-        Livewire::test(Caisse::class)
-            ->assertFormSet(['mode_paiement' => ModePaiement::Especes->value])
+        $caisse = Livewire::test(Caisse::class);
+        $part = $this->premierePart($caisse);
+
+        $caisse
+            ->assertFormSet(["parts.{$part}.mode" => ModePaiement::Especes->value])
             ->fillForm(['client_id' => $carte->id])
-            ->assertFormSet(['mode_paiement' => ModePaiement::CarteBancaire->value])
+            ->assertFormSet(["parts.{$part}.mode" => ModePaiement::CarteBancaire->value])
             ->fillForm(['client_id' => $sansPreference->id])
-            ->assertFormSet(['mode_paiement' => ModePaiement::Especes->value]);
+            ->assertFormSet(["parts.{$part}.mode" => ModePaiement::Especes->value]);
     }
 
     /**
@@ -1507,32 +1525,36 @@ class CaisseTest extends TestCase
         $this->ouvrirLaCaisseDUnMagasin();
         Client::query()->where('est_comptoir', true)->sole()->update(['mode_paiement_prefere' => ModePaiement::CarteBancaire]);
 
-        Livewire::test(Caisse::class)
-            ->assertFormSet(['mode_paiement' => ModePaiement::CarteBancaire->value]);
+        $caisse = Livewire::test(Caisse::class);
+
+        $caisse->assertFormSet(["parts.{$this->premierePart($caisse)}.mode" => ModePaiement::CarteBancaire->value]);
     }
 
     /**
-     * K6 : le ticket comptoir de 12,00 € repris par l'avoir
-     * AV-MABOUT-2026-000001 ; à la vente comptoir suivante, de 20,00 €, le
-     * n° de cet avoir, saisi tel que le client le présente, règle 12,00 €,
-     * et le reste, 8,00 €, se paie en espèces. Le ticket signe le bon
-     * imputé, et l'avoir est épuisé.
+     * K6 et point 1 : le ticket comptoir de 12,00 € repris par l'avoir
+     * AV-MABOUT-2026-000001 ; à la vente comptoir suivante, de 20,00 €, une
+     * part « Avoir » avec le n° de cet avoir, saisi tel que le client le
+     * présente, règle 12,00 €, et la part en espèces prend d'elle-même le
+     * reste, 8,00 €. Le ticket signe le bon imputé, et l'avoir est épuisé.
      */
     public function test_le_bon_d_avoir_d_un_ticket_comptoir_regle_une_partie_de_la_vente_comptoir_suivante(): void
     {
         $magasin = $this->ouvrirLaCaisseDUnMagasin();
         $bon = $this->bonDAvoirDeDouzeEuros();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $component = Livewire::test(Caisse::class)
-            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes']);
+        $caisse = Livewire::test(Caisse::class)
+            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]]]);
+        $especes = $this->premierePart($caisse);
 
-        $component
-            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => ' av-mabout-2026-000001 '])
-            ->assertHasNoFormComponentActionErrors()
-            ->assertSeeHtml('Total 20,00 € moins 12,00 € du bon d&#039;avoir AV-MABOUT-2026-000001.')
-            ->set('data.montant_recu', '10')
-            ->assertFormFieldExists('montant_recu', fn (TextInput $champ): bool => $champ->getMinValue() === 8.0)
+        $this->presenterUnBonDAvoir($caisse, ' av-mabout-2026-000001 ');
+
+        $caisse
+            ->assertSee('12,00 €')
+            ->assertFormSet(["parts.{$especes}.montant" => '8.00'])
+            ->set("data.parts.{$especes}.montant_recu", '10')
+            ->assertFormFieldExists("parts.{$especes}.montant_recu", fn (TextInput $champ): bool => $champ->getMinValue() === 8.0)
             ->call('encaisser')
+            ->assertHasNoFormErrors()
             ->assertNotified('Vente encaissée : facture TK-MABOUT-2026-000002');
 
         $ticket = Facture::query()->where('numero', 'TK-MABOUT-2026-000002')->sole();
@@ -1548,12 +1570,15 @@ class CaisseTest extends TestCase
         $this->ouvrirLaCaisseDUnMagasin();
         $bon = $this->bonDAvoirDeDouzeEuros();
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes, bonDAvoir: $bon->numero);
+        self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes, bonsDAvoir: [$bon->numero]);
+        $caisse = Livewire::test(Caisse::class);
 
-        Livewire::test(Caisse::class)
-            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001'])
-            ->assertHasFormComponentActionErrors(['numero' => ['Ce bon d\'avoir est introuvable ou déjà utilisé.']])
-            ->assertFormSet(['bon_d_avoir' => null]);
+        $part = $this->presenterUnBonDAvoir($caisse, 'AV-MABOUT-2026-000001');
+
+        $caisse
+            ->assertSee('Ce bon d\'avoir est introuvable ou déjà utilisé.')
+            ->call('encaisser')
+            ->assertHasFormErrors(["parts.{$part}.bon" => ['Ce bon d\'avoir est introuvable ou déjà utilisé.']]);
     }
 
     /**
@@ -1564,13 +1589,16 @@ class CaisseTest extends TestCase
     {
         $this->ouvrirLaCaisseDUnMagasin();
         $martin = Client::factory()->create(['nom' => 'Mme Martin']);
-        $vente = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $vente = self::vendreAuComptant(self::auteur(), $martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $martin, [['ligne_facture_id' => $vente->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $this->assertSame(12.0, $martin->soldeCrediteur());
+        $caisse = Livewire::test(Caisse::class);
 
-        Livewire::test(Caisse::class)
-            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001'])
-            ->assertHasFormComponentActionErrors(['numero' => ['Ce bon d\'avoir est introuvable ou déjà utilisé.']]);
+        $part = $this->presenterUnBonDAvoir($caisse, 'AV-MABOUT-2026-000001');
+
+        $caisse
+            ->call('encaisser')
+            ->assertHasFormErrors(["parts.{$part}.bon" => ['Ce bon d\'avoir est introuvable ou déjà utilisé.']]);
     }
 
     public function test_le_bon_d_avoir_d_un_autre_magasin_est_introuvable(): void
@@ -1578,10 +1606,13 @@ class CaisseTest extends TestCase
         $autreMagasin = $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $bonDeLAutreMagasin = app(TenantContext::class)->runAs($autreMagasin, fn (): string => $this->bonDAvoirDeDouzeEuros()->numero);
         $this->ouvrirLaCaisseDUnMagasin();
+        $caisse = Livewire::test(Caisse::class);
 
-        Livewire::test(Caisse::class)
-            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => $bonDeLAutreMagasin])
-            ->assertHasFormComponentActionErrors(['numero' => ['Ce bon d\'avoir est introuvable ou déjà utilisé.']]);
+        $part = $this->presenterUnBonDAvoir($caisse, $bonDeLAutreMagasin);
+
+        $caisse
+            ->call('encaisser')
+            ->assertHasFormErrors(["parts.{$part}.bon" => ['Ce bon d\'avoir est introuvable ou déjà utilisé.']]);
     }
 
     public function test_retirer_le_bon_d_avoir_rend_tout_le_total_a_payer(): void
@@ -1589,39 +1620,39 @@ class CaisseTest extends TestCase
         $this->ouvrirLaCaisseDUnMagasin();
         $this->bonDAvoirDeDouzeEuros();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $component = Livewire::test(Caisse::class)
-            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]]])
-            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001']);
+        $caisse = Livewire::test(Caisse::class)
+            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]]]);
+        $especes = $this->premierePart($caisse);
+        $avoir = $this->presenterUnBonDAvoir($caisse, 'AV-MABOUT-2026-000001');
+        $caisse->assertFormSet(["parts.{$especes}.montant" => '8.00']);
 
-        $component->callFormComponentAction('total_a_payer', 'retirerLeBonDAvoir');
+        $caisse->callFormComponentAction('parts', 'delete', arguments: ['item' => $avoir]);
 
-        $component
-            ->assertFormSet(['bon_d_avoir' => null])
-            ->assertDontSeeHtml('du bon d&#039;avoir')
-            ->assertFormFieldExists('montant_recu', fn (TextInput $champ): bool => $champ->getMinValue() === 20.0)
-            ->assertFormComponentActionVisible('total_a_payer', 'utiliserUnBonDAvoir');
+        $caisse
+            ->assertFormSet(["parts.{$especes}.montant" => '20.00'])
+            ->assertFormFieldExists("parts.{$especes}.montant_recu", fn (TextInput $champ): bool => $champ->getMinValue() === 20.0);
+        $this->assertSame([$especes], array_keys($caisse->get('data.parts')));
     }
 
     /**
      * Un bon saisi puis utilisé par une autre caisse : la caisse le dit
-     * sous le total à payer, et l'encaissement le refuse sans rien
-     * enregistrer.
+     * sous son numéro, et l'encaissement le refuse sans rien enregistrer.
      */
     public function test_un_bon_d_avoir_utilise_entre_temps_par_une_autre_caisse_est_refuse_a_l_encaissement(): void
     {
         $this->ouvrirLaCaisseDUnMagasin();
         $bon = $this->bonDAvoirDeDouzeEuros();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $component = Livewire::test(Caisse::class)
-            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes'])
-            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001']);
-        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::CarteBancaire, bonDAvoir: $bon->numero);
+        $caisse = Livewire::test(Caisse::class)
+            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 20, 'taux_tva' => 20, 'remise_pourcentage' => 0]]]);
+        $part = $this->presenterUnBonDAvoir($caisse, 'AV-MABOUT-2026-000001');
+        self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::CarteBancaire, bonsDAvoir: [$bon->numero]);
 
-        $component
-            ->set('data.reference', null)
+        $caisse
+            ->set("data.parts.{$part}.reference", null)
             ->assertSee('Ce bon d\'avoir est introuvable ou déjà utilisé.')
             ->call('encaisser')
-            ->assertNotified('Ce bon d\'avoir est introuvable ou déjà utilisé.');
+            ->assertHasFormErrors(["parts.{$part}.bon" => ['Ce bon d\'avoir est introuvable ou déjà utilisé.']]);
 
         $this->assertSame([2, 2], [Facture::query()->count(), Paiement::query()->count()]);
     }
@@ -1630,28 +1661,32 @@ class CaisseTest extends TestCase
      * K6 : le bon d'avoir règle aussi la vente d'un client nommé. Mme
      * Martin a 10,00 € de crédit d'avoir à elle et présente le bon de
      * 12,00 € pour un achat de 15,00 € : son crédit s'impute d'abord,
-     * 10,00 €, puis le bon sur les 5,00 € qui restent ; le ticket, à son
-     * nom, est réglé sans encaissement, et le bon garde 7,00 €.
+     * 10,00 €, puis le bon sur les 5,00 € qui restent ; la part en espèces,
+     * restée sans montant, ne règle rien, et le ticket, à son nom, est
+     * réglé sans encaissement ; le bon garde 7,00 €. Le message de fin
+     * énumère ce qui a réglé la vente (point 23).
      */
     public function test_le_bon_d_avoir_regle_la_vente_d_un_client_nomme_apres_son_propre_credit(): void
     {
         $magasin = $this->ouvrirLaCaisseDUnMagasin();
         $bon = $this->bonDAvoirDeDouzeEuros();
         $martin = Client::factory()->create(['nom' => 'Mme Martin']);
-        $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $achatRendu = self::vendreAuComptant(self::auteur(), $martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 10, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
         $avoirDeMartin = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $martin, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $produit = Produit::factory()->create(['prix_vente_ttc' => 15, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $component = Livewire::test(Caisse::class)
-            ->fillForm(['client_id' => $martin->id, 'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'remise_pourcentage' => 0]], 'mode_paiement' => 'especes'])
-            ->assertFormComponentActionVisible('total_a_payer', 'utiliserUnBonDAvoir')
-            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001'])
-            ->assertHasNoFormComponentActionErrors()
-            ->assertSeeHtml('Total 15,00 € moins 10,00 € de crédit d&#039;avoir du client et 5,00 € du bon d&#039;avoir AV-MABOUT-2026-000001.')
-            ->assertFormFieldExists('montant_recu', fn (TextInput $champ): bool => $champ->getMinValue() === 0.0);
+        $caisse = Livewire::test(Caisse::class)
+            ->fillForm(['client_id' => $martin->id, 'lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 15, 'taux_tva' => 20, 'remise_pourcentage' => 0]]]);
+        $especes = $this->premierePart($caisse);
+        $this->presenterUnBonDAvoir($caisse, 'AV-MABOUT-2026-000001');
+        $caisse
+            ->assertSee('Avoir (crédit du client)')
+            ->assertSee('5,00 €')
+            ->assertFormSet(["parts.{$especes}.montant" => null]);
 
-        $component
+        $caisse
             ->call('encaisser')
-            ->assertNotified(Notification::make()->title('Vente encaissée : facture TK-MABOUT-2026-000003')->body('Réglée intégralement par avoir (15,00 €, AV-MABOUT-2026-000002, AV-MABOUT-2026-000001).')->success());
+            ->assertHasNoFormErrors()
+            ->assertNotified(Notification::make()->title('Vente encaissée : facture TK-MABOUT-2026-000003')->body('Réglée par 10,00 € du crédit d\'avoir AV-MABOUT-2026-000002 et 5,00 € du bon d\'avoir AV-MABOUT-2026-000001.')->success());
 
         $ticket = Facture::query()->where('numero', 'TK-MABOUT-2026-000003')->sole();
         $this->assertSame([$martin->id, 'Mme Martin'], [(int) $ticket->client_id, $ticket->client_nom]);
@@ -1667,19 +1702,98 @@ class CaisseTest extends TestCase
 
     /**
      * Le bon d'avoir saisi règle la vente de tout client : choisir un
-     * autre client le garde.
+     * autre client garde sa part « Avoir ».
      */
     public function test_changer_de_client_garde_le_bon_d_avoir_saisi(): void
     {
         $this->ouvrirLaCaisseDUnMagasin();
         $this->bonDAvoirDeDouzeEuros();
         $martin = Client::factory()->create(['nom' => 'Mme Martin']);
-        $component = Livewire::test(Caisse::class)
-            ->callFormComponentAction('total_a_payer', 'utiliserUnBonDAvoir', data: ['numero' => 'AV-MABOUT-2026-000001']);
+        $caisse = Livewire::test(Caisse::class);
+        $part = $this->presenterUnBonDAvoir($caisse, 'AV-MABOUT-2026-000001');
 
-        $component->fillForm(['client_id' => $martin->id]);
+        $caisse->fillForm(['client_id' => $martin->id]);
 
-        $component->assertFormSet(['bon_d_avoir' => 'AV-MABOUT-2026-000001']);
+        $caisse->assertFormSet(["parts.{$part}.mode" => Caisse::PART_AVOIR, "parts.{$part}.bon" => 'AV-MABOUT-2026-000001']);
+    }
+
+    /**
+     * Point 1 : « Avoir » est proposé parmi les modes d'une part, et le
+     * choisir demande le numéro du bon d'avoir, sans montant à saisir :
+     * celui du bon se lit dans l'aperçu du règlement.
+     */
+    public function test_la_caisse_propose_le_mode_avoir_et_demande_le_numero_du_bon(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $caisse = Livewire::test(Caisse::class);
+        $part = $this->premierePart($caisse);
+        $caisse->assertFormFieldExists("parts.{$part}.mode", fn (Select $champ): bool => $champ->getOptions() === [
+            'especes' => 'Espèces',
+            'carte_bancaire' => 'Carte bancaire',
+            'cheque' => 'Chèque',
+            'virement' => 'Virement',
+            'avoir' => 'Avoir',
+        ]);
+
+        $caisse->set("data.parts.{$part}.mode", Caisse::PART_AVOIR);
+
+        $caisse
+            ->assertFormFieldIsVisible("parts.{$part}.bon")
+            ->assertFormFieldIsHidden("parts.{$part}.montant")
+            ->assertFormFieldIsHidden("parts.{$part}.reference")
+            ->call('encaisser')
+            ->assertHasFormErrors(["parts.{$part}.bon" => 'required']);
+    }
+
+    /**
+     * Point 23 : pour un panier de 80,00 €, la vendeuse ramène la part en
+     * espèces à 50,00 € ; « Ajouter un autre mode » ajoute une part par
+     * carte bancaire, préremplie avec ce qui reste, 30,00 €, et la vente
+     * s'encaisse en deux paiements.
+     */
+    public function test_ajouter_un_autre_mode_preremplit_ce_qui_reste(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)
+            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 2, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20, 'remise_pourcentage' => 0]]]);
+        $especes = $this->premierePart($caisse);
+        $caisse->assertFormSet(["parts.{$especes}.montant" => '80.00'])->set("data.parts.{$especes}.montant", '50');
+        $caisse->assertSee('Il reste 30,00 € à répartir.');
+
+        $carte = $this->ajouterUnePart($caisse);
+
+        $caisse
+            ->assertFormSet(["parts.{$carte}.mode" => ModePaiement::CarteBancaire->value, "parts.{$carte}.montant" => '30.00', "parts.{$especes}.montant" => '50'])
+            ->assertDontSee('à répartir')
+            ->call('encaisser')
+            ->assertHasNoFormErrors();
+        $ticket = Facture::query()->where('numero', 'TK-MABOUT-2026-000001')->sole();
+        $this->assertSame(
+            [[ModePaiement::Especes, '50.00'], [ModePaiement::CarteBancaire, '30.00']],
+            $ticket->allocationsPaiement()->with('paiement')->orderBy('id')->get()->map(fn ($allocation): array => [$allocation->paiement->mode_paiement, $allocation->montant_alloue])->all(),
+        );
+    }
+
+    /**
+     * À la caisse, le prélèvement n'est pas proposé, et une part par
+     * prélèvement envoyée sans passer par la liste est refusée.
+     */
+    public function test_le_prelevement_n_est_pas_propose_a_la_caisse(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => 40, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)
+            ->fillForm(['lignes' => [['produit_id' => $produit->id, 'description' => $produit->nom, 'quantite' => 1, 'prix_unitaire_ttc' => 40, 'taux_tva' => 20, 'remise_pourcentage' => 0]]]);
+        $part = $this->premierePart($caisse);
+        $caisse->assertFormFieldExists("parts.{$part}.mode", fn (Select $champ): bool => ! array_key_exists(ModePaiement::Prelevement->value, $champ->getOptions()));
+
+        $caisse
+            ->set("data.parts.{$part}.mode", ModePaiement::Prelevement->value)
+            ->call('encaisser')
+            ->assertHasFormErrors(["parts.{$part}.mode" => 'in']);
+
+        $this->assertSame([0, 0], [Facture::query()->count(), Paiement::query()->count()]);
     }
 
     /**
@@ -1748,13 +1862,44 @@ class CaisseTest extends TestCase
     }
 
     /**
+     * La clé de la première part du règlement de la caisse.
+     */
+    private function premierePart(Testable $caisse): string
+    {
+        return (string) array_key_first($caisse->get('data.parts'));
+    }
+
+    /**
+     * « Ajouter un autre mode » : la clé de la part ajoutée au règlement.
+     */
+    private function ajouterUnePart(Testable $caisse): string
+    {
+        $avant = array_keys($caisse->get('data.parts'));
+        $caisse->callFormComponentAction('parts', 'add');
+
+        return (string) array_values(array_diff(array_keys($caisse->get('data.parts')), $avant))[0];
+    }
+
+    /**
+     * Une part « Avoir » ajoutée au règlement, avec ce numéro de bon
+     * d'avoir, tel que le vendeur le saisit : la clé de la part.
+     */
+    private function presenterUnBonDAvoir(Testable $caisse, string $numero): string
+    {
+        $part = $this->ajouterUnePart($caisse);
+        $caisse->set("data.parts.{$part}.mode", Caisse::PART_AVOIR)->set("data.parts.{$part}.bon", $numero);
+
+        return $part;
+    }
+
+    /**
      * Un ticket comptoir de 12,00 € repris en entier par un avoir dans le
      * magasin actif : son numéro vaut bon d'avoir de 12,00 €.
      */
     private function bonDAvoirDeDouzeEuros(): Avoir
     {
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
 
         return app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
     }

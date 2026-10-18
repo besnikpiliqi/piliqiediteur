@@ -5,7 +5,6 @@ namespace Tests\Feature\CaisseSecurisee;
 use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Models\Magasin;
@@ -38,7 +37,7 @@ class VerificateurIntegriteConcurrenceTest extends TestCase
         app(TenantContext::class)->set($magasin);
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
         $client = Client::factory()->create();
-        app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
         $magasinId = $magasin->id;
         $clientId = $client->id;
         $produitId = $produit->id;
@@ -47,7 +46,7 @@ class VerificateurIntegriteConcurrenceTest extends TestCase
             if ($venteConcurrente === null && str_contains($requete->sql, 'from "tetes_registre_fiscal"')) {
                 $venteConcurrente = $this->demarrerUnProcessusConcurrent(static function () use ($magasinId, $clientId, $produitId): void {
                     app(TenantContext::class)->set(Magasin::query()->findOrFail($magasinId));
-                    app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::query()->findOrFail($clientId), [['produit_id' => $produitId, 'quantite' => 1]], ModePaiement::Especes);
+                    self::vendreAuComptant(self::auteur(), Client::query()->findOrFail($clientId), [['produit_id' => $produitId, 'quantite' => 1]], ModePaiement::Especes);
                 })->wait();
             }
         });

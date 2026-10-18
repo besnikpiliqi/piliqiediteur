@@ -15,7 +15,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Enums\TypeDocument;
@@ -25,6 +24,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\SequenceDocument;
+use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
@@ -228,19 +228,19 @@ class EmettreFactureActionTest extends TestCase
 
     /**
      * Seul l'avoir d'un client comptoir du magasin vaut bon d'avoir (K6) :
-     * l'avoir d'un client nommé, même passé tel quel au règlement
-     * comptant, ne règle pas la vente d'un autre client. Le brouillon
+     * le numéro de l'avoir d'un client nommé, même passé tel quel au
+     * règlement de la caisse, ne règle pas la vente d'un autre client. Le brouillon
      * reste un brouillon, et le crédit de l'avoir reste à son client.
      */
     public function test_l_avoir_d_un_client_nomme_ne_regle_jamais_une_vente_comme_bon_d_avoir(): void
     {
         $martin = Client::factory()->create();
-        $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $achatRendu = self::vendreAuComptant(self::auteur(), $martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
         $avoirDeMartin = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $martin, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
 
         try {
-            app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon, new ReglementComptant(ModePaiement::Especes, bonDAvoir: $avoirDeMartin));
+            app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon, new ReglementComptant([new PartDeReglement(ModePaiement::Especes, 2000)], [$avoirDeMartin->numero]));
             $this->fail('L\'avoir d\'un client nommé aurait dû être refusé comme bon d\'avoir.');
         } catch (LogicException $refus) {
             $this->assertSame('Ce bon d\'avoir est introuvable ou déjà utilisé.', $refus->getMessage());
@@ -251,8 +251,9 @@ class EmettreFactureActionTest extends TestCase
     }
 
     /**
-     * Le bon d'avoir d'un autre magasin, même passé tel quel au règlement
-     * comptant, ne règle jamais une vente de ce magasin : rien n'est émis.
+     * Le numéro du bon d'avoir d'un autre magasin, même passé tel quel au
+     * règlement de la caisse, ne règle jamais une vente de ce magasin :
+     * rien n'est émis.
      */
     public function test_le_bon_d_avoir_d_un_autre_magasin_ne_regle_jamais_une_vente(): void
     {
@@ -260,7 +261,7 @@ class EmettreFactureActionTest extends TestCase
         $autreMagasin = $this->ouvrirUneSociete(['nom' => 'Autre boutique']);
         $bonDeLAutreMagasin = app(TenantContext::class)->runAs($autreMagasin, function (): Avoir {
             $comptoir = Client::query()->where('est_comptoir', true)->sole();
-            $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+            $ticket = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
 
             return app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         });
@@ -269,7 +270,7 @@ class EmettreFactureActionTest extends TestCase
         $brouillon = app(CreerFactureAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]]);
 
         try {
-            app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon, new ReglementComptant(ModePaiement::Especes, bonDAvoir: $bonDeLAutreMagasin));
+            app(EmettreFactureAction::class)->handle(self::auteur(), $brouillon, new ReglementComptant([new PartDeReglement(ModePaiement::Especes, 2000)], [$bonDeLAutreMagasin->numero]));
             $this->fail('Le bon d\'avoir d\'un autre magasin aurait dû être refusé.');
         } catch (LogicException $refus) {
             $this->assertSame('Ce bon d\'avoir est introuvable ou déjà utilisé.', $refus->getMessage());

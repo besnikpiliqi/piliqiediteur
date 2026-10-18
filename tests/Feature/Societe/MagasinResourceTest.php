@@ -10,7 +10,6 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerDevisAction;
 use App\Domain\Facturation\Actions\EmettreDevisAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\Emetteur;
@@ -1012,7 +1011,7 @@ class MagasinResourceTest extends TestCase
      */
     private function vendre(Magasin $magasin): Facture
     {
-        return app(TenantContext::class)->runAs($magasin->fresh(), fn (): Facture => app(EnregistrerVenteCaisseAction::class)->handle(
+        return app(TenantContext::class)->runAs($magasin->fresh(), fn (): Facture => self::vendreAuComptant(
             $this->proprietaireDe($magasin),
             Client::query()->where('est_comptoir', true)->sole(),
             [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]],

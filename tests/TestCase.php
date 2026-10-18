@@ -7,6 +7,17 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
+use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
+use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Services\ApercuDuReglement;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Facturation\Services\ConstructeurLigneDocument;
+use App\Domain\Facturation\Services\ContexteDeVente;
+use App\Domain\Facturation\Services\PartDeReglement;
+use App\Domain\Facturation\Services\ReglementComptant;
+use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Tenancy\Actions\ChangerSonMotDePasseProvisoireAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
@@ -631,6 +642,40 @@ abstract class TestCase extends BaseTestCase
         $connecte = auth()->user();
 
         return $connecte instanceof User ? $connecte : app(TenantContext::class)->magasin()->societe()->firstOrFail()->proprietaire()->firstOrFail();
+    }
+
+    /**
+     * Une vente à la caisse réglée d'un seul mode pour tout ce qui reste à
+     * payer, une fois imputés le crédit du client et les bons d'avoir
+     * présentés, comme la caisse le propose (voir
+     * resteAPayerAuComptant()) ; rien à payer, aucune part. Statique : un
+     * processus concurrent l'appelle aussi.
+     *
+     * @param  list<array<string, mixed>>  $lignes
+     * @param  list<string>  $bonsDAvoir
+     */
+    protected static function vendreAuComptant(User $auteur, Client $client, array $lignes, ModePaiement $mode = ModePaiement::Especes, ?string $reference = null, array $bonsDAvoir = [], ?ConfirmationVenteSansStock $confirmation = null, ?string $jeton = null): Facture
+    {
+        $reste = self::resteAPayerAuComptant($client, $lignes, $bonsDAvoir);
+        $reglement = new ReglementComptant($reste > 0 ? [new PartDeReglement($mode, $reste, $reference)] : [], $bonsDAvoir);
+
+        return app(EnregistrerVenteCaisseAction::class)->handle($auteur, $client, $lignes, $reglement, $confirmation, $jeton);
+    }
+
+    /**
+     * Ce qui reste à payer d'une vente à la caisse, en centimes, comme
+     * l'écran de la caisse le montre : son total TTC calculé par le
+     * constructeur de lignes de la vente, moins le crédit du client et les
+     * bons d'avoir présentés (voir ApercuDuReglement).
+     *
+     * @param  list<array<string, mixed>>  $lignes
+     * @param  list<string>  $bonsDAvoir
+     */
+    protected static function resteAPayerAuComptant(Client $client, array $lignes, array $bonsDAvoir = []): int
+    {
+        $totalTtc = app(ConstructeurLigneDocument::class)->apercu($lignes, ContexteDeVente::pour($client, app(TenantContext::class)->magasin()))->totaux['total_ttc'];
+
+        return ApercuDuReglement::aLaCaisse($client, app(CalculateurLigne::class)->enCentiemes($totalTtc), $bonsDAvoir)->resteARepartir;
     }
 
     /**

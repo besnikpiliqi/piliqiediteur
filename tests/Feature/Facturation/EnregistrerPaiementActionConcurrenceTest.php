@@ -27,9 +27,9 @@ use Tests\TestCase;
  * base PostgreSQL : la seconde attend le verrou du registre fiscal que
  * tient la première, puis relit sous ce verrou ce qu'elle règle. Deux
  * caisses qui encaissent le même ticket : un seul des deux paiements
- * passe, et le total imputé ne dépasse jamais le TTC. Un paiement et
- * l'émission d'une facture du même client : son crédit d'avoir ne
- * s'impute qu'une fois.
+ * passe, et le total imputé ne dépasse jamais le TTC. Une
+ * contre-passation et l'émission d'une facture du même client : son
+ * crédit d'avoir ne s'impute qu'une fois.
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.
@@ -116,13 +116,13 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
     }
 
     /**
-     * Le client a 12,00 € de crédit d'avoir et une facture de 100,00 €
-     * rouverte par la contre-passation d'un paiement saisi par erreur. Au
-     * même instant, il paie 88,00 € sur cette facture, que son crédit
-     * solde (K9), et une nouvelle facture de 20,00 € lui est émise : elle
-     * ne trouve plus de crédit et reste due en entier.
+     * Complément 1 : le client a 12,00 € de crédit d'avoir et une facture
+     * de 100,00 € réglée par un paiement saisi par erreur. Au même
+     * instant, ce paiement est contre-passé, ce qui impute le crédit sur la
+     * facture rouverte, et une nouvelle facture de 20,00 € lui est émise :
+     * elle ne trouve plus de crédit et reste due en entier.
      */
-    public function test_un_paiement_et_une_facture_emise_au_meme_instant_n_imputent_le_credit_qu_une_fois(): void
+    public function test_une_contre_passation_et_une_facture_emise_au_meme_instant_n_imputent_le_credit_qu_une_fois(): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = Magasin::factory()->create(['code' => 'LYON1']);
@@ -133,8 +133,7 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
         $rouverte = self::emettreUneFacture((int) $client->id, Produit::factory()->create(['prix_vente_ttc' => 100, 'taux_tva' => 20, 'suivi_stock' => false])->id);
         $paiementErrone = self::payer((int) $client->id, $rouverte->id, '100.00');
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $reprise->lignes()->sole()->id, 'quantite' => 1]], 'Retour');
-        app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiementErrone, 'Saisi sur la mauvaise facture');
-        $this->assertSame([100.0, 12.0], [$rouverte->fresh()->montantRestant(), $client->soldeCrediteur()]);
+        $this->assertSame([0.0, 12.0], [$rouverte->fresh()->montantRestant(), $client->soldeCrediteur()]);
         $magasinId = $magasin->id;
         $clientId = (int) $client->id;
         $produitId = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false])->id;
@@ -144,17 +143,17 @@ class EnregistrerPaiementActionConcurrenceTest extends TestCase
             self::emettreUneFacture($clientId, $produitId);
         }, $concurrente);
 
-        $bonPaiement = self::payer($clientId, $rouverte->id, '88.00');
+        $contrePassation = app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiementErrone, 'Saisi sur la mauvaise facture');
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $concurrente->wait();
         $this->assertTrue($resultat->successful(), $resultat->errorOutput());
         $nouvelle = Facture::query()->whereKeyNot([$reprise->id, $rouverte->id])->sole();
         $this->assertSame(
-            [[$rouverte->id, $bonPaiement->id, '12.00']],
+            [[$rouverte->id, $contrePassation->id, '12.00']],
             AvoirAllocation::query()->where('avoir_id', $avoir->id)->get()->map(fn (AvoirAllocation $credit): array => [$credit->facture_id, $credit->paiement_id, $credit->montant_alloue])->all(),
         );
-        $this->assertSame([StatutFacture::Payee, 88.0, 12.0, 0.0], [$rouverte->fresh()->statut, $rouverte->fresh()->montantPaye(), $rouverte->fresh()->montantCrediteParAvoir(), $rouverte->fresh()->montantRestant()]);
+        $this->assertSame([StatutFacture::PartiellementPayee, 0.0, 12.0, 88.0], [$rouverte->fresh()->statut, $rouverte->fresh()->montantPaye(), $rouverte->fresh()->montantCrediteParAvoir(), $rouverte->fresh()->montantRestant()]);
         $this->assertSame([StatutFacture::Emise, 0.0, 20.0], [$nouvelle->statut, $nouvelle->montantCrediteParAvoir(), $nouvelle->montantRestant()]);
         $this->assertSame(0.0, $client->soldeCrediteur());
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());

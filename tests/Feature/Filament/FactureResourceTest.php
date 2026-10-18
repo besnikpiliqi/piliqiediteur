@@ -15,7 +15,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreAvoirAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\StatutFacture;
@@ -139,7 +138,7 @@ class FactureResourceTest extends TestCase
 
         // Premier achat payé puis intégralement retourné : 60 € de crédit
         // disponible.
-        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
+        $premiereFacture = self::vendreAuComptant(self::auteur(), $client, [
             ['produit_id' => $produit->id, 'quantite' => 1],
         ], ModePaiement::Especes);
 
@@ -266,7 +265,7 @@ class FactureResourceTest extends TestCase
 
         // Premier achat payé puis intégralement retourné : 10 € de crédit
         // disponible.
-        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
+        $premiereFacture = self::vendreAuComptant(self::auteur(), $client, [
             ['produit_id' => $produitRembourse->id, 'quantite' => 1],
         ], ModePaiement::Especes);
 
@@ -321,7 +320,7 @@ class FactureResourceTest extends TestCase
 
         // Premier achat payé puis intégralement retourné : 13 € de crédit
         // disponible.
-        $premiereFacture = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [
+        $premiereFacture = self::vendreAuComptant(self::auteur(), $client, [
             ['produit_id' => $produitRembourse->id, 'quantite' => 1],
         ], ModePaiement::Especes);
 
@@ -376,7 +375,7 @@ class FactureResourceTest extends TestCase
         $client = Client::factory()->create();
         $bonbon = Produit::factory()->create(['prix_vente_ttc' => '0.10', 'taux_tva' => 20, 'suivi_stock' => false]);
         $cable = Produit::factory()->create(['prix_vente_ttc' => '10.00', 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $bonbon->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $bonbon->id, 'quantite' => 1]], ModePaiement::Especes);
         app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]]));
         $facture = app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [['produit_id' => $cable->id, 'quantite' => 1]]));
 
@@ -402,7 +401,7 @@ class FactureResourceTest extends TestCase
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
         $cable = Produit::factory()->create(['prix_vente_ttc' => '10.00', 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $cable->id, 'quantite' => 1]], ModePaiement::CarteBancaire, 'REF-XYZ-123');
+        $ticket = self::vendreAuComptant(self::auteur(), Client::query()->where('est_comptoir', true)->sole(), [['produit_id' => $cable->id, 'quantite' => 1]], ModePaiement::CarteBancaire, 'REF-XYZ-123');
 
         $fiche = Livewire::test(ViewFacture::class, ['record' => $ticket->getRouteKey()]);
 
@@ -1014,7 +1013,7 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
         $client = Client::factory()->create();
         $produit = Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false]);
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $produit->id, 'quantite' => 1]], ModePaiement::Especes);
         app(EmettreAvoirAction::class)->handle(self::auteur(), app(CreerAvoirAction::class)->handle(self::auteur(), $client, [
             ['ligne_facture_id' => $ticket->lignes->firstOrFail()->id, 'quantite' => 1],
         ]));
@@ -1448,8 +1447,9 @@ class FactureResourceTest extends TestCase
     }
 
     /**
-     * B8 : l'action « Encaisser » présélectionne le mode de paiement
-     * préféré du client de la facture.
+     * B8 et point 23 : l'action « Encaisser » préremplit la première part
+     * du règlement avec le mode de paiement préféré du client de la
+     * facture et ce qui en reste dû.
      */
     public function test_encaisser_preselectionne_le_mode_de_paiement_prefere_du_client(): void
     {
@@ -1459,9 +1459,10 @@ class FactureResourceTest extends TestCase
         Filament::setTenant($magasin);
         $facture = $this->emettreFactureDepuisLePanneau(Client::factory()->create(['mode_paiement_prefere' => ModePaiement::CarteBancaire]));
 
-        Livewire::test(ListFactures::class)
-            ->mountTableAction('encaisser', $facture)
-            ->assertTableActionDataSet(['mode_paiement' => ModePaiement::CarteBancaire->value, 'montant' => 60.0]);
+        $liste = Livewire::test(ListFactures::class)->mountTableAction('encaisser', $facture);
+        $part = array_key_first($liste->get('mountedTableActionsData.0.parts'));
+
+        $liste->assertTableActionDataSet(["parts.{$part}.mode" => ModePaiement::CarteBancaire->value, "parts.{$part}.montant" => '60.00']);
     }
 
     private function emettreFactureDepuisLePanneau(Client $client)

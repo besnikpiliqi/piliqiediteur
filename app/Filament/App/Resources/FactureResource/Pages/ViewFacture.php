@@ -23,9 +23,11 @@ use Filament\Resources\Pages\ViewRecord;
  * FacturePolicy::justifier()) : les preuves de son exonération (voir
  * AjouterPreuveOperationAction) et le bordereau de détaxe d'un ticket
  * (voir NoterBordereauDetaxeAction). Chaque bouton n'apparaît que là où
- * son action l'accepte (voir leurs refusPour()). Son retour passe par
- * « Avoir », qui ouvre la recherche par numéro de « Nouvel avoir » sur ce
- * document (voir faireUnAvoir()).
+ * son action l'accepte (voir leurs refusPour()). « Encaisser » le règle
+ * d'un seul geste, en un ou plusieurs modes, comme sur la liste (voir
+ * FactureResource::encaisser()). Son retour passe par « Avoir », qui ouvre
+ * la recherche par numéro de « Nouvel avoir » sur ce document (voir
+ * faireUnAvoir()).
  */
 class ViewFacture extends ViewRecord
 {
@@ -36,6 +38,7 @@ class ViewFacture extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            FactureResource::encaisser(Actions\Action::make('encaisser')),
             FactureResource::telechargerLePdf(Actions\Action::make('telecharger_pdf')),
             FactureResource::envoyerParEmail(Actions\Action::make('envoyer_par_email')),
             FactureResource::relancer(Actions\Action::make('relancer')),

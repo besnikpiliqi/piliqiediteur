@@ -16,20 +16,22 @@ use LogicException;
 
 /**
  * Le jeton unique des demandes (R3) : une émission, une vente à la caisse,
- * une émission de devis, un paiement, une contre-passation, un avoir, un
- * envoi, une fermeture de caisse, une clôture du jour et une validation
- * d'achat ou d'avoir fournisseur portent chacune un jeton, que l'écran
- * crée à l'ouverture du formulaire ou de la fenêtre (le panier de la
- * caisse a le sien, voir PanierDeCaisse) et garde jusqu'à son succès.
+ * une émission de devis, un paiement, un encaissement en plusieurs modes,
+ * une contre-passation, un avoir, un envoi, une fermeture de caisse, une
+ * clôture du jour et une validation d'achat ou d'avoir fournisseur portent
+ * chacune un jeton, que l'écran crée à l'ouverture du formulaire ou de la
+ * fenêtre (le panier de la caisse a le sien, voir PanierDeCaisse) et garde
+ * jusqu'à son succès.
  * Une demande répétée après une réponse perdue renvoie le résultat déjà
  * enregistré sous son jeton, sans rien refaire ; le même jeton avec une
  * demande différente (une autre action, un autre compte, un autre
  * contenu) est refusé.
  *
  * Seule l'action la plus externe consomme le jeton : celles qu'elle
- * appelle (l'émission et le paiement d'une vente à la caisse, l'émission
- * d'un avoir enregistré, celle d'un devis envoyé, la clôture de chaque
- * journée) reçoivent un jeton nul. Une action sans jeton s'exécute
+ * appelle (l'émission et les paiements d'une vente à la caisse, les
+ * paiements d'un encaissement en plusieurs modes, l'émission d'un avoir
+ * enregistré, celle d'un devis envoyé, la clôture de chaque journée)
+ * reçoivent un jeton nul. Une action sans jeton s'exécute
  * simplement : les gestes du système et des tests n'en portent pas.
  *
  * Le jeton se cherche dans la transaction de l'action, juste après son
@@ -58,6 +60,8 @@ class ActionsUniques
     public const EMETTRE_DEVIS = 'devis.emettre';
 
     public const ENREGISTRER_PAIEMENT = 'paiement.enregistrer';
+
+    public const ENCAISSER_EN_PLUSIEURS_MODES = 'facture.encaisser';
 
     public const CONTRE_PASSER_PAIEMENT = 'paiement.contre_passer';
 

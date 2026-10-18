@@ -473,13 +473,13 @@ class Facture extends Model implements DocumentEnvoyable
     /**
      * Crédit d'avoir imputé sur cette facture : par un avoir à son émission,
      * qu'il la corrige ou non (voir ImputerAvoirSurSesFacturesAction), à
-     * l'émission de la facture, crédit du client ou bon d'avoir présenté au
-     * comptoir (voir AppliquerAvoirsDisponiblesAction et
-     * EmettreFactureAction), ou par un paiement qui la règle (voir
-     * EnregistrerPaiementAction), moins celui que la contre-passation
-     * de ce paiement a rendu (voir ContrePasserPaiementAction) -- jamais un
-     * paiement réellement encaissé, mais il réduit le solde dû exactement
-     * de la même façon.
+     * l'émission de la facture, crédit du client ou bons d'avoir présentés
+     * à la caisse (voir AppliquerAvoirsDisponiblesAction et
+     * EmettreFactureAction), par les bons présentés avec un paiement (voir
+     * EnregistrerPaiementAction) ou par la contre-passation d'un paiement
+     * qui l'a rouverte (voir ContrePasserPaiementAction), moins celui
+     * qu'une contre-passation a rendu -- jamais un paiement réellement
+     * encaissé, mais il réduit le solde dû exactement de la même façon.
      */
     public function montantCrediteParAvoir(): float
     {

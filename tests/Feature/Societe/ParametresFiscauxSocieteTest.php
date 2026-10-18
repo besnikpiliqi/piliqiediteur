@@ -10,7 +10,6 @@ use App\Domain\Catalogue\Models\Service;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
@@ -67,7 +66,7 @@ class ParametresFiscauxSocieteTest extends TestCase
         $this->assertSame(RegimeTva::FranchiseEnBase, $lyon->societe->fresh()->regime_tva);
         foreach ([$lyon, $villeurbanne] as $magasin) {
             $ticket = app(TenantContext::class)->runAs($magasin->fresh(), function (): Facture {
-                $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+                $ticket = self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
                 app(FermerSaCaisseAction::class)->handle(self::auteur(), self::auteur());
 
                 return $ticket;
@@ -151,7 +150,7 @@ class ParametresFiscauxSocieteTest extends TestCase
         $proprietaire = $this->proprietaireDe($lyon);
         app(TenantContext::class)->clear();
         app(ModifierParametresFiscauxSocieteAction::class)->handle($proprietaire, $lyon->societe, ['mois_fin_exercice' => 6]);
-        app(TenantContext::class)->runAs($villeurbanne, fn (): Facture => app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes));
+        app(TenantContext::class)->runAs($villeurbanne, fn (): Facture => self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes));
         app(TenantContext::class)->clear();
 
         $this->assertThrows(

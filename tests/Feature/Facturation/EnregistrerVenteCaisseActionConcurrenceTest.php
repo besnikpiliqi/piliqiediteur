@@ -7,7 +7,6 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\AvoirAllocation;
@@ -36,11 +35,11 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
 
     private static function vendreVingtEuros(int $clientId, int $produitId, ?string $bonDAvoir = null): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+        return self::vendreAuComptant(self::auteur(),
             Client::query()->findOrFail($clientId),
             [['produit_id' => $produitId, 'quantite' => 1]],
             ModePaiement::Especes,
-            bonDAvoir: $bonDAvoir,
+            bonsDAvoir: $bonDAvoir === null ? [] : [$bonDAvoir],
         );
     }
 
@@ -50,7 +49,7 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
      */
     private static function vendreLePanier(int $comptoirId, int $tshirtId, int $livreId): Facture
     {
-        return app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(),
+        return self::vendreAuComptant(self::auteur(),
             Client::query()->findOrFail($comptoirId),
             [['produit_id' => $tshirtId, 'quantite' => 1], ['produit_id' => $tshirtId, 'quantite' => 1], ['produit_id' => $livreId, 'quantite' => 1]],
             ModePaiement::Especes,
@@ -113,7 +112,7 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         app(TenantContext::class)->set($magasin);
         $comptoir = Client::query()->where('est_comptoir', true)->sole();
-        $ticket = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $ticket = self::vendreAuComptant(self::auteur(), $comptoir, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
         $bon = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $comptoir, [['ligne_facture_id' => $ticket->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
         $magasinId = $magasin->id;
@@ -139,8 +138,11 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
 
     /**
      * Mme Martin a 12,00 € de crédit d'avoir ; deux caisses lui vendent
-     * 20,00 € au même instant. La première impute les 12,00 € et encaisse
-     * 8,00 €, la seconde, qui ne trouve plus de crédit, encaisse 20,00 €.
+     * 20,00 € au même instant, chacune avec une part de 8,00 € en espèces,
+     * ce que leur écran proposait. La première impute les 12,00 € et
+     * encaisse 8,00 € ; la seconde, qui ne trouve plus de crédit, est
+     * refusée avec le nouveau total, sans rien enregistrer (points 1 et
+     * 23 : les parts égalent exactement le total à payer).
      */
     public function test_deux_ventes_simultanees_au_meme_client_n_imputent_son_credit_qu_une_fois(): void
     {
@@ -148,7 +150,7 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         app(TenantContext::class)->set($magasin);
         $martin = Client::factory()->create(['nom' => 'Mme Martin']);
-        $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $achatRendu = self::vendreAuComptant(self::auteur(), $martin, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
         $avoir = app(EnregistrerAvoirAction::class)->handle(self::auteur(), $martin, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]], 'Retour');
         $produit = Produit::factory()->create(['prix_vente_ttc' => 20, 'taux_tva' => 20, 'suivi_stock' => false]);
         $magasinId = $magasin->id;
@@ -164,11 +166,11 @@ class EnregistrerVenteCaisseActionConcurrenceTest extends TestCase
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $resultat = $concurrente->wait();
-        $this->assertTrue($resultat->successful(), $resultat->errorOutput());
-        $seconde = Facture::query()->whereKeyNot([$achatRendu->id, $premiere->id])->sole();
+        $this->assertFalse($resultat->successful());
+        $this->assertStringContainsString('Le total à payer est de 20,00 €, crédit d\'avoir déduit. Il reste 12,00 € à répartir.', $resultat->errorOutput());
+        $this->assertSame([$achatRendu->id, $premiere->id], Facture::query()->orderBy('id')->pluck('id')->all());
         $this->assertSame(['12.00'], AvoirAllocation::query()->where('avoir_id', $avoir->id)->pluck('montant_alloue')->all());
-        $this->assertSame([12.0, 8.0, 0.0], [$premiere->montantCrediteParAvoir(), $premiere->montantPaye(), $premiere->montantRestant()]);
-        $this->assertSame([StatutFacture::Payee, 0.0, 20.0, 0.0], [$seconde->statut, $seconde->montantCrediteParAvoir(), $seconde->montantPaye(), $seconde->montantRestant()]);
+        $this->assertSame([StatutFacture::Payee, 12.0, 8.0, 0.0], [$premiere->statut, $premiere->montantCrediteParAvoir(), $premiere->montantPaye(), $premiere->montantRestant()]);
         $this->assertSame([0.0, 0.0], [$avoir->fresh()->montantNonAlloue(), $martin->soldeCrediteur()]);
         $this->assertSame([], app(VerificateurIntegrite::class)->verifier($magasin)->anomalies());
     }

@@ -11,7 +11,6 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Actions\EnregistrerAvoirAction;
 use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Facture;
@@ -29,12 +28,34 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Exceptions;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use Tests\TestCase;
 
 class PaiementResourceTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * « Encaisser » depuis la liste des factures, en une seule part : la
+     * première part, que la fenêtre propose, prend ce mode, ce montant et
+     * cette référence.
+     *
+     * @param  array{mode: string, montant: int|float|string, reference?: string}  $part
+     */
+    private function encaisserDepuisLaListe(Facture $facture, array $part, string $recuLe): Testable
+    {
+        $liste = Livewire::test(ListFactures::class)->mountTableAction('encaisser', $facture);
+        $cle = array_key_first($liste->get('mountedTableActionsData.0.parts'));
+
+        return $liste
+            ->setTableActionData(array_merge(
+                ["parts.{$cle}.montant_saisi" => true],
+                collect($part)->mapWithKeys(fn (mixed $valeur, string $champ): array => ["parts.{$cle}.{$champ}" => $valeur])->all(),
+                ['recu_le' => $recuLe],
+            ))
+            ->callMountedTableAction();
+    }
 
     /**
      * Crée une facture émise (total TTC 120, via un produit à 120 € TTC et
@@ -211,12 +232,7 @@ class PaiementResourceTest extends TestCase
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client);
 
-        Livewire::test(ListFactures::class)
-            ->callTableAction('encaisser', $facture, data: [
-                'mode_paiement' => ModePaiement::CarteBancaire->value,
-                'montant' => 120,
-                'recu_le' => now()->toDateString(),
-            ]);
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::CarteBancaire->value, 'montant' => 120], now()->toDateString());
 
         $this->assertSame(StatutFacture::Payee, $facture->fresh()->statut);
         $this->assertSame(1, Paiement::query()->count());
@@ -232,12 +248,7 @@ class PaiementResourceTest extends TestCase
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
 
-        Livewire::test(ListFactures::class)
-            ->callTableAction('encaisser', $facture, data: [
-                'mode_paiement' => ModePaiement::Especes->value,
-                'montant' => 50,
-                'recu_le' => now()->toDateString(),
-            ])
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 50], now()->toDateString())
             ->assertHasNoTableActionErrors();
 
         $this->assertSame(StatutFacture::PartiellementPayee, $facture->fresh()->statut);
@@ -260,13 +271,9 @@ class PaiementResourceTest extends TestCase
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
 
-        Livewire::test(ListFactures::class)
-            ->callTableAction('encaisser', $facture, data: [
-                'mode_paiement' => ModePaiement::Especes->value,
-                'montant' => 150,
-                'recu_le' => now()->toDateString(),
-            ])
-            ->assertHasTableActionErrors(['montant']);
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 150], now()->toDateString())
+            ->assertHasTableActionErrors(['parts'])
+            ->assertSee('Les parts du règlement (150,00 €) dépassent ce qui reste dû (120,00 €).');
 
         $this->assertSame(0, Paiement::query()->count());
         $this->assertSame(StatutFacture::Emise, $facture->fresh()->statut);
@@ -283,12 +290,7 @@ class PaiementResourceTest extends TestCase
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
 
-        Livewire::test(ListFactures::class)
-            ->callTableAction('encaisser', $facture, data: [
-                'mode_paiement' => ModePaiement::Virement->value,
-                'montant' => 120,
-                'recu_le' => '2026-10-08',
-            ])
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Virement->value, 'montant' => 120], '2026-10-08')
             ->assertHasNoTableActionErrors();
 
         $this->assertSame('2026-10-08', Paiement::query()->sole()->recu_le->toDateString());
@@ -305,12 +307,7 @@ class PaiementResourceTest extends TestCase
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
 
-        Livewire::test(ListFactures::class)
-            ->callTableAction('encaisser', $facture, data: [
-                'mode_paiement' => ModePaiement::Especes->value,
-                'montant' => 120,
-                'recu_le' => '2026-10-10',
-            ])
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 120], '2026-10-10')
             ->assertHasTableActionErrors(['recu_le' => 'before_or_equal'])
             ->assertSee('Un paiement ne peut pas être reçu à une date future.');
 
@@ -328,14 +325,13 @@ class PaiementResourceTest extends TestCase
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
 
-        Livewire::test(ListFactures::class)
-            ->callTableAction('encaisser', $facture, data: [
-                'mode_paiement' => ModePaiement::CarteBancaire->value,
-                'montant' => 120,
-                'reference' => str_repeat('A', 101),
-                'recu_le' => now()->toDateString(),
-            ])
-            ->assertHasTableActionErrors(['reference' => 'max'])
+        $liste = Livewire::test(ListFactures::class)->mountTableAction('encaisser', $facture);
+        $part = array_key_first($liste->get('mountedTableActionsData.0.parts'));
+
+        $liste
+            ->setTableActionData(["parts.{$part}.mode" => ModePaiement::CarteBancaire->value, "parts.{$part}.reference" => str_repeat('A', 101)])
+            ->callMountedTableAction()
+            ->assertHasTableActionErrors(["parts.{$part}.reference" => 'max'])
             ->assertSee('Le champ référence ne doit pas dépasser 100 caractères.');
 
         $this->assertSame(0, Paiement::query()->count());
@@ -665,11 +661,7 @@ class PaiementResourceTest extends TestCase
         $this->connecterLeProprietaire();
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client, 120);
-        Livewire::test(ListFactures::class)->callTableAction('encaisser', $facture, data: [
-            'mode_paiement' => ModePaiement::Especes->value,
-            'montant' => 120,
-            'recu_le' => now()->toDateString(),
-        ]);
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 120], now()->toDateString());
         $client->delete();
 
         Livewire::test(CreatePaiement::class)
@@ -750,11 +742,7 @@ class PaiementResourceTest extends TestCase
         $this->connecterLeProprietaire();
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
-        Livewire::test(ListFactures::class)->callTableAction('encaisser', $facture, data: [
-            'mode_paiement' => ModePaiement::Especes->value,
-            'montant' => 120,
-            'recu_le' => now()->toDateString(),
-        ]);
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 120], now()->toDateString());
         $errone = Paiement::query()->sole();
 
         Livewire::test(ListPaiements::class)
@@ -779,11 +767,7 @@ class PaiementResourceTest extends TestCase
         $this->connecterLeProprietaire();
         $client = Client::factory()->create();
         $facture = $this->emettreFactureDepuisLePanneau($client); // total TTC 120
-        Livewire::test(ListFactures::class)->callTableAction('encaisser', $facture, data: [
-            'mode_paiement' => ModePaiement::Especes->value,
-            'montant' => 120,
-            'recu_le' => now()->toDateString(),
-        ]);
+        $this->encaisserDepuisLaListe($facture, ['mode' => ModePaiement::Especes->value, 'montant' => 120], now()->toDateString());
 
         Livewire::test(ListPaiements::class)
             ->callTableAction('contre_passer', Paiement::query()->sole(), data: ['motif' => ''])
@@ -812,15 +796,16 @@ class PaiementResourceTest extends TestCase
      * payé puis rendu) et des factures à régler, de la plus ancienne à la
      * plus récente : un virement les réglait quand l'avoir a été émis, qui
      * n'a donc rien eu à y imputer (B6), puis la contre-passation de ce
-     * virement, rejeté, les a rouvertes.
+     * virement, rejeté, les a rouvertes et y a aussitôt imputé ce crédit,
+     * sur la plus ancienne d'abord (complément 1).
      *
      * @param  list<float>  $prixDesFactures
      * @return array{client: Client, factures: list<Facture>}
      */
-    private function clientAvecDuCreditEtDesFacturesDues(array $prixDesFactures): array
+    private function clientDontLeCreditSImputeALaContrePassation(array $prixDesFactures): array
     {
         $client = Client::factory()->create();
-        $achatRendu = app(EnregistrerVenteCaisseAction::class)->handle(self::auteur(), $client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 36, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
+        $achatRendu = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 36, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes);
         $factures = array_map(fn (float $prix): Facture => app(EmettreFactureAction::class)->handle(self::auteur(), app(CreerFactureAction::class)->handle(self::auteur(), $client, [
             ['produit_id' => Produit::factory()->create(['prix_vente_ttc' => $prix, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1],
         ])), $prixDesFactures);
@@ -831,63 +816,65 @@ class PaiementResourceTest extends TestCase
         );
         app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $achatRendu->lignes->sole()->id, 'quantite' => 1]]);
         app(ContrePasserPaiementAction::class)->handle(self::auteur(), $virementRejete, 'Virement rejeté');
-        $this->assertSame(36.0, $client->soldeCrediteur());
 
         return ['client' => $client, 'factures' => $factures];
     }
 
     /**
-     * K9 : le crédit ne solde que ce que le montant reçu laisse dû. «
-     * Encaisser » propose donc le reste dû moins ce crédit, 84,00 €, et le
-     * dit ; validé tel quel, il règle la facture avec 84,00 € reçus et
-     * 36,00 € de crédit.
+     * Complément 1 et point 1 : le crédit est déjà imputé sur la facture
+     * rouverte. « Encaisser » le montre en lecture, comme la part « Avoir
+     * (crédit déjà imputé) », et propose ce qui reste dû, 84,00 €, dans le
+     * mode préféré du client ; validé tel quel, il règle la facture avec
+     * 84,00 € reçus.
      */
-    public function test_encaisser_propose_le_reste_du_moins_le_credit_qui_solde_la_facture(): void
+    public function test_encaisser_montre_le_credit_deja_impute_et_propose_ce_qui_reste_du(): void
     {
         $this->connecterLeProprietaire();
-        ['client' => $client, 'factures' => [$facture]] = $this->clientAvecDuCreditEtDesFacturesDues([120]);
+        ['client' => $client, 'factures' => [$facture]] = $this->clientDontLeCreditSImputeALaContrePassation([120]);
+        $this->assertSame(0.0, $client->soldeCrediteur());
+        $liste = Livewire::test(ListFactures::class)->mountTableAction('encaisser', $facture);
+        $part = array_key_first($liste->get('mountedTableActionsData.0.parts'));
 
-        Livewire::test(ListFactures::class)
-            ->mountTableAction('encaisser', $facture)
-            ->assertTableActionDataSet(['montant' => 84.0])
-            ->assertSee('Crédit disponible pour ce client : 36,00 €. Il soldera ce que le montant reçu laisse dû : 84,00 € suffisent pour régler la facture.')
-            ->setTableActionData(['mode_paiement' => ModePaiement::Especes->value])
+        $liste
+            ->assertTableActionDataSet(["parts.{$part}.mode" => ModePaiement::Especes->value, "parts.{$part}.montant" => '84.00'])
+            ->assertSee('Avoir (crédit déjà imputé)')
+            ->assertSee('36,00 €')
             ->callMountedTableAction()
             ->assertHasNoTableActionErrors();
 
         $facture->refresh();
         $this->assertSame([StatutFacture::Payee, 84.0, 36.0, 0.0], [$facture->statut, $facture->montantPaye(), $facture->montantCrediteParAvoir(), $facture->montantRestant()]);
-        $this->assertSame(0.0, $client->soldeCrediteur());
     }
 
     /**
-     * Quand le crédit couvre tout ce qui reste dû, « Encaisser » ne
-     * propose aucun montant et le dit.
+     * Complément 1 : quand le crédit couvre tout ce que la contre-passation
+     * a rouvert, la facture est réglée aussitôt, il reste 6,00 € de crédit
+     * au client, et « Encaisser » disparaît.
      */
-    public function test_encaisser_ne_propose_aucun_montant_quand_le_credit_couvre_tout_le_reste_du(): void
+    public function test_une_facture_que_le_credit_solde_a_la_contre_passation_n_est_plus_a_encaisser(): void
     {
         $this->connecterLeProprietaire();
-        ['factures' => [$facture]] = $this->clientAvecDuCreditEtDesFacturesDues([30]);
+        ['client' => $client, 'factures' => [$facture]] = $this->clientDontLeCreditSImputeALaContrePassation([30]);
 
-        Livewire::test(ListFactures::class)
-            ->mountTableAction('encaisser', $facture)
-            ->assertTableActionDataSet(['montant' => null])
-            ->assertSee('Crédit disponible pour ce client : 36,00 €. Il soldera ce que le montant reçu laisse dû, et couvre déjà tout ce qui reste dû.');
+        Livewire::test(ListFactures::class)->assertTableActionHidden('encaisser', $facture);
+
+        $this->assertSame([StatutFacture::Payee, 0.0, 30.0], [$facture->fresh()->statut, $facture->fresh()->montantPaye(), $facture->fresh()->montantCrediteParAvoir()]);
+        $this->assertSame(6.0, $client->soldeCrediteur());
     }
 
     /**
-     * Dans le formulaire des paiements, le choix d'une facture propose son
-     * reste dû moins le crédit encore libre : 84,00 € pour la première ;
-     * ce qu'elle laisse au crédit l'épuise, et la seconde est proposée en
-     * entier. Le paiement de 204,00 € règle les deux, le crédit compris.
+     * Complément 1 : dans le formulaire des paiements, le choix d'une
+     * facture propose ce qui en reste dû, le crédit y étant déjà imputé :
+     * 84,00 € pour la plus ancienne, 120,00 € pour la suivante. Le paiement
+     * de 204,00 € règle les deux, sans imputer aucun crédit.
      */
-    public function test_choisir_une_facture_propose_son_reste_du_moins_le_credit_encore_libre(): void
+    public function test_choisir_une_facture_propose_son_reste_du_le_credit_etant_deja_impute(): void
     {
         $this->connecterLeProprietaire();
-        ['client' => $client, 'factures' => [$premiere, $seconde]] = $this->clientAvecDuCreditEtDesFacturesDues([120, 120]);
+        ['client' => $client, 'factures' => [$premiere, $seconde]] = $this->clientDontLeCreditSImputeALaContrePassation([120, 120]);
         $formulaire = Livewire::test(CreatePaiement::class)
             ->fillForm(['client_id' => $client->id, 'mode_paiement' => ModePaiement::Virement->value, 'montant' => 204, 'recu_le' => now()->toDateString()])
-            ->assertSee('Crédit disponible pour ce client : 36,00 €. Il soldera ce que les montants imputés laissent dû sur les factures choisies, de la plus ancienne à la plus récente.');
+            ->assertDontSee('Crédit disponible pour ce client');
 
         $formulaire
             ->fillForm(['allocations' => [['facture_id' => $premiere->id]]])
@@ -897,9 +884,10 @@ class PaiementResourceTest extends TestCase
             ->call('create')
             ->assertHasNoFormErrors();
 
+        $paiement = Paiement::query()->where('montant', '204.00')->sole();
+        $this->assertSame([], $paiement->creditsImputes->all());
         $this->assertSame([StatutFacture::Payee, 84.0, 36.0], [$premiere->fresh()->statut, $premiere->fresh()->montantPaye(), $premiere->fresh()->montantCrediteParAvoir()]);
         $this->assertSame([StatutFacture::Payee, 120.0, 0.0], [$seconde->fresh()->statut, $seconde->fresh()->montantPaye(), $seconde->fresh()->montantCrediteParAvoir()]);
-        $this->assertSame(0.0, $client->soldeCrediteur());
     }
 
     /**

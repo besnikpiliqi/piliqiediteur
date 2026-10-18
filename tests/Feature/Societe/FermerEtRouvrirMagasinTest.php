@@ -13,7 +13,6 @@ use App\Domain\CaisseSecurisee\Services\VerificateurIntegrite;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
-use App\Domain\Facturation\Actions\EnregistrerVenteCaisseAction;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\ClotureCaisse;
@@ -859,7 +858,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
     {
         app(TenantContext::class)->set($magasin->fresh());
 
-        return app(EnregistrerVenteCaisseAction::class)->handle(
+        return self::vendreAuComptant(
             self::auteur(),
             Client::query()->where('est_comptoir', true)->sole(),
             [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]],

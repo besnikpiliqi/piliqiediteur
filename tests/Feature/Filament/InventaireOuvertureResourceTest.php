@@ -11,10 +11,12 @@ use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Stock\Actions\CreerInventaireOuvertureAction;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
 use App\Domain\Stock\Models\InventaireOuverture;
+use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\InventaireOuvertureResource;
 use App\Filament\App\Resources\InventaireOuvertureResource\Pages\CreateInventaireOuverture;
+use App\Filament\App\Resources\InventaireOuvertureResource\Pages\EditInventaireOuverture;
 use App\Filament\App\Resources\InventaireOuvertureResource\Pages\ListInventairesOuverture;
 use App\Filament\App\Resources\InventaireOuvertureResource\Pages\ViewInventaireOuverture;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -97,6 +99,51 @@ class InventaireOuvertureResourceTest extends TestCase
             [['PRD-000001', 10, '2.0000'], ['TASSE', 4, '3.2500']],
             Produit::query()->orderBy('reference')->get()->map(fn (Produit $produit): array => [$produit->reference, $produit->stock_quantite, $produit->cmup_ht])->all(),
         );
+    }
+
+    /**
+     * Un brouillon se supprime depuis la liste comme depuis sa page de
+     * modification, avec ses lignes, sans rien créer.
+     */
+    public function test_un_brouillon_se_supprime_depuis_la_liste_et_depuis_sa_page_de_modification(): void
+    {
+        $this->magasinDuProprietaire();
+        $ligne = ['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20'], 'quantite' => 10, 'cout_unitaire_ht' => '2.00'];
+        $premier = app(CreerInventaireOuvertureAction::class)->handle(self::auteur(), [$ligne]);
+        $second = app(CreerInventaireOuvertureAction::class)->handle(self::auteur(), [$ligne]);
+
+        Livewire::test(ListInventairesOuverture::class)->callTableAction('delete', $premier)->assertHasNoTableActionErrors();
+        $this->assertSame([$second->id], InventaireOuverture::query()->pluck('id')->all());
+
+        Livewire::test(EditInventaireOuverture::class, ['record' => $second->getRouteKey()])
+            ->callAction('delete')
+            ->assertHasNoActionErrors()
+            ->assertRedirect(InventaireOuvertureResource::getUrl('index'));
+
+        $this->assertSame([0, 0, 0], [InventaireOuverture::query()->count(), LigneInventaireOuverture::query()->count(), Produit::query()->count()]);
+    }
+
+    /**
+     * La fiche ne compte que le stock qui entre (50 stylos à 0,30 € :
+     * 15,00 € HT) et dit, sous la ligne d'un produit qui ne suit pas son
+     * stock, qu'il ne reçoit que son coût de départ.
+     */
+    public function test_la_fiche_dit_qu_un_produit_qui_ne_suit_pas_son_stock_ne_recoit_que_son_cout(): void
+    {
+        $this->magasinDuProprietaire();
+        $inventaire = app(CreerInventaireOuvertureAction::class)->handle(self::auteur(), [
+            ['produit' => ['nom' => 'Carnet A5', 'prix_vente_ttc' => '4.90', 'taux_tva' => '20', 'suivi_stock' => false], 'quantite' => 10, 'cout_unitaire_ht' => '2.00'],
+            ['produit' => ['nom' => 'Stylo bleu', 'prix_vente_ttc' => '1.20', 'taux_tva' => '20'], 'quantite' => 50, 'cout_unitaire_ht' => '0.30'],
+        ]);
+
+        $fiche = Livewire::test(ViewInventaireOuverture::class, ['record' => $inventaire->getRouteKey()]);
+
+        $fiche->assertSeeInOrder([
+            'Valeur du stock HT', "15,00\u{00A0}€",
+            'Carnet A5', "2,00\u{00A0}€", "0,00\u{00A0}€", InventaireOuvertureResource::AIDE_SANS_SUIVI_DU_STOCK,
+            'Stylo bleu', "0,30\u{00A0}€", "15,00\u{00A0}€",
+        ]);
+        $this->assertSame(1, substr_count($fiche->html(), e(InventaireOuvertureResource::AIDE_SANS_SUIVI_DU_STOCK)));
     }
 
     /**

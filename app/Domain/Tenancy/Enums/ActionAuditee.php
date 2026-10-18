@@ -192,10 +192,13 @@ enum ActionAuditee: string implements HasLabel
             // pour chaque ligne, la référence et la quantité retournées
             // (voir EmettreAvoirFournisseurAction).
             self::AvoirFournisseurEmis => ['avoir', 'facture_achat', 'numero_fournisseur', 'total_ht', 'total_tva', 'total_ttc', 'lignes'],
-            // Le numéro de l'inventaire d'ouverture, sa valeur hors taxe
-            // et, pour chaque ligne, la référence du produit, la quantité
-            // entrée en stock, son coût unitaire HT et si la validation a
-            // créé le produit (voir ValiderInventaireOuvertureAction).
+            // Le numéro de l'inventaire d'ouverture, la valeur hors taxe du
+            // stock qu'il fait entrer et, pour chaque ligne, la référence du
+            // produit, la quantité inventoriée, si elle est entrée en stock
+            // (suivi_stock : un produit qui ne suit pas son stock ne reçoit
+            // que son coût de départ, sans valeur de stock), son coût
+            // unitaire HT et si la validation a créé le produit (voir
+            // ValiderInventaireOuvertureAction).
             self::InventaireOuvertureValide => ['inventaire', 'valeur_ht', 'lignes'],
         };
     }

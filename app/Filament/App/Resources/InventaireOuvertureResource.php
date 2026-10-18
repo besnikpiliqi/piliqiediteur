@@ -3,6 +3,7 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Catalogue\Models\Produit;
+use App\Domain\Stock\Actions\SupprimerInventaireOuvertureAction;
 use App\Domain\Stock\Actions\ValiderInventaireOuvertureAction;
 use App\Domain\Stock\Enums\StatutInventaireOuverture;
 use App\Domain\Stock\Models\InventaireOuverture;
@@ -13,6 +14,7 @@ use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\InventaireOuvertureResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Concerns\PorteUnJeton;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\MountableAction;
 use Filament\Forms\Components\Field;
 use Filament\Forms\Components\Group;
@@ -66,7 +68,9 @@ class InventaireOuvertureResource extends Resource
 
     protected static ?string $pluralModelLabel = 'inventaires d\'ouverture';
 
-    public const AIDE = 'Le stock déjà en magasin au démarrage, avec son coût d\'achat hors taxe. La validation crée les nouveaux produits et fait entrer leur stock à ce coût, sans TVA ni fournisseur. L\'inventaire d\'ouverture se saisit jusqu\'à la première vente du magasin ; un produit oublié entre ensuite par une facture d\'achat.';
+    public const AIDE = 'Le stock déjà en magasin au démarrage, avec son coût d\'achat hors taxe. La validation crée les nouveaux produits et fait entrer leur stock à ce coût, sans TVA ni fournisseur ; un produit qui ne suit pas son stock ne reçoit que ce coût. L\'inventaire d\'ouverture se saisit jusqu\'à la première vente du magasin ; un produit oublié entre ensuite par une facture d\'achat.';
+
+    public const AIDE_SANS_SUIVI_DU_STOCK = 'Ne suit pas son stock : rien n\'entre en stock, le produit ne reçoit que son coût de départ.';
 
     /**
      * Le menu reste tant que le magasin n'a pas vendu, puis seulement pour
@@ -218,7 +222,10 @@ class InventaireOuvertureResource extends Resource
                         TextEntry::make('description')->label('Produit'),
                         TextEntry::make('quantite')->label('Quantité'),
                         TextEntry::make('cout_unitaire_ht')->label('Coût unitaire HT')->money('EUR'),
-                        TextEntry::make('valeur_ht')->label('Valeur HT')->money('EUR'),
+                        TextEntry::make('valeur_ht')
+                            ->label('Valeur du stock HT')
+                            ->money('EUR')
+                            ->helperText(fn (LigneInventaireOuverture $record): ?string => $record->suivi_stock ? null : self::AIDE_SANS_SUIVI_DU_STOCK),
                     ])
                     ->columns(5),
             ]),
@@ -239,7 +246,7 @@ class InventaireOuvertureResource extends Resource
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                self::actionSupprimer(Tables\Actions\DeleteAction::make()),
                 self::actionValider(Tables\Actions\Action::make('valider')),
             ])
             // Aucune action groupée : un inventaire validé ne se supprime
@@ -279,6 +286,27 @@ class InventaireOuvertureResource extends Resource
                     $action->redirect(self::getUrl('view', ['record' => $inventaire]));
                 });
             });
+    }
+
+    /**
+     * « Supprimer », depuis la liste ou la page de modification d'un
+     * brouillon : par l'action du domaine, qui relit l'inventaire sous son
+     * verrou (voir SupprimerInventaireOuvertureAction), pour qu'un
+     * brouillon validé entre-temps par une autre personne reste validé,
+     * et que la page dise pourquoi.
+     *
+     * @template TAction of DeleteAction|Tables\Actions\DeleteAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function actionSupprimer(DeleteAction|Tables\Actions\DeleteAction $action): DeleteAction|Tables\Actions\DeleteAction
+    {
+        return $action->using(fn (InventaireOuverture $record): bool => static::executerOuInterrompre(function () use ($record): bool {
+            app(SupprimerInventaireOuvertureAction::class)->handle(auth()->user(), $record);
+
+            return true;
+        }));
     }
 
     public static function getPages(): array

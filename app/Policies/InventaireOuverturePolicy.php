@@ -15,7 +15,8 @@ use App\Models\User;
  * sa validation crée des produits et fait entrer du stock, et seulement
  * jusqu'à la première vente du magasin (voir Magasin::aVendu()) ; validé,
  * il ne se modifie ni ne se supprime plus. Un brouillon resté après la
- * première vente se supprime encore, sans rien créer.
+ * première vente se supprime encore, sans rien créer (voir
+ * SupprimerInventaireOuvertureAction).
  *
  * Le propriétaire et les responsables du magasin ont toujours ces
  * autorisations ; un expert-comptable le consulte sans jamais le saisir

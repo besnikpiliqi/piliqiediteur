@@ -220,13 +220,15 @@ class ProduitResource extends Resource
 
     /**
      * La fiche d'un produit existant, la seule page de formulaire de cette
-     * ressource : tout s'y modifie, sauf son fournisseur et ses données
-     * d'achat (coût moyen, stock), seulement affichés, que seuls les
-     * achats, les retours et les inventaires font évoluer. Un produit reçu
-     * sur une facture d'achat récupérée automatiquement garde aussi ce que
-     * son fournisseur en dit (voir Produit::vientDUneFactureAchatApi()) :
-     * ces champs-là restent affichés mais ne se modifient pas. Son prix de
-     * vente, sa TVA et le suivi de son stock restent ceux du magasin.
+     * ressource : tout s'y modifie, sauf ce qui n'y est qu'affiché : son
+     * fournisseur, celui de son dernier achat validé ; son coût moyen, que
+     * seuls les achats, les retours au fournisseur et les inventaires font
+     * évoluer ; son stock, que tiennent ses mouvements (ventes, retours,
+     * achats, inventaires). Un produit reçu sur une facture d'achat
+     * récupérée automatiquement garde aussi ce que son fournisseur en dit
+     * (voir Produit::vientDUneFactureAchatApi()) : ces champs-là restent
+     * affichés mais ne se modifient pas. Son prix de vente, sa TVA et le
+     * suivi de son stock restent ceux du magasin.
      */
     public static function form(Form $form): Form
     {

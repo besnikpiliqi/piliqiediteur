@@ -30,7 +30,16 @@ return new class extends Migration
             // centime : le coût moyen de départ du produit, sans TVA ni
             // fournisseur.
             $table->decimal('cout_unitaire_ht', 12, 2);
-            // Quantité x coût unitaire, exacte au centime.
+            // Le produit suit-il son stock ? Lu sur sa fiche à chaque
+            // enregistrement du brouillon, puis, définitivement, à la
+            // validation, sous le verrou du produit (voir
+            // ConstructeurLigneInventaire) : seule une ligne qui le suit
+            // fait entrer son stock ; une autre ne donne au produit que son
+            // coût de départ.
+            $table->boolean('suivi_stock');
+            // La valeur du stock que la ligne fait entrer : quantité x coût
+            // unitaire, exacte au centime, ou zéro pour un produit qui ne
+            // suit pas son stock.
             $table->decimal('valeur_ht', 14, 2);
             $table->unsignedSmallInteger('ordre')->default(0);
             $table->timestamps();

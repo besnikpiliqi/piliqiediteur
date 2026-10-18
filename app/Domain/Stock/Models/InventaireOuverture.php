@@ -20,7 +20,12 @@ use LogicException;
  * aucun effet ; sa validation crée ses nouveaux produits, fait entrer leur
  * stock au coût saisi, sans TVA ni fournisseur, lui donne son numéro et
  * s'inscrit au journal d'audit (voir ValiderInventaireOuvertureAction).
- * Validé, il ne se modifie ni ne se supprime plus jamais, ni ses lignes.
+ * Validé, il ne se modifie ni ne se supprime plus jamais, ni ses lignes :
+ * ses actions le relisent sous son verrou avant de le modifier ou de le
+ * supprimer (voir ModifierInventaireOuvertureAction et
+ * SupprimerInventaireOuvertureAction), et ce modèle refuse en plus
+ * d'écrire ou d'effacer un inventaire validé en base, même lu avant sa
+ * validation.
  *
  * L'inventaire complet (comptage, ajustements, import) reste à l'étape 7
  * de la feuille de route.
@@ -65,17 +70,23 @@ class InventaireOuverture extends Model
             $inventaire->statut ??= StatutInventaireOuverture::Brouillon;
         });
 
-        static::updating(function (InventaireOuverture $inventaire): void {
-            if ($inventaire->getOriginal('statut') === StatutInventaireOuverture::Valide) {
-                throw new LogicException(self::REFUS_VALIDE);
-            }
-        });
+        static::updating(fn (InventaireOuverture $inventaire) => $inventaire->verifierQuIlEstEncoreUnBrouillon());
+        static::deleting(fn (InventaireOuverture $inventaire) => $inventaire->verifierQuIlEstEncoreUnBrouillon());
+    }
 
-        static::deleting(function (InventaireOuverture $inventaire): void {
-            if ($inventaire->getOriginal('statut') === StatutInventaireOuverture::Valide) {
-                throw new LogicException(self::REFUS_VALIDE);
-            }
-        });
+    /**
+     * Relu en base, et non sur ce modèle, qui peut avoir été lu avant une
+     * validation faite depuis : un inventaire validé ne s'écrit ni ne
+     * s'efface plus. La validation elle-même passe, l'inventaire étant
+     * encore un brouillon en base quand elle l'enregistre.
+     *
+     * @throws LogicException
+     */
+    private function verifierQuIlEstEncoreUnBrouillon(): void
+    {
+        if (static::query()->whereKey($this->getKey())->value('statut') === StatutInventaireOuverture::Valide) {
+            throw new LogicException(self::REFUS_VALIDE);
+        }
     }
 
     public function lignes(): HasMany

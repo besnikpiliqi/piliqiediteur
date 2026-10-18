@@ -37,8 +37,10 @@ use LogicException;
  * inventaire d'ouverture : toute autre création est refusée ici même,
  * quel que soit le code qui la tente (voir OrigineDesProduits). Il se
  * modifie ensuite dans « Produits », sauf son fournisseur et ses données
- * d'achat (coût moyen, stock), que seuls les achats, les retours et les
- * inventaires font évoluer.
+ * d'achat (coût moyen, quantités reçues), que seuls les achats, les
+ * retours et les inventaires font évoluer, et son stock, que tiennent ses
+ * mouvements (ventes, retours, achats, inventaires, voir
+ * StockLedgerService), sans jamais se saisir.
  *
  * Son taux de TVA est un paramètre ayant un impact sur la conformité :
  * chaque changement s'inscrit au journal des événements du magasin (JET

@@ -25,10 +25,11 @@ return new class extends Migration
             $table->string('statut', 20)->default('brouillon');
             $table->timestamp('date_validation')->nullable();
             $table->text('notes')->nullable();
-            // La valeur hors taxe du stock inventorié : la somme exacte, en
-            // centimes, de la valeur de ses lignes (voir
-            // ConstructeurLigneInventaire), jamais une somme faite par la
-            // base.
+            // La valeur hors taxe du stock que l'inventaire fait entrer : la
+            // somme exacte, en centimes, de la valeur de ses lignes, celles
+            // des produits qui ne suivent pas leur stock n'en ayant aucune
+            // (voir ConstructeurLigneInventaire), jamais une somme faite par
+            // la base.
             $table->decimal('valeur_ht', 14, 2)->default(0);
             $table->timestamps();
 

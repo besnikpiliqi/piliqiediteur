@@ -25,7 +25,7 @@ class EditInventaireOuverture extends EditRecord
     {
         return [
             InventaireOuvertureResource::actionValider(Actions\Action::make('valider')),
-            Actions\DeleteAction::make(),
+            InventaireOuvertureResource::actionSupprimer(Actions\DeleteAction::make()),
         ];
     }
 

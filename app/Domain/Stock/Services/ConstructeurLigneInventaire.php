@@ -8,7 +8,9 @@ use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Stock\Models\InventaireOuverture;
+use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Tenancy\Services\TenantContext;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;
 use LogicException;
@@ -31,8 +33,15 @@ use LogicException;
  * de la casse.
  *
  * Chaque ligne porte une quantité entière d'au moins un article et un coût
- * unitaire HT au centime, jamais négatif : sa valeur est quantité x coût,
- * exacte en centimes, et celle de l'inventaire la somme de ses lignes.
+ * unitaire HT au centime, jamais négatif. Elle retient si son produit suit
+ * son stock : seule une telle ligne fait entrer son stock, et sa valeur est
+ * quantité x coût, exacte en centimes ; un produit qui ne suit pas son
+ * stock ne reçoit que son coût de départ, et sa ligne n'a aucune valeur de
+ * stock (voir StockLedgerService::entrerALInventaireDOuverture()). La
+ * valeur de l'inventaire est la somme de ses lignes : la valeur du stock
+ * qu'il fait entrer. Dans un brouillon, le suivi du stock se lit sur la
+ * fiche du produit à chaque enregistrement ; la validation le relit, sous
+ * le verrou du produit, et fixe les valeurs (voir valoriser()).
  */
 class ConstructeurLigneInventaire
 {
@@ -74,7 +83,6 @@ class ConstructeurLigneInventaire
         foreach (array_values($lignes) as $ordre => $donnees) {
             $quantite = QuantiteEntiere::depuisSaisie($donnees['quantite'] ?? null);
             $cout = $this->coutUnitaire($donnees['cout_unitaire_ht'] ?? null);
-            $valeur = $this->valeur($quantite, $cout);
 
             if (filled($donnees['produit_id'] ?? null)) {
                 $produit = $this->produitJamaisRecu($donnees['produit_id']);
@@ -101,6 +109,9 @@ class ConstructeurLigneInventaire
                 $fiche = array_filter($produit->only(ConstructeurLigneAchat::ATTRIBUTS_DU_PRODUIT), fn (mixed $valeur): bool => filled($valeur));
             }
 
+            $suiviStock = (bool) $produit->suivi_stock;
+            $valeur = $this->valeurDuStock($quantite, $cout, $suiviStock);
+
             $inventaire->lignes()->create([
                 'produit_id' => $produit->exists ? $produit->getKey() : null,
                 'nouveau_produit' => $fiche,
@@ -108,6 +119,7 @@ class ConstructeurLigneInventaire
                 'reference' => $produit->reference,
                 'quantite' => $quantite,
                 'cout_unitaire_ht' => $this->calculateur->enDecimal($cout),
+                'suivi_stock' => $suiviStock,
                 'valeur_ht' => $this->calculateur->enDecimal($valeur),
                 'ordre' => $ordre,
             ]);
@@ -115,11 +127,35 @@ class ConstructeurLigneInventaire
             $valeurDeLInventaire += $valeur;
         }
 
-        if ($valeurDeLInventaire > self::VALEUR_MAXIMUM) {
-            throw new InvalidArgumentException('Cet inventaire d\'ouverture dépasse ce que le logiciel accepte : répartissez son stock sur plusieurs inventaires.');
+        $this->enregistrerLaValeur($inventaire, $valeurDeLInventaire);
+    }
+
+    /**
+     * À la validation, une fois les produits de ses lignes verrouillés ou
+     * créés (voir ValiderInventaireOuvertureAction), avant que l'inventaire
+     * ne passe validé : chaque ligne reprend le suivi du stock de son
+     * produit tel qu'il est alors, celui avec lequel son stock entre, et la
+     * valeur qui en découle ; l'inventaire, la somme de ses lignes. Ce que
+     * dit l'inventaire validé est ainsi ce qui entre en stock.
+     *
+     * @param  Collection<int, LigneInventaireOuverture>  $lignes  ses lignes, chacune avec son produit
+     *
+     * @throws InvalidArgumentException
+     */
+    public function valoriser(InventaireOuverture $inventaire, Collection $lignes): void
+    {
+        $valeurDeLInventaire = 0;
+
+        foreach ($lignes as $ligne) {
+            $suiviStock = (bool) $ligne->produit->suivi_stock;
+            $valeur = $this->valeurDuStock($ligne->quantite, SaisieDecimale::enCentiemes($ligne->cout_unitaire_ht), $suiviStock);
+
+            $ligne->update(['suivi_stock' => $suiviStock, 'valeur_ht' => $this->calculateur->enDecimal($valeur)]);
+
+            $valeurDeLInventaire += $valeur;
         }
 
-        $inventaire->forceFill(['valeur_ht' => $this->calculateur->enDecimal($valeurDeLInventaire)])->save();
+        $this->enregistrerLaValeur($inventaire, $valeurDeLInventaire);
     }
 
     /**
@@ -210,11 +246,13 @@ class ConstructeurLigneInventaire
     }
 
     /**
-     * Quantité x coût unitaire, en centimes, dans les limites des colonnes.
+     * La valeur du stock qu'une ligne fait entrer, en centimes : quantité x
+     * coût unitaire, dans les limites des colonnes ; zéro pour un produit
+     * qui ne suit pas son stock, dont rien n'entre en stock.
      *
      * @throws InvalidArgumentException
      */
-    private function valeur(int $quantite, int $cout): int
+    private function valeurDuStock(int $quantite, int $cout, bool $suiviStock): int
     {
         $valeur = $quantite * $cout;
 
@@ -222,6 +260,20 @@ class ConstructeurLigneInventaire
             throw new InvalidArgumentException('Cette ligne dépasse ce que le logiciel accepte : réduisez sa quantité ou son coût.');
         }
 
-        return $valeur;
+        return $suiviStock ? $valeur : 0;
+    }
+
+    /**
+     * La valeur de l'inventaire, en centimes, dans la limite de sa colonne.
+     *
+     * @throws InvalidArgumentException
+     */
+    private function enregistrerLaValeur(InventaireOuverture $inventaire, int $valeur): void
+    {
+        if ($valeur > self::VALEUR_MAXIMUM) {
+            throw new InvalidArgumentException('Cet inventaire d\'ouverture dépasse ce que le logiciel accepte : répartissez son stock sur plusieurs inventaires.');
+        }
+
+        $inventaire->forceFill(['valeur_ht' => $this->calculateur->enDecimal($valeur)])->save();
     }
 }

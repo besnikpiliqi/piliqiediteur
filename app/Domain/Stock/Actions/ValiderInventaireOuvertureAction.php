@@ -31,13 +31,19 @@ use LogicException;
  * produits naissent, dans l'ordre de ses lignes et dans le contexte
  * d'origine d'un inventaire d'ouverture (voir OrigineDesProduits), à leur
  * coût saisi, sans fournisseur ; chaque ligne fait entrer son stock au
- * coût saisi, sans TVA (voir StockLedgerService::entrerALInventaireDOuverture()) ;
- * l'inventaire reçoit son numéro dans la série INV du magasin ; et la
- * validation s'inscrit au journal d'audit de la société, dans la chaîne
- * du magasin : son numéro, sa valeur hors taxe et, pour chaque ligne, la
- * référence, la quantité, le coût unitaire et si le produit est né de
- * l'inventaire. Un refus (référence prise entre-temps, produit reçu ou
- * archivé depuis la saisie) annule toute la validation.
+ * coût saisi, sans TVA, si son produit suit son stock, un produit qui ne
+ * le suit pas ne recevant que ce coût (voir
+ * StockLedgerService::entrerALInventaireDOuverture()) ; chaque ligne
+ * garde alors le suivi du stock de son produit et la valeur du stock
+ * qu'elle fait entrer, l'inventaire leur somme (voir
+ * ConstructeurLigneInventaire::valoriser()) ; l'inventaire reçoit son
+ * numéro dans la série INV du magasin ; et la validation s'inscrit au
+ * journal d'audit de la société, dans la chaîne du magasin : son numéro,
+ * la valeur hors taxe du stock entré et, pour chaque ligne, la référence,
+ * la quantité inventoriée, si elle est entrée en stock (le produit suit
+ * son stock), le coût unitaire et si le produit est né de l'inventaire.
+ * Un refus (référence prise entre-temps, produit reçu ou archivé depuis
+ * la saisie) annule toute la validation.
  *
  * Un inventaire d'ouverture se valide jusqu'à la première vente du
  * magasin (voir InventaireOuverture::verifierQuIlSeSaisitEncore()) : le
@@ -127,14 +133,15 @@ class ValiderInventaireOuvertureAction
         $lignes->whereNotNull('produit_id')->each(fn (LigneInventaireOuverture $ligne): Produit => $this->constructeurLignes->produitJamaisRecu($ligne->produit_id));
         $produitsCrees = $lignes->whereNull('produit_id')->map(fn (LigneInventaireOuverture $ligne): int => $this->creerLeProduit($ligne))->values()->all();
 
+        $lignes = $inventaire->lignes()->with('produit')->get();
+        $this->constructeurLignes->valoriser($inventaire, $lignes);
+
         $inventaire->forceFill([
             'numero' => $this->numerotation->suivant($magasin, TypeDocument::InventaireOuverture, now()->format('Y')),
             'statut' => StatutInventaireOuverture::Valide,
             'date_validation' => now(),
             'valide_par' => $compte->getKey(),
         ])->save();
-
-        $lignes = $inventaire->lignes()->with('produit')->get();
 
         foreach ($lignes as $ligne) {
             $this->stock->entrerALInventaireDOuverture($ligne->produit, $ligne->quantite, (float) $ligne->cout_unitaire_ht, $inventaire, "Inventaire d'ouverture {$inventaire->numero}");
@@ -146,6 +153,7 @@ class ValiderInventaireOuvertureAction
             'lignes' => $lignes->map(fn (LigneInventaireOuverture $ligne): array => [
                 'reference' => $ligne->reference,
                 'quantite' => $ligne->quantite,
+                'suivi_stock' => $ligne->suivi_stock,
                 'cout_unitaire_ht' => $ligne->cout_unitaire_ht,
                 'produit_cree' => in_array($ligne->getKey(), $produitsCrees, true),
             ])->values()->all(),

@@ -16,7 +16,10 @@ use LogicException;
  * brouillon garde seulement la fiche (nouveau_produit) jusqu'à la
  * validation de l'inventaire, qui le crée (voir
  * ValiderInventaireOuvertureAction). Jamais les deux à la fois, jamais
- * aucun des deux. Une ligne d'un inventaire validé ne change plus.
+ * aucun des deux. Un produit qui ne suit pas son stock (suivi_stock) n'en
+ * reçoit que son coût de départ : rien n'entre en stock, et la ligne n'a
+ * aucune valeur de stock (voir ConstructeurLigneInventaire). Une ligne
+ * d'un inventaire validé ne change plus.
  */
 class LigneInventaireOuverture extends Model
 {
@@ -32,6 +35,7 @@ class LigneInventaireOuverture extends Model
         'reference',
         'quantite',
         'cout_unitaire_ht',
+        'suivi_stock',
         'valeur_ht',
         'ordre',
     ];
@@ -40,6 +44,7 @@ class LigneInventaireOuverture extends Model
         'nouveau_produit' => 'array',
         'quantite' => 'integer',
         'cout_unitaire_ht' => 'decimal:2',
+        'suivi_stock' => 'boolean',
         'valeur_ht' => 'decimal:2',
     ];
 

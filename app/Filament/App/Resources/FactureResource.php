@@ -148,7 +148,7 @@ class FactureResource extends Resource
                     // Un client archivé ne reçoit plus de nouveau document,
                     // même si ceux qu'il a déjà le gardent (voir
                     // Facture::client() et AppServiceProvider::limiterLesChoixAuMagasin()).
-                    ->relationProposable('client', 'nom', ClientResource::COLONNES_DE_RECHERCHE)
+                    ->relationProposable('client', 'nom', ClientResource::colonnesDeRecherche())
                     ->searchable()
                     ->preload()
                     ->required()

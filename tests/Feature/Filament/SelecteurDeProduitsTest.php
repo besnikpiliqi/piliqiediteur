@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
@@ -154,24 +155,40 @@ class SelecteurDeProduitsTest extends TestCase
             ->assertCanSeeTableRecords([$enStock, $epuise, $negatif, $sansSuivi]);
     }
 
+    /**
+     * Un produit à zéro, ou en stock négatif après une vente sans stock
+     * (R1), est épuisé : sans l'autorisation de vendre sans stock, il reste
+     * visible, « Épuisé » sous son nom, mais ne se choisit ni d'un clic, ni
+     * par une sélection forgée, ni à la douchette. Le stock négatif garde
+     * « À régulariser » pour tous.
+     */
     public function test_un_produit_epuise_ne_se_selectionne_pas_sans_l_autorisation_meme_par_requete_forgee(): void
     {
         $magasin = $this->ouvrirLeMagasinEnTantQueProprietaire();
         $epuise = Produit::factory()->create(['nom' => 'Chargeur', 'reference' => 'CHG-1', 'suivi_stock' => true, 'stock_quantite' => 0]);
+        $negatif = Produit::factory()->create(['nom' => 'Housse', 'reference' => 'HOU-1', 'suivi_stock' => true, 'stock_quantite' => -2]);
         $refus = '« Chargeur » est épuisé : seule une personne autorisée à vendre sans stock peut le vendre.';
+        $refusDuNegatif = '« Housse » est épuisé : seule une personne autorisée à vendre sans stock peut le vendre.';
 
         $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur));
 
         Livewire::test(SelecteurDeProduits::class)
-            ->assertCanSeeTableRecords([$epuise])
+            ->assertCanSeeTableRecords([$epuise, $negatif])
             ->assertSee('Épuisé')
+            ->assertTableColumnHasDescription('nom', 'Épuisé', $epuise)
+            ->assertTableColumnHasDescription('nom', 'Épuisé', $negatif)
+            ->assertTableColumnHasDescription('stock_quantite', 'À régulariser', $negatif)
             ->call('basculer', $epuise->getKey())
             ->assertNotified($refus)
+            ->call('basculer', $negatif->getKey())
+            ->assertNotified($refusDuNegatif)
             ->assertSet('selection', []);
 
         $caisse = Livewire::test(Caisse::class)
             ->call('recevoirLesProduitsChoisis', [['produit_id' => $epuise->getKey(), 'quantite' => 1]])
             ->assertNotified($refus)
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $negatif->getKey(), 'quantite' => 1]])
+            ->assertNotified($refusDuNegatif)
             ->set('data.douchette', 'CHG-1')
             ->call('scannerUneReference')
             ->assertNotified($refus);
@@ -180,8 +197,94 @@ class SelecteurDeProduitsTest extends TestCase
         $this->actingAs($magasin->societe->proprietaire()->firstOrFail());
 
         Livewire::test(SelecteurDeProduits::class)
+            ->assertTableColumnDoesNotHaveDescription('nom', 'Épuisé', $negatif)
+            ->assertTableColumnHasDescription('stock_quantite', 'À régulariser', $negatif)
             ->call('basculer', $epuise->getKey())
             ->assertSet('selection', [['produit_id' => $epuise->getKey(), 'quantite' => 1]]);
+    }
+
+    /**
+     * La liste « Produit » d'une ligne déjà posée applique le même refus
+     * que le tableau : sans l'autorisation de vendre sans stock, choisir un
+     * produit épuisé le dit et la ligne garde son produit et son prix, puis
+     * le brouillon s'enregistre avec eux ; une personne autorisée change le
+     * produit de la ligne.
+     */
+    public function test_la_liste_produit_d_une_ligne_refuse_un_produit_epuise_sans_l_autorisation(): void
+    {
+        $magasin = $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $cable = Produit::factory()->create(['nom' => 'Câble', 'reference' => 'CAB-1', 'prix_vente_ttc' => '12.00', 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 5]);
+        $chargeur = Produit::factory()->create(['nom' => 'Chargeur', 'reference' => 'CHG-1', 'prix_vente_ttc' => '30.00', 'taux_tva' => 20, 'suivi_stock' => true, 'stock_quantite' => 0]);
+        $client = Client::factory()->create();
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $this->actingAs($vendeur);
+
+        $page = Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => $client->getKey()])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]]);
+        $cle = array_key_first($page->get('data.lignes'));
+
+        $page->set("data.lignes.{$cle}.produit_id", $chargeur->getKey())
+            ->assertNotified('« Chargeur » est épuisé : seule une personne autorisée à vendre sans stock peut le vendre.')
+            ->assertSet("data.lignes.{$cle}.produit_id", $cable->getKey())
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '12.00')
+            ->call('create')
+            ->assertHasNoFormErrors();
+        $this->assertSame([$cable->getKey()], Facture::query()->sole()->lignes->pluck('produit_id')->all());
+
+        $this->actingAs($magasin->societe->proprietaire()->firstOrFail());
+
+        $page = Livewire::test(CreateFacture::class)
+            ->fillForm(['client_id' => $client->getKey()])
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->getKey(), 'quantite' => 1]]);
+        $cle = array_key_first($page->get('data.lignes'));
+
+        $page->set("data.lignes.{$cle}.produit_id", $chargeur->getKey())
+            ->assertSet("data.lignes.{$cle}.produit_id", $chargeur->getKey())
+            ->assertSet("data.lignes.{$cle}.prix_unitaire_ttc", '30.00');
+    }
+
+    /**
+     * Le stock restant, le seuil d'alerte, le fournisseur et la date
+     * d'entrée ne se montrent qu'à qui voit les fiches des produits : un
+     * vendeur à qui « Produits et services : voir » est décoché vend
+     * toujours, voit la référence, le nom et le prix, et « Épuisé » sous un
+     * produit qu'il ne peut pas vendre, mais aucune de ces informations,
+     * même en demandant leurs colonnes.
+     */
+    public function test_le_stock_et_le_fournisseur_ne_s_affichent_qu_a_qui_voit_les_fiches_des_produits(): void
+    {
+        $magasin = $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $fournisseur = Fournisseur::factory()->create(['nom' => 'Grossiste Secret']);
+        $this->travelTo(CarbonImmutable::parse('2026-09-03 10:00'));
+        $cable = Produit::factory()->create(['nom' => 'Câble', 'reference' => 'CAB-1', 'prix_vente_ttc' => '12.00', 'suivi_stock' => true, 'stock_quantite' => 37, 'seuil_alerte' => 11, 'fournisseur_id' => $fournisseur->getKey()]);
+        $epuise = Produit::factory()->create(['nom' => 'Chargeur', 'suivi_stock' => true, 'stock_quantite' => 0]);
+        $this->travelBack();
+        $colonnes = ['stock_quantite', 'seuil_alerte', 'fournisseur.nom', 'created_at'];
+
+        $tableau = Livewire::test(SelecteurDeProduits::class)
+            ->set('toggledTableColumns', ['seuil_alerte' => true, 'fournisseur' => ['nom' => true], 'created_at' => true]);
+        foreach ($colonnes as $colonne) {
+            $tableau->assertTableColumnVisible($colonne);
+        }
+        $tableau->assertSee(['Grossiste Secret', '03/09/2026'])
+            ->assertTableColumnFormattedStateSet('stock_quantite', '37', $cable)
+            ->assertTableColumnFormattedStateSet('seuil_alerte', '11', $cable);
+
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [PermissionRegistry::PRODUIT_VIEW]))));
+
+        $tableau = Livewire::test(SelecteurDeProduits::class)
+            ->set('toggledTableColumns', ['seuil_alerte' => true, 'fournisseur' => ['nom' => true], 'created_at' => true]);
+        foreach ($colonnes as $colonne) {
+            $tableau->assertTableColumnHidden($colonne);
+        }
+        $tableau->assertCanSeeTableRecords([$cable, $epuise])
+            ->assertSee(['CAB-1', 'Câble', '12,00 €'])
+            ->assertTableColumnHasDescription('nom', 'Épuisé', $epuise)
+            ->assertDontSee('Grossiste Secret')
+            ->assertDontSee('03/09/2026')
+            ->call('basculer', $cable->getKey())
+            ->assertSet('selection', [['produit_id' => $cable->getKey(), 'quantite' => 1]]);
     }
 
     /**

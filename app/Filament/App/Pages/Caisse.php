@@ -381,7 +381,7 @@ class Caisse extends Page implements HasForms
                     // archivage reste affiché, le temps d'en choisir un autre.
                     // La recherche cherche ce que cherche la loupe, sans
                     // casse ni accents.
-                    ->getSearchResultsUsing(fn (string $search) => RechercheSansAccents::appliquer(Client::query(), $search, ClientResource::COLONNES_DE_RECHERCHE)
+                    ->getSearchResultsUsing(fn (string $search) => RechercheSansAccents::appliquer(Client::query(), $search, ClientResource::colonnesDeRecherche())
                         ->orderBy('nom')
                         ->orderBy('id')
                         ->limit(50)

@@ -47,11 +47,17 @@ class RemisesEtPrixTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * Le câble ne suit pas son stock : un vendeur, qui n'est pas autorisé
+     * à vendre sans stock, le choisit dans la liste « Produit » de sa
+     * ligne, qui refuse un produit épuisé (voir
+     * AjouteDesLignesDeVente::refusDuProduit()).
+     */
     public function test_un_vendeur_n_accorde_aucune_remise_meme_par_requete_forgee(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
-        $cable = $this->produit('Câble USB', '12.00');
+        $cable = $this->produit('Câble USB', '12.00', suiviDuStock: false);
 
         $this->assertThrows(
             fn () => app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 1, 'remise_pourcentage' => 10]]),

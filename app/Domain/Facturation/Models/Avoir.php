@@ -313,9 +313,28 @@ class Avoir extends Model implements DocumentEnvoyable
             return 0;
         }
 
-        $calculateur = app(CalculateurLigne::class);
+        return $this->creditApres($this->allocations()->pluck('montant_alloue'));
+    }
 
-        return $calculateur->enCentiemes($this->total_ttc) - (int) $this->allocations()->pluck('montant_alloue')
-            ->sum(fn (string $montant): int => $calculateur->enCentiemes($montant));
+    /**
+     * Le crédit de cet avoir émis qui reste après ces imputations, leurs
+     * montants tels qu'enregistrés, en centimes : son total TTC moins
+     * leur somme, faite en centimes (voir creditEnCentimes()). Le crédit
+     * de tous les clients d'une page se calcule ainsi d'un coup, les
+     * imputations lues avec les avoirs (voir
+     * Client::creditsDAvoirEnCentimes()).
+     *
+     * @param  iterable<string>  $montantsImputes
+     */
+    public function creditApres(iterable $montantsImputes): int
+    {
+        $calculateur = app(CalculateurLigne::class);
+        $credit = $calculateur->enCentiemes($this->total_ttc);
+
+        foreach ($montantsImputes as $montant) {
+            $credit -= $calculateur->enCentiemes($montant);
+        }
+
+        return $credit;
     }
 }

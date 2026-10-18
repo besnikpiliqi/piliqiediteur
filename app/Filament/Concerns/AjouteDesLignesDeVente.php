@@ -139,7 +139,10 @@ trait AjouteDesLignesDeVente
      * produit (ou une unité de plus à sa ligne) sans ouvrir le tableau des
      * produits (voir RecoitLesProduitsChoisis::scannerUneReference()) ;
      * Entrée ne valide jamais le formulaire de la page. Le champ n'est
-     * jamais enregistré.
+     * jamais enregistré ni validé : un code qu'aucun produit ne porte y
+     * reste, quelle que soit sa longueur (un code GS1 DataMatrix dépasse
+     * souvent 60 caractères), sans jamais arrêter l'encaissement ni
+     * l'enregistrement du document.
      */
     private static function champDeLaDouchette(): TextInput
     {
@@ -148,7 +151,6 @@ trait AjouteDesLignesDeVente
             ->placeholder('Code-barres ou référence exacte, puis Entrée')
             ->prefixIcon('heroicon-m-qr-code')
             ->autocomplete(false)
-            ->maxLength(60)
             ->dehydrated(false)
             ->extraInputAttributes(['x-on:keydown.enter.prevent' => '$wire.scannerUneReference()']);
     }
@@ -282,10 +284,23 @@ trait AjouteDesLignesDeVente
                 ->live()
                 ->columnSpan(2)
                 ->visible(fn (Get $get): bool => ! self::estUneLigneDeService($get))
-                ->afterStateUpdated(function (?int $state, Set $set) {
+                ->afterStateUpdated(function (?int $state, mixed $old, Set $set) {
                     $produit = $state ? Produit::find($state) : null;
 
                     if ($produit === null) {
+                        return;
+                    }
+
+                    // Comme dans le tableau des produits, même par une
+                    // requête forgée : un produit épuisé ne se choisit pas
+                    // sans l'autorisation de vendre sans stock (R1), et la
+                    // ligne garde son produit d'avant.
+                    $refus = self::refusDuProduit($produit, self::peutVendreSansStock());
+
+                    if ($refus !== null) {
+                        $set('produit_id', $old);
+                        Notification::make()->title($refus)->danger()->send();
+
                         return;
                     }
 
@@ -1065,11 +1080,11 @@ trait AjouteDesLignesDeVente
     /**
      * Comme le bouton natif du Repeater : la nouvelle ligne reçoit les
      * valeurs par défaut de ses champs (quantité 1, taux du territoire du
-     * magasin...), puis celles données ici.
+     * magasin...), puis celles données.
      *
      * @param  array<string, mixed>  $valeurs
      */
-    private static function ajouterUneLigne(HasForms $livewire, array $valeurs = []): void
+    private static function ajouterUneLigne(HasForms $livewire, array $valeurs): void
     {
         /** @var Repeater $lignes */
         $lignes = $livewire->getForm('form')->getComponent('data.lignes');
@@ -1079,11 +1094,9 @@ trait AjouteDesLignesDeVente
         $lignes->state([...($lignes->getState() ?? []), $uuid => []]);
         $lignes->getChildComponentContainer($uuid)->fill();
 
-        if ($valeurs !== []) {
-            $etat = $lignes->getState();
-            $etat[$uuid] = [...$etat[$uuid], ...$valeurs];
-            $lignes->state($etat);
-        }
+        $etat = $lignes->getState();
+        $etat[$uuid] = [...$etat[$uuid], ...$valeurs];
+        $lignes->state($etat);
 
         $lignes->callAfterStateUpdated();
     }

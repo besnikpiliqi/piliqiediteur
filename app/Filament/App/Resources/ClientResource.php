@@ -2,6 +2,7 @@
 
 namespace App\Filament\App\Resources;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
@@ -48,13 +49,6 @@ class ClientResource extends Resource
     private const MESSAGE_PROPRE_ENTREPRISE = 'Ce SIREN est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
 
     private const MESSAGE_PROPRE_NUMERO_TVA = 'Ce n° de TVA est celui de votre propre entreprise : une opération entre magasins d\'une même société n\'est pas une vente.';
-
-    /**
-     * Ce que cherche le texte tapé pour trouver un client d'une vente,
-     * dans la liste du champ « Client » comme dans le tableau de sa loupe
-     * (voir SelecteurDeClients), sans casse ni accents.
-     */
-    public const COLONNES_DE_RECHERCHE = ['nom', 'siren', 'siret', 'numero_tva', 'email', 'telephone', 'ville', 'code_postal'];
 
     /**
      * Un client choisi qui n'est pas, ou plus, proposé pour une vente :
@@ -435,6 +429,35 @@ class ClientResource extends Resource
             'view' => Pages\ViewClient::route('/{record}'),
             'edit' => Pages\EditClient::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * La personne connectée voit-elle les fiches des clients du magasin
+     * actif (« Clients : voir », voir ClientPolicy::viewAny()) ? Sans, une
+     * vente ne lui montre que le nom et le type des clients : ni leurs
+     * identifiants, ni leurs coordonnées, ni leur crédit d'avoir, ni leurs
+     * achats (voir SelecteurDeClients).
+     */
+    public static function voitLesFichesDesClients(): bool
+    {
+        return auth()->user()?->can(PermissionRegistry::CLIENT_VIEW) ?? false;
+    }
+
+    /**
+     * Ce que cherche le texte tapé pour trouver un client d'une vente,
+     * dans la liste du champ « Client » comme dans le tableau de sa loupe
+     * (voir SelecteurDeClients), sans casse ni accents : son nom, ses
+     * identifiants et ses coordonnées pour qui voit les fiches des clients,
+     * son nom seul pour les autres, à qui une recherche par e-mail ou par
+     * téléphone dirait à quel client ils appartiennent.
+     *
+     * @return list<string>
+     */
+    public static function colonnesDeRecherche(): array
+    {
+        return self::voitLesFichesDesClients()
+            ? ['nom', 'siren', 'siret', 'numero_tva', 'email', 'telephone', 'ville', 'code_postal']
+            : ['nom'];
     }
 
     /**

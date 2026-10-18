@@ -240,7 +240,7 @@ class AppServiceProvider extends ServiceProvider
      * Proposable), et la recherche ignore la casse et les accents (voir
      * RechercheSansAccents) ; elle cherche dans l'attribut affiché, ou dans
      * les colonnes données (celles du client d'une vente, voir
-     * ClientResource::COLONNES_DE_RECHERCHE).
+     * ClientResource::colonnesDeRecherche()).
      *
      * La valeur déjà enregistrée sur la fiche modifiée n'est jamais
      * revérifiée : elle n'a pas été choisie dans ce formulaire, et une

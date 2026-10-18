@@ -34,6 +34,12 @@ use Livewire\Component;
  * professionnels et « avec un crédit d'avoir » ; et « Nouveau client »
  * pour qui peut en créer.
  *
+ * Les identifiants, les coordonnées, le crédit d'avoir et le dernier achat
+ * de chaque client, et la recherche ou le filtre qui les lisent, ne
+ * servent qu'à qui voit les fiches des clients (« Clients : voir », voir
+ * ClientResource::voitLesFichesDesClients()) : les autres ne voient que le
+ * nom et le type des clients, et ne cherchent que par le nom.
+ *
  * Un clic sur une rangée choisit le client : il part à la page (voir
  * RecoitLeClientChoisi), qui le revérifie, le pose dans le formulaire et
  * ferme la fenêtre ; à la caisse, son mode de paiement préféré se
@@ -49,8 +55,9 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
     public const EVENEMENT = 'client-choisi';
 
     /**
-     * Le crédit d'avoir des clients affichés, lu une fois par requête
-     * (voir credits()).
+     * Le crédit d'avoir des clients affichés, lu une fois par requête, en
+     * deux lectures quel que soit le nombre de clients (voir
+     * Client::creditsDAvoirEnCentimes()).
      *
      * @var array<int, int>|null
      */
@@ -67,6 +74,8 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
 
     public function table(Table $table): Table
     {
+        $voitLesFiches = ClientResource::voitLesFichesDesClients();
+
         return $table
             ->query(fn (): Builder => Client::query())
             // Avant le tri choisi : le client comptoir reste en tête. Seul
@@ -79,28 +88,30 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
             ->paginated([25, 50, 100])
             ->defaultPaginationPageOption(25)
             ->recordAction('choisir')
-            ->searchPlaceholder('Nom, SIREN, n° de TVA, e-mail, téléphone, ville...')
+            ->searchPlaceholder($voitLesFiches ? 'Nom, SIREN, n° de TVA, e-mail, téléphone, ville...' : 'Nom du client')
             ->emptyStateHeading('Aucun client ne correspond.')
             ->columns([
                 TextColumn::make('nom')
                     ->label('Nom')
                     ->description(fn (Client $client): ?string => $client->estComptoir() ? 'Vente anonyme' : null)
-                    ->searchable(query: RechercheSansAccents::dans(...ClientResource::COLONNES_DE_RECHERCHE))
+                    ->searchable(query: RechercheSansAccents::dans(...ClientResource::colonnesDeRecherche()))
                     ->sortable(),
                 TextColumn::make('type_client')->label('Type')->badge(),
                 TextColumn::make('siren')
                     ->label('SIREN ou SIRET')
                     ->state(fn (Client $client): ?string => $client->siret ?? $client->siren)
-                    ->placeholder('—'),
-                TextColumn::make('numero_tva')->label('N° de TVA')->placeholder('—'),
-                TextColumn::make('email')->label('E-mail')->placeholder('—'),
-                TextColumn::make('telephone')->label('Téléphone')->placeholder('—'),
-                TextColumn::make('ville')->label('Ville')->placeholder('—'),
+                    ->placeholder('—')
+                    ->visible($voitLesFiches),
+                TextColumn::make('numero_tva')->label('N° de TVA')->placeholder('—')->visible($voitLesFiches),
+                TextColumn::make('email')->label('E-mail')->placeholder('—')->visible($voitLesFiches),
+                TextColumn::make('telephone')->label('Téléphone')->placeholder('—')->visible($voitLesFiches),
+                TextColumn::make('ville')->label('Ville')->placeholder('—')->visible($voitLesFiches),
                 TextColumn::make('credit_d_avoir')
                     ->label('Crédit d\'avoir')
                     ->state(fn (Client $client): ?string => ($credit = $this->credits()[$client->getKey()] ?? 0) > 0 ? app(CalculateurLigne::class)->enEuros($credit) : null)
                     ->placeholder('—')
-                    ->color('warning'),
+                    ->color('warning')
+                    ->visible($voitLesFiches),
                 // Celui d'une facture ou d'un ticket que la personne voit
                 // (voir Facture::scopeVisiblesPar()).
                 TextColumn::make('factures_max_date_emission')
@@ -108,6 +119,7 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
                     ->max(['factures' => fn (Builder $query): Builder => $query->visiblesPar(auth()->user())], 'date_emission')
                     ->date('d/m/Y')
                     ->placeholder('—')
+                    ->visible($voitLesFiches)
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->label('Créé le')
@@ -124,6 +136,7 @@ class SelecteurDeClients extends Component implements HasForms, HasTable
                 Filter::make('avec_credit')
                     ->label('Avec un crédit d\'avoir')
                     ->toggle()
+                    ->visible($voitLesFiches)
                     ->query(fn (Builder $query): Builder => $query->avecUnCreditDAvoir()),
             ])
             ->headerActions([

@@ -21,6 +21,7 @@ use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -210,6 +211,82 @@ class SelecteurDeClientsTest extends TestCase
     }
 
     /**
+     * Le crédit d'avoir de la page et le filtre « Avec un crédit d'avoir »
+     * se lisent en un nombre de requêtes qui ne dépend pas du nombre de
+     * clients ayant eu un avoir : trois clients de plus, l'un avec son
+     * crédit, l'autre dont le crédit a réglé un autre achat, ne coûtent
+     * aucune requête de plus, et les crédits restent exacts.
+     */
+    public function test_le_credit_d_avoir_et_son_filtre_se_lisent_en_un_nombre_fixe_de_requetes(): void
+    {
+        $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $produit = Produit::factory()->create(['prix_vente_ttc' => '33.33', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $avecCredit = $this->clientsAvecUnAvoir($produit, 'Avec crédit', 2);
+        $creditUtilise = $this->clientsAvecUnAvoir($produit, 'Crédit utilisé', 1);
+        foreach ($creditUtilise as $client) {
+            self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $produit->getKey(), 'quantite' => 1]]);
+        }
+        $avant = $this->requetesDuTableauEtDuFiltre();
+
+        $avecCredit = [...$avecCredit, ...$this->clientsAvecUnAvoir($produit, 'Autre crédit', 2)];
+        foreach ($this->clientsAvecUnAvoir($produit, 'Autre crédit utilisé', 1) as $client) {
+            self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $produit->getKey(), 'quantite' => 1]]);
+            $creditUtilise[] = $client;
+        }
+        $apres = $this->requetesDuTableauEtDuFiltre();
+
+        $this->assertSame($avant, $apres);
+        $tableau = Livewire::test(SelecteurDeClients::class);
+        foreach ($avecCredit as $client) {
+            $tableau->assertTableColumnFormattedStateSet('credit_d_avoir', '33,33 €', $client);
+        }
+        $tableau->filterTable('avec_credit')
+            ->assertCanSeeTableRecords($avecCredit)
+            ->assertCanNotSeeTableRecords($creditUtilise);
+    }
+
+    /**
+     * Sans « Clients : voir », la loupe ne montre que le nom et le type des
+     * clients : ni identifiants, ni coordonnées, ni crédit d'avoir, ni
+     * dernier achat, ni le filtre du crédit ; elle ne cherche que par le
+     * nom, comme la liste du champ « Client » de la caisse, des factures et
+     * des devis : l'e-mail d'un client ne le retrouve pas.
+     */
+    public function test_sans_l_autorisation_de_voir_les_clients_la_loupe_ne_montre_ni_coordonnees_ni_recherche_par_e_mail(): void
+    {
+        $magasin = $this->ouvrirLeMagasinEnTantQueProprietaire();
+        $client = Client::factory()->create([
+            'nom' => 'Jean Secret', 'type_client' => TypeClient::Professionnel, 'siren' => '732829320', 'numero_tva' => 'FR44732829320',
+            'email' => 'jean.secret@exemple.fr', 'telephone' => '06 98 76 54 32', 'ville' => 'Besançon',
+        ]);
+        $this->actingAs($this->membre($magasin, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [PermissionRegistry::CLIENT_VIEW]))));
+
+        $tableau = Livewire::test(SelecteurDeClients::class)
+            ->assertCanSeeTableRecords([$client])
+            ->assertSee('Jean Secret')
+            ->assertTableFilterHidden('avec_credit');
+        foreach (['siren', 'numero_tva', 'email', 'telephone', 'ville', 'credit_d_avoir', 'factures_max_date_emission'] as $colonne) {
+            $tableau->assertTableColumnHidden($colonne);
+        }
+        $tableau->assertDontSee('jean.secret@exemple.fr')
+            ->assertDontSee('06 98 76 54 32')
+            ->assertDontSee('732829320')
+            ->searchTable('jean.secret@exemple.fr')
+            ->assertCanNotSeeTableRecords([$client])
+            ->searchTable('06 98 76')
+            ->assertCanNotSeeTableRecords([$client])
+            ->searchTable('secret')
+            ->assertCanSeeTableRecords([$client]);
+
+        foreach ([Caisse::class, CreateFacture::class, CreateDevis::class] as $page) {
+            /** @var Select $champ */
+            $champ = Livewire::test($page)->instance()->form->getComponent('data.client_id');
+            $this->assertSame([], $champ->getSearchResults('jean.secret@'));
+            $this->assertSame([$client->getKey() => 'Jean Secret'], $champ->getSearchResults('SECRET'));
+        }
+    }
+
+    /**
      * La loupe du champ « Client » d'une facture et d'un devis ouvre le
      * même tableau, et sa liste cherche aussi par SIREN.
      */
@@ -240,6 +317,41 @@ class SelecteurDeClientsTest extends TestCase
         Filament::setTenant($magasin);
 
         return $magasin;
+    }
+
+    /**
+     * Le nombre de requêtes de l'ouverture du tableau, puis celui de
+     * l'application du filtre « Avec un crédit d'avoir ».
+     *
+     * @return array{0: int, 1: int}
+     */
+    private function requetesDuTableauEtDuFiltre(): array
+    {
+        $requetes = 0;
+        DB::listen(function () use (&$requetes): void {
+            $requetes++;
+        });
+
+        $tableau = Livewire::test(SelecteurDeClients::class);
+        $ouverture = $requetes;
+        $tableau->filterTable('avec_credit');
+
+        return [$ouverture, $requetes - $ouverture];
+    }
+
+    /**
+     * Ces clients, chacun avec un achat de ce produit entièrement retourné.
+     *
+     * @return list<Client>
+     */
+    private function clientsAvecUnAvoir(Produit $produit, string $nom, int $nombre): array
+    {
+        return array_map(function (int $numero) use ($produit, $nom): Client {
+            $client = Client::factory()->create(['nom' => "{$nom} {$numero}"]);
+            $this->retournerUnAchatEntier($client, $produit);
+
+            return $client;
+        }, range(1, $nombre));
     }
 
     /**

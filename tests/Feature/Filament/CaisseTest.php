@@ -705,6 +705,31 @@ class CaisseTest extends TestCase
     }
 
     /**
+     * Un code GS1 DataMatrix lu par la douchette dépasse souvent 60
+     * caractères : inconnu, il reste dans le champ, qui n'est jamais
+     * enregistré, sans empêcher d'encaisser la vente.
+     */
+    public function test_un_long_code_inconnu_reste_dans_la_douchette_sans_bloquer_l_encaissement(): void
+    {
+        $this->ouvrirLaCaisseDUnMagasin();
+        $comptoir = Client::query()->where('est_comptoir', true)->sole();
+        $cable = Produit::factory()->create(['nom' => 'Câble USB', 'prix_vente_ttc' => '12.50', 'taux_tva' => 20, 'suivi_stock' => false]);
+        $code = '010345312000001117271231102026AB21SERIE0000000001'.str_repeat('9', 25);
+
+        Livewire::test(Caisse::class)
+            ->call('recevoirLesProduitsChoisis', [['produit_id' => $cable->id, 'quantite' => 1]])
+            ->set('data.douchette', $code)
+            ->call('scannerUneReference')
+            ->assertNotified("Aucun produit du magasin n'a le code-barres ni la référence « {$code} ».")
+            ->assertSet('data.douchette', $code)
+            ->call('encaisser')
+            ->assertHasNoFormErrors();
+
+        $this->assertGreaterThan(60, strlen($code));
+        $this->assertSame('12.50', Facture::query()->where('client_id', $comptoir->id)->sole()->total_ttc);
+    }
+
+    /**
      * En franchise en base, toute vente est à 0 % au même prix TTC (B10) :
      * le taux d'une ligne de produit est désactivé, vaut 0 et le dit, et
      * le ticket encaissé n'a aucune TVA.

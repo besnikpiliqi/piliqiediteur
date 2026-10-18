@@ -9,6 +9,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
+use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\TerritoireFiscal;
@@ -19,6 +20,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Support\Str;
 use LogicException;
 
@@ -248,22 +250,18 @@ class Client extends Model
      */
     public function soldeCrediteurEnCentimes(): int
     {
-        if ($this->estComptoir()) {
-            return 0;
-        }
-
-        return (int) $this->avoirs()
-            ->where('statut', StatutAvoir::Emise)
-            ->get()
-            ->sum(fn (Avoir $avoir): int => $avoir->creditEnCentimes());
+        return self::creditsDAvoirEnCentimes([$this])[$this->getKey()];
     }
 
     /**
      * Le crédit d'avoir disponible de chacun de ces clients (voir
-     * soldeCrediteurEnCentimes()), en centimes, par identifiant : une
-     * requête trouve ceux qui ont un avoir émis, et seuls ceux-là se
-     * relisent -- le tableau des clients (voir SelecteurDeClients) ne lit
-     * pas les avoirs de chaque rangée.
+     * soldeCrediteurEnCentimes()), en centimes, par identifiant, en deux
+     * lectures quel que soit leur nombre : leurs avoirs émis, puis les
+     * imputations de ces avoirs. Le crédit de chaque avoir s'en calcule en
+     * centimes (voir Avoir::creditApres()), jamais par une somme que la
+     * base ferait sur une colonne décimale. Le client comptoir n'en a
+     * jamais, sans rien lire pour lui. Le tableau des clients d'une vente
+     * (voir SelecteurDeClients) le lit ainsi pour toute sa page.
      *
      * @param  iterable<Client>  $clients
      * @return array<int, int>
@@ -271,34 +269,53 @@ class Client extends Model
     public static function creditsDAvoirEnCentimes(iterable $clients): array
     {
         $clients = collect($clients);
-        $avecUnAvoir = Avoir::query()
-            ->where('statut', StatutAvoir::Emise)
-            ->whereIn('client_id', $clients->map(fn (Client $client): int => $client->getKey())->all())
-            ->distinct()
-            ->pluck('client_id')
-            ->map(fn (int|string $identifiant): int => (int) $identifiant)
-            ->all();
+        $credits = $clients->mapWithKeys(fn (Client $client): array => [$client->getKey() => 0])->all();
+        $identifies = $clients->reject(fn (Client $client): bool => $client->estComptoir());
 
-        return $clients->mapWithKeys(fn (Client $client): array => [
-            $client->getKey() => in_array($client->getKey(), $avecUnAvoir, true) ? $client->soldeCrediteurEnCentimes() : 0,
-        ])->all();
+        if ($identifies->isEmpty()) {
+            return $credits;
+        }
+
+        $avoirs = Avoir::query()
+            ->where('statut', StatutAvoir::Emise)
+            ->whereIn('client_id', $identifies->map(fn (Client $client): mixed => $client->getKey())->all())
+            ->with('allocations')
+            ->get();
+
+        foreach ($avoirs as $avoir) {
+            $credits[$avoir->client_id] += $avoir->creditApres($avoir->allocations->pluck('montant_alloue'));
+        }
+
+        return $credits;
     }
 
     /**
      * Les clients qui ont un crédit d'avoir disponible (voir
-     * soldeCrediteurEnCentimes(), jamais le client comptoir) : parmi ceux
-     * qui ont un avoir émis, ceux dont le crédit, calculé en centimes,
-     * reste positif -- jamais une somme que la base ferait sur une colonne
-     * décimale.
+     * soldeCrediteurEnCentimes()), jamais le client comptoir : ceux qui ont
+     * un avoir émis dont le total TTC dépasse ce qu'il a imputé. La
+     * comparaison se fait dans la requête du tableau, avoir par avoir, sans
+     * rien lire à part, sur des centimes entiers : chaque montant y est
+     * arrondi au centime et converti en entier avant d'être additionné,
+     * jamais additionné tel quel dans sa colonne décimale, que SQLite
+     * additionnerait en nombres à virgule. Le crédit affiché se calcule à
+     * part, pour la page (voir creditsDAvoirEnCentimes()).
      *
      * @param  Builder<static>  $query
      */
     public function scopeAvecUnCreditDAvoir(Builder $query): void
     {
-        $avecUnAvoir = static::query()
-            ->whereHas('avoirs', fn (Builder $avoirs): Builder => $avoirs->where('statut', StatutAvoir::Emise))
-            ->get();
+        $grammaire = $query->getQuery()->getGrammar();
+        $enCentimes = fn (string $colonne): string => 'cast(round('.$grammaire->wrap($colonne).' * 100) as bigint)';
 
-        $query->whereKey(array_keys(array_filter(self::creditsDAvoirEnCentimes($avecUnAvoir), fn (int $credit): bool => $credit > 0)));
+        $query->whereNull($query->qualifyColumn('est_comptoir'))
+            ->whereHas('avoirs', fn (Builder $avoirs): Builder => $avoirs
+                ->where($avoirs->qualifyColumn('statut'), StatutAvoir::Emise)
+                ->where(
+                    new Expression($enCentimes($avoirs->qualifyColumn('total_ttc'))),
+                    '>',
+                    AvoirAllocation::query()
+                        ->selectRaw('coalesce(sum('.$enCentimes('avoir_allocations.montant_alloue').'), 0)')
+                        ->whereColumn('avoir_allocations.avoir_id', $avoirs->qualifyColumn('id')),
+                ));
     }
 }

@@ -41,12 +41,17 @@ use Livewire\Component;
  * Le coût moyen, le bénéfice unitaire et le taux de marque ne se
  * montrent qu'à qui voit la valeur du stock (réponse de l'éditeur à Q9) :
  * à la caisse, le client voit souvent l'écran. Ce sont ceux de la fiche
- * (voir MargeDuCatalogue), jamais les montants d'un document.
+ * (voir MargeDuCatalogue), jamais les montants d'un document. Le stock
+ * restant, le seuil d'alerte, le fournisseur et la date d'entrée, lus sur
+ * la fiche du produit, ne se montrent qu'à qui peut voir les fiches des
+ * produits (« Produits et services : voir ») : vendre ne demande que la
+ * référence, le nom, le prix et le taux.
  *
  * Un clic sur une rangée ajoute le produit à la sélection, gardée ici,
  * côté serveur, avec sa quantité, ou l'en retire ; un produit épuisé reste
- * visible, grisé, mais ne se sélectionne pas sans l'autorisation de
- * vendre sans stock (voir AjouteDesLignesDeVente::refusDuProduit()). Le
+ * visible, grisé, « Épuisé » sous son nom, pour qui ne peut pas le vendre,
+ * même sans voir son stock, mais ne se sélectionne pas sans l'autorisation
+ * de vendre sans stock (voir AjouteDesLignesDeVente::refusDuProduit()). Le
  * bas de la fenêtre donne le total HT et TTC de la sélection, calculé
  * comme les lignes qu'elle ajoutera, pour le client et la nature de
  * l'opération du document (voir AjouteDesLignesDeVente::apercuDesLignes()) :
@@ -130,6 +135,7 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
 
     public function table(Table $table): Table
     {
+        $voitLesFiches = auth()->user()?->can(PermissionRegistry::PRODUIT_VIEW) ?? false;
         $voitLaValeurDuStock = auth()->user()?->can(PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK) ?? false;
         $vendSansStock = $this->vendSansStock();
         $calculateur = app(CalculateurLigne::class);
@@ -155,8 +161,12 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
                     ->icon('heroicon-m-check-circle')
                     ->color('primary'),
                 TextColumn::make('reference')->label('Référence'),
+                // Sous le nom, qu'on voie ou non le stock : la rangée grisée
+                // dit pourquoi le produit ne se choisit pas, pour que le
+                // vendeur le dise au client.
                 TextColumn::make('nom')
                     ->label('Nom')
+                    ->description(fn (Produit $produit): ?string => DevisResource::refusDuProduit($produit, $vendSansStock) === null ? null : 'Épuisé')
                     ->searchable(query: RechercheSansAccents::dans('nom', 'reference', 'code_barres')),
                 TextColumn::make('code_barres')->label('Code-barres')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('taille')->label('Taille')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
@@ -168,14 +178,12 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
                     ->label('Stock restant')
                     ->formatStateUsing(fn (Produit $produit): string => $produit->suivi_stock ? Number::format($produit->stock_quantite, locale: config('app.locale')) : '—')
                     ->color(fn (Produit $produit): ?string => $produit->estEpuise() ? 'danger' : null)
-                    ->description(fn (Produit $produit): ?string => match (true) {
-                        $produit->estEnStockNegatif() => 'À régulariser',
-                        $produit->estEpuise() && ! $vendSansStock => 'Épuisé',
-                        default => null,
-                    }),
+                    ->description(fn (Produit $produit): ?string => $produit->estEnStockNegatif() ? 'À régulariser' : null)
+                    ->visible($voitLesFiches),
                 TextColumn::make('seuil_alerte')
                     ->label('Seuil d\'alerte')
                     ->formatStateUsing(fn (Produit $produit): string => $produit->suivi_stock ? (string) $produit->seuil_alerte : '—')
+                    ->visible($voitLesFiches)
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('prix_vente_ht')
                     ->label('PV HT')
@@ -203,8 +211,8 @@ class SelecteurDeProduits extends Component implements HasForms, HasTable
                     ->state(fn (Produit $produit): string => ($taux = $this->marge($produit)->tauxDeMarque) === null ? '—' : $this->pourcentage($taux))
                     ->visible($voitLaValeurDuStock)
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('fournisseur.nom')->label('Fournisseur')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('created_at')->label('Entré le')->date('d/m/Y')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('fournisseur.nom')->label('Fournisseur')->placeholder('—')->visible($voitLesFiches)->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->label('Entré le')->date('d/m/Y')->visible($voitLesFiches)->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 Filter::make('en_stock')

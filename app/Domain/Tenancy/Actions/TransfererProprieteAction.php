@@ -41,7 +41,12 @@ use SensitiveParameter;
  * chaque magasin et au journal d'audit (voir JournalDesDroits), et chacun
  * des deux en est prévenu. Le nouveau propriétaire ne vend plus : une
  * caisse qu'il avait ouverte comme administrateur se ferme comme celle de
- * tout vendeur, par lui-même ou d'office par la clôture du jour.
+ * tout vendeur, par lui-même (voir ClotureCaissePersonnellePolicy::fermer()),
+ * pour lui par qui peut clôturer la journée, ou d'office par la clôture du
+ * jour ; tant qu'elle reste ouverte, il n'opère dans aucun autre magasin
+ * (voir VerificateurCaissesPersonnelles::refuserSiSaCaisseEstOuverteAilleurs()).
+ * Un brouillon qu'il avait créé devient, à son émission, la vente de qui
+ * l'émet (voir EmettreFactureAction).
  */
 class TransfererProprieteAction
 {

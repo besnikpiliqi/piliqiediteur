@@ -16,6 +16,8 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages\ListClotureCaissePersonnelles;
+use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Widgets\CaissesOuvertesDeLEquipeApercu;
+use App\Filament\App\Resources\ClotureCaisseResource;
 use App\Filament\App\Resources\ClotureCaisseResource\Widgets\CaissesPersonnellesOuvertesApercu;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
@@ -194,8 +196,12 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
 
     /**
      * Les caisses encore ouvertes s'affichent en tête de la page des
-     * caisses, pour qui clôture la journée ou voit les relevés de toute
-     * l'équipe, jamais pour un vendeur qui ne voit que sa caisse.
+     * caisses quand elle s'appelle « Les caisses » (le propriétaire, un
+     * expert-comptable, un administrateur sans vente qui ne fait que fermer
+     * la caisse d'un vendeur), jamais quand elle s'appelle « Ma caisse »,
+     * même pour un vendeur autorisé à clôturer la journée. Sur la liste des
+     * clôtures, elles restent réservées à qui peut clôturer la journée :
+     * un expert-comptable ne les y voit pas.
      */
     public function test_les_caisses_ouvertes_s_affichent_en_tete_de_la_page_des_caisses(): void
     {
@@ -203,13 +209,26 @@ class ClotureCaissePersonnelleResourceTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul']);
         $this->dansLeMagasin($magasin, $vendeur);
         $this->vendreAuComptoir(Client::factory()->create(), 12);
+        $vendeurQuiCloture = $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW, PermissionRegistry::CLOTURE_CAISSE_GERER]);
+        $administrateurQuiFerme = $this->administrateur($magasin, null, [], array_values(array_diff(PermissionRegistry::modeleDeLAdministrateur(), [PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES])));
+        $expert = $this->expertComptable($magasin);
 
-        $this->dansLeMagasin($magasin, $this->proprietaireDe($magasin));
-        $this->get(ClotureCaissePersonnelleResource::getUrl('index', tenant: $magasin))->assertOk()->assertSeeLivewire(CaissesPersonnellesOuvertesApercu::class);
-        Livewire::test(CaissesPersonnellesOuvertesApercu::class)->assertSee('Fermées automatiquement à la clôture de la journée : Paul');
-        $this->dansLeMagasin($magasin, $vendeur);
-        $this->get(ClotureCaissePersonnelleResource::getUrl('index', tenant: $magasin))->assertOk()->assertDontSeeLivewire(CaissesPersonnellesOuvertesApercu::class);
-        $this->assertFalse(CaissesPersonnellesOuvertesApercu::canView());
+        foreach ([$this->proprietaireDe($magasin), $expert, $administrateurQuiFerme] as $compte) {
+            $this->dansLeMagasin($magasin, $compte);
+
+            $this->get(ClotureCaissePersonnelleResource::getUrl('index', tenant: $magasin))->assertOk()->assertSeeText('Les caisses')->assertSeeLivewire(CaissesOuvertesDeLEquipeApercu::class);
+            Livewire::test(CaissesOuvertesDeLEquipeApercu::class)->assertSee('Fermées automatiquement à la clôture de la journée : Paul');
+        }
+        foreach ([$vendeur, $vendeurQuiCloture] as $compte) {
+            $this->dansLeMagasin($magasin, $compte);
+
+            $this->get(ClotureCaissePersonnelleResource::getUrl('index', tenant: $magasin))->assertOk()->assertSeeText('Ma caisse')->assertDontSeeLivewire(CaissesOuvertesDeLEquipeApercu::class);
+            $this->assertFalse(CaissesOuvertesDeLEquipeApercu::canView(), $compte->name);
+        }
+        $this->dansLeMagasin($magasin, $expert);
+        $this->get(ClotureCaisseResource::getUrl('index', tenant: $magasin))->assertOk()->assertDontSeeLivewire(CaissesPersonnellesOuvertesApercu::class);
+        $this->dansLeMagasin($magasin, $vendeurQuiCloture);
+        $this->get(ClotureCaisseResource::getUrl('index', tenant: $magasin))->assertOk()->assertSeeLivewire(CaissesPersonnellesOuvertesApercu::class);
     }
 
     private function vendreAuComptoir(Client $client, float $prixTtc): Facture

@@ -31,6 +31,7 @@ use App\Domain\Stock\Services\ConfirmationVenteSansStock;
 use App\Domain\Stock\Services\ManqueDeStock;
 use App\Domain\Stock\Services\VerificateurDeStock;
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\JournalAudit;
@@ -108,7 +109,10 @@ use LogicException;
  *     fois : sa caisse personnelle d'un autre magasin de la société doit
  *     être fermée (voir VerificateurCaissesPersonnelles). Le registre signe
  *     l'émission à son nom (voir OperateurCourant) ;
- *  3. la facture, relue verrouillée, prend la copie de son client (nom,
+ *  3. la facture, relue verrouillée, devient la vente de qui l'émet si
+ *     son auteur est devenu propriétaire de la société depuis la création
+ *     du brouillon (voir reprendreLeBrouillonDuProprietaire()), puis prend
+ *     la copie de son client (nom,
  *     adresse, identifiants), la vérification VIES que retient sa nature,
  *     son numéro, dans la série et l'année de cet
  *     instant à l'heure de Paris, cet instant, en UTC, pour date
@@ -219,6 +223,7 @@ class EmettreFactureAction
             throw new LogicException('Impossible d\'émettre une facture sans lignes.');
         }
 
+        $this->reprendreLeBrouillonDuProprietaire($facture, $compte);
         ContexteDeVente::refuserSiLeTypeDeClientAChange($facture);
         ContexteDeVente::refuserSiLeRegimeAChange($facture);
 
@@ -275,6 +280,27 @@ class EmettreFactureAction
         }
 
         return $facture;
+    }
+
+    /**
+     * Un brouillon créé par un administrateur à qui la propriété de la
+     * société a été transmise depuis (voir TransfererProprieteAction)
+     * devient la vente de qui l'émet : le propriétaire ne vend jamais et
+     * n'a pas de caisse personnelle, et une vente est celle d'une personne
+     * autorisée à vendre dans ce magasin à ce moment, ici la seule de la
+     * transaction. La facture, son nom figé (voir FigeLeNomDeSesAuteurs),
+     * son contenu signé, « Mes ventes » et la caisse personnelle désignent
+     * donc qui l'émet ; la base refuse d'émettre une facture au nom du
+     * propriétaire (voir GardesDeLaVente). Le rôle de l'auteur se lit sous
+     * le verrou du registre, que la transmission de la propriété prend
+     * aussi : il ne change pas pendant l'émission. Un brouillon d'un autre
+     * compte garde son auteur.
+     */
+    private function reprendreLeBrouillonDuProprietaire(Facture $facture, User $compte): void
+    {
+        if ($facture->cree_par !== null && User::query()->whereKey($facture->cree_par)->where('role_societe', RoleSociete::Proprietaire)->exists()) {
+            $facture->forceFill(['cree_par' => $compte->getKey()]);
+        }
     }
 
     /**

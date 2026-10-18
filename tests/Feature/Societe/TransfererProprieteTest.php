@@ -7,12 +7,20 @@ use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
+use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
 use App\Domain\Facturation\Actions\CreerFactureAction;
+use App\Domain\Facturation\Actions\EmettreFactureAction;
+use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
+use App\Domain\Facturation\Actions\FermerSaCaisseAction;
+use App\Domain\Facturation\Actions\ModifierFactureAction;
 use App\Domain\Facturation\Enums\ModeFermetureCaisse;
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
+use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
+use App\Domain\Facturation\Support\GardesDeLaVente;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\TransfererProprieteAction;
@@ -25,11 +33,13 @@ use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Filament\App\Pages\Caisse;
+use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages\ListClotureCaissePersonnelles;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Filament\Societe\Resources\MembreResource;
 use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -276,6 +286,90 @@ class TransfererProprieteTest extends TestCase
         $releve = ClotureCaissePersonnelle::query()->sole();
         $this->assertSame([$nouveau->id, ModeFermetureCaisse::Automatique, 1, '12.00'], [$releve->vendeur_id, $releve->mode_fermeture, $releve->nombre_ventes, $releve->total_ttc]);
         $this->assertSame([], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->all());
+    }
+
+    /**
+     * Un administrateur à qui le propriétaire avait coché la vente a vendu
+     * ce jour-là à Ma Boutique, puis reçoit la propriété. Tant que cette
+     * caisse reste ouverte, il ne contre-passe rien dans un autre magasin
+     * (une caisse à la fois) ; il la ferme lui-même, par « Fermer ma
+     * caisse », bien qu'il ne vende plus, puis contre-passe dans l'autre
+     * magasin, où la contre-passation revient à la caisse du vendeur du
+     * paiement corrigé, jamais à la sienne.
+     */
+    public function test_le_nouveau_proprietaire_ferme_lui_meme_sa_caisse_puis_contre_passe_dans_un_autre_magasin(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $vendeur = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();
+        app(TenantContext::class)->runAs($magasin, fn (): Facture => self::vendreAuComptant($vendeur, Client::factory()->create(), $this->lignes(), ModePaiement::Especes));
+        $responsableAilleurs = self::responsableDeTest($autre);
+        $paiement = app(TenantContext::class)->runAs($autre, function () use ($responsableAilleurs): Paiement {
+            self::vendreAuComptant($responsableAilleurs, Client::factory()->create(), $this->lignes(), ModePaiement::Especes);
+
+            return Paiement::query()->sole();
+        });
+
+        app(TransfererProprieteAction::class)->handle($proprietaire, $vendeur, self::MOT_DE_PASSE_DU_PROPRIETAIRE);
+
+        $nouveau = $vendeur->refresh();
+        $contrePasser = fn (): Paiement => app(TenantContext::class)->runAs($autre, fn (): Paiement => app(ContrePasserPaiementAction::class)->handle($nouveau, $paiement, 'Saisi par erreur'));
+        $this->assertThrows($contrePasser, LogicException::class, 'Fermez d\'abord votre caisse de Ma Boutique : vous n\'encaissez que dans un magasin à la fois.');
+
+        $this->dansLeMagasin($magasin, $nouveau);
+        Livewire::test(ListClotureCaissePersonnelles::class)
+            ->assertActionVisible('fermer_ma_caisse')
+            ->callAction('fermer_ma_caisse')
+            ->assertHasNoActionErrors();
+
+        $releve = ClotureCaissePersonnelle::query()->sole();
+        $this->assertSame([$nouveau->id, ModeFermetureCaisse::Vendeur, $nouveau->id, 1, '12.00'], [$releve->vendeur_id, $releve->mode_fermeture, $releve->fermee_par, $releve->nombre_ventes, $releve->total_ttc]);
+        Livewire::test(ListClotureCaissePersonnelles::class)->assertActionHidden('fermer_ma_caisse');
+
+        $contrePassation = $contrePasser();
+
+        $this->assertSame([$nouveau->id, $paiement->id, '-12.00'], [$contrePassation->cree_par, $contrePassation->contre_passe_paiement_id, $contrePassation->montant]);
+        $this->assertSame([$responsableAilleurs->id], app(TenantContext::class)->runAs($autre, fn (): array => app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->modelKeys()));
+        $this->assertSame([], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->all());
+    }
+
+    /**
+     * Un administrateur à qui le propriétaire avait coché la vente émet un
+     * ticket resté dû et crée un brouillon, puis reçoit la propriété. Le
+     * brouillon reste à son nom et se modifie toujours, mais la base refuse
+     * de l'émettre à son nom ; émis par le responsable, il devient la vente
+     * de celui-ci (auteur, nom figé, contenu signé, caisse personnelle), et
+     * la caisse du propriétaire ne garde que la vente qu'il avait faite
+     * comme administrateur, qui reste la sienne et se règle toujours.
+     */
+    public function test_un_brouillon_de_l_administrateur_devenu_proprietaire_devient_a_son_emission_la_vente_de_qui_l_emet(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $vendeur = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $responsable = self::responsableDeTest($magasin);
+        $ticketDu = app(EmettreFactureAction::class)->handle($vendeur, app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), $this->lignes()));
+        $brouillon = app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), $this->lignes());
+
+        app(TransfererProprieteAction::class)->handle($proprietaire, $vendeur, self::MOT_DE_PASSE_DU_PROPRIETAIRE);
+
+        $nouveau = $vendeur->refresh();
+        app(ModifierFactureAction::class)->handle($responsable, $brouillon->fresh(), $brouillon->client, $this->lignes());
+        $this->assertSame([$nouveau->id, StatutFacture::Brouillon], [$brouillon->fresh()->cree_par, $brouillon->fresh()->statut]);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('factures')->where('id', $brouillon->id)->update(['numero' => 'TIC-TEST-2026-000099', 'statut' => StatutFacture::Emise->value])), QueryException::class, GardesDeLaVente::MESSAGE);
+
+        $vente = app(EmettreFactureAction::class)->handle($responsable, $brouillon->fresh());
+
+        $enregistrement = $vente->enregistrementDeVente()->firstOrFail();
+        $this->assertSame([$responsable->id, 'Responsable de test', StatutFacture::Emise], [$vente->cree_par, $vente->cree_par_nom, $vente->statut]);
+        $this->assertSame([$responsable->id, $responsable->id], [$enregistrement->operateur_id, $enregistrement->contenuSigne()['donnees']['document']['cree_par']]);
+        $this->assertSame([1, 1], [app(FermerSaCaisseAction::class)->apercu($nouveau)->nombre_ventes, app(FermerSaCaisseAction::class)->apercu($responsable)->nombre_ventes]);
+        $this->assertEqualsCanonicalizing([$nouveau->id, $responsable->id], app(VerificateurCaissesPersonnelles::class)->vendeursAvecCaisseOuverte(today())->modelKeys());
+
+        app(EnregistrerPaiementAction::class)->handle($responsable, $ticketDu->client, ['mode_paiement' => ModePaiement::Especes, 'montant' => 12, 'recu_le' => today()->toDateString()], [['facture_id' => $ticketDu->id, 'montant' => 12]]);
+
+        $this->assertSame([$nouveau->id, StatutFacture::Payee], [$ticketDu->fresh()->cree_par, $ticketDu->fresh()->statut]);
     }
 
     /**

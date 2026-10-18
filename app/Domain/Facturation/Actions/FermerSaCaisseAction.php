@@ -20,8 +20,9 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Ferme la caisse personnelle d'un vendeur -- tout membre qui vend ou
- * encaisse, voir ClotureCaissePersonnellePolicy::fermer() --, jamais la
+ * Ferme la caisse personnelle d'un vendeur -- quiconque vend ou encaisse,
+ * ou a encore sa caisse ouverte dans le magasin, voir
+ * ClotureCaissePersonnellePolicy::fermer() --, jamais la
  * clôture officielle de la journée du magasin (voir CloturerCaisseAction,
  * réservée à cloture_caisse.gerer). Le docblock de ClotureCaissePersonnelle
  * décrit les quatre rubriques du relevé (B18) : les ventes et leur TTC

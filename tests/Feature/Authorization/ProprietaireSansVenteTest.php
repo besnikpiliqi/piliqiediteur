@@ -388,7 +388,10 @@ class ProprietaireSansVenteTest extends TestCase
     /**
      * Écrite directement en base : une facture ou un paiement au nom du
      * propriétaire, ou une facture qu'on lui attribue ensuite, est refusé ;
-     * sa contre-passation d'un paiement et son avoir passent.
+     * sa contre-passation d'un paiement et son avoir passent. Un « paiement »
+     * à son nom qui désigne un original sans en être l'exact opposé (montant
+     * positif ou différent, autre mode, autre client) reste un encaissement,
+     * refusé.
      */
     public function test_la_base_refuse_une_facture_ou_un_paiement_au_nom_du_proprietaire_mais_pas_sa_contre_passation_ni_son_avoir(): void
     {
@@ -406,7 +409,18 @@ class ProprietaireSansVenteTest extends TestCase
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('paiements')->insert([...$paiement, 'cree_par' => $proprietaire->id])), QueryException::class, GardesDeLaVente::MESSAGE);
         $this->assertSame([2, 1, (int) $responsable->id], [Facture::query()->count(), Paiement::query()->count(), (int) $brouillon->fresh()->cree_par]);
 
-        DB::table('paiements')->insert([...$paiement, 'cree_par' => $proprietaire->id, 'montant' => '-12.00', 'contre_passe_paiement_id' => Paiement::query()->sole()->id]);
+        $original = Paiement::query()->sole();
+        foreach ([
+            ['montant' => '500.00'],
+            ['montant' => '-5.00'],
+            ['montant' => '-12.00', 'mode_paiement' => ModePaiement::CarteBancaire->value],
+            ['montant' => '-12.00', 'client_id' => Client::factory()->create()->id],
+        ] as $pasLOppose) {
+            $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('paiements')->insert([...$paiement, ...$pasLOppose, 'cree_par' => $proprietaire->id, 'contre_passe_paiement_id' => $original->id])), QueryException::class, GardesDeLaVente::MESSAGE);
+        }
+        $this->assertSame(1, Paiement::query()->count());
+
+        DB::table('paiements')->insert([...$paiement, 'cree_par' => $proprietaire->id, 'montant' => '-12.00', 'contre_passe_paiement_id' => $original->id]);
         DB::table('avoirs')->insert([...$this->copieDe('avoirs', $avoir->id, ['numero' => null]), 'cree_par' => $proprietaire->id]);
         DB::table('factures')->insert([...$facture, 'cree_par' => $responsable->id]);
 

@@ -20,8 +20,8 @@ use Illuminate\Support\Facades\Schema;
  * qu'une contre-passation au plus.
  *
  * Le propriétaire, qui ne vend jamais, n'enregistre aucun paiement : la
- * base refuse un paiement à son nom, mais pas sa contre-passation (voir
- * GardesDeLaVente).
+ * base refuse un paiement à son nom, mais pas sa contre-passation, l'exact
+ * opposé d'un paiement saisi par erreur (voir GardesDeLaVente).
  */
 return new class extends Migration
 {

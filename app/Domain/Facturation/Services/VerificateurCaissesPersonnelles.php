@@ -27,8 +27,9 @@ use LogicException;
  * journée de son émission, à l'heure de Paris ; un encaissement, de celle
  * où il est reçu, une contre-passation comprise, qui revient au vendeur du
  * paiement qu'elle corrige (voir Paiement::scopeNonFermesParLeVendeur()).
- * Quiconque enregistre un paiement a ainsi sa caisse (voir
- * ClotureCaissePersonnellePolicy::fermer()).
+ * Quiconque enregistre un paiement a ainsi sa caisse, et la ferme tant
+ * qu'elle est ouverte, même s'il n'est plus autorisé à vendre (voir
+ * aSaCaisseOuverte() et ClotureCaissePersonnellePolicy::fermer()).
  *
  * Un compte autorisé à vendre n'encaisse que dans un magasin à la fois,
  * même s'il a accès à plusieurs magasins (un administrateur à qui le
@@ -66,6 +67,20 @@ class VerificateurCaissesPersonnelles
             ->unique();
 
         return User::query()->whereKey($vendeurIds->all())->orderBy('id')->get();
+    }
+
+    /**
+     * Ce compte a-t-il sa caisse personnelle ouverte dans le magasin actif :
+     * une vente émise ou un encaissement, quelle qu'en soit la journée,
+     * qu'aucune de ses fermetures n'a comptés (voir
+     * Facture::scopeNonFermeesParLeVendeur() et
+     * Paiement::scopeNonFermesParLeVendeur()) ? Lu sous MagasinScope, dans
+     * ce seul magasin.
+     */
+    public function aSaCaisseOuverte(User $compte): bool
+    {
+        return Facture::query()->nonFermeesParLeVendeur($compte->getKey())->exists()
+            || Paiement::query()->nonFermesParLeVendeur($compte->getKey())->exists();
     }
 
     /**

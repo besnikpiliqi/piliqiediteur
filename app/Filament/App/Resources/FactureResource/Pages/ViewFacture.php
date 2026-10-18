@@ -19,8 +19,10 @@ use Filament\Resources\Pages\ViewRecord;
 
 /**
  * La fiche d'une facture ou d'un ticket. Ce qui suit la vente sans la
- * changer s'y enregistre, à qui peut l'émettre (voir
- * FacturePolicy::justifier()) : les preuves de son exonération (voir
+ * changer s'y enregistre, à qui est autorisé à noter les preuves
+ * d'exonération et les bordereaux de détaxe (facture.justifier, voir
+ * FacturePolicy::justifier()), le propriétaire compris, qui ne vend
+ * pas : les preuves de son exonération (voir
  * AjouterPreuveOperationAction) et le bordereau de détaxe d'un ticket
  * (voir NoterBordereauDetaxeAction). Chaque bouton n'apparaît que là où
  * son action l'accepte (voir leurs refusPour()). « Encaisser » le règle

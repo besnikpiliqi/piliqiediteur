@@ -6,6 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 
@@ -15,7 +16,11 @@ use App\Models\User;
  * consulte ses relevés (voir User::tientUneCaisseDans() et le docblock de
  * ClotureCaissePersonnelle), le responsable comme le vendeur, et un
  * administrateur à qui le propriétaire a coché la vente ; jamais le
- * propriétaire, qui ne vend pas et n'a pas de caisse. Qui peut clôturer la
+ * propriétaire, qui ne vend pas et n'a pas de caisse. Un compte qui n'est
+ * plus autorisé à vendre ferme encore la caisse qu'il a laissée ouverte
+ * dans le magasin (voir fermer()) : un vendeur dont on a décoché la vente,
+ * un administrateur devenu propriétaire avec les ventes qu'il avait faites
+ * comme administrateur. Qui peut clôturer la
  * journée (cloture_caisse.gerer) ferme aussi celle d'un autre vendeur du
  * magasin, pour lui (voir fermerLaCaisseDe()), depuis la page des relevés,
  * qui lui est donc ouverte même s'il ne vend ni n'encaisse ; et toute
@@ -31,9 +36,9 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $this->tientUneCaisse($user)
-            || $user->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)
-            || $user->can(PermissionRegistry::CLOTURE_CAISSE_GERER);
+        return $user->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES)
+            || $user->can(PermissionRegistry::CLOTURE_CAISSE_GERER)
+            || $this->fermer($user);
     }
 
     public function view(User $user, ClotureCaissePersonnelle $cloture): bool
@@ -45,9 +50,20 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
         return $user->can(PermissionRegistry::CLOTURE_CAISSE_VIEW_TOUTES) || $cloture->vendeur_id === $user->getKey();
     }
 
+    /**
+     * « Fermer ma caisse » : qui tient une caisse dans le magasin actif, ou
+     * y a encore sa caisse ouverte (voir
+     * VerificateurCaissesPersonnelles::aSaCaisseOuverte()), même s'il n'y
+     * est plus autorisé à vendre : sinon, il ne la fermerait jamais lui-même
+     * et elle l'empêcherait d'opérer dans un autre magasin (voir
+     * VerificateurCaissesPersonnelles::refuserSiSaCaisseEstOuverteAilleurs()).
+     */
     public function fermer(User $user): bool
     {
-        return $this->tientUneCaisse($user);
+        $contexte = app(TenantContext::class);
+
+        return $contexte->has()
+            && ($user->tientUneCaisseDans($contexte->magasin()) || app(VerificateurCaissesPersonnelles::class)->aSaCaisseOuverte($user));
     }
 
     /**
@@ -88,17 +104,6 @@ class ClotureCaissePersonnellePolicy extends MagasinPolicy
     public function restore(User $user, ClotureCaissePersonnelle $cloture): bool
     {
         return false;
-    }
-
-    /**
-     * Tient-il une caisse dans le magasin actif (voir
-     * User::tientUneCaisseDans()) ? Aucune hors d'un magasin.
-     */
-    private function tientUneCaisse(User $user): bool
-    {
-        $contexte = app(TenantContext::class);
-
-        return $contexte->has() && $user->tientUneCaisseDans($contexte->magasin());
     }
 
     /**

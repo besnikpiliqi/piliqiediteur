@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Les factures et les tickets de caisse d'un magasin. Le propriétaire, qui
  * ne vend jamais, n'en crée aucun : la base refuse une facture créée à son
- * nom ou qu'on lui attribue ensuite (voir GardesDeLaVente).
+ * nom, qu'on lui attribue ensuite ou qu'on émet à son nom (voir
+ * GardesDeLaVente).
  */
 return new class extends Migration
 {

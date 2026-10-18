@@ -50,7 +50,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
  * Contrairement à ClotureCaisse (la clôture officielle de la journée du
  * magasin, réservée au propriétaire ou à qui il en délègue la permission),
  * quiconque vend ou encaisse peut toujours fermer SA PROPRE caisse, sans
- * permission dédiée (voir ClotureCaissePersonnellePolicy::fermer()).
+ * permission dédiée, comme qui l'a encore ouverte sans plus être autorisé
+ * à vendre (voir ClotureCaissePersonnellePolicy::fermer()).
  * Toutes ses ventes comptent, aux particuliers comme aux
  * professionnels : l'objectif est de vérifier sa propre caisse, pas
  * l'e-reporting. Les ventes et les paiements comptés sont notés dans des

@@ -24,6 +24,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
+use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -1458,7 +1459,8 @@ class CaisseTest extends TestCase
 
     /**
      * Q8 : baisser le prix d'une ligne du panier avant l'encaissement
-     * s'inscrit en ligne retirée, avec le prix d'avant et d'après ; le
+     * s'inscrit en ligne retirée, avec le prix d'avant et d'après, une fois
+     * le nouveau prix arrêté (la requête suivante ne le change pas) ; le
      * monter ne retire rien.
      */
     public function test_baisser_le_prix_d_une_ligne_du_panier_l_inscrit_au_journal(): void
@@ -1469,14 +1471,131 @@ class CaisseTest extends TestCase
             ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 2, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
         ]]);
         $prix = 'data.lignes.'.array_key_first($caisse->get('data.lignes')).'.prix_unitaire_ttc';
-        $caisse->set($prix, '130.00');
+        $caisse->set($prix, '130.00')->call('$refresh');
+        $caisse->set($prix, '100.00');
         $this->assertSame([], $this->journalDesEvenements($magasin));
 
-        $caisse->set($prix, '100.00');
+        $caisse->call('$refresh');
 
         $this->assertSame([
             ['260', []],
             ['323', ['origine' => 'caisse', 'produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 2, 'prix_unitaire_ttc' => 13000, 'prix_unitaire_ttc_apres' => 10000]],
+        ], $this->journalDesEvenements($magasin));
+    }
+
+    /**
+     * Effacer le prix d'une ligne puis en taper un plus bas est le geste le
+     * plus courant pour le corriger : le prix effacé garde le dernier prix
+     * lisible de la ligne, et la baisse s'inscrit à partir de lui avant que
+     * le ticket ne soit encaissé au nouveau prix.
+     */
+    public function test_vider_le_prix_puis_le_baisser_l_inscrit_au_journal(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 1, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+        $prix = 'data.lignes.'.array_key_first($caisse->get('data.lignes')).'.prix_unitaire_ttc';
+        $caisse->set($prix, '')->set($prix, '10.00');
+
+        $caisse->call('encaisser');
+
+        $this->assertSame(['TK-MABOUT-2026-000001', '10.00'], [Facture::query()->sole()->numero, Facture::query()->sole()->total_ttc]);
+        $this->assertSame([
+            ['260', []],
+            ['323', ['origine' => 'caisse', 'produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 1, 'prix_unitaire_ttc' => 12000, 'prix_unitaire_ttc_apres' => 1000]],
+        ], $this->journalDesEvenements($magasin));
+    }
+
+    /**
+     * Le prix se saisit en direct : chaque chiffre tapé arrive au serveur.
+     * Taper un prix plus bas chiffre par chiffre n'inscrit qu'une baisse,
+     * du prix d'avant la saisie au prix final, jamais celui d'un chiffre en
+     * cours de frappe.
+     */
+    public function test_taper_un_prix_plus_bas_chiffre_par_chiffre_inscrit_une_seule_baisse_jusqu_au_prix_final(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 1, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+        $prix = 'data.lignes.'.array_key_first($caisse->get('data.lignes')).'.prix_unitaire_ttc';
+        $caisse->set($prix, '1')->set($prix, '10')->set($prix, '100');
+
+        $caisse->call('encaisser');
+
+        $this->assertSame('100.00', Facture::query()->sole()->total_ttc);
+        $this->assertSame([
+            ['260', []],
+            ['323', ['origine' => 'caisse', 'produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 1, 'prix_unitaire_ttc' => 12000, 'prix_unitaire_ttc_apres' => 10000]],
+        ], $this->journalDesEvenements($magasin));
+    }
+
+    /**
+     * Monter un prix en le retapant chiffre par chiffre passe par des prix
+     * plus bas (1, 13) : aucun ne s'arrête, et rien ne s'inscrit au
+     * journal, pas même à l'encaissement au prix plus haut.
+     */
+    public function test_retaper_un_prix_plus_haut_chiffre_par_chiffre_n_inscrit_aucune_baisse(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 1, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+        $prix = 'data.lignes.'.array_key_first($caisse->get('data.lignes')).'.prix_unitaire_ttc';
+        $caisse->set($prix, '1')->set($prix, '13')->set($prix, '130');
+
+        $caisse->call('encaisser');
+
+        $this->assertSame('130.00', Facture::query()->sole()->total_ttc);
+        $this->assertSame([['260', []]], $this->journalDesEvenements($magasin));
+    }
+
+    /**
+     * Abandonner la vente juste après avoir baissé un prix, sans qu'il se
+     * soit arrêté, inscrit la baisse avant l'abandon : la vente se fige.
+     */
+    public function test_abandonner_la_vente_juste_apres_une_baisse_de_prix_inscrit_la_baisse_puis_l_abandon(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 120, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [
+            ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 2, 'prix_unitaire_ttc' => '120.00', 'taux_tva' => 20, 'remise_pourcentage' => 0],
+        ]]);
+        $caisse->set('data.lignes.'.array_key_first($caisse->get('data.lignes')).'.prix_unitaire_ttc', '90.00');
+
+        $caisse->callAction('abandonnerLaVente');
+
+        $this->assertSame([
+            ['260', []],
+            ['323', ['origine' => 'caisse', 'produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 2, 'prix_unitaire_ttc' => 12000, 'prix_unitaire_ttc_apres' => 9000]],
+            ['320', ['origine' => 'caisse', 'nombre_lignes' => 1, 'nombre_articles' => 2, 'total_ttc' => 18000]],
+        ], $this->journalDesEvenements($magasin));
+    }
+
+    /**
+     * Deux quantités absurdes dont la somme dépasse le plus grand entier ne
+     * s'enregistrent pas : le panier garde ce qu'il avait, et l'abandon
+     * signe son nombre exact d'articles, jamais une somme qui a débordé.
+     */
+    public function test_des_quantites_dont_la_somme_deborderait_sont_refusees_et_l_abandon_signe_le_nombre_exact_d_articles(): void
+    {
+        $magasin = $this->ouvrirLaCaisseDUnMagasin();
+        $cable = Produit::factory()->create(['nom' => 'Câble USB-C', 'prix_vente_ttc' => 5, 'taux_tva' => 20, 'suivi_stock' => false]);
+        $ligne = fn (int $quantite): array => ['produit_id' => $cable->id, 'description' => $cable->nom, 'quantite' => $quantite, 'prix_unitaire_ttc' => '5.00', 'taux_tva' => 20, 'remise_pourcentage' => 0];
+        $caisse = Livewire::test(Caisse::class)->fillForm(['lignes' => [$ligne(2)]]);
+
+        $caisse->fillForm(['lignes' => [$ligne(PHP_INT_MAX), $ligne(PHP_INT_MAX)]]);
+
+        $caisse->assertNotified(PanierDeCaisse::TROP_D_ARTICLES);
+        $this->assertSame(2, $this->seuleLigne($caisse)['quantite']);
+        $caisse->callAction('abandonnerLaVente');
+        $this->assertSame([
+            ['260', []],
+            ['320', ['origine' => 'caisse', 'nombre_lignes' => 1, 'nombre_articles' => 2, 'total_ttc' => 1000]],
         ], $this->journalDesEvenements($magasin));
     }
 

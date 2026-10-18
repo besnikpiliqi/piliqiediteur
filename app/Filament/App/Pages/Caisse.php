@@ -75,7 +75,9 @@ use LogicException;
  * son abandon (« Abandonner la vente », ou la clôture de sa journée, JET
  * 320, avec le vendeur, le nombre d'articles et le montant, comme le dit
  * la fenêtre de confirmation) et chaque article retiré du panier ou dont
- * le prix baisse avant l'encaissement (JET 323).
+ * le prix baisse avant l'encaissement (JET 323), une fois la saisie du
+ * prix terminée : le PU TTC se saisit en direct, et un chiffre en cours de
+ * frappe ne s'inscrit jamais (voir PanierDeCaisse).
  *
  * Une fois la journée clôturée, la caisse n'encaisse plus aucune vente
  * jusqu'à minuit, pas même à un professionnel (voir journeeCloturee()) ;

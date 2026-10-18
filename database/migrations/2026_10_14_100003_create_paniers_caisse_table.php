@@ -32,6 +32,11 @@ return new class extends Migration
             // Les lignes où un produit ou un service est choisi, par clé du
             // répéteur de la caisse, telles que le vendeur les voit.
             $table->json('lignes');
+            // Par clé du répéteur, le prix arrêté des articles de la ligne,
+            // en centimes, avec leur nombre : le prix que leur saisie a
+            // laissé la dernière fois qu'elle était terminée, auquel une
+            // baisse se compare (voir LignesRetirees::dansLePanier()).
+            $table->json('prix_arretes');
             $table->timestamps();
 
             $table->unique(['magasin_id', 'user_id']);

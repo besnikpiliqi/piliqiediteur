@@ -24,6 +24,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PanierCaisse;
+use App\Domain\Facturation\Services\PanierDeCaisse;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Enums\MotifFermeture;
@@ -34,6 +35,7 @@ use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use LogicException;
 use Tests\TestCase;
 
@@ -401,6 +403,34 @@ class CloturerCaisseActionTest extends TestCase
             $evenements[1]->contenuSigne()['donnees']['details'],
         );
         $this->assertSame([$vendeurDeNuit->id], PanierCaisse::query()->pluck('user_id')->all());
+    }
+
+    /**
+     * Q8 : une vente restée ouverte dont un prix vient de baisser, sans
+     * s'être arrêté, se fige à la clôture de sa journée : la baisse
+     * s'inscrit, avec la journée et le vendeur, avant l'abandon de la vente
+     * et la clôture elle-même.
+     */
+    public function test_la_cloture_inscrit_la_baisse_d_un_prix_pas_encore_arrete_avant_d_abandonner_la_vente(): void
+    {
+        $this->travelTo('2026-10-09 18:00:00');
+        $vendeur = User::factory()->create();
+        $ecran = Produit::factory()->create(['nom' => 'Écran iPhone 11', 'prix_vente_ttc' => 150, 'taux_tva' => 20]);
+        $jeton = (string) Str::uuid();
+        $lignes = fn (string $prix): array => ['ligne' => ['produit_id' => $ecran->id, 'description' => $ecran->nom, 'quantite' => 3, 'prix_unitaire_ttc' => $prix, 'taux_tva' => '20', 'remise_pourcentage' => '0']];
+        app(PanierDeCaisse::class)->enregistrer($vendeur, $jeton, null, $lignes('150.00'));
+        app(PanierDeCaisse::class)->enregistrer($vendeur, $jeton, null, $lignes('120.00'));
+        $this->travelTo('2026-10-09 19:00:00');
+
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $this->magasin, '2026-10-09');
+
+        $evenements = EnregistrementFiscal::query()->where('chaine', ChaineFiscale::Evenement->value)->orderBy('sequence')->get();
+        $this->assertSame(['260', '323', '320', '50'], $evenements->pluck('type')->all());
+        $this->assertSame(
+            ['origine' => 'cloture', 'journee' => '2026-10-09', 'vendeur_id' => $vendeur->id, 'produit_id' => $ecran->id, 'service_id' => null, 'description' => 'Écran iPhone 11', 'quantite' => 3, 'prix_unitaire_ttc' => 15000, 'prix_unitaire_ttc_apres' => 12000],
+            $evenements[1]->contenuSigne()['donnees']['details'],
+        );
+        $this->assertSame(0, PanierCaisse::query()->count());
     }
 
     /**

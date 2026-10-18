@@ -47,7 +47,9 @@ use Filament\Support\Contracts\HasLabel;
  *   son encaissement ou son émission, au panier de la caisse comme dans un
  *   brouillon de facture ou de ticket : ligne retirée, produit ou service
  *   remplacé, quantité baissée, et chaque baisse du prix d'un article
- *   restant, avec son prix d'avant et d'après (Q8, voir LignesRetirees).
+ *   restant, avec son prix d'avant et d'après, inscrite au panier de la
+ *   caisse une fois sa saisie terminée, jamais pour un chiffre en cours de
+ *   frappe (Q8, voir LignesRetirees).
  * - L'entrée en mode démonstration (mode école) suit chaque ouverture du
  *   magasin de démonstration, et sa sortie chaque fermeture, dans le
  *   registre de ce magasin distinct (voir OuvrirLaDemonstrationAction et

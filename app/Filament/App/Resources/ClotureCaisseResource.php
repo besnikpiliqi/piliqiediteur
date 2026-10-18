@@ -137,7 +137,7 @@ class ClotureCaisseResource extends Resource
                 ]),
 
             InfolistSection::make('Encaissements')
-                ->description('Paiements enregistrés pendant la journée, par mode, contre-passations déduites. Ventes et encaissements diffèrent quand un client garde un crédit d\'avoir ou paie plus tard.')
+                ->description('Paiements enregistrés depuis la clôture précédente jusqu\'à la fin de la journée, par mode, contre-passations déduites : un paiement enregistré après la clôture de sa journée compte dans la suivante. Ventes et encaissements diffèrent quand un client garde un crédit d\'avoir ou paie plus tard.')
                 ->schema([
                     RepeatableEntry::make('encaissements')
                         ->hiddenLabel()
@@ -160,7 +160,7 @@ class ClotureCaisseResource extends Resource
                 ->columns(2),
 
             InfolistSection::make('Grands totaux')
-                ->description('Grands totaux perpétuels du magasin à la fin de la journée, jamais remis à zéro : toutes ses ventes, factures aux professionnels comprises, avoirs déduits (réel) ou ajoutés en valeur absolue (absolu).')
+                ->description('Grands totaux perpétuels du magasin après le dernier document que compte la clôture, jamais remis à zéro : toutes ses ventes, factures aux professionnels comprises, avoirs déduits (réel) ou ajoutés en valeur absolue (absolu).')
                 ->schema([
                     TextEntry::make('grand_total_reel')
                         ->label('Grand total perpétuel réel')

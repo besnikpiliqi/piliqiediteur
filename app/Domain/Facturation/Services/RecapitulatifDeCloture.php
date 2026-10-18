@@ -38,7 +38,8 @@ use Illuminate\Support\Collection;
  *   avec son libellé du jour, son nombre de paiements et de
  *   contre-passations et son montant, contre-passations déduites ;
  * - le crédit d'avoir imputé, à part : il ne fait entrer aucun argent ;
- * - les grands totaux perpétuels du magasin à la fin de la journée.
+ * - les grands totaux perpétuels du magasin après le dernier document
+ *   qu'elle compte.
  *
  * Ce que la clôture compte se lit dans le registre fiscal (voir
  * RegistreFiscal::enregistrementsJusquA()) : les enregistrements des
@@ -60,7 +61,9 @@ use Illuminate\Support\Collection;
  * par l'avoir qui l'impute à son émission, ou par le paiement qui l'impute
  * (voir ContenuFiscal), et compte dans la clôture de la journée de cet
  * enregistrement. Les grands totaux sont ceux que signe le dernier
- * enregistrement de la chaîne des ventes de la journée.
+ * enregistrement de la chaîne des ventes que la clôture compte : un
+ * document enregistré après la clôture de sa journée n'y entre pas, il
+ * entre dans les grands totaux de la clôture suivante.
  */
 class RecapitulatifDeCloture
 {

@@ -45,8 +45,10 @@ use LogicException;
  * RecapitulatifDeCloture) : les ventes et les avoirs séparés, par taux,
  * dont le net se déduit ; les factures et les avoirs aux professionnels,
  * pour information ; les encaissements par mode, chaque paiement comptant
- * dans la seule clôture de la journée où il est enregistré ; le crédit
- * d'avoir imputé et les grands totaux perpétuels à la fin de la journée.
+ * dans une seule clôture, celle de la journée où il est enregistré, ou la
+ * suivante s'il l'est après la clôture de cette journée ; le crédit
+ * d'avoir imputé et les grands totaux perpétuels après le dernier document
+ * qu'elle compte.
  * Puis elle s'inscrit au journal des événements (JET 50, clôture de
  * période), dans sa transaction et sous le verrou du registre, avec son
  * numéro, sa journée, ses nombres de tickets et d'avoirs, son net, ses

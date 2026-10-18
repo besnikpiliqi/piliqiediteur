@@ -48,8 +48,10 @@ use LogicException;
  * (voir EmettreFactureAction) : deux caisses qui présentent le même bon au
  * même instant passent l'une après l'autre, et la seconde ne trouve plus
  * que ce que la première a laissé. Le panier de caisse du vendeur, sa
- * vente étant encaissée, se vide dans la même transaction (voir
- * PanierDeCaisse).
+ * vente étant encaissée, se vide dans la même transaction, après avoir
+ * inscrit au journal des événements ce qu'il perd jusqu'aux lignes
+ * vendues et chaque prix vendu plus bas que son prix arrêté (voir
+ * PanierDeCaisse::encaisser()).
  *
  * Son auteur, le vendeur, est relu sous le verrou de sa ligne après celui
  * du registre (voir LecteurDesDroits) : il doit pouvoir créer et émettre
@@ -132,7 +134,7 @@ class EnregistrerVenteCaisseAction
                 $confirmation,
             );
 
-            $this->panierDeCaisse->vider($vendeur);
+            $this->panierDeCaisse->encaisser($vendeur, $lignes);
 
             return $facture->fresh('lignes');
         });

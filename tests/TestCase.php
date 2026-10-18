@@ -687,7 +687,10 @@ abstract class TestCase extends BaseTestCase
      * (voir chassesDesPolices()). Dompdf écrit chaque morceau de ligne par
      * un opérateur « BT x y Td /Fn corps Tf [(texte)] TJ ET », le texte en
      * UTF-16 dans un flux compressé, ses parenthèses, ses barres obliques
-     * inverses et ses retours chariot échappés.
+     * inverses et ses retours chariot échappés. Les données d'un flux se
+     * lisent sur la longueur que déclare son dictionnaire : compressées,
+     * elles peuvent finir par un retour chariot, qu'un motif arrêté au
+     * « endstream » retirerait.
      *
      * @return list<array{format: string, textes: list<array{x: float, y: float, largeur: float, texte: string}>}>
      */
@@ -699,8 +702,10 @@ abstract class TestCase extends BaseTestCase
         return array_map(function (string $page) use ($pdf, $chasses): array {
             preg_match('/\/MediaBox \[([^\]]+)\]/', $page, $format);
             preg_match('/\/Contents (\d+) 0 R/', $page, $contenu);
-            preg_match('/\n'.$contenu[1].' 0 obj\s*<<(.*?)>>\s*stream\r?\n(.*?)\r?\nendstream/s', $pdf, $flux);
-            $operateurs = str_contains($flux[1], '/FlateDecode') ? gzuncompress($flux[2]) : $flux[2];
+            preg_match('/\n'.$contenu[1].' 0 obj\s*<<(.*?)>>\s*stream\r?\n/s', $pdf, $flux, PREG_OFFSET_CAPTURE);
+            preg_match('/\/Length (\d+)/', $flux[1][0], $longueur);
+            $donnees = substr($pdf, $flux[0][1] + strlen($flux[0][0]), (int) $longueur[1]);
+            $operateurs = str_contains($flux[1][0], '/FlateDecode') ? gzuncompress($donnees) : $donnees;
             preg_match_all('/BT ([-\d.]+) ([-\d.]+) Td \/(F\d+) ([\d.]+) Tf\s+\[\(((?:\\\\.|[^\\\\)])*)\)\] TJ ET/s', $operateurs, $textes, PREG_SET_ORDER);
 
             return [

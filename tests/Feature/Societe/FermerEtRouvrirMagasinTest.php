@@ -3,7 +3,9 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Authorization\AutorisationsSociete;
+use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
+use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
 use App\Domain\CaisseSecurisee\Services\SignataireFiscal;
@@ -23,13 +25,16 @@ use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\ChangerSiretAction;
 use App\Domain\Tenancy\Actions\ChoisirEtablissementPrincipalAction;
+use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
+use App\Domain\Tenancy\Actions\RefuserLaSocieteAction;
 use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Events\MagasinFerme;
 use App\Domain\Tenancy\Events\MagasinOuvert;
 use App\Domain\Tenancy\Events\MagasinRouvert;
@@ -39,19 +44,24 @@ use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Models\SiretMagasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Notifications\StockDuMagasinCede;
 use App\Domain\Tenancy\Services\ControleSirene;
+use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Closure;
+use Database\Factories\SocieteFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Notification;
 use LogicException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -585,6 +595,107 @@ class FermerEtRouvrirMagasinTest extends TestCase
     }
 
     /**
+     * @return array<string, array{0: Closure(Magasin, User): string}>
+     */
+    public static function correctionsDuSiretPendantLeControle(): array
+    {
+        return [
+            'NIC corrigé' => [static function (Magasin $magasin, User $proprietaire): string {
+                $siret = IdentifiantsInsee::avecSaCle($magasin->societe->siren.'9001');
+                app(ModifierEtablissementAction::class)->handle($proprietaire, $magasin->fresh(), ['nic' => substr($siret, 9)]);
+
+                return $siret;
+            }],
+            'SIREN corrigé' => [static function (Magasin $magasin, User $proprietaire): string {
+                $siren = SocieteFactory::sirenFictif();
+                $siret = IdentifiantsInsee::avecSaCle($siren.'9001');
+                app(CorrigerSirenAvantValidationAction::class)->handle($proprietaire, $magasin->societe->fresh(), $siren, [$magasin->id => substr($siret, 9)]);
+
+                return $siret;
+            }],
+        ];
+    }
+
+    /**
+     * Avant la validation, le SIRET d'un magasin fermé change encore : son
+     * NIC, ou le SIREN de la société, se corrige pendant que la réouverture
+     * attend le répertoire Sirene, l'INSEE ne répondant plus à la
+     * correction, qui laisse l'établissement à vérifier. Le contrôle de la
+     * réouverture, concluant pour l'ancien SIRET, ne vaut pas pour le
+     * nouveau : elle est refusée sans rien écrire, le magasin reste fermé
+     * et à vérifier, et aucun contrôle concluant ne s'inscrit sous le
+     * nouveau SIRET. Recommencée, elle contrôle le nouveau SIRET, fermé au
+     * répertoire, et elle est refusée.
+     *
+     * @param  Closure(Magasin, User): string  $corriger  la correction, qui rend le nouveau SIRET
+     */
+    #[DataProvider('correctionsDuSiretPendantLeControle')]
+    public function test_une_reouverture_dont_le_siret_change_pendant_le_controle_sirene_est_refusee(Closure $corriger): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $ancienSiret = (string) $magasin->siret;
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+        $nouveauSiret = null;
+        $this->pendantLaConsultationDe($ancienSiret, function () use ($magasin, $proprietaire, $corriger, &$nouveauSiret): void {
+            $this->repertoire()->rendreInjoignable();
+            $nouveauSiret = $corriger($magasin, $proprietaire);
+            $this->repertoire()->rendreInjoignable(false);
+        });
+
+        $this->assertThrows(fn () => $this->rouvrir($magasin), LogicException::class, RouvrirMagasinAction::MESSAGE_CONTROLE_PERIME);
+
+        $refuse = $magasin->fresh();
+        $this->assertSame([StatutMagasin::Ferme, MotifFermeture::Temporaire, $nouveauSiret, null], [$refuse->statut, $refuse->motif_fermeture, $refuse->siret, $refuse->etablissement_verifie_le]);
+        $this->assertSame([['concluante', $ancienSiret], ['indisponible', $nouveauSiret]], $this->controlesDeLEtablissement($magasin));
+        $this->assertSame(['ferme'], $this->changementsDeStatut($magasin));
+        $this->assertSame([], $this->entreesDAudit($magasin->societe, ActionAuditee::MagasinRouvert));
+        $this->assertThrows(fn () => $this->rouvrir($magasin), LogicException::class, ControleSirene::MOTIF_ETABLISSEMENT_FERME);
+    }
+
+    /**
+     * @return array<string, array{0: bool, 1: Closure(Societe): void}>
+     */
+    public static function decisionsDeLEditeurPendantLeControle(): array
+    {
+        return [
+            'société refusée avant sa validation' => [true, static function (Societe $societe): void {
+                app(RefuserLaSocieteAction::class)->handle($societe, new InterventionDeLEditeur('Pièces falsifiées, signalement du vrai dirigeant.', 'DOSSIER-2026-0042', ['alice']));
+            }],
+            'société validée suspendue' => [false, static function (Societe $societe): void {
+                $societe->fresh()->forceFill(['statut' => StatutSociete::Suspendue])->save();
+            }],
+        ];
+    }
+
+    /**
+     * L'éditeur refuse la société, ou la suspend, pendant que la
+     * réouverture attend le répertoire Sirene : la société passe en lecture
+     * seule, où aucun magasin ne se rouvre. La réouverture, qui relit la
+     * société sous son verrou, est refusée comme par la policy, sans rien
+     * écrire : le magasin reste fermé, sans JET 270 de réouverture, sans
+     * contrôle Sirene ni entrée d'audit.
+     *
+     * @param  Closure(Societe): void  $decider  la décision de l'éditeur
+     */
+    #[DataProvider('decisionsDeLEditeurPendantLeControle')]
+    public function test_une_reouverture_pendant_laquelle_la_societe_passe_en_lecture_seule_est_refusee(bool $aVerifier, Closure $decider): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => $aVerifier]);
+        $this->fermer($magasin, MotifFermeture::Temporaire);
+        $controles = $this->controlesDeLEtablissement($magasin);
+        $this->pendantLaConsultationDe((string) $magasin->siret, fn () => $decider($magasin->societe));
+
+        $this->assertThrows(fn () => $this->rouvrir($magasin), AuthorizationException::class, LecteurDesDroits::REFUS_DANS_LA_SOCIETE);
+
+        $this->assertTrue($magasin->societe->fresh()->estEnLectureSeule());
+        $this->assertSame([StatutMagasin::Ferme, MotifFermeture::Temporaire], [$magasin->fresh()->statut, $magasin->fresh()->motif_fermeture]);
+        $this->assertSame($controles, $this->controlesDeLEtablissement($magasin));
+        $this->assertSame(['ferme'], $this->changementsDeStatut($magasin));
+        $this->assertSame([], $this->entreesDAudit($magasin->societe, ActionAuditee::MagasinRouvert));
+    }
+
+    /**
      * Un magasin fermé temporairement, dont l'INSEE a fermé l'établissement
      * après la fermeture, se cède sans être rouvert ni recontrôlé au
      * répertoire Sirene (réponse M1 de l'éditeur) : son motif de fermeture
@@ -800,5 +911,25 @@ class FermerEtRouvrirMagasinTest extends TestCase
     private function repertoire(): FauxRepertoireSirene
     {
         return app(RepertoireSirene::class);
+    }
+
+    /**
+     * Les statuts que le journal des événements du magasin a reçus (JET
+     * 270 statut_magasin), dans l'ordre.
+     *
+     * @return list<string>
+     */
+    private function changementsDeStatut(Magasin $magasin): array
+    {
+        return app(TenantContext::class)->runAs($magasin, fn (): array => EnregistrementFiscal::query()
+            ->where('chaine', ChaineFiscale::Evenement->value)
+            ->where('type', (string) CodeEvenement::ParametreDeConformite->value)
+            ->orderBy('sequence')
+            ->get()
+            ->map(fn (EnregistrementFiscal $evenement): array => $evenement->contenuSigne()['donnees']['details'])
+            ->filter(fn (array $details): bool => $details['parametre'] === 'statut_magasin')
+            ->map(fn (array $details): string => $details['nouvelle_valeur'])
+            ->values()
+            ->all());
     }
 }

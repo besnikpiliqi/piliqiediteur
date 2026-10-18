@@ -5,8 +5,10 @@ namespace Tests\Feature\Societe;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Tenancy\Actions\ChangerSiretAction;
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
 use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
+use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
@@ -18,6 +20,7 @@ use App\Domain\Tenancy\Mail\AlerteEditeurMail;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ControleSirene;
+use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\ReverificationSirene;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -208,6 +211,71 @@ class ReverifierSireneTest extends TestCase
         $entree = $this->entrees($societe)->where('action.value', 'identite_modifiee')->sole();
         $this->assertSame([['categorie_juridique_insee' => '5499'], ['categorie_juridique_insee' => '5710'], 'systeme'], [$entree->anciennes_valeurs, $entree->nouvelles_valeurs, $entree->origine]);
         Log::shouldHaveReceived('warning')->with('Revérification Sirene : catégorie juridique différente pour une société validée.', ['societe_id' => $societe->id, 'avant' => '5499', 'apres' => '5710'])->once();
+    }
+
+    /**
+     * Le NIC d'un magasin créé pendant une panne de l'INSEE se corrige
+     * pendant que la reprise du contrôle consulte le répertoire, l'INSEE ne
+     * répondant plus à la correction. Le contrôle repris, concluant pour
+     * l'ancien SIRET, ne vaut pas pour le nouveau : rien ne s'inscrit, le
+     * magasin reste à vérifier, et la reprise suivante contrôle le nouveau
+     * SIRET, fermé au répertoire, sans le rendre vérifié.
+     */
+    public function test_un_controle_repris_ne_vaut_pas_pour_un_siret_corrige_pendant_la_consultation(): void
+    {
+        $premier = $this->ouvrirUneSociete(['nom' => 'Lyon centre', 'a_verifier' => true]);
+        $proprietaire = $this->proprietaireDe($premier);
+        app(RepertoireSirene::class)->rendreInjoignable();
+        $magasin = $this->ouvrirUnAutreMagasin($premier, ['nom' => 'Lyon 2']);
+        app(RepertoireSirene::class)->rendreInjoignable(false);
+        $ancienSiret = (string) $magasin->siret;
+        $nouveauSiret = IdentifiantsInsee::avecSaCle($premier->societe->siren.'9001');
+        $this->pendantLaConsultationDe($ancienSiret, function () use ($proprietaire, $magasin, $nouveauSiret): void {
+            app(RepertoireSirene::class)->rendreInjoignable();
+            app(ModifierEtablissementAction::class)->handle($proprietaire, $magasin->fresh(), ['nic' => substr($nouveauSiret, 9)]);
+            app(RepertoireSirene::class)->rendreInjoignable(false);
+        });
+        app(TenantContext::class)->clear();
+
+        $this->artisan('app:reverifier-sirene')->assertSuccessful();
+
+        $this->assertSame([$nouveauSiret, null], [$magasin->fresh()->siret, $magasin->fresh()->etablissement_verifie_le]);
+        $this->assertSame([['indisponible', $ancienSiret], ['indisponible', $nouveauSiret]], $this->controlesDeLEtablissement($magasin));
+
+        $this->artisan('app:reverifier-sirene')->assertSuccessful();
+
+        $this->assertNull($magasin->fresh()->etablissement_verifie_le);
+        $this->assertSame([['indisponible', $ancienSiret], ['indisponible', $nouveauSiret], ['negative', $nouveauSiret]], $this->controlesDeLEtablissement($magasin));
+    }
+
+    /**
+     * Après la validation, le magasin déménage pendant que la
+     * revérification mensuelle consulte l'établissement qu'il quitte, que
+     * l'INSEE ferme : ce contrôle ne vaut plus pour le magasin, qui a
+     * changé de SIRET. Rien ne s'inscrit à son nom, et aucun écart ne se
+     * signale, ni au propriétaire ni à l'éditeur.
+     */
+    public function test_un_demenagement_pendant_la_reverification_mensuelle_ne_signale_aucun_ecart(): void
+    {
+        Mail::fake();
+        config(['editeur.email' => 'editeur@piliqi.test']);
+        $siege = $this->ouvrirUneSociete(['nom' => 'Siège']);
+        $proprietaire = $this->proprietaireDe($siege);
+        $magasin = $this->ouvrirUnAutreMagasin($siege, ['nom' => 'Ma Boutique']);
+        $ancienSiret = (string) $magasin->siret;
+        $nouveauSiret = IdentifiantsInsee::avecSaCle($magasin->societe->siren.'0007');
+        $this->pendantLaConsultationDe($ancienSiret, function () use ($proprietaire, $magasin, $ancienSiret, $nouveauSiret): void {
+            app(ChangerSiretAction::class)->handle($proprietaire, $magasin->fresh(), substr($nouveauSiret, 9), 'password');
+            app(RepertoireSirene::class)->fermer($ancienSiret);
+        });
+        app(TenantContext::class)->clear();
+
+        $this->artisan('app:reverifier-sirene', ['--toutes' => true])->assertSuccessful();
+
+        $this->assertSame($nouveauSiret, $magasin->fresh()->siret);
+        $this->assertSame([['concluante', $ancienSiret], ['concluante', $nouveauSiret]], $this->controlesDeLEtablissement($magasin));
+        $this->assertSame([], $proprietaire->notifications()->get()->filter(fn ($notification): bool => $notification->data['title'] === 'Écart au répertoire Sirene')->all());
+        Mail::assertNotSent(AlerteEditeurMail::class);
     }
 
     /**

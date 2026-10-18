@@ -18,6 +18,7 @@ use App\Domain\Tenancy\Actions\RecevoirResultatIdentiteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -27,6 +28,8 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\GardesDesDroits;
 use App\Integrations\Identite\Contracts\VerificationIdentite;
 use App\Integrations\Identite\FausseVerificationIdentite;
+use App\Integrations\Sirene\Contracts\RepertoireSirene;
+use App\Integrations\Sirene\EtablissementSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -592,6 +595,24 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Les contrôles de l'établissement du magasin au répertoire Sirene,
+     * inscrits au registre des vérifications de sa société, dans l'ordre :
+     * le résultat et le SIRET contrôlé de chacun.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    protected function controlesDeLEtablissement(Magasin $magasin): array
+    {
+        return app(TenantContext::class)->runAsSociete($magasin->societe, fn (): array => VerificationSociete::query()
+            ->where('magasin_id', $magasin->id)
+            ->where('type', TypeVerification::SireneEtablissement->value)
+            ->orderBy('id')
+            ->get()
+            ->map(fn (VerificationSociete $controle): array => [$controle->resultat->value, $controle->details['siret']])
+            ->all());
+    }
+
+    /**
      * Le propriétaire de la société du magasin, qui a tous les droits dans
      * chacun de ses magasins.
      */
@@ -659,6 +680,40 @@ abstract class TestCase extends BaseTestCase
         DB::unprepared(DB::connection()->getDriverName() === 'pgsql'
             ? "DROP TRIGGER {$declencheur} ON {$table}"
             : "DROP TRIGGER {$declencheur}");
+    }
+
+    /**
+     * Fait $pendant pendant la prochaine consultation de ce SIRET au
+     * répertoire Sirene factice, une seule fois, avant sa réponse : ce qui
+     * s'y fait passe pendant que l'action qui consulte attend l'INSEE,
+     * avant qu'elle ne prenne ses verrous, comme un geste fait au même
+     * moment dans un autre onglet. Le répertoire factice du conteneur est
+     * remplacé par un neuf, avec ses réponses par défaut, que le test règle
+     * ensuite comme l'ancien.
+     *
+     * @param  Closure(): void  $pendant
+     */
+    protected function pendantLaConsultationDe(string $siret, Closure $pendant): FauxRepertoireSirene
+    {
+        $repertoire = new class($siret, $pendant) extends FauxRepertoireSirene
+        {
+            public function __construct(private readonly string $siretGuette, private ?Closure $pendant) {}
+
+            public function etablissement(string $siret): ?EtablissementSirene
+            {
+                $pendant = $siret === $this->siretGuette ? $this->pendant : null;
+
+                if ($pendant !== null) {
+                    $this->pendant = null;
+                    $pendant();
+                }
+
+                return parent::etablissement($siret);
+            }
+        };
+        $this->app->instance(RepertoireSirene::class, $repertoire);
+
+        return $repertoire;
     }
 
     /**

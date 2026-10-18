@@ -154,37 +154,57 @@ class ReverificationSirene
         }
     }
 
+    /**
+     * Le contrôle de l'établissement du magasin, consulté sur son SIRET du
+     * moment, puis appliqué à la ligne du magasin relue sous verrou : si
+     * son SIRET a changé pendant la consultation (NIC ou SIREN corrigé
+     * avant la validation, déménagement après), ce contrôle ne vaut pas
+     * pour lui, et rien ne s'écrit ni ne se signale ; son nouveau SIRET a
+     * son propre contrôle, inscrit par le geste qui l'a changé, que la
+     * reprise suivante reprend s'il est resté impossible et que la
+     * revérification mensuelle revoit. Sinon le contrôle s'inscrit ; un
+     * établissement à vérifier que le répertoire confirme devient vérifié ;
+     * un établissement qui l'était déjà signale ses écarts.
+     */
     private function reverifierLEtablissement(Magasin $magasin): void
     {
         $societe = $magasin->societe;
-        $consultation = $this->controle->etablissement((string) $magasin->siret, (string) $societe->siren);
+        $siret = (string) $magasin->siret;
+        $consultation = $this->controle->etablissement($siret, (string) $societe->siren);
         $etablissement = $consultation['etablissement'];
 
-        DB::transaction(function () use ($magasin, $consultation, $etablissement): void {
-            $confirme = $magasin->etablissement_verifie_le === null && $consultation['resultat'] === ResultatVerification::Concluante && $etablissement !== null && ControleSirene::estDansUnTerritoireGere($etablissement);
-            $adresseDuRepertoire = $confirme && ! ControleSirene::etablissementDejaConfirme($magasin);
-            $this->controle->noterEtablissement($magasin, $consultation);
+        $verifie = DB::transaction(function () use ($magasin, $siret, $consultation, $etablissement): ?Magasin {
+            $relu = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
+
+            if ($relu->siret !== $siret) {
+                return null;
+            }
+
+            $dejaVerifie = $relu->etablissement_verifie_le !== null;
+            $confirme = ! $dejaVerifie && $consultation['resultat'] === ResultatVerification::Concluante && $etablissement !== null && ControleSirene::estDansUnTerritoireGere($etablissement);
+            $adresseDuRepertoire = $confirme && ! ControleSirene::etablissementDejaConfirme($relu);
+            $this->controle->noterEtablissement($relu, $consultation);
 
             if ($confirme) {
-                Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail()
-                    ->forceFill(['etablissement_verifie_le' => now(), ...($adresseDuRepertoire ? [...ControleSirene::adresseDe($etablissement), 'pays' => 'FR'] : [])])
-                    ->save();
+                $relu->forceFill(['etablissement_verifie_le' => now(), ...($adresseDuRepertoire ? [...ControleSirene::adresseDe($etablissement), 'pays' => 'FR'] : [])])->save();
             }
+
+            return $dejaVerifie ? $relu : null;
         });
 
-        if ($magasin->etablissement_verifie_le === null) {
+        if ($verifie === null) {
             return;
         }
 
         $ecart = match (true) {
             $consultation['resultat'] === ResultatVerification::Negative => $consultation['motif'],
-            $consultation['resultat'] === ResultatVerification::Concluante && $etablissement !== null && SignauxDeRisque::adresseDiffere($magasin, ControleSirene::adresseEnUneLigne($etablissement)) => 'L\'adresse du magasin n\'est plus celle que le répertoire donne de son établissement : '.ControleSirene::adresseEnUneLigne($etablissement).'.',
+            $consultation['resultat'] === ResultatVerification::Concluante && $etablissement !== null && SignauxDeRisque::adresseDiffere($verifie, ControleSirene::adresseEnUneLigne($etablissement)) => 'L\'adresse du magasin n\'est plus celle que le répertoire donne de son établissement : '.ControleSirene::adresseEnUneLigne($etablissement).'.',
             default => null,
         };
 
         if ($ecart !== null) {
-            Log::warning('Revérification Sirene : écart sur un établissement vérifié.', ['magasin_id' => $magasin->getKey(), 'motif' => $ecart]);
-            $this->signalerLEcart($societe, "{$magasin->nom} (SIRET {$magasin->siret}) : {$ecart}", $consultation['resultat'] === ResultatVerification::Negative);
+            Log::warning('Revérification Sirene : écart sur un établissement vérifié.', ['magasin_id' => $verifie->getKey(), 'motif' => $ecart]);
+            $this->signalerLEcart($societe, "{$verifie->nom} (SIRET {$verifie->siret}) : {$ecart}", $consultation['resultat'] === ResultatVerification::Negative);
         }
     }
 

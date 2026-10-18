@@ -86,7 +86,7 @@ class EReportingResource extends Resource
      */
     public static function getEloquentQuery(): Builder
     {
-        return EReportingDesParticuliers::journeesADeclarer(app(TenantContext::class)->magasin());
+        return app(EReportingDesParticuliers::class)->journeesADeclarer(app(TenantContext::class)->magasin());
     }
 
     public static function apercu(ClotureCaisse $cloture): ApercuEReporting

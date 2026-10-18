@@ -34,31 +34,42 @@ use Illuminate\Support\Collection;
  * catégorie, par taux et par motif ; leur total est donc exactement le net
  * de la clôture, qui additionne les mêmes documents (voir
  * CloturerCaisseAction). Une ligne vendue avec la TVA française est une
- * livraison de biens ou une prestation de services, selon sa nature ; une
- * vente sans TVA française (export expédié, livraison vers un DOM, et la
- * franchise en base, dont la catégorie reste à vérifier) se range dans les
- * opérations non soumises à la TVA en France, avec son motif : elle est à
- * déclarer, et sa transmission attend que l'étape 2 sache envoyer ce motif,
- * comme celle d'une vente en France à 0 %.
+ * livraison de biens ou une prestation de services, selon sa nature. Une
+ * vente sans TVA française se range dans les opérations non soumises à la
+ * TVA en France, avec son motif : elle est à déclarer, et sa transmission
+ * attend que l'étape 2 sache envoyer ce motif. C'est la catégorie que les
+ * notes du projet donnent à l'export expédié et à la livraison vers un DOM
+ * (cas V3 et V5) ; elle reste à vérifier pour la franchise en base (cas
+ * V14) et pour une vente en France à 0 %, la France n'ayant pas de taux
+ * zéro : une opération exonérée en France (art. 261 à 261 E du CGI) serait,
+ * d'après ces notes, hors de l'e-reporting.
  *
  * Les encaissements des prestations de services (la TVA d'un service est
  * due à l'encaissement) sont les règlements que la clôture compte sur des
  * tickets qui vendent un service avec la TVA française : chaque paiement
  * d'un mode à sa date de réception, contre-passations déduites, et chaque
- * crédit d'avoir à la date où il est utilisé (Q13), sauf le crédit qu'un
- * avoir impute sur un ticket qu'il corrige, qui réduit la vente au lieu de
- * la régler. Ils se lisent, comme ceux du récapitulatif de la clôture (voir
- * RecapitulatifDeCloture), dans les enregistrements du registre fiscal qui
- * suivent ceux de la clôture précédente : chaque règlement compte dans une
- * seule clôture. Un ticket qui ne vend que des services à un même taux
- * déclare tout ce qu'il reçoit à ce taux ; un ticket qui mêle biens et
- * services, ou plusieurs taux de services, déclare la part de chaque
- * service quand il est réglé en une fois à son émission, et sinon son
- * règlement reste à répartir. Tous attendent la confirmation de la règle
- * par l'expert-comptable de la société.
+ * crédit d'avoir à la date où il est utilisé (Q13). Seule la part d'un
+ * crédit qui annule les lignes que son avoir corrige sur ce ticket n'est
+ * pas un règlement : elle réduit la vente, et ne pas la compter garde
+ * égaux le net vendu du ticket et ce qu'il a encaissé (voir
+ * sansLesReductions()). Ils se lisent, comme ceux du récapitulatif de la
+ * clôture (voir RecapitulatifDeCloture), dans les enregistrements du
+ * registre fiscal qui suivent ceux de la clôture précédente : chaque
+ * règlement compte dans une seule clôture. Les règlements d'un même ticket
+ * à une même date s'additionnent : un ticket qui ne vend que des services
+ * à un même taux déclare tout ce qu'il reçoit à ce taux ; un ticket qui
+ * mêle biens et services, ou plusieurs taux de services, déclare la part
+ * de chaque service quand ses règlements de la date le soldent en entier,
+ * ou rendent en entier un règlement qui le soldait, et sinon son règlement
+ * reste à répartir. Tous attendent la confirmation de la règle par
+ * l'expert-comptable de la société. L'avoir d'une prestation déjà
+ * encaissée ne se déduit pas de ses encaissements, même quand son crédit
+ * règle ensuite une autre vente : point soumis à l'éditeur.
  *
  * Le magasin de démonstration n'est jamais déclaré. Toutes les lectures
- * restent dans le magasin actif (MagasinScope), celui de la clôture.
+ * restent dans le magasin actif (MagasinScope), celui de la clôture ; le
+ * registre fiscal se lit par MagasinScope, et par le magasin de chaque
+ * clôture dans journeesADeclarer().
  */
 class EReportingDesParticuliers
 {
@@ -70,9 +81,9 @@ class EReportingDesParticuliers
 
     public const MOTIF_TAUX_ZERO = 'Vente en France à 0 %';
 
-    public const MENTION_ENCAISSEMENTS = 'En attente de la confirmation de l\'expert-comptable de la société. Un crédit d\'avoir compte à la date où il est utilisé.';
+    public const MENTION_ENCAISSEMENTS = 'En attente de la confirmation de l\'expert-comptable de la société. Un crédit d\'avoir compte à la date où il est utilisé, sauf la part qui annule les lignes que son avoir corrige sur ce ticket. Point soumis à l\'éditeur : l\'avoir d\'une prestation déjà encaissée ne se déduit pas de ses encaissements, même quand son crédit règle ensuite une autre vente.';
 
-    public const MENTION_A_REPARTIR = 'Règlements reçus en plusieurs fois d\'un ticket qui mêle biens et services, ou plusieurs taux de services : leur répartition entre biens et services, et entre taux, attend la règle de l\'expert-comptable de la société.';
+    public const MENTION_A_REPARTIR = 'Règlements qui ne soldent pas en une fois, à une même date, un ticket qui mêle biens et services ou plusieurs taux de services : règlement partiel, reste dû d\'un ticket corrigé par un avoir, ou contre-passation d\'un tel règlement. Leur répartition entre biens et services, et entre taux, attend la règle de l\'expert-comptable de la société.';
 
     public const MENTION_DEMONSTRATION = 'Magasin de démonstration : jamais déclaré.';
 
@@ -105,43 +116,88 @@ class EReportingDesParticuliers
     }
 
     /**
-     * Les journées clôturées du magasin qui ont des opérations à déclarer :
-     * des ventes ou des avoirs aux particuliers, ou un règlement compté par
-     * la clôture (un paiement, et le crédit d'avoir qu'il impute) sur un
-     * ticket qui vend un service avec la TVA française. Aucune pour le
-     * magasin de démonstration.
+     * Les journées clôturées du magasin actif qui ont quelque chose à
+     * déclarer, exactement celles dont l'aperçu le dit
+     * (ApercuEReporting::aDeclarer()) : celles qui comptent une vente ou un
+     * avoir à un particulier, dont l'aperçu a des transactions, et, parmi
+     * les autres, celles dont l'aperçu montre un encaissement de prestation
+     * de services. Ces dernières se cherchent parmi les seules clôtures qui
+     * comptent un enregistrement du registre réglant un ticket déclaré qui
+     * vend un service avec la TVA française (un paiement ou une
+     * contre-passation, et le crédit d'avoir qu'ils imputent, ou l'avoir,
+     * fait à tout client, qui impute son crédit à son émission), puis leur
+     * aperçu les garde ou les écarte : des règlements qui s'annulent le
+     * même jour ne déclarent rien. Aucune pour le magasin de démonstration.
      *
      * @return Builder<ClotureCaisse>
      */
-    public static function journeesADeclarer(Magasin $magasin): Builder
+    public function journeesADeclarer(Magasin $magasin): Builder
     {
         if ($magasin->est_demonstration) {
             return ClotureCaisse::query()->whereRaw('1 = 0');
         }
 
+        $avecDesTransactions = fn (Builder $clotures): Builder => $clotures->where('clotures_caisse.nombre_ventes', '>', 0)->orWhere('clotures_caisse.nombre_avoirs', '>', 0);
+        $parLeursEncaissements = ClotureCaisse::query()
+            ->where('clotures_caisse.magasin_id', $magasin->getKey())
+            ->whereNot($avecDesTransactions)
+            ->where(fn (Builder $clotures): Builder => self::quiComptentUnReglementDeService($clotures))
+            ->get()
+            ->filter(fn (ClotureCaisse $cloture): bool => $this->apercu($cloture)->aDeclarer())
+            ->modelKeys();
+
+        return ClotureCaisse::query()
+            ->where('clotures_caisse.magasin_id', $magasin->getKey())
+            ->where(fn (Builder $clotures): Builder => $avecDesTransactions($clotures)->orWhereIn('clotures_caisse.id', $parLeursEncaissements));
+    }
+
+    /**
+     * Les clôtures qui comptent un enregistrement du registre de leur
+     * magasin réglant un ticket déclaré qui vend un service avec la TVA
+     * française : un paiement ou une contre-passation, dans la chaîne des
+     * encaissements, par ce qu'il impute ou par le crédit d'avoir qu'il
+     * impute ; un avoir, dans la chaîne des ventes, par le crédit qu'il
+     * impute à son émission.
+     *
+     * @param  Builder<ClotureCaisse>  $clotures
+     * @return Builder<ClotureCaisse>
+     */
+    private static function quiComptentUnReglementDeService(Builder $clotures): Builder
+    {
         $ticketsAvecUnService = self::declares(Facture::query())
             ->whereHas('lignes', fn (Builder $lignes): Builder => $lignes->where('nature', NatureLigne::Service->value)->where('taux_tva', '>', 0))
             ->select('factures.id');
 
-        return ClotureCaisse::query()
-            ->where('clotures_caisse.magasin_id', $magasin->getKey())
-            ->where(fn (Builder $clotures): Builder => $clotures
-                ->where('nombre_ventes', '>', 0)
-                ->orWhere('nombre_avoirs', '>', 0)
-                ->orWhereExists(fn (QueryBuilder $encaissements): QueryBuilder => $encaissements
-                    ->from('enregistrements_fiscaux')
-                    ->whereColumn('enregistrements_fiscaux.magasin_id', 'clotures_caisse.magasin_id')
-                    ->where('enregistrements_fiscaux.chaine', ChaineFiscale::Encaissement->value)
-                    ->where('enregistrements_fiscaux.document_type', (new Paiement)->getMorphClass())
-                    ->whereColumn('enregistrements_fiscaux.sequence', '<=', 'clotures_caisse.derniere_sequence_encaissement')
-                    ->where('enregistrements_fiscaux.sequence', '>', fn (QueryBuilder $precedente): QueryBuilder => $precedente
-                        ->from('clotures_caisse as precedente')
-                        ->selectRaw('coalesce(max(precedente.derniere_sequence_encaissement), 0)')
-                        ->whereColumn('precedente.magasin_id', 'clotures_caisse.magasin_id')
-                        ->whereColumn('precedente.date_cloture', '<', 'clotures_caisse.date_cloture'))
-                    ->where(fn (QueryBuilder $reglements): QueryBuilder => $reglements
-                        ->whereIn('enregistrements_fiscaux.document_id', PaiementAllocation::query()->whereIn('facture_id', $ticketsAvecUnService)->select('paiement_id'))
-                        ->orWhereIn('enregistrements_fiscaux.document_id', AvoirAllocation::query()->whereIn('facture_id', $ticketsAvecUnService)->whereNotNull('paiement_id')->select('paiement_id')))));
+        return $clotures
+            ->whereExists(fn (QueryBuilder $enregistrements): QueryBuilder => self::enregistrementsDeLaCloture($enregistrements, ChaineFiscale::Encaissement, 'derniere_sequence_encaissement')
+                ->where('enregistrements_fiscaux.document_type', (new Paiement)->getMorphClass())
+                ->where(fn (QueryBuilder $paiements): QueryBuilder => $paiements
+                    ->whereIn('enregistrements_fiscaux.document_id', PaiementAllocation::query()->whereIn('facture_id', $ticketsAvecUnService)->select('paiement_id'))
+                    ->orWhereIn('enregistrements_fiscaux.document_id', AvoirAllocation::query()->whereIn('facture_id', $ticketsAvecUnService)->whereNotNull('paiement_id')->select('paiement_id'))))
+            ->orWhereExists(fn (QueryBuilder $enregistrements): QueryBuilder => self::enregistrementsDeLaCloture($enregistrements, ChaineFiscale::Vente, 'derniere_sequence_vente')
+                ->where('enregistrements_fiscaux.document_type', (new Avoir)->getMorphClass())
+                ->whereIn('enregistrements_fiscaux.document_id', AvoirAllocation::query()->whereIn('facture_id', $ticketsAvecUnService)->whereNull('paiement_id')->select('avoir_id')));
+    }
+
+    /**
+     * Les enregistrements de cette chaîne du registre du magasin de la
+     * clôture qu'elle compte : après la dernière séquence de la clôture
+     * précédente, jusqu'à la sienne.
+     *
+     * @param  'derniere_sequence_vente'|'derniere_sequence_encaissement'  $derniereSequence
+     */
+    private static function enregistrementsDeLaCloture(QueryBuilder $enregistrements, ChaineFiscale $chaine, string $derniereSequence): QueryBuilder
+    {
+        return $enregistrements
+            ->from('enregistrements_fiscaux')
+            ->whereColumn('enregistrements_fiscaux.magasin_id', 'clotures_caisse.magasin_id')
+            ->where('enregistrements_fiscaux.chaine', $chaine->value)
+            ->whereColumn('enregistrements_fiscaux.sequence', '<=', "clotures_caisse.{$derniereSequence}")
+            ->where('enregistrements_fiscaux.sequence', '>', fn (QueryBuilder $precedente): QueryBuilder => $precedente
+                ->from('clotures_caisse as precedente')
+                ->selectRaw("coalesce(max(precedente.{$derniereSequence}), 0)")
+                ->whereColumn('precedente.magasin_id', 'clotures_caisse.magasin_id')
+                ->whereColumn('precedente.date_cloture', '<', 'clotures_caisse.date_cloture'));
     }
 
     /**
@@ -193,7 +249,7 @@ class EReportingDesParticuliers
      * La transaction d'une ligne, ses montants enregistrés en centimes, en
      * négatif pour un avoir ($sens = -1), sa catégorie et son motif selon
      * le document : franchise en base, nature d'opération hors de la TVA
-     * française, ou vente en France à son taux.
+     * française, vente en France à 0 %, ou vente en France à son taux.
      *
      * @return array{categorie: CategorieEReporting, taux: int, ht: int, tva: int, motif: string|null, remarque: string|null}
      */
@@ -203,7 +259,7 @@ class EReportingDesParticuliers
         [$categorie, $motif, $remarque] = match (true) {
             $document->franchise_en_base => [CategorieEReporting::NonSoumisesALaTvaEnFrance, self::MOTIF_FRANCHISE, self::MENTION_CATEGORIE_A_VERIFIER],
             $document->nature_operation->exonere() => [CategorieEReporting::NonSoumisesALaTvaEnFrance, $document->nature_operation->getLabel(), self::MENTION_TRANSMISSION_EN_ATTENTE],
-            $taux === 0 => [CategorieEReporting::deLaNature($ligne->nature), self::MOTIF_TAUX_ZERO, self::MENTION_TRANSMISSION_EN_ATTENTE],
+            $taux === 0 => [CategorieEReporting::NonSoumisesALaTvaEnFrance, self::MOTIF_TAUX_ZERO, self::MENTION_CATEGORIE_A_VERIFIER],
             default => [CategorieEReporting::deLaNature($ligne->nature), null, null],
         };
 
@@ -220,7 +276,9 @@ class EReportingDesParticuliers
     /**
      * Les encaissements des prestations de services que la clôture compte,
      * par date et par taux, et ceux qui restent à répartir, par date ; ni
-     * l'un ni l'autre ne garde une somme nulle.
+     * l'un ni l'autre ne garde une somme nulle. Les règlements d'un même
+     * ticket à une même date s'additionnent d'abord : ce qu'un ticket reçoit
+     * ce jour-là, contre-passations déduites.
      *
      * @return array{0: list<array{date: string, taux: int, montant: int}>, 1: list<array{date: string, montant: int}>}
      */
@@ -231,39 +289,47 @@ class EReportingDesParticuliers
             ->whereDate('date_cloture', '<', $cloture->date_cloture->toDateString())
             ->orderByDesc('date_cloture')
             ->first();
-        $reglements = $this->reglements(
+        $reglements = $this->sansLesReductions($this->reglements(
             self::enregistrementsComptes(ChaineFiscale::Vente, $precedente?->derniere_sequence_vente, $cloture->derniere_sequence_vente),
             self::enregistrementsComptes(ChaineFiscale::Encaissement, $precedente?->derniere_sequence_encaissement, $cloture->derniere_sequence_encaissement),
-        );
+        ));
         $tickets = self::declares(Facture::query())->whereKey(array_unique(array_column($reglements, 'facture_id')))->with('lignes')->get()->keyBy('id');
-        $ticketsCorriges = self::ticketsCorriges(array_values(array_unique(array_filter(array_column($reglements, 'avoir_id')))));
+        $recus = [];
+
+        foreach ($reglements as $reglement) {
+            if ($tickets->has($reglement['facture_id'])) {
+                $cle = "{$reglement['facture_id']}|{$reglement['date']}";
+                $recus[$cle] = ($recus[$cle] ?? 0) + $reglement['montant'];
+            }
+        }
+
         $parTaux = [];
         $aRepartir = [];
 
-        foreach ($reglements as $reglement) {
-            $ticket = $tickets->get($reglement['facture_id']);
-
-            if ($ticket === null || ($reglement['avoir_id'] !== null && in_array($reglement['facture_id'], $ticketsCorriges[$reglement['avoir_id']] ?? [], true))) {
-                continue;
-            }
-
-            $groupes = $this->groupes($ticket);
+        foreach ($recus as $cle => $montant) {
+            [$factureId, $date] = explode('|', $cle);
+            $groupes = $this->groupes($tickets->get((int) $factureId));
             $services = array_filter($groupes, fn (array $groupe): bool => $groupe['nature'] === NatureLigne::Service && $groupe['taux'] > 0);
 
-            if ($services === []) {
+            if ($montant === 0 || $services === []) {
                 continue;
             }
 
-            if (count($groupes) === 1 || $reglement['solde_a_l_emission']) {
+            if (count($groupes) === 1) {
+                $parTaux["{$date}|{$groupes[0]['taux']}"] = ($parTaux["{$date}|{$groupes[0]['taux']}"] ?? 0) + $montant;
+
+                continue;
+            }
+
+            if (abs($montant) === (int) array_sum(array_column($groupes, 'ttc'))) {
                 foreach ($services as $service) {
-                    $cle = "{$reglement['date']}|{$service['taux']}";
-                    $parTaux[$cle] = ($parTaux[$cle] ?? 0) + (count($groupes) === 1 ? $reglement['montant'] : $service['ttc']);
+                    $parTaux["{$date}|{$service['taux']}"] = ($parTaux["{$date}|{$service['taux']}"] ?? 0) + ($montant <=> 0) * $service['ttc'];
                 }
 
                 continue;
             }
 
-            $aRepartir[$reglement['date']] = ($aRepartir[$reglement['date']] ?? 0) + $reglement['montant'];
+            $aRepartir[$date] = ($aRepartir[$date] ?? 0) + $montant;
         }
 
         $parTaux = array_filter($parTaux);
@@ -310,17 +376,19 @@ class EReportingDesParticuliers
     }
 
     /**
-     * Les règlements que signent ces enregistrements, en centimes : ce qui
-     * règle un ticket ou une facture à son émission (paiements de ses parts
-     * et crédits d'avoir), en un seul règlement daté du jour de l'émission
-     * et noté soldé quand il couvre tout le document ; les imputations d'un
+     * Les règlements que signent ces enregistrements, dans leur ordre, en
+     * centimes : ce qui règle un ticket ou une facture à son émission
+     * (paiements de ses parts et crédits d'avoir d'avoirs plus anciens), en
+     * un seul règlement daté du jour de l'émission ; les imputations d'un
      * avoir, datées du jour de son émission ; puis ce qu'imputent les
-     * autres paiements, chacun daté du jour de sa réception, et le crédit
-     * d'avoir qu'ils imputent, daté du jour de leur enregistrement.
+     * autres paiements et les contre-passations, chacun daté du jour de sa
+     * réception, et le crédit d'avoir qu'ils imputent ou rendent, daté du
+     * jour de leur enregistrement. Un crédit d'avoir garde son avoir, et le
+     * paiement qui le signe (null à l'émission de l'avoir).
      *
      * @param  Collection<int, EnregistrementFiscal>  $ventes
      * @param  Collection<int, EnregistrementFiscal>  $encaissements
-     * @return list<array{facture_id: int, date: string, montant: int, avoir_id: int|null, solde_a_l_emission: bool}>
+     * @return list<array{facture_id: int, date: string, montant: int, avoir_id: int|null, paiement_id: int|null}>
      */
     private function reglements(Collection $ventes, Collection $encaissements): array
     {
@@ -332,7 +400,7 @@ class EReportingDesParticuliers
 
             if ($vente->type === 'avoir') {
                 foreach ($contexte['imputations'] as $imputation) {
-                    $reglements[] = self::reglement((int) $imputation['facture_id'], self::jourDe($vente), (int) $imputation['montant'], (int) $vente->document_id);
+                    $reglements[] = self::reglement((int) $imputation['facture_id'], self::jourDe($vente), (int) $imputation['montant'], (int) $vente->document_id, null);
                 }
 
                 continue;
@@ -342,10 +410,7 @@ class EReportingDesParticuliers
             $montant = (int) array_sum(array_column($contexte['reglements'], 'montant')) + (int) array_sum(array_column($contexte['credits_avoir'], 'montant'));
 
             if ($montant !== 0) {
-                $reglements[] = [
-                    ...self::reglement((int) $vente->document_id, self::jourDe($vente), $montant, null),
-                    'solde_a_l_emission' => $montant === $vente->contenuSigne()['donnees']['document']['totaux']['ttc'],
-                ];
+                $reglements[] = self::reglement((int) $vente->document_id, self::jourDe($vente), $montant, null, null);
             }
         }
 
@@ -357,11 +422,11 @@ class EReportingDesParticuliers
             $donnees = $encaissement->contenuSigne()['donnees'];
 
             foreach ($donnees['allocations'] as $allocation) {
-                $reglements[] = self::reglement((int) $allocation['facture_id'], $donnees['paiement']['recu_le'], (int) $allocation['montant'], null);
+                $reglements[] = self::reglement((int) $allocation['facture_id'], $donnees['paiement']['recu_le'], (int) $allocation['montant'], null, null);
             }
 
             foreach ($donnees['credits_imputes'] as $credit) {
-                $reglements[] = self::reglement((int) $credit['facture_id'], self::jourDe($encaissement), (int) $credit['montant'], (int) $credit['avoir_id']);
+                $reglements[] = self::reglement((int) $credit['facture_id'], self::jourDe($encaissement), (int) $credit['montant'], (int) $credit['avoir_id'], (int) $encaissement->document_id);
             }
         }
 
@@ -369,11 +434,11 @@ class EReportingDesParticuliers
     }
 
     /**
-     * @return array{facture_id: int, date: string, montant: int, avoir_id: int|null, solde_a_l_emission: bool}
+     * @return array{facture_id: int, date: string, montant: int, avoir_id: int|null, paiement_id: int|null}
      */
-    private static function reglement(int $factureId, string $date, int $montant, ?int $avoirId): array
+    private static function reglement(int $factureId, string $date, int $montant, ?int $avoirId, ?int $paiementId): array
     {
-        return ['facture_id' => $factureId, 'date' => $date, 'montant' => $montant, 'avoir_id' => $avoirId, 'solde_a_l_emission' => false];
+        return ['facture_id' => $factureId, 'date' => $date, 'montant' => $montant, 'avoir_id' => $avoirId, 'paiement_id' => $paiementId];
     }
 
     /**
@@ -386,22 +451,127 @@ class EReportingDesParticuliers
     }
 
     /**
-     * Les tickets et les factures que corrige chacun de ces avoirs, par
-     * avoir : son crédit imputé sur l'un d'eux ne le règle pas, il le
-     * réduit.
+     * Les règlements, chaque crédit qu'un avoir impute sur un ticket ou une
+     * facture qu'il corrige diminué de la part qui annule les lignes de cet
+     * avoir sur ce document (voir reductions()) : cette part réduit la
+     * vente, elle ne la règle pas. Le reste du crédit, venu des autres
+     * lignes de l'avoir, règle le document comme tout crédit d'avoir
+     * (Q13). Un ticket dont la vente est réduite de cette part encaisse
+     * ainsi, une fois soldé, exactement son net vendu.
+     *
+     * @param  list<array{facture_id: int, date: string, montant: int, avoir_id: int|null, paiement_id: int|null}>  $reglements
+     * @return list<array{facture_id: int, date: string, montant: int, avoir_id: int|null, paiement_id: int|null}>
+     */
+    private function sansLesReductions(array $reglements): array
+    {
+        $corrections = $this->corrections(array_values(array_unique(array_filter(array_column($reglements, 'avoir_id')))));
+
+        if ($corrections === []) {
+            return $reglements;
+        }
+
+        $reductions = $this->reductions($corrections);
+
+        foreach ($reglements as $indice => $reglement) {
+            if ($reglement['avoir_id'] === null || ! isset($corrections[$reglement['avoir_id']][$reglement['facture_id']])) {
+                continue;
+            }
+
+            $cle = self::cleDImputation($reglement['avoir_id'], $reglement['facture_id'], $reglement['paiement_id']);
+            $reductions[$cle] ??= [];
+            $reglements[$indice]['montant'] -= array_shift($reductions[$cle]) ?? 0;
+        }
+
+        return $reglements;
+    }
+
+    /**
+     * Ce que chacun de ces avoirs corrige de chaque ticket ou facture, en
+     * centimes : le TTC de ses lignes sur ce document, comme le compte
+     * ImputationDuCredit, par avoir puis par document.
      *
      * @param  list<int>  $avoirs
-     * @return array<int, list<int>>
+     * @return array<int, array<int, int>>
      */
-    private static function ticketsCorriges(array $avoirs): array
+    private function corrections(array $avoirs): array
     {
-        return LigneAvoir::query()
-            ->whereIn('avoir_id', $avoirs)
-            ->with('ligneFacture')
-            ->get()
-            ->groupBy('avoir_id')
-            ->map(fn (Collection $lignes): array => $lignes->map(fn (LigneAvoir $ligne): int => (int) $ligne->ligneFacture->facture_id)->unique()->values()->all())
-            ->all();
+        if ($avoirs === []) {
+            return [];
+        }
+
+        $corrections = [];
+
+        foreach (LigneAvoir::query()->whereIn('avoir_id', $avoirs)->with('ligneFacture')->get() as $ligne) {
+            $avoirId = (int) $ligne->avoir_id;
+            $factureId = (int) $ligne->ligneFacture->facture_id;
+            $corrections[$avoirId][$factureId] = ($corrections[$avoirId][$factureId] ?? 0) + $this->calculateur->enCentiemes($ligne->montant_ttc);
+        }
+
+        return $corrections;
+    }
+
+    /**
+     * La part de chaque imputation de ces avoirs sur un document qu'ils
+     * corrigent qui annule leurs lignes sur ce document, en centimes, dans
+     * l'ordre où les imputations ont été faites (toutes sous le verrou du
+     * registre du magasin, donc dans l'ordre du registre) : ce qui reste de
+     * la correction (le TTC des lignes de l'avoir sur ce document, moins ce
+     * que les imputations précédentes du même avoir sur ce document en ont
+     * déjà annulé), au plus le montant imputé. L'imputation négative par
+     * laquelle une contre-passation rend un crédit rend la part
+     * qu'annulait l'imputation correspondante du paiement contre-passé,
+     * dans le même ordre (voir ContrePasserPaiementAction). Rangées par
+     * avoir, document et paiement qui signe l'imputation (0 pour
+     * l'émission de l'avoir).
+     *
+     * @param  array<int, array<int, int>>  $corrections
+     * @return array<string, list<int>>
+     */
+    private function reductions(array $corrections): array
+    {
+        $imputations = AvoirAllocation::query()
+            ->whereIn('avoir_id', array_keys($corrections))
+            ->with('paiement')
+            ->orderBy('id')
+            ->get();
+        $dejaAnnule = [];
+        $reductionsDesPaiements = [];
+        $reductions = [];
+
+        foreach ($imputations as $imputation) {
+            $avoirId = (int) $imputation->avoir_id;
+            $factureId = (int) $imputation->facture_id;
+
+            if (! isset($corrections[$avoirId][$factureId])) {
+                continue;
+            }
+
+            $paiementId = $imputation->paiement_id === null ? null : (int) $imputation->paiement_id;
+            $cle = self::cleDImputation($avoirId, $factureId, $paiementId);
+            $montant = $this->calculateur->enCentiemes($imputation->montant_alloue);
+
+            if ($montant >= 0) {
+                $reduction = min($montant, max(0, $corrections[$avoirId][$factureId] - ($dejaAnnule["{$avoirId}|{$factureId}"] ?? 0)));
+
+                if ($paiementId !== null) {
+                    $reductionsDesPaiements[$cle][] = $reduction;
+                }
+            } else {
+                $cleDOrigine = self::cleDImputation($avoirId, $factureId, (int) $imputation->paiement?->contre_passe_paiement_id);
+                $reductionsDesPaiements[$cleDOrigine] ??= [];
+                $reduction = -(array_shift($reductionsDesPaiements[$cleDOrigine]) ?? 0);
+            }
+
+            $dejaAnnule["{$avoirId}|{$factureId}"] = ($dejaAnnule["{$avoirId}|{$factureId}"] ?? 0) + $reduction;
+            $reductions[$cle][] = $reduction;
+        }
+
+        return $reductions;
+    }
+
+    private static function cleDImputation(int $avoirId, int $factureId, ?int $paiementId): string
+    {
+        return "{$avoirId}|{$factureId}|".($paiementId ?? 0);
     }
 
     /**

@@ -13,9 +13,11 @@ use App\Domain\Facturation\Enums\CategorieEReporting;
  *   n'a que des avoirs) ; le motif et la remarque disent pourquoi une vente
  *   sans TVA française reste à déclarer et ce qui attend sa transmission ;
  * - les encaissements des prestations de services, par date et par taux ;
- * - les règlements d'une vente qui mêle biens et services, ou plusieurs
- *   taux de services, reçus en plusieurs fois, par date, dont la
- *   répartition attend la règle de l'expert-comptable de la société.
+ * - les règlements d'un ticket qui mêle biens et services, ou plusieurs
+ *   taux de services, qui ne le soldent pas en une fois à une même date
+ *   (règlement partiel, reste dû d'un ticket corrigé par un avoir, ou
+ *   contre-passation d'un tel règlement), par date, dont la répartition
+ *   attend la règle de l'expert-comptable de la société.
  *
  * Le magasin de démonstration n'a jamais rien à déclarer.
  */

@@ -227,7 +227,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->verifierLIdentiteDuProprietaire($societe);
         $apercu = app(TenantContext::class)->runAs($demonstration, fn () => app(EReportingDesParticuliers::class)->apercu(ClotureCaisse::query()->sole()));
         $this->assertSame([true, false], [$apercu->demonstration, $apercu->aDeclarer()]);
-        $this->assertSame(0, app(TenantContext::class)->runAs($demonstration, fn (): int => EReportingDesParticuliers::journeesADeclarer($demonstration)->count()));
+        $this->assertSame(0, app(TenantContext::class)->runAs($demonstration, fn (): int => app(EReportingDesParticuliers::class)->journeesADeclarer($demonstration)->count()));
     }
 
     public function test_ses_documents_portent_une_identite_fictive_et_le_filigrane(): void

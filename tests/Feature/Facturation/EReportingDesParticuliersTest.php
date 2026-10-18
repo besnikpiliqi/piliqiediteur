@@ -4,6 +4,7 @@ namespace Tests\Feature\Facturation;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CloturerCaisseAction;
 use App\Domain\Facturation\Actions\ContrePasserPaiementAction;
@@ -14,6 +15,7 @@ use App\Domain\Facturation\Actions\EnregistrerPaiementAction;
 use App\Domain\Facturation\Enums\CategorieEReporting;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Enums\NatureOperation;
+use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
@@ -25,7 +27,9 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ViewClotureCaisse;
 use Filament\Facades\Filament;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -240,7 +244,7 @@ class EReportingDesParticuliersTest extends TestCase
 
         $this->assertFalse($this->apercu($aZero)->aDeclarer());
         $this->assertSame([], $this->apercu($aZero)->transactions);
-        $this->assertSame([$avecVente->id], EReportingDesParticuliers::journeesADeclarer($this->magasin)->pluck('id')->all());
+        $this->assertSame([$avecVente->id], app(EReportingDesParticuliers::class)->journeesADeclarer($this->magasin)->pluck('id')->all());
     }
 
     /**
@@ -293,11 +297,12 @@ class EReportingDesParticuliersTest extends TestCase
     }
 
     /**
-     * Un câble à 10,00 € vendu en France à un taux saisi de 0 % reste une
-     * livraison de biens, à déclarer, sa transmission attendant comme
-     * toute vente à 0 % la prise en charge de son motif.
+     * Un câble à 10,00 € vendu en France à un taux saisi de 0 % : la France
+     * n'a pas de taux zéro, une vente sans TVA française se range parmi les
+     * opérations non soumises à la TVA en France, à déclarer, sa catégorie
+     * restant à vérifier comme celle de la franchise en base.
      */
-    public function test_une_vente_en_france_a_zero_pour_cent_garde_sa_categorie_en_attente_de_son_motif(): void
+    public function test_une_vente_en_france_a_zero_pour_cent_se_range_dans_les_operations_non_soumises_categorie_a_verifier(): void
     {
         $this->travelTo('2026-10-05 10:00:00');
         self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit(10, 0)->id, 'quantite' => 1]]);
@@ -305,12 +310,12 @@ class EReportingDesParticuliersTest extends TestCase
         $apercu = $this->apercu($this->cloturer('2026-10-05'));
 
         $this->assertSame([[
-            'categorie' => CategorieEReporting::LivraisonsDeBiens,
+            'categorie' => CategorieEReporting::NonSoumisesALaTvaEnFrance,
             'taux' => 0,
             'ht' => 1000,
             'tva' => 0,
             'motif' => 'Vente en France à 0 %',
-            'remarque' => 'À déclarer ; transmission en attente de la prise en charge de son motif d\'exonération (étape 2).',
+            'remarque' => 'Catégorie à vérifier. À déclarer ; transmission en attente de la prise en charge de son motif d\'exonération (étape 2).',
         ]], $apercu->transactions);
     }
 
@@ -364,6 +369,33 @@ class EReportingDesParticuliersTest extends TestCase
     }
 
     /**
+     * Point soumis à l'éditeur, calcul gardé jusqu'à sa réponse : le 5,
+     * deux réparations de 60,00 €, l'une payée par carte, l'autre laissée
+     * due ; le 6, la première est annulée et son crédit règle la seconde.
+     * Le 5 déclare 60,00 € encaissés et le 6 encore 60,00 €, sans déduire
+     * l'annulation d'une prestation déjà encaissée ; la fiche le signale.
+     */
+    public function test_l_avoir_d_une_prestation_deja_encaissee_ne_se_deduit_pas_de_ses_encaissements_en_attendant_l_editeur(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $client = Client::factory()->create();
+        $payee = self::vendreAuComptant(self::auteur(), $client, [$this->reparation(60)], ModePaiement::CarteBancaire);
+        $this->emettre($client, [$this->reparation(60)]);
+        $duCinq = $this->cloturer('2026-10-05');
+        $this->travelTo('2026-10-06 10:00:00');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [['ligne_facture_id' => $payee->lignes->sole()->id, 'quantite' => 1]], 'Annulée');
+
+        $duSix = $this->cloturer('2026-10-06');
+
+        $this->assertSame([['date' => '2026-10-05', 'taux' => 2000, 'montant' => 6000]], $this->apercu($duCinq)->encaissementsDeServices);
+        $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => 6000]], $this->apercu($duSix)->encaissementsDeServices);
+        $this->actingAs(self::auteur());
+        Filament::setTenant($this->magasin);
+        Livewire::test(ViewClotureCaisse::class, ['record' => $duSix->getRouteKey()])
+            ->assertSee('Point soumis à l\'éditeur : l\'avoir d\'une prestation déjà encaissée ne se déduit pas de ses encaissements, même quand son crédit règle ensuite une autre vente.');
+    }
+
+    /**
      * Point 26 : le livre et la réparation du deuxième ticket, payés
      * ensemble par carte à son émission, ne déclarent que les 60,00 € de
      * la réparation ; les câbles, des biens, ne déclarent rien.
@@ -379,9 +411,10 @@ class EReportingDesParticuliersTest extends TestCase
     }
 
     /**
-     * Une réparation de 60,00 € laissée due le 5, puis rendue le 6 : le
-     * crédit de l'avoir, imputé sur le ticket qu'il corrige, réduit la
-     * vente au lieu de la régler. Rien n'est encaissé.
+     * Une réparation de 60,00 € laissée due le 5, puis rendue le 6 : tout
+     * le crédit de l'avoir, imputé sur le ticket qu'il corrige, annule ses
+     * propres lignes sur ce ticket ; il réduit la vente au lieu de la
+     * régler. Rien n'est encaissé.
      */
     public function test_le_credit_d_un_avoir_impute_sur_le_ticket_qu_il_corrige_n_est_pas_un_encaissement(): void
     {
@@ -396,6 +429,62 @@ class EReportingDesParticuliersTest extends TestCase
 
         $this->assertSame([[CategorieEReporting::PrestationsDeServices, 2000, -5000, -1000]], self::totaux($apercu));
         $this->assertSame([[], []], [$apercu->encaissementsDeServices, $apercu->encaissementsARepartir]);
+    }
+
+    /**
+     * Le 5, un écran de 50,00 € payé en espèces et six heures de service à
+     * 10,00 € laissées dues ; le 6, un seul avoir rend l'écran et une heure
+     * (60,00 €), dont tout le crédit s'impute sur le service : 10,00 €
+     * réduisent la vente, et les 50,00 € venus de l'écran la règlent, le 6.
+     */
+    public function test_le_credit_d_un_avoir_sur_deux_tickets_ne_retire_des_encaissements_que_ce_qu_il_corrige_du_ticket_regle(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $client = Client::factory()->create();
+        $ecran = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $this->produit(50)->id, 'quantite' => 1]]);
+        $heures = $this->emettre($client, [[...$this->reparation(10), 'quantite' => 6]]);
+        $this->cloturer('2026-10-05');
+        $this->travelTo('2026-10-06 10:00:00');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
+            ['ligne_facture_id' => $ecran->lignes->sole()->id, 'quantite' => 1],
+            ['ligne_facture_id' => $heures->lignes->sole()->id, 'quantite' => 1],
+        ], 'Retour');
+
+        $apercu = $this->apercu($this->cloturer('2026-10-06'));
+
+        $this->assertSame([[['date' => '2026-10-06', 'taux' => 2000, 'montant' => 5000]], []], [$apercu->encaissementsDeServices, $apercu->encaissementsARepartir]);
+        $this->assertSame(StatutFacture::Payee, $heures->fresh()->statut);
+    }
+
+    /**
+     * Le 5, un écran de 40,00 € et deux réparations de 60,00 €, payés
+     * chacun par carte ; le 6, un seul avoir rend l'écran et une
+     * réparation, son crédit de 100,00 € reste au client, tous ses tickets
+     * étant payés ; le 7, le paiement des réparations est contre-passé, et
+     * le crédit s'y réimpute : 60,00 € réduisent la vente, 40,00 € la
+     * règlent. Le 7 déclare donc 120,00 € rendus et 40,00 € reçus.
+     */
+    public function test_le_credit_reimpute_apres_une_contre_passation_compte_au_dela_de_ce_qu_il_corrige(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $client = Client::factory()->create();
+        $ecran = self::vendreAuComptant(self::auteur(), $client, [['produit_id' => $this->produit(40)->id, 'quantite' => 1]], ModePaiement::CarteBancaire);
+        $reparations = self::vendreAuComptant(self::auteur(), $client, [[...$this->reparation(60), 'quantite' => 2]], ModePaiement::CarteBancaire);
+        $this->cloturer('2026-10-05');
+        $this->travelTo('2026-10-06 10:00:00');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client, [
+            ['ligne_facture_id' => $ecran->lignes->sole()->id, 'quantite' => 1],
+            ['ligne_facture_id' => $reparations->lignes->sole()->id, 'quantite' => 1],
+        ], 'Retour');
+        $duSix = $this->cloturer('2026-10-06');
+        $this->travelTo('2026-10-07 10:00:00');
+        app(ContrePasserPaiementAction::class)->handle(self::auteur(), $reparations->allocationsPaiement()->sole()->paiement, 'Carte refusée');
+
+        $duSept = $this->cloturer('2026-10-07');
+
+        $this->assertSame([], $this->apercu($duSix)->encaissementsDeServices);
+        $this->assertSame([[['date' => '2026-10-07', 'taux' => 2000, 'montant' => -8000]], []], [$this->apercu($duSept)->encaissementsDeServices, $this->apercu($duSept)->encaissementsARepartir]);
+        $this->assertSame(2000, $reparations->fresh()->resteDuEnCentimes());
     }
 
     /**
@@ -434,6 +523,90 @@ class EReportingDesParticuliersTest extends TestCase
     }
 
     /**
+     * Un livre à 10,55 € et une réparation à 60,00 €, payés ensemble par
+     * carte à la caisse le 5, puis le paiement contre-passé le 6 : le 6
+     * rend exactement les 60,00 € de la réparation déclarés le 5, et rien
+     * ne reste à répartir.
+     */
+    public function test_la_contre_passation_du_reglement_d_un_ticket_mixte_solde_en_une_fois_rend_la_part_du_service(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $ticket = self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit(10.55, 5.5)->id, 'quantite' => 1], $this->reparation(60)], ModePaiement::CarteBancaire);
+        $this->cloturer('2026-10-05');
+        $this->travelTo('2026-10-06 10:00:00');
+        app(ContrePasserPaiementAction::class)->handle(self::auteur(), $ticket->allocationsPaiement()->sole()->paiement, 'Carte refusée');
+
+        $apercu = $this->apercu($this->cloturer('2026-10-06'));
+
+        $this->assertSame([[['date' => '2026-10-06', 'taux' => 2000, 'montant' => -6000]], []], [$apercu->encaissementsDeServices, $apercu->encaissementsARepartir]);
+    }
+
+    /**
+     * Un livre à 10,55 € et une réparation à 60,00 € laissés dus le 5, puis
+     * soldés le 6 par un seul paiement de 70,55 € : la part de la
+     * réparation est connue, comme pour un ticket soldé à son émission.
+     */
+    public function test_un_ticket_mixte_solde_en_un_seul_reglement_apres_son_emission_declare_la_part_du_service(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $mixte = $this->emettre(Client::factory()->create(), [['produit_id' => $this->produit(10.55, 5.5)->id, 'quantite' => 1], $this->reparation(60)]);
+        $this->cloturer('2026-10-05');
+        $this->travelTo('2026-10-06 10:00:00');
+        $this->payer($mixte, 70.55, ModePaiement::Especes, '2026-10-06');
+
+        $apercu = $this->apercu($this->cloturer('2026-10-06'));
+
+        $this->assertSame([[['date' => '2026-10-06', 'taux' => 2000, 'montant' => 6000]], []], [$apercu->encaissementsDeServices, $apercu->encaissementsARepartir]);
+    }
+
+    /**
+     * Une réparation de 60,00 € laissée due par un particulier le 5 ; le 6,
+     * devenu professionnel, il reçoit une facture de 40,00 € qu'il paie ;
+     * le 7, l'avoir de cette facture, fait à un professionnel, règle 40,00 €
+     * de la réparation. Le 7 n'a ni vente ni avoir à un particulier, mais
+     * cet encaissement le rend à déclarer.
+     */
+    public function test_une_journee_dont_seul_l_avoir_d_un_professionnel_regle_une_prestation_d_un_particulier_est_a_declarer(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $client = Client::factory()->create();
+        $this->emettre($client, [$this->reparation(60)]);
+        $duCinq = $this->cloturer('2026-10-05');
+        $this->travelTo('2026-10-06 10:00:00');
+        $client->update(['type_client' => TypeClient::Professionnel, 'siren' => '123456789']);
+        $facture = $this->emettre($client->fresh(), [['produit_id' => $this->produit(40)->id, 'quantite' => 1]]);
+        $this->payer($facture, 40, ModePaiement::Virement, '2026-10-06');
+        $this->cloturer('2026-10-06');
+        $this->travelTo('2026-10-07 10:00:00');
+        app(EnregistrerAvoirAction::class)->handle(self::auteur(), $client->fresh(), [['ligne_facture_id' => $facture->lignes->sole()->id, 'quantite' => 1]], 'Retour');
+
+        $duSept = $this->cloturer('2026-10-07');
+
+        $this->assertSame([['date' => '2026-10-07', 'taux' => 2000, 'montant' => 4000]], $this->apercu($duSept)->encaissementsDeServices);
+        $this->assertSame([$duCinq->id, $duSept->id], app(EReportingDesParticuliers::class)->journeesADeclarer($this->magasin)->orderBy('date_cloture')->pluck('id')->all());
+    }
+
+    /**
+     * Une réparation laissée due le 5, payée le 6 puis contre-passée le
+     * même jour : le 6 n'a rien encaissé, son aperçu n'a rien à déclarer,
+     * et il n'est pas une journée à déclarer.
+     */
+    public function test_une_journee_dont_le_paiement_d_une_prestation_est_contre_passe_le_jour_meme_n_est_pas_a_declarer(): void
+    {
+        $this->travelTo('2026-10-05 10:00:00');
+        $reparation = $this->emettre(Client::factory()->create(), [$this->reparation(60)]);
+        $duCinq = $this->cloturer('2026-10-05');
+        $this->travelTo('2026-10-06 10:00:00');
+        $paiement = $this->payer($reparation, 60, ModePaiement::Especes, '2026-10-06');
+        app(ContrePasserPaiementAction::class)->handle(self::auteur(), $paiement, 'Saisie en double');
+
+        $duSix = $this->cloturer('2026-10-06');
+
+        $this->assertFalse($this->apercu($duSix)->aDeclarer());
+        $this->assertSame([$duCinq->id], app(EReportingDesParticuliers::class)->journeesADeclarer($this->magasin)->pluck('id')->all());
+    }
+
+    /**
      * Une réparation laissée due le 5 et réglée le 6 sans autre opération
      * ce jour-là : le 6 est à déclarer ; un écran laissé dû et réglé le 7
      * ne rend pas le 7 à déclarer, un bien ne donnant aucun encaissement à
@@ -454,7 +627,7 @@ class EReportingDesParticuliersTest extends TestCase
 
         $duSept = $this->cloturer('2026-10-07');
 
-        $this->assertSame([$duCinq->id, $duSix->id], EReportingDesParticuliers::journeesADeclarer($this->magasin)->orderBy('date_cloture')->pluck('id')->all());
+        $this->assertSame([$duCinq->id, $duSix->id], app(EReportingDesParticuliers::class)->journeesADeclarer($this->magasin)->orderBy('date_cloture')->pluck('id')->all());
         $this->assertSame([['date' => '2026-10-06', 'taux' => 2000, 'montant' => 6000]], $this->apercu($duSix)->encaissementsDeServices);
         $this->assertFalse($this->apercu($duSept)->aDeclarer());
     }
@@ -474,12 +647,15 @@ class EReportingDesParticuliersTest extends TestCase
         $apercu = $this->apercu($cloture);
 
         $this->assertSame([1, true, false, []], [$cloture->nombre_ventes, $apercu->demonstration, $apercu->aDeclarer(), $apercu->transactions]);
-        $this->assertSame(0, EReportingDesParticuliers::journeesADeclarer($demonstration)->count());
+        $this->assertSame(0, app(EReportingDesParticuliers::class)->journeesADeclarer($demonstration)->count());
     }
 
     /**
-     * Deux magasins, même journée : l'aperçu ne lit que les tickets, les
-     * avoirs et le registre du magasin de la clôture.
+     * Deux magasins, même journée : l'aperçu ne lit que les tickets et les
+     * avoirs du magasin de la clôture, et chaque lecture du registre
+     * fiscal, celles de l'aperçu comme celle des journées à déclarer, est
+     * limitée à ce magasin, sans compter sur les lectures suivantes des
+     * documents pour écarter ceux de l'autre magasin.
      */
     public function test_l_apercu_ne_lit_que_les_documents_du_magasin_de_la_cloture(): void
     {
@@ -488,13 +664,44 @@ class EReportingDesParticuliersTest extends TestCase
         self::vendreAuComptant(self::auteur(), Client::factory()->create(), [$this->reparation(60)], ModePaiement::CarteBancaire);
         app(TenantContext::class)->set($autreMagasin);
         self::vendreAuComptant(self::auteur(), Client::factory()->create(), [['produit_id' => $this->produit(12)->id, 'quantite' => 1], $this->reparation(30, 10)]);
-        $clotureAutre = app(CloturerCaisseAction::class)->handle(self::auteur(), $autreMagasin, '2026-10-05');
+        app(CloturerCaisseAction::class)->handle(self::auteur(), $autreMagasin, '2026-10-05');
         app(TenantContext::class)->set($this->magasin);
+        $cloture = $this->cloturer('2026-10-05');
+        $lectures = [];
+        DB::listen(function (QueryExecuted $requete) use (&$lectures): void {
+            if (str_contains($requete->sql, '"enregistrements_fiscaux"')) {
+                $lectures[] = $requete;
+            }
+        });
 
-        $apercu = $this->apercu($this->cloturer('2026-10-05'));
+        $apercu = $this->apercu($cloture);
+        $lecturesDeLApercu = count($lectures);
+        $journees = app(EReportingDesParticuliers::class)->journeesADeclarer($this->magasin)->pluck('id')->all();
 
         $this->assertSame([[CategorieEReporting::PrestationsDeServices, 2000, 5000, 1000]], self::totaux($apercu));
         $this->assertSame([['date' => '2026-10-05', 'taux' => 2000, 'montant' => 6000]], $apercu->encaissementsDeServices);
-        $this->assertNotContains($clotureAutre->id, EReportingDesParticuliers::journeesADeclarer($this->magasin)->pluck('id')->all());
+        $this->assertSame([$cloture->id], $journees);
+        $this->assertGreaterThan(0, $lecturesDeLApercu);
+        $this->assertGreaterThan($lecturesDeLApercu, count($lectures));
+        foreach ($lectures as $lecture) {
+            $this->assertTrue(self::limiteLeRegistreAuMagasin($lecture, $this->magasin->id), $lecture->sql);
+        }
+    }
+
+    /**
+     * Cette requête limite-t-elle chacune de ses lectures du registre
+     * fiscal à ce magasin ? Chaque table du registre qu'elle lit compare sa
+     * colonne magasin_id à l'identifiant du magasin, ou à la colonne
+     * magasin_id d'une clôture, et chaque identifiant de magasin qu'elle
+     * lie, pour le registre comme pour les clôtures, est celui-là.
+     */
+    private static function limiteLeRegistreAuMagasin(QueryExecuted $requete, int $magasinId): bool
+    {
+        preg_match_all('/"(?:enregistrements_fiscaux|clotures_caisse)"\."magasin_id" = \?/', $requete->sql, $filtres, PREG_OFFSET_CAPTURE);
+        $magasins = array_map(fn (array $filtre): int => (int) $requete->bindings[substr_count(substr($requete->sql, 0, $filtre[1]), '?')], $filtres[0]);
+
+        return substr_count($requete->sql, 'from "enregistrements_fiscaux"') === substr_count($requete->sql, '"enregistrements_fiscaux"."magasin_id" = ')
+            && $magasins !== []
+            && array_values(array_unique($magasins)) === [$magasinId];
     }
 }

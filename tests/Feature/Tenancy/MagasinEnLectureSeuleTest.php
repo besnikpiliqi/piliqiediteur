@@ -346,7 +346,7 @@ class MagasinEnLectureSeuleTest extends TestCase
 
         $this->artisan('app:cloturer-caisses-automatiquement')->assertSuccessful();
 
-        $cloture = EReportingDesParticuliers::journeesADeclarer($magasin->fresh())->sole();
+        $cloture = app(EReportingDesParticuliers::class)->journeesADeclarer($magasin->fresh())->sole();
         $transactions = app(EReportingDesParticuliers::class)->apercu($cloture)->transactions;
         $this->assertSame('2026-10-05', $cloture->date_cloture->toDateString());
         $this->assertSame([[CategorieEReporting::LivraisonsDeBiens, 2000, 1000, 200]], array_map(fn (array $transaction): array => [$transaction['categorie'], $transaction['taux'], $transaction['ht'], $transaction['tva']], $transactions));

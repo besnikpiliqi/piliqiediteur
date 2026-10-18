@@ -10,6 +10,7 @@ use App\Domain\Achats\Enums\SourceAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
+use App\Domain\Achats\Models\LigneAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\Fournisseur;
@@ -17,8 +18,11 @@ use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
+use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\CategorieAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use InvalidArgumentException;
 use LogicException;
@@ -451,5 +455,84 @@ class AvoirFournisseurActionsTest extends TestCase
             ['ligne_achat_id' => $ligneAchatId, 'quantite' => 2],
             ['ligne_achat_id' => $ligneAchatId, 'quantite' => 2],
         ]);
+    }
+
+    /**
+     * Chaque ligne d'un avoir fournisseur reste liée à la ligne d'achat
+     * qu'elle retourne : la base refuse une ligne sans elle, et refuse
+     * d'effacer une ligne d'achat retournée.
+     */
+    public function test_une_ligne_d_avoir_fournisseur_sans_ligne_d_achat_est_refusee_par_la_base(): void
+    {
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->receptionnerAchat(Fournisseur::factory()->create(), $produit, 5);
+        $ligneAchat = $factureAchat->lignes->sole();
+        $avoir = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
+            ['ligne_achat_id' => $ligneAchat->id, 'quantite' => 2],
+        ]);
+
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => $avoir->lignes->sole()->replicate()->forceFill(['ligne_achat_id' => null])->save()), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => LigneAchat::query()->whereKey($ligneAchat->id)->delete()), QueryException::class);
+
+        $this->assertSame([1, (int) $ligneAchat->id], [$avoir->lignes()->count(), (int) $avoir->lignes()->sole()->ligne_achat_id]);
+        $this->assertModelExists($ligneAchat);
+    }
+
+    /**
+     * Le n° de l'avoir chez le fournisseur s'enregistre sans les espaces
+     * tapés autour ; rien de saisi, il reste vide ; au-delà de 60
+     * caractères, l'avoir est refusé.
+     */
+    public function test_le_numero_de_l_avoir_du_fournisseur_s_enregistre(): void
+    {
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => false]);
+        $factureAchat = $this->receptionnerAchat(Fournisseur::factory()->create(), $produit, 5);
+        $ligne = [['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 1]];
+
+        $avecNumero = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, $ligne, 'Erreur de livraison', '  AV-2026-0017  ');
+        $sansNumero = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, $ligne, 'Erreur de livraison', '   ');
+
+        $this->assertSame(['AV-2026-0017', null], [$avecNumero->fresh()->numero_fournisseur, $sansNumero->fresh()->numero_fournisseur]);
+        $this->assertThrows(
+            fn () => app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, $ligne, 'Erreur de livraison', str_repeat('7', 61)),
+            InvalidArgumentException::class,
+            'Le n° de l\'avoir du fournisseur ne dépasse pas 60 caractères.',
+        );
+        $this->assertSame(2, AvoirFournisseur::query()->count());
+    }
+
+    /**
+     * L'avoir fournisseur s'inscrit au journal d'audit à son émission, pas
+     * à la création de son brouillon : son numéro, celui de la facture
+     * d'achat créditée, le n° du fournisseur, ses totaux et ce qu'il
+     * retourne, sans le fournisseur ni le motif.
+     */
+    public function test_l_emission_d_un_avoir_fournisseur_s_inscrit_au_journal_d_audit(): void
+    {
+        $magasin = app(TenantContext::class)->magasin();
+        $produit = Produit::factory()->create(['reference' => 'CABLE-USB', 'taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->receptionnerAchat(Fournisseur::factory()->create(['nom' => 'Grossiste Martin']), $produit, 5);
+        $brouillon = app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
+            ['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 2],
+        ], 'Produit défectueux', 'AV-2026-0017');
+        $this->assertSame([], $this->entreesDAudit($magasin->societe, ActionAuditee::AvoirFournisseurEmis));
+
+        $avoir = app(EmettreAvoirFournisseurAction::class)->handle(self::auteur(), $brouillon);
+
+        $entrees = $this->entreesDAudit($magasin->societe, ActionAuditee::AvoirFournisseurEmis);
+        $this->assertCount(1, $entrees);
+        $this->assertSame(
+            [(int) $magasin->id, (int) self::auteur()->id, CategorieAudit::Operations, $avoir->getMorphClass(), (int) $avoir->id, null],
+            [(int) $entrees[0]->magasin_id, (int) $entrees[0]->auteur_id, $entrees[0]->categorie, $entrees[0]->cible_type, (int) $entrees[0]->cible_id, $entrees[0]->anciennes_valeurs],
+        );
+        $this->assertSame([
+            'avoir' => $avoir->numero,
+            'facture_achat' => $factureAchat->numero,
+            'lignes' => [['quantite' => 2, 'reference' => 'CABLE-USB']],
+            'numero_fournisseur' => 'AV-2026-0017',
+            'total_ht' => '40.00',
+            'total_ttc' => '48.00',
+            'total_tva' => '8.00',
+        ], $entrees[0]->nouvelles_valeurs);
     }
 }

@@ -8,9 +8,11 @@ use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Facturation\Concerns\VentileLaTvaParTaux;
+use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use Database\Factories\FactureAchatFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -113,11 +115,40 @@ class FactureAchat extends Model
      * un avoir fournisseur peut être partiel, cette facture peut donc en
      * recevoir plusieurs tant qu'il reste une ligne dont la quantité reçue
      * n'a pas été intégralement retournée (et encore présente en stock,
-     * voir LigneAchat::quantiteRetournableRestante()).
+     * voir LigneAchat::scopeRetournables()).
      */
     public function possedeDesLignesRetournables(): bool
     {
-        return $this->lignes->contains(fn (LigneAchat $ligne) => $ligne->quantiteRetournableRestante() > 0);
+        return $this->lignes()->retournables()->exists();
+    }
+
+    /**
+     * Les factures d'achat validées dont il reste au moins un article à
+     * retourner : celles que propose la création d'un avoir fournisseur
+     * depuis le menu « Avoirs fournisseur ».
+     *
+     * @param  Builder<FactureAchat>  $query
+     * @return Builder<FactureAchat>
+     */
+    public function scopeRetournables(Builder $query): Builder
+    {
+        return $query
+            ->where('statut', StatutFactureAchat::Validee)
+            ->whereHas('lignes', fn (Builder $lignes): Builder => $lignes->retournables());
+    }
+
+    /**
+     * Le total TTC de la facture moins ceux des avoirs fournisseur émis qui
+     * la créditent, en centimes, chaque montant enregistré lu au centime
+     * exact, jamais recalculé ni additionné par la base.
+     */
+    public function totalTtcApresAvoirsFournisseurEnCentimes(): int
+    {
+        $calculateur = app(CalculateurLigne::class);
+
+        return $calculateur->enCentiemes($this->total_ttc) - $this->avoirsFournisseurEmis()
+            ->get(['total_ttc'])
+            ->sum(fn (AvoirFournisseur $avoir): int => $calculateur->enCentiemes($avoir->total_ttc));
     }
 
     /**
@@ -140,11 +171,14 @@ class FactureAchat extends Model
      * jamais modifiable, quel que soit son statut : une erreur ne pourrait
      * venir que de la source elle-même, jamais d'une saisie locale.
      *
-     * Dès qu'un avoir fournisseur a été émis sur cette facture, elle se
-     * fige malgré tout : la quantité déjà retournée (voir
-     * LigneAchat::quantiteDejaRetournee()) est calculée par référence aux
-     * lignes d'achat existantes, qu'une modification remplace entièrement.
-     * Toute correction supplémentaire passe alors par un nouvel avoir.
+     * Dès qu'un avoir fournisseur porte sur cette facture, elle se fige
+     * malgré tout : chaque ligne d'avoir est liée à la ligne d'achat
+     * qu'elle retourne (voir LigneAchat::quantiteDejaRetournee()), qu'une
+     * modification remplacerait entièrement, et la base refuse d'effacer
+     * une ligne d'achat retournée. Un brouillon d'avoir y suffit : l'écran
+     * n'en laisse jamais (voir EnregistrerAvoirFournisseurAction), mais sa
+     * ligne retient aussi la ligne d'achat. Toute correction supplémentaire
+     * passe alors par un nouvel avoir.
      */
     public function estModifiable(): bool
     {
@@ -153,7 +187,7 @@ class FactureAchat extends Model
         }
 
         if ($this->statut === StatutFactureAchat::Validee) {
-            return $this->avoirsFournisseurEmis()->doesntExist();
+            return $this->avoirsFournisseur()->doesntExist();
         }
 
         return true;

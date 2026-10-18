@@ -842,6 +842,28 @@ class FactureAchatActionsTest extends TestCase
         $this->assertSame('48.5000', $produit->fresh()->cmup_ht);
     }
 
+    /**
+     * Un brouillon d'avoir fournisseur, que l'écran ne laisse jamais mais
+     * que le domaine peut créer seul, retient aussi les lignes de la
+     * facture d'achat : elle ne se modifie plus, au lieu d'échouer contre
+     * la base, qui refuse d'effacer une ligne d'achat retournée.
+     */
+    public function test_une_facture_dachat_qui_a_un_avoir_fournisseur_en_brouillon_n_est_plus_modifiable(): void
+    {
+        $fournisseur = Fournisseur::factory()->create();
+        $produit = Produit::factory()->create(['taux_tva' => 20, 'suivi_stock' => true]);
+        $factureAchat = $this->recevoir($fournisseur, [['produit_id' => $produit->id, 'quantite' => 5, 'prix_unitaire_ht' => 2]]);
+        app(CreerAvoirFournisseurAction::class)->handle(self::auteur(), $factureAchat, [
+            ['ligne_achat_id' => $factureAchat->lignes->sole()->id, 'quantite' => 2],
+        ]);
+
+        $this->assertFalse($factureAchat->fresh()->estModifiable());
+        $this->assertThrows(fn () => app(ModifierFactureAchatAction::class)->handle(self::auteur(), $factureAchat->fresh(), $fournisseur, [
+            ['produit_id' => $produit->id, 'quantite' => 1, 'prix_unitaire_ht' => 2],
+        ]), LogicException::class, 'Cette facture d\'achat n\'est plus modifiable.');
+        $this->assertSame([5, 5], [$factureAchat->lignes()->sole()->quantite, $produit->fresh()->stock_quantite]);
+    }
+
     public function test_une_facture_dachat_recuperee_par_api_nest_jamais_modifiable(): void
     {
         $fournisseur = Fournisseur::factory()->create();

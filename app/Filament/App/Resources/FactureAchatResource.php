@@ -2,14 +2,18 @@
 
 namespace App\Filament\App\Resources;
 
+use App\Domain\Achats\Actions\CreerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\EnregistrerAvoirFournisseurAction;
 use App\Domain\Achats\Actions\ValiderFactureAchatAction;
 use App\Domain\Achats\Enums\SourceFactureAchat;
+use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Enums\StatutFactureAchat;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\FactureAchat;
 use App\Domain\Achats\Models\LigneAchat;
-use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Achats\Models\LigneAvoirFournisseur;
+use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Recherche\RechercheSansAccents;
 use App\Filament\App\Resources\FactureAchatResource\Pages;
 use App\Filament\Concerns\AjouteDesLignesDAchat;
 use App\Filament\Concerns\GereLesExceptionsMetier;
@@ -17,6 +21,8 @@ use App\Filament\Concerns\PorteUnJeton;
 use App\Filament\Concerns\SaisitUneQuantiteRetournee;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;
 use Closure;
+use Filament\Actions\MountableAction;
+use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
@@ -26,13 +32,21 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
+use Filament\Forms\Set;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Infolists\Infolist;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Exists;
 
 /**
  * Enregistre les factures reçues des fournisseurs (réception de
@@ -60,6 +74,14 @@ class FactureAchatResource extends Resource
     protected static ?string $modelLabel = 'facture d\'achat';
 
     protected static ?string $pluralModelLabel = 'factures d\'achat';
+
+    /**
+     * Ce que dit l'écran d'un avoir fournisseur sans le n° de l'avoir du
+     * fournisseur, dans le formulaire puis dans l'avis de son émission.
+     */
+    public const AVERTISSEMENT_SANS_NUMERO_FOURNISSEUR = 'Sans le n° de l\'avoir de votre fournisseur, l\'avoir qu\'il enverra par la plateforme de facturation électronique ne pourra pas être rapproché de celui-ci.';
+
+    private const CHOISIR_UNE_FACTURE_RETOURNABLE = 'Choisissez une facture d\'achat validée du magasin dont des produits restent à retourner.';
 
     public static function form(Form $form): Form
     {
@@ -128,6 +150,12 @@ class FactureAchatResource extends Resource
                 TextEntry::make('total_ht')->label('Total HT')->money('EUR'),
                 TextEntry::make('total_tva')->label('Total TVA')->money('EUR'),
                 TextEntry::make('total_ttc')->label('Total TTC')->money('EUR'),
+                // Le total TTC moins ceux des avoirs fournisseur émis (voir
+                // FactureAchat::totalTtcApresAvoirsFournisseurEnCentimes()).
+                TextEntry::make('total_apres_avoirs_fournisseur')
+                    ->label('Total après avoirs fournisseur')
+                    ->state(fn (FactureAchat $record): string => app(CalculateurLigne::class)->enEuros($record->totalTtcApresAvoirsFournisseurEnCentimes()))
+                    ->visible(fn (FactureAchat $record): bool => $record->avoirsFournisseurEmis()->exists()),
                 FactureResource::ventilationTvaEntry(),
             ])->columns(3),
 
@@ -147,12 +175,13 @@ class FactureAchatResource extends Resource
                             TextEntry::make('numero')
                                 ->label('Numéro')
                                 ->state(fn (AvoirFournisseur $record) => $record->numero)
-                                ->url(fn (AvoirFournisseur $record) => AvoirFournisseurResource::getUrl('view', ['record' => $record]))
+                                ->url(fn (AvoirFournisseur $record): ?string => auth()->user()->can('view', $record) ? AvoirFournisseurResource::getUrl('view', ['record' => $record]) : null)
                                 ->color('primary'),
+                            TextEntry::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->state(fn (AvoirFournisseur $record) => $record->numero_fournisseur)->placeholder('—'),
                             TextEntry::make('motif')->label('Motif')->state(fn (AvoirFournisseur $record) => $record->motif)->placeholder('—'),
                             TextEntry::make('total_ttc')->label('Total retourné TTC')->state(fn (AvoirFournisseur $record) => $record->total_ttc)->money('EUR'),
                         ])
-                        ->columns(3),
+                        ->columns(4),
                 ]),
         ]);
     }
@@ -195,38 +224,7 @@ class FactureAchatResource extends Resource
                     ->form([self::champDuJeton()])
                     ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Brouillon && auth()->user()->can('valider', $record))
                     ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(fn () => app(ValiderFactureAchatAction::class)->handle(auth()->user(), $record, $data['jeton']))),
-                Tables\Actions\Action::make('avoir_fournisseur')
-                    ->label('Avoir fournisseur')
-                    ->icon('heroicon-o-arrow-uturn-left')
-                    ->color('danger')
-                    ->form(fn (FactureAchat $record) => [
-                        self::champDuJeton(),
-                        // Sélection des lignes/quantités à retourner : un
-                        // produit déjà vendu est automatiquement exclu, voir
-                        // LigneAchat::quantiteRetournableRestante().
-                        Repeater::make('lignes')
-                            ->label('Lignes à retourner')
-                            ->schema([
-                                Hidden::make('ligne_achat_id'),
-                                TextInput::make('description')
-                                    ->label('Produit / description')
-                                    ->disabled()
-                                    ->dehydrated(false),
-                                self::champQuantiteRetournee('Quantité à retourner', fn (Get $get): int => LigneAchat::find($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0)
-                                    ->rule(self::regleStockDuProduitRetourne()),
-                            ])
-                            ->columns(3)
-                            ->addable(false)
-                            ->deletable(true)
-                            ->default(self::lignesRetournables($record)),
-                        Textarea::make('motif')->label('Motif du retour')->required(),
-                    ])
-                    ->requiresConfirmation()
-                    ->modalDescription('Seules les lignes et quantités conservées ci-dessous seront retournées, et leur stock décrémenté. Un produit déjà vendu à un client ne peut jamais être inclus. Cette action est irréversible.')
-                    ->visible(fn (FactureAchat $record) => $record->statut === StatutFactureAchat::Validee
-                        && $record->possedeDesLignesRetournables()
-                        && auth()->user()->can(PermissionRegistry::AVOIR_FOURNISSEUR_CREER))
-                    ->action(fn (FactureAchat $record, array $data) => static::executerSansCasser(fn () => app(EnregistrerAvoirFournisseurAction::class)->handle(auth()->user(), $record, $data['lignes'], $data['motif'], $data['jeton']))),
+                self::creerUnAvoirFournisseur(Tables\Actions\Action::make('avoir_fournisseur')),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -236,18 +234,244 @@ class FactureAchatResource extends Resource
     }
 
     /**
-     * Chaque ligne encore retournable, proposée pour tout ce qui peut en
-     * être retourné ; deux lignes du même produit se partagent son stock,
-     * dans l'ordre de la facture.
+     * « Créer un avoir fournisseur » : le seul formulaire d'un retour au
+     * fournisseur, et le seul chemin vers le domaine (voir
+     * EnregistrerAvoirFournisseurAction), depuis quatre endroits :
+     *
+     * - le menu « Avoirs fournisseur », sans document : on y choisit
+     *   d'abord une facture d'achat validée du magasin dont il reste des
+     *   articles à retourner (voir FactureAchat::scopeRetournables()) ;
+     * - la liste des factures d'achat et la fiche de l'une d'elles, avec
+     *   cette facture ;
+     * - « Retourner ce produit », sur chaque ligne retournable de la fiche
+     *   d'une facture d'achat, avec cette seule ligne.
+     *
+     * Chaque ligne proposée l'est pour tout ce qui reste à retourner et en
+     * stock (voir lignesRetournables()) ; la quantité ne le dépasse pas. Le
+     * n° de l'avoir du fournisseur est demandé avec insistance : vide, un
+     * avertissement le réclame, sans refuser l'avoir, puisqu'il servira à
+     * rapprocher celui que le fournisseur enverra par la plateforme de
+     * facturation électronique. La fenêtre porte le jeton de la demande
+     * (R3). Le bouton n'apparaît qu'à qui peut créer un avoir fournisseur,
+     * jamais dans un magasin en lecture seule (voir ControleDesDroits).
+     *
+     * @template TAction of MountableAction
+     *
+     * @param  TAction  $action
+     * @return TAction
+     */
+    public static function creerUnAvoirFournisseur(MountableAction $action): MountableAction
+    {
+        return $action
+            ->label(fn (?Model $record): string => $record instanceof LigneAchat ? 'Retourner ce produit' : 'Créer un avoir fournisseur')
+            ->icon('heroicon-o-arrow-uturn-left')
+            ->color('danger')
+            ->modalHeading(fn (?Model $record): string => $record instanceof LigneAchat ? 'Retourner ce produit' : 'Créer un avoir fournisseur')
+            ->modalDescription('Seules les lignes et quantités conservées ci-dessous seront retournées, et leur stock décrémenté. Un produit déjà vendu à un client ne peut jamais être inclus. Cette action est irréversible.')
+            ->modalSubmitActionLabel('Émettre l\'avoir fournisseur')
+            ->form(fn (?Model $record): array => self::formulaireDeLAvoirFournisseur($record))
+            ->visible(fn (?Model $record): bool => self::peutCreerUnAvoirFournisseur($record))
+            ->action(fn (?Model $record, array $data) => static::executerSansCasser(fn () => self::enregistrerLAvoirFournisseur($record, $data)));
+    }
+
+    /**
+     * Sous la désignation d'une ligne d'achat, en orange, comme le crédit
+     * d'avoir sous un client (voir ClientResource::enEvidence()), ce qu'en
+     * a retourné chaque avoir fournisseur émis : « Retourné : 4 (avoir
+     * AF-MABOUT-2026-000001 du 17/10/2026) », le numéro menant à la fiche
+     * de l'avoir pour qui peut la voir ; rien pour une ligne jamais
+     * retournée.
+     */
+    public static function retoursDeLaLigne(LigneAchat $ligne): ?Htmlable
+    {
+        $retours = $ligne->lignesAvoirFournisseur()
+            ->whereHas('avoirFournisseur', fn (Builder $avoir): Builder => $avoir->where('statut', StatutAvoirFournisseur::Emise))
+            ->with('avoirFournisseur')
+            ->get()
+            ->sortBy(fn (LigneAvoirFournisseur $retour): array => [$retour->avoirFournisseur->date_emission->getTimestamp(), $retour->avoirFournisseur->getKey()])
+            ->map(function (LigneAvoirFournisseur $retour): string {
+                $avoir = $retour->avoirFournisseur;
+                $numero = auth()->user()?->can('view', $avoir)
+                    ? '<a href="'.e(AvoirFournisseurResource::getUrl('view', ['record' => $avoir])).'" style="text-decoration: underline;">'.e($avoir->numero).'</a>'
+                    : e($avoir->numero);
+
+                return ClientResource::enEvidence(new HtmlString(e("Retourné : {$retour->quantite} (avoir ").$numero.e(' du '.$avoir->date_emission->format('d/m/Y').')')))->toHtml();
+            });
+
+        return $retours->isEmpty() ? null : new HtmlString($retours->implode('<br>'));
+    }
+
+    /**
+     * La facture d'achat que le bouton retourne : la sienne, celle de sa
+     * ligne, ou aucune depuis le menu, où on la choisit.
+     */
+    private static function factureDuRetour(?Model $record): ?FactureAchat
+    {
+        return match (true) {
+            $record instanceof FactureAchat => $record,
+            $record instanceof LigneAchat => $record->factureAchat,
+            default => null,
+        };
+    }
+
+    private static function peutCreerUnAvoirFournisseur(?Model $record): bool
+    {
+        if (! auth()->user()->can('create', AvoirFournisseur::class)) {
+            return false;
+        }
+
+        return match (true) {
+            $record instanceof FactureAchat => $record->statut === StatutFactureAchat::Validee && $record->possedeDesLignesRetournables(),
+            $record instanceof LigneAchat => $record->factureAchat->statut === StatutFactureAchat::Validee && $record->quantiteRetournableRestante() > 0,
+            default => true,
+        };
+    }
+
+    /**
+     * @return list<Component>
+     */
+    private static function formulaireDeLAvoirFournisseur(?Model $record): array
+    {
+        $factureAchat = self::factureDuRetour($record);
+
+        return [
+            self::champDuJeton(),
+            Select::make('facture_achat_id')
+                ->label('Facture d\'achat')
+                ->helperText('Une facture d\'achat validée du magasin dont des produits restent à retourner : encore en stock, et pas déjà retournés.')
+                ->options(fn (): array => self::facturesAchatRetournables())
+                ->searchable()
+                ->getSearchResultsUsing(fn (string $search): array => self::facturesAchatRetournables($search))
+                ->getOptionLabelUsing(fn (mixed $value): ?string => ($facture = self::factureAchatRetournable($value)) === null ? null : self::libelleDeLaFactureAchat($facture))
+                ->required()
+                ->rule('integer')
+                ->rule(fn (): Exists => FactureAchat::regleExisteDansLeMagasin(FactureAchat::query()->retournables()), fn (mixed $state): bool => self::estUnIdentifiant($state))
+                ->validationMessages([
+                    'integer' => self::CHOISIR_UNE_FACTURE_RETOURNABLE,
+                    'exists' => self::CHOISIR_UNE_FACTURE_RETOURNABLE,
+                ])
+                ->live()
+                ->afterStateUpdated(fn (Set $set, mixed $state) => $set('lignes', self::lignesDuRepeteur(self::lignesRetournables(self::factureAchatRetournable($state)))))
+                ->visible($factureAchat === null),
+            Repeater::make('lignes')
+                ->label('Lignes à retourner')
+                ->schema([
+                    Hidden::make('ligne_achat_id'),
+                    TextInput::make('description')
+                        ->label('Produit / description')
+                        ->disabled()
+                        ->dehydrated(false),
+                    self::champQuantiteRetournee('Quantité à retourner', fn (Get $get): int => LigneAchat::find($get('ligne_achat_id'))?->quantiteRetournableRestante() ?? 0)
+                        ->rule(self::regleStockDuProduitRetourne()),
+                ])
+                ->columns(3)
+                ->addable(false)
+                ->deletable(true)
+                ->default($factureAchat === null ? [] : self::lignesRetournables($factureAchat, $record instanceof LigneAchat ? $record : null))
+                ->visible(fn (Get $get): bool => $factureAchat !== null || filled($get('facture_achat_id'))),
+            TextInput::make('numero_fournisseur')
+                ->label('N° de l\'avoir du fournisseur')
+                ->maxLength(CreerAvoirFournisseurAction::LONGUEUR_NUMERO_FOURNISSEUR)
+                ->live(onBlur: true)
+                ->helperText(fn (?string $state): ?Htmlable => blank($state) ? ClientResource::enEvidence(self::AVERTISSEMENT_SANS_NUMERO_FOURNISSEUR) : null),
+            Textarea::make('motif')->label('Motif du retour')->required(),
+        ];
+    }
+
+    /**
+     * Crée et émet l'avoir, puis dit son numéro ; sans le n° de l'avoir du
+     * fournisseur, l'avis le réclame encore.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private static function enregistrerLAvoirFournisseur(?Model $record, array $data): void
+    {
+        $factureAchat = self::factureDuRetour($record) ?? FactureAchat::query()->findOrFail($data['facture_achat_id']);
+        $avoir = app(EnregistrerAvoirFournisseurAction::class)->handle(
+            auth()->user(),
+            $factureAchat,
+            array_values($data['lignes'] ?? []),
+            $data['motif'],
+            $data['numero_fournisseur'] ?? null,
+            $data['jeton'],
+        );
+        $avis = Notification::make()->title("Avoir fournisseur {$avoir->numero} émis.");
+
+        ($avoir->numero_fournisseur === null ? $avis->warning()->body(self::AVERTISSEMENT_SANS_NUMERO_FOURNISSEUR) : $avis->success())->send();
+    }
+
+    /**
+     * Les factures d'achat proposées depuis le menu : les cinquante plus
+     * récentes de celles qui ont des articles à retourner ou, avec un
+     * terme, celles dont le numéro, le n° du fournisseur ou le nom du
+     * fournisseur le contient, sans tenir compte de la casse ni des
+     * accents.
+     *
+     * @return array<int, string>
+     */
+    private static function facturesAchatRetournables(?string $recherche = null): array
+    {
+        return FactureAchat::query()
+            ->retournables()
+            ->when(filled($recherche), fn (Builder $factures): Builder => RechercheSansAccents::appliquer($factures, (string) $recherche, ['numero', 'numero_fournisseur', 'fournisseur.nom']))
+            ->with('fournisseur')
+            ->orderByDesc('date_validation')
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get()
+            ->mapWithKeys(fn (FactureAchat $facture): array => [$facture->getKey() => self::libelleDeLaFactureAchat($facture)])
+            ->all();
+    }
+
+    /**
+     * La facture d'achat retournable du magasin que désigne le choix, s'il
+     * en désigne une ; un identifiant illisible n'est jamais cherché en
+     * base, où PostgreSQL le refuserait.
+     */
+    private static function factureAchatRetournable(mixed $identifiant): ?FactureAchat
+    {
+        return self::estUnIdentifiant($identifiant) ? FactureAchat::query()->retournables()->with('fournisseur')->find((int) $identifiant) : null;
+    }
+
+    private static function estUnIdentifiant(mixed $valeur): bool
+    {
+        return (is_int($valeur) || is_string($valeur)) && filter_var($valeur, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) !== false;
+    }
+
+    private static function libelleDeLaFactureAchat(FactureAchat $facture): string
+    {
+        return $facture->numero.' — '.$facture->fournisseur->nom.(filled($facture->numero_fournisseur) ? " (n° {$facture->numero_fournisseur})" : '');
+    }
+
+    /**
+     * Les lignes posées dans le répéteur après le choix d'une facture,
+     * chacune sous sa propre clé, comme celles qu'il crée lui-même.
+     *
+     * @param  list<array{ligne_achat_id: int, description: string, quantite: int}>  $lignes
+     * @return array<string, array{ligne_achat_id: int, description: string, quantite: int}>
+     */
+    private static function lignesDuRepeteur(array $lignes): array
+    {
+        return collect($lignes)->mapWithKeys(fn (array $ligne): array => [(string) Str::uuid() => $ligne])->all();
+    }
+
+    /**
+     * Chaque ligne encore retournable, ou cette seule ligne, proposée pour
+     * tout ce qui peut en être retourné ; deux lignes du même produit se
+     * partagent son stock, dans l'ordre de la facture.
      *
      * @return list<array{ligne_achat_id: int, description: string, quantite: int}>
      */
-    private static function lignesRetournables(FactureAchat $factureAchat): array
+    private static function lignesRetournables(?FactureAchat $factureAchat, ?LigneAchat $seuleLigne = null): array
     {
         $stockRestant = [];
         $lignes = [];
 
-        foreach ($factureAchat->lignes as $ligne) {
+        foreach ($factureAchat?->lignes ?? [] as $ligne) {
+            if ($seuleLigne !== null && ! $ligne->is($seuleLigne)) {
+                continue;
+            }
+
             $quantite = $ligne->quantiteRetournableRestante();
 
             if ($ligne->produit->suivi_stock) {

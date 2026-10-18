@@ -21,10 +21,16 @@ return new class extends Migration
             // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
             // son compte.
             $table->string('cree_par_nom')->nullable();
-            // Traçabilité (voir SourceAvoirFournisseur) : manuelle
-            // aujourd'hui, une future synchronisation par API viendra.
+            // Traçabilité (voir SourceAvoirFournisseur) : saisi à la main
+            // aujourd'hui ; ceux reçus par la plateforme agréée ou par
+            // l'API viendront.
             $table->string('source', 20)->default('manuelle');
             $table->string('numero', 40)->nullable();
+            // Le numéro de l'avoir chez le FOURNISSEUR lui-même (format
+            // libre), facultatif comme celui de la facture d'achat : il
+            // rapprochera l'avoir que le fournisseur enverra par la
+            // plateforme de facturation électronique de celui saisi ici.
+            $table->string('numero_fournisseur', 60)->nullable();
             $table->string('statut', 20)->default('brouillon');
             $table->timestamp('date_emission')->nullable();
             $table->string('devise', 3)->default('EUR');

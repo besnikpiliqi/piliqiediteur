@@ -21,7 +21,10 @@ use LogicException;
  * fois émis (voir AvoirFournisseurPolicy). Référence une facture d'achat
  * SANS jamais la modifier (voir CreerAvoirFournisseurAction) : la facture
  * d'achat d'origine reste un document figé, l'avoir ne fait qu'y
- * référencer un retour.
+ * référencer un retour, chacune de ses lignes liée à la ligne d'achat
+ * qu'elle retourne. Il garde le n° de l'avoir du fournisseur
+ * (numero_fournisseur), qui le rapprochera de celui que le fournisseur
+ * enverra par la plateforme de facturation électronique.
  */
 class AvoirFournisseur extends Model
 {
@@ -46,6 +49,7 @@ class AvoirFournisseur extends Model
     // uniquement via CreerAvoirFournisseurAction/EmettreAvoirFournisseurAction.
     protected $fillable = [
         'facture_achat_id',
+        'numero_fournisseur',
         'motif',
         'devise',
         'source',

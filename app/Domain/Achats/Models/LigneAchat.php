@@ -6,6 +6,7 @@ use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -172,5 +173,31 @@ class LigneAchat extends Model
         }
 
         return max(0, min($resteSurLaLigne, $this->produit->stock_quantite));
+    }
+
+    /**
+     * Les lignes dont il reste au moins un article à retourner, la même
+     * règle que quantiteRetournableRestante() lue par la base pour toute
+     * une liste (choix de la facture d'achat d'un avoir fournisseur) :
+     * moins d'articles retournés par des avoirs émis que de reçus, et un
+     * produit, même archivé, dont le stock n'est pas suivi ou reste
+     * positif. La somme porte sur des quantités entières ; les fiches
+     * liées se lisent dans le magasin actif (voir MagasinScope).
+     *
+     * @param  Builder<LigneAchat>  $query
+     * @return Builder<LigneAchat>
+     */
+    public function scopeRetournables(Builder $query): Builder
+    {
+        $dejaRetournees = LigneAvoirFournisseur::query()
+            ->selectRaw('coalesce(sum(lignes_avoir_fournisseur.quantite), 0)')
+            ->whereColumn('lignes_avoir_fournisseur.ligne_achat_id', 'lignes_achat.id')
+            ->whereHas('avoirFournisseur', fn (Builder $avoir): Builder => $avoir->where('statut', StatutAvoirFournisseur::Emise));
+
+        return $query
+            ->where('lignes_achat.quantite', '>', $dejaRetournees)
+            ->whereHas('produit', fn (Builder $produit): Builder => $produit->where(
+                fn (Builder $stock): Builder => $stock->where('suivi_stock', false)->orWhere('stock_quantite', '>', 0),
+            ));
     }
 }

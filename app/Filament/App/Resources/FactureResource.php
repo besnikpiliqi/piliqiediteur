@@ -56,6 +56,8 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
+use Filament\Infolists\Components\Actions;
+use Filament\Infolists\Components\Actions\Action as InfolistAction;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\Section as InfolistSection;
 use Filament\Infolists\Components\TextEntry;
@@ -63,6 +65,7 @@ use Filament\Infolists\Infolist;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\HtmlString;
@@ -518,7 +521,11 @@ class FactureResource extends Resource
      * TTC et se répartit sur les lignes (voir MentionsFiscales::calcul()).
      * La ligne d'une facture d'achat brouillon
      * qui garde la fiche d'un nouveau produit dit qu'il ne naîtra qu'à sa
-     * validation (voir LigneAchat).
+     * validation (voir LigneAchat). Sous chaque ligne d'une facture d'achat
+     * validée, en orange, ce qu'en a retourné chaque avoir fournisseur émis
+     * (voir FactureAchatResource::retoursDeLaLigne()), et, sur une ligne
+     * qui peut encore l'être, « Retourner ce produit » (voir
+     * FactureAchatResource::creerUnAvoirFournisseur()).
      *
      * Une vente sans TVA française (voir
      * ContexteDeVente::documentRetireLaTvaDuPrix()) montre, comme ses PDF,
@@ -542,7 +549,11 @@ class FactureResource extends Resource
             ->helperText($estUneVente ? app(MentionsFiscales::class)->calcul($document) : null)
             ->schema([
                 TextEntry::make('description')
-                    ->helperText(fn (?Model $record): ?string => $record instanceof LigneAchat && $record->nouveau_produit !== null ? 'Nouveau produit, créé à la validation' : null),
+                    ->helperText(fn (?Model $record): string|Htmlable|null => match (true) {
+                        ! $record instanceof LigneAchat => null,
+                        $record->nouveau_produit !== null => 'Nouveau produit, créé à la validation',
+                        default => FactureAchatResource::retoursDeLaLigne($record),
+                    }),
                 TextEntry::make('quantite')->label('Quantité')->numeric(),
                 TextEntry::make('prix_unitaire_ht')
                     ->label('PU HT')
@@ -565,6 +576,9 @@ class FactureResource extends Resource
                 TextEntry::make('montant_ht')->label('Total HT')->money('EUR'),
                 TextEntry::make('montant_tva')->label('TVA')->money('EUR'),
                 TextEntry::make('montant_ttc')->label('Total TTC')->money('EUR'),
+                Actions::make([FactureAchatResource::creerUnAvoirFournisseur(InfolistAction::make('retourner_ce_produit'))])
+                    ->visible(fn (?Model $record): bool => $record instanceof LigneAchat)
+                    ->columnSpanFull(),
             ])
             ->columns(8 + ($avecRemise ? 1 : 0) + ($sansTvaFrancaise ? 1 : 0) - ($estUnAchat ? 1 : 0));
     }

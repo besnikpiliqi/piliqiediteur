@@ -29,6 +29,12 @@ use LogicException;
  * produit, et AvoirFournisseur::verifierQueLeStockSuffit(), qui plafonne
  * aussi le total des lignes d'un même produit.
  *
+ * Il garde le n° de l'avoir du fournisseur, facultatif : l'écran le
+ * demande avec un avertissement, sans refus, quand il manque (voir
+ * FactureAchatResource::creerUnAvoirFournisseur()), car c'est lui qui
+ * rapprochera l'avoir que le fournisseur enverra par la plateforme de
+ * facturation électronique de celui saisi ici.
+ *
  * Son auteur, relu en base (voir LecteurDesDroits), doit pouvoir créer un
  * avoir fournisseur ; l'avoir l'enregistre comme auteur.
  */
@@ -40,13 +46,22 @@ class CreerAvoirFournisseurAction
     ) {}
 
     /**
+     * Le plus long n° d'avoir du fournisseur, comme celui de sa facture
+     * (voir la colonne numero_fournisseur des deux tables).
+     */
+    public const LONGUEUR_NUMERO_FOURNISSEUR = 60;
+
+    /**
      * @param  list<array{ligne_achat_id: int|string, quantite: int|string}>  $lignesSelectionnees
+     * @param  string|null  $numeroFournisseur  le n° de l'avoir chez le fournisseur, facultatif
      *
      * @throws AuthorizationException
      */
-    public function handle(User $auteur, FactureAchat $factureAchat, array $lignesSelectionnees, ?string $motif = null): AvoirFournisseur
+    public function handle(User $auteur, FactureAchat $factureAchat, array $lignesSelectionnees, ?string $motif = null, ?string $numeroFournisseur = null): AvoirFournisseur
     {
-        return DB::transaction(function () use ($auteur, $factureAchat, $lignesSelectionnees, $motif) {
+        $numeroFournisseur = self::numeroFournisseur($numeroFournisseur);
+
+        return DB::transaction(function () use ($auteur, $factureAchat, $lignesSelectionnees, $motif, $numeroFournisseur) {
             $compte = $this->lecteur->exiger($auteur, 'create', app(TenantContext::class)->magasin(), AvoirFournisseur::class);
             $factureAchat = FactureAchat::query()->whereKey($factureAchat->getKey())->lockForUpdate()->firstOrFail();
             $factureAchat->load('lignes');
@@ -68,6 +83,7 @@ class CreerAvoirFournisseurAction
 
             $avoir = (new AvoirFournisseur([
                 'facture_achat_id' => $factureAchat->id,
+                'numero_fournisseur' => $numeroFournisseur,
                 'motif' => $motif,
             ]))->forceFill(['cree_par' => $compte->getKey()]);
             $avoir->save();
@@ -111,5 +127,21 @@ class CreerAvoirFournisseurAction
 
             return $avoir->fresh('lignes');
         });
+    }
+
+    /**
+     * Le n° saisi, sans espaces autour ; rien de saisi, aucun n°.
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function numeroFournisseur(?string $saisie): ?string
+    {
+        $numero = trim($saisie ?? '');
+
+        if (mb_strlen($numero) > self::LONGUEUR_NUMERO_FOURNISSEUR) {
+            throw new InvalidArgumentException('Le n° de l\'avoir du fournisseur ne dépasse pas '.self::LONGUEUR_NUMERO_FOURNISSEUR.' caractères.');
+        }
+
+        return $numero === '' ? null : $numero;
     }
 }

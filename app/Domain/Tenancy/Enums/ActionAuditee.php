@@ -60,6 +60,7 @@ enum ActionAuditee: string implements HasLabel
     case ProprieteTransferee = 'propriete_transferee';
     case AdresseDeConnexionChangee = 'adresse_de_connexion_changee';
     case VenteSansStock = 'vente_sans_stock';
+    case AvoirFournisseurEmis = 'avoir_fournisseur_emis';
 
     /**
      * Les mots qui, dans un nom de champ (entre ses traits de soulignement,
@@ -118,6 +119,7 @@ enum ActionAuditee: string implements HasLabel
             self::ProprieteTransferee => 'Propriété transférée',
             self::AdresseDeConnexionChangee => 'Adresse de connexion changée',
             self::VenteSansStock => 'Vente au-delà du stock',
+            self::AvoirFournisseurEmis => 'Avoir fournisseur émis',
         };
     }
 
@@ -183,6 +185,11 @@ enum ActionAuditee: string implements HasLabel
             // passer sous zéro, sa référence, son stock avant la vente et
             // la quantité vendue (voir EmettreFactureAction).
             self::VenteSansStock => ['vente', 'produits'],
+            // Le numéro de l'avoir fournisseur, celui de la facture d'achat
+            // qu'il crédite, le n° de l'avoir du fournisseur, ses totaux et,
+            // pour chaque ligne, la référence et la quantité retournées
+            // (voir EmettreAvoirFournisseurAction).
+            self::AvoirFournisseurEmis => ['avoir', 'facture_achat', 'numero_fournisseur', 'total_ht', 'total_tva', 'total_ttc', 'lignes'],
         };
     }
 }

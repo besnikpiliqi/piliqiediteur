@@ -14,10 +14,14 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Lecture seule : un avoir fournisseur se crée uniquement depuis l'action
- * rapide "Avoir fournisseur" de FactureAchatResource et ne se modifie ni
- * ne se supprime jamais une fois émis (voir AvoirFournisseurPolicy).
- * Aucune page create/edit ici, seulement sa fiche.
+ * Les avoirs fournisseur du magasin. Un avoir se crée à la main, par
+ * « Créer un avoir fournisseur » en tête de cette liste, de la liste des
+ * factures d'achat ou de la fiche de l'une d'elles, ou par « Retourner ce
+ * produit » sur une ligne de cette fiche : le même formulaire partout
+ * (voir FactureAchatResource::creerUnAvoirFournisseur()). Ceux reçus par
+ * la plateforme agréée ou par l'API viendront aussi ici. Émis, il ne se
+ * modifie ni ne se supprime jamais (voir AvoirFournisseurPolicy) : aucune
+ * page de modification, seulement sa fiche.
  */
 class AvoirFournisseurResource extends Resource
 {
@@ -53,6 +57,7 @@ class AvoirFournisseurResource extends Resource
                 TextEntry::make('source')->badge(),
                 TextEntry::make('factureAchat.numero')->label('Facture d\'achat créditée'),
                 TextEntry::make('factureAchat.fournisseur.nom')->label('Fournisseur'),
+                TextEntry::make('numero_fournisseur')->label('N° de l\'avoir du fournisseur')->placeholder('—'),
                 TextEntry::make('date_emission')->label('Émis le')->dateTime('d/m/Y')->placeholder('—'),
                 TextEntry::make('motif')->label('Motif')->placeholder('—')->columnSpanFull(),
             ])->columns(3),
@@ -77,6 +82,7 @@ class AvoirFournisseurResource extends Resource
                 Tables\Columns\TextColumn::make('numero')->label('Numéro')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('factureAchat.numero')->label('Facture d\'achat créditée')->rechercheSansAccents(),
                 Tables\Columns\TextColumn::make('factureAchat.fournisseur.nom')->label('Fournisseur')->rechercheSansAccents(),
+                Tables\Columns\TextColumn::make('numero_fournisseur')->label('N° fournisseur')->placeholder('—')->rechercheSansAccents()->toggleable(),
                 Tables\Columns\TextColumn::make('total_ttc')->label('Total TTC')->money('EUR')->sortable(),
                 Tables\Columns\TextColumn::make('motif')->limit(40)->toggleable(),
                 Tables\Columns\TextColumn::make('source')->badge()->toggleable(),

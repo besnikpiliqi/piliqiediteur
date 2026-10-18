@@ -12,11 +12,13 @@ return new class extends Migration
             $table->id();
             $table->foreignId('magasin_id')->constrained('magasins')->cascadeOnDelete();
             $table->foreignId('avoir_fournisseur_id')->constrained('avoirs_fournisseur')->cascadeOnDelete();
-            // Trace la ligne d'achat d'origine (produit + facture d'achat)
-            // SANS jamais la modifier : voir le docblock de
-            // CreerAvoirFournisseurAction. Comme pour lignes_avoir, tout
-            // est un snapshot figé au moment de la création de l'avoir.
-            $table->foreignId('ligne_achat_id')->nullable()->constrained('lignes_achat')->nullOnDelete();
+            // La ligne d'achat retournée, toujours : un avoir fournisseur ne
+            // retourne qu'un produit d'une facture d'achat (voir
+            // CreerAvoirFournisseurAction), qu'il ne modifie jamais. Comme
+            // pour lignes_avoir, le reste de la ligne est une copie figée à
+            // la création de l'avoir. restrictOnDelete : une ligne d'achat
+            // retournée ne s'efface jamais sous son avoir.
+            $table->foreignId('ligne_achat_id')->constrained('lignes_achat')->restrictOnDelete();
             // Celui de la ligne d'achat retournée, archivé compris : une
             // fiche utilisée ne s'efface jamais.
             $table->foreignId('produit_id')->constrained('produits')->restrictOnDelete();

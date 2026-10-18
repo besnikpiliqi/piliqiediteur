@@ -513,10 +513,12 @@ class ClientResource extends Resource
      * Couleur directement en ligne, pas une classe Tailwind : ce message
      * doit attirer l'œil du vendeur, pas se fondre dans le texte d'aide
      * gris habituel -- et ne dépend ainsi jamais de ce que le build CSS a
-     * ou non conservé.
+     * ou non conservé. Un texte simple s'échappe ; un texte déjà écrit en
+     * HTML (un lien vers un document, voir
+     * FactureAchatResource::retoursDeLaLigne()) se place tel quel.
      */
-    public static function enEvidence(string $texte): Htmlable
+    public static function enEvidence(string|Htmlable $texte): Htmlable
     {
-        return new HtmlString('<span style="color: #c2410c; font-weight: 600;">'.e($texte).'</span>');
+        return new HtmlString('<span style="color: #c2410c; font-weight: 600;">'.($texte instanceof Htmlable ? $texte->toHtml() : e($texte)).'</span>');
     }
 }

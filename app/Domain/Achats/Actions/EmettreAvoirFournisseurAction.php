@@ -6,12 +6,15 @@ use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Achats\Events\AvoirFournisseurEmis;
 use App\Domain\Achats\Models\AvoirFournisseur;
 use App\Domain\Achats\Models\LigneAchat;
+use App\Domain\Achats\Models\LigneAvoirFournisseur;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\Facturation\Enums\TypeDocument;
 use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\DocumentNumberingService;
+use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -36,6 +39,12 @@ use LogicException;
  * (voir AvoirFournisseur::verifierQueLeStockSuffit()). L'écran ne l'appelle
  * qu'avec la création de l'avoir, dans la même transaction (voir
  * EnregistrerAvoirFournisseurAction).
+ *
+ * L'avoir émis s'inscrit au journal d'audit de la société, dans la chaîne
+ * du magasin, en dernier verrou (voir JournalAudit) : son numéro, celui de
+ * la facture d'achat qu'il crédite, le n° de l'avoir du fournisseur, ses
+ * totaux et, pour chaque ligne, la référence et la quantité retournées ;
+ * ni le fournisseur ni le motif, qui restent sur l'avoir.
  */
 class EmettreAvoirFournisseurAction
 {
@@ -44,6 +53,7 @@ class EmettreAvoirFournisseurAction
         private readonly CalculateurLigne $calculateur,
         private readonly LecteurDesDroits $lecteur,
         private readonly OperateurCourant $operateur,
+        private readonly JournalAudit $journalAudit,
     ) {}
 
     /**
@@ -57,14 +67,14 @@ class EmettreAvoirFournisseurAction
             Magasin::query()->whereKey($magasin->getKey())->sharedLock()->firstOrFail()->verifierQuIlEstOuvert();
             $compte = $this->lecteur->exigerSousVerrou($auteur, 'create', $magasin, AvoirFournisseur::class);
 
-            return $this->operateur->pendant($compte, fn (): AvoirFournisseur => $this->emettre($avoirFournisseur));
+            return $this->operateur->pendant($compte, fn (): AvoirFournisseur => $this->emettre($compte, $avoirFournisseur));
         });
     }
 
     /**
      * @throws LogicException
      */
-    private function emettre(AvoirFournisseur $avoirFournisseur): AvoirFournisseur
+    private function emettre(User $compte, AvoirFournisseur $avoirFournisseur): AvoirFournisseur
     {
         $avoirFournisseur = AvoirFournisseur::query()->whereKey($avoirFournisseur->getKey())->lockForUpdate()->firstOrFail();
 
@@ -86,6 +96,19 @@ class EmettreAvoirFournisseurAction
         // Synchrone et dans la même transaction, voir le commentaire de
         // AvoirFournisseurEmis.
         AvoirFournisseurEmis::dispatch($avoirFournisseur);
+
+        $this->journalAudit->inscrire(ActionAuditee::AvoirFournisseurEmis, $compte, $avoirFournisseur->magasin, null, [
+            'avoir' => $avoirFournisseur->numero,
+            'facture_achat' => $avoirFournisseur->factureAchat->numero,
+            'numero_fournisseur' => $avoirFournisseur->numero_fournisseur,
+            'total_ht' => $avoirFournisseur->total_ht,
+            'total_tva' => $avoirFournisseur->total_tva,
+            'total_ttc' => $avoirFournisseur->total_ttc,
+            'lignes' => $avoirFournisseur->lignes->map(fn (LigneAvoirFournisseur $ligne): array => [
+                'reference' => $ligne->reference,
+                'quantite' => $ligne->quantite,
+            ])->values()->all(),
+        ], $avoirFournisseur);
 
         return $avoirFournisseur;
     }

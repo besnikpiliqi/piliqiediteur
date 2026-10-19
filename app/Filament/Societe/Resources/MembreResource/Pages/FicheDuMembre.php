@@ -2,28 +2,45 @@
 
 namespace App\Filament\Societe\Resources\MembreResource\Pages;
 
+use App\Domain\Tenancy\Actions\AnnulerLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\AnnulerUneNominationAction;
+use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
+use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
-use App\Domain\Tenancy\Actions\NommerAdministrateurAction;
-use App\Domain\Tenancy\Actions\TransfererProprieteAction;
+use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Filament\Societe\Resources\MembreResource;
 use App\Models\User;
+use Closure;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Group;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Placeholder;
+use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Str;
 
 /**
  * La fiche d'un compte, avec les gestes que la personne connectée peut
  * faire sur lui (voir MembreResource et PorteeDesDroits) ; chaque bouton
  * n'apparaît qu'à qui peut faire ce geste, et l'action du domaine le
- * revérifie sous ses verrous sur des comptes relus.
+ * revérifie sous ses verrous sur des comptes relus. Un administrateur qui
+ * n'est autorisé qu'à redonner l'accès d'un vendeur ou d'un observateur n'y
+ * trouve que « Redonner l'accès » et « Afficher l'identifiant ».
  */
 class FicheDuMembre extends ViewRecord
 {
@@ -34,90 +51,48 @@ class FicheDuMembre extends ViewRecord
         $compte = fn (): User => $this->compte();
 
         return [
-            $this->modifierLesMagasinsAction(),
-            $this->retirerUnMagasinDeResponsableAction(),
-            $this->deplacerLeResponsableAction(),
+            $this->modifierSonRoleAction(),
             $this->annulerLaNominationAction(),
-            $this->nommerAdministrateurAction(),
+            $this->changerLeRoleDeSocieteAction(),
             $this->modifierLAdministrateurAction(),
-            $this->retrograderAction(),
             $this->transmettreLaProprieteAction(),
+            $this->renvoyerLeLienDeTransmissionAction(),
+            $this->annulerLaTransmissionAction(),
             $this->reintegrerAction(),
-            $this->reintegrerCommeExpertComptableAction(),
+            MembreResource::actionRedonnerLAcces(Action::make('redonnerLAcces'), $compte)->after(fn () => $this->getRecord()->refresh()),
+            MembreResource::actionAfficherLIdentifiant(Action::make('afficherLIdentifiant'), $compte),
             MembreResource::actionSuspendre(Action::make('suspendre'), $compte)->after(fn () => $this->getRecord()->refresh()),
             MembreResource::actionReactiver(Action::make('reactiver'), $compte)->after(fn () => $this->getRecord()->refresh()),
             MembreResource::actionRetirerDeLaSociete(Action::make('retirerDeLaSociete'), $compte)->after(fn () => $this->getRecord()->refresh()),
-            MembreResource::actionRenvoyerUnLien(Action::make('renvoyerUnLien'), $compte),
-            MembreResource::actionRedonnerUnProvisoire(Action::make('redonnerUnProvisoire'), $compte),
         ];
     }
 
     /**
-     * Le propriétaire choisit tous les magasins d'un membre, avec son rôle
-     * et ses cases dans chacun : un magasin qu'il ne garde pas lui est
-     * retiré, et sans aucun magasin il serait retiré de la société.
+     * Le propriétaire change le rôle et les cases d'un membre dans son
+     * magasin, le seul qu'il ait (voir ModifierMembreAction).
      */
-    public function modifierLesMagasinsAction(): Action
+    public function modifierSonRoleAction(): Action
     {
-        return Action::make('modifierLesMagasins')
-            ->label('Modifier ses magasins')
-            ->icon('heroicon-o-building-storefront')
-            ->visible(fn (): bool => $this->gereLEquipe() && $this->auteur()->estProprietaire() && $this->compte()->estMembre() && ! $this->compte()->estRetire())
-            ->fillForm(fn (): array => ['affectations' => $this->compte()->affectationsDeMembre()->map(fn (Affectation $affectation): array => [
-                'magasin_id' => (int) $affectation->magasin_id,
-                'role' => $affectation->role->value,
-                ...MembreResource::autorisationsAAfficher($affectation->autorisations(), 'autorisations'),
-            ])->values()->all()])
-            ->form([MembreResource::champAffectations()])
+        return Action::make('modifierSonRole')
+            ->label('Rôle dans son magasin')
+            ->icon('heroicon-o-adjustments-horizontal')
+            ->visible(fn (): bool => $this->gereLEquipe() && $this->auteur()->estProprietaire() && $this->compte()->estMembre() && $this->compte()->affectationDeMembre() !== null)
+            ->fillForm(function (): array {
+                $affectation = $this->compte()->affectationDeMembre();
+
+                return [
+                    'role' => $affectation?->role?->value,
+                    ...MembreResource::autorisationsAAfficher($affectation?->autorisations() ?? [], 'autorisations'),
+                ];
+            })
+            ->form(MembreResource::champsDuRoleDeMembre())
+            ->modalDescription(fn (): string => 'Son magasin ne change pas : '.($this->compte()->magasinDeSonIdentifiant()?->nom ?? '—').'.')
             ->action(function (array $data): void {
                 $this->agir(function () use ($data): void {
-                    $voulues = MembreResource::affectationsSaisies($data['affectations']);
-                    $retirees = array_fill_keys(array_diff($this->compte()->affectationsDeMembre()->pluck('magasin_id')->map(fn ($id): int => (int) $id)->all(), array_keys($voulues)), null);
-                    app(ModifierMembreAction::class)->handle($this->auteur(), $this->compte(), $voulues + $retirees);
-                    Notification::make()->title('Ses magasins sont enregistrés.')->success()->send();
+                    $role = MembreResource::roleSaisi($data);
+                    app(ModifierMembreAction::class)->handle($this->auteur(), $this->compte(), $role['role'], $role['autorisations']);
+                    Notification::make()->title('Son rôle est enregistré.')->success()->send();
                 });
-            });
-    }
-
-    /**
-     * Un administrateur autorisé retire à un responsable un magasin de sa
-     * portée (de la société, si c'était son dernier).
-     */
-    public function retirerUnMagasinDeResponsableAction(): Action
-    {
-        return Action::make('retirerUnMagasinDeResponsable')
-            ->label('Retirer un magasin')
-            ->icon('heroicon-o-minus-circle')
-            ->color('danger')
-            ->visible(fn (): bool => ! $this->auteur()->estProprietaire() && $this->magasinsDeResponsableRetirables() !== [])
-            ->form([
-                Select::make('magasin_id')->label('Magasin')->options(fn (): array => $this->magasinsDeResponsableRetirables())->required(),
-            ])
-            ->modalDescription('Retirer son dernier magasin retire cette personne de la société.')
-            ->action(function (array $data): void {
-                $this->agir(fn () => app(ModifierMembreAction::class)->handle($this->auteur(), $this->compte(), [(int) $data['magasin_id'] => null]));
-            });
-    }
-
-    /**
-     * Un administrateur autorisé déplace un responsable d'un magasin de sa
-     * portée vers un autre.
-     */
-    public function deplacerLeResponsableAction(): Action
-    {
-        return Action::make('deplacerLeResponsable')
-            ->label('Changer de magasin')
-            ->icon('heroicon-o-arrows-right-left')
-            ->visible(fn (): bool => ! $this->auteur()->estProprietaire() && $this->magasinsDeResponsableRetirables() !== [])
-            ->form([
-                Select::make('depuis')->label('Responsable de')->options(fn (): array => $this->magasinsDeResponsableRetirables())->required(),
-                Select::make('vers')->label('Désormais responsable de')->options(fn (): array => MembreResource::magasinsDeLaPortee())->required()->different('depuis'),
-            ])
-            ->action(function (array $data): void {
-                $this->agir(fn () => app(ModifierMembreAction::class)->handle($this->auteur(), $this->compte(), [
-                    (int) $data['depuis'] => null,
-                    (int) $data['vers'] => ['role' => RoleMagasin::Responsable],
-                ]));
             });
     }
 
@@ -131,29 +106,95 @@ class FicheDuMembre extends ViewRecord
             ->label('Annuler la nomination')
             ->icon('heroicon-o-arrow-uturn-left')
             ->color('danger')
-            ->visible(fn (): bool => $this->nominationsAnnulables() !== [])
-            ->form([
-                Select::make('affectation')->label('Nomination')->options(fn (): array => $this->nominationsAnnulables())->required(),
-            ])
-            ->modalDescription('Le rôle de responsable disparaît de ce magasin : la personne retrouve son rôle d\'avant, ou, si la nomination avait créé son accès, le perd. Aucun document n\'est touché.')
-            ->action(function (array $data): void {
-                $this->agir(function () use ($data): void {
-                    app(AnnulerUneNominationAction::class)->handle($this->auteur(), Affectation::query()->where('user_id', $this->compte()->getKey())->findOrFail($data['affectation']));
+            ->requiresConfirmation()
+            ->visible(fn (): bool => $this->nominationAnnulable() !== null)
+            ->modalDescription('Le rôle de responsable disparaît : la personne retrouve son rôle d\'avant, ou, si la nomination avait créé son compte, perd son accès. Aucun document n\'est touché.')
+            ->action(function (): void {
+                $this->agir(function (): void {
+                    app(AnnulerUneNominationAction::class)->handle($this->auteur(), $this->nominationAnnulable() ?? throw new AuthorizationException(PorteeDesDroits::REFUS));
                     Notification::make()->title('La nomination est annulée.')->success()->send();
                 });
             });
     }
 
-    public function nommerAdministrateurAction(): Action
+    /**
+     * Le propriétaire change le rôle de société de ce compte (membre,
+     * administrateur, expert-comptable), qui garde son identifiant et son
+     * historique (voir ChangerLeRoleDeSocieteAction) ; un compte qui n'a pas
+     * encore de magasin et devient membre reçoit, une fois pour toutes, le
+     * magasin réel ouvert choisi ici. Quand son mot de passe est encore son
+     * identifiant, la fenêtre l'avertit et la personne présente peut
+     * choisir le sien maintenant.
+     */
+    public function changerLeRoleDeSocieteAction(): Action
     {
-        return Action::make('nommerAdministrateur')
-            ->label('Nommer administrateur')
-            ->icon('heroicon-o-shield-check')
-            ->visible(fn (): bool => $this->auteur()->can('nommerAdministrateur', $this->compte()) && ! $this->compte()->is($this->auteur()))
-            ->form(MembreResource::champsDeLAdministrateur())
-            ->modalDescription('Ses magasins de membre sont remplacés par sa portée d\'administrateur.')
-            ->action(function (array $data): void {
-                $this->agir(fn () => app(NommerAdministrateurAction::class)->handle(...$this->porteeSaisie($data)));
+        return Action::make('changerLeRoleDeSociete')
+            ->label('Changer de rôle')
+            ->icon('heroicon-o-arrows-right-left')
+            ->color('warning')
+            ->visible(fn (): bool => $this->auteur()->can('changerLeRoleDeSociete', $this->compte()))
+            ->fillForm(fn (): array => ['jeton_acces' => (string) Str::uuid(), 'mode' => 'plus_tard', ...MembreResource::modeleDeLAdministrateur()])
+            ->form([
+                Select::make('role_societe')
+                    ->label('Nouveau rôle')
+                    ->options(fn (): array => collect([RoleSociete::Membre, RoleSociete::Administrateur, RoleSociete::ExpertComptable])
+                        ->reject(fn (RoleSociete $role): bool => $role === $this->compte()->role_societe)
+                        ->mapWithKeys(fn (RoleSociete $role): array => [$role->value => $role->getLabel()])
+                        ->all())
+                    ->required()
+                    ->live(),
+                Group::make([
+                    Placeholder::make('magasin_de_rattachement')
+                        ->label('Son magasin, définitif')
+                        ->content(fn (): string => $this->compte()->magasinDeSonIdentifiant()?->nom ?? '—')
+                        ->visible(fn (): bool => $this->compte()->magasinDeSonIdentifiant() !== null),
+                    Select::make('magasin_id')
+                        ->label('Son magasin, définitif')
+                        ->helperText('Choisi une fois pour toutes, parmi les magasins réels ouverts : un compte de membre ne change jamais de magasin.')
+                        ->options(fn (): array => $this->magasinsReelsOuverts())
+                        ->required(fn (): bool => $this->compte()->magasinDeSonIdentifiant() === null)
+                        ->visible(fn (): bool => $this->compte()->magasinDeSonIdentifiant() === null),
+                    ...MembreResource::champsDuRoleDeMembre(),
+                ])->visible(fn (Get $get): bool => $get('role_societe') === RoleSociete::Membre->value),
+                Group::make(MembreResource::champsDeLAdministrateur())
+                    ->visible(fn (Get $get): bool => $get('role_societe') === RoleSociete::Administrateur->value),
+                Placeholder::make('avertissement')
+                    ->hiddenLabel()
+                    ->content(ListMembres::AVERTISSEMENT_IDENTIFIANT)
+                    ->visible(fn (): bool => $this->compte()->mot_de_passe_est_l_identifiant),
+                Hidden::make('jeton_acces'),
+                Radio::make('mode')
+                    ->label('La personne est-elle là ?')
+                    ->options(['plus_tard' => 'Non : elle choisira son mot de passe à sa prochaine connexion, si son nouveau rôle l\'exige', 'present' => 'Oui : elle choisit son mot de passe maintenant'])
+                    ->live()
+                    ->visible(fn (): bool => $this->compte()->mot_de_passe_est_l_identifiant),
+                ...MembreResource::champsDuMotDePasseChoisi(fn (Get $get): bool => $this->compte()->mot_de_passe_est_l_identifiant && $get('mode') === 'present'),
+            ])
+            ->modalDescription('Le compte garde son identifiant et son historique ; seuls son rôle et ses autorisations changent. Un administrateur ou un expert-comptable ne garde aucune affectation de membre ; ses ventes passées restent à son nom.')
+            ->action(function (array $data, Form $form): void {
+                $compte = $this->compte();
+                $enPresence = $compte->mot_de_passe_est_l_identifiant && ($data['mode'] ?? null) === 'present';
+
+                if ($enPresence) {
+                    MembreResource::exigerLeMotDePasseChoisi((string) ($data['mot_de_passe'] ?? ''), $compte, $form);
+                }
+
+                $this->agir(function () use ($data, $compte, $enPresence): void {
+                    $action = app(ChangerLeRoleDeSocieteAction::class);
+
+                    match (RoleSociete::from((string) $data['role_societe'])) {
+                        RoleSociete::Membre => $action->versMembre($this->auteur(), $compte, MembreResource::roleSaisi($data)['role'], MembreResource::roleSaisi($data)['autorisations'], filled($data['magasin_id'] ?? null) ? (int) $data['magasin_id'] : null),
+                        RoleSociete::Administrateur => $action->versAdministrateur(...$this->porteeSaisie($data)),
+                        RoleSociete::ExpertComptable => $action->versExpertComptable($this->auteur(), $compte),
+                        RoleSociete::Proprietaire => throw new AuthorizationException(PorteeDesDroits::REFUS),
+                    };
+
+                    if ($enPresence) {
+                        app(RedonnerLAccesAction::class)->handle($this->auteur(), $compte->refresh(), true, (string) $data['mot_de_passe'], (string) $data['jeton_acces']);
+                    }
+
+                    Notification::make()->title('Son rôle est changé.')->success()->send();
+                });
             });
     }
 
@@ -162,7 +203,7 @@ class FicheDuMembre extends ViewRecord
         return Action::make('modifierLAdministrateur')
             ->label('Modifier sa portée et ses autorisations')
             ->icon('heroicon-o-adjustments-horizontal')
-            ->visible(fn (): bool => $this->auteur()->can('modifierUnAdministrateur', $this->compte()))
+            ->visible(fn (): bool => $this->auteur()->can('modifierUnAdministrateur', $this->compte()) && ! $this->compte()->estRetire())
             ->fillForm(fn (): array => $this->porteeActuelle())
             ->form(MembreResource::champsDeLAdministrateur())
             ->action(function (array $data): void {
@@ -170,27 +211,12 @@ class FicheDuMembre extends ViewRecord
             });
     }
 
-    public function retrograderAction(): Action
-    {
-        return Action::make('retrograder')
-            ->label('Rétrograder en membre')
-            ->icon('heroicon-o-arrow-down-circle')
-            ->color('warning')
-            ->visible(fn (): bool => $this->auteur()->can('modifierUnAdministrateur', $this->compte()))
-            ->form([MembreResource::champAffectations()])
-            ->modalDescription('Sa portée et ses autorisations de société disparaissent : choisissez ses magasins de membre.')
-            ->action(function (array $data): void {
-                $this->agir(fn () => app(ModifierAdministrateurAction::class)->retrograder($this->auteur(), $this->compte(), MembreResource::affectationsSaisies($data['affectations'])));
-            });
-    }
-
     /**
-     * Le propriétaire transmet la propriété de la société à cet
-     * administrateur actif, en redonnant son mot de passe ; l'action exige
-     * que la qualité de représentant de l'administrateur soit prouvée à son
-     * nom. L'ancien propriétaire, devenu administrateur de tous les
-     * magasins, revient à la liste des comptes, qui ne lui montre plus que
-     * ce que voit un administrateur.
+     * Le propriétaire demande la transmission de la propriété à cet
+     * administrateur, en redonnant son mot de passe : un lien part à
+     * l'adresse que l'administrateur a renseignée lui-même, et la propriété
+     * ne passe que quand il le suit (voir
+     * DemanderLaTransmissionDeLaProprieteAction).
      */
     public function transmettreLaProprieteAction(): Action
     {
@@ -198,83 +224,144 @@ class FicheDuMembre extends ViewRecord
             ->label('Transmettre la propriété')
             ->icon('heroicon-o-key')
             ->color('danger')
-            ->visible(fn (): bool => $this->auteur()->can('transmettreLaPropriete', $this->compte()))
-            ->modalDescription(fn (): string => "{$this->compte()->name} deviendra le propriétaire de la société, avec tous les droits sauf celui de vendre : le propriétaire supervise et contrôle. Vous en deviendrez administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, que le nouveau propriétaire pourra vous cocher, et toutes celles de la société. Sa qualité de représentant légal ou de mandataire doit être prouvée à son nom.")
+            ->visible(fn (): bool => $this->auteur()->can('transmettreLaPropriete', $this->compte()) && $this->transmissionEnAttente() === null)
+            ->modalDescription(fn (): string => "Un lien, valable 24 heures, part à l'adresse que {$this->compte()->name} a renseignée dans son profil : la propriété ne passera que quand il l'aura suivi, connecté à son compte, et vous pourrez annuler d'ici là. Il deviendra alors le propriétaire de la société, avec tous les droits sauf celui de vendre ; vous en deviendrez administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, et toutes celles de la société. Sa qualité de représentant doit être prouvée à son nom, et il doit avoir choisi son propre mot de passe.")
             ->form([
                 TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->autocomplete('current-password')->required(),
             ])
             ->action(function (array $data): void {
-                $transmise = false;
-
-                MembreResource::executerLeGeste(function () use ($data, &$transmise): void {
-                    app(TransfererProprieteAction::class)->handle($this->auteur(), $this->compte(), $data['mot_de_passe']);
-                    $transmise = true;
+                $this->agir(function () use ($data): void {
+                    app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($this->auteur(), $this->compte(), $data['mot_de_passe']);
+                    Notification::make()->title('Un lien a été envoyé à l\'adresse de cet administrateur : la propriété ne passera que quand il l\'aura suivi.')->success()->send();
                 });
+            });
+    }
 
-                if ($transmise) {
-                    Notification::make()->title("La propriété de la société est transmise à {$this->compte()->name}.")->success()->send();
-                    $this->redirect(MembreResource::getUrl('index'));
-                }
+    public function renvoyerLeLienDeTransmissionAction(): Action
+    {
+        return Action::make('renvoyerLeLienDeTransmission')
+            ->label('Renvoyer le lien de transmission')
+            ->icon('heroicon-o-envelope')
+            ->requiresConfirmation()
+            ->modalDescription('Un nouveau lien, valable 24 heures, part à son adresse ; le précédent ne sert plus.')
+            ->visible(fn (): bool => $this->auteur()->can('transmettreLaPropriete', $this->compte()) && $this->transmissionEnAttente() !== null)
+            ->action(function (): void {
+                $this->agir(function (): void {
+                    app(DemanderLaTransmissionDeLaProprieteAction::class)->renvoyerLeLien($this->auteur(), $this->compte());
+                    Notification::make()->title('Un nouveau lien a été envoyé à l\'adresse de cet administrateur.')->success()->send();
+                });
+            });
+    }
+
+    public function annulerLaTransmissionAction(): Action
+    {
+        return Action::make('annulerLaTransmission')
+            ->label('Annuler la transmission')
+            ->icon('heroicon-o-x-circle')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalDescription('Le lien envoyé ne sert plus ; rien n\'a changé dans la société.')
+            ->visible(fn (): bool => $this->auteur()->estProprietaire() && $this->transmissionEnAttente() !== null)
+            ->action(function (): void {
+                $this->agir(function (): void {
+                    app(AnnulerLaTransmissionDeLaProprieteAction::class)->handle($this->auteur(), $this->compte());
+                    Notification::make()->title('La transmission de la propriété est annulée.')->success()->send();
+                });
             });
     }
 
     /**
-     * Réintégrer un compte retiré par la société, comme une création : le
-     * propriétaire choisit ses magasins ; un administrateur autorisé, un
-     * magasin de sa portée où il sera responsable.
+     * Réintégrer un compte retiré, dans son rôle et, pour un membre, dans
+     * son magasin, comme une création : le propriétaire choisit son rôle de
+     * magasin, ou la portée d'un administrateur ; un administrateur
+     * autorisé réintègre un responsable d'un magasin réel de sa portée.
      */
     public function reintegrerAction(): Action
     {
         return Action::make('reintegrer')
             ->label('Réintégrer')
             ->icon('heroicon-o-arrow-path')
-            ->visible(fn (): bool => $this->gereLEquipe() && $this->compte()->estRetire() && $this->compte()->estMembre() && ! $this->compte()->estRetireParSonRefus())
-            ->form(fn (): array => $this->auteur()->estProprietaire()
-                ? [MembreResource::champAffectations()]
-                : [Select::make('magasin_id')->label('Responsable de')->options(fn (): array => MembreResource::magasinsDeLaPortee())->required()])
+            ->visible(fn (): bool => $this->peutReintegrer())
+            ->fillForm(fn (): array => $this->compte()->estAdministrateur() ? MembreResource::modeleDeLAdministrateur() : [])
+            ->form(fn (): array => match (true) {
+                $this->compte()->estAdministrateur() => MembreResource::champsDeLAdministrateur(),
+                $this->compte()->estMembre() && $this->auteur()->estProprietaire() => MembreResource::champsDuRoleDeMembre(),
+                default => [],
+            })
+            ->requiresConfirmation(fn (): bool => $this->compte()->estExpertComptable() || ! $this->auteur()->estProprietaire())
+            ->modalDescription(fn (): string => $this->compte()->estMembre() ? 'Dans son magasin : '.($this->compte()->magasinDeSonIdentifiant()?->nom ?? '—').'.' : 'Il retrouve son rôle.')
             ->action(function (array $data): void {
-                $this->agir(fn () => app(ChangerStatutCompteAction::class)->reintegrer(
-                    $this->auteur(),
-                    $this->compte(),
-                    isset($data['affectations']) ? MembreResource::affectationsSaisies($data['affectations']) : [(int) $data['magasin_id'] => ['role' => RoleMagasin::Responsable]],
-                ));
+                $this->agir(function () use ($data): void {
+                    $action = app(ChangerStatutCompteAction::class);
+                    $compte = $this->compte();
+
+                    if ($compte->estAdministrateur()) {
+                        $action->reintegrerLAdministrateur(...$this->porteeSaisie($data));
+                    } elseif ($compte->estExpertComptable()) {
+                        $action->reintegrerLExpertComptable($this->auteur(), $compte);
+                    } elseif ($this->auteur()->estProprietaire()) {
+                        $role = MembreResource::roleSaisi($data);
+                        $action->reintegrer($this->auteur(), $compte, $role['role'], $role['autorisations']);
+                    } else {
+                        $action->reintegrer($this->auteur(), $compte, RoleMagasin::Responsable);
+                    }
+                });
             });
     }
 
-    public function reintegrerCommeExpertComptableAction(): Action
+    private function peutReintegrer(): bool
     {
-        return Action::make('reintegrerCommeExpertComptable')
-            ->label('Réintégrer comme expert-comptable')
-            ->icon('heroicon-o-calculator')
-            ->requiresConfirmation()
-            ->visible(fn (): bool => $this->gereLEquipe() && $this->auteur()->estProprietaire() && $this->compte()->estRetire() && ! $this->compte()->estRetireParSonRefus())
-            ->action(function (): void {
-                $this->agir(fn () => app(ChangerStatutCompteAction::class)->reintegrerCommeExpertComptable($this->auteur(), $this->compte()));
-            });
+        $compte = $this->compte();
+
+        if (! $compte->estRetire()) {
+            return false;
+        }
+
+        if ($compte->estAdministrateur()) {
+            return $this->auteur()->can('modifierUnAdministrateur', $compte);
+        }
+
+        if ($compte->estExpertComptable()) {
+            return $this->gereLEquipe() && $this->auteur()->can('creerLExpertComptable', User::class);
+        }
+
+        return collect(RoleMagasin::cases())->contains(fn (RoleMagasin $role): bool => app(PorteeDesDroits::class)->peutReintegrer($this->auteur(), $compte, $role));
+    }
+
+    private function nominationAnnulable(): ?Affectation
+    {
+        $affectation = $this->compte()->affectationDeMembre();
+
+        return $affectation !== null && app(PorteeDesDroits::class)->peutAnnulerLaNomination($this->auteur(), $affectation) ? $affectation : null;
     }
 
     /**
-     * Les magasins de sa portée où ce compte est responsable, qu'un
-     * administrateur autorisé peut lui retirer.
+     * La demande de transmission de la propriété qui attend pour ce compte.
+     */
+    private function transmissionEnAttente(): ?TransmissionPropriete
+    {
+        return TransmissionPropriete::query()
+            ->where('destinataire_id', $this->compte()->getKey())
+            ->whereNull('annulee_le')
+            ->whereNull('acceptee_le')
+            ->where('expire_le', '>', now())
+            ->first();
+    }
+
+    /**
+     * Les magasins réels ouverts de la société, où un compte qui n'a pas
+     * encore de magasin peut devenir membre.
      *
      * @return array<int, string>
      */
-    private function magasinsDeResponsableRetirables(): array
+    private function magasinsReelsOuverts(): array
     {
-        return $this->compte()->affectationsDeMembre()
-            ->filter(fn (Affectation $affectation): bool => app(PorteeDesDroits::class)->peutRetirerLAffectation($this->auteur(), $affectation))
-            ->mapWithKeys(fn (Affectation $affectation): array => [(int) $affectation->magasin_id => $affectation->magasin->nom])
-            ->all();
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function nominationsAnnulables(): array
-    {
-        return $this->compte()->affectationsDeMembre()
-            ->filter(fn (Affectation $affectation): bool => app(PorteeDesDroits::class)->peutAnnulerLaNomination($this->auteur(), $affectation))
-            ->mapWithKeys(fn (Affectation $affectation): array => [(int) $affectation->getKey() => "Responsable de {$affectation->magasin->nom}"])
+        return Magasin::query()
+            ->where('societe_id', MembreResource::societe()->getKey())
+            ->where('est_demonstration', false)
+            ->where('statut', StatutMagasin::Actif->value)
+            ->orderBy('nom')
+            ->pluck('nom', 'id')
             ->all();
     }
 
@@ -314,7 +401,7 @@ class FicheDuMembre extends ViewRecord
      * Exécute le geste, affiche un refus sans casser la page, puis relit
      * le compte pour que la fiche montre son nouvel état.
      */
-    private function agir(\Closure $geste): void
+    private function agir(Closure $geste): void
     {
         MembreResource::executerLeGeste($geste);
         $this->getRecord()->refresh();

@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use App\Domain\Authorization\ControleDesDroits;
 use App\Domain\Authorization\OperateurCourant;
+use App\Domain\Tenancy\Contracts\SourceDeHasard;
+use App\Domain\Tenancy\Services\SourceDeHasardCryptographique;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -23,6 +25,9 @@ class TenancyServiceProvider extends ServiceProvider
         // Même raison : l'opérateur d'une requête ou d'un job ne survit
         // jamais au suivant (voir OperateurCourant).
         $this->app->scoped(OperateurCourant::class);
+        // Le hasard des identifiants de connexion : celui, cryptographique,
+        // de PHP (voir GenerateurDIdentifiants).
+        $this->app->bind(SourceDeHasard::class, SourceDeHasardCryptographique::class);
     }
 
     /**

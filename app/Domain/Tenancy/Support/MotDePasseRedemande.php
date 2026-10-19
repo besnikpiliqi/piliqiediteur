@@ -9,8 +9,10 @@ use SensitiveParameter;
 
 /**
  * Le mot de passe que redemandent les gestes graves de la société :
- * transmettre la propriété (voir TransfererProprieteAction), fermer, céder
- * ou rouvrir un magasin, changer son SIRET (voir FermerMagasinAction,
+ * demander la transmission de la propriété, puis l'accepter (voir
+ * DemanderLaTransmissionDeLaProprieteAction et
+ * AccepterLaTransmissionDeLaProprieteAction), fermer, céder ou rouvrir un
+ * magasin, changer son SIRET (voir FermerMagasinAction,
  * RouvrirMagasinAction et ChangerSiretAction). Il se compare à celui que
  * la base donne pour l'auteur, relu par l'action : jamais à celui d'une
  * session restée ouverte.

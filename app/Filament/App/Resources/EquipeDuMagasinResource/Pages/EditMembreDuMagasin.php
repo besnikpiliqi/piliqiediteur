@@ -11,7 +11,7 @@ use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Change le rôle et les cases de ce membre dans ce magasin, par
+ * Change le rôle et les cases de ce membre dans son magasin, par
  * ModifierMembreAction, qui revérifie tout sur l'auteur et le compte relus :
  * ceux d'un vendeur ou d'un observateur, par qui gère tout son compte ;
  * rétrograder un responsable, par le propriétaire seul (voir
@@ -42,9 +42,7 @@ class EditMembreDuMagasin extends EditRecord
     {
         /** @var Affectation $record */
         return static::executerOuInterrompre(function () use ($record, $data): Affectation {
-            app(ModifierMembreAction::class)->handle(auth()->user(), $record->utilisateur, [
-                $record->magasin_id => ['role' => $data['role'], 'autorisations' => EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations')],
-            ]);
+            app(ModifierMembreAction::class)->handle(auth()->user(), $record->utilisateur, $data['role'], EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations'));
 
             return $record->refresh();
         });

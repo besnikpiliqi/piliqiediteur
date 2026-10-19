@@ -14,10 +14,12 @@ use App\Console\Commands\ReverifierSirene;
 use App\Console\Commands\SuivreEnvoisRecommandes;
 use App\Console\Commands\VerifierIntegriteFiscale;
 use App\Console\Commands\VerifierJournalAudit;
+use App\Http\Middleware\FaireConfianceAuxMandataires;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -32,6 +34,12 @@ return Application::configure(basePath: dirname(__DIR__))
         // « Mot de passe oublié », ne peut pas mener ailleurs qu'au
         // logiciel par un en-tête Host forgé.
         $middleware->trustHosts();
+        // Seules les adresses exactes du répartiteur de charge, lues de la
+        // configuration (PROXIES_DE_CONFIANCE, jamais « * »), donnent
+        // l'adresse IP du client par leurs en-têtes : à la place du réglage
+        // trustProxies() de Laravel, qui se poserait ici avant le chargement
+        // de la configuration (voir FaireConfianceAuxMandataires).
+        $middleware->replace(TrustProxies::class, FaireConfianceAuxMandataires::class);
         // Les rappels des prestataires arrivent sans session : ils se
         // prouvent par leur signature (voir RappelsDesPrestatairesController).
         $middleware->validateCsrfTokens(except: ['rappels/*']);

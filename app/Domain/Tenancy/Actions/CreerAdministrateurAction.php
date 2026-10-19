@@ -12,27 +12,29 @@ use App\Domain\Tenancy\Services\PorteeDesAdministrateurs;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\ValidationException;
 use LogicException;
-use SensitiveParameter;
 
 /**
  * Le propriétaire, et lui seul, crée un administrateur en une fois : son
- * identité, son mot de passe provisoire remis de la main à la main (voir
- * CreationDesComptes), sa portée (tous les magasins, présents et futurs,
- * ou une sélection, sans rien de présélectionné) et ses autorisations,
- * de société et de magasin (voir PorteeDesAdministrateurs).
+ * nom, sans adresse e-mail, son identifiant de connexion, qui est aussi son
+ * premier mot de passe (voir CreationDesComptes), sa portée (tous les
+ * magasins, présents et futurs, ou une sélection, sans rien de
+ * présélectionné) et ses autorisations, de société et de magasin (voir
+ * PorteeDesAdministrateurs), celles de la vente jamais précochées.
  *
  * Contrôlé sur l'auteur relu sous les verrous des registres des magasins
  * de sa portée (tous les magasins de la société pour une portée globale)
- * et de sa ligne ; un seul JET 130 par magasin touché, puis l'entrée
- * d'audit (voir JournalDesDroits).
+ * et de sa ligne, puis le jeton de l'écran (une demande répétée rend le
+ * compte déjà créé) et la limite du jour ; un seul JET 130 par magasin
+ * touché, puis l'entrée d'audit (voir JournalDesDroits).
  */
 class CreerAdministrateurAction
 {
     use AgitDansLaSociete;
 
-    public const MESSAGE_PROPRIETAIRE_SEUL = 'Seul le propriétaire crée, nomme et modifie les administrateurs.';
+    public const MESSAGE_PROPRIETAIRE_SEUL = 'Seul le propriétaire crée et modifie les administrateurs.';
 
     public function __construct(
         private readonly JournalDesDroits $journalDesDroits,
@@ -41,29 +43,54 @@ class CreerAdministrateurAction
     ) {}
 
     /**
-     * @param  array{name?: mixed, email?: mixed}  $identite
+     * @param  array{name?: mixed}  $identite
      * @param  list<int>|null  $magasins  null : tous les magasins, présents et futurs
      * @param  array<int|string, mixed>  $autorisationsMagasin  une liste pour chaque magasin, ou une liste par magasin de la sélection
      * @param  array<array-key, mixed>  $autorisationsSociete
+     * @param  string|null  $jeton  le jeton de l'écran de création, tiré à son ouverture
      *
      * @throws AuthorizationException
      * @throws ValidationException
      * @throws LogicException
      */
-    public function handle(User $auteur, Societe $societe, array $identite, #[SensitiveParameter] string $motDePasseProvisoire, ?array $magasins, array $autorisationsMagasin, array $autorisationsSociete): User
+    public function handle(User $auteur, Societe $societe, array $identite, ?array $magasins, array $autorisationsMagasin, array $autorisationsSociete, ?string $jeton = null): User
     {
-        return $this->dansLaSociete($societe, self::MESSAGE_PROPRIETAIRE_SEUL, function () use ($auteur, $societe, $identite, $motDePasseProvisoire, $magasins, $autorisationsMagasin, $autorisationsSociete): User {
+        return $this->dansLaSociete($societe, self::MESSAGE_PROPRIETAIRE_SEUL, function () use ($auteur, $societe, $identite, $magasins, $autorisationsMagasin, $autorisationsSociete, $jeton): User {
             self::exigerLeProprietaire($auteur, $societe);
             $portee = $this->porteeDesAdministrateurs->lire($societe, $magasins, $autorisationsMagasin, $autorisationsSociete);
-            $identiteValide = $this->creation->valider($auteur, $societe, $identite, $motDePasseProvisoire);
+            $identiteValide = $this->creation->valider($identite);
+            $empreinte = CreationDesComptes::empreinte([
+                'role_societe' => RoleSociete::Administrateur->value,
+                'name' => $identiteValide['name'],
+                'magasins' => $portee['tous'] ? null : $portee['magasins']->modelKeys(),
+                'cases' => $portee['cases'],
+                'societe' => $portee['societe'],
+            ]);
 
-            return $this->journalDesDroits->modifier($auteur, ActionAuditee::AdministrateurCree, [], $this->porteeDesAdministrateurs->magasinsTouches($societe, $portee), function (User $auteurRelu) use ($societe, $identiteValide, $motDePasseProvisoire, $portee): User {
-                self::exigerLeProprietaire($auteurRelu, $societe);
-                $administrateur = $this->creation->creer($auteurRelu, $societe, $identiteValide, $motDePasseProvisoire, RoleSociete::Administrateur);
-                $this->porteeDesAdministrateurs->ecrire($administrateur, $portee);
+            try {
+                $resultat = $this->journalDesDroits->modifier($auteur, ActionAuditee::AdministrateurCree, [], $this->porteeDesAdministrateurs->magasinsTouches($societe, $portee), function (User $auteurRelu) use ($societe, $identiteValide, $portee, $jeton, $empreinte): array {
+                    self::exigerLeProprietaire($auteurRelu, $societe);
+                    $existant = $this->creation->compteDejaCree($auteurRelu, $societe, $jeton, $empreinte);
 
-                return $administrateur;
-            });
+                    if ($existant !== null) {
+                        return ['existant' => $existant];
+                    }
+
+                    $this->creation->verifierLaLimiteDuJour($auteurRelu, $societe);
+                    $administrateur = $this->creation->creer($auteurRelu, $societe, $identiteValide, RoleSociete::Administrateur, null, $jeton, $empreinte);
+                    $this->porteeDesAdministrateurs->ecrire($administrateur, $portee);
+
+                    return ['compte' => $administrateur];
+                });
+            } catch (UniqueConstraintViolationException $doublon) {
+                if (! CreationDesComptes::estUnJetonDejaServi($doublon)) {
+                    throw $doublon;
+                }
+
+                return $this->creation->compteDejaCree($auteur->refresh(), $societe, $jeton, $empreinte) ?? throw $doublon;
+            }
+
+            return $resultat['existant'] ?? $resultat['compte'];
         });
     }
 

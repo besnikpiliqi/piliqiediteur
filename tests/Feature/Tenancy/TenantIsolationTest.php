@@ -52,6 +52,7 @@ use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
 use App\Domain\Tenancy\Models\ActionTraitee;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\ActionsUniques;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -163,6 +164,7 @@ class TenantIsolationTest extends TestCase
         MouvementStock::class,
         Paiement::class,
         PaiementAllocation::class,
+        PosteReconnu::class,
         PreuveOperation::class,
         TeteRegistreFiscal::class,
         TraceEvenement::class,
@@ -461,7 +463,7 @@ class TenantIsolationTest extends TestCase
             'inventaire d\'ouverture, modification' => [InventaireOuvertureResource::class, 'edit', static fn (): Model => InventaireOuverture::factory()->create()],
             'membre de l\'équipe, modification' => [EquipeDuMagasinResource::class, 'edit', static fn (Magasin $magasin): Model => Affectation::query()
                 ->where('magasin_id', $magasin->getKey())
-                ->where('user_id', app(CreerMembreAction::class)->handle($magasin->societe->proprietaire, $magasin->societe, ['name' => 'Paul', 'email' => 'paul@example.test'], 'provisoire-des-tests', [$magasin->getKey() => ['role' => RoleMagasin::Vendeur]])->getKey())
+                ->where('user_id', app(CreerMembreAction::class)->handle($magasin->societe->proprietaire, $magasin, ['name' => 'Paul'], RoleMagasin::Vendeur)->getKey())
                 ->firstOrFail()],
             'produit, modification' => [ProduitResource::class, 'edit', static fn (): Model => Produit::factory()->create()],
         ];

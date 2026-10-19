@@ -8,11 +8,13 @@ use Illuminate\Support\Facades\Schema;
 /**
  * Les affectations des comptes de la société à ses magasins (voir
  * Affectation) :
- * - un membre a une affectation par magasin où il travaille, avec son
- *   rôle de magasin (voir RoleMagasin) : responsable, sans aucune case,
- *   car il a toutes les autorisations de son magasin ; vendeur ou
- *   observateur, avec ses cases (voir autorisations_affectations), que son
- *   rôle n'a fait que précocher ;
+ * - un membre a une seule affectation, dans le magasin de rattachement de
+ *   son identifiant (voir la table identifiants), avec son rôle de magasin
+ *   (voir RoleMagasin) : responsable, sans aucune case, car il a toutes les
+ *   autorisations de son magasin ; vendeur ou observateur, avec ses cases
+ *   (voir autorisations_affectations), que son rôle n'a fait que
+ *   précocher ; une personne qui travaille dans plusieurs magasins y a un
+ *   compte dans chacun ;
  * - un administrateur a une affectation sans rôle par magasin de sa
  *   sélection, ou une seule, sans magasin, pour tous les magasins, présents
  *   et futurs, jamais les deux ; elles délimitent sa portée et portent les
@@ -61,6 +63,8 @@ return new class extends Migration
         // Une seule affectation à tous les magasins par compte : l'index
         // unique (user_id, magasin_id) ne compare pas deux magasin_id nuls.
         DB::statement('CREATE UNIQUE INDEX affectations_une_globale ON affectations (user_id) WHERE magasin_id IS NULL');
+        // Un seul magasin par compte de membre.
+        DB::statement('CREATE UNIQUE INDEX affectations_un_magasin_par_membre ON affectations (user_id) WHERE role IS NOT NULL');
     }
 
     public function down(): void

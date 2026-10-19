@@ -4,12 +4,10 @@ namespace Tests\Feature\Authorization;
 
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
-use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
-use App\Domain\Tenancy\Actions\NommerAdministrateurAction;
-use App\Domain\Tenancy\Actions\RefuserSonCompteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Models\Affectation;
@@ -151,7 +149,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
 
         foreach ([$proprietaire, $responsable, $vendeur] as $compte) {
-            $this->refusee(fn () => DB::table('autorisations_societe')->insert(['societe_id' => $magasin->societe_id, 'user_id' => $compte->id, 'autorisation' => AutorisationsSociete::RESPONSABLES_NOMMER]), $compte->email);
+            $this->refusee(fn () => DB::table('autorisations_societe')->insert(['societe_id' => $magasin->societe_id, 'user_id' => $compte->id, 'autorisation' => AutorisationsSociete::RESPONSABLES_NOMMER]), $compte->name);
         }
 
         $this->assertSame(0, DB::table('autorisations_societe')->count());
@@ -180,7 +178,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
 
         foreach ([RoleSociete::Proprietaire, RoleSociete::ExpertComptable] as $role) {
             foreach ([$vendeur, $administrateur, $administrateurSansAffectation] as $compte) {
-                $this->refusee(fn () => DB::table('users')->where('id', $compte->id)->update(['role_societe' => $role->value]), "{$role->value} {$compte->email}");
+                $this->refusee(fn () => DB::table('users')->where('id', $compte->id)->update(['role_societe' => $role->value]), "{$role->value} {$compte->name}");
             }
         }
 
@@ -191,9 +189,10 @@ class GardesDesDroitsEnBaseTest extends TestCase
     /**
      * Les transitions des actions, faites dans leur ordre (les droits qui
      * contrediraient le nouveau rôle s'effacent d'abord), passent : nommer
-     * administrateur, le rétrograder, transmettre la propriété, refuser son
-     * compte, promouvoir un vendeur responsable ; créer, retirer et
-     * réintégrer un expert-comptable.
+     * administrateur, le ramener membre dans son magasin, transmettre la
+     * propriété (l'adresse et le rôle du nouveau propriétaire dans la même
+     * mise à jour), promouvoir un vendeur responsable ; créer, retirer et
+     * réintégrer un expert-comptable, qui garde son rôle une fois retiré.
      */
     public function test_les_transitions_permises_passent(): void
     {
@@ -203,12 +202,12 @@ class GardesDesDroitsEnBaseTest extends TestCase
         $futurAdministrateur = $this->membre($magasin, RoleMagasin::Observateur);
         $nouveauProprietaire = $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER]);
 
-        app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, [$magasin->id => ['role' => RoleMagasin::Responsable]]);
+        app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Responsable);
         $this->assertSame([RoleMagasin::Responsable, []], [Affectation::query()->where('user_id', $vendeur->id)->sole()->role, Affectation::query()->where('user_id', $vendeur->id)->sole()->autorisations()]);
 
-        app(NommerAdministrateurAction::class)->handle($proprietaire, $futurAdministrateur, null, PermissionRegistry::modeleDeLAdministrateur(), [AutorisationsSociete::MAGASINS_GERER]);
+        app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($proprietaire, $futurAdministrateur, null, PermissionRegistry::modeleDeLAdministrateur(), [AutorisationsSociete::MAGASINS_GERER]);
         $this->assertTrue($futurAdministrateur->refresh()->estAdministrateur());
-        app(ModifierAdministrateurAction::class)->retrograder($proprietaire, $futurAdministrateur, [$magasin->id => ['role' => RoleMagasin::Observateur]]);
+        app(ChangerLeRoleDeSocieteAction::class)->versMembre($proprietaire, $futurAdministrateur, RoleMagasin::Observateur);
         $this->assertTrue($futurAdministrateur->refresh()->estMembre());
         $this->assertSame([], $futurAdministrateur->autorisationsDeSociete());
 
@@ -216,7 +215,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
             DB::table('affectations')->where('user_id', $nouveauProprietaire->id)->delete();
             DB::table('autorisations_societe')->where('user_id', $nouveauProprietaire->id)->delete();
             DB::table('users')->where('id', $proprietaire->id)->update(['role_societe' => RoleSociete::Administrateur->value]);
-            DB::table('users')->where('id', $nouveauProprietaire->id)->update(['role_societe' => RoleSociete::Proprietaire->value]);
+            DB::table('users')->where('id', $nouveauProprietaire->id)->update(['role_societe' => RoleSociete::Proprietaire->value, 'email' => 'nouveau-proprietaire@example.test']);
             DB::table('affectations')->insert($this->ligne($magasin, $proprietaire, null, null));
         });
         $this->assertTrue($nouveauProprietaire->refresh()->estProprietaire());
@@ -224,13 +223,9 @@ class GardesDesDroitsEnBaseTest extends TestCase
 
         $expert = $this->expertComptableCreePar($nouveauProprietaire, $magasin);
         app(ChangerStatutCompteAction::class)->retirer($nouveauProprietaire, $expert);
-        $this->assertTrue($expert->refresh()->estMembre());
-        app(ChangerStatutCompteAction::class)->reintegrerCommeExpertComptable($nouveauProprietaire, $expert);
-        $this->assertTrue($expert->refresh()->estExpertComptable());
-
-        $administrateurQuiRefuse = $this->administrateur($magasin, null, [AutorisationsSociete::MAGASINS_GERER]);
-        app(RefuserSonCompteAction::class)->handle($administrateurQuiRefuse);
-        $this->assertSame([true, 0, 0], [$administrateurQuiRefuse->refresh()->estMembre(), Affectation::query()->where('user_id', $administrateurQuiRefuse->id)->count(), DB::table('autorisations_societe')->where('user_id', $administrateurQuiRefuse->id)->count()]);
+        $this->assertSame([true, true], [$expert->refresh()->estExpertComptable(), $expert->estRetire()]);
+        app(ChangerStatutCompteAction::class)->reintegrerLExpertComptable($nouveauProprietaire, $expert);
+        $this->assertSame([true, true], [$expert->refresh()->estExpertComptable(), $expert->estActif()]);
     }
 
     /**
@@ -239,7 +234,7 @@ class GardesDesDroitsEnBaseTest extends TestCase
      */
     private function expertComptableCreePar(User $proprietaire, Magasin $magasin): User
     {
-        $expert = app(CreerExpertComptableAction::class)->handle($proprietaire, $magasin->societe()->firstOrFail(), ['name' => 'Cabinet', 'email' => 'cabinet@example.test'], self::MOT_DE_PASSE_PROVISOIRE);
+        $expert = app(CreerExpertComptableAction::class)->handle($proprietaire, $magasin->societe()->firstOrFail(), ['name' => 'Cabinet']);
 
         return $this->choisirSonMotDePasse($expert);
     }

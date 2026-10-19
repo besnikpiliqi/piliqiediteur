@@ -8,6 +8,8 @@ use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
 use App\Domain\Tenancy\Models\DemandeInscription;
 use App\Domain\Tenancy\Rules\SirenValide;
 use App\Domain\Tenancy\Services\ControleSirene;
+use App\Domain\Tenancy\Services\FournisseurDesComptes;
+use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Models\User;
 use DanHarrin\LivewireRateLimiting\Exceptions\TooManyRequestsException;
 use Filament\Facades\Filament;
@@ -16,8 +18,8 @@ use Filament\Forms\Components\TextInput;
 use Filament\Http\Responses\Auth\Contracts\RegistrationResponse;
 use Filament\Pages\Auth\Register;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -36,12 +38,14 @@ use Illuminate\Validation\ValidationException;
  * refusés avec leur motif ; quand l'INSEE ne répond pas, la demande est
  * acceptée et le contrôle reprend à la confirmation. Rien d'autre n'est
  * vérifié dans le logiciel : que le SIREN soit déjà celui d'une autre
- * société ou l'adresse déjà celle d'un compte, l'écran répond toujours la
- * même chose (MESSAGE_NEUTRE). Une adresse déjà utilisée ne reçoit aucun
- * lien d'inscription, mais un e-mail qui lui dit qu'elle a déjà un compte
- * (voir CompteExistantMail) ; celle d'un compte retiré y reçoit le lien de
- * la page du lien, pour choisir son mot de passe puis créer sa propre
- * société avec ce compte.
+ * société ou l'adresse déjà celle d'un propriétaire, l'écran répond
+ * toujours la même chose (MESSAGE_NEUTRE). L'adresse de connexion d'un
+ * propriétaire ne reçoit aucun lien d'inscription, mais un e-mail qui lui
+ * dit qu'elle a déjà un compte (voir CompteExistantMail) ; l'adresse de
+ * contact d'un autre compte n'empêche rien. Le mot de passe choisi suit la
+ * règle du mot de passe choisi, sans l'identifiant, qui n'existe pas
+ * encore (voir RegleDuMotDePasse) : le tirage de l'identifiant écartera la
+ * valeur égale à ce mot de passe (voir GenerateurDIdentifiants).
  *
  * La page est ouverte à tous : deux demandes par minute et par adresse IP
  * (rateLimit() de Filament), vingt par heure et par adresse IP, trois par
@@ -113,15 +117,11 @@ class InscriptionSociete extends Register
 
         $this->refuserCeQueSireneRefuse($donnees['siren']);
 
-        $compte = User::query()->where('email', $email)->first();
-
-        if ($compte !== null) {
+        if (FournisseurDesComptes::proprietaireDeLAdresse($email) !== null) {
             $panneau = Filament::getPanel('app');
             Mail::to($email)->send(new CompteExistantMail(
                 self::adresseDeLApplication($panneau->generateRouteName('auth.login')),
                 self::adresseDeLApplication($panneau->generateRouteName('auth.password-reset.request')),
-                $compte->estRetire() ? $panneau->getResetPasswordUrl(Password::broker(Filament::getAuthPasswordBroker())->createToken($compte), $compte) : null,
-                (int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire'),
             ));
             $this->terminer();
 
@@ -191,6 +191,23 @@ class InscriptionSociete extends Register
             ->required()
             ->maxLength(255)
             ->adresseDeConnexion();
+    }
+
+    /**
+     * Le mot de passe du propriétaire, suivant la règle du mot de passe
+     * choisi, sans l'identifiant, qui n'existe pas encore ; haché dès la
+     * demande (voir CreerSocieteAction).
+     */
+    protected function getPasswordFormComponent(): Component
+    {
+        return TextInput::make('password')
+            ->label('Votre mot de passe')
+            ->password()
+            ->revealable(filament()->arePasswordsRevealable())
+            ->rules(RegleDuMotDePasse::regles(null))
+            ->helperText('Au moins 8 caractères ; ni un seul caractère répété, ni une suite de chiffres.')
+            ->dehydrateStateUsing(fn (string $state): string => Hash::make($state))
+            ->same('passwordConfirmation');
     }
 
     protected function getNameFormComponent(): Component

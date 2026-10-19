@@ -235,7 +235,7 @@ class FacturePolicyTest extends TestCase
             'la sienne' => $this->emettreUneFactureEnTantQue($membre, $magasin),
             'celle du collègue' => $this->emettreUneFactureEnTantQue($collegue, $magasin),
         ];
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $membre, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => $autorisations]]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $membre, RoleMagasin::Vendeur, $autorisations);
         $membre->refresh();
 
         $listees = Facture::query()->visiblesPar($membre)->orderBy('id')->pluck('id')->all();

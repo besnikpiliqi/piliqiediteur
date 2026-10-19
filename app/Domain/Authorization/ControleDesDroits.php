@@ -6,6 +6,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
@@ -20,8 +21,7 @@ use App\Models\User;
  * PermissionRegistry::duProprietaire()), qu'il passe les policies.
  *
  * Un compte qui ne peut pas agir n'a aucun droit, où que ce soit :
- * suspendu ou retiré, ou avec un mot de passe provisoire (voir
- * User::peutAgir()).
+ * suspendu ou retiré (voir User::peutAgir()).
  *
  * Un expert-comptable lit et n'écrit rien, quelles que soient les lignes
  * que garderait la base : aucune autorisation de société ; dans un magasin
@@ -35,8 +35,8 @@ use App\Models\User;
  * la société du compte : celle du contexte, sinon la sienne. Le propriétaire
  * les a toutes, un administrateur celles que le propriétaire a cochées pour
  * lui, tout autre compte aucune ; une société en lecture seule ne garde que
- * celles qui y restent permises (nommer et retirer les responsables, sauf
- * dans une société révoquée). Aucune ne suffit seule pour un geste sur un
+ * celles qui y restent permises (nommer et retirer les responsables,
+ * redonner l'accès, sauf dans une société révoquée). Aucune ne suffit seule pour un geste sur un
  * magasin : les policies et les actions vérifient en plus la portée de
  * l'administrateur.
  *
@@ -63,8 +63,8 @@ use App\Models\User;
  *   (ClotureCaissePersonnellePolicy::fermer() et fermerLaCaisseDe()) : les
  *   clôtures continuent jusqu'au bout ; les autorisations de
  *   PermissionRegistry::permisesEnLectureSeule() ; un geste sur l'équipe
- *   du magasin (une affectation ou un compte), sauf dans une société
- *   révoquée ;
+ *   du magasin (une affectation, un compte ou un poste reconnu), sauf dans
+ *   une société révoquée ;
  * - tant que le magasin ne peut pas vendre (société en cours de
  *   vérification, établissement pas encore confirmé, voir
  *   Magasin::peutVendre()), les autorisations des opérations commerciales
@@ -181,12 +181,14 @@ final class ControleDesDroits
     }
 
     /**
-     * Un geste sur l'équipe : un compte (voir MembrePolicy), ou une
-     * affectation à un magasin (voir AffectationPolicy).
+     * Un geste sur l'équipe : un compte (voir MembrePolicy), une
+     * affectation à un magasin (voir AffectationPolicy), ou un poste
+     * reconnu du magasin (voir PosteReconnuPolicy) : un accès se coupe
+     * toujours.
      */
     private static function porteSurLEquipe(mixed $cible): bool
     {
-        return self::porteSur($cible, User::class) || self::porteSur($cible, Affectation::class);
+        return self::porteSur($cible, User::class) || self::porteSur($cible, Affectation::class) || self::porteSur($cible, PosteReconnu::class);
     }
 
     /**

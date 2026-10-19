@@ -3,6 +3,7 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Tenancy\Enums\ActionAuditee;
+use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Mail\AdresseChangeeMail;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
@@ -15,21 +16,21 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 /**
- * La personne suit le lien envoyé à la nouvelle adresse de connexion
- * qu'elle a demandée dans son profil (voir
- * DemanderUneNouvelleAdresseAction et ConfirmerNouvelleAdresseController) :
- * sous le verrou de la ligne du compte, le lien encore valable pose la
- * nouvelle adresse et la date à laquelle une adresse du compte a été
- * confirmée (un lien suivi : le compte ne peut plus être refusé, voir
- * User::peutRefuserSonCompte()), et ne sert qu'une fois. Un lien « Mot de
- * passe oublié » déjà envoyé à l'ancienne adresse ne sert plus. Le
- * changement s'inscrit au journal d'audit de la société du compte, sans
- * aucune adresse, et l'ancienne adresse en est prévenue.
+ * Le propriétaire suit le lien envoyé à la nouvelle adresse de connexion
+ * qu'il a demandée dans son profil (voir DemanderUneNouvelleAdresseAction
+ * et ConfirmerNouvelleAdresseController) : sous le verrou de la ligne du
+ * compte, le lien encore valable pose la nouvelle adresse et la date de sa
+ * confirmation, et ne sert qu'une fois. Un lien « Mot de passe oublié »
+ * déjà envoyé à l'ancienne adresse ne sert plus. Le changement s'inscrit au
+ * journal d'audit de la société, sans aucune adresse, et l'ancienne
+ * adresse en est prévenue. Un compte qui n'est plus propriétaire (après une
+ * transmission de la propriété) ne confirme plus rien.
  *
- * Une adresse prise entre-temps par un autre compte (une adresse en
- * attente ne bloque rien) est refusée, sans dire à qui elle appartient, et
- * le lien ne sert plus. Le compte se cherche par l'empreinte du jeton,
- * hors de toute société ; tout s'écrit ensuite dans la sienne.
+ * Une adresse prise entre-temps par un autre propriétaire (une adresse en
+ * attente ne bloque rien ; l'adresse de contact d'un autre compte n'est pas
+ * unique) est refusée, sans dire à qui elle appartient, et le lien ne sert
+ * plus. Le compte se cherche par l'empreinte du jeton, hors de toute
+ * société ; tout s'écrit ensuite dans la sienne.
  */
 class ConfirmerNouvelleAdresseAction
 {
@@ -58,7 +59,7 @@ class ConfirmerNouvelleAdresseAction
     {
         $compte = User::query()->where('nouvelle_adresse_jeton_hache', self::empreinte($jeton))->first();
 
-        return $compte !== null && $compte->nouvelle_adresse_expire_le?->isFuture() ? $compte : null;
+        return $compte !== null && $compte->estProprietaire() && $compte->nouvelle_adresse_expire_le?->isFuture() ? $compte : null;
     }
 
     /**
@@ -74,7 +75,7 @@ class ConfirmerNouvelleAdresseAction
             $ancienne = app(TenantContext::class)->runAsSociete($societe, fn (): ?string => DB::transaction(function () use ($compte, $jeton): ?string {
                 $relu = User::query()->whereKey($compte->getKey())->lockForUpdate()->firstOrFail();
 
-                if ($relu->nouvelle_adresse_jeton_hache !== self::empreinte($jeton) || ! $relu->nouvelle_adresse_expire_le?->isFuture()) {
+                if (! $relu->estProprietaire() || $relu->nouvelle_adresse_jeton_hache !== self::empreinte($jeton) || ! $relu->nouvelle_adresse_expire_le?->isFuture()) {
                     throw new AuthorizationException(self::MESSAGE_LIEN_INVALIDE);
                 }
 
@@ -82,7 +83,7 @@ class ConfirmerNouvelleAdresseAction
                 $ancienne = $relu->email;
                 $relu->forceFill(['nouvelle_adresse' => null, 'nouvelle_adresse_jeton_hache' => null, 'nouvelle_adresse_expire_le' => null]);
 
-                if (User::query()->where('email', $nouvelle)->whereKeyNot($relu->getKey())->exists()) {
+                if (User::query()->where('role_societe', RoleSociete::Proprietaire->value)->where('email', $nouvelle)->whereKeyNot($relu->getKey())->exists()) {
                     $relu->save();
 
                     return null;
@@ -97,8 +98,8 @@ class ConfirmerNouvelleAdresseAction
                 return $ancienne;
             }));
         } catch (UniqueConstraintViolationException) {
-            // Un autre compte a pris l'adresse depuis le contrôle : la même
-            // réponse, et rien n'est changé.
+            // Un autre propriétaire a pris l'adresse depuis le contrôle : la
+            // même réponse, et rien n'est changé.
             $ancienne = null;
         }
 

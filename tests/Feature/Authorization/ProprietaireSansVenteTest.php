@@ -47,7 +47,7 @@ use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\ClotureCaissePersonnelleResource\Pages\ListClotureCaissePersonnelles;
-use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\CreateMembreDuMagasin;
+use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\App\Resources\FactureResource\Pages\CreateFacture;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
@@ -330,15 +330,16 @@ class ProprietaireSansVenteTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $this->dansLeMagasin($magasin, $proprietaire);
 
-        Livewire::test(CreateMembreDuMagasin::class)
-            ->fillForm(['name' => 'Paul', 'email' => 'paul@example.test', 'mot_de_passe_provisoire' => self::MOT_DE_PASSE_PROVISOIRE, 'role' => RoleMagasin::Vendeur->value])
-            ->set('data.autorisations', [PermissionRegistry::FACTURE_VIEW])
-            ->set('data.autorisations_vente', PermissionRegistry::deVente())
-            ->call('create')
-            ->assertHasNoFormErrors();
-        $administrateur = app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alix', 'email' => 'alix@example.test'], self::MOT_DE_PASSE_PROVISOIRE, null, [...PermissionRegistry::modeleDeLAdministrateur(), ...PermissionRegistry::deVente()], []);
+        Livewire::test(ListEquipeDuMagasin::class)
+            ->mountAction('creerUnCompte')
+            ->setActionData(['name' => 'Paul', 'role' => RoleMagasin::Vendeur->value])
+            ->set('mountedActionsData.0.autorisations', [])
+            ->setActionData(['autorisations' => [PermissionRegistry::FACTURE_VIEW], 'autorisations_vente' => PermissionRegistry::deVente()])
+            ->callMountedAction()
+            ->assertHasNoActionErrors();
+        $administrateur = app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alix'], null, [...PermissionRegistry::modeleDeLAdministrateur(), ...PermissionRegistry::deVente()], []);
 
-        $vendeur = $this->choisirSonMotDePasse(User::query()->where('email', 'paul@example.test')->sole());
+        $vendeur = $this->choisirSonMotDePasse(User::query()->where('societe_id', $magasin->societe_id)->where('name', 'Paul')->sole());
         $administrateur = $this->choisirSonMotDePasse($administrateur);
         $this->assertEqualsCanonicalizing([PermissionRegistry::FACTURE_VIEW, ...PermissionRegistry::deVente()], $vendeur->autorisationsDans($magasin));
         $this->assertSame([], array_values(array_diff(PermissionRegistry::deVente(), $administrateur->autorisationsDans($magasin))));

@@ -2,11 +2,11 @@
 
 namespace Tests\Feature\Tenancy;
 
+use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -39,7 +39,7 @@ class TracabiliteDesVentesConcurrenceTest extends TestCase
         $this->exigerUnServeurDeBaseDeDonnees();
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
-        $vendeur = $this->membreDeCesMagasins([$lyon->id => ['role' => RoleMagasin::Vendeur], $villeurbanne->id => ['role' => RoleMagasin::Vendeur]], $lyon);
+        $vendeur = $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], [], [...PermissionRegistry::modeleDeLAdministrateur(), ...PermissionRegistry::deVente()]);
         [$vendeurId, $villeurbanneId] = [$vendeur->id, $villeurbanne->id];
         $produitDeVilleurbanne = app(TenantContext::class)->runAs($villeurbanne, fn (): int => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id);
         app(TenantContext::class)->set($lyon);

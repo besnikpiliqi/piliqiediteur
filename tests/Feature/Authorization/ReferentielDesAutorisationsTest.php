@@ -55,7 +55,7 @@ class ReferentielDesAutorisationsTest extends TestCase
         $affectation = Affectation::query()->where('user_id', $vendeur->id)->sole();
 
         $this->assertThrows(
-            fn () => app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [PermissionRegistry::FACTURE_VIEW, 'facture.tout_faire']]]),
+            fn () => app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, 'facture.tout_faire']),
             InvalidArgumentException::class,
             'Autorisation inconnue : facture.tout_faire',
         );
@@ -82,11 +82,11 @@ class ReferentielDesAutorisationsTest extends TestCase
         $affectation = Affectation::query()->where('user_id', $vendeur->id)->sole();
 
         $this->assertThrows(
-            fn () => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [AutorisationsSociete::RESPONSABLES_NOMMER]]]),
+            fn () => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, [AutorisationsSociete::RESPONSABLES_NOMMER]),
             InvalidArgumentException::class,
         );
         $this->assertThrows(
-            fn () => app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alix', 'email' => 'alix@example.test'], self::MOT_DE_PASSE_PROVISOIRE, null, [], [PermissionRegistry::FACTURE_EMETTRE]),
+            fn () => app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alix'], null, [], [PermissionRegistry::FACTURE_EMETTRE]),
             InvalidArgumentException::class,
         );
         $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('autorisations_affectations')->insert(['affectation_id' => $affectation->id, 'autorisation' => AutorisationsSociete::MAGASINS_GERER])), QueryException::class);

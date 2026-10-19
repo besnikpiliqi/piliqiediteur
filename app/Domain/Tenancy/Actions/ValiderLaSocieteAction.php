@@ -75,9 +75,11 @@ use Throwable;
  * déjà prouvé leur qualité de représentant voient leur propriétaire
  * prévenu qu'un examen de l'éditeur est nécessaire, sans rien apprendre de
  * cette société, et l'éditeur est alerté. Après la transaction : le
- * magasin de démonstration se ferme (un échec n'empêche rien : il ne vend
- * plus, la société étant validée, et la commande quotidienne le reprend),
- * la lettre d'information part au siège, et le propriétaire est prévenu.
+ * magasin de démonstration se ferme pour de bon et ses comptes
+ * d'entraînement sont retirés, même s'il était déjà fermé pour inactivité
+ * (un échec n'empêche rien : il ne vend plus, la société étant validée, et
+ * la commande quotidienne le reprend), la lettre d'information part au
+ * siège, et le propriétaire est prévenu.
  */
 class ValiderLaSocieteAction
 {
@@ -228,7 +230,8 @@ class ValiderLaSocieteAction
 
     private function apresLaValidation(Societe $societe, User $proprietaire, string $personneVerifiee, bool $qualiteDuTitulaire): void
     {
-        $demonstration = $societe->demonstration()->where('statut', StatutMagasin::Actif->value)->first();
+        $demonstration = $societe->demonstration()->first();
+        $demonstrationOuverte = $demonstration?->statut === StatutMagasin::Actif;
 
         if ($demonstration !== null) {
             try {
@@ -244,7 +247,7 @@ class ValiderLaSocieteAction
             $societe,
             'Votre société est validée',
             'La vente, les e-mails aux clients, les PDF et les transmissions sont ouverts dans vos magasins.'
-                .($demonstration !== null ? ' Le magasin de démonstration est terminé et reste consultable.' : '')
+                .($demonstrationOuverte ? ' Le magasin de démonstration est terminé et reste consultable.' : '')
                 .($qualiteDuTitulaire ? '' : ' '.sprintf(self::MESSAGE_QUALITE_D_UN_AUTRE, $personneVerifiee)),
             AvisDeVerification::SUCCES,
         ));

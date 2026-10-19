@@ -12,21 +12,32 @@ use Tests\TestCase;
 /**
  * Le sélecteur de magasin du panneau (voir User::getTenants()) propose à
  * chacun les magasins qu'il ouvre, et eux seuls : tous ceux de la société
- * au propriétaire, ses magasins à un membre, les magasins réels à
- * l'expert-comptable, jamais un magasin d'une autre société.
+ * au propriétaire, son seul magasin à un compte de membre, sans sélecteur,
+ * les magasins réels à l'expert-comptable, jamais un magasin d'une autre
+ * société.
  */
 class SelecteurDeMagasinTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_un_membre_de_deux_magasins_voit_les_deux(): void
+    /**
+     * Un compte de responsable, de vendeur ou d'observateur ne vaut que
+     * pour son magasin : il n'en ouvre aucun autre, et le panneau ne lui
+     * montre aucun sélecteur ; une personne qui travaille dans deux
+     * magasins y a deux comptes.
+     */
+    public function test_un_compte_de_membre_n_a_qu_un_magasin(): void
     {
         $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Bron']);
-        $membre = $this->membreDeCesMagasins([$lyon->id => ['role' => RoleMagasin::Vendeur], $villeurbanne->id => ['role' => RoleMagasin::Observateur]], $lyon);
+        $responsable = $this->responsable($lyon);
+        $observateur = $this->membre($villeurbanne, RoleMagasin::Observateur);
 
-        $this->assertEqualsCanonicalizing([$lyon->id, $villeurbanne->id], $membre->getTenants(Filament::getPanel('app'))->modelKeys());
+        $this->assertSame([[$lyon->id], [$villeurbanne->id]], [$responsable->getTenants(Filament::getPanel('app'))->modelKeys(), $observateur->getTenants(Filament::getPanel('app'))->modelKeys()]);
+        $this->assertFalse($responsable->canAccessTenant($villeurbanne));
+        $this->actingAs($responsable);
+        $this->assertFalse(Filament::getPanel('app')->hasTenantMenu());
     }
 
     public function test_un_vendeur_d_un_seul_magasin_ne_voit_que_lui(): void
@@ -48,16 +59,6 @@ class SelecteurDeMagasinTest extends TestCase
 
         $this->assertEqualsCanonicalizing([$lyon->id, $villeurbanne->id], $proprietaire->getTenants(Filament::getPanel('app'))->modelKeys());
         $this->assertFalse($proprietaire->canAccessTenant($ailleurs));
-    }
-
-    public function test_un_responsable_de_deux_magasins_voit_les_deux(): void
-    {
-        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
-        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
-        $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Bron']);
-        $responsable = $this->responsable($lyon, $villeurbanne);
-
-        $this->assertEqualsCanonicalizing([$lyon->id, $villeurbanne->id], $responsable->getTenants(Filament::getPanel('app'))->modelKeys());
     }
 
     public function test_l_expert_comptable_voit_tous_les_magasins_reels_et_pas_la_demonstration(): void

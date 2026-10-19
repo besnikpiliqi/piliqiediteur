@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Societe;
 
+use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
@@ -23,7 +24,9 @@ use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\EReportingDesParticuliers;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
+use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\CreerMandatPdpAction;
+use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\FermerLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
@@ -31,10 +34,14 @@ use App\Domain\Tenancy\Actions\RefuserLaSocieteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
+use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\EntreeAudit;
+use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Models\Societe;
@@ -43,10 +50,12 @@ use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use LogicException;
@@ -117,8 +126,8 @@ class MagasinDeDemonstrationTest extends TestCase
      * Le propriétaire ne vend pas, pas même dans le magasin de
      * démonstration : il n'y a ni caisse ni autorisation de vente, l'action
      * le refuse et rien ne s'écrit ; la fenêtre qui ouvre la démonstration
-     * le lui dit et l'invite à y créer un compte pour essayer la caisse,
-     * avec lequel la vente passe.
+     * le lui dit et l'invite à y créer des comptes d'entraînement pour
+     * essayer la caisse, avec lesquels la vente passe.
      */
     public function test_le_proprietaire_ne_vend_pas_dans_la_demonstration_et_la_fenetre_le_dit(): void
     {
@@ -128,7 +137,7 @@ class MagasinDeDemonstrationTest extends TestCase
 
         Livewire::test(TableauDeBord::class)
             ->mountAction('ouvrirLaDemonstration')
-            ->assertSee('votre équipe y vend, encaisse et clôture comme pour de vrai ; vous-même ne vendez pas : pour essayer la caisse, créez-y un compte de responsable ou de vendeur.')
+            ->assertSee('votre équipe y vend, encaisse et clôture comme pour de vrai ; vous-même ne vendez pas : pour essayer la caisse, créez-y des comptes d\'entraînement : ils ne servent qu\'ici et sont retirés à la validation de votre société.')
             ->callMountedAction();
 
         $demonstration = $societe->demonstration()->sole();
@@ -424,6 +433,114 @@ class MagasinDeDemonstrationTest extends TestCase
 
         $this->assertThrows(fn () => app(FacturePdfGenerator::class)->html($brouillon), VenteNonAutoriseeException::class);
         $this->assertStringContainsString('DÉMONSTRATION', app(FacturePdfGenerator::class)->html($ticket));
+    }
+
+    /**
+     * Le propriétaire, puis un responsable de la démonstration, y créent
+     * des comptes d'entraînement : rattachés à la démonstration, ils n'y
+     * ouvrent qu'elle, et y vendent.
+     */
+    public function test_le_proprietaire_et_un_responsable_creent_des_comptes_d_entrainement_dans_la_demonstration(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
+        app(TenantContext::class)->set($demonstration);
+
+        $chef = $this->choisirSonMotDePasse(app(CreerMembreAction::class)->handle($societe->proprietaire, $demonstration, ['name' => 'Chef d\'essai'], RoleMagasin::Responsable));
+        $vendeur = $this->choisirSonMotDePasse(app(CreerMembreAction::class)->handle($chef, $demonstration, ['name' => 'Vendeur d\'essai'], RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut()]));
+
+        foreach ([$chef, $vendeur] as $compte) {
+            $this->assertSame([true, (int) $demonstration->id, [(int) $demonstration->id]], [$compte->estUnCompteDEntrainement(), (int) $compte->magasinDeSonIdentifiant()?->id, $compte->magasinsAccessibles()->modelKeys()], $compte->name);
+        }
+        $this->actingAs($vendeur);
+        $this->assertSame('payee', $this->vendre()->fresh()->statut->value);
+    }
+
+    /**
+     * Un administrateur, même de tous les magasins et autorisé à tout, ne
+     * crée aucun compte d'entraînement : ni responsable, ni vendeur.
+     */
+    public function test_un_administrateur_ne_cree_aucun_compte_d_entrainement(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $reel = $this->creerLeMagasinDuSiege($societe);
+        $administrateur = $this->administrateur($reel, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
+
+        foreach ([RoleMagasin::Responsable, RoleMagasin::Vendeur] as $role) {
+            $this->assertThrows(fn () => app(TenantContext::class)->runAs($demonstration, fn () => app(CreerMembreAction::class)->handle($administrateur, $demonstration, ['name' => 'Essai'], $role)), AuthorizationException::class);
+        }
+
+        $this->assertFalse(User::query()->where('name', 'Essai')->exists());
+        $this->assertSame(0, Identifiant::withoutGlobalScopes()->where('societe_id', $societe->id)->where('magasin_id', $demonstration->id)->count());
+    }
+
+    /**
+     * Les comptes d'entraînement sont retirés de la société, au nom du
+     * système, quand la démonstration se ferme pour de bon, à la validation
+     * comme au refus de la société ; fermée pour trente jours d'inactivité,
+     * elle les garde, et ils la retrouvent à sa réouverture.
+     */
+    public function test_les_comptes_d_entrainement_sont_retires_a_la_validation_ou_au_refus_et_gardes_a_la_fermeture_pour_inactivite(): void
+    {
+        $validee = $this->inscrireUneSociete();
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($validee->proprietaire, $validee);
+        $compte = $this->compteDEntrainement($demonstration);
+        $this->ouvrirUneSessionAilleurs($compte);
+
+        $this->travel(31)->days();
+        $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
+        $this->assertSame([StatutMagasin::Ferme, StatutCompte::Actif], [$demonstration->fresh()->statut, $compte->refresh()->statut]);
+        app(OuvrirLaDemonstrationAction::class)->handle($validee->proprietaire, $validee->fresh());
+        $this->assertTrue($compte->refresh()->peutOuvrir($demonstration->fresh()));
+
+        $this->verifierLIdentiteDuProprietaire($validee);
+
+        $compte->refresh();
+        $this->assertSame([StatutCompte::Retire, null], [$compte->statut, $compte->statut_change_par]);
+        $this->assertSame(0, Affectation::query()->where('user_id', $compte->id)->count());
+        $this->assertSessionsFermees($compte);
+        $this->assertCount(1, $this->entreesDAudit($validee, ActionAuditee::CompteRetire));
+
+        $refusee = $this->inscrireUneSociete();
+        $autreDemonstration = app(OuvrirLaDemonstrationAction::class)->handle($refusee->proprietaire, $refusee);
+        $compteDuRefus = $this->compteDEntrainement($autreDemonstration);
+        app(RefuserLaSocieteAction::class)->handle($refusee, new InterventionDeLEditeur('Pièces falsifiées, signalement du vrai dirigeant.', 'DOSSIER-43', ['alice']));
+        $this->assertSame(StatutCompte::Retire, $compteDuRefus->refresh()->statut);
+    }
+
+    /**
+     * Un compte d'entraînement n'ouvre jamais un magasin réel : ni par une
+     * affectation de membre, que la base refuse hors du magasin de son
+     * identifiant, ni par une promotion à un rôle de société, que l'action
+     * et la base refusent.
+     */
+    public function test_un_compte_d_entrainement_n_ouvre_jamais_un_magasin_reel(): void
+    {
+        $societe = $this->inscrireUneSociete();
+        $reel = $this->creerLeMagasinDuSiege($societe);
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh());
+        $compte = $this->compteDEntrainement($demonstration);
+
+        $this->assertFalse($compte->peutOuvrir($reel));
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('affectations')->insert(['societe_id' => $societe->id, 'user_id' => $compte->id, 'magasin_id' => $reel->id, 'role' => RoleMagasin::Vendeur->value, 'created_at' => now(), 'updated_at' => now()])), QueryException::class);
+        $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($societe->proprietaire, $compte, null, [], []), LogicException::class, ChangerLeRoleDeSocieteAction::MESSAGE_ENTRAINEMENT);
+        $this->assertThrows(fn () => app(ChangerLeRoleDeSocieteAction::class)->versExpertComptable($societe->proprietaire, $compte), LogicException::class, ChangerLeRoleDeSocieteAction::MESSAGE_ENTRAINEMENT);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('users')->where('id', $compte->id)->update(['role_societe' => RoleSociete::ExpertComptable->value])), QueryException::class);
+
+        $this->assertSame([RoleSociete::Membre, [(int) $demonstration->id]], [$compte->refresh()->role_societe, $compte->magasinsAccessibles()->modelKeys()]);
+        $this->assertFalse($compte->peutOuvrir($reel));
+    }
+
+    /**
+     * Un vendeur d'entraînement de la démonstration, créé par le
+     * propriétaire, son mot de passe choisi.
+     */
+    private function compteDEntrainement(Magasin $demonstration): User
+    {
+        $proprietaire = Societe::query()->findOrFail($demonstration->societe_id)->proprietaire;
+
+        return $this->choisirSonMotDePasse(app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($proprietaire, $demonstration, ['name' => 'Vendeur d\'essai'], RoleMagasin::Vendeur)));
     }
 
     /**

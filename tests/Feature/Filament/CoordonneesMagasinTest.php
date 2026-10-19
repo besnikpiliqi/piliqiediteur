@@ -74,10 +74,7 @@ class CoordonneesMagasinTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
-        $vendeur = $this->choisirSonMotDePasse(app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle($responsable, $magasin->societe()->firstOrFail(), [
-            'name' => 'Paul Martin',
-            'email' => 'paul@example.test',
-        ], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PARAMETRES_GERER]]])));
+        $vendeur = $this->choisirSonMotDePasse(app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle($responsable, $magasin, ['name' => 'Paul Martin'], RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::PARAMETRES_GERER])));
         $this->dansLeMagasin($magasin, $vendeur);
 
         Livewire::test(CoordonneesMagasin::class)

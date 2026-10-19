@@ -6,24 +6,26 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Un compte n'appartient qu'à une seule société (voir User) : son
+ * Un compte appartient pour toujours à une seule société (voir User) : son
  * propriétaire, un administrateur, un expert-comptable ou un membre (voir
- * RoleSociete). Un compte ne s'efface pas : retiré, il garde son adresse,
- * qui ne sert jamais à un autre compte (voir StatutCompte).
+ * RoleSociete). Un compte ne s'efface pas : retiré, il garde son rôle, son
+ * identifiant de connexion et son historique (voir StatutCompte).
  *
- * Un compte créé par la société (voir CreerMembreAction,
- * CreerAdministrateurAction et CreerExpertComptableAction) reçoit un mot
- * de passe provisoire, remis de la main à la main, valable 72 heures, que
- * la personne change à sa première connexion. Elle peut refuser ce compte
- * tant que son adresse n'a jamais été confirmée, c'est-à-dire tant que
- * personne n'a suivi un lien envoyé à cette adresse (voir
- * User::peutRefuserSonCompte() et RefuserSonCompteAction). Une nouvelle
- * adresse de connexion attend la confirmation du lien envoyé à cette
- * adresse (voir ModifierProfil et ConfirmerNouvelleAdresseAction).
+ * Chaque compte a un identifiant de connexion de 8 chiffres, tiré au hasard
+ * et jamais redonné (voir la table identifiants). Le propriétaire se
+ * connecte aussi par son adresse e-mail, son adresse de connexion,
+ * qu'aucun autre propriétaire n'utilise ; celle de tout autre compte est
+ * facultative, renseignée par la personne seule dans son profil, et n'est
+ * qu'un contact (voir ModifierProfil). Un compte créé par la société (voir
+ * CreerMembreAction, CreerAdministrateurAction et CreerExpertComptableAction)
+ * a pour premier mot de passe son identifiant ; la personne choisit le sien
+ * quand elle le veut, ou à sa première connexion pour un responsable, un
+ * administrateur ou un expert-comptable (voir ExigerSonPropreMotDePasse).
  *
- * Les gardes de la base qui lient le rôle de société aux affectations et
- * aux autorisations de société se posent avec la table des autorisations
- * de société, la dernière qu'elles lisent (voir GardesDesDroits).
+ * Les gardes de la base qui lient le rôle de société aux affectations, aux
+ * autorisations de société et aux identifiants se posent avec la table des
+ * autorisations de société, la dernière qu'elles lisent (voir
+ * GardesDesDroits).
  */
 return new class extends Migration
 {
@@ -38,8 +40,8 @@ return new class extends Migration
             $table->string('role_societe', 20)->default('membre');
             $table->string('statut', 20)->default('actif');
             // Qui a donné au compte son statut actuel (voir
-            // User::nouveauStatut()) : lui-même pour un refus de son compte
-            // ou la création de sa propre société.
+            // User::nouveauStatut()) ; nul pour un compte d'entraînement
+            // retiré par la fermeture du magasin de démonstration.
             $table->unsignedBigInteger('statut_change_par')->nullable();
             // Ce statut a-t-il été décidé par le propriétaire de la
             // société, au moment même du geste ? Un compte suspendu ou
@@ -51,45 +53,64 @@ return new class extends Migration
             $table->boolean('statut_decide_par_le_proprietaire')->default(false);
             $table->string('name');
             // En minuscules, sans espaces autour (voir
-            // User::normaliserEmail()) : unique dans tout le logiciel.
-            $table->string('email')->unique();
-            // La date à laquelle quelqu'un a suivi un lien envoyé à
-            // l'adresse actuelle du compte (inscription, « Mot de passe
-            // oublié », rattachement, confirmation d'une nouvelle adresse),
-            // et rien d'autre : nulle, le compte créé par la société peut
-            // encore être refusé (voir User::aConfirmeSonAdresse()).
+            // User::normaliserEmail()). Pour le propriétaire, son adresse de
+            // connexion, obligatoire et unique parmi les propriétaires
+            // (index users_adresse_de_connexion, garde
+            // users_role_coherent_avec_les_droits) ; pour tout autre compte,
+            // une adresse de contact facultative, que plusieurs comptes
+            // peuvent partager, jamais écrite par qui crée le compte.
+            $table->string('email')->nullable();
+            // La date à laquelle le propriétaire a suivi un lien envoyé à son
+            // adresse de connexion actuelle : celui de l'inscription, de la
+            // confirmation d'une nouvelle adresse ou de la transmission de la
+            // propriété.
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            // Le mot de passe est-il encore l'identifiant du compte ? Vrai à
+            // la création par la société et après un accès redonné en
+            // l'absence de la personne, faux dès qu'elle choisit le sien :
+            // le rappel du profil et de la liste de l'équipe le lisent sans
+            // recalculer un hachage, et la base refuse un propriétaire dont
+            // il est vrai.
+            $table->boolean('mot_de_passe_est_l_identifiant')->default(false);
             // La qualité de représentant légal ou de mandataire de la
             // société, prouvée pour cette personne-ci (voir
             // ValiderLaSocieteAction et User::aSaQualiteVerifiee()) ; la
             // vérification qui l'a prouvée la nomme pour bénéficiaire.
             $table->timestamp('qualite_verifiee_le')->nullable();
-            // Le mot de passe est provisoire : la personne le change avant
-            // toute autre page (voir ExigerUnMotDePasseDefinitif) ; il ne
-            // sert plus après son expiration.
-            $table->boolean('mot_de_passe_a_changer')->default(false);
-            $table->timestamp('mot_de_passe_provisoire_expire_le')->nullable();
             // Le compte qui a créé ce compte pour la personne (propriétaire,
-            // responsable ou administrateur autorisé), prévenu si elle le
-            // refuse, et seul à lui donner de nouveaux droits tant que son
-            // mot de passe est un provisoire ; nul pour le propriétaire
-            // inscrit par son lien ; il ne change plus ensuite.
+            // responsable ou administrateur autorisé) : il compte ses
+            // créations du jour (voir CreationDesComptes) ; nul pour le
+            // propriétaire inscrit par son lien ; il ne change plus ensuite.
             $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
-            // Qui a donné au compte son mot de passe provisoire actuel, et
-            // le connaît donc : son auteur à la création, puis qui le lui a
-            // redonné (voir DonnerUnMotDePasseProvisoireAction) ; nul dès
-            // que la personne a choisi son mot de passe. Tant que le mot de
-            // passe est ce provisoire, le compte ne reçoit de nouveaux
-            // droits que de la personne qui l'a créé, et seulement si c'est
-            // elle qui le lui a donné (voir User::recoitDeNouveauxDroitsDe()).
-            $table->foreignId('provisoire_donne_par')->nullable()->constrained('users')->restrictOnDelete();
-            // La nouvelle adresse de connexion demandée dans le profil, en
-            // attente de la confirmation du lien envoyé à cette adresse
-            // (24 heures) : SHA-256 du jeton du lien, jamais le jeton.
+            // Sa première et sa dernière connexion réussie (voir Connexion) :
+            // la première prévient le propriétaire, la dernière s'affiche à
+            // la personne à sa connexion suivante.
+            $table->timestamp('premiere_connexion_le')->nullable();
+            $table->timestamp('derniere_connexion_le')->nullable();
+            // Le dernier accès redonné au compte (voir RedonnerLAccesAction),
+            // montré à la personne à sa connexion suivante : quand, par
+            // qui, en sa présence ou non.
+            $table->timestamp('acces_redonne_le')->nullable();
+            $table->foreignId('acces_redonne_par')->nullable()->constrained('users')->restrictOnDelete();
+            $table->boolean('acces_redonne_en_presence')->nullable();
+            // Vrai après un accès redonné par un autre que le propriétaire :
+            // le propriétaire sera prévenu du premier mot de passe que la
+            // personne choisit ensuite, moment où il redevient faux.
+            $table->boolean('signaler_le_prochain_mot_de_passe')->default(false);
+            // Le jeton d'écran du dernier accès redonné en présence de la
+            // personne : une demande répétée avec le même jeton est sans
+            // effet.
+            $table->uuid('jeton_acces_redonne')->nullable();
+            // La nouvelle adresse de connexion que le propriétaire a
+            // demandée dans son profil, en attente de la confirmation du
+            // lien envoyé à cette adresse (24 heures) : SHA-256 du jeton du
+            // lien, jamais le jeton.
             $table->string('nouvelle_adresse')->nullable();
             $table->char('nouvelle_adresse_jeton_hache', 64)->nullable()->unique();
             $table->timestamp('nouvelle_adresse_expire_le')->nullable();
+            // « Se souvenir de moi », pour le seul compte du propriétaire
+            // (voir FournisseurDesComptes::retrieveByToken()).
             $table->rememberToken();
             $table->timestamps();
 
@@ -99,11 +120,20 @@ return new class extends Migration
             $table->foreign('statut_change_par')->references('id')->on('users')->restrictOnDelete();
             $table->unique(['societe_id', 'id']);
             $table->index(['societe_id', 'role_societe']);
+            // Les créations du jour d'un auteur (voir CreationDesComptes).
+            $table->index(['cree_par', 'created_at']);
         });
 
         // Un seul propriétaire par société.
         DB::statement("CREATE UNIQUE INDEX users_un_proprietaire_par_societe ON users (societe_id) WHERE role_societe = 'proprietaire'");
+        // L'adresse de connexion d'un propriétaire n'est celle d'aucun autre
+        // propriétaire ; l'adresse de contact d'un autre compte n'est pas
+        // unique.
+        DB::statement("CREATE UNIQUE INDEX users_adresse_de_connexion ON users (email) WHERE role_societe = 'proprietaire'");
 
+        // Les liens « Mot de passe oublié », rangés par adresse : seuls les
+        // propriétaires s'en servent, et leur adresse est unique parmi eux
+        // (voir JetonsDuLien).
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();
             $table->string('token');

@@ -9,10 +9,16 @@ use App\Domain\Facturation\Actions\CloturerLesJourneesAction;
 use App\Domain\Facturation\Actions\FermerLesCaissesPersonnellesAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
+use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
+use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
+use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PeriodesDActivite;
+use App\Domain\Tenancy\Services\SessionsDesComptes;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -32,6 +38,16 @@ use Throwable;
  * Le registre l'inscrit au nom de la personne qui la ferme, ou du système ;
  * les journées se clôturent et les caisses se ferment au nom du système.
  *
+ * Quand elle se ferme pour de bon, c'est-à-dire quand la société est
+ * validée ou refusée, ses comptes d'entraînement (les comptes de membre
+ * rattachés à la démonstration, voir User::estUnCompteDEntrainement()) sont
+ * retirés de la société, dans la même transaction, au nom du système et
+ * sans décision du propriétaire (voir JournalDesDroits) : ils n'ouvrent
+ * plus rien, leurs sessions se ferment, et ils gardent leur historique de
+ * démonstration. Une démonstration déjà fermée pour inactivité retire
+ * alors aussi les siens. Fermée après trente jours sans opération, elle
+ * garde ses comptes d'entraînement, qui la retrouvent à sa réouverture.
+ *
  * Fermé, il reste consultable, en lecture seule (« Démonstration
  * (terminée) »), et ne produit plus de ticket Z. Déjà fermé, rien n'est
  * refait.
@@ -45,6 +61,8 @@ class FermerLaDemonstrationAction
         private readonly PeriodesDActivite $periodesDActivite,
         private readonly JournalAudit $journalAudit,
         private readonly OperateurCourant $operateur,
+        private readonly JournalDesDroits $journalDesDroits,
+        private readonly SessionsDesComptes $sessions,
     ) {}
 
     /**
@@ -67,6 +85,8 @@ class FermerLaDemonstrationAction
             $verrouille = Magasin::query()->whereKey($demonstration->getKey())->lockForUpdate()->firstOrFail();
 
             if ($verrouille->statut === StatutMagasin::Ferme) {
+                $this->retirerLesComptesDEntrainementSiElleFinit($verrouille);
+
                 return false;
             }
 
@@ -81,6 +101,7 @@ class FermerLaDemonstrationAction
             ]);
             $this->periodesDActivite->fermer($verrouille, $motif, $auteur);
             $this->journalAudit->inscrire(ActionAuditee::DemonstrationFermee, $auteur, $verrouille, null, ['motif' => $motif->value], $verrouille);
+            $this->retirerLesComptesDEntrainementSiElleFinit($verrouille);
 
             return true;
         })));
@@ -94,5 +115,46 @@ class FermerLaDemonstrationAction
         } catch (Throwable $erreur) {
             report($erreur);
         }
+    }
+
+    /**
+     * Retire les comptes d'entraînement de cette démonstration quand sa
+     * société est validée ou refusée, au nom du système, sous le verrou du
+     * registre de la démonstration (déjà pris) puis de leurs lignes (voir
+     * JournalDesDroits) ; rien sinon.
+     */
+    private function retirerLesComptesDEntrainementSiElleFinit(Magasin $demonstration): void
+    {
+        $societe = Societe::query()->whereKey($demonstration->societe_id)->firstOrFail();
+
+        if (! $societe->estValidee() && ! $societe->estRefusee()) {
+            return;
+        }
+
+        $comptes = User::query()
+            ->where('societe_id', $societe->getKey())
+            ->where('role_societe', RoleSociete::Membre->value)
+            ->where('statut', '<>', StatutCompte::Retire->value)
+            ->whereIn('id', Identifiant::query()->where('magasin_id', $demonstration->getKey())->select('user_id'))
+            ->orderBy('id')
+            ->get()
+            ->all();
+
+        if ($comptes === []) {
+            return;
+        }
+
+        $this->journalDesDroits->modifier(null, ActionAuditee::CompteRetire, $comptes, [], function (?User $systeme, array $relus): void {
+            foreach ($relus as $compte) {
+                if ($compte->estRetire()) {
+                    continue;
+                }
+
+                ChangerStatutCompteAction::retirerLesDroits($compte);
+                $compte->forceFill($compte->nouveauStatut(StatutCompte::Retire, null))->save();
+                $compte->effacerToutesSesNotifications();
+                $this->sessions->fermer($compte);
+            }
+        });
     }
 }

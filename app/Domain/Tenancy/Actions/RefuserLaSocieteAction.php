@@ -3,7 +3,6 @@
 namespace App\Domain\Tenancy\Actions;
 
 use App\Domain\Tenancy\Enums\ActionAuditee;
-use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Societe;
@@ -78,14 +77,16 @@ class RefuserLaSocieteAction
     }
 
     /**
-     * Après la transaction du refus : la démonstration se ferme, et le
+     * Après la transaction du refus : la démonstration se ferme pour de bon
+     * (ses comptes d'entraînement sont retirés, même si elle était déjà
+     * fermée pour inactivité, voir FermerLaDemonstrationAction), et le
      * propriétaire est prévenu, avec le motif du répertoire quand c'est lui
      * qui fait refuser (la justification de l'éditeur reste interne).
      */
     public function apresLeRefus(Societe $societe, ?string $motifPourLeProprietaire): void
     {
         app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $motifPourLeProprietaire): void {
-            $demonstration = $societe->demonstration()->where('statut', StatutMagasin::Actif->value)->first();
+            $demonstration = $societe->demonstration()->first();
 
             if ($demonstration !== null) {
                 try {

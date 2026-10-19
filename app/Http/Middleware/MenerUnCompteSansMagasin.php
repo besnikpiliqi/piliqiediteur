@@ -13,12 +13,12 @@ use Symfony\Component\HttpFoundation\Response;
  * L'accueil du panneau des magasins (/app) pour un compte qui n'a encore
  * aucun magasin à ouvrir (voir User::magasinsAccessibles()) : jamais une
  * erreur. Le propriétaire et un administrateur vont à l'espace de leur
- * société, où se créent les magasins (voir TableauDeBord) ; tout autre
- * compte (un membre dont aucun magasin n'est encore ouvert, un
- * expert-comptable d'une société sans magasin réel) à une page qui le lui
- * dit (voir AucunMagasin). Un compte qui a un magasin y va, comme Filament
- * l'y mène. Après ExigerUnMotDePasseDefinitif : un mot de passe provisoire
- * se change d'abord.
+ * société, où se créent les magasins (voir TableauDeBord) ; un
+ * expert-comptable d'une société sans magasin réel, à une page qui le lui
+ * dit (voir AucunMagasin). Un compte de membre a toujours son magasin, où
+ * il va, comme Filament l'y mène. Après ExigerSonPropreMotDePasse : un
+ * responsable, un administrateur ou un expert-comptable dont le mot de
+ * passe est encore son identifiant choisit d'abord le sien.
  */
 class MenerUnCompteSansMagasin
 {

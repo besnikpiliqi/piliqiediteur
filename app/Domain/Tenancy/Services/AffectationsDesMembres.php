@@ -5,19 +5,15 @@ namespace App\Domain\Tenancy\Services;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Notifications\ResponsableNommeParUnAdministrateur;
 use App\Models\User;
-use Illuminate\Auth\Access\AuthorizationException;
 use LogicException;
 
 /**
- * Les affectations de membre que demande une action de l'équipe (créer un
- * compte, le modifier, le réintégrer), lues, contrôlées et écrites une
- * seule fois :
- * - chaque magasin demandé est un magasin de la société, sinon le geste est
- *   refusé avant toute écriture (un magasin d'une autre société ne
- *   s'affecte jamais) ;
+ * L'affectation de membre que demande une action de l'équipe (créer un
+ * compte, changer son rôle ou ses cases, le réintégrer), lue, contrôlée et
+ * écrite une seule fois. Un compte de membre n'a qu'une affectation, dans
+ * le magasin de son identifiant (voir GardesDesDroits) :
  * - un responsable n'a aucune case ; un vendeur ou un observateur reçoit
  *   les cases demandées, ou le modèle de son rôle, jamais au-delà de ce que
  *   l'auteur peut cocher dans ce magasin (voir PorteeDesDroits) ;
@@ -27,103 +23,48 @@ use LogicException;
  */
 final class AffectationsDesMembres
 {
-    public const MESSAGE_SANS_MAGASIN = 'Un membre est affecté à au moins un magasin.';
-
     public const MESSAGE_RESPONSABLE_SANS_CASE = 'Un responsable n\'a aucune case : il a toutes les autorisations de son magasin.';
 
     public function __construct(private readonly PorteeDesDroits $portee) {}
 
     /**
-     * Les affectations demandées, chaque magasin lu dans la société.
-     *
-     * @param  array<int, array{role: RoleMagasin|string, autorisations?: list<string>|null}|null>  $demandees  par identifiant de magasin ; null pour retirer le magasin
-     * @return array<int, array{magasin: Magasin, role: RoleMagasin, autorisations: list<string>|null}|null>
-     *
-     * @throws AuthorizationException quand un magasin n'est pas de la société
-     * @throws LogicException quand un rôle est inconnu ou qu'un responsable porte des cases
-     */
-    public function lire(Societe $societe, array $demandees): array
-    {
-        $magasins = Magasin::query()->where('societe_id', $societe->getKey())->whereKey(array_keys($demandees))->get()->keyBy(fn (Magasin $magasin): int => (int) $magasin->getKey());
-        $lues = [];
-
-        foreach ($demandees as $magasinId => $demandee) {
-            $magasin = $magasins->get((int) $magasinId) ?? throw new AuthorizationException(PorteeDesDroits::REFUS);
-
-            if ($demandee === null) {
-                $lues[(int) $magasinId] = null;
-
-                continue;
-            }
-
-            $role = $demandee['role'] instanceof RoleMagasin ? $demandee['role'] : (RoleMagasin::tryFrom((string) $demandee['role']) ?? throw new LogicException('Rôle de magasin inconnu.'));
-            $autorisations = $demandee['autorisations'] ?? null;
-
-            if (! $role->aDesCases() && $autorisations !== null && $autorisations !== []) {
-                throw new LogicException(self::MESSAGE_RESPONSABLE_SANS_CASE);
-            }
-
-            $lues[(int) $magasinId] = ['magasin' => $magasin, 'role' => $role, 'autorisations' => $role->aDesCases() ? $autorisations : null];
-        }
-
-        return $lues;
-    }
-
-    /**
-     * Contrôle, pour un compte que l'auteur crée ou réintègre, des
-     * affectations à donner : au moins une ; plusieurs, par le propriétaire
-     * seul ; chacune, le rôle que l'auteur peut donner dans ce magasin, et
-     * des cases qu'il peut cocher. Rend les cases de chacune, le modèle du
-     * rôle à défaut.
-     *
-     * @param  array<int, array{magasin: Magasin, role: RoleMagasin, autorisations: list<string>|null}|null>  $affectations
-     * @return array<int, array{magasin: Magasin, role: RoleMagasin, autorisations: list<string>}>
-     *
-     * @throws AuthorizationException
-     * @throws LogicException
-     */
-    public function verifierPourUnNouveauCompte(User $auteur, array $affectations): array
-    {
-        $affectations = array_filter($affectations);
-
-        if ($affectations === []) {
-            throw new LogicException(self::MESSAGE_SANS_MAGASIN);
-        }
-
-        if (count($affectations) > 1 && ! $this->portee->peutAffecterAPlusieursMagasins($auteur)) {
-            throw new AuthorizationException(PorteeDesDroits::REFUS_PLUSIEURS_MAGASINS);
-        }
-
-        $verifiees = [];
-
-        foreach ($affectations as $magasinId => $affectation) {
-            if (! $this->portee->peutDonnerLeRole($auteur, null, $affectation['magasin'], $affectation['role'])) {
-                throw new AuthorizationException(PorteeDesDroits::REFUS);
-            }
-
-            $verifiees[$magasinId] = [...$affectation, 'autorisations' => $this->cases($auteur, $affectation)];
-        }
-
-        return $verifiees;
-    }
-
-    /**
-     * Les cases d'une affectation, contrôlées : aucune pour un responsable ;
-     * celles demandées, ou le modèle du rôle, pour un vendeur ou un
+     * Le rôle demandé, et ses cases : aucune pour un responsable, celles
+     * demandées (ou null, le modèle du rôle) pour un vendeur ou un
      * observateur.
      *
-     * @param  array{magasin: Magasin, role: RoleMagasin, autorisations: list<string>|null}  $affectation
+     * @param  list<string>|null  $autorisations
+     * @return array{role: RoleMagasin, autorisations: list<string>|null}
+     *
+     * @throws LogicException quand le rôle est inconnu ou qu'un responsable porte des cases
+     */
+    public function lire(RoleMagasin|string $role, ?array $autorisations): array
+    {
+        $role = $role instanceof RoleMagasin ? $role : (RoleMagasin::tryFrom($role) ?? throw new LogicException('Rôle de magasin inconnu.'));
+
+        if (! $role->aDesCases() && $autorisations !== null && $autorisations !== []) {
+            throw new LogicException(self::MESSAGE_RESPONSABLE_SANS_CASE);
+        }
+
+        return ['role' => $role, 'autorisations' => $role->aDesCases() ? $autorisations : null];
+    }
+
+    /**
+     * Les cases de l'affectation, contrôlées : aucune pour un responsable ;
+     * celles demandées, ou le modèle du rôle, pour un vendeur ou un
+     * observateur, que l'auteur peut toutes cocher dans ce magasin.
+     *
+     * @param  array{role: RoleMagasin, autorisations: list<string>|null}  $demandee
      * @return list<string>
      *
      * @throws LogicException
      */
-    public function cases(User $auteur, array $affectation): array
+    public function cases(User $auteur, Magasin $magasin, array $demandee): array
     {
-        if (! $affectation['role']->aDesCases()) {
+        if (! $demandee['role']->aDesCases()) {
             return [];
         }
 
-        return $this->portee->verifierCochables($auteur, $affectation['magasin'], $affectation['autorisations'] ?? $affectation['role']->permissionsParDefaut());
+        return $this->portee->verifierCochables($auteur, $magasin, $demandee['autorisations'] ?? $demandee['role']->permissionsParDefaut());
     }
 
     /**
@@ -170,22 +111,19 @@ final class AffectationsDesMembres
     }
 
     /**
-     * Prévient le propriétaire de chaque responsable qu'un administrateur
-     * vient de nommer.
-     *
-     * @param  list<Affectation>  $affectations
+     * Prévient le propriétaire du responsable qu'un administrateur vient de
+     * nommer, ou dont il vient de créer le compte : il en connaît alors le
+     * premier mot de passe, l'identifiant.
      */
-    public function prevenirDesNominations(User $compte, array $affectations): void
+    public function prevenirDUneNomination(User $compte, Affectation $affectation, bool $compteCree): void
     {
-        foreach ($affectations as $affectation) {
-            if ($affectation->nomme_par === null || (! $affectation->wasRecentlyCreated && ! $affectation->wasChanged('nomme_par'))) {
-                continue;
-            }
-
-            $magasin = $affectation->magasin()->firstOrFail();
-            $administrateur = User::query()->findOrFail($affectation->nomme_par);
-
-            $magasin->societe->proprietaire?->notify(new ResponsableNommeParUnAdministrateur($administrateur, $compte, $magasin));
+        if ($affectation->nomme_par === null || (! $affectation->wasRecentlyCreated && ! $affectation->wasChanged('nomme_par'))) {
+            return;
         }
+
+        $magasin = $affectation->magasin()->firstOrFail();
+        $administrateur = User::query()->findOrFail($affectation->nomme_par);
+
+        $magasin->societe->proprietaire?->notify(new ResponsableNommeParUnAdministrateur($administrateur, $compte, $magasin, $compteCree));
     }
 }

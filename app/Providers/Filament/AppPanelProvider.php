@@ -4,7 +4,7 @@ namespace App\Providers\Filament;
 
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Pages\AucunMagasin;
-use App\Filament\App\Pages\Auth\ChangerMotDePasseProvisoire;
+use App\Filament\App\Pages\Auth\ChoisirSonMotDePasse;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\App\Pages\Auth\DemandeDeLien;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
@@ -12,7 +12,7 @@ use App\Filament\App\Pages\Auth\ModifierProfil;
 use App\Filament\App\Pages\Auth\PageDuLien;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Http\Middleware\BindTenantContextFromFilamentTenant;
-use App\Http\Middleware\ExigerUnMotDePasseDefinitif;
+use App\Http\Middleware\ExigerSonPropreMotDePasse;
 use App\Http\Middleware\JournaliserOuvertureDeSession;
 use App\Http\Middleware\MenerUnCompteSansMagasin;
 use Filament\Facades\Filament;
@@ -51,10 +51,13 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
  * policies et la lecture des droits (voir ControleDesDroits).
  * JournaliserOuvertureDeSession le suit : une fois le magasin actif
  * positionné, il inscrit l'ouverture de session (JET 80) au journal des
- * événements de ce magasin. Avant tout cela, ExigerUnMotDePasseDefinitif
- * mène un compte au mot de passe provisoire à son changement, puis
+ * événements de ce magasin. Avant tout cela, ExigerSonPropreMotDePasse
+ * mène un responsable, un administrateur ou un expert-comptable dont le
+ * mot de passe est encore son identifiant au choix du sien, puis
  * MenerUnCompteSansMagasin mène un compte qui n'a encore aucun magasin à
  * l'espace de sa société ou à la page qui le lui dit (voir AucunMagasin).
+ * Le sélecteur de magasin n'apparaît qu'à qui en ouvre plusieurs : un
+ * compte de membre n'en a qu'un.
  */
 class AppPanelProvider extends PanelProvider
 {
@@ -66,19 +69,21 @@ class AppPanelProvider extends PanelProvider
             ->path('app')
             ->login(Connexion::class)
             ->registration(InscriptionSociete::class)
-            // « Mot de passe oublié » envoie un lien par e-mail à tout
-            // compte (voir DemandeDeLien), qui mène à la page du lien de
-            // PILIQI (voir PageDuLien) : choisir son mot de passe, ou
-            // refuser le compte s'il peut l'être. Le profil permet à chacun
-            // de changer son nom, son adresse de connexion et son mot de
-            // passe (voir ModifierProfil).
+            // « Mot de passe oublié » envoie un lien par e-mail au seul
+            // propriétaire, à son adresse de connexion (voir DemandeDeLien),
+            // qui mène à la page du lien de PILIQI (voir PageDuLien), où il
+            // choisit son mot de passe ; tout autre compte se fait redonner
+            // l'accès par qui gère son compte. Le profil permet à chacun de
+            // changer son nom, son adresse e-mail et son mot de passe (voir
+            // ModifierProfil).
             ->passwordReset(DemandeDeLien::class, PageDuLien::class)
             ->authenticatedRoutes(function (): void {
-                ChangerMotDePasseProvisoire::registerRoutes();
+                ChoisirSonMotDePasse::registerRoutes();
                 AucunMagasin::registerRoutes();
             })
             ->profile(ModifierProfil::class)
             ->tenant(Magasin::class, slugAttribute: 'uuid')
+            ->tenantMenu(fn (): bool => (auth()->user()?->magasinsAccessibles()->count() ?? 0) > 1)
             ->tenantMiddleware([
                 BindTenantContextFromFilamentTenant::class,
                 JournaliserOuvertureDeSession::class,
@@ -121,7 +126,7 @@ class AppPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-                ExigerUnMotDePasseDefinitif::class,
+                ExigerSonPropreMotDePasse::class,
                 MenerUnCompteSansMagasin::class,
             ], isPersistent: true)
             // Avant les scripts de Filament/Livewire : le script doit

@@ -12,10 +12,11 @@ use Filament\Support\Contracts\HasLabel;
  *   la requête suivante (voir User::canAccessPanel() et
  *   ControleDesDroits), mais garde ses affectations pour sa réintégration ;
  * - retiré : il a quitté la société, sans affectation, sans autorisation
- *   et sans notification ; le compte ne s'efface pas et garde son adresse,
- *   qui ne sert jamais à un autre compte, et la personne peut, avec son
- *   accord, rejoindre une autre société ou créer la sienne avec lui (voir
- *   AccepterUnRattachementAction et CreerSaSocieteAvecUnCompteRetireAction).
+ *   et sans notification ; le compte ne s'efface pas, appartient pour
+ *   toujours à sa société et garde son rôle, son identifiant de connexion
+ *   (jamais redonné à un autre compte) et son historique : la société peut
+ *   le réintégrer dans ce rôle ; une personne qui rejoint une autre société
+ *   y reçoit un nouveau compte.
  */
 enum StatutCompte: string implements HasColor, HasLabel
 {

@@ -2,25 +2,25 @@
 
 namespace App\Filament\App\Resources\EquipeDuMagasinResource\Pages;
 
-use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
-use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Filament\App\Resources\EquipeDuMagasinResource;
 use App\Models\User;
-use Filament\Actions;
+use Filament\Actions\Action;
 use Filament\Facades\Filament;
-use Filament\Forms\Components\TextInput;
-use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Support\Str;
 
 /**
- * L'équipe du magasin, avec la création d'un compte et la proposition, par
- * son adresse, à une personne dont le compte a été retiré de sa société de
- * rejoindre l'équipe de ce magasin avec ce compte (voir
- * ProposerUnRattachementAction) : comme vendeur ou observateur, ou, par
- * le propriétaire, comme responsable. La réponse ne dit jamais si
- * l'adresse est celle d'un compte.
+ * L'équipe du magasin, avec la création d'un compte de ce magasin, le seul
+ * qu'il ouvrira : un vendeur ou un observateur, par le propriétaire ou un
+ * responsable du magasin, ou un responsable, par le propriétaire ; dans le
+ * magasin de démonstration, des comptes d'entraînement. La fenêtre tire son
+ * jeton à son ouverture (une demande répétée après une réponse perdue ne
+ * crée jamais un second compte), ne demande aucune adresse e-mail, propose
+ * de réintégrer l'ancien compte retiré du même nom, et elle est suivie de
+ * la fenêtre qui montre l'identifiant du compte créé, aussi son premier mot
+ * de passe (voir GereLesComptes::fenetreDuCompteCree()).
  */
 class ListEquipeDuMagasin extends ListRecords
 {
@@ -29,35 +29,49 @@ class ListEquipeDuMagasin extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            Actions\CreateAction::make()->label('Créer un compte'),
-            $this->proposerUnRattachementAction(),
+            $this->creerUnCompteAction(),
         ];
     }
 
-    public function proposerUnRattachementAction(): Actions\Action
+    public function creerUnCompteAction(): Action
     {
-        return Actions\Action::make('proposerUnRattachement')
-            ->label('Proposer à un compte existant')
-            ->icon('heroicon-o-envelope')
-            ->visible(fn (): bool => app(PorteeDesDroits::class)->gereSonEquipe($this->auteur()) && app(PorteeDesDroits::class)->gereLEquipeDe($this->auteur(), $this->magasin()))
-            ->modalDescription('Une personne dont le compte a été retiré de sa société peut rejoindre l\'équipe de ce magasin avec ce compte, si elle accepte : elle reçoit une proposition à son adresse, valable sept jours.')
+        return Action::make('creerUnCompte')
+            ->label('Créer un compte')
+            ->icon('heroicon-o-user-plus')
+            ->authorize('create', Affectation::class)
+            ->fillForm(fn (): array => ['jeton' => (string) Str::uuid()])
             ->form([
-                TextInput::make('email')->label('Adresse e-mail de son compte')->email()->adresseDeConnexion()->required()->maxLength(255),
+                ...EquipeDuMagasinResource::champsDuNouveauMembre(fn (): Magasin => $this->magasin()),
                 EquipeDuMagasinResource::champRole(),
                 ...EquipeDuMagasinResource::champsAutorisations(),
             ])
+            ->modalDescription('Un compte ne vaut que pour ce magasin. Son identifiant, tiré au hasard, est aussi son premier mot de passe : vous le verrez juste après, pour le remettre en main propre.')
             ->action(function (array $data): void {
-                EquipeDuMagasinResource::executerLeGeste(function () use ($data): void {
-                    app(ProposerUnRattachementAction::class)->handle(
+                $cree = null;
+
+                EquipeDuMagasinResource::executerLeGeste(function () use ($data, &$cree): void {
+                    $cree = EquipeDuMagasinResource::creerOuReintegrerUnMembre(
                         $this->auteur(),
-                        $this->magasin()->societe,
-                        $data['email'],
-                        RoleSociete::Membre,
-                        [$this->magasin()->getKey() => ['role' => $data['role'], 'autorisations' => EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations')]],
+                        $this->magasin(),
+                        $data,
+                        $data['role'],
+                        EquipeDuMagasinResource::autorisationsSaisies($data, 'autorisations'),
                     );
-                    Notification::make()->title(ProposerUnRattachementAction::REPONSE)->success()->send();
                 });
+
+                if ($cree instanceof User) {
+                    $this->replaceMountedAction('compteCree', ['compte' => $cree->getKey()]);
+                }
             });
+    }
+
+    /**
+     * La fenêtre qui suit chaque création (voir
+     * GereLesComptes::fenetreDuCompteCree()).
+     */
+    public function compteCreeAction(): Action
+    {
+        return EquipeDuMagasinResource::fenetreDuCompteCree(Action::make('compteCree'));
     }
 
     private function magasin(): Magasin

@@ -35,14 +35,14 @@ class AffectationPolicyTest extends TestCase
         app(TenantContext::class)->set($magasin);
 
         foreach ([$proprietaire, $responsable] as $gestionnaire) {
-            $this->assertTrue($gestionnaire->can('viewAny', Affectation::class), $gestionnaire->email);
-            $this->assertTrue($gestionnaire->can('create', Affectation::class), $gestionnaire->email);
+            $this->assertTrue($gestionnaire->can('viewAny', Affectation::class), $gestionnaire->name);
+            $this->assertTrue($gestionnaire->can('create', Affectation::class), $gestionnaire->name);
 
             foreach ([$vendeur, $observateur] as $affectation) {
-                $this->assertTrue($gestionnaire->can('view', $affectation), $gestionnaire->email);
-                $this->assertTrue($gestionnaire->can('update', $affectation), $gestionnaire->email);
-                $this->assertTrue($gestionnaire->can('delete', $affectation), $gestionnaire->email);
-                $this->assertFalse($gestionnaire->can('forceDelete', $affectation), $gestionnaire->email);
+                $this->assertTrue($gestionnaire->can('view', $affectation), $gestionnaire->name);
+                $this->assertTrue($gestionnaire->can('update', $affectation), $gestionnaire->name);
+                $this->assertTrue($gestionnaire->can('delete', $affectation), $gestionnaire->name);
+                $this->assertFalse($gestionnaire->can('forceDelete', $affectation), $gestionnaire->name);
             }
         }
 
@@ -63,9 +63,9 @@ class AffectationPolicyTest extends TestCase
         app(TenantContext::class)->set($magasin);
 
         foreach ([$proprietaire, $responsable] as $compte) {
-            $this->assertFalse($compte->can('view', $vendeurDeLAutre), $compte->email);
-            $this->assertFalse($compte->can('update', $vendeurDeLAutre), $compte->email);
-            $this->assertFalse($compte->can('delete', $vendeurDeLAutre), $compte->email);
+            $this->assertFalse($compte->can('view', $vendeurDeLAutre), $compte->name);
+            $this->assertFalse($compte->can('update', $vendeurDeLAutre), $compte->name);
+            $this->assertFalse($compte->can('delete', $vendeurDeLAutre), $compte->name);
         }
 
         app(TenantContext::class)->set($autre);
@@ -92,9 +92,9 @@ class AffectationPolicyTest extends TestCase
         app(TenantContext::class)->set($magasin);
 
         foreach ($comptes as $compte) {
-            $this->assertFalse($compte->can('viewAny', Affectation::class), $compte->email);
-            $this->assertFalse($compte->can('view', $vendeur), $compte->email);
-            $this->assertFalse($compte->can('create', Affectation::class), $compte->email);
+            $this->assertFalse($compte->can('viewAny', Affectation::class), $compte->name);
+            $this->assertFalse($compte->can('view', $vendeur), $compte->name);
+            $this->assertFalse($compte->can('create', Affectation::class), $compte->name);
             $this->flushSession();
             $this->actingAs($compte)->get(EquipeDuMagasinResource::getUrl('edit', ['record' => $vendeur, 'tenant' => $magasin]))->assertForbidden();
             $this->actingAs($compte)->get(EquipeDuMagasinResource::getUrl('index', ['tenant' => $magasin]))->assertForbidden();

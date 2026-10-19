@@ -40,8 +40,8 @@ enum ActionAuditee: string implements HasLabel
     case DemonstrationFermee = 'demonstration_fermee';
     case MembreCree = 'membre_cree';
     case AdministrateurCree = 'administrateur_cree';
-    case AdministrateurNomme = 'administrateur_nomme';
     case AdministrateurModifie = 'administrateur_modifie';
+    case RoleDeSocieteChange = 'role_de_societe_change';
     case ExpertComptableCree = 'expert_comptable_cree';
     case DroitsModifies = 'droits_modifies';
     case ResponsableNomme = 'responsable_nomme';
@@ -51,12 +51,11 @@ enum ActionAuditee: string implements HasLabel
     case CompteReactive = 'compte_reactive';
     case CompteRetire = 'compte_retire';
     case CompteReintegre = 'compte_reintegre';
-    case CompteRefuse = 'compte_refuse';
-    case MotDePasseProvisoireDonne = 'provisoire_donne';
-    case LienDAccesEnvoye = 'lien_d_acces_envoye';
-    case RattachementPropose = 'rattachement_propose';
-    case RattachementAccepte = 'rattachement_accepte';
-    case SocieteCreeeParUnCompteRetire = 'societe_creee_par_un_compte_retire';
+    case AccesRedonne = 'acces_redonne';
+    case PremiereConnexion = 'premiere_connexion';
+    case IdentifiantConsulte = 'identifiant_consulte';
+    case TransmissionDemandee = 'transmission_demandee';
+    case TransmissionAnnulee = 'transmission_annulee';
     case ProprieteTransferee = 'propriete_transferee';
     case AdresseDeConnexionChangee = 'adresse_de_connexion_changee';
     case VenteSansStock = 'vente_sans_stock';
@@ -100,8 +99,8 @@ enum ActionAuditee: string implements HasLabel
             self::DemonstrationFermee => 'Magasin de démonstration fermé',
             self::MembreCree => 'Compte créé',
             self::AdministrateurCree => 'Administrateur créé',
-            self::AdministrateurNomme => 'Administrateur nommé',
             self::AdministrateurModifie => 'Administrateur modifié',
+            self::RoleDeSocieteChange => 'Rôle de société changé',
             self::ExpertComptableCree => 'Expert-comptable créé',
             self::DroitsModifies => 'Droits modifiés',
             self::ResponsableNomme => 'Responsable nommé',
@@ -111,12 +110,11 @@ enum ActionAuditee: string implements HasLabel
             self::CompteReactive => 'Compte réactivé',
             self::CompteRetire => 'Compte retiré de la société',
             self::CompteReintegre => 'Compte réintégré',
-            self::CompteRefuse => 'Compte refusé par la personne',
-            self::MotDePasseProvisoireDonne => 'Nouveau mot de passe provisoire donné',
-            self::LienDAccesEnvoye => 'Lien de renouvellement de l\'accès envoyé',
-            self::RattachementPropose => 'Rattachement proposé',
-            self::RattachementAccepte => 'Rattachement accepté',
-            self::SocieteCreeeParUnCompteRetire => 'Société créée par un compte retiré',
+            self::AccesRedonne => 'Accès redonné',
+            self::PremiereConnexion => 'Première connexion',
+            self::IdentifiantConsulte => 'Identifiant affiché à un administrateur',
+            self::TransmissionDemandee => 'Transmission de la propriété demandée',
+            self::TransmissionAnnulee => 'Transmission de la propriété annulée',
             self::ProprieteTransferee => 'Propriété transférée',
             self::AdresseDeConnexionChangee => 'Adresse de connexion changée',
             self::VenteSansStock => 'Vente au-delà du stock',
@@ -130,10 +128,10 @@ enum ActionAuditee: string implements HasLabel
         return match ($this) {
             self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees, self::AccordDirigeantDemande, self::AccordDirigeantAnnule,
             self::CodeEnvoye, self::CodeSaisi, self::CodeAnnule, self::SocieteValidee, self::SocieteRefusee, self::ReclamationOuverte => CategorieAudit::Verification,
-            self::MembreCree, self::AdministrateurCree, self::AdministrateurNomme, self::AdministrateurModifie, self::ExpertComptableCree, self::DroitsModifies,
+            self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::ExpertComptableCree, self::DroitsModifies,
             self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
-            self::CompteReintegre, self::CompteRefuse, self::MotDePasseProvisoireDonne, self::LienDAccesEnvoye, self::RattachementPropose,
-            self::RattachementAccepte, self::SocieteCreeeParUnCompteRetire, self::ProprieteTransferee, self::AdresseDeConnexionChangee => CategorieAudit::Acces,
+            self::CompteReintegre, self::AccesRedonne, self::PremiereConnexion, self::IdentifiantConsulte, self::TransmissionDemandee,
+            self::TransmissionAnnulee, self::ProprieteTransferee, self::AdresseDeConnexionChangee => CategorieAudit::Acces,
             default => CategorieAudit::Operations,
         };
     }
@@ -176,13 +174,21 @@ enum ActionAuditee: string implements HasLabel
             self::MagasinRouvert => ['statut', 'etablissement_verifie'],
             self::EtablissementPrincipalChoisi => ['etablissement_principal'],
             // Les droits de chaque compte touché, avant et après, avec son
-            // nom au moment de l'opération (voir JournalDesDroits).
-            self::MembreCree, self::AdministrateurCree, self::AdministrateurNomme, self::AdministrateurModifie, self::ExpertComptableCree, self::DroitsModifies,
+            // nom au moment de l'opération, son rôle de société et ses rôles
+            // de magasin (voir JournalDesDroits).
+            self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::ExpertComptableCree, self::DroitsModifies,
             self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
-            self::CompteReintegre, self::CompteRefuse, self::RattachementAccepte, self::ProprieteTransferee => ['droits'],
-            self::MotDePasseProvisoireDonne, self::LienDAccesEnvoye, self::AdresseDeConnexionChangee => ['compte'],
-            self::RattachementPropose => ['compte', 'role_societe', 'magasins'],
-            self::SocieteCreeeParUnCompteRetire => ['compte', 'siren', 'societe_quittee'],
+            self::CompteReintegre, self::ProprieteTransferee => ['droits'],
+            // Le compte (son identifiant technique et son nom au moment de
+            // l'opération), jamais son identifiant de connexion, qui serait
+            // son mot de passe tant qu'il ne l'a pas changé ; pour un accès
+            // redonné, si la personne était présente.
+            self::PremiereConnexion, self::IdentifiantConsulte, self::AdresseDeConnexionChangee => ['compte'],
+            self::AccesRedonne => ['compte', 'en_presence'],
+            // L'administrateur à qui la propriété est proposée ; pour un
+            // lien renvoyé, la mention qu'il l'a été.
+            self::TransmissionDemandee => ['destinataire', 'lien_renvoye'],
+            self::TransmissionAnnulee => ['destinataire'],
             // Le numéro de la vente et, pour chaque produit qu'elle a fait
             // passer sous zéro, sa référence, son stock avant la vente et
             // la quantité vendue (voir EmettreFactureAction).

@@ -19,20 +19,18 @@ trait CocheLesAutorisationsDeMagasin
 {
     /**
      * Les deux groupes de cases, chacun sous son libellé, masqués ensemble
-     * quand $masque est vrai ; le premier précoche $precochees, le groupe
-     * de la vente rien.
+     * quand $masque est vrai ; la fenêtre qui les montre les remplit (voir
+     * autorisationsAAfficher()).
      *
-     * @param  list<string>  $precochees
      * @return list<CheckboxList>
      */
-    public static function champsDesAutorisationsDeMagasin(string $nom, string $libelle, ?string $aide, string $libelleVente, string $aideVente, ?Closure $masque = null, array $precochees = []): array
+    public static function champsDesAutorisationsDeMagasin(string $nom, string $libelle, ?string $aide, string $libelleVente, string $aideVente, ?Closure $masque = null): array
     {
         return [
             CheckboxList::make($nom)
                 ->label($libelle)
                 ->helperText($aide)
                 ->options(self::libellesDe(PermissionRegistry::horsVente()))
-                ->default(array_values(array_intersect($precochees, PermissionRegistry::horsVente())))
                 ->columns(2)
                 ->bulkToggleable()
                 ->hidden($masque ?? false)

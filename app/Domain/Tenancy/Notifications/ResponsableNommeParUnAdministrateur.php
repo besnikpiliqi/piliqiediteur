@@ -11,10 +11,12 @@ use Illuminate\Notifications\Notification;
 
 /**
  * Prévient le propriétaire de chaque responsable qu'un administrateur
- * nomme : la nomination prend effet aussitôt, et il peut l'annuler en un
- * clic depuis la fiche du compte, dans l'espace d'administration de la
- * société (voir AnnulerUneNominationAction). Elle nomme l'administrateur,
- * la personne et le magasin, et porte la société (`societe_id`).
+ * nomme, et de chaque compte de responsable qu'il crée, dont il connaît
+ * alors le premier mot de passe : la nomination prend effet aussitôt, et
+ * il peut l'annuler en un clic depuis la fiche du compte, dans l'espace
+ * d'administration de la société (voir AnnulerUneNominationAction). Elle
+ * nomme l'administrateur, la personne et le magasin, et porte la société
+ * (`societe_id`) ; jamais l'identifiant de connexion du compte.
  */
 class ResponsableNommeParUnAdministrateur extends Notification
 {
@@ -22,6 +24,7 @@ class ResponsableNommeParUnAdministrateur extends Notification
         public readonly User $administrateur,
         public readonly User $responsable,
         public readonly Magasin $magasin,
+        public readonly bool $compteCree = false,
     ) {}
 
     /**
@@ -40,7 +43,9 @@ class ResponsableNommeParUnAdministrateur extends Notification
         return [
             ...NotificationFilament::make()
                 ->title("{$this->magasin->nom} : responsable nommé par un administrateur")
-                ->body("{$this->administrateur->name} a nommé {$this->responsable->name} responsable de {$this->magasin->nom} : cette personne a tous les droits dans ce magasin. Vous pouvez annuler cette nomination.")
+                ->body($this->compteCree
+                    ? "{$this->administrateur->name} a créé le compte de {$this->responsable->name}, responsable de {$this->magasin->nom}, et en connaît le premier mot de passe : cette personne a tous les droits dans ce magasin. Vous pouvez annuler cette nomination."
+                    : "{$this->administrateur->name} a nommé {$this->responsable->name} responsable de {$this->magasin->nom} : cette personne a tous les droits dans ce magasin. Vous pouvez annuler cette nomination.")
                 ->icon('heroicon-o-user-plus')
                 ->status('warning')
                 ->actions([

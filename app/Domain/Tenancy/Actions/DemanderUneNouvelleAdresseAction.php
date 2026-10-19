@@ -12,10 +12,12 @@ use Illuminate\Validation\ValidationException;
 use LogicException;
 
 /**
- * Une personne demande, dans son profil et avec son mot de passe actuel
+ * Le propriétaire demande, dans son profil et avec son mot de passe actuel
  * (voir ModifierProfil), une nouvelle adresse de connexion : rien ne change
- * encore. La nouvelle adresse attend sur le compte, avec l'empreinte
- * SHA-256 du jeton du lien envoyé à cette adresse, valable 24 heures ;
+ * encore. Tout autre compte n'a qu'une adresse de contact, qu'il enregistre
+ * directement dans son profil, sans confirmation. La nouvelle adresse
+ * attend sur le compte, avec l'empreinte SHA-256 du jeton du lien envoyé à
+ * cette adresse, valable 24 heures ;
  * seul ce lien suivi la pose (voir ConfirmerNouvelleAdresseAction). Une
  * nouvelle demande remplace la précédente, dont le lien ne sert plus. Une
  * adresse en attente ne bloque rien : celle qu'une personne tape dans son
@@ -32,10 +34,14 @@ class DemanderUneNouvelleAdresseAction
 
     /**
      * @throws ValidationException
-     * @throws LogicException quand la personne a atteint le débit de ses e-mails
+     * @throws LogicException quand le compte n'est pas propriétaire, ou a atteint le débit de ses e-mails
      */
     public function handle(User $compte, string $nouvelleAdresse): void
     {
+        if (! $compte->estProprietaire()) {
+            throw new LogicException('Seul le propriétaire a une adresse de connexion à confirmer.');
+        }
+
         $nouvelleAdresse = Validator::make(['email' => User::normaliserEmail($nouvelleAdresse)], ['email' => ['required', 'string', 'email', 'max:255']])->validate()['email'];
         $this->debit->verifier($compte);
         $jeton = Str::random(64);

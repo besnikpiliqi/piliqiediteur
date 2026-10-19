@@ -16,7 +16,8 @@ use LogicException;
 /**
  * La portée et les autorisations d'un administrateur, que le propriétaire
  * choisit en une fois (voir CreerAdministrateurAction,
- * NommerAdministrateurAction et ModifierAdministrateurAction), lues et
+ * ChangerLeRoleDeSocieteAction, ModifierAdministrateurAction et
+ * ChangerStatutCompteAction::reintegrerLAdministrateur()), lues et
  * écrites une seule fois :
  * - tous les magasins, présents et futurs (une affectation sans magasin),
  *   ou une sélection de magasins de la société (une affectation par

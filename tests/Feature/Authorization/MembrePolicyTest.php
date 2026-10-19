@@ -39,16 +39,16 @@ class MembrePolicyTest extends TestCase
         $this->assertTrue($proprietaire->can('create', User::class));
 
         foreach ($comptes as $compte) {
-            $this->assertTrue($proprietaire->can('view', $compte), $compte->email);
-            $this->assertTrue($proprietaire->can('update', $compte), $compte->email);
-            $this->assertTrue($proprietaire->can('suspendreOuReactiver', $compte), $compte->email);
-            $this->assertTrue($proprietaire->can('retirerDeLaSociete', $compte), $compte->email);
-            $this->assertTrue($proprietaire->can('renouvelerLAcces', $compte), $compte->email);
-            $this->assertFalse($proprietaire->can('delete', $compte), $compte->email);
+            $this->assertTrue($proprietaire->can('view', $compte), $compte->name);
+            $this->assertTrue($proprietaire->can('update', $compte), $compte->name);
+            $this->assertTrue($proprietaire->can('suspendreOuReactiver', $compte), $compte->name);
+            $this->assertTrue($proprietaire->can('retirerDeLaSociete', $compte), $compte->name);
+            $this->assertTrue($proprietaire->can('redonnerLAcces', $compte), $compte->name);
+            $this->assertFalse($proprietaire->can('delete', $compte), $compte->name);
         }
 
         $this->assertTrue($proprietaire->can('view', $proprietaire));
-        foreach (['update', 'suspendreOuReactiver', 'retirerDeLaSociete', 'renouvelerLAcces', 'donnerUnProvisoire', 'delete'] as $geste) {
+        foreach (['update', 'suspendreOuReactiver', 'retirerDeLaSociete', 'redonnerLAcces', 'delete'] as $geste) {
             $this->assertFalse($proprietaire->can($geste, $proprietaire), $geste);
         }
     }
@@ -86,8 +86,8 @@ class MembrePolicyTest extends TestCase
         $this->assertFalse($autorise->can('suspendreOuReactiver', $responsable));
 
         foreach ($autres as $compte) {
-            $this->assertFalse($autorise->can('view', $compte), $compte->email);
-            $this->assertFalse($autorise->can('update', $compte), $compte->email);
+            $this->assertFalse($autorise->can('view', $compte), $compte->name);
+            $this->assertFalse($autorise->can('update', $compte), $compte->name);
         }
 
         $this->assertFalse($sansAutorisation->can('viewAny', User::class));
@@ -118,14 +118,14 @@ class MembrePolicyTest extends TestCase
         $this->assertTrue($proprietaire->can('modifierUnAdministrateur', $autreAdministrateur));
 
         foreach ([$administrateur, $responsable] as $compte) {
-            $this->assertFalse($compte->can('creerLExpertComptable', User::class), $compte->email);
-            $this->assertFalse($compte->can('creerUnAdministrateur', User::class), $compte->email);
-            $this->assertFalse($compte->can('view', $expert), $compte->email);
-            $this->assertFalse($compte->can('suspendreOuReactiver', $expert), $compte->email);
-            $this->assertFalse($compte->can('retirerDeLaSociete', $expert), $compte->email);
-            $this->assertFalse($compte->can('renouvelerLAcces', $expert), $compte->email);
-            $this->assertFalse($compte->can('modifierUnAdministrateur', $autreAdministrateur), $compte->email);
-            $this->assertFalse($compte->can('suspendreOuReactiver', $autreAdministrateur), $compte->email);
+            $this->assertFalse($compte->can('creerLExpertComptable', User::class), $compte->name);
+            $this->assertFalse($compte->can('creerUnAdministrateur', User::class), $compte->name);
+            $this->assertFalse($compte->can('view', $expert), $compte->name);
+            $this->assertFalse($compte->can('suspendreOuReactiver', $expert), $compte->name);
+            $this->assertFalse($compte->can('retirerDeLaSociete', $expert), $compte->name);
+            $this->assertFalse($compte->can('redonnerLAcces', $expert), $compte->name);
+            $this->assertFalse($compte->can('modifierUnAdministrateur', $autreAdministrateur), $compte->name);
+            $this->assertFalse($compte->can('suspendreOuReactiver', $autreAdministrateur), $compte->name);
         }
     }
 }

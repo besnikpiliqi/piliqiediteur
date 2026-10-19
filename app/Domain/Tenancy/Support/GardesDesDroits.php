@@ -21,7 +21,9 @@ use RuntimeException;
  *   administrateur ; une affectation à tous les magasins avec un rôle ;
  *   une affectation qui devient celle d'un responsable avec des cases ; un
  *   administrateur à la fois affecté à tous les magasins et à une
- *   sélection ;
+ *   sélection ; une affectation de membre hors du magasin de rattachement
+ *   de l'identifiant du compte (voir la table identifiants) : un compte de
+ *   membre ne vaut que pour un magasin ;
  * - autorisations_affectations_sans_responsable (autorisations_affectations) :
  *   une case sur l'affectation d'un responsable, qui a toutes les
  *   autorisations de son magasin sans case ;
@@ -32,7 +34,11 @@ use RuntimeException;
  *   inconnu ; devenir propriétaire ou expert-comptable avec une
  *   affectation ou une autorisation de société ; devenir administrateur
  *   avec l'affectation d'un membre ; devenir membre avec l'affectation d'un
- *   administrateur ou une autorisation de société.
+ *   administrateur ou une autorisation de société ; un propriétaire sans
+ *   adresse de connexion, ou dont le mot de passe est encore son
+ *   identifiant ; le rôle de propriétaire, d'administrateur ou
+ *   d'expert-comptable pour un compte d'entraînement (rattaché au magasin
+ *   de démonstration), qui n'ouvre jamais un magasin réel.
  *
  * PostgreSQL : une fonction plpgsql et un déclencheur BEFORE INSERT OR
  * UPDATE par garde. Chaque fonction verrouille d'abord la ligne parente
@@ -47,9 +53,13 @@ use RuntimeException;
  * (les registres, puis les comptes, voir JournalDesDroits) : aucun
  * interblocage.
  *
+ * PostgreSQL déclenche la garde de users à l'insertion et à la
+ * modification de role_societe, email ou mot_de_passe_est_l_identifiant.
+ *
  * SQLite : un déclencheur BEFORE INSERT et un BEFORE UPDATE par garde
- * (BEFORE UPDATE OF role_societe pour users), qui refusent par
- * RAISE(ABORT, ...) ; l'écriture y est déjà sérialisée.
+ * (BEFORE UPDATE OF role_societe, email, mot_de_passe_est_l_identifiant
+ * pour users), qui refusent par RAISE(ABORT, ...) ; l'écriture y est déjà
+ * sérialisée.
  *
  * Elles se posent quand toutes les tables qu'elles lisent existent (voir
  * la migration des autorisations de société) et se retirent avant elles,
@@ -66,6 +76,12 @@ final class GardesDesDroits
     public const AUTORISATIONS_SOCIETE = 'autorisations_societe_administrateur_seul';
 
     public const ROLES = 'users_role_coherent_avec_les_droits';
+
+    /**
+     * Les colonnes de users dont la modification déclenche la garde des
+     * rôles.
+     */
+    private const COLONNES_DES_ROLES = 'role_societe, email, mot_de_passe_est_l_identifiant';
 
     /**
      * La table que protège chaque garde.
@@ -144,6 +160,10 @@ final class GardesDesDroits
         $responsable = "'".RoleMagasin::Responsable->value."'";
         $roleDuCompte = 'COALESCE((SELECT role_societe FROM users WHERE id = NEW.user_id), \'\')';
         $autresAffectations = 'SELECT 1 FROM affectations WHERE user_id = NEW.user_id AND id <> COALESCE(NEW.id, 0)';
+        $magasinDeSonIdentifiant = 'COALESCE((SELECT magasin_id FROM identifiants WHERE user_id = NEW.user_id), -1)';
+        $horsDuMagasin = self::liste([RoleSociete::Proprietaire->value, RoleSociete::Administrateur->value, RoleSociete::ExpertComptable->value]);
+        $proprietaire = "'".RoleSociete::Proprietaire->value."'";
+        $compteDEntrainement = 'EXISTS (SELECT 1 FROM identifiants INNER JOIN magasins ON magasins.id = identifiants.magasin_id WHERE identifiants.user_id = NEW.id AND magasins.est_demonstration = TRUE)';
 
         return [
             self::AFFECTATIONS => [
@@ -155,6 +175,7 @@ final class GardesDesDroits
                 ["NEW.role = {$responsable} AND EXISTS (SELECT 1 FROM autorisations_affectations WHERE affectation_id = NEW.id)", 'un responsable n\'a aucune case'],
                 ["NEW.magasin_id IS NULL AND EXISTS ({$autresAffectations} AND magasin_id IS NOT NULL)", 'un administrateur a accès à tous les magasins ou à une sélection, jamais aux deux'],
                 ["NEW.magasin_id IS NOT NULL AND EXISTS ({$autresAffectations} AND magasin_id IS NULL)", 'un administrateur a accès à tous les magasins ou à une sélection, jamais aux deux'],
+                ["NEW.role IS NOT NULL AND {$magasinDeSonIdentifiant} <> COALESCE(NEW.magasin_id, -2)", 'un membre n\'a d\'affectation que dans le magasin de son identifiant'],
             ],
             self::CASES => [
                 ["COALESCE((SELECT role FROM affectations WHERE id = NEW.affectation_id), '') = {$responsable}", 'un responsable n\'a aucune case'],
@@ -167,6 +188,9 @@ final class GardesDesDroits
                 ["NEW.role_societe IN ({$sansAffectation}) AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'le propriétaire et un expert-comptable n\'ont ni affectation ni autorisation de société'],
                 ["NEW.role_societe = {$administrateur} AND EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id AND role IS NOT NULL)", 'un administrateur n\'a aucune affectation de membre'],
                 ["NEW.role_societe = {$membre} AND (EXISTS (SELECT 1 FROM affectations WHERE user_id = NEW.id AND role IS NULL) OR EXISTS (SELECT 1 FROM autorisations_societe WHERE user_id = NEW.id))", 'un membre n\'a ni affectation d\'administrateur ni autorisation de société'],
+                ["NEW.role_societe = {$proprietaire} AND NEW.email IS NULL", 'un propriétaire a une adresse de connexion'],
+                ["NEW.role_societe = {$proprietaire} AND NEW.mot_de_passe_est_l_identifiant = TRUE", 'un propriétaire n\'a jamais pour mot de passe son identifiant'],
+                ["NEW.role_societe IN ({$horsDuMagasin}) AND {$compteDEntrainement}", 'un compte d\'entraînement ne change jamais de rôle de société'],
             ],
         ];
     }
@@ -199,7 +223,7 @@ final class GardesDesDroits
                 $refus,
             ));
             $table = self::TABLES[$garde];
-            $quand = $garde === self::ROLES ? 'INSERT OR UPDATE OF role_societe' : 'INSERT OR UPDATE';
+            $quand = $garde === self::ROLES ? 'INSERT OR UPDATE OF '.self::COLONNES_DES_ROLES : 'INSERT OR UPDATE';
 
             $instructions[] = "CREATE OR REPLACE FUNCTION garde_{$garde}() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN ".self::verrou($garde)." {$controles} RETURN NEW; END \$\$";
             $instructions[] = "CREATE TRIGGER {$garde} BEFORE {$quand} ON {$table} FOR EACH ROW EXECUTE FUNCTION garde_{$garde}()";
@@ -222,7 +246,7 @@ final class GardesDesDroits
             ));
             $table = self::TABLES[$garde];
             [$insertion, $modification] = self::declencheursSqlite($garde);
-            $quandModifie = $garde === self::ROLES ? 'UPDATE OF role_societe' : 'UPDATE';
+            $quandModifie = $garde === self::ROLES ? 'UPDATE OF '.self::COLONNES_DES_ROLES : 'UPDATE';
 
             $instructions[] = "CREATE TRIGGER {$insertion} BEFORE INSERT ON {$table} BEGIN {$controles} END";
             $instructions[] = "CREATE TRIGGER {$modification} BEFORE {$quandModifie} ON {$table} BEGIN {$controles} END";

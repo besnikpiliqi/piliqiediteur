@@ -21,14 +21,19 @@ use InvalidArgumentException;
  * - gérer les magasins : modifier, changer le SIRET, fermer et rouvrir
  *   ceux de sa portée ; en créer, seulement avec tous les magasins ;
  * - nommer et retirer les responsables : nommer responsable, dans un
- *   magasin de sa portée, un nouveau compte ou un vendeur ou un
- *   observateur de ce magasin, lui retirer ce magasin ou le déplacer vers
- *   un autre magasin de sa portée ; retirer de la société une personne
- *   qui n'est que responsable de magasins tous dans sa portée, et lui
- *   envoyer un lien pour renouveler son accès ; annuler sa propre
- *   nomination. Jamais suspendre, réactiver ni rétrograder un responsable,
- *   ni affecter une personne à plusieurs magasins : cela reste au
- *   propriétaire, prévenu de chaque nomination (voir PorteeDesDroits) ;
+ *   magasin réel de sa portée, un nouveau compte, dont il connaît alors le
+ *   premier mot de passe, ou un vendeur ou un observateur de ce magasin ;
+ *   retirer de la société le compte d'un responsable d'un magasin réel de
+ *   sa portée, et lui redonner l'accès ; annuler sa propre nomination.
+ *   Jamais suspendre, réactiver ni rétrograder un responsable : cela reste
+ *   au propriétaire, prévenu de chaque compte créé et de chaque nomination
+ *   (voir PorteeDesDroits) ;
+ * - redonner l'accès aux vendeurs et aux observateurs des magasins réels
+ *   de sa portée, la personne présente choisissant son mot de passe sur
+ *   son écran, absente retrouvant son identifiant pour mot de passe (voir
+ *   RedonnerLAccesAction) ; jamais précochée, et rien d'autre sur ces
+ *   comptes : il ne les crée, ne les modifie, ne les suspend ni ne les
+ *   retire ;
  * - gérer les paramètres de la société (identité légale hors SIREN, siège,
  *   TVA, mois de fin d'exercice) : seulement avec tous les magasins (voir
  *   exigentTousLesMagasins()).
@@ -41,12 +46,14 @@ final class AutorisationsSociete
 
     public const PARAMETRES_GERER = 'societe.parametres.gerer';
 
+    public const ACCES_REDONNER = 'societe.acces.redonner';
+
     /**
      * @return list<string>
      */
     public static function toutes(): array
     {
-        return [self::MAGASINS_GERER, self::RESPONSABLES_NOMMER, self::PARAMETRES_GERER];
+        return [self::MAGASINS_GERER, self::RESPONSABLES_NOMMER, self::PARAMETRES_GERER, self::ACCES_REDONNER];
     }
 
     /**
@@ -63,23 +70,24 @@ final class AutorisationsSociete
     /**
      * Les autorisations qui restent permises quand la société est en
      * lecture seule (suspendue, résiliée, refusée ; voir ControleDesDroits) :
-     * nommer et retirer les responsables, car l'équipe reste gérable, ne
-     * serait-ce que pour couper un accès. Une société révoquée, en lecture
-     * seule totale, n'en garde aucune.
+     * nommer et retirer les responsables, et redonner l'accès, car l'équipe
+     * reste gérable, ne serait-ce que pour couper un accès. Une société
+     * révoquée, en lecture seule totale, n'en garde aucune.
      *
      * @return list<string>
      */
     public static function permisesEnLectureSeule(bool $societeRevoquee): array
     {
-        return $societeRevoquee ? [] : [self::RESPONSABLES_NOMMER];
+        return $societeRevoquee ? [] : [self::RESPONSABLES_NOMMER, self::ACCES_REDONNER];
     }
 
     /**
      * Le modèle des autorisations de société d'un nouvel administrateur :
      * gérer les magasins, décochable (voir CreerAdministrateurAction).
-     * Nommer et retirer les responsables, et les paramètres de la société,
-     * se cochent à la main : un responsable a tous les droits de son
-     * magasin.
+     * Nommer et retirer les responsables, redonner l'accès et les
+     * paramètres de la société se cochent à la main : un responsable a tous
+     * les droits de son magasin, et redonner l'accès d'un vendeur ou d'un
+     * observateur ne se fait que si le propriétaire l'y autorise.
      *
      * @return list<string>
      */
@@ -118,8 +126,9 @@ final class AutorisationsSociete
     {
         return [
             self::MAGASINS_GERER => 'Magasins : créer (avec tous les magasins), modifier, fermer et rouvrir',
-            self::RESPONSABLES_NOMMER => 'Responsables : nommer et retirer les responsables de ses magasins, et changer leur magasin (un responsable a tous les droits de son magasin)',
+            self::RESPONSABLES_NOMMER => 'Responsables : nommer et retirer les responsables de ses magasins, créer leur compte et leur redonner l\'accès (un responsable a tous les droits de son magasin)',
             self::PARAMETRES_GERER => 'Paramètres de la société : identité légale, siège, TVA et fin d\'exercice (avec tous les magasins)',
+            self::ACCES_REDONNER => 'Accès : redonner l\'accès aux vendeurs et aux observateurs de ses magasins (la personne présente choisit son mot de passe ; absente, il redevient son identifiant)',
         ];
     }
 }

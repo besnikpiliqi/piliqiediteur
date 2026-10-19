@@ -11,17 +11,12 @@ use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Actions\CreerFactureAction;
 use App\Domain\Facturation\Actions\EmettreFactureAction;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\AccepterUnRattachementAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
-use App\Domain\Tenancy\Actions\ChoisirSonMotDePasseParLeLienAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
-use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
-use App\Domain\Tenancy\Actions\RefuserSonCompteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
-use App\Domain\Tenancy\Mail\PropositionDeRattachementMail;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -37,9 +32,6 @@ use App\Models\User;
 use Filament\Facades\Filament;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -69,37 +61,37 @@ class ExpertComptableTest extends TestCase
         $refuses = [$administrateur, $this->responsable($magasin), $this->membre($magasin, RoleMagasin::Vendeur)];
 
         foreach ($refuses as $compte) {
-            $this->assertThrows(fn () => app(CreerExpertComptableAction::class)->handle($compte, $societe, ['name' => 'Cabinet', 'email' => 'cabinet@example.test'], self::MOT_DE_PASSE_PROVISOIRE), AuthorizationException::class, CreerExpertComptableAction::MESSAGE_PROPRIETAIRE_SEUL);
+            $this->assertThrows(fn () => app(CreerExpertComptableAction::class)->handle($compte, $societe, ['name' => 'Cabinet']), AuthorizationException::class, CreerExpertComptableAction::MESSAGE_PROPRIETAIRE_SEUL);
             $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($compte, $expert), AuthorizationException::class);
             $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($compte, $expert), AuthorizationException::class);
         }
 
         $this->dansLEspaceDeLaSociete($societe, $administrateur);
-        $this->forgerLAction(Livewire::test(ListMembres::class)->assertActionHidden('creerUnExpertComptable'), 'creerUnExpertComptable', ['name' => 'Cabinet', 'email' => 'cabinet@example.test', 'mot_de_passe_provisoire' => self::MOT_DE_PASSE_PROVISOIRE]);
+        $this->forgerLAction(Livewire::test(ListMembres::class)->assertActionHidden('creerUnExpertComptable'), 'creerUnExpertComptable', ['name' => 'Cabinet']);
         $this->get(MembreResource::getUrl('view', ['record' => $expert, 'tenant' => $societe]))->assertNotFound();
         foreach (array_slice($refuses, 1) as $compte) {
             $this->flushSession();
             $this->actingAs($compte)->get(MembreResource::getUrl('index', ['tenant' => $societe]))->assertForbidden();
         }
-        $this->assertFalse(User::query()->where('email', 'cabinet@example.test')->exists());
+        $this->assertFalse(User::query()->where('name', 'Cabinet')->exists());
         $this->assertTrue($expert->refresh()->estActif());
 
         $this->dansLEspaceDeLaSociete($societe, $proprietaire);
         Livewire::test(ListMembres::class)
-            ->callAction('creerUnExpertComptable', ['name' => 'Cabinet', 'email' => 'cabinet@example.test', 'mot_de_passe_provisoire' => self::MOT_DE_PASSE_PROVISOIRE])
+            ->callAction('creerUnExpertComptable', ['name' => 'Cabinet'])
             ->assertHasNoActionErrors();
-        $this->assertTrue(User::query()->where('email', 'cabinet@example.test')->sole()->estExpertComptable());
+        $this->assertTrue(User::query()->where('name', 'Cabinet')->sole()->estExpertComptable());
         Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()])->callAction('suspendre');
         $this->assertTrue($expert->refresh()->estSuspendu());
         Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()])->callAction('reactiver');
         $this->assertTrue($expert->refresh()->estActif());
         Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()])->callAction('retirerDeLaSociete');
         $this->assertTrue($expert->refresh()->estRetire());
-        Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()])->callAction('reintegrerCommeExpertComptable');
+        Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()])->callAction('reintegrer');
         $this->assertSame([StatutCompte::Actif, RoleSociete::ExpertComptable], [$expert->refresh()->statut, $expert->role_societe]);
 
         app(ChangerStatutCompteAction::class)->retirer($proprietaire, $expert);
-        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->reintegrerCommeExpertComptable($administrateur, $expert), AuthorizationException::class);
+        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->reintegrerLExpertComptable($administrateur, $expert), AuthorizationException::class);
         $this->assertTrue($expert->refresh()->estRetire());
     }
 
@@ -262,7 +254,12 @@ class ExpertComptableTest extends TestCase
         $this->assertSame(['role_societe' => 'expert_comptable', 'role_magasin' => null, 'statut' => 'actif', 'permissions' => $this->trier(PermissionRegistry::consultations())], $siens[0]['apres']);
     }
 
-    public function test_retirer_l_expert_comptable_le_repasse_membre_sans_aucun_droit(): void
+    /**
+     * Retiré de la société, l'expert-comptable garde son rôle, sans plus
+     * aucun droit dans aucun magasin ; il se réintègre comme
+     * expert-comptable, sans passer par un autre rôle.
+     */
+    public function test_retirer_l_expert_comptable_garde_son_role_sans_aucun_droit(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $expert = $this->expertComptable($magasin);
@@ -270,67 +267,17 @@ class ExpertComptableTest extends TestCase
         app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($magasin), $expert);
 
         $expert->refresh();
-        $this->assertSame([RoleSociete::Membre, StatutCompte::Retire], [$expert->role_societe, $expert->statut]);
+        $this->assertSame([RoleSociete::ExpertComptable, StatutCompte::Retire], [$expert->role_societe, $expert->statut]);
+        $this->assertNull($expert->droitsDans($magasin));
         $this->assertSame([], $expert->autorisationsDans($magasin));
         $this->assertSame([], $expert->getTenants(Filament::getPanel('app'))->modelKeys());
         $this->assertFalse($expert->canAccessTenant($magasin));
         app(TenantContext::class)->set($magasin);
         $this->assertFalse($expert->can('viewAny', Facture::class));
-    }
 
-    /**
-     * Comme tout compte créé par la société, l'expert-comptable refuse son
-     * compte tant que son adresse n'a jamais été confirmée ; confirmée par
-     * un lien suivi, il ne le peut plus.
-     */
-    public function test_l_expert_comptable_refuse_son_compte_tant_que_son_adresse_n_est_pas_confirmee(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $refusant = $this->expertComptable($magasin);
-        $confirme = $this->expertComptable($magasin);
-        app(ChoisirSonMotDePasseParLeLienAction::class)->handle($confirme, Password::broker()->createToken($confirme), 'un-autre-mot-de-passe-sur');
-
-        $this->assertTrue($refusant->peutRefuserSonCompte());
-        app(RefuserSonCompteAction::class)->handle($refusant);
-
-        $this->assertSame([RoleSociete::Membre, StatutCompte::Retire], [$refusant->refresh()->role_societe, $refusant->statut]);
-        $this->assertFalse($confirme->refresh()->peutRefuserSonCompte());
-        $this->assertThrows(fn () => app(RefuserSonCompteAction::class)->handle($confirme), AuthorizationException::class, RefuserSonCompteAction::MESSAGE_NON_REFUSABLE);
-        $this->assertTrue($confirme->refresh()->estExpertComptable());
-    }
-
-    /**
-     * Comme pour une création, seul le propriétaire propose à un compte
-     * retiré de rejoindre la société comme expert-comptable : ni un
-     * administrateur, même autorisé à nommer les responsables, ni un
-     * responsable. Accepté, le compte lit tous les magasins réels, sans
-     * affectation.
-     */
-    public function test_seul_le_proprietaire_propose_un_rattachement_comme_expert_comptable(): void
-    {
-        Mail::fake();
-        $ancien = $this->ouvrirUneSociete(['nom' => 'Cabinet précédent']);
-        $compte = $this->membre($ancien, RoleMagasin::Vendeur, null, ['email' => 'cabinet@example.test']);
-        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($ancien), $compte);
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre Boutique']);
-        $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
-        $responsable = $this->responsable($magasin);
-
-        foreach ([$administrateur, $responsable] as $auteur) {
-            $this->assertThrows(fn () => app(ProposerUnRattachementAction::class)->handle($auteur, $magasin->societe, 'cabinet@example.test', RoleSociete::ExpertComptable, []), AuthorizationException::class);
-        }
-        Mail::assertNotSent(PropositionDeRattachementMail::class);
-
-        app(ProposerUnRattachementAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, 'cabinet@example.test', RoleSociete::ExpertComptable, []);
-        $lien = Mail::sent(PropositionDeRattachementMail::class)->sole()->lien;
-        app(AccepterUnRattachementAction::class)->handle(Str::afterLast($lien, '/'), 'cabinet@example.test', self::MOT_DE_PASSE_CHOISI);
-
-        $compte->refresh();
-        $this->assertSame([(int) $magasin->societe_id, RoleSociete::ExpertComptable], [(int) $compte->societe_id, $compte->role_societe]);
-        $this->assertSame(0, Affectation::query()->where('user_id', $compte->id)->count());
-        $this->assertTrue($compte->peutOuvrir($magasin));
-        $this->assertTrue($compte->peutOuvrir($autre));
+        app(ChangerStatutCompteAction::class)->reintegrerLExpertComptable($this->proprietaireDe($magasin), $expert);
+        $this->assertSame([RoleSociete::ExpertComptable, StatutCompte::Actif], [$expert->refresh()->role_societe, $expert->statut]);
+        $this->assertTrue($expert->can('viewAny', Facture::class));
     }
 
     /**

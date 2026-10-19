@@ -233,7 +233,7 @@ class JournalEvenementsTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul', 'email' => 'paul@example.test']);
         $this->actingAs($vendeur);
         $this->get("/app/{$magasin->uuid}")->assertSuccessful();
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => null]);
+        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($magasin), $vendeur);
 
         $this->post('/test/fermer-la-session');
 
@@ -320,7 +320,7 @@ class JournalEvenementsTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW], ['name' => 'Paul', 'email' => 'paul@example.test']);
         $observateur = ['avoir_fournisseur.view', 'client.view', 'devis.view', 'facture.view', 'facture_achat.view', 'fournisseur.view', 'produit.view'];
 
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => ['role' => RoleMagasin::Observateur]]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Observateur);
 
         $this->assertSame(['260', '130', '130'], $this->codes($magasin));
         $this->assertSame([
@@ -344,7 +344,7 @@ class JournalEvenementsTest extends TestCase
         $magasin = $this->magasinDe(User::factory()->create());
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW], ['name' => 'Paul', 'email' => 'paul@example.test']);
 
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [PermissionRegistry::FACTURE_VIEW]]]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
 
         $this->assertSame(['260', '130'], $this->codes($magasin));
     }
@@ -354,7 +354,7 @@ class JournalEvenementsTest extends TestCase
         $magasin = $this->magasinDe(User::factory()->create());
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK], ['name' => 'Paul', 'email' => 'paul@example.test']);
 
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK, PermissionRegistry::AVOIR_VIEW]]]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::PRODUIT_VOIR_VALEUR_STOCK, PermissionRegistry::AVOIR_VIEW]);
 
         $this->assertSame(['260', '130', '130'], $this->codes($magasin));
         $this->assertSame([
@@ -369,7 +369,7 @@ class JournalEvenementsTest extends TestCase
         $magasin = $this->magasinDe(User::factory()->create());
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::AVOIR_VIEW], ['name' => 'Paul', 'email' => 'paul@example.test']);
 
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => null]);
+        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($magasin), $vendeur);
 
         $this->assertSame([
             'membre' => ['id' => $vendeur->id, 'nom' => 'Paul'],
@@ -385,7 +385,7 @@ class JournalEvenementsTest extends TestCase
         $this->retirerLaCleDeSignature();
 
         $this->assertThrows(
-            fn () => app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => ['role' => RoleMagasin::Observateur]]),
+            fn () => app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Observateur),
             ModuleFiscalNonConfigureException::class,
         );
 

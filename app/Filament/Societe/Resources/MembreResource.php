@@ -20,7 +20,6 @@ use Filament\Facades\Filament;
 use Filament\Forms\Components\CheckboxList;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Radio;
-use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Get;
 use Filament\Forms\Set;
@@ -36,25 +35,30 @@ use Illuminate\Database\Eloquent\Builder;
  * Les comptes de la société, dans son espace d'administration (voir
  * MembrePolicy et PorteeDesDroits) :
  * - pour le propriétaire, tous les comptes, experts-comptables compris,
- *   avec leurs magasins et leurs autorisations, et tous les gestes :
- *   créer un membre (dans un ou plusieurs magasins), un administrateur, un
- *   expert-comptable ; nommer administrateur ; modifier les magasins d'un
- *   membre ; modifier ou rétrograder un administrateur ; suspendre,
- *   réactiver, retirer, réintégrer ; renouveler un accès ; annuler la
- *   nomination d'un responsable par un administrateur ; proposer à un
- *   compte retiré de rejoindre la société ; transmettre la propriété à un
- *   administrateur dont la qualité de représentant est prouvée ;
+ *   avec leur identifiant de connexion, leur magasin et leurs
+ *   autorisations, et tous les gestes : créer un membre (pour un seul
+ *   magasin), un administrateur, un expert-comptable ; changer le rôle de
+ *   société d'un compte ; modifier un administrateur ; suspendre,
+ *   réactiver, retirer, réintégrer ; redonner l'accès ; annuler la
+ *   nomination d'un responsable par un administrateur ; demander,
+ *   renvoyer ou annuler la transmission de la propriété à un
+ *   administrateur ;
  * - pour un administrateur autorisé à nommer les responsables, les
- *   responsables de ses magasins : en nommer (un nouveau compte, ou un
- *   vendeur ou un observateur du magasin), leur retirer un magasin de sa
- *   portée ou les déplacer vers un autre, annuler sa propre nomination,
- *   proposer à un compte retiré d'en devenir un, et, pour une personne qui
- *   n'est que responsable de magasins de sa portée, la retirer de la
- *   société ou lui envoyer un lien ;
+ *   responsables des magasins réels de sa portée : en nommer (un nouveau
+ *   compte, ou un vendeur ou un observateur du magasin), annuler sa propre
+ *   nomination, retirer de la société, redonner l'accès et afficher
+ *   l'identifiant ;
+ * - pour un administrateur autorisé à redonner l'accès, les vendeurs et
+ *   les observateurs des magasins réels de sa portée, avec « Redonner
+ *   l'accès » et « Afficher l'identifiant » seulement ;
  * - fermée à tout autre compte.
- * Les magasins proposés se lisent par la portée de la personne connectée,
- * dans sa société. Personne ne change ici le nom ni l'adresse d'un autre
- * compte, et un compte ne se supprime jamais.
+ * Le propriétaire voit les identifiants, et, dans la liste, les comptes
+ * dont le mot de passe est encore l'identifiant et ceux qui ne se sont
+ * jamais connectés ; un administrateur ne voit un identifiant que par
+ * « Afficher l'identifiant », geste tracé. Les magasins proposés se lisent
+ * par la portée de la personne connectée, dans sa société. Personne ne
+ * change ici le nom ni l'adresse d'un autre compte, et un compte ne se
+ * supprime jamais.
  */
 class MembreResource extends RessourceDuPanneauSociete
 {
@@ -97,14 +101,29 @@ class MembreResource extends RessourceDuPanneauSociete
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')->label('Nom')->rechercheSansAccents()->sortable(),
-                Tables\Columns\TextColumn::make('email')->label('Adresse e-mail')->rechercheSansAccents(),
+                Tables\Columns\TextColumn::make('identifiant')
+                    ->label('Identifiant')
+                    ->state(fn (User $record): ?string => static::peut('voirLIdentifiant', $record) ? $record->identifiantDeConnexion() : null)
+                    ->placeholder('—')
+                    ->visible(fn (): bool => static::proprietaireConnecte()),
                 Tables\Columns\TextColumn::make('role_societe')->label('Rôle')->badge(),
-                Tables\Columns\TextColumn::make('magasins')->label('Magasins')->state(fn (User $record): string => static::resumeDesMagasins($record))->wrap(),
+                Tables\Columns\TextColumn::make('magasins')->label('Magasin')->state(fn (User $record): string => static::resumeDesMagasins($record))->wrap(),
                 Tables\Columns\TextColumn::make('statut')->label('Statut')->badge(),
+                Tables\Columns\TextColumn::make('signaux')
+                    ->label('À surveiller')
+                    ->badge()
+                    ->color('warning')
+                    ->state(fn (User $record): array => static::signaux($record))
+                    ->placeholder('—')
+                    ->visible(fn (): bool => static::proprietaireConnecte()),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('role_societe')->label('Rôle')->options(RoleSociete::class),
                 Tables\Filters\SelectFilter::make('statut')->label('Statut')->options(StatutCompte::class),
+                Tables\Filters\Filter::make('mot_de_passe_identifiant')
+                    ->label('Mot de passe encore l\'identifiant')
+                    ->query(fn (Builder $query): Builder => $query->where('users.mot_de_passe_est_l_identifiant', true))
+                    ->visible(fn (): bool => static::proprietaireConnecte()),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make()->label('Fiche'),
@@ -118,14 +137,29 @@ class MembreResource extends RessourceDuPanneauSociete
         return $infolist->schema([
             Section::make('Compte')->schema([
                 TextEntry::make('name')->label('Nom'),
-                TextEntry::make('email')->label('Adresse e-mail de connexion'),
+                TextEntry::make('identifiant')
+                    ->label('Identifiant de connexion')
+                    ->state(fn (User $record): ?string => $record->identifiantDeConnexion())
+                    ->visible(fn (User $record): bool => static::peut('voirLIdentifiant', $record)),
+                TextEntry::make('email')
+                    ->label(fn (User $record): string => $record->estProprietaire() ? 'Adresse e-mail de connexion' : 'Adresse e-mail de contact')
+                    ->placeholder('Non renseignée'),
                 TextEntry::make('role_societe')->label('Rôle dans la société')->badge(),
                 TextEntry::make('statut')->label('Statut')->badge(),
-                TextEntry::make('premiere_connexion')
+                TextEntry::make('mot_de_passe')
                     ->label('Mot de passe')
-                    ->state(fn (User $record): string => $record->doitChangerSonMotDePasse() ? 'Provisoire, pas encore changé' : 'Choisi par la personne'),
+                    ->state(fn (User $record): string => $record->mot_de_passe_est_l_identifiant ? 'Encore l\'identifiant' : 'Choisi par la personne')
+                    ->visible(fn (User $record): bool => static::peut('voirLIdentifiant', $record)),
+                TextEntry::make('derniere_connexion_le')
+                    ->label('Dernière connexion')
+                    ->dateTime('d/m/Y à H:i')
+                    ->placeholder('Jamais connecté'),
+                TextEntry::make('acces_redonne')
+                    ->label('Accès redonné')
+                    ->state(fn (User $record): ?string => static::accesRedonne($record))
+                    ->placeholder('—'),
             ])->columns(2),
-            Section::make('Magasins')->schema([
+            Section::make('Magasin')->schema([
                 RepeatableEntry::make('affectationsVisibles')
                     ->label('')
                     ->state(fn (User $record): array => static::affectationsVisibles($record))
@@ -143,13 +177,42 @@ class MembreResource extends RessourceDuPanneauSociete
                     ->state(fn (User $record): array => array_map(fn (string $cle): string => AutorisationsSociete::libelles()[$cle], $record->autorisationsDeSociete()))
                     ->listWithLineBreaks()
                     ->placeholder('Aucune'),
-            ])->visible(fn (User $record): bool => $record->estAdministrateur() && (auth()->user()?->estProprietaire() ?? false)),
+            ])->visible(fn (User $record): bool => $record->estAdministrateur() && static::proprietaireConnecte()),
         ]);
     }
 
     /**
-     * Ses magasins, comme les voit la personne connectée : tous pour le
+     * Les badges de la liste, pour le propriétaire : un mot de passe encore
+     * égal à l'identifiant, un compte jamais connecté.
+     *
+     * @return list<string>
+     */
+    public static function signaux(User $compte): array
+    {
+        return array_values(array_filter([
+            $compte->mot_de_passe_est_l_identifiant ? 'Mot de passe : l\'identifiant' : null,
+            $compte->premiere_connexion_le === null ? 'Jamais connecté' : null,
+        ]));
+    }
+
+    /**
+     * Le dernier accès redonné à ce compte : la date, l'auteur et le mode.
+     */
+    public static function accesRedonne(User $compte): ?string
+    {
+        if ($compte->acces_redonne_le === null) {
+            return null;
+        }
+
+        $auteur = User::query()->where('societe_id', $compte->societe_id)->find($compte->acces_redonne_par)?->name ?? 'un compte de la société';
+
+        return 'Le '.$compte->acces_redonne_le->setTimezone(config('app.timezone'))->format('d/m/Y à H:i')." par {$auteur}, ".($compte->acces_redonne_en_presence ? 'en sa présence' : 'en son absence');
+    }
+
+    /**
+     * Son magasin, comme le voit la personne connectée : tous pour le
      * propriétaire ; pour un administrateur autorisé, ceux de sa portée.
+     * Un membre retiré garde son magasin, sans droit.
      */
     public static function resumeDesMagasins(User $compte): string
     {
@@ -165,7 +228,15 @@ class MembreResource extends RessourceDuPanneauSociete
             return 'Tous les magasins (administrateur)';
         }
 
-        return collect(static::affectationsVisibles($compte))->map(fn (array $ligne): string => "{$ligne['magasin']} ({$ligne['role']})")->implode(', ') ?: '—';
+        $resume = collect(static::affectationsVisibles($compte))->map(fn (array $ligne): string => "{$ligne['magasin']} ({$ligne['role']})")->implode(', ');
+
+        if ($resume === '' && $compte->estMembre()) {
+            $magasin = $compte->magasinDeSonIdentifiant();
+
+            return $magasin !== null && array_key_exists((int) $magasin->getKey(), static::magasinsDeLaPortee()) ? "{$magasin->nom} (sans droit)" : '—';
+        }
+
+        return $resume ?: '—';
     }
 
     /**
@@ -222,74 +293,59 @@ class MembreResource extends RessourceDuPanneauSociete
     }
 
     /**
-     * Les champs d'affectations de membre d'un compte, que le propriétaire
-     * choisit magasin par magasin : le magasin, le rôle, et les cases d'un
-     * vendeur ou d'un observateur, précochées par son rôle, celles de la
-     * vente à part (voir CocheLesAutorisationsDeMagasin).
+     * Le rôle d'un membre dans son magasin et ses cases, précochées par son
+     * rôle, celles de la vente à part (voir CocheLesAutorisationsDeMagasin) ;
+     * aucune pour un responsable, qui a toutes les autorisations du
+     * magasin.
+     *
+     * @return list<Component>
      */
-    public static function champAffectations(string $nom = 'affectations'): Repeater
+    public static function champsDuRoleDeMembre(): array
     {
-        return Repeater::make($nom)
-            ->label('Magasins')
-            ->schema([
-                Select::make('magasin_id')
-                    ->label('Magasin')
-                    ->options(fn (): array => static::magasinsDeLaPortee())
-                    ->required()
-                    ->distinct(),
-                Select::make('role')
-                    ->label('Rôle')
-                    ->options(RoleMagasin::class)
-                    ->required()
-                    ->live()
-                    ->afterStateUpdated(function (Set $set, mixed $state): void {
-                        $modele = RoleMagasin::tryFrom((string) ($state instanceof RoleMagasin ? $state->value : $state))?->permissionsParDefaut() ?? [];
+        return [
+            Select::make('role')
+                ->label('Rôle')
+                ->options(RoleMagasin::class)
+                ->required()
+                ->live()
+                ->afterStateUpdated(function (Set $set, mixed $state): void {
+                    $modele = RoleMagasin::tryFrom((string) ($state instanceof RoleMagasin ? $state->value : $state))?->permissionsParDefaut() ?? [];
 
-                        foreach (static::autorisationsAAfficher($modele, 'autorisations') as $champ => $cases) {
-                            $set($champ, $cases);
-                        }
-                    }),
-                ...static::champsDesAutorisationsDeMagasin(
-                    'autorisations',
-                    'Autorisations dans ce magasin',
-                    null,
-                    'Vente',
-                    'Créer et émettre un ticket ou une facture, enregistrer un encaissement, vendre sans stock : ce compte aura sa caisse personnelle.',
-                    fn (Get $get): bool => in_array($get('role'), [RoleMagasin::Responsable, RoleMagasin::Responsable->value], true),
-                ),
-            ])
-            ->columns(2)
-            ->minItems(1)
-            ->defaultItems(1)
-            ->addActionLabel('Ajouter un magasin');
+                    foreach (static::autorisationsAAfficher($modele, 'autorisations') as $champ => $cases) {
+                        $set($champ, $cases);
+                    }
+                }),
+            ...static::champsDesAutorisationsDeMagasin(
+                'autorisations',
+                'Autorisations dans ce magasin',
+                null,
+                'Vente',
+                'Créer et émettre un ticket ou une facture, enregistrer un encaissement, vendre sans stock : ce compte aura sa caisse personnelle.',
+                fn (Get $get): bool => in_array($get('role'), [RoleMagasin::Responsable, RoleMagasin::Responsable->value], true),
+            ),
+        ];
     }
 
     /**
-     * Les affectations saisies, par identifiant de magasin, comme les
-     * reçoivent les actions de l'équipe.
+     * Le rôle saisi et ses cases, comme les reçoivent les actions de
+     * l'équipe : aucune case pour un responsable.
      *
-     * @param  list<array{magasin_id: int|string, role: RoleMagasin|string, autorisations?: list<string>|null, autorisations_vente?: list<string>|null}>  $lignes
-     * @return array<int, array{role: string, autorisations: list<string>}>
+     * @param  array<string, mixed>  $data
+     * @return array{role: string, autorisations: list<string>}
      */
-    public static function affectationsSaisies(array $lignes): array
+    public static function roleSaisi(array $data): array
     {
-        $affectations = [];
+        $role = $data['role'] instanceof RoleMagasin ? $data['role']->value : (string) $data['role'];
 
-        foreach ($lignes as $ligne) {
-            $role = $ligne['role'] instanceof RoleMagasin ? $ligne['role']->value : (string) $ligne['role'];
-            $affectations[(int) $ligne['magasin_id']] = ['role' => $role, 'autorisations' => $role === RoleMagasin::Responsable->value ? [] : static::autorisationsSaisies($ligne, 'autorisations')];
-        }
-
-        return $affectations;
+        return ['role' => $role, 'autorisations' => $role === RoleMagasin::Responsable->value ? [] : static::autorisationsSaisies($data, 'autorisations')];
     }
 
     /**
      * Les champs de la portée et des autorisations d'un administrateur,
-     * sans rien de présélectionné pour sa portée : ses cases de magasin
-     * précochées selon le modèle de l'administrateur, et à part celles de
-     * la vente, jamais précochées (voir
-     * PermissionRegistry::modeleDeLAdministrateur()) ; l'action reçoit leur
-     * réunion (voir autorisationsSaisies()).
+     * avec à part ses cases de la vente ; l'action reçoit la réunion de ses
+     * cases de magasin (voir autorisationsSaisies()). La fenêtre d'un
+     * nouvel administrateur les remplit du modèle (voir
+     * modeleDeLAdministrateur()).
      *
      * @return list<Component>
      */
@@ -309,7 +365,6 @@ class MembreResource extends RessourceDuPanneauSociete
             CheckboxList::make('autorisations_societe')
                 ->label('Autorisations de société')
                 ->options(AutorisationsSociete::libelles())
-                ->default(AutorisationsSociete::modeleDeLAdministrateur())
                 ->disableOptionWhen(fn (Get $get, string $value): bool => $get('portee') !== 'tous' && in_array($value, AutorisationsSociete::exigentTousLesMagasins(), true)),
             ...static::champsDesAutorisationsDeMagasin(
                 'autorisations_magasin',
@@ -317,9 +372,30 @@ class MembreResource extends RessourceDuPanneauSociete
                 null,
                 'Vente (seulement si cet administrateur vend)',
                 'Cet administrateur pourra vendre et aura sa caisse personnelle ; il n\'encaisse que dans un magasin à la fois.',
-                precochees: PermissionRegistry::modeleDeLAdministrateur(),
             ),
         ];
+    }
+
+    /**
+     * Ce que la fenêtre d'un nouvel administrateur (création, changement de
+     * rôle, réintégration) précoche : aucune portée, les autorisations de
+     * société et les cases de magasin de son modèle, aucune de la vente
+     * (voir AutorisationsSociete::modeleDeLAdministrateur() et
+     * PermissionRegistry::modeleDeLAdministrateur()).
+     *
+     * @return array<string, list<string>>
+     */
+    public static function modeleDeLAdministrateur(): array
+    {
+        return [
+            'autorisations_societe' => AutorisationsSociete::modeleDeLAdministrateur(),
+            ...static::autorisationsAAfficher(PermissionRegistry::modeleDeLAdministrateur(), 'autorisations_magasin'),
+        ];
+    }
+
+    public static function proprietaireConnecte(): bool
+    {
+        return auth()->user()?->estProprietaire() ?? false;
     }
 
     public static function societe(): Societe

@@ -23,6 +23,7 @@ use App\Domain\Stock\Enums\TypeMouvementStock;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\ChangerSiretAction;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ChoisirEtablissementPrincipalAction;
 use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
@@ -32,6 +33,7 @@ use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Events\MagasinFerme;
@@ -408,11 +410,12 @@ class FermerEtRouvrirMagasinTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $ferme = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Boutique fermée']);
+        $responsable = $this->responsable($magasin);
+        $responsableDuMagasinFerme = $this->responsable($ferme);
         $this->fermer($ferme, MotifFermeture::Temporaire);
-        $responsable = $this->responsable($magasin, $ferme);
         $expert = $this->expertComptable($magasin);
 
-        foreach ([$responsable, $expert] as $compte) {
+        foreach ([$responsable, $responsableDuMagasinFerme, $expert] as $compte) {
             $this->assertThrows(fn () => $this->fermer($magasin, MotifFermeture::Temporaire, $compte, self::MOT_DE_PASSE_CHOISI), AuthorizationException::class);
             $this->assertThrows(fn () => $this->fermer($magasin, MotifFermeture::Cession, $compte, self::MOT_DE_PASSE_CHOISI, 'Ma Boutique'), AuthorizationException::class);
             $this->assertThrows(fn () => $this->rouvrir($ferme, $compte, self::MOT_DE_PASSE_CHOISI), AuthorizationException::class);
@@ -445,6 +448,40 @@ class FermerEtRouvrirMagasinTest extends TestCase
         $this->assertSame([ModeFermetureCaisse::Automatique, [$ticket->id]], [$releve->mode_fermeture, $releve->factures->modelKeys()]);
         $this->assertSame($affectations, Affectation::query()->where('magasin_id', $magasin->id)->count());
         $this->assertTrue($vendeur->fresh()->peutOuvrir($magasin->fresh()));
+    }
+
+    /**
+     * Les comptes de l'équipe d'un magasin fermé pour cessation ou cédé
+     * sont gardés : ni retirés, ni privés de leur affectation ou de leur
+     * identifiant ; ils consultent le magasin en lecture seule, et la
+     * société les gère encore (seuls les comptes d'entraînement de la
+     * démonstration sont retirés à sa fermeture définitive).
+     */
+    public function test_les_comptes_d_un_magasin_cede_ou_ferme_pour_cessation_sont_gardes(): void
+    {
+        $cede = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $cesse = $this->ouvrirUnAutreMagasin($cede, ['nom' => 'Autre Boutique']);
+        $comptes = [];
+        foreach ([$cede, $cesse] as $magasin) {
+            foreach ([RoleMagasin::Vendeur, RoleMagasin::Responsable] as $role) {
+                $compte = $this->membre($magasin, $role);
+                $comptes[] = [$magasin, $compte, (string) $compte->identifiantDeConnexion()];
+            }
+        }
+
+        $this->fermer($cede, MotifFermeture::Cession, confirmation: 'Ma Boutique');
+        $this->fermer($cesse, MotifFermeture::Cessation);
+
+        foreach ($comptes as [$magasin, $compte, $identifiant]) {
+            $compte->refresh();
+            $this->assertSame([StatutCompte::Actif, $identifiant, (int) $magasin->id], [$compte->statut, $compte->identifiantDeConnexion(), (int) $compte->magasinDeSonIdentifiant()?->id], $compte->name);
+            $this->assertSame(1, Affectation::query()->where('user_id', $compte->id)->where('magasin_id', $magasin->id)->count(), $compte->name);
+            $this->assertTrue($compte->peutOuvrir($magasin->fresh()), $compte->name);
+        }
+        $this->assertTrue($magasin->fresh()->estEnLectureSeule());
+        [, $vendeurDuCede] = $comptes[0];
+        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($cede), $vendeurDuCede);
+        $this->assertSame(StatutCompte::Retire, $vendeurDuCede->refresh()->statut);
     }
 
     /**

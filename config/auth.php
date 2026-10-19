@@ -62,7 +62,8 @@ return [
     */
 
     'providers' => [
-        // Les comptes, cherchés par leur adresse e-mail en minuscules (voir
+        // Les comptes, cherchés par leur identifiant de connexion ou, pour
+        // un propriétaire, par son adresse e-mail en minuscules (voir
         // FournisseurDesComptes, déclaré dans AppServiceProvider).
         'users' => [
             'driver' => 'comptes',
@@ -110,5 +111,22 @@ return [
     */
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Délai constant d'un échec de connexion
+    |--------------------------------------------------------------------------
+    |
+    | Un essai de connexion manqué dure au moins ce nombre de microsecondes,
+    | qu'un compte existe ou non (voir SessionGuard::attempt() et
+    | FournisseurDesComptes, qui vérifie aussi une empreinte factice quand il
+    | ne trouve aucun compte) : le délai de la réponse ne dit jamais qu'un
+    | identifiant ou une adresse existe. 500 ms, au-dessus de la vérification
+    | d'un mot de passe haché au coût de production (BCRYPT_ROUNDS=12, de
+    | 230 à 260 ms mesurés), avec une marge.
+    |
+    */
+
+    'timebox_duration' => (int) env('AUTH_DELAI_CONSTANT_US', 500000),
 
 ];

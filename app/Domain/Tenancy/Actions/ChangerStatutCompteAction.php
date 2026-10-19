@@ -5,12 +5,12 @@ namespace App\Domain\Tenancy\Actions;
 use App\Domain\Tenancy\Concerns\AgitDansLaSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\AffectationsDesMembres;
 use App\Domain\Tenancy\Services\JournalDesDroits;
+use App\Domain\Tenancy\Services\PorteeDesAdministrateurs;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\SessionsDesComptes;
 use App\Models\User;
@@ -28,20 +28,21 @@ use LogicException;
  * l'entrée d'audit (voir JournalDesDroits) :
  * - suspendre : le compte n'ouvre plus rien et n'a plus aucun droit dès la
  *   requête suivante, ses sessions se ferment et ses notifications, qui ne
- *   le regardent plus, s'effacent ; il garde ses affectations ;
+ *   le regardent plus, s'effacent ; il garde son affectation ;
  * - réactiver : un compte suspendu par le propriétaire ne se réactive que
  *   par le propriétaire ;
- * - retirer de la société : ses affectations et ses autorisations de
- *   société disparaissent, un administrateur ou un expert-comptable
- *   repasse membre, ses notifications s'effacent, ses sessions se
- *   ferment ; le compte ne s'efface jamais et garde son adresse. Un compte
- *   suspendu par le propriétaire ne se retire que par le propriétaire ;
- * - réintégrer un compte retiré par la société, comme une création : comme
- *   membre (voir PorteeDesDroits::peutReintegrer()), ou comme
+ * - retirer de la société (retirer un membre de son magasin, son seul
+ *   magasin, revient au même) : ses affectations et ses autorisations de
+ *   société disparaissent, ses notifications s'effacent, ses sessions se
+ *   ferment ; le compte ne s'efface jamais et garde son rôle de société,
+ *   son identifiant, son magasin de rattachement et son historique. Un
+ *   compte suspendu par le propriétaire ne se retire que par le
+ *   propriétaire ;
+ * - réintégrer un compte retiré, dans son rôle et, pour un membre, dans son
+ *   magasin, selon les règles de la création de ce rôle : comme membre
+ *   (voir PorteeDesDroits::peutReintegrer()), comme administrateur ou comme
  *   expert-comptable par le propriétaire seul. Un compte retiré par le
- *   propriétaire ne se réintègre que par le propriétaire ; un compte
- *   retiré par son propre refus, jamais (seulement par un rattachement
- *   qu'il accepte).
+ *   propriétaire ne se réintègre que par le propriétaire.
  *
  * Chaque nouveau statut note qui l'a donné, et si c'était alors le
  * propriétaire (voir User::nouveauStatut()) : la décision du propriétaire
@@ -58,6 +59,7 @@ class ChangerStatutCompteAction
         private readonly PorteeDesDroits $portee,
         private readonly AffectationsDesMembres $affectations,
         private readonly SessionsDesComptes $sessions,
+        private readonly PorteeDesAdministrateurs $porteeDesAdministrateurs,
     ) {}
 
     /**
@@ -116,83 +118,113 @@ class ChangerStatutCompteAction
     }
 
     /**
-     * Réintègre comme membre un compte retiré par la société, avec ses
-     * nouvelles affectations, comme une création (voir
+     * Réintègre un compte de membre retiré dans le magasin de son
+     * identifiant, avec ce rôle et ces cases, comme une création (voir
      * PorteeDesDroits::peutReintegrer()).
      *
-     * @param  array<int, array{role: RoleMagasin|string, autorisations?: list<string>|null}>  $affectations  par identifiant de magasin
+     * @param  list<string>|null  $autorisations  les cases d'un vendeur ou d'un observateur ; null, le modèle de son rôle
      *
      * @throws AuthorizationException
      * @throws LogicException
      */
-    public function reintegrer(User $auteur, User $compte, array $affectations): void
+    public function reintegrer(User $auteur, User $compte, RoleMagasin|string $role, ?array $autorisations = null): void
     {
         $societe = $compte->societe()->firstOrFail();
+        $demandee = $this->affectations->lire($role, $autorisations);
+        $magasin = $compte->magasinDeSonIdentifiant() ?? throw new AuthorizationException(PorteeDesDroits::REFUS);
 
-        $this->dansLaSociete($societe, PorteeDesDroits::REFUS, function () use ($auteur, $compte, $affectations, $societe): void {
-            $demandees = array_filter($this->affectations->lire($societe, $affectations));
-            $ecrites = [];
-
-            $this->journalDesDroits->modifier($auteur, ActionAuditee::CompteReintegre, [$compte], array_map(fn (array $demandee): Magasin => $demandee['magasin'], $demandees), function (User $auteurRelu, array $relus) use ($demandees, &$ecrites): void {
+        $this->dansLaSociete($societe, PorteeDesDroits::REFUS, function () use ($auteur, $compte, $demandee, $magasin): void {
+            $ecrite = $this->journalDesDroits->modifier($auteur, ActionAuditee::CompteReintegre, [$compte], [$magasin], function (User $auteurRelu, array $relus) use ($demandee, $magasin) {
                 [$compteRelu] = $relus;
 
-                if (! $this->portee->peutReintegrer($auteurRelu, $compteRelu, array_map(fn (array $demandee): RoleMagasin => $demandee['role'], $demandees))) {
+                if (! $this->portee->peutReintegrer($auteurRelu, $compteRelu, $demandee['role'])) {
                     throw new AuthorizationException(PorteeDesDroits::REFUS);
                 }
 
-                $verifiees = $this->affectations->verifierPourUnNouveauCompte($auteurRelu, $demandees);
+                $cases = $this->affectations->cases($auteurRelu, $magasin, $demandee);
                 $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
 
-                foreach ($verifiees as $affectation) {
-                    $ecrites[] = $this->affectations->ecrire($auteurRelu, $compteRelu, $affectation['magasin'], $affectation['role'], $affectation['autorisations']);
-                }
+                return $this->affectations->ecrire($auteurRelu, $compteRelu, $magasin, $demandee['role'], $cases);
             });
 
-            $this->affectations->prevenirDesNominations($compte, $ecrites);
+            $this->affectations->prevenirDUneNomination($compte, $ecrite, compteCree: false);
         });
+
+        $compte->refresh();
     }
 
     /**
-     * Réintègre comme expert-comptable un compte retiré par la société : le
-     * propriétaire seul, tant qu'il gère son équipe (pas dans une société
-     * révoquée, voir PorteeDesDroits::gereSonEquipe()) ; un compte au mot
-     * de passe provisoire, seulement s'il l'a créé et lui a donné ce
-     * provisoire (voir User::recoitDeNouveauxDroitsDe()).
+     * Réintègre un administrateur retiré, avec la portée et les
+     * autorisations que le propriétaire, seul, lui choisit, comme à sa
+     * création (voir PorteeDesAdministrateurs).
+     *
+     * @param  list<int>|null  $magasins  null : tous les magasins, présents et futurs
+     * @param  array<int|string, mixed>  $autorisationsMagasin
+     * @param  array<array-key, mixed>  $autorisationsSociete
+     *
+     * @throws AuthorizationException
+     * @throws LogicException
+     */
+    public function reintegrerLAdministrateur(User $auteur, User $compte, ?array $magasins, array $autorisationsMagasin, array $autorisationsSociete): void
+    {
+        $societe = $compte->societe()->firstOrFail();
+
+        $this->dansLaSociete($societe, PorteeDesDroits::REFUS, function () use ($auteur, $compte, $societe, $magasins, $autorisationsMagasin, $autorisationsSociete): void {
+            CreerAdministrateurAction::exigerLeProprietaire($auteur, $societe);
+            $portee = $this->porteeDesAdministrateurs->lire($societe, $magasins, $autorisationsMagasin, $autorisationsSociete);
+
+            $this->journalDesDroits->modifier($auteur, ActionAuditee::CompteReintegre, [$compte], $this->porteeDesAdministrateurs->magasinsTouches($societe, $portee), function (User $auteurRelu, array $relus) use ($societe, $portee): void {
+                [$compteRelu] = $relus;
+                CreerAdministrateurAction::exigerLeProprietaire($auteurRelu, $societe);
+
+                if (! $compteRelu->estRetire() || ! $compteRelu->estAdministrateur() || (int) $compteRelu->societe_id !== $societe->getKey()) {
+                    throw new AuthorizationException(PorteeDesDroits::REFUS);
+                }
+
+                $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
+                $this->porteeDesAdministrateurs->ecrire($compteRelu, $portee);
+            });
+        });
+
+        $compte->refresh();
+    }
+
+    /**
+     * Réintègre un expert-comptable retiré : le propriétaire seul, tant
+     * qu'il gère son équipe (pas dans une société révoquée, voir
+     * PorteeDesDroits::gereSonEquipe()).
      *
      * @throws AuthorizationException
      */
-    public function reintegrerCommeExpertComptable(User $auteur, User $compte): void
+    public function reintegrerLExpertComptable(User $auteur, User $compte): void
     {
         $societe = $compte->societe()->firstOrFail();
 
         $this->dansLaSociete($societe, PorteeDesDroits::REFUS, function () use ($auteur, $compte, $societe): void {
-            $this->journalDesDroits->modifier($auteur, ActionAuditee::CompteReintegre, [$compte], Magasin::query()->where('societe_id', $societe->getKey())->get(), function (User $auteurRelu, array $relus): void {
+            $this->journalDesDroits->modifier($auteur, ActionAuditee::CompteReintegre, [$compte], Magasin::query()->where('societe_id', $societe->getKey())->get(), function (User $auteurRelu, array $relus) use ($societe): void {
                 [$compteRelu] = $relus;
+                CreerExpertComptableAction::exigerLeProprietaire($auteurRelu, $societe);
 
-                if (! $this->portee->gereSonEquipe($auteurRelu) || ! $auteurRelu->estProprietaire() || (int) $compteRelu->societe_id !== (int) $auteurRelu->societe_id
-                    || ! $compteRelu->estRetire() || ! $compteRelu->estMembre() || $compteRelu->estRetireParSonRefus() || ! $compteRelu->recoitDeNouveauxDroitsDe($auteurRelu)) {
+                if (! $compteRelu->estRetire() || ! $compteRelu->estExpertComptable() || (int) $compteRelu->societe_id !== $societe->getKey()) {
                     throw new AuthorizationException(PorteeDesDroits::REFUS);
                 }
 
-                $compteRelu->forceFill(['role_societe' => RoleSociete::ExpertComptable, ...$compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu)])->save();
+                $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Actif, $auteurRelu))->save();
             });
         });
+
+        $compte->refresh();
     }
 
     /**
      * Supprime les affectations et les autorisations de société d'un compte
-     * qui quitte la société, puis le repasse membre, dans cet ordre (voir
-     * GardesDesDroits) : un administrateur ou un expert-comptable retiré ne
-     * garde aucun rôle de société.
+     * qui quitte la société : il garde son rôle de société, son identifiant
+     * et son magasin de rattachement, sans aucun droit.
      */
     public static function retirerLesDroits(User $compte): void
     {
         Affectation::query()->where('user_id', $compte->getKey())->delete();
         DB::table('autorisations_societe')->where('user_id', $compte->getKey())->delete();
-
-        if (! $compte->estMembre()) {
-            $compte->forceFill(['role_societe' => RoleSociete::Membre])->save();
-        }
     }
 
     /**

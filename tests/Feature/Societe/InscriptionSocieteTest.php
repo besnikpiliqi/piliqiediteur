@@ -4,7 +4,6 @@ namespace Tests\Feature\Societe;
 
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Facturation\Models\SequenceDocument;
-use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\ResultatVerification;
@@ -24,7 +23,6 @@ use App\Domain\Tenancy\Rules\SirenValide;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\Auth\InscriptionSociete;
-use App\Filament\App\Pages\Auth\PageDuLien;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Filament\Societe\Pages\VerificationSociete as PageDeVerification;
 use App\Filament\Societe\Resources\MagasinResource;
@@ -122,7 +120,7 @@ class InscriptionSocieteTest extends TestCase
             ['Jeanne Dupont', 'jeanne@maboutique.fr', RoleSociete::Proprietaire, $societe->id],
             [$proprietaire->name, $proprietaire->email, $proprietaire->role_societe, (int) $proprietaire->societe_id],
         );
-        $this->assertTrue($proprietaire->aConfirmeSonAdresse());
+        $this->assertNotNull($proprietaire->email_verified_at);
         $this->assertSame(
             [0, 0, 0, 0, 0],
             [Magasin::query()->count(), SiretMagasin::query()->count(), EnregistrementFiscal::withoutGlobalScopes()->count(), SequenceDocument::withoutGlobalScopes()->count(), PeriodeActivite::query()->count()],
@@ -282,14 +280,19 @@ class InscriptionSocieteTest extends TestCase
     }
 
     /**
-     * Une adresse déjà celle d'un compte, sous une autre casse : aucune
-     * demande, et la personne qui la détient apprend par e-mail qu'elle a
-     * déjà un compte ; l'écran répond comme pour une adresse libre.
+     * Une adresse déjà l'adresse de connexion d'un propriétaire, sous une
+     * autre casse : aucune demande, et la personne qui la détient apprend
+     * par e-mail qu'elle a déjà un compte ; l'écran répond comme pour une
+     * adresse libre. L'adresse de contact d'un autre compte n'est pas une
+     * adresse de connexion : elle s'inscrit comme une adresse libre.
      */
     public function test_une_adresse_deja_utilisee_recoit_un_e_mail_et_aucune_demande(): void
     {
         Mail::fake();
         User::factory()->create(['email' => 'jeanne@maboutique.fr']);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $this->membre($magasin, RoleMagasin::Vendeur, null, ['email' => 'paul@maboutique.fr']);
+        app(TenantContext::class)->clear();
 
         $this->demander(['email' => 'Jeanne@MaBoutique.FR'])
             ->assertHasNoFormErrors()
@@ -299,47 +302,19 @@ class InscriptionSocieteTest extends TestCase
             && $mail->urlDeConnexion === rtrim((string) config('app.url'), '/').'/app/login');
         Mail::assertNotSent(DemandeInscriptionMail::class);
         $this->assertSame(0, DemandeInscription::query()->count());
-    }
 
-    /**
-     * L'adresse d'un compte retiré de sa société reçoit, au lieu du lien de
-     * connexion, celui de la page du lien : la personne y choisit son mot
-     * de passe, ce qui confirme son adresse, puis crée sa propre société ;
-     * celle d'un compte encore dans sa société ne reçoit que la connexion
-     * et « Mot de passe oublié ». L'écran répond pareil dans les deux cas.
-     */
-    public function test_un_compte_retire_recoit_le_lien_pour_creer_sa_propre_societe(): void
-    {
-        Mail::fake();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $retire = $this->membre($magasin, RoleMagasin::Vendeur, null, ['email' => 'retire@maboutique.fr']);
-        $this->membre($magasin, RoleMagasin::Vendeur, null, ['email' => 'actif@maboutique.fr']);
-        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($magasin), $retire);
-        app(TenantContext::class)->clear();
-        Filament::setCurrentPanel(Filament::getPanel('app'));
+        $this->demander(['email' => 'paul@maboutique.fr'])->assertHasNoFormErrors()->assertSee(InscriptionSociete::MESSAGE_NEUTRE);
 
-        foreach (['retire@maboutique.fr', 'actif@maboutique.fr'] as $email) {
-            $this->demander(['email' => $email])->assertHasNoFormErrors()->assertSee(InscriptionSociete::MESSAGE_NEUTRE);
-        }
-
-        $pourLeRetire = Mail::sent(CompteExistantMail::class, fn (CompteExistantMail $mail): bool => $mail->hasTo('retire@maboutique.fr'))->sole();
-        $pourLActif = Mail::sent(CompteExistantMail::class, fn (CompteExistantMail $mail): bool => $mail->hasTo('actif@maboutique.fr'))->sole();
-        $this->assertNull($pourLActif->urlPourCreerSaSociete);
-        $this->assertNotNull($pourLeRetire->urlPourCreerSaSociete);
-        parse_str((string) parse_url($pourLeRetire->urlPourCreerSaSociete, PHP_URL_QUERY), $parametres);
-        Livewire::test(PageDuLien::class, ['email' => $parametres['email'], 'token' => $parametres['token']])
-            ->fillForm(['password' => 'mon-propre-mot-de-passe', 'passwordConfirmation' => 'mon-propre-mot-de-passe'])
-            ->call('choisir')
-            ->assertRedirect(route('societe.creer'));
-        $this->assertTrue($retire->refresh()->aConfirmeSonAdresse());
-        $this->assertSame(0, DemandeInscription::query()->count());
+        Mail::assertSent(DemandeInscriptionMail::class, fn (DemandeInscriptionMail $mail): bool => $mail->hasTo('paul@maboutique.fr'));
+        Mail::assertNotSent(CompteExistantMail::class, fn (CompteExistantMail $mail): bool => $mail->hasTo('paul@maboutique.fr'));
+        $this->assertSame(1, DemandeInscription::query()->count());
     }
 
     /**
      * Le propriétaire que crée la confirmation de son lien, et non la
      * fabrique, agit dès son inscription : son adresse est confirmée, son
-     * mot de passe est le sien, il ouvre l'espace de sa société et peut y
-     * créer son premier magasin.
+     * mot de passe est le sien, il a son identifiant de connexion, il ouvre
+     * l'espace de sa société et peut y créer son premier magasin.
      */
     public function test_le_proprietaire_inscrit_par_son_lien_peut_agir_des_son_inscription(): void
     {
@@ -347,8 +322,8 @@ class InscriptionSocieteTest extends TestCase
         $proprietaire = $societe->proprietaire()->sole();
 
         $this->assertTrue($proprietaire->peutAgir());
-        $this->assertTrue($proprietaire->aConfirmeSonAdresse());
-        $this->assertFalse($proprietaire->peutRefuserSonCompte());
+        $this->assertNotNull($proprietaire->email_verified_at);
+        $this->assertMatchesRegularExpression('/^[1-9][0-9]{7}$/', (string) $proprietaire->identifiantDeConnexion());
         $this->assertTrue($proprietaire->canAccessPanel(Filament::getPanel('societe')));
         $this->assertTrue($proprietaire->can('creerUnMagasin', $societe));
     }

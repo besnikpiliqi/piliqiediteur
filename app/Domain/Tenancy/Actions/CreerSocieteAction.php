@@ -9,12 +9,14 @@ use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Rules\SirenValide;
 use App\Domain\Tenancy\Services\ControleSirene;
+use App\Domain\Tenancy\Services\FournisseurDesComptes;
+use App\Domain\Tenancy\Services\GenerateurDIdentifiants;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Models\User;
-use Closure;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -24,7 +26,9 @@ use Illuminate\Validation\ValidationException;
  * transaction : la société, « à vérifier », préremplie depuis le
  * répertoire Sirene de l'INSEE (raison sociale, forme juridique tirée de
  * la catégorie juridique, siège, n° de TVA proposé) ; le compte de son
- * propriétaire, son adresse déjà confirmée par le lien de l'inscription ;
+ * propriétaire, son adresse de connexion déjà confirmée par le lien de
+ * l'inscription, et son identifiant de connexion, tiré au hasard, jamais
+ * égal au mot de passe qu'il a déjà choisi (voir GenerateurDIdentifiants) ;
  * le contrôle Sirene de l'entreprise au registre des vérifications ;
  * l'inscription au journal d'audit. La société naît sans aucun magasin :
  * ni SIRET réservé, ni registre, ni série ; tous ses magasins se créent
@@ -33,16 +37,13 @@ use Illuminate\Validation\ValidationException;
  * Que ce SIREN soit libre, en attente dans une autre inscription ou déjà
  * validé par une autre société, la société est créée de la même façon, à
  * vérifier, et rien n'en est révélé : seule une preuve de qualité départage
- * plus tard les sociétés d'un même SIREN.
+ * plus tard les sociétés d'un même SIREN. Une adresse déjà adresse de
+ * connexion d'un autre propriétaire est refusée, sans dire à qui elle
+ * appartient ; l'adresse de contact d'un autre compte n'empêche rien.
  *
  * Une entreprise cessée ou inconnue du répertoire est refusée ; quand
  * l'INSEE ne répond pas, la société est créée sans préremplissage et le
  * contrôle reprend ensuite (voir app:reverifier-sirene).
- *
- * La création elle-même (voir creer()) sert aussi à la personne qui crée
- * sa société avec un compte retiré (voir
- * CreerSaSocieteAvecUnCompteRetireAction) : seuls changent le compte du
- * propriétaire, créé ici ou repris, et l'entrée du journal d'audit.
  */
 class CreerSocieteAction
 {
@@ -51,6 +52,7 @@ class CreerSocieteAction
     public function __construct(
         private readonly ControleSirene $controleSirene,
         private readonly JournalAudit $journalAudit,
+        private readonly GenerateurDIdentifiants $generateur,
     ) {}
 
     /**
@@ -69,58 +71,13 @@ class CreerSocieteAction
             'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string'],
         ])->validate();
+        $email = User::normaliserEmail($compte['email']);
+        $motDePasseHache = Hash::isHashed($compte['password']) ? $compte['password'] : Hash::make($compte['password']);
 
-        if (User::query()->where('email', User::normaliserEmail($compte['email']))->exists()) {
+        if (FournisseurDesComptes::proprietaireDeLAdresse($email) !== null) {
             throw ValidationException::withMessages(['email' => self::MESSAGE_ADRESSE_INUTILISABLE]);
         }
 
-        try {
-            return $this->creer(
-                $societe,
-                fn (Societe $nouvelle): User => tap((new User([
-                    'name' => $compte['name'],
-                    'email' => $compte['email'],
-                    'password' => $compte['password'],
-                ]))->forceFill([
-                    'societe_id' => $nouvelle->getKey(),
-                    'role_societe' => RoleSociete::Proprietaire,
-                    'statut' => StatutCompte::Actif,
-                    'email_verified_at' => now(),
-                ]))->save(),
-                fn (Societe $nouvelle, User $proprietaire) => $this->journalAudit->inscrire(ActionAuditee::SocieteInscrite, $proprietaire, null, null, [
-                    'siren' => $nouvelle->siren,
-                    'raison_sociale' => $nouvelle->raison_sociale,
-                    'forme_juridique' => JournalAudit::valeur($nouvelle->forme_juridique),
-                    'proprietaire' => ['id' => $proprietaire->getKey(), 'nom' => $proprietaire->name],
-                ], $nouvelle),
-            );
-        } catch (UniqueConstraintViolationException $doublon) {
-            // Une autre confirmation a pris cette adresse depuis le
-            // contrôle ci-dessus : la même réponse, et rien n'est créé.
-            if (str_contains($doublon->getMessage(), 'users.email') || str_contains($doublon->getMessage(), 'users_email_unique')) {
-                throw ValidationException::withMessages(['email' => self::MESSAGE_ADRESSE_INUTILISABLE]);
-            }
-
-            throw $doublon;
-        }
-    }
-
-    /**
-     * La société, sans magasin, en une transaction, le propriétaire posé
-     * par $proprietaire dans la société nouvelle, puis l'inscription au
-     * journal d'audit par $inscrire ; une entreprise cessée ou inconnue du
-     * répertoire est refusée avant toute écriture. Partagée par
-     * l'inscription et par la création de sa société par un compte retiré
-     * (voir CreerSaSocieteAvecUnCompteRetireAction).
-     *
-     * @param  array{siren?: mixed}  $societe
-     * @param  Closure(Societe): User  $proprietaire
-     * @param  Closure(Societe, User): mixed  $inscrire
-     *
-     * @throws ValidationException
-     */
-    public function creer(array $societe, Closure $proprietaire, Closure $inscrire): Societe
-    {
         $siren = Validator::make($societe, ['siren' => ['required', 'string', new SirenValide]])->validate()['siren'];
         $consultation = $this->controleSirene->unite($siren);
 
@@ -130,17 +87,42 @@ class CreerSocieteAction
 
         $identite = $consultation['unite'] === null ? [] : $this->controleSirene->identiteDepuisSirene($consultation['unite']);
 
-        return DB::transaction(function () use ($siren, $identite, $proprietaire, $inscrire, $consultation): Societe {
-            $nouvelle = tap((new Societe)->forceFill(['siren' => $siren, ...$identite]))->save();
+        try {
+            return DB::transaction(function () use ($siren, $identite, $consultation, $compte, $email, $motDePasseHache): Societe {
+                $nouvelle = tap((new Societe)->forceFill(['siren' => $siren, ...$identite]))->save();
 
-            return app(TenantContext::class)->runAsSociete($nouvelle, function () use ($nouvelle, $proprietaire, $inscrire, $consultation): Societe {
-                $compte = $proprietaire($nouvelle);
+                return app(TenantContext::class)->runAsSociete($nouvelle, function () use ($nouvelle, $consultation, $compte, $email, $motDePasseHache): Societe {
+                    $proprietaire = tap((new User([
+                        'name' => $compte['name'],
+                        'email' => $email,
+                        'password' => $motDePasseHache,
+                    ]))->forceFill([
+                        'societe_id' => $nouvelle->getKey(),
+                        'role_societe' => RoleSociete::Proprietaire,
+                        'statut' => StatutCompte::Actif,
+                        'email_verified_at' => now(),
+                    ]))->save();
+                    $this->generateur->attribuer($proprietaire, motDePasseHache: $motDePasseHache);
 
-                $this->controleSirene->noterUnite($nouvelle, $consultation, $compte);
-                $inscrire($nouvelle, $compte);
+                    $this->controleSirene->noterUnite($nouvelle, $consultation, $proprietaire);
+                    $this->journalAudit->inscrire(ActionAuditee::SocieteInscrite, $proprietaire, null, null, [
+                        'siren' => $nouvelle->siren,
+                        'raison_sociale' => $nouvelle->raison_sociale,
+                        'forme_juridique' => JournalAudit::valeur($nouvelle->forme_juridique),
+                        'proprietaire' => ['id' => $proprietaire->getKey(), 'nom' => $proprietaire->name],
+                    ], $nouvelle);
 
-                return $nouvelle;
+                    return $nouvelle;
+                });
             });
-        });
+        } catch (UniqueConstraintViolationException $doublon) {
+            // Une autre confirmation a pris cette adresse de connexion depuis
+            // le contrôle ci-dessus : la même réponse, et rien n'est créé.
+            if (str_contains($doublon->getMessage(), 'users_adresse_de_connexion') || str_contains($doublon->getMessage(), 'users.email')) {
+                throw ValidationException::withMessages(['email' => self::MESSAGE_ADRESSE_INUTILISABLE]);
+            }
+
+            throw $doublon;
+        }
     }
 }

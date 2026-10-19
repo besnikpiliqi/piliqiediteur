@@ -13,6 +13,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\CaissesDeLaSociete;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Stock\Models\MouvementStock;
+use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
@@ -22,12 +23,13 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\DemandeAccordDirigeant;
-use App\Domain\Tenancy\Models\DemandeRattachement;
 use App\Domain\Tenancy\Models\EntreeAudit;
+use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\TraceAudit;
+use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\EvaluateurDeVerification;
@@ -75,10 +77,11 @@ class IsolationDesSocietesTest extends TestCase
     private const MODELES_DE_SOCIETE = [
         CodeConfirmation::class,
         DemandeAccordDirigeant::class,
-        DemandeRattachement::class,
         EntreeAudit::class,
+        Identifiant::class,
         PieceVerification::class,
         TraceAudit::class,
+        TransmissionPropriete::class,
         VerificationSociete::class,
     ];
 
@@ -193,21 +196,23 @@ class IsolationDesSocietesTest extends TestCase
      * Les clés étrangères composites de l'équipe d'un magasin : la base
      * refuse d'affecter un compte au magasin d'une autre société que la
      * sienne, quelle que soit la société écrite sur la ligne ; dans sa
-     * propre société, la même ligne s'écrit.
+     * propre société, la même ligne s'écrit pour un compte rattaché à ce
+     * magasin (un compte de membre ne vaut que pour son magasin).
      */
     public function test_la_base_refuse_d_affecter_un_compte_au_magasin_d_une_autre_societe(): void
     {
         $magasinA = $this->ouvrirUneSociete(['nom' => 'A']);
         $autreMagasinA = $this->ouvrirUnAutreMagasin($magasinA, ['nom' => 'A bis']);
         $vendeurDeA = $this->membre($magasinA, RoleMagasin::Vendeur);
+        $compteDeABis = User::factory()->membreDe($autreMagasinA)->create();
         $magasinB = $this->ouvrirUneSociete(['nom' => 'B']);
-        $ligne = fn (Magasin $magasin, int $societeId): array => ['societe_id' => $societeId, 'magasin_id' => $magasin->id, 'user_id' => $vendeurDeA->id, 'role' => RoleMagasin::Vendeur->value, 'created_at' => now(), 'updated_at' => now()];
+        $ligne = fn (Magasin $magasin, int $societeId, User $compte): array => ['societe_id' => $societeId, 'magasin_id' => $magasin->id, 'user_id' => $compte->id, 'role' => RoleMagasin::Vendeur->value, 'created_at' => now(), 'updated_at' => now()];
 
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('affectations')->insert($ligne($magasinB, $magasinA->societe_id))), QueryException::class);
-        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('affectations')->insert($ligne($magasinB, $magasinB->societe_id))), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('affectations')->insert($ligne($magasinB, $magasinA->societe_id, $vendeurDeA))), QueryException::class);
+        $this->assertThrows($this->dansUnPointDeSauvegarde(fn () => DB::table('affectations')->insert($ligne($magasinB, $magasinB->societe_id, $vendeurDeA))), QueryException::class);
 
         $this->assertSame(0, DB::table('affectations')->where('magasin_id', $magasinB->id)->count());
-        $this->assertTrue(DB::table('affectations')->insert($ligne($autreMagasinA, $magasinA->societe_id)));
+        $this->assertTrue(DB::table('affectations')->insert($ligne($autreMagasinA, $magasinA->societe_id, $compteDeABis)));
     }
 
     /**
@@ -483,7 +488,7 @@ class IsolationDesSocietesTest extends TestCase
     /**
      * Une vente de Lyon, ouverte à l'adresse du magasin de Villeurbanne,
      * répond 404 à chaque compte qui a pourtant accès aux deux magasins :
-     * le propriétaire, un responsable des deux, l'expert-comptable.
+     * le propriétaire, un administrateur des deux, l'expert-comptable.
      */
     public function test_l_url_d_un_enregistrement_d_un_autre_magasin_de_la_societe_repond_404_meme_pour_un_compte_autorise_dans_les_deux(): void
     {
@@ -491,12 +496,95 @@ class IsolationDesSocietesTest extends TestCase
         $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
         $venteDeLyon = $this->vendre($lyon);
 
-        foreach ([$this->proprietaireDe($lyon), $this->responsable($lyon, $villeurbanne), $this->expertComptable($lyon)] as $compte) {
+        foreach ([$this->proprietaireDe($lyon), $this->administrateur($lyon, [$lyon->id, $villeurbanne->id], [], PermissionRegistry::toutes()), $this->expertComptable($lyon)] as $compte) {
             $this->flushSession();
             $this->actingAs($compte);
             $this->get(FactureResource::getUrl('view', ['record' => $venteDeLyon], tenant: $lyon))->assertOk();
             $this->get(FactureResource::getUrl('view', ['record' => $venteDeLyon], tenant: $villeurbanne))->assertNotFound();
         }
+    }
+
+    /**
+     * À la connexion, un identifiant ne lit que la ligne de son identifiant
+     * et le compte qu'elle désigne, dans quelque société qu'il soit : aucune
+     * requête sur les comptes ou les identifiants qui ne porte sur eux.
+     */
+    public function test_la_connexion_ne_lit_d_un_identifiant_que_le_compte_qu_il_designe(): void
+    {
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'A']);
+        $this->membre($magasinA, RoleMagasin::Vendeur);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'B']);
+        $vendeurDeB = $this->membre($magasinB, RoleMagasin::Vendeur);
+        $identifiant = (string) $vendeurDeB->identifiantDeConnexion();
+        app(TenantContext::class)->clear();
+        $requetes = [];
+        DB::listen(function (QueryExecuted $requete) use (&$requetes): void {
+            $requetes[] = $requete;
+        });
+
+        $compte = auth()->getProvider()->retrieveByCredentials(['login' => substr($identifiant, 0, 4).' '.substr($identifiant, 4), 'password' => self::MOT_DE_PASSE_CHOISI]);
+
+        $this->assertTrue($vendeurDeB->is($compte));
+        $surLesComptes = array_values(array_filter($requetes, fn (QueryExecuted $requete): bool => preg_match('/from "?(users|identifiants)"?/', $requete->sql) === 1));
+        $this->assertCount(2, $surLesComptes);
+        $this->assertSame([$identifiant], $surLesComptes[0]->bindings);
+        $this->assertSame([$vendeurDeB->id], $surLesComptes[1]->bindings);
+    }
+
+    /**
+     * La page du lien de la transmission de la propriété ne lit que la
+     * demande que désigne l'empreinte de son jeton, et ne la propose qu'à
+     * son destinataire : jamais à un compte d'une autre société.
+     */
+    public function test_la_page_du_lien_de_transmission_ne_lit_que_la_demande_qu_il_designe(): void
+    {
+        $magasinA = $this->ouvrirUneSociete(['nom' => 'A']);
+        $administrateurDeA = $this->administrateurPretAReprendre($magasinA, 'repreneur-a@example.test');
+        $jetonDeA = $this->demanderLaTransmission($this->proprietaireDe($magasinA), $administrateurDeA);
+        $magasinB = $this->ouvrirUneSociete(['nom' => 'B']);
+        $administrateurDeB = $this->administrateurPretAReprendre($magasinB, 'repreneur-b@example.test');
+        $this->demanderLaTransmission($this->proprietaireDe($magasinB), $administrateurDeB);
+        app(TenantContext::class)->clear();
+        $requetes = [];
+        DB::listen(function (QueryExecuted $requete) use (&$requetes): void {
+            $requetes[] = $requete;
+        });
+
+        $demande = AccepterLaTransmissionDeLaProprieteAction::demandeDestineeA($administrateurDeA, $jetonDeA);
+
+        $this->assertSame((int) $magasinA->societe_id, (int) $demande?->societe_id);
+        $this->assertCount(1, $requetes);
+        $this->assertSame([TransmissionPropriete::empreinte($jetonDeA)], $requetes[0]->bindings);
+        $this->assertNull(AccepterLaTransmissionDeLaProprieteAction::demandeDestineeA($administrateurDeB, $jetonDeA));
+        $this->actingAs($administrateurDeB)->get(route('filament.societe.transmission', ['jeton' => $jetonDeA]))
+            ->assertOk()
+            ->assertSee(AccepterLaTransmissionDeLaProprieteAction::MESSAGE_LIEN)
+            ->assertDontSee('repreneur-a@example.test');
+    }
+
+    /**
+     * Une personne qui vend dans deux magasins y a deux comptes : chacun
+     * n'ouvre que son magasin et n'y voit que les ventes qu'il y a faites.
+     */
+    public function test_une_personne_de_deux_magasins_a_deux_comptes_et_ne_voit_dans_chacun_que_ce_qu_il_y_a_fait(): void
+    {
+        $lyon = $this->ouvrirUneSociete(['nom' => 'Lyon']);
+        $villeurbanne = $this->ouvrirUnAutreMagasin($lyon, ['nom' => 'Villeurbanne']);
+        $aLyon = $this->membre($lyon, RoleMagasin::Vendeur, null, ['name' => 'Paul Martin']);
+        $aVilleurbanne = $this->membre($villeurbanne, RoleMagasin::Vendeur, null, ['name' => 'Paul Martin']);
+        $venteDeLyon = app(TenantContext::class)->runAs($lyon, fn (): Facture => self::vendreAuComptant($aLyon, Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes));
+        $venteDeVilleurbanne = app(TenantContext::class)->runAs($villeurbanne, fn (): Facture => self::vendreAuComptant($aVilleurbanne, Client::factory()->create(), [['produit_id' => Produit::factory()->create(['prix_vente_ttc' => 15, 'taux_tva' => 20, 'suivi_stock' => false])->id, 'quantite' => 1]], ModePaiement::Especes));
+
+        foreach ([[$aLyon, $lyon, $villeurbanne, $venteDeLyon, $venteDeVilleurbanne], [$aVilleurbanne, $villeurbanne, $lyon, $venteDeVilleurbanne, $venteDeLyon]] as [$compte, $sien, $autre, $saVente, $autreVente]) {
+            $this->assertSame([[(int) $sien->id], false], [$compte->magasinsAccessibles()->modelKeys(), $compte->peutOuvrir($autre)]);
+            $this->flushSession();
+            $this->actingAs($compte);
+            $this->get(FactureResource::getUrl('view', ['record' => $saVente], tenant: $sien))->assertOk();
+            $this->get(FactureResource::getUrl('index', tenant: $autre))->assertNotFound();
+            $this->assertSame([(int) $saVente->id], app(TenantContext::class)->runAs($sien, fn (): array => Facture::query()->visiblesPar($compte)->pluck('id')->map(fn ($id): int => (int) $id)->all()));
+            $this->assertNotSame((int) $saVente->id, (int) $autreVente->id);
+        }
+        $this->assertNotSame($aLyon->identifiantDeConnexion(), $aVilleurbanne->identifiantDeConnexion());
     }
 
     /**

@@ -15,7 +15,7 @@ enum CategorieAudit: string implements HasLabel
     /** Opérations commerciales et fiscales, réglages, procédures. */
     case Operations = 'operations';
 
-    /** Comptes, droits, mots de passe, rattachements, transferts. */
+    /** Comptes, droits, rôles, accès redonnés, connexions, transmissions. */
     case Acces = 'acces';
 
     /** Vérification de la société. */

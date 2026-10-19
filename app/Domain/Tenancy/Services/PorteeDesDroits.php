@@ -23,51 +23,47 @@ use LogicException;
  *
  * Règles générales :
  * - aucun geste sur un compte d'une autre société, ni sur son propre
- *   compte (ses droits, son rôle, ses affectations, son statut), ni sur le
- *   propriétaire ; aucun dans une société révoquée (voir gereSonEquipe()) ;
- * - seul le propriétaire gère les administrateurs et les experts-comptables,
- *   et seul il affecte une même personne à plusieurs magasins (voir
- *   peutAffecterAPlusieursMagasins()) ;
- * - responsable d'un magasin : nommé, retiré ou déplacé par le propriétaire,
- *   ou par un administrateur autorisé à nommer les responsables, dans les
- *   magasins de sa portée (voir peutNommerUnResponsable()) ; rétrogradé,
- *   suspendu ou réactivé par le propriétaire seul ; jamais touché par un
- *   autre responsable ;
- * - vendeur ou observateur : créé dans un magasin, coché, modifié et
- *   retiré par le propriétaire ou un responsable du magasin ; un
- *   responsable ne gère que les vendeurs et les observateurs dont tous les
- *   magasins sont des magasins dont il est responsable (voir
- *   gereLeCompte()), tout autre compte se gère par le propriétaire seul ;
- * - gestes sur tout le compte (suspendre, réactiver, retirer de la
- *   société, renouveler l'accès) : le propriétaire ; un responsable de
- *   tous les magasins d'un vendeur ou d'un observateur ; pour une personne
- *   qui n'est que responsable de magasins tous dans sa portée, un
- *   administrateur autorisé, pour la retirer de la société ou lui envoyer
- *   un lien ;
+ *   compte (ses droits, son rôle, son statut), ni sur le propriétaire ;
+ *   aucun dans une société révoquée (voir gereSonEquipe()) ;
+ * - un compte de membre ne vaut que pour un magasin, celui de son
+ *   identifiant (voir User::magasinDeSonIdentifiant()) : une personne qui
+ *   travaille dans plusieurs magasins y a un compte dans chacun, et aucun
+ *   geste ne fait changer un compte de magasin ;
+ * - seul le propriétaire gère les administrateurs et les
+ *   experts-comptables, et change le rôle de société d'un compte ;
+ * - responsable d'un magasin : nommé ou retiré par le propriétaire, ou par
+ *   un administrateur autorisé à nommer les responsables, dans les
+ *   magasins réels de sa portée (voir peutNommerUnResponsable()), jamais
+ *   dans le magasin de démonstration ; rétrogradé, suspendu ou réactivé par
+ *   le propriétaire seul ; jamais touché par un autre responsable ;
+ * - vendeur ou observateur : créé, coché, modifié, suspendu, réactivé et
+ *   retiré par le propriétaire ou un responsable de son magasin (voir
+ *   gereLeCompte()) ;
+ * - accès redonné (voir peutRedonnerLAcces()) : par le propriétaire pour
+ *   tout compte ; par un responsable de son magasin pour un vendeur ou un
+ *   observateur ; par un administrateur autorisé à nommer les responsables
+ *   pour un responsable d'un magasin réel de sa portée, et par un
+ *   administrateur autorisé à redonner l'accès pour un vendeur ou un
+ *   observateur d'un magasin réel de sa portée ; jamais pour le
+ *   propriétaire, un administrateur ou un expert-comptable par un autre que
+ *   le propriétaire ;
  * - un compte suspendu par le propriétaire ne se réactive, ni ne se retire
- *   de la société (son dernier magasin compris), que par le propriétaire ;
- *   retiré par lui, il ne se réintègre et ne reçoit de rattachement à la
- *   même société que du propriétaire. La décision se lit sur le compte,
+ *   de la société, que par le propriétaire ; retiré par lui, il ne se
+ *   réintègre que par le propriétaire. La décision se lit sur le compte,
  *   telle qu'elle a été prise (voir User::statutDecideParLeProprietaire()) :
- *   elle tient après une transmission de la propriété, et le retrait d'un
- *   compte suspendu ne sert jamais à lever sa suspension ;
- * - un nouveau mot de passe provisoire ne se donne qu'à un compte dont le
- *   mot de passe est encore un provisoire, par le propriétaire ou un
- *   responsable de tous ses magasins, jamais par un administrateur ;
- * - tant que son mot de passe est un provisoire, un compte ne reçoit un
- *   nouveau magasin, un rôle de responsable ou une réintégration que de la
- *   personne qui l'a créé, et seulement si c'est elle qui lui a donné ce
- *   provisoire (voir User::recoitDeNouveauxDroitsDe()) : qui connaît le
- *   provisoire ne profite jamais, par ce compte, de droits qu'il ne
- *   pourrait pas donner lui-même ;
+ *   elle tient après une transmission de la propriété ;
  * - ce qu'on coche pour quelqu'un dans un magasin : toutes les
  *   autorisations pour le propriétaire, y compris celles de la vente qu'il
  *   n'exerce pas lui-même, toutes celles de son magasin pour un
  *   responsable, qui les a toutes, aucune pour tout autre compte (voir
- *   autorisationsCochables()).
+ *   autorisationsCochables()) ;
+ * - l'identifiant de connexion d'un compte ne se montre qu'à la personne,
+ *   au propriétaire et, pour un vendeur ou un observateur, au responsable
+ *   de son magasin (voir voitLIdentifiant()) ; à un administrateur,
+ *   seulement par un geste tracé (voir peutAfficherLIdentifiant()).
  *
- * Retirer quelqu'un de son dernier magasin le retire de la société : n'en
- * a le droit que qui peut le retirer de la société.
+ * Retirer un compte de son magasin le retire de la société : n'en a le
+ * droit que qui peut le retirer de la société.
  */
 final class PorteeDesDroits
 {
@@ -75,7 +71,7 @@ final class PorteeDesDroits
 
     public const REFUS_AU_DELA = 'Vous ne pouvez pas donner, dans ce magasin, une autorisation que vous n\'avez pas.';
 
-    public const REFUS_PLUSIEURS_MAGASINS = 'Seul le propriétaire affecte une même personne à plusieurs magasins.';
+    public const REFUS_AUTRE_MAGASIN = 'Un compte ne vaut que pour son magasin : créez-lui un compte dans cet autre magasin.';
 
     /**
      * Peut-il gérer l'équipe de sa société, dans la mesure de son rôle ? Un
@@ -104,9 +100,11 @@ final class PorteeDesDroits
     }
 
     /**
-     * Peut-il nommer, retirer ou déplacer un responsable dans ce magasin ?
-     * Le propriétaire ; un administrateur autorisé à nommer les
-     * responsables, pour un magasin de sa portée.
+     * Peut-il nommer ou retirer un responsable dans ce magasin, en créer le
+     * compte et lui redonner l'accès ? Le propriétaire ; un administrateur
+     * autorisé à nommer les responsables, pour un magasin réel de sa
+     * portée, jamais le magasin de démonstration, dont seuls le
+     * propriétaire et ses responsables créent les comptes d'entraînement.
      */
     public function peutNommerUnResponsable(User $auteur, Magasin $magasin): bool
     {
@@ -115,24 +113,13 @@ final class PorteeDesDroits
         }
 
         return $auteur->estProprietaire()
-            || ($auteur->aLAutorisationDeSociete(AutorisationsSociete::RESPONSABLES_NOMMER) && $auteur->administreLeMagasin($magasin));
-    }
-
-    /**
-     * Seul le propriétaire affecte une même personne à plusieurs magasins :
-     * créer un compte avec plusieurs magasins, lui en ajouter un quand il
-     * en a déjà un, le réintégrer dans plusieurs.
-     */
-    public function peutAffecterAPlusieursMagasins(User $auteur): bool
-    {
-        return $this->gereSonEquipe($auteur) && $auteur->estProprietaire();
+            || (! $magasin->est_demonstration && $auteur->aLAutorisationDeSociete(AutorisationsSociete::RESPONSABLES_NOMMER) && $auteur->administreLeMagasin($magasin));
     }
 
     /**
      * Gère-t-il ce compte de vendeur ou d'observateur tout entier (ses
-     * cases et son modèle dans chacun de ses magasins, ses gestes sur tout
-     * le compte) ? Le propriétaire ; un responsable de chacun des magasins
-     * d'un compte qui n'est que vendeur ou observateur.
+     * cases et son modèle, ses gestes sur tout le compte) ? Le
+     * propriétaire ; un responsable du magasin du compte.
      */
     public function gereLeCompte(User $auteur, User $compte): bool
     {
@@ -144,20 +131,20 @@ final class PorteeDesDroits
             return true;
         }
 
-        $affectations = $compte->affectationsDeMembre();
+        $affectation = $compte->affectationDeMembre();
 
-        return $affectations->isNotEmpty()
-            && $affectations->every(fn (Affectation $affectation): bool => $affectation->role !== RoleMagasin::Responsable
-                && $affectation->magasin !== null
-                && $this->gereLEquipeDe($auteur, $affectation->magasin));
+        return $affectation !== null
+            && $affectation->role !== RoleMagasin::Responsable
+            && $affectation->magasin !== null
+            && $this->gereLEquipeDe($auteur, $affectation->magasin);
     }
 
     /**
      * Peut-il donner ce rôle à ce compte dans ce magasin : créer son
      * affectation, ou changer celle qu'il y a (son rôle, ses cases) ? Avec
-     * un compte nul, pour un compte qu'il crée ou qu'il réintègre. Le
-     * nombre de magasins se contrôle à part (voir
-     * peutAffecterAPlusieursMagasins()).
+     * un compte nul, pour un compte qu'il crée ou qu'il réintègre. Un
+     * compte existant ne reçoit de rôle que dans le magasin de son
+     * identifiant.
      */
     public function peutDonnerLeRole(User $auteur, ?User $compte, Magasin $magasin, RoleMagasin $role): bool
     {
@@ -165,25 +152,15 @@ final class PorteeDesDroits
             return false;
         }
 
-        if ($compte !== null && (! $this->estUneCible($auteur, $compte) || ! $compte->estMembre() || $compte->estRetire())) {
+        if ($compte !== null && (! $this->estUneCible($auteur, $compte) || ! $compte->estMembre() || $compte->estRetire()
+            || (int) $compte->magasinDeSonIdentifiant()?->getKey() !== (int) $magasin->getKey())) {
             return false;
         }
 
-        $actuelle = $compte?->affectationsDeMembre()->firstWhere('magasin_id', $magasin->getKey());
-
-        if ($compte !== null && ($actuelle === null || ($role === RoleMagasin::Responsable && ! $actuelle->estDeResponsable())) && ! $compte->recoitDeNouveauxDroitsDe($auteur)) {
-            return false;
-        }
+        $actuelle = $compte?->affectationDeMembre();
 
         if ($role === RoleMagasin::Responsable) {
-            if (! $this->peutNommerUnResponsable($auteur, $magasin)) {
-                return false;
-            }
-
-            return $auteur->estProprietaire()
-                || $compte === null
-                || $actuelle !== null
-                || $this->nEstResponsableQueDansSaPortee($auteur, $compte);
+            return $this->peutNommerUnResponsable($auteur, $magasin);
         }
 
         if ($actuelle?->estDeResponsable()) {
@@ -198,38 +175,24 @@ final class PorteeDesDroits
     }
 
     /**
-     * Peut-il retirer cette affectation de membre ? Selon son rôle : celle
-     * d'un responsable, qui peut nommer un responsable dans ce magasin ;
-     * celle d'un vendeur ou d'un observateur, qui gère ce compte tout
-     * entier. La dernière affectation du compte, seulement qui peut le
-     * retirer de la société (il l'est alors).
-     *
-     * @param  bool|null  $derniere  le compte n'aura plus aucune affectation après ce changement ; null : lu en base (ce retrait seul)
+     * Peut-il retirer cette affectation de membre ? C'est le seul magasin du
+     * compte : la retirer le retire de la société, ce que seul peut faire
+     * qui peut le retirer de la société (voir peutRetirerDeLaSociete()).
      */
-    public function peutRetirerLAffectation(User $auteur, Affectation $affectation, ?bool $derniere = null): bool
+    public function peutRetirerLAffectation(User $auteur, Affectation $affectation): bool
     {
         $compte = User::query()->find($affectation->user_id);
-        $magasin = $affectation->magasin;
 
-        if ($compte === null || $magasin === null || $affectation->estDAdministrateur() || ! $this->estUneCible($auteur, $compte) || ! $compte->estMembre()) {
-            return false;
-        }
-
-        if (($derniere ?? $compte->affectationsDeMembre()->count() === 1) && ! $this->peutRetirerDeLaSociete($auteur, $compte)) {
-            return false;
-        }
-
-        if ($affectation->estDeResponsable()) {
-            return $this->peutNommerUnResponsable($auteur, $magasin);
-        }
-
-        return $this->gereLeCompte($auteur, $compte);
+        return $compte !== null
+            && ! $affectation->estDAdministrateur()
+            && $compte->estMembre()
+            && $this->peutRetirerDeLaSociete($auteur, $compte);
     }
 
     /**
      * Peut-il suspendre ce compte, ou le réactiver s'il est suspendu ? Le
-     * propriétaire ; un responsable de tous les magasins d'un vendeur ou
-     * d'un observateur, sauf pour réactiver un compte que le propriétaire a
+     * propriétaire ; un responsable du magasin d'un vendeur ou d'un
+     * observateur, sauf pour réactiver un compte que le propriétaire a
      * suspendu. Jamais un administrateur.
      */
     public function peutSuspendreOuReactiver(User $auteur, User $compte): bool
@@ -246,81 +209,128 @@ final class PorteeDesDroits
     }
 
     /**
-     * Peut-il retirer ce compte de la société ? Ceux qui touchent à tout le
-     * compte (voir toucheToutLeCompte()) ; un compte suspendu par le
+     * Peut-il retirer ce compte de la société ? Le propriétaire ; un
+     * responsable du magasin d'un vendeur ou d'un observateur ; un
+     * administrateur autorisé à nommer les responsables, pour un
+     * responsable d'un magasin réel de sa portée. Un compte suspendu par le
      * propriétaire, le propriétaire seul : retiré par un autre, puis
      * réintégré par lui, il verrait sa suspension levée sans le
      * propriétaire.
      */
     public function peutRetirerDeLaSociete(User $auteur, User $compte): bool
     {
-        return $this->toucheToutLeCompte($auteur, $compte)
-            && ($auteur->estProprietaire() || ! $this->estSuspenduParLeProprietaire($compte));
-    }
-
-    /**
-     * Peut-il renouveler l'accès de ce compte par un lien envoyé à la
-     * personne ? Ceux qui touchent à tout le compte (voir
-     * toucheToutLeCompte()) : un lien ne lève aucune suspension.
-     */
-    public function peutRenouvelerLAcces(User $auteur, User $compte): bool
-    {
-        return $this->toucheToutLeCompte($auteur, $compte);
-    }
-
-    /**
-     * Peut-il lui donner un nouveau mot de passe provisoire ? Seulement si
-     * son mot de passe est encore un provisoire de la société, par le
-     * propriétaire, ou par un responsable de tous les magasins d'un vendeur
-     * ou d'un observateur ; jamais par un administrateur.
-     */
-    public function peutDonnerUnProvisoire(User $auteur, User $compte): bool
-    {
-        if (! $this->estUneCible($auteur, $compte) || $compte->estRetire() || ! $compte->doitChangerSonMotDePasse()) {
+        if (! $this->estUneCible($auteur, $compte) || $compte->estRetire()) {
             return false;
         }
 
-        return $auteur->estProprietaire() || $this->gereLeCompte($auteur, $compte);
+        if ($auteur->estProprietaire()) {
+            return true;
+        }
+
+        return ! $this->estSuspenduParLeProprietaire($compte)
+            && ($this->gereLeCompte($auteur, $compte) || $this->estResponsableDeSaPortee($auteur, $compte));
     }
 
     /**
-     * Peut-il réintégrer ce compte retiré par la société, avec ces
-     * affectations (magasin => rôle) ? Comme une création : le
-     * propriétaire pour tout rôle ; un responsable, comme vendeur ou
-     * observateur d'un de ses magasins ; un administrateur autorisé, comme
-     * responsable d'un magasin de sa portée. Un compte retiré par le
-     * propriétaire ne se réintègre que par lui, un compte retiré par son
-     * propre refus jamais (seulement par un rattachement qu'il accepte), et
-     * un compte au mot de passe provisoire que par la personne qui l'a créé.
-     *
-     * @param  array<int, RoleMagasin>  $roles  par identifiant de magasin
+     * Peut-il redonner l'accès à ce compte actif (voir
+     * RedonnerLAccesAction) ? Le propriétaire, pour tout compte ; un
+     * responsable du magasin d'un vendeur ou d'un observateur ; un
+     * administrateur autorisé à nommer les responsables, pour un
+     * responsable d'un magasin réel de sa portée ; un administrateur que le
+     * propriétaire autorise à redonner l'accès, pour un vendeur ou un
+     * observateur d'un magasin réel de sa portée. Personne d'autre que le
+     * propriétaire ne redonne l'accès d'un administrateur ou d'un
+     * expert-comptable, et personne celui du propriétaire. Un compte
+     * suspendu se réactive d'abord, par qui le peut.
      */
-    public function peutReintegrer(User $auteur, User $compte, array $roles): bool
+    public function peutRedonnerLAcces(User $auteur, User $compte): bool
     {
-        if (! $this->gereSonEquipe($auteur) || ! $compte->estRetire() || ! $compte->estMembre() || $roles === []
+        if (! $this->estUneCible($auteur, $compte) || ! $compte->estActif()) {
+            return false;
+        }
+
+        if ($auteur->estProprietaire()) {
+            return true;
+        }
+
+        $affectation = $compte->affectationDeMembre();
+
+        if ($affectation === null || $affectation->magasin === null) {
+            return false;
+        }
+
+        if ($affectation->estDeResponsable()) {
+            return $this->peutNommerUnResponsable($auteur, $affectation->magasin);
+        }
+
+        return $this->gereLEquipeDe($auteur, $affectation->magasin)
+            || $this->redonneLAccesDesVendeursDe($auteur, $affectation->magasin);
+    }
+
+    /**
+     * Voit-il l'identifiant de connexion de ce compte, dans les listes et
+     * les fiches ? La personne elle-même ; le propriétaire, pour tout
+     * compte de sa société ; un responsable, pour un vendeur ou un
+     * observateur de son magasin, dont il gère le compte. Jamais un
+     * administrateur : il ne le voit que par un geste tracé (voir
+     * peutAfficherLIdentifiant()).
+     */
+    public function voitLIdentifiant(User $auteur, User $compte): bool
+    {
+        if ((int) $compte->societe_id !== (int) $auteur->societe_id || ! $auteur->peutAgir()) {
+            return false;
+        }
+
+        return $compte->is($auteur) || $auteur->estProprietaire() || ($auteur->estMembre() && $this->gereLeCompte($auteur, $compte));
+    }
+
+    /**
+     * Peut-il faire « Afficher l'identifiant », geste inscrit au journal
+     * d'audit et signalé au propriétaire quand le mot de passe du compte
+     * est encore son identifiant (voir AfficherLIdentifiantAction) ? Un
+     * administrateur qui peut redonner l'accès à ce compte.
+     */
+    public function peutAfficherLIdentifiant(User $auteur, User $compte): bool
+    {
+        return $auteur->estAdministrateur() && $this->peutRedonnerLAcces($auteur, $compte);
+    }
+
+    /**
+     * Peut-il réintégrer ce compte de membre retiré, avec ce rôle, dans le
+     * magasin de son identifiant ? Comme une création : le propriétaire
+     * pour tout rôle ; un responsable de ce magasin, comme vendeur ou
+     * observateur ; un administrateur autorisé, comme responsable d'un
+     * magasin réel de sa portée. Un compte retiré par le propriétaire ne se
+     * réintègre que par lui.
+     */
+    public function peutReintegrer(User $auteur, User $compte, RoleMagasin $role): bool
+    {
+        if (! $this->gereSonEquipe($auteur) || ! $compte->estRetire() || ! $compte->estMembre()
             || (int) $compte->societe_id !== (int) $auteur->societe_id || $compte->is($auteur)) {
             return false;
         }
 
-        if ($compte->estRetireParSonRefus() || ($compte->statutDecideParLeProprietaire() && ! $auteur->estProprietaire())) {
+        if ($compte->statutDecideParLeProprietaire() && ! $auteur->estProprietaire()) {
             return false;
         }
 
-        if (! $compte->recoitDeNouveauxDroitsDe($auteur) || (count($roles) > 1 && ! $this->peutAffecterAPlusieursMagasins($auteur))) {
-            return false;
-        }
+        $magasin = $compte->magasinDeSonIdentifiant();
 
-        $magasins = Magasin::query()->where('societe_id', $auteur->societe_id)->whereKey(array_keys($roles))->get()->keyBy('id');
+        return $magasin !== null && $this->peutDonnerLeRole($auteur, null, $magasin, $role);
+    }
 
-        foreach ($roles as $magasinId => $role) {
-            $magasin = $magasins->get($magasinId);
-
-            if ($magasin === null || ! $this->peutDonnerLeRole($auteur, null, $magasin, $role)) {
-                return false;
-            }
-        }
-
-        return true;
+    /**
+     * Peut-il changer le rôle de société de ce compte (membre,
+     * administrateur, expert-comptable ; voir
+     * ChangerLeRoleDeSocieteAction) ? Le propriétaire seul, pour un compte
+     * actif de sa société qui n'est pas un compte d'entraînement.
+     */
+    public function peutChangerLeRoleDeSociete(User $auteur, User $compte): bool
+    {
+        return $this->estUneCible($auteur, $compte)
+            && $auteur->estProprietaire()
+            && $compte->estActif()
+            && ! $compte->estUnCompteDEntrainement();
     }
 
     /**
@@ -329,8 +339,8 @@ final class PorteeDesDroits
      * l'administrateur qui l'a faite, s'il peut toujours nommer un
      * responsable dans ce magasin. Seulement tant que l'affectation est
      * celle de cette nomination. Une annulation qui retirerait la personne
-     * de la société (l'affectation créée par la nomination est son dernier
-     * magasin), seulement qui peut l'en retirer.
+     * de la société (la nomination a créé son compte), seulement qui peut
+     * l'en retirer.
      */
     public function peutAnnulerLaNomination(User $auteur, Affectation $affectation): bool
     {
@@ -345,7 +355,7 @@ final class PorteeDesDroits
             return false;
         }
 
-        if ($affectation->avant_la_nomination === null && $compte->affectationsDeMembre()->count() === 1 && ! $this->peutRetirerDeLaSociete($auteur, $compte)) {
+        if ($affectation->avant_la_nomination === null && ! $this->peutRetirerDeLaSociete($auteur, $compte)) {
             return false;
         }
 
@@ -391,8 +401,9 @@ final class PorteeDesDroits
     /**
      * Les comptes de sa société qu'il voit dans l'espace d'administration :
      * tous pour le propriétaire, experts-comptables compris ; pour un
-     * administrateur autorisé à nommer les responsables, ceux qui ont une
-     * affectation de responsable dans un magasin de sa portée ; aucun pour
+     * administrateur, les responsables des magasins réels de sa portée s'il
+     * est autorisé à nommer les responsables, et leurs vendeurs et leurs
+     * observateurs s'il est autorisé à leur redonner l'accès ; aucun pour
      * tout autre compte.
      *
      * @return Builder<User>
@@ -409,7 +420,12 @@ final class PorteeDesDroits
             return $comptes;
         }
 
-        if (! $auteur->aLAutorisationDeSociete(AutorisationsSociete::RESPONSABLES_NOMMER)) {
+        $roles = [
+            ...($auteur->aLAutorisationDeSociete(AutorisationsSociete::RESPONSABLES_NOMMER) ? [RoleMagasin::Responsable->value] : []),
+            ...($auteur->aLAutorisationDeSociete(AutorisationsSociete::ACCES_REDONNER) ? [RoleMagasin::Vendeur->value, RoleMagasin::Observateur->value] : []),
+        ];
+
+        if ($roles === []) {
             return $comptes->whereRaw('1 = 0');
         }
 
@@ -417,8 +433,8 @@ final class PorteeDesDroits
             ->where('users.role_societe', RoleSociete::Membre->value)
             ->whereIn('users.id', Affectation::query()
                 ->where('societe_id', $auteur->societe_id)
-                ->where('role', RoleMagasin::Responsable->value)
-                ->whereIn('magasin_id', $auteur->magasinsDeSaPortee()->select('magasins.id'))
+                ->whereIn('role', $roles)
+                ->whereIn('magasin_id', $auteur->magasinsDeSaPortee()->where('magasins.est_demonstration', false)->select('magasins.id'))
                 ->select('user_id'));
     }
 
@@ -429,13 +445,12 @@ final class PorteeDesDroits
     }
 
     /**
-     * Les comptes qu'il peut nommer responsables de ce magasin : des
-     * membres actifs, qui n'en sont pas déjà responsables, ont choisi leur
-     * mot de passe ou ont été créés par lui et ont reçu de lui leur
-     * provisoire (voir User::recoitDeNouveauxDroitsDe()) ; pour le propriétaire, tout
-     * membre de la société ; pour un administrateur autorisé, un vendeur
-     * ou un observateur de ce magasin, sans nouveau magasin. Jamais un
-     * administrateur, un expert-comptable ni le propriétaire.
+     * Les comptes qu'il peut nommer responsables de ce magasin : les
+     * vendeurs et les observateurs actifs de ce magasin, jamais un autre
+     * compte que le sien, ni rien quand il ne peut pas y nommer un
+     * responsable (un administrateur dans le magasin de démonstration, par
+     * exemple). Un compte dont le mot de passe est encore son identifiant
+     * se propose, la fenêtre l'avertissant.
      *
      * @return Builder<User>
      */
@@ -446,95 +461,12 @@ final class PorteeDesDroits
             ->where('users.role_societe', RoleSociete::Membre->value)
             ->where('users.statut', StatutCompte::Actif->value)
             ->whereKeyNot($auteur->getKey())
-            ->where(fn (Builder $comptes) => $comptes->where('users.mot_de_passe_a_changer', false)->orWhere(fn (Builder $deLui) => $deLui->where('users.cree_par', $auteur->getKey())->where('users.provisoire_donne_par', $auteur->getKey())))
-            ->whereNotIn('users.id', Affectation::query()->where('magasin_id', $magasin->getKey())->where('role', RoleMagasin::Responsable->value)->select('user_id'));
+            ->whereIn('users.id', Affectation::query()
+                ->where('magasin_id', $magasin->getKey())
+                ->whereIn('role', [RoleMagasin::Vendeur->value, RoleMagasin::Observateur->value])
+                ->select('user_id'));
 
-        if (! $this->peutNommerUnResponsable($auteur, $magasin)) {
-            return $candidats->whereRaw('1 = 0');
-        }
-
-        if ($auteur->estProprietaire()) {
-            return $candidats;
-        }
-
-        return $candidats->whereIn('users.id', Affectation::query()
-            ->where('magasin_id', $magasin->getKey())
-            ->whereIn('role', [RoleMagasin::Vendeur->value, RoleMagasin::Observateur->value])
-            ->select('user_id'));
-    }
-
-    /**
-     * Peut-il proposer ce rôle et ces affectations dans sa société, par un
-     * rattachement ? Comme une création : comme expert-comptable, le
-     * propriétaire seul, sans affectation ; comme membre, au moins un
-     * magasin, plusieurs par le propriétaire seul, et dans chacun le rôle
-     * qu'il peut donner (vendeur ou observateur par le propriétaire ou un
-     * responsable du magasin, responsable par le propriétaire ou un
-     * administrateur autorisé dans sa portée).
-     *
-     * @param  array<int, RoleMagasin>  $roles  par identifiant de magasin
-     */
-    public function peutProposerUnRattachement(User $auteur, RoleSociete $role, array $roles): bool
-    {
-        if (! $this->gereSonEquipe($auteur)) {
-            return false;
-        }
-
-        if ($role === RoleSociete::ExpertComptable) {
-            return $auteur->estProprietaire() && $roles === [];
-        }
-
-        if ($role !== RoleSociete::Membre || $roles === [] || (count($roles) > 1 && ! $this->peutAffecterAPlusieursMagasins($auteur))) {
-            return false;
-        }
-
-        $magasins = Magasin::query()->where('societe_id', $auteur->societe_id)->whereKey(array_keys($roles))->get()->keyBy('id');
-
-        foreach ($roles as $magasinId => $roleDeMagasin) {
-            $magasin = $magasins->get($magasinId);
-
-            if ($magasin === null || ! $this->peutDonnerLeRole($auteur, null, $magasin, $roleDeMagasin)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Ce compte peut-il recevoir de l'auteur une proposition de
-     * rattachement à la société de l'auteur ? Seulement un compte retiré,
-     * membre (un administrateur ou un expert-comptable retiré l'est
-     * redevenu) ; retiré par le propriétaire de cette même société, par le
-     * propriétaire seul. Un compte encore actif ou suspendu, dans cette
-     * société ou une autre, jamais : il doit d'abord en être retiré.
-     */
-    public function peutRecevoirUnRattachement(User $auteur, User $compte): bool
-    {
-        if (! $compte->estRetire() || ! $compte->estMembre() || $compte->is($auteur)) {
-            return false;
-        }
-
-        return (int) $compte->societe_id !== (int) $auteur->societe_id
-            || $compte->estRetireParSonRefus()
-            || ! $compte->statutDecideParLeProprietaire()
-            || $auteur->estProprietaire();
-    }
-
-    /**
-     * Ce membre de l'équipe du magasin travaille-t-il aussi dans un autre
-     * magasin ? Lu seulement pour savoir qui peut gérer son compte et le
-     * dire à l'écran, sans jamais dire lequel (une lecture hors du magasin,
-     * déclarée dans CLAUDE.md).
-     */
-    public function aAussiDAutresMagasins(User $compte, Magasin $magasin): bool
-    {
-        return Affectation::query()
-            ->where('societe_id', $magasin->societe_id)
-            ->where('user_id', $compte->getKey())
-            ->whereNotNull('role')
-            ->where('magasin_id', '<>', $magasin->getKey())
-            ->exists();
+        return $this->peutNommerUnResponsable($auteur, $magasin) ? $candidats : $candidats->whereRaw('1 = 0');
     }
 
     /**
@@ -550,24 +482,6 @@ final class PorteeDesDroits
     }
 
     /**
-     * Touche-t-il à tout ce compte (le retirer de la société, renouveler
-     * son accès) ? Le propriétaire ; un responsable de tous les magasins
-     * d'un vendeur ou d'un observateur ; un administrateur autorisé, pour
-     * une personne qui n'est que responsable de magasins tous dans sa
-     * portée.
-     */
-    private function toucheToutLeCompte(User $auteur, User $compte): bool
-    {
-        if (! $this->estUneCible($auteur, $compte) || $compte->estRetire()) {
-            return false;
-        }
-
-        return $auteur->estProprietaire()
-            || $this->gereLeCompte($auteur, $compte)
-            || $this->nEstResponsableQueDansSaPortee($auteur, $compte);
-    }
-
-    /**
      * Le compte est-il suspendu, par une décision du propriétaire ?
      */
     private function estSuspenduParLeProprietaire(User $compte): bool
@@ -576,20 +490,33 @@ final class PorteeDesDroits
     }
 
     /**
-     * Une personne qui n'est que responsable, de magasins tous dans la
-     * portée d'un administrateur autorisé à nommer les responsables.
+     * Le compte est-il celui d'un responsable d'un magasin réel de la
+     * portée d'un administrateur autorisé à nommer les responsables ?
      */
-    private function nEstResponsableQueDansSaPortee(User $auteur, User $compte): bool
+    private function estResponsableDeSaPortee(User $auteur, User $compte): bool
     {
-        if (! $auteur->estAdministrateur() || ! $compte->estMembre() || ! $this->estUneCible($auteur, $compte)) {
+        if (! $auteur->estAdministrateur() || ! $compte->estMembre()) {
             return false;
         }
 
-        $affectations = $compte->affectationsDeMembre();
+        $affectation = $compte->affectationDeMembre();
 
-        return $affectations->isNotEmpty()
-            && $affectations->every(fn (Affectation $affectation): bool => $affectation->estDeResponsable()
-                && $affectation->magasin !== null
-                && $this->peutNommerUnResponsable($auteur, $affectation->magasin));
+        return $affectation !== null
+            && $affectation->estDeResponsable()
+            && $affectation->magasin !== null
+            && $this->peutNommerUnResponsable($auteur, $affectation->magasin);
+    }
+
+    /**
+     * Est-il un administrateur que le propriétaire autorise à redonner
+     * l'accès aux vendeurs et aux observateurs, pour ce magasin réel de sa
+     * portée ?
+     */
+    private function redonneLAccesDesVendeursDe(User $auteur, Magasin $magasin): bool
+    {
+        return $auteur->estAdministrateur()
+            && ! $magasin->est_demonstration
+            && $auteur->aLAutorisationDeSociete(AutorisationsSociete::ACCES_REDONNER)
+            && $auteur->administreLeMagasin($magasin);
     }
 }

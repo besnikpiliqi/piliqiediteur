@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Authorization;
 
-use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\LecteurDesDroits;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
@@ -12,7 +11,7 @@ use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\TransfererProprieteAction;
+use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Scopes\MagasinScope;
@@ -25,11 +24,12 @@ use Tests\TestCase;
 
 /**
  * Un administrateur à qui le propriétaire a coché la vente émet un ticket
- * au moment même où le propriétaire lui transmet la propriété, chacun dans
- * son processus, sur une vraie base PostgreSQL. La vente verrouille le
- * registre de son magasin puis la ligne de son auteur ; la transmission
- * verrouille les registres de tous les magasins puis les comptes (voir
- * JournalDesDroits) : l'une passe avant l'autre, jamais pendant. Soit le
+ * au moment même où il accepte la propriété que le propriétaire lui
+ * transmet, chacun dans son processus, sur une vraie base PostgreSQL. La
+ * vente verrouille le registre de son magasin puis la ligne de son auteur ;
+ * l'acceptation verrouille les registres de tous les magasins puis les
+ * comptes (voir JournalDesDroits) : l'une passe avant l'autre, jamais
+ * pendant. Soit le
  * ticket passe avant, signé par un administrateur ; soit il est refusé
  * après, son auteur relu sous verrou étant devenu propriétaire. Jamais un
  * enregistrement de vente au nom d'un propriétaire.
@@ -52,13 +52,14 @@ class ProprietaireSansVenteConcurrenceTest extends TestCase
         $this->exigerUnServeurDeBaseDeDonnees();
 
         [$transmisAvant, $administrateurAvant, $produitAvant] = $this->magasinDUnAdministrateurQuiVend('Transmis avant');
+        $jeton = $this->demanderLaTransmission($this->proprietaireDe(Magasin::query()->findOrFail($transmisAvant)), User::query()->findOrFail($administrateurAvant), self::MOT_DE_PASSE_DU_PROPRIETAIRE);
         $concurrente = null;
         $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($transmisAvant, $administrateurAvant, $produitAvant): void {
             app(TenantContext::class)->set(Magasin::query()->findOrFail($transmisAvant));
             self::vendreAuComptant(User::query()->findOrFail($administrateurAvant), Client::factory()->create(), [['produit_id' => $produitAvant, 'quantite' => 1]], ModePaiement::Especes);
         }, $concurrente);
 
-        app(TransfererProprieteAction::class)->handle($this->proprietaireDe(Magasin::query()->findOrFail($transmisAvant)), User::query()->findOrFail($administrateurAvant), self::MOT_DE_PASSE_DU_PROPRIETAIRE);
+        app(AccepterLaTransmissionDeLaProprieteAction::class)->handle(User::query()->findOrFail($administrateurAvant), $jeton, self::MOT_DE_PASSE_CHOISI);
 
         $this->assertInstanceOf(InvokedProcess::class, $concurrente);
         $refus = $concurrente->wait();
@@ -68,10 +69,10 @@ class ProprietaireSansVenteConcurrenceTest extends TestCase
         $this->assertSame(0, Facture::withoutGlobalScope(MagasinScope::class)->where('magasin_id', $transmisAvant)->count());
 
         [$venduAvant, $administrateurApres, $produitApres] = $this->magasinDUnAdministrateurQuiVend('Vendu avant');
-        $proprietaireId = $this->proprietaireDe(Magasin::query()->findOrFail($venduAvant))->id;
+        $jetonApres = $this->demanderLaTransmission($this->proprietaireDe(Magasin::query()->findOrFail($venduAvant)), User::query()->findOrFail($administrateurApres), self::MOT_DE_PASSE_DU_PROPRIETAIRE);
         $transmission = null;
-        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($proprietaireId, $administrateurApres): void {
-            app(TransfererProprieteAction::class)->handle(User::query()->findOrFail($proprietaireId), User::query()->findOrFail($administrateurApres), self::MOT_DE_PASSE_DU_PROPRIETAIRE);
+        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($administrateurApres, $jetonApres): void {
+            app(AccepterLaTransmissionDeLaProprieteAction::class)->handle(User::query()->findOrFail($administrateurApres), $jetonApres, self::MOT_DE_PASSE_CHOISI);
         }, $transmission);
         app(TenantContext::class)->set(Magasin::query()->findOrFail($venduAvant));
 
@@ -90,16 +91,17 @@ class ProprietaireSansVenteConcurrenceTest extends TestCase
     /**
      * Une société validée, son magasin de ce nom et un administrateur de
      * tous ses magasins, à qui le propriétaire a coché toutes les
-     * autorisations, vente comprise, et dont la qualité de représentant est
-     * prouvée ; un produit de 12,00 € sans suivi de stock. Leurs
-     * identifiants, pour l'autre processus.
+     * autorisations, vente comprise, qui remplit les conditions de la
+     * transmission de la propriété (voir administrateurPretAReprendre()) ;
+     * un produit de 12,00 € sans suivi de stock. Leurs identifiants, pour
+     * l'autre processus.
      *
      * @return array{0: int, 1: int, 2: int}
      */
     private function magasinDUnAdministrateurQuiVend(string $nom): array
     {
         $magasin = $this->ouvrirUneSociete(['nom' => $nom]);
-        $administrateur = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $administrateur = $this->administrateurPretAReprendre($magasin, "repreneur-{$magasin->id}@example.test", PermissionRegistry::toutes());
         $produit = app(TenantContext::class)->runAs($magasin, fn (): int => Produit::factory()->create(['prix_vente_ttc' => 12, 'taux_tva' => 20, 'suivi_stock' => false])->id);
 
         return [(int) $magasin->id, (int) $administrateur->id, $produit];

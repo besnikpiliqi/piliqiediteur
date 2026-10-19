@@ -178,7 +178,7 @@ class VenteSansStockTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, $cases);
         $cable = $this->produit('Câble USB', 1);
         $confirmation = ConfirmationVenteSansStock::de($this->avertissementDe(fn () => $this->vendre($vendeur, $cable, 3))->manques);
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => RoleMagasin::Vendeur->permissionsParDefaut()]]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, RoleMagasin::Vendeur->permissionsParDefaut());
         app(TenantContext::class)->set($magasin->fresh());
 
         $this->assertThrows(fn () => $this->vendre($vendeur, $cable, 3, $confirmation), StockInsuffisantException::class, 'Stock insuffisant : Câble USB, reste 1, demandé 3.');
@@ -269,7 +269,7 @@ class VenteSansStockTest extends TestCase
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $cable = $this->produit('Câble USB', 0);
         $this->assertThrows(fn () => $this->vendre($vendeur, $cable, 1), StockInsuffisantException::class);
-        app(ModifierMembreAction::class)->handle($responsable, $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::STOCK_VENDRE_SANS_STOCK]]]);
+        app(ModifierMembreAction::class)->handle($responsable, $vendeur, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::STOCK_VENDRE_SANS_STOCK]);
         app(TenantContext::class)->set($magasin->fresh());
 
         $avertissement = $this->avertissementDe(fn () => $this->vendre($vendeur, $cable, 1));

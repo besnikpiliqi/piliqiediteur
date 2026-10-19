@@ -145,7 +145,7 @@ class TableauDeBord extends Dashboard
                 'titre' => self::ETAPE_DEMONSTRATION,
                 'faite' => $demonstration !== null || $societe->estValidee(),
                 'etat' => match (true) {
-                    $demonstration?->statut === StatutMagasin::Actif => 'Ouvert : votre équipe s\'y entraîne à vendre, encaisser et clôturer ; pour essayer la caisse, créez-y un compte de responsable ou de vendeur.',
+                    $demonstration?->statut === StatutMagasin::Actif => 'Ouvert : votre équipe s\'y entraîne à vendre, encaisser et clôturer ; pour essayer la caisse, créez-y des comptes d\'entraînement : ils ne servent qu\'ici et sont retirés à la validation de votre société.',
                     $demonstration !== null => 'Terminé.',
                     $societe->estValidee() => 'Plus disponible : votre société est validée.',
                     default => 'Un magasin d\'entraînement, sans valeur, à essayer avant la validation.',
@@ -221,7 +221,7 @@ class TableauDeBord extends Dashboard
             ->icon('heroicon-o-academic-cap')
             ->visible(fn (): bool => (auth()->user()?->can('ouvrirLaDemonstration', $this->societe()) ?? false) && $this->demonstration()?->statut !== StatutMagasin::Actif)
             ->requiresConfirmation()
-            ->modalDescription('Un magasin d\'entraînement, avec un catalogue fictif : votre équipe y vend, encaisse et clôture comme pour de vrai ; vous-même ne vendez pas : pour essayer la caisse, créez-y un compte de responsable ou de vendeur. Ses documents sont marqués « Démonstration — sans valeur », il n\'écrit à aucun client et ne transmet rien. Il se ferme à la validation de votre société, et rien n\'en passe à vos magasins réels.')
+            ->modalDescription('Un magasin d\'entraînement, avec un catalogue fictif : votre équipe y vend, encaisse et clôture comme pour de vrai ; vous-même ne vendez pas : pour essayer la caisse, créez-y des comptes d\'entraînement : ils ne servent qu\'ici et sont retirés à la validation de votre société. Ses documents sont marqués « Démonstration — sans valeur », il n\'écrit à aucun client et ne transmet rien. Il se ferme à la validation de votre société, et rien n\'en passe à vos magasins réels.')
             ->action(function () {
                 $demonstration = null;
                 static::executerSansCasser(function () use (&$demonstration): void {

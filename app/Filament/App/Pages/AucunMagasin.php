@@ -9,19 +9,16 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\Route;
 
 /**
- * La page du panneau des magasins pour un compte qui n'a encore aucun
- * magasin à ouvrir et n'administre pas sa société (voir
- * MenerUnCompteSansMagasin) : elle le lui dit, sans erreur, et lui laisse
- * se déconnecter. Un expert-comptable apprend que sa société n'a encore
- * aucun magasin réel ; un membre, que personne ne lui a encore ouvert de
- * magasin. Un compte qui a un magasin, ou qui administre sa société, n'y
- * reste pas : il va à l'accueil du panneau.
+ * La page du panneau des magasins pour un expert-comptable d'une société
+ * qui n'a encore aucun magasin réel (voir MenerUnCompteSansMagasin) : elle
+ * le lui dit, sans erreur, et lui laisse se déconnecter. Un compte de
+ * membre a toujours son magasin (retiré de son magasin, il est retiré de
+ * la société et ne se connecte plus). Un compte qui a un magasin, ou qui
+ * administre sa société, n'y reste pas : il va à l'accueil du panneau.
  */
 class AucunMagasin extends SimplePage
 {
     public const MESSAGE_EXPERT_COMPTABLE = 'Votre société n\'a encore aucun magasin : vous consulterez chacun d\'eux dès que le propriétaire l\'aura créé.';
-
-    public const MESSAGE_MEMBRE = 'Vous n\'avez accès à aucun magasin de votre société pour le moment : le propriétaire de votre société ou le responsable de votre magasin vous y donnera accès.';
 
     protected static string $view = 'filament.app.pages.aucun-magasin';
 
@@ -51,7 +48,7 @@ class AucunMagasin extends SimplePage
 
     public function getSubheading(): string|Htmlable|null
     {
-        return $this->compte()->estExpertComptable() ? self::MESSAGE_EXPERT_COMPTABLE : self::MESSAGE_MEMBRE;
+        return self::MESSAGE_EXPERT_COMPTABLE;
     }
 
     private function compte(): User

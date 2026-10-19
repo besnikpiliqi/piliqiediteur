@@ -284,7 +284,7 @@ class EmettreFactureAction
 
     /**
      * Un brouillon créé par un administrateur à qui la propriété de la
-     * société a été transmise depuis (voir TransfererProprieteAction)
+     * société a été transmise depuis (voir AccepterLaTransmissionDeLaProprieteAction)
      * devient la vente de qui l'émet : le propriétaire ne vend jamais et
      * n'a pas de caisse personnelle, et une vente est celle d'une personne
      * autorisée à vendre dans ce magasin à ce moment, ici la seule de la

@@ -184,7 +184,7 @@ class ActionsForgeesTest extends TestCase
                 $this->dansLeMagasin($magasin, $vendeur);
                 Livewire::test(ListEquipeDuMagasin::class)->assertForbidden();
 
-                return fn (): bool => User::query()->where('email', 'paul@example.test')->doesntExist();
+                return fn (): bool => User::query()->where('name', 'Paul')->doesntExist();
             })(),
             'nommer un responsable' => (function () use ($magasin, $societe): Closure {
                 $administrateur = $this->administrateur($magasin);
@@ -197,7 +197,7 @@ class ActionsForgeesTest extends TestCase
             'créer l\'expert-comptable' => (function () use ($magasin, $societe): Closure {
                 $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
                 $this->dansLEspaceDeLaSociete($societe, $administrateur);
-                $this->forgerLAction(Livewire::test(ListMembres::class)->assertActionHidden('creerUnExpertComptable'), 'creerUnExpertComptable', ['name' => 'Cabinet', 'email' => 'cabinet@example.test', 'mot_de_passe_provisoire' => self::MOT_DE_PASSE_PROVISOIRE]);
+                $this->forgerLAction(Livewire::test(ListMembres::class)->assertActionHidden('creerUnExpertComptable'), 'creerUnExpertComptable', ['name' => 'Cabinet']);
 
                 return fn (): bool => User::query()->where('role_societe', RoleSociete::ExpertComptable->value)->doesntExist();
             })(),

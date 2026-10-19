@@ -38,8 +38,8 @@ use App\Models\User;
  * ChoisirEtablissementPrincipalAction,
  * ModifierIdentiteSocieteAction, ModifierParametresFiscauxSocieteAction,
  * CorrigerSirenAvantValidationAction, les actions de la vérification,
- * OuvrirLaDemonstrationAction et TransfererProprieteAction), en plus des
- * écrans.
+ * OuvrirLaDemonstrationAction et
+ * DemanderLaTransmissionDeLaProprieteAction), en plus des écrans.
  */
 class SocietePolicy
 {

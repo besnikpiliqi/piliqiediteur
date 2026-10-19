@@ -28,7 +28,6 @@ use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
-use App\Domain\Tenancy\Actions\RefuserSonCompteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -424,10 +423,8 @@ class EnvoyerDocumentJobTest extends TestCase
     public static function droitsPerdusAvantLeDepart(): array
     {
         return array_combine($cas = [
-            'retiré du magasin',
             'suspendu',
             'retiré de la société',
-            'refusé',
             'privé de l\'autorisation d\'envoyer',
             'facture devenue invisible pour lui',
         ], array_map(static fn (string $nom): array => [$nom], $cas));
@@ -445,21 +442,17 @@ class EnvoyerDocumentJobTest extends TestCase
         Mail::fake();
         Queue::fake([EnvoyerDocumentJob::class]);
         $magasin = $this->magasinAvecProprietaire('Ma Boutique');
-        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Autre Boutique']);
-        app(TenantContext::class)->set($magasin);
         $proprietaire = $this->proprietaireDe($magasin);
         $cases = [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::FACTURE_VIEW_TOUTES];
-        $vendeur = $this->membreDeCesMagasins([$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => $cases], $autre->id => ['role' => RoleMagasin::Vendeur]], $magasin);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, $cases);
         $facture = $this->emettreFacture(Client::factory()->create());
         $envoi = app(EnvoyerDocumentAction::class)->handle($vendeur, $facture, 'client@exemple.fr', null);
 
         match ($cas) {
-            'retiré du magasin' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, [$magasin->id => null]),
             'suspendu' => app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $vendeur),
             'retiré de la société' => app(ChangerStatutCompteAction::class)->retirer($proprietaire, $vendeur),
-            'refusé' => app(RefuserSonCompteAction::class)->handle($vendeur),
-            'privé de l\'autorisation d\'envoyer' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => array_values(array_diff($cases, [PermissionRegistry::FACTURE_ENVOYER]))]]),
-            'facture devenue invisible pour lui' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => RoleMagasin::Vendeur->permissionsParDefaut()]]),
+            'privé de l\'autorisation d\'envoyer' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, array_values(array_diff($cases, [PermissionRegistry::FACTURE_ENVOYER]))),
+            'facture devenue invisible pour lui' => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Vendeur, RoleMagasin::Vendeur->permissionsParDefaut()),
         };
 
         (new EnvoyerDocumentJob($magasin->id, $envoi->id))->handle();

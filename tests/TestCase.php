@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
@@ -18,18 +19,20 @@ use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\PartDeReglement;
 use App\Domain\Facturation\Services\ReglementComptant;
 use App\Domain\Stock\Services\ConfirmationVenteSansStock;
-use App\Domain\Tenancy\Actions\ChangerSonMotDePasseProvisoireAction;
+use App\Domain\Tenancy\Actions\ChangerSonMotDePasseAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
+use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\DemarrerVerificationIdentiteAction;
 use App\Domain\Tenancy\Actions\RecevoirResultatIdentiteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\FormeJuridique;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeVerification;
+use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -58,8 +61,10 @@ use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
+use Illuminate\Support\Testing\Fakes\MailFake;
 use Illuminate\Testing\TestResponse;
 use Laravel\SerializableClosure\SerializableClosure;
 use Livewire\Features\SupportTesting\Testable;
@@ -309,27 +314,40 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
-     * Le mot de passe provisoire que les aides donnent aux comptes qu'elles
-     * créent, et celui que la personne choisit ensuite.
+     * Le mot de passe que la personne choisit elle-même, après son
+     * identifiant : il suit la règle du mot de passe choisi (voir
+     * RegleDuMotDePasse).
      */
-    protected const MOT_DE_PASSE_PROVISOIRE = 'provisoire-des-tests';
-
     protected const MOT_DE_PASSE_CHOISI = 'mot-de-passe-sur';
 
     /**
      * Un nouveau membre du magasin, comme dans le vrai parcours : créé par
-     * le propriétaire (voir CreerMembreAction), avec les autorisations
-     * données ou, sans liste, celles du modèle de son rôle (aucune pour un
-     * responsable, qui n'a pas de case), puis la personne choisit son mot
-     * de passe (voir ChangerSonMotDePasseProvisoireAction) ; son adresse
-     * n'est pas confirmée. Le magasin reste ensuite le magasin actif.
+     * le propriétaire pour ce seul magasin (voir CreerMembreAction), avec
+     * les autorisations données ou, sans liste, celles du modèle de son
+     * rôle (aucune pour un responsable, qui n'a pas de case), puis la
+     * personne choisit son mot de passe dans son profil (voir
+     * ChangerSonMotDePasseAction) ; une adresse donnée, elle la renseigne
+     * elle-même dans son profil (voir renseignerSonAdresse()). Le magasin
+     * reste ensuite le magasin actif.
      *
      * @param  list<string>|null  $autorisations
      * @param  array{name?: string, email?: string}  $identite
      */
     protected function membre(Magasin $magasin, RoleMagasin $role, ?array $autorisations = null, array $identite = []): User
     {
-        return $this->membreDeCesMagasins([$magasin->getKey() => ['role' => $role, 'autorisations' => $autorisations]], $magasin, $identite);
+        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle(
+            $this->proprietaireDe($magasin),
+            $magasin,
+            ['name' => $identite['name'] ?? fake()->name()],
+            $role,
+            $autorisations,
+        ));
+
+        if (isset($identite['email'])) {
+            $this->renseignerSonAdresse($compte, $identite['email']);
+        }
+
+        return $this->choisirSonMotDePasse($compte);
     }
 
     /**
@@ -391,32 +409,12 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
-     * Un responsable de ces magasins de la société, créé par le
-     * propriétaire, son mot de passe choisi.
+     * Un responsable de ce magasin, créé par le propriétaire pour ce seul
+     * magasin, son mot de passe choisi.
      */
-    protected function responsable(Magasin ...$magasins): User
+    protected function responsable(Magasin $magasin): User
     {
-        return $this->membreDeCesMagasins(
-            collect($magasins)->mapWithKeys(fn (Magasin $magasin): array => [$magasin->getKey() => ['role' => RoleMagasin::Responsable]])->all(),
-            $magasins[0],
-        );
-    }
-
-    /**
-     * Un membre affecté par le propriétaire à ces magasins, son mot de
-     * passe choisi.
-     *
-     * @param  array<int, array{role: RoleMagasin, autorisations?: list<string>|null}>  $affectations  par identifiant de magasin
-     * @param  array{name?: string, email?: string}  $identite
-     */
-    protected function membreDeCesMagasins(array $affectations, Magasin $magasin, array $identite = []): User
-    {
-        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe()->firstOrFail(), [
-            'name' => $identite['name'] ?? fake()->name(),
-            'email' => $identite['email'] ?? fake()->unique()->safeEmail(),
-        ], self::MOT_DE_PASSE_PROVISOIRE, $affectations));
-
-        return $this->choisirSonMotDePasse($compte);
+        return $this->membre($magasin, RoleMagasin::Responsable);
     }
 
     /**
@@ -432,10 +430,14 @@ abstract class TestCase extends BaseTestCase
      */
     protected function administrateur(Magasin $magasin, ?array $selection = null, array $autorisationsSociete = [], ?array $autorisationsMagasin = null): User
     {
-        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerAdministrateurAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe()->firstOrFail(), [
-            'name' => fake()->name(),
-            'email' => fake()->unique()->safeEmail(),
-        ], self::MOT_DE_PASSE_PROVISOIRE, $selection, $autorisationsMagasin ?? PermissionRegistry::modeleDeLAdministrateur(), $autorisationsSociete));
+        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerAdministrateurAction::class)->handle(
+            $this->proprietaireDe($magasin),
+            $magasin->societe()->firstOrFail(),
+            ['name' => fake()->name()],
+            $selection,
+            $autorisationsMagasin ?? PermissionRegistry::modeleDeLAdministrateur(),
+            $autorisationsSociete,
+        ));
 
         return $this->choisirSonMotDePasse($compte);
     }
@@ -447,39 +449,96 @@ abstract class TestCase extends BaseTestCase
      */
     protected function expertComptable(Magasin $magasin): User
     {
-        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerExpertComptableAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe()->firstOrFail(), [
-            'name' => fake()->name(),
-            'email' => fake()->unique()->safeEmail(),
-        ], self::MOT_DE_PASSE_PROVISOIRE));
+        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerExpertComptableAction::class)->handle(
+            $this->proprietaireDe($magasin),
+            $magasin->societe()->firstOrFail(),
+            ['name' => fake()->name()],
+        ));
 
         return $this->choisirSonMotDePasse($compte);
     }
 
     /**
-     * Un membre du magasin créé par le propriétaire, qui n'a pas encore
-     * choisi son mot de passe : le compte et son mot de passe provisoire.
+     * Un membre du magasin créé par le propriétaire, dont le mot de passe
+     * est encore son identifiant : le compte et son identifiant.
      *
      * @return array{0: User, 1: string}
      */
-    protected function compteAuMotDePasseProvisoire(Magasin $magasin, RoleMagasin $role): array
+    protected function compteAuMotDePasseIdentifiant(Magasin $magasin, RoleMagasin $role): array
     {
-        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe()->firstOrFail(), [
-            'name' => fake()->name(),
-            'email' => fake()->unique()->safeEmail(),
-        ], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->getKey() => ['role' => $role]]));
+        $compte = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerMembreAction::class)->handle(
+            $this->proprietaireDe($magasin),
+            $magasin,
+            ['name' => fake()->name()],
+            $role,
+        ));
 
-        return [$compte, self::MOT_DE_PASSE_PROVISOIRE];
+        return [$compte, (string) $compte->identifiantDeConnexion()];
     }
 
     /**
-     * La personne remplace son mot de passe provisoire par le sien, comme à
-     * sa première connexion ; le magasin actif reste le même.
+     * La personne choisit son mot de passe dans son profil, à la place de
+     * son identifiant ; le magasin actif reste le même.
      */
     protected function choisirSonMotDePasse(User $compte): User
     {
-        app(ChangerSonMotDePasseProvisoireAction::class)->handle($compte, self::MOT_DE_PASSE_CHOISI);
+        app(ChangerSonMotDePasseAction::class)->handle($compte, self::MOT_DE_PASSE_CHOISI);
 
         return $compte->refresh();
+    }
+
+    /**
+     * La personne renseigne elle-même son adresse de contact, comme dans
+     * son profil (voir ModifierProfil::save()) : le seul chemin qui écrit
+     * l'adresse d'un compte qui n'est pas propriétaire.
+     */
+    protected function renseignerSonAdresse(User $compte, string $adresse): User
+    {
+        $compte->forceFill(['email' => User::normaliserEmail($adresse)])->save();
+
+        return $compte->refresh();
+    }
+
+    /**
+     * Le propriétaire demande la transmission de la propriété à cet
+     * administrateur (voir DemanderLaTransmissionDeLaProprieteAction) : le
+     * jeton du lien parti à l'adresse de l'administrateur, lu dans le
+     * courriel retenu par la fausse messagerie.
+     */
+    protected function demanderLaTransmission(User $proprietaire, User $administrateur, string $motDePasse = 'password'): string
+    {
+        if (! Mail::getFacadeRoot() instanceof MailFake) {
+            Mail::fake();
+        }
+
+        app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $administrateur, $motDePasse);
+
+        return $this->jetonDuDernierLienDeTransmission();
+    }
+
+    /**
+     * Le jeton du dernier lien de transmission de la propriété envoyé.
+     */
+    protected function jetonDuDernierLienDeTransmission(): string
+    {
+        $lien = (string) Mail::sent(TransmissionDeLaProprieteMail::class)->last()?->lien;
+
+        return Str::afterLast($lien, '/');
+    }
+
+    /**
+     * Un administrateur de tous les magasins qui remplit les conditions de
+     * la transmission de la propriété : sa qualité de représentant prouvée
+     * à son nom, son mot de passe choisi, son adresse renseignée par lui.
+     *
+     * @param  list<string>|null  $autorisationsMagasin
+     */
+    protected function administrateurPretAReprendre(Magasin $magasin, string $adresse = 'repreneur@example.test', ?array $autorisationsMagasin = null): User
+    {
+        $administrateur = $this->renseignerSonAdresse($this->administrateur($magasin, null, AutorisationsSociete::toutes(), $autorisationsMagasin), $adresse);
+        $administrateur->forceFill(['qualite_verifiee_le' => now()])->save();
+
+        return $administrateur->refresh();
     }
 
     /**
@@ -1004,7 +1063,9 @@ abstract class TestCase extends BaseTestCase
      * que des valeurs simples (des identifiants). Quand le test a figé son
      * heure, l'autre processus se fige au même instant : sinon il lirait
      * l'heure réelle, et ce qu'il fait tomberait un autre jour que ce que
-     * fait le test.
+     * fait le test. Il reprend aussi le préfixe du cache du test, propre à
+     * son processus de test parallèle : un cache en base est le même pour
+     * les deux.
      */
     protected function demarrerUnProcessusConcurrent(Closure $operation): InvokedProcess
     {
@@ -1012,6 +1073,7 @@ abstract class TestCase extends BaseTestCase
             'base' => DB::connection()->getDatabaseName(),
             'caisse_securisee' => config('caisse_securisee'),
             'journal_audit' => config('journal_audit'),
+            'prefixe_du_cache' => config('cache.prefix'),
             'maintenant' => Carbon::getTestNow()?->format('Y-m-d\TH:i:s.uP'),
             'operation' => new SerializableClosure($operation),
         ]);

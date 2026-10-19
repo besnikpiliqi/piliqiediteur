@@ -5,18 +5,18 @@ namespace Tests\Feature\Societe;
 use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
+use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
+use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
-use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
-use App\Domain\Tenancy\Actions\TransfererProprieteAction;
+use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Affectation;
@@ -272,7 +272,7 @@ class PanneauSocieteTest extends TestCase
         app(TenantContext::class)->clear();
         $this->assertThrows(fn () => app(CreerEtablissementAction::class)->handle($proprietaire, $societe, ['nom' => 'Lyon 2', 'nic' => MagasinFactory::nicLibre($societe)]), LogicException::class, CreerEtablissementAction::MESSAGE_SANS_AUTORISATION);
         $this->assertThrows(fn () => app(ModifierIdentiteSocieteAction::class)->handle($proprietaire, $societe, ['capital_social' => '5000']), LogicException::class, ModifierIdentiteSocieteAction::MESSAGE_SANS_AUTORISATION);
-        $compte = app(CreerMembreAction::class)->handle($proprietaire, $societe, ['name' => 'Paul', 'email' => 'paul@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
+        $compte = app(CreerMembreAction::class)->handle($proprietaire, $magasin, ['name' => 'Paul'], RoleMagasin::Vendeur);
 
         $this->assertSame($magasins, Magasin::query()->where('societe_id', $societe->id)->count());
         $this->assertTrue($compte->exists);
@@ -282,8 +282,9 @@ class PanneauSocieteTest extends TestCase
      * Une société révoquée (un usurpateur) garde son espace et son équipe
      * consultables, mais plus rien ne s'y gère, ni par l'écran ni par les
      * actions : aucun compte créé, suspendu, nommé, réintégré (comme
-     * membre ou comme expert-comptable) ou proposé, aucun administrateur ni
-     * expert-comptable, aucune propriété transmise.
+     * membre ou comme expert-comptable), changé de rôle ou dont l'accès est
+     * redonné, aucun administrateur ni expert-comptable, aucune
+     * transmission de la propriété demandée.
      */
     public function test_une_societe_revoquee_ne_gere_plus_son_equipe(): void
     {
@@ -293,7 +294,7 @@ class PanneauSocieteTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $responsable = $this->responsable($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
-        $administrateur = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $administrateur = $this->administrateurPretAReprendre($magasin);
         $vendeurRetire = $this->membre($magasin, RoleMagasin::Vendeur);
         $expertRetire = $this->expertComptable($magasin);
         app(ChangerStatutCompteAction::class)->retirer($proprietaire, $vendeurRetire);
@@ -304,16 +305,17 @@ class PanneauSocieteTest extends TestCase
         $affectations = Affectation::query()->where('societe_id', $societe->id)->count();
 
         $gestes = [
-            fn () => app(CreerMembreAction::class)->handle($proprietaire, $societe, ['name' => 'Paul', 'email' => 'paul@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Vendeur]]),
-            fn () => app(CreerMembreAction::class)->handle($responsable, $societe, ['name' => 'Jean', 'email' => 'jean@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Vendeur]]),
+            fn () => app(CreerMembreAction::class)->handle($proprietaire, $magasin, ['name' => 'Paul'], RoleMagasin::Vendeur),
+            fn () => app(CreerMembreAction::class)->handle($responsable, $magasin, ['name' => 'Jean'], RoleMagasin::Vendeur),
             fn () => app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $vendeur),
-            fn () => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, [$magasin->id => ['role' => RoleMagasin::Responsable]]),
-            fn () => app(ChangerStatutCompteAction::class)->reintegrer($proprietaire, $vendeurRetire, [$magasin->id => ['role' => RoleMagasin::Vendeur]]),
-            fn () => app(ChangerStatutCompteAction::class)->reintegrerCommeExpertComptable($proprietaire, $expertRetire),
-            fn () => app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice', 'email' => 'alice@example.test'], self::MOT_DE_PASSE_PROVISOIRE, null, [], []),
-            fn () => app(CreerExpertComptableAction::class)->handle($proprietaire, $societe, ['name' => 'Émile', 'email' => 'emile@example.test'], self::MOT_DE_PASSE_PROVISOIRE),
-            fn () => app(ProposerUnRattachementAction::class)->handle($proprietaire, $societe, 'quelquun@example.test', RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur]]),
-            fn () => app(TransfererProprieteAction::class)->handle($proprietaire, $administrateur, 'password'),
+            fn () => app(ModifierMembreAction::class)->handle($proprietaire, $vendeur, RoleMagasin::Responsable),
+            fn () => app(ChangerStatutCompteAction::class)->reintegrer($proprietaire, $vendeurRetire, RoleMagasin::Vendeur),
+            fn () => app(ChangerStatutCompteAction::class)->reintegrerLExpertComptable($proprietaire, $expertRetire),
+            fn () => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($proprietaire, $vendeur, null, [], []),
+            fn () => app(RedonnerLAccesAction::class)->handle($proprietaire, $vendeur, false),
+            fn () => app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice'], null, [], []),
+            fn () => app(CreerExpertComptableAction::class)->handle($proprietaire, $societe, ['name' => 'Émile']),
+            fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $administrateur, 'password'),
         ];
         foreach ($gestes as $geste) {
             $this->assertThrows($geste, AuthorizationException::class);
@@ -322,12 +324,12 @@ class PanneauSocieteTest extends TestCase
         $this->assertSame($avant, User::query()->where('societe_id', $societe->id)->orderBy('id')->get(['id', 'role_societe', 'statut'])->toArray());
         $this->assertSame($affectations, Affectation::query()->where('societe_id', $societe->id)->count());
         $this->dansLeMagasin($magasin, $responsable);
-        Livewire::test(ListEquipeDuMagasin::class)->assertActionHidden('proposerUnRattachement');
+        Livewire::test(ListEquipeDuMagasin::class)->assertActionHidden('creerUnCompte');
         $this->dansLEspaceDeLaSociete($societe, $proprietaire);
         Livewire::test(ListMembres::class)
             ->assertCanSeeTableRecords([$vendeur])
             ->assertActionHidden('creerUnMembre')
-            ->assertActionHidden('proposerUnRattachement');
+            ->assertActionHidden('creerUnAdministrateur');
         Livewire::test(FicheDuMembre::class, ['record' => $administrateur->getRouteKey()])->assertActionHidden('transmettreLaPropriete');
         Mail::assertNothingOutgoing();
     }
@@ -396,7 +398,7 @@ class PanneauSocieteTest extends TestCase
     {
         $societe = $this->inscrireUneSociete();
         $proprietaire = $societe->proprietaire()->firstOrFail();
-        $administrateur = $this->choisirSonMotDePasse(app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice Martin', 'email' => 'alice@example.test'], self::MOT_DE_PASSE_PROVISOIRE, null, PermissionRegistry::modeleDeLAdministrateur(), []));
+        $administrateur = $this->choisirSonMotDePasse(app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice Martin'], null, PermissionRegistry::modeleDeLAdministrateur(), []));
         $etapes = function (User $compte) use ($societe): array {
             $this->dansLEspaceDeLaSociete($societe->fresh(), $compte);
 

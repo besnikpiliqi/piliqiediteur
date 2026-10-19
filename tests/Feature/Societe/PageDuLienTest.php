@@ -2,11 +2,9 @@
 
 namespace Tests\Feature\Societe;
 
-use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ChoisirSonMotDePasseParLeLienAction;
-use App\Domain\Tenancy\Actions\RefuserSonCompteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\StatutCompte;
+use App\Domain\Tenancy\Support\RegleDuMotDePasse;
 use App\Filament\App\Pages\Auth\PageDuLien;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -14,15 +12,15 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Livewire\Livewire;
-use LogicException;
 use Tests\TestCase;
 
 /**
- * La page d'un lien envoyé à l'adresse d'un compte (voir PageDuLien) :
- * elle n'ouvre aucune session, ne lève jamais une suspension, ne laisse
- * pas un compte suspendu choisir son mot de passe, répond pareil à un lien
- * faux quel que soit le compte, ne sert qu'une fois et seulement au compte
- * du lien, et chaque décision qu'on y prend ferme les sessions du compte.
+ * La page du lien « Mot de passe oublié », envoyé au seul propriétaire à
+ * son adresse de connexion (voir PageDuLien) : elle n'ouvre aucune
+ * session, répond pareil à un lien faux quelle que soit l'adresse, ne sert
+ * qu'une fois et seulement au propriétaire du lien, applique la règle du
+ * mot de passe choisi, et le mot de passe choisi ferme toutes les sessions
+ * du compte.
  */
 class PageDuLienTest extends TestCase
 {
@@ -36,152 +34,122 @@ class PageDuLienTest extends TestCase
     }
 
     /**
-     * La page ne connecte personne ; à un compte suspendu, elle ne propose
-     * pas de choisir un mot de passe, et une requête forgée n'en enregistre
-     * aucun : un refus rend désormais le mot de passe inutilisable, mais un
-     * compte suspendu ne choisit pas le sien.
+     * Le propriétaire choisit son mot de passe sur la page du lien sans
+     * qu'aucune session ne s'ouvre : il est mené à la connexion, et le lien
+     * suivi confirme son adresse.
      */
-    public function test_la_page_de_lien_n_ouvre_aucune_session_et_ne_laisse_pas_un_compte_suspendu_choisir_son_mot_de_passe(): void
+    public function test_la_page_de_lien_n_ouvre_aucune_session(): void
     {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $compte = $this->membre($magasin, RoleMagasin::Vendeur);
-        app(ChangerStatutCompteAction::class)->suspendre($this->proprietaireDe($magasin), $compte);
-        $empreinte = $compte->refresh()->password;
-        $jeton = Password::broker()->createToken($compte);
+        $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
+        $proprietaire->forceFill(['email_verified_at' => null])->save();
+        $jeton = Password::broker()->createToken($proprietaire);
 
-        $this->get(Filament::getPanel('app')->getResetPasswordUrl($jeton, $compte))->assertOk();
-        Livewire::test(PageDuLien::class, ['email' => $compte->email, 'token' => $jeton])
-            ->assertFormFieldIsHidden('password')
-            ->assertActionHidden('choisir')
-            ->set('data.password', 'mot-de-passe-force-1')
-            ->set('data.passwordConfirmation', 'mot-de-passe-force-1')
-            ->call('choisir');
+        $this->get(Filament::getPanel('app')->getResetPasswordUrl($jeton, $proprietaire))->assertOk()->assertSee('Choisissez votre nouveau mot de passe.');
+        Livewire::test(PageDuLien::class, ['email' => $proprietaire->email, 'token' => $jeton])
+            ->fillForm(['password' => 'mon-nouveau-mot-de-passe', 'passwordConfirmation' => 'mon-nouveau-mot-de-passe'])
+            ->call('choisir')
+            ->assertHasNoFormErrors()
+            ->assertRedirect(Filament::getLoginUrl());
 
         $this->assertGuest();
-        $this->assertSame([$empreinte, StatutCompte::Suspendu], [$compte->refresh()->password, $compte->statut]);
-        $this->assertTrue(Password::broker()->tokenExists($compte, $jeton));
+        $proprietaire->refresh();
+        $this->assertTrue(Hash::check('mon-nouveau-mot-de-passe', $proprietaire->password));
+        $this->assertNotNull($proprietaire->email_verified_at);
+        $this->assertFalse(Password::broker()->tokenExists($proprietaire, $jeton));
     }
 
     /**
-     * Choisir son mot de passe sur la page du lien ne lève jamais une
-     * suspension : ni par la page, ni par l'action.
-     */
-    public function test_accepter_sur_la_page_de_lien_ne_leve_jamais_une_suspension(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        [$compte] = $this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur);
-        app(ChangerStatutCompteAction::class)->suspendre($this->proprietaireDe($magasin), $compte);
-        $jeton = Password::broker()->createToken($compte);
-
-        $this->assertThrows(fn () => app(ChoisirSonMotDePasseParLeLienAction::class)->handle($compte, $jeton, self::MOT_DE_PASSE_CHOISI), LogicException::class, ChoisirSonMotDePasseParLeLienAction::MESSAGE_SUSPENDU);
-
-        $this->assertSame([StatutCompte::Suspendu, true], [$compte->refresh()->statut, $compte->doitChangerSonMotDePasse()]);
-        $this->assertFalse($compte->peutAgir());
-    }
-
-    /**
-     * Un lien faux, expiré ou déjà servi reçoit la même réponse, que
-     * l'adresse soit celle d'un compte actif, suspendu, retiré, ou d'aucun
+     * Un lien faux reçoit la même réponse, que l'adresse soit celle d'un
+     * propriétaire, l'adresse de contact d'un autre compte, ou d'aucun
      * compte : la page ne révèle rien.
      */
     public function test_la_page_de_lien_repond_pareil_quel_que_soit_l_etat_du_compte(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $actif = $this->membre($magasin, RoleMagasin::Vendeur);
-        $suspendu = $this->membre($magasin, RoleMagasin::Vendeur);
-        $retire = $this->membre($magasin, RoleMagasin::Vendeur);
-        app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $suspendu);
-        app(ChangerStatutCompteAction::class)->retirer($proprietaire, $retire);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['email' => 'vendeur@example.test']);
+        $jetonDuVendeur = Password::broker()->createToken($proprietaire);
 
         $reponses = [];
-        foreach ([$actif->email, $suspendu->email, $retire->email, 'personne@example.test'] as $email) {
-            $page = Livewire::test(PageDuLien::class, ['email' => $email, 'token' => 'jeton-faux'])
-                ->assertSee(RefuserSonCompteAction::MESSAGE_LIEN_INVALIDE)
+        foreach ([[$proprietaire->email, 'jeton-faux'], [$vendeur->email, 'jeton-faux'], [$vendeur->email, $jetonDuVendeur], ['personne@example.test', 'jeton-faux']] as [$adresse, $jeton]) {
+            $page = Livewire::test(PageDuLien::class, ['email' => $adresse, 'token' => $jeton])
+                ->assertSee(ChoisirSonMotDePasseParLeLienAction::MESSAGE_LIEN_INVALIDE)
                 ->assertActionHidden('choisir')
-                ->assertActionHidden('refuserCeCompte');
-            $reponses[] = [$page->instance()->lienValable(), $page->instance()->compteDuLien()];
+                ->assertFormFieldIsHidden('password');
+            $reponses[] = $page->instance()->compteDuLien();
         }
 
-        $this->assertSame(array_fill(0, 4, [false, null]), $reponses);
+        $this->assertSame([null, null, null, null], $reponses);
+        $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $vendeur->refresh()->password));
     }
 
     /**
-     * Un jeton déjà servi, ou le jeton d'un autre compte, est refusé.
+     * Un jeton déjà servi, ou le jeton d'un autre propriétaire, est refusé.
      */
     public function test_un_jeton_rejoue_ou_d_un_autre_compte_est_refuse_sur_la_page_de_lien(): void
     {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $compte = $this->membre($magasin, RoleMagasin::Vendeur);
-        $autre = $this->membre($magasin, RoleMagasin::Vendeur);
-        $jeton = Password::broker()->createToken($compte);
+        $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
+        $autre = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Autre Boutique']));
+        $jeton = Password::broker()->createToken($proprietaire);
         $jetonDeLAutre = Password::broker()->createToken($autre);
 
-        Livewire::test(PageDuLien::class, ['email' => $compte->email, 'token' => $jeton])
+        Livewire::test(PageDuLien::class, ['email' => $proprietaire->email, 'token' => $jeton])
             ->fillForm(['password' => 'premier-mot-de-passe', 'passwordConfirmation' => 'premier-mot-de-passe'])
             ->call('choisir');
-        Livewire::test(PageDuLien::class, ['email' => $compte->email, 'token' => $jeton])
-            ->assertSee(RefuserSonCompteAction::MESSAGE_LIEN_INVALIDE)
+        Livewire::test(PageDuLien::class, ['email' => $proprietaire->email, 'token' => $jeton])
+            ->assertSee(ChoisirSonMotDePasseParLeLienAction::MESSAGE_LIEN_INVALIDE)
             ->set('data.password', 'second-mot-de-passe')
             ->set('data.passwordConfirmation', 'second-mot-de-passe')
             ->call('choisir');
-        Livewire::test(PageDuLien::class, ['email' => $compte->email, 'token' => $jetonDeLAutre])
-            ->assertSee(RefuserSonCompteAction::MESSAGE_LIEN_INVALIDE)
+        Livewire::test(PageDuLien::class, ['email' => $proprietaire->email, 'token' => $jetonDeLAutre])
+            ->assertSee(ChoisirSonMotDePasseParLeLienAction::MESSAGE_LIEN_INVALIDE)
             ->set('data.password', 'troisieme-mot-de-passe')
             ->set('data.passwordConfirmation', 'troisieme-mot-de-passe')
             ->call('choisir');
 
-        $this->assertTrue(Hash::check('premier-mot-de-passe', $compte->refresh()->password));
-        $this->assertTrue(Hash::check(self::MOT_DE_PASSE_CHOISI, $autre->refresh()->password));
+        $this->assertTrue(Hash::check('premier-mot-de-passe', $proprietaire->refresh()->password));
+        $this->assertTrue(Hash::check('password', $autre->refresh()->password));
+        $this->assertTrue(Password::broker()->tokenExists($autre, $jetonDeLAutre));
     }
 
     /**
-     * Un compte retiré choisit son mot de passe sur la page du lien, sans
-     * ouvrir aucun panneau, puis arrive sur la création de sa société (ou
-     * accepte un rattachement par le lien d'une société).
+     * Le mot de passe choisi sur la page du lien suit la règle : ni
+     * l'identifiant du propriétaire, ni trop court ; rien ne s'enregistre
+     * et le lien reste valable.
      */
-    public function test_un_compte_retire_choisit_son_mot_de_passe_sur_la_page_de_lien_sans_ouvrir_aucun_panneau(): void
+    public function test_le_mot_de_passe_choisi_sur_la_page_de_lien_suit_la_regle(): void
     {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $compte = $this->membre($magasin, RoleMagasin::Vendeur);
-        app(RefuserSonCompteAction::class)->handle($compte);
+        $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
+        $identifiant = (string) $proprietaire->identifiantDeConnexion();
+        $jeton = Password::broker()->createToken($proprietaire);
 
-        Livewire::test(PageDuLien::class, ['email' => $compte->email, 'token' => Password::broker()->createToken($compte)])
-            ->assertSee('n\'appartient plus à aucune société')
-            ->fillForm(['password' => 'mon-nouveau-mot-de-passe', 'passwordConfirmation' => 'mon-nouveau-mot-de-passe'])
-            ->call('choisir')
-            ->assertHasNoFormErrors()
-            ->assertRedirect(route('societe.creer'));
+        foreach ([$identifiant => RegleDuMotDePasse::MESSAGE_IDENTIFIANT, 'court' => RegleDuMotDePasse::MESSAGE_TROP_COURT] as $motDePasse => $message) {
+            $page = Livewire::test(PageDuLien::class, ['email' => $proprietaire->email, 'token' => $jeton])
+                ->fillForm(['password' => (string) $motDePasse, 'passwordConfirmation' => (string) $motDePasse])
+                ->call('choisir')
+                ->assertHasFormErrors(['password']);
 
-        $compte->refresh();
-        $this->assertTrue(Hash::check('mon-nouveau-mot-de-passe', $compte->password));
-        $this->assertSame(StatutCompte::Retire, $compte->statut);
-        $this->assertGuest();
-        $this->assertFalse($compte->canAccessPanel(Filament::getPanel('app')));
-        $this->assertFalse($compte->canAccessPanel(Filament::getPanel('societe')));
+            $this->assertContains($message, $page->errors()->get('data.password'));
+        }
+
+        $this->assertTrue(Hash::check('password', $proprietaire->refresh()->password));
+        $this->assertTrue(Password::broker()->tokenExists($proprietaire, $jeton));
     }
 
     /**
-     * Choisir son mot de passe ou refuser le compte, sur la page du lien,
-     * ferme toutes les sessions du compte.
+     * Choisir son mot de passe sur la page du lien ferme toutes les
+     * sessions du compte et renouvelle son « se souvenir de moi ».
      */
-    public function test_toute_decision_sur_la_page_de_lien_supprime_les_sessions_du_compte(): void
+    public function test_choisir_son_mot_de_passe_sur_la_page_de_lien_supprime_les_sessions_du_compte(): void
     {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $choisit = $this->membre($magasin, RoleMagasin::Vendeur);
-        $refuse = $this->membre($magasin, RoleMagasin::Vendeur);
-        $this->ouvrirUneSessionAilleurs($choisit);
-        $this->ouvrirUneSessionAilleurs($refuse);
+        $proprietaire = $this->proprietaireDe($this->ouvrirUneSociete(['nom' => 'Ma Boutique']));
+        $this->ouvrirUneSessionAilleurs($proprietaire);
 
-        Livewire::test(PageDuLien::class, ['email' => $choisit->email, 'token' => Password::broker()->createToken($choisit)])
+        Livewire::test(PageDuLien::class, ['email' => $proprietaire->email, 'token' => Password::broker()->createToken($proprietaire)])
             ->fillForm(['password' => 'mon-nouveau-mot-de-passe', 'passwordConfirmation' => 'mon-nouveau-mot-de-passe'])
             ->call('choisir');
-        Livewire::test(PageDuLien::class, ['email' => $refuse->email, 'token' => Password::broker()->createToken($refuse)])
-            ->callAction('refuserCeCompte');
 
-        $this->assertSessionsFermees($choisit);
-        $this->assertSessionsFermees($refuse);
-        $this->assertSame([StatutCompte::Actif, StatutCompte::Retire], [$choisit->refresh()->statut, $refuse->refresh()->statut]);
-        $this->assertInstanceOf(User::class, $choisit);
+        $this->assertSessionsFermees($proprietaire);
+        $this->assertInstanceOf(User::class, $proprietaire->refresh());
     }
 }

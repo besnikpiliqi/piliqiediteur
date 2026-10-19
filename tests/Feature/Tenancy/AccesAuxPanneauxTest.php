@@ -9,12 +9,10 @@ use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
-use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Domain\Tenancy\Support\GardesDesDroits;
 use App\Filament\App\Pages\AucunMagasin;
-use App\Filament\App\Pages\Auth\ChangerMotDePasseProvisoire;
+use App\Filament\App\Pages\Auth\ChoisirSonMotDePasse;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
@@ -131,7 +129,7 @@ class AccesAuxPanneauxTest extends TestCase
         Filament::setCurrentPanel(Filament::getPanel('app'));
 
         Livewire::test(Connexion::class)
-            ->fillForm(['email' => $proprietaire->email, 'password' => 'mot-de-passe-sur'])
+            ->fillForm(['login' => $proprietaire->email, 'password' => 'mot-de-passe-sur'])
             ->call('authenticate')
             ->assertHasNoFormErrors()
             ->assertRedirect(route('filament.app.tenant'));
@@ -142,51 +140,45 @@ class AccesAuxPanneauxTest extends TestCase
     }
 
     /**
-     * Un administrateur d'une société qui n'a encore aucun magasin, son mot
-     * de passe provisoire changé, ouvre l'accueil du panneau des magasins
-     * sans erreur : il va à l'espace de sa société.
+     * Un administrateur d'une société qui n'a encore aucun magasin, qui
+     * choisit d'abord son mot de passe à la place de son identifiant, ouvre
+     * l'accueil du panneau des magasins sans erreur : il va à l'espace de
+     * sa société.
      */
     public function test_un_administrateur_sans_magasin_ouvre_app_et_va_a_l_espace_de_sa_societe(): void
     {
         $societe = $this->inscrireUneSociete();
-        $administrateur = app(CreerAdministrateurAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe, ['name' => 'Alice Martin', 'email' => 'alice@example.test'], self::MOT_DE_PASSE_PROVISOIRE, null, PermissionRegistry::modeleDeLAdministrateur(), [AutorisationsSociete::MAGASINS_GERER]);
+        $administrateur = app(CreerAdministrateurAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe, ['name' => 'Alice Martin'], null, PermissionRegistry::modeleDeLAdministrateur(), [AutorisationsSociete::MAGASINS_GERER]);
         app(TenantContext::class)->clear();
         Filament::setCurrentPanel(Filament::getPanel('app'));
         $this->actingAs($administrateur);
 
-        $this->get('/app')->assertRedirect(route('filament.app.mot-de-passe-provisoire'));
-        Livewire::test(ChangerMotDePasseProvisoire::class)
+        $this->get('/app')->assertRedirect(route('filament.app.choisir-son-mot-de-passe'));
+        Livewire::test(ChoisirSonMotDePasse::class)
             ->fillForm(['password' => self::MOT_DE_PASSE_CHOISI, 'passwordConfirmation' => self::MOT_DE_PASSE_CHOISI])
-            ->call('accepter')
+            ->call('choisir')
             ->assertRedirect(route('filament.app.tenant'));
 
         $this->get('/app')->assertRedirect(TableauDeBord::getUrl(panel: 'societe', tenant: $societe));
     }
 
     /**
-     * Un expert-comptable d'une société sans magasin réel, et un membre à
-     * qui il ne reste aucun magasin, ouvrent l'accueil du panneau des
-     * magasins sans erreur : une page claire leur dit pourquoi ils n'y
-     * voient rien, et ils n'ont pas d'espace de société.
+     * Un expert-comptable d'une société sans magasin réel ouvre l'accueil
+     * du panneau des magasins sans erreur : une page claire lui dit
+     * pourquoi il n'y voit rien, et il n'a pas d'espace de société. (Un
+     * compte de membre a toujours son magasin : retiré de son magasin, il
+     * est retiré de la société.)
      */
-    public function test_un_expert_comptable_ou_un_membre_sans_magasin_ouvre_app_sur_une_page_claire(): void
+    public function test_un_expert_comptable_sans_magasin_ouvre_app_sur_une_page_claire(): void
     {
         $sansMagasin = $this->inscrireUneSociete();
-        $expert = $this->choisirSonMotDePasse(app(CreerExpertComptableAction::class)->handle($sansMagasin->proprietaire()->firstOrFail(), $sansMagasin, ['name' => 'Cabinet Durand', 'email' => 'durand@example.test'], self::MOT_DE_PASSE_PROVISOIRE));
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $membre = $this->membre($magasin, RoleMagasin::Vendeur);
-        $this->retirerLaGardeDesDroits(GardesDesDroits::AFFECTATIONS);
-        Affectation::query()->where('user_id', $membre->id)->delete();
+        $expert = $this->choisirSonMotDePasse(app(CreerExpertComptableAction::class)->handle($sansMagasin->proprietaire()->firstOrFail(), $sansMagasin, ['name' => 'Cabinet Durand']));
         app(TenantContext::class)->clear();
+        $this->actingAs($expert->refresh());
 
-        foreach ([[$expert, AucunMagasin::MESSAGE_EXPERT_COMPTABLE], [$membre, AucunMagasin::MESSAGE_MEMBRE]] as [$compte, $message]) {
-            $this->flushSession();
-            $this->actingAs($compte->refresh());
-
-            $this->get('/app')->assertRedirect(route('filament.app.aucun-magasin'));
-            $this->get('/app/aucun-magasin')->assertOk()->assertSeeText($message)->assertSeeText('Me déconnecter');
-            $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $compte->societe))->assertForbidden();
-        }
+        $this->get('/app')->assertRedirect(route('filament.app.aucun-magasin'));
+        $this->get('/app/aucun-magasin')->assertOk()->assertSeeText(AucunMagasin::MESSAGE_EXPERT_COMPTABLE)->assertSeeText('Me déconnecter');
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $expert->societe))->assertForbidden();
     }
 
     /**

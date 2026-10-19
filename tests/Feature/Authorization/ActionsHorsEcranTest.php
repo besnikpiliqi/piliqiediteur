@@ -43,6 +43,7 @@ use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\AnnulerUneNominationAction;
+use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
@@ -50,23 +51,19 @@ use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\DemanderAccordDUnDirigeantAction;
+use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\DemarrerVerificationIdentiteAction;
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
-use App\Domain\Tenancy\Actions\DonnerUnMotDePasseProvisoireAction;
-use App\Domain\Tenancy\Actions\EnvoyerUnLienDeReinitialisationAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
-use App\Domain\Tenancy\Actions\NommerAdministrateurAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
-use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
 use App\Domain\Tenancy\Actions\RecevoirResultatIdentiteAction;
+use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
-use App\Domain\Tenancy\Actions\TransfererProprieteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\TypePiece;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
@@ -88,9 +85,9 @@ use Throwable;
 /**
  * Chaque action métier contrôle elle-même son auteur, appelée sans aucun
  * écran (une commande, un job, une requête forgée) : un compte sans le
- * droit, d'une autre société, suspendu, retiré, au mot de passe
- * provisoire, ou l'expert-comptable pour toute écriture, est refusé pour
- * ce motif, et rien n'est écrit en base ni envoyé.
+ * droit, d'une autre société, suspendu, retiré, ou l'expert-comptable
+ * pour toute écriture, est refusé pour ce motif, et rien n'est écrit en
+ * base ni envoyé.
  */
 class ActionsHorsEcranTest extends TestCase
 {
@@ -106,7 +103,6 @@ class ActionsHorsEcranTest extends TestCase
         LecteurDesDroits::REFUS_DANS_LA_SOCIETE,
         PorteeDesDroits::REFUS,
         PorteeDesDroits::REFUS_AU_DELA,
-        PorteeDesDroits::REFUS_PLUSIEURS_MAGASINS,
         CreerAdministrateurAction::MESSAGE_PROPRIETAIRE_SEUL,
         CreerExpertComptableAction::MESSAGE_PROPRIETAIRE_SEUL,
         CreerEtablissementAction::MESSAGE_SANS_AUTORISATION,
@@ -115,7 +111,7 @@ class ActionsHorsEcranTest extends TestCase
         CorrigerSirenAvantValidationAction::MESSAGE_SANS_AUTORISATION,
         OuvrirLaDemonstrationAction::MESSAGE_SANS_AUTORISATION,
         DemarrerVerificationIdentiteAction::MESSAGE_SANS_AUTORISATION,
-        TransfererProprieteAction::MESSAGE_PROPRIETAIRE_SEUL,
+        DemanderLaTransmissionDeLaProprieteAction::MESSAGE_PROPRIETAIRE_SEUL,
     ];
 
     /**
@@ -143,11 +139,11 @@ class ActionsHorsEcranTest extends TestCase
             'créer un service à la caisse', 'vérifier un numéro de TVA',
             'exporter le journal des événements', 'vérifier l\'intégrité',
             'créer un vendeur', 'modifier un vendeur', 'suspendre un vendeur', 'réactiver un vendeur', 'retirer un vendeur', 'réintégrer un vendeur',
-            'redonner un mot de passe provisoire', 'envoyer un lien de réinitialisation', 'proposer un rattachement',
+            'redonner l\'accès',
         ];
         $societe = [
-            'créer un administrateur', 'nommer un administrateur', 'modifier un administrateur', 'rétrograder un administrateur',
-            'créer l\'expert-comptable', 'réintégrer l\'expert-comptable', 'annuler une nomination', 'transférer la propriété',
+            'créer un administrateur', 'changer le rôle de société', 'modifier un administrateur',
+            'créer l\'expert-comptable', 'réintégrer l\'expert-comptable', 'annuler une nomination', 'demander la transmission de la propriété',
             'créer un magasin', 'modifier un magasin', 'modifier l\'identité de la société', 'modifier les réglages fiscaux',
         ];
         $verification = [
@@ -201,7 +197,7 @@ class ActionsHorsEcranTest extends TestCase
     }
 
     #[DataProvider('actions')]
-    public function test_chaque_action_refuse_un_auteur_suspendu_retire_ou_au_mot_de_passe_provisoire_sans_rien_ecrire(string $nom, string $porte, bool $aVerifier): void
+    public function test_chaque_action_refuse_un_auteur_suspendu_ou_retire_sans_rien_ecrire(string $nom, string $porte, bool $aVerifier): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => $aVerifier]);
         $geste = $this->geste($nom, $magasin);
@@ -217,12 +213,6 @@ class ActionsHorsEcranTest extends TestCase
         $retire = $autorise();
         app(ChangerStatutCompteAction::class)->retirer($proprietaire, $retire);
         $this->assertRefuseSansRienEcrire($geste, $retire);
-
-        $auProvisoire = $porte === 'magasin'
-            ? app(CreerMembreAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Provisoire', 'email' => 'provisoire@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Responsable]])
-            : app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Provisoire', 'email' => 'provisoire@example.test'], self::MOT_DE_PASSE_PROVISOIRE, null, PermissionRegistry::modeleDeLAdministrateur(), AutorisationsSociete::toutes());
-        $this->assertTrue($auProvisoire->fresh()->mot_de_passe_a_changer);
-        $this->assertRefuseSansRienEcrire($geste, $auProvisoire);
     }
 
     #[DataProvider('actionsDEcriture')]
@@ -292,8 +282,8 @@ class ActionsHorsEcranTest extends TestCase
             'vérifier un numéro de TVA' => $this->avec(Client::factory()->professionnel()->create(['pays' => 'DE', 'numero_tva' => 'DE123456789']), fn (Client $client, User $auteur) => app(VerifierNumeroTvaAction::class)->handle($auteur, $client)),
             'exporter le journal des événements' => fn (User $auteur) => app(ExporterJournalDesEvenementsAction::class)->handle($auteur, today()->toDateString(), today()->toDateString()),
             'vérifier l\'intégrité' => fn (User $auteur) => app(VerifierIntegriteAction::class)->handle($auteur, $magasin, false),
-            'créer un vendeur' => fn (User $auteur) => app(CreerMembreAction::class)->handle($auteur, $societe, ['name' => 'Paul', 'email' => 'paul@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Vendeur]]),
-            'modifier un vendeur' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(ModifierMembreAction::class)->handle($auteur, $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [PermissionRegistry::FACTURE_VIEW]]])),
+            'créer un vendeur' => fn (User $auteur) => app(CreerMembreAction::class)->handle($auteur, $magasin, ['name' => 'Paul'], RoleMagasin::Vendeur),
+            'modifier un vendeur' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(ModifierMembreAction::class)->handle($auteur, $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW])),
             'suspendre un vendeur' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(ChangerStatutCompteAction::class)->suspendre($auteur, $vendeur)),
             'réactiver un vendeur' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), function (User $vendeur) use ($proprietaire): Closure {
                 app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $vendeur);
@@ -301,31 +291,28 @@ class ActionsHorsEcranTest extends TestCase
                 return fn (User $auteur) => app(ChangerStatutCompteAction::class)->reactiver($auteur, $vendeur);
             }),
             'retirer un vendeur' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(ChangerStatutCompteAction::class)->retirer($auteur, $vendeur)),
-            'réintégrer un vendeur' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), function (User $vendeur) use ($proprietaire, $magasin): Closure {
+            'réintégrer un vendeur' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), function (User $vendeur) use ($proprietaire): Closure {
                 app(ChangerStatutCompteAction::class)->retirer($proprietaire, $vendeur);
 
-                return fn (User $auteur) => app(ChangerStatutCompteAction::class)->reintegrer($auteur, $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
+                return fn (User $auteur) => app(ChangerStatutCompteAction::class)->reintegrer($auteur, $vendeur, RoleMagasin::Vendeur);
             }),
-            'redonner un mot de passe provisoire' => $this->avec($this->compteAuMotDePasseProvisoire($magasin, RoleMagasin::Vendeur)[0], fn (User $compte, User $auteur) => app(DonnerUnMotDePasseProvisoireAction::class)->handle($auteur, $compte, 'un-autre-provisoire-1234')),
-            'envoyer un lien de réinitialisation' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(EnvoyerUnLienDeReinitialisationAction::class)->handle($auteur, $vendeur)),
-            'proposer un rattachement' => $this->avec($this->compteRetireDAilleurs(), fn (User $compte, User $auteur) => app(ProposerUnRattachementAction::class)->handle($auteur, $societe, $compte->email, RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur]])),
-            'créer un administrateur' => fn (User $auteur) => app(CreerAdministrateurAction::class)->handle($auteur, $societe, ['name' => 'Alice', 'email' => 'alice@example.test'], self::MOT_DE_PASSE_PROVISOIRE, null, PermissionRegistry::modeleDeLAdministrateur(), []),
-            'nommer un administrateur' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(NommerAdministrateurAction::class)->handle($auteur, $vendeur, null, PermissionRegistry::modeleDeLAdministrateur(), [])),
+            'redonner l\'accès' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(RedonnerLAccesAction::class)->handle($auteur, $vendeur, false)),
+            'créer un administrateur' => fn (User $auteur) => app(CreerAdministrateurAction::class)->handle($auteur, $societe, ['name' => 'Alice'], null, PermissionRegistry::modeleDeLAdministrateur(), []),
+            'changer le rôle de société' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), fn (User $vendeur, User $auteur) => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($auteur, $vendeur, null, PermissionRegistry::modeleDeLAdministrateur(), [])),
             'modifier un administrateur' => $this->avec($this->administrateur($magasin), fn (User $administrateur, User $auteur) => app(ModifierAdministrateurAction::class)->modifier($auteur, $administrateur, null, PermissionRegistry::modeleDeLAdministrateur(), AutorisationsSociete::toutes())),
-            'rétrograder un administrateur' => $this->avec($this->administrateur($magasin), fn (User $administrateur, User $auteur) => app(ModifierAdministrateurAction::class)->retrograder($auteur, $administrateur, [$magasin->id => ['role' => RoleMagasin::Vendeur]])),
-            'créer l\'expert-comptable' => fn (User $auteur) => app(CreerExpertComptableAction::class)->handle($auteur, $societe, ['name' => 'Émile', 'email' => 'emile@example.test'], self::MOT_DE_PASSE_PROVISOIRE),
+            'créer l\'expert-comptable' => fn (User $auteur) => app(CreerExpertComptableAction::class)->handle($auteur, $societe, ['name' => 'Émile']),
             'réintégrer l\'expert-comptable' => $this->avec($this->expertComptable($magasin), function (User $expert) use ($proprietaire): Closure {
                 app(ChangerStatutCompteAction::class)->retirer($proprietaire, $expert);
 
-                return fn (User $auteur) => app(ChangerStatutCompteAction::class)->reintegrerCommeExpertComptable($auteur, $expert);
+                return fn (User $auteur) => app(ChangerStatutCompteAction::class)->reintegrerLExpertComptable($auteur, $expert);
             }),
             'annuler une nomination' => $this->avec($this->membre($magasin, RoleMagasin::Vendeur), function (User $vendeur) use ($magasin): Closure {
-                app(ModifierMembreAction::class)->handle($this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]), $vendeur, [$magasin->id => ['role' => RoleMagasin::Responsable]]);
+                app(ModifierMembreAction::class)->handle($this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]), $vendeur, RoleMagasin::Responsable);
                 $nomination = Affectation::query()->where('user_id', $vendeur->id)->sole();
 
                 return fn (User $auteur) => app(AnnulerUneNominationAction::class)->handle($auteur, $nomination);
             }),
-            'transférer la propriété' => $this->avec(tap($this->administrateur($magasin, null, AutorisationsSociete::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save(), fn (User $administrateur, User $auteur) => app(TransfererProprieteAction::class)->handle($auteur, $administrateur, 'password')),
+            'demander la transmission de la propriété' => $this->avec($this->administrateurPretAReprendre($magasin), fn (User $administrateur, User $auteur) => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($auteur, $administrateur, 'password')),
             'créer un magasin' => fn (User $auteur) => app(CreerEtablissementAction::class)->handle($auteur, $societe, ['nom' => 'Lyon 2', 'nic' => MagasinFactory::nicLibre($societe)]),
             'modifier un magasin' => fn (User $auteur) => app(ModifierEtablissementAction::class)->handle($auteur, $magasin, ['nom' => 'Nouveau nom']),
             'modifier l\'identité de la société' => fn (User $auteur) => app(ModifierIdentiteSocieteAction::class)->handle($auteur, $societe, ['capital_social' => '5000']),
@@ -365,21 +352,6 @@ class ActionsHorsEcranTest extends TestCase
         Mail::assertNothingOutgoing();
         Notification::assertNothingSent();
         Queue::assertNothingPushed();
-    }
-
-    /**
-     * Un vendeur d'une autre société, retiré par elle : le magasin actif
-     * reste celui du test.
-     */
-    private function compteRetireDAilleurs(): User
-    {
-        $magasin = app(TenantContext::class)->magasin();
-        $ailleurs = $this->ouvrirUneSociete(['nom' => 'Ancienne société']);
-        $compte = $this->membre($ailleurs, RoleMagasin::Vendeur);
-        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($ailleurs), $compte);
-        app(TenantContext::class)->set($magasin);
-
-        return $compte->refresh();
     }
 
     /**

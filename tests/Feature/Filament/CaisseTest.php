@@ -2013,9 +2013,7 @@ class CaisseTest extends TestCase
      */
     private function retirerUneCase(Magasin $magasin, User $vendeur, string $autorisation): void
     {
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [
-            $magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [$autorisation]))],
-        ]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, array_values(array_diff(RoleMagasin::Vendeur->permissionsParDefaut(), [$autorisation])));
     }
 
     /**

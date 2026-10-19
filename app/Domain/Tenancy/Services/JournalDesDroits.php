@@ -46,7 +46,9 @@ use LogicException;
  * de l'auteur relu (voir OperateurCourant). Si la liste des magasins
  * touchés a changé entre sa lecture et ces verrous, tout reprend avec la
  * nouvelle liste. Fermé par défaut : un registre qui ne peut pas inscrire
- * refuse toute la modification.
+ * refuse toute la modification. Une seule modification se fait sans
+ * auteur, au nom du système : le retrait des comptes d'entraînement quand
+ * la démonstration se ferme pour de bon (voir FermerLaDemonstrationAction).
  */
 class JournalDesDroits
 {
@@ -64,22 +66,23 @@ class JournalDesDroits
      * actuels et ceux qu'elle vise), puis des lignes de l'auteur et des
      * comptes, et inscrit au JET 130 de chacun de ces magasins ce qui y a
      * changé pour chacun d'eux, puis l'entrée d'audit. La modification
-     * reçoit l'auteur relu et les comptes relus, dans l'ordre donné ; un
-     * compte qu'elle crée, elle le rend (seul, ou dans un tableau avec ses
-     * autres résultats sous la clé « compte »).
+     * reçoit l'auteur relu (null pour le système) et les comptes relus,
+     * dans l'ordre donné ; un compte qu'elle crée, elle le rend (seul, ou
+     * dans un tableau avec ses autres résultats sous la clé « compte »).
      *
      * @template TResultat
      *
+     * @param  User|null  $auteur  null pour le système
      * @param  list<User>  $comptes  les comptes existants dont les droits changent
      * @param  iterable<Magasin>  $magasinsVises  les magasins que leurs nouveaux droits toucheront
-     * @param  Closure(User, list<User>): TResultat  $modification
+     * @param  Closure(User|null, list<User>): TResultat  $modification
      * @return TResultat
      *
      * @throws LogicException
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    public function modifier(User $auteur, ActionAuditee $action, array $comptes, iterable $magasinsVises, Closure $modification): mixed
+    public function modifier(?User $auteur, ActionAuditee $action, array $comptes, iterable $magasinsVises, Closure $modification): mixed
     {
         $vises = collect($magasinsVises)->map(fn (Magasin $magasin): int => (int) $magasin->getKey())->all();
         $ids = array_map(fn (User $compte): int => (int) $compte->getKey(), $comptes);
@@ -89,8 +92,8 @@ class JournalDesDroits
             $termine = false;
 
             $resultat = $this->registre->sousVerrouDesMagasins($magasins, function () use ($auteur, $action, $ids, $vises, $magasins, $modification, &$termine): mixed {
-                $verrouilles = User::query()->whereKey([...$ids, (int) $auteur->getKey()])->orderBy('id')->lockForUpdate()->get()->keyBy(fn (User $compte): int => (int) $compte->getKey());
-                $auteurRelu = $verrouilles->get((int) $auteur->getKey()) ?? throw new LogicException('Ce compte n\'existe pas.');
+                $verrouilles = User::query()->whereKey($auteur === null ? $ids : [...$ids, (int) $auteur->getKey()])->orderBy('id')->lockForUpdate()->get()->keyBy(fn (User $compte): int => (int) $compte->getKey());
+                $auteurRelu = $auteur === null ? null : ($verrouilles->get((int) $auteur->getKey()) ?? throw new LogicException('Ce compte n\'existe pas.'));
                 $relus = array_map(fn (int $id): User => $verrouilles->get($id) ?? throw new LogicException('Ce compte n\'existe pas.'), $ids);
                 $touches = array_map(intval(...), $this->magasinsTouches($ids, $vises)->modelKeys());
 
@@ -98,7 +101,9 @@ class JournalDesDroits
                     return null;
                 }
 
-                $resultat = $this->operateur->pendant($auteurRelu, function () use ($auteurRelu, $action, $relus, $magasins, $modification): mixed {
+                $auNomDe = fn (Closure $operation): mixed => $auteurRelu === null ? $this->operateur->pendantLeSysteme($operation) : $this->operateur->pendant($auteurRelu, $operation);
+
+                $resultat = $auNomDe(function () use ($auteurRelu, $action, $relus, $magasins, $modification): mixed {
                     $avant = $this->etats($magasins, $relus);
                     $resultat = $modification($auteurRelu, $relus);
                     $cree = $resultat instanceof User ? $resultat : (is_array($resultat) && ($resultat['compte'] ?? null) instanceof User ? $resultat['compte'] : null);
@@ -128,7 +133,7 @@ class JournalDesDroits
 
     /**
      * Exécute un geste sur des comptes qui ne change pas leurs droits (un
-     * mot de passe provisoire redonné, un lien envoyé), dans une
+     * accès redonné, un identifiant affiché), dans une
      * transaction qui verrouille les lignes de l'auteur et de ces comptes,
      * par identifiant croissant, comme modifier() : le geste reçoit
      * l'auteur et les comptes relus sous ce verrou, et s'inscrit au nom de
@@ -251,7 +256,7 @@ class JournalDesDroits
      * @throws ModuleFiscalNonConfigureException
      * @throws HorlogeRegressiveException
      */
-    private function inscrire(User $auteur, ActionAuditee $action, Collection $magasins, array $avant, array $apres): void
+    private function inscrire(?User $auteur, ActionAuditee $action, Collection $magasins, array $avant, array $apres): void
     {
         $droitsAvant = [];
         $droitsApres = [];

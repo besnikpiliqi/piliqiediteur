@@ -15,7 +15,7 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\VerificateurCaissesPersonnelles;
-use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -263,7 +263,7 @@ class CaissesPersonnellesFermeesDOfficeTest extends TestCase
         $magasin = $this->ouvrirLeMagasin();
         $paul = $this->vendeur($magasin, 'Paul Martin');
         $ticket = $this->vendreUnTicket($paul);
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $paul, [$magasin->id => null]);
+        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($magasin), $paul);
 
         Livewire::test(ListClotureCaissePersonnelles::class)
             ->callAction('fermer_la_caisse_d_un_vendeur', ['vendeur_id' => $paul->id])

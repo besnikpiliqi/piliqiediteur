@@ -7,38 +7,35 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
-use App\Domain\Tenancy\Actions\EnvoyerUnLienDeReinitialisationAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
+use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Services\CreationDesComptes;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Filament\App\Resources\EquipeDuMagasinResource;
-use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\CreateMembreDuMagasin;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
 use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
  * L'équipe d'un magasin, dans son panneau (voir EquipeDuMagasinResource) :
- * son propriétaire et ses responsables y créent les vendeurs et les
- * observateurs du magasin et cochent leurs cases ; un responsable ne gère
- * que les vendeurs et les observateurs dont tous les magasins sont les
- * siens, voit un membre qui travaille aussi ailleurs sans savoir où, et ne
- * touche jamais un autre responsable, un administrateur, l'expert-comptable
- * ni le propriétaire. Une même personne n'est affectée à plusieurs
- * magasins que par le propriétaire.
+ * son propriétaire et ses responsables y créent les comptes de vendeur et
+ * d'observateur du magasin, qui ne valent que pour lui, et cochent leurs
+ * cases ; un responsable gère les vendeurs et les observateurs de son
+ * magasin, voit leur identifiant, et ne touche jamais un autre
+ * responsable, un administrateur, l'expert-comptable ni le propriétaire,
+ * ni un compte d'un autre magasin.
  */
 class EquipeDuMagasinTest extends TestCase
 {
@@ -50,26 +47,28 @@ class EquipeDuMagasinTest extends TestCase
         $responsable = $this->responsable($magasin);
         $this->dansLeMagasin($magasin, $responsable);
 
-        foreach ([['paul@example.test', RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::PARAMETRES_GERER]], ['lea@example.test', RoleMagasin::Observateur, [PermissionRegistry::PRODUIT_VIEW]]] as [$email, $role, $autorisations]) {
-            Livewire::test(CreateMembreDuMagasin::class)
-                ->fillForm(['name' => $email, 'email' => $email, 'mot_de_passe_provisoire' => self::MOT_DE_PASSE_PROVISOIRE, 'role' => $role->value])
-                ->set('data.autorisations', $autorisations)
-                ->set('data.autorisations_vente', [])
-                ->call('create')
-                ->assertHasNoFormErrors();
+        foreach ([['Paul', RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::PARAMETRES_GERER]], ['Léa', RoleMagasin::Observateur, [PermissionRegistry::PRODUIT_VIEW]]] as [$nom, $role, $autorisations]) {
+            Livewire::test(ListEquipeDuMagasin::class)
+                ->mountAction('creerUnCompte')
+                ->setActionData(['name' => $nom, 'role' => $role->value])
+                ->set('mountedActionsData.0.autorisations', [])
+                ->setActionData(['autorisations' => $autorisations, 'autorisations_vente' => []])
+                ->callMountedAction()
+                ->assertHasNoActionErrors()
+                ->assertActionMounted('compteCree');
 
-            $compte = User::query()->where('email', $email)->sole();
+            $compte = User::query()->where('societe_id', $magasin->societe_id)->where('name', $nom)->sole();
             $affectation = Affectation::query()->where('user_id', $compte->id)->sole();
-            $this->assertSame([(int) $magasin->id, $role, (int) $responsable->id], [(int) $affectation->magasin_id, $affectation->role, (int) $compte->cree_par]);
+            $this->assertSame([(int) $magasin->id, $role, (int) $responsable->id, null], [(int) $affectation->magasin_id, $affectation->role, (int) $compte->cree_par, $compte->email]);
             $this->assertEqualsCanonicalizing($autorisations, $affectation->autorisations());
+            $this->assertSame([true, (int) $magasin->id], [$compte->mot_de_passe_est_l_identifiant, (int) $compte->magasinDeSonIdentifiant()?->id]);
         }
     }
 
     /**
      * Un administrateur, même de tous les magasins et avec toutes les
      * cases et toutes les autorisations de société, ne crée jamais un
-     * vendeur ou un observateur : ni par l'écran, ni par une requête
-     * forgée, ni par l'action.
+     * vendeur ou un observateur : ni par l'écran, ni par l'action.
      */
     public function test_un_administrateur_ne_cree_jamais_un_vendeur_ou_un_observateur(): void
     {
@@ -77,13 +76,13 @@ class EquipeDuMagasinTest extends TestCase
         $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes(), PermissionRegistry::toutes());
 
         $this->dansLeMagasin($magasin, $administrateur);
-        $this->get(EquipeDuMagasinResource::getUrl('create', ['tenant' => $magasin]))->assertForbidden();
-        Livewire::test(CreateMembreDuMagasin::class)->assertForbidden();
+        $this->get(EquipeDuMagasinResource::getUrl('index', ['tenant' => $magasin]))->assertForbidden();
+        Livewire::test(ListEquipeDuMagasin::class)->assertForbidden();
         foreach ([RoleMagasin::Vendeur, RoleMagasin::Observateur] as $role) {
-            $this->assertThrows(fn () => app(CreerMembreAction::class)->handle($administrateur, $magasin->societe, ['name' => 'Paul', 'email' => 'paul@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => $role]]), AuthorizationException::class);
+            $this->assertThrows(fn () => app(CreerMembreAction::class)->handle($administrateur, $magasin, ['name' => 'Paul'], $role), AuthorizationException::class);
         }
 
-        $this->assertFalse(User::query()->where('email', 'paul@example.test')->exists());
+        $this->assertFalse(User::query()->where('name', 'Paul')->exists());
     }
 
     /**
@@ -103,12 +102,13 @@ class EquipeDuMagasinTest extends TestCase
         $affectationDuCoResponsable = Affectation::query()->where('user_id', $coResponsable->id)->sole();
 
         $this->dansLeMagasin($magasin, $responsable);
-        Livewire::test(CreateMembreDuMagasin::class)
-            ->assertFormFieldExists('role', fn ($champ): bool => ! array_key_exists(RoleMagasin::Responsable->value, $champ->getOptions()))
-            ->fillForm(['name' => 'Chef', 'email' => 'chef@example.test', 'mot_de_passe_provisoire' => self::MOT_DE_PASSE_PROVISOIRE, 'role' => RoleMagasin::Responsable->value])
-            ->call('create');
+        Livewire::test(ListEquipeDuMagasin::class)
+            ->mountAction('creerUnCompte')
+            ->assertActionDataSet(['name' => null])
+            ->setActionData(['name' => 'Chef', 'role' => RoleMagasin::Responsable->value])
+            ->callMountedAction();
         $liste = Livewire::test(ListEquipeDuMagasin::class);
-        foreach (['edit', 'retirer_du_magasin', 'suspendre', 'retirer_de_la_societe', 'renvoyer_un_lien'] as $geste) {
+        foreach (['edit', 'retirer_du_magasin', 'suspendre', 'redonner_l_acces'] as $geste) {
             $liste->assertTableActionHidden($geste, $affectationDuCoResponsable);
         }
         $this->forgerLActionDeLigne($liste, 'retirer_du_magasin', $affectationDuCoResponsable);
@@ -116,16 +116,15 @@ class EquipeDuMagasinTest extends TestCase
         $this->forgerLActionDeLigne($liste, 'nommer_responsable', Affectation::query()->where('user_id', $vendeur->id)->sole());
         $this->get(EquipeDuMagasinResource::getUrl('edit', ['record' => $affectationDuCoResponsable, 'tenant' => $magasin]))->assertForbidden();
 
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $vendeur, [$magasin->id => ['role' => RoleMagasin::Responsable]]), AuthorizationException::class);
+        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $vendeur, RoleMagasin::Responsable), AuthorizationException::class);
         foreach ([$coResponsable, $administrateur, $proprietaire] as $cible) {
             $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $cible), AuthorizationException::class);
             $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($responsable, $cible), AuthorizationException::class);
-            $this->assertThrows(fn () => app(EnvoyerUnLienDeReinitialisationAction::class)->handle($responsable, $cible), AuthorizationException::class);
-            $this->assertSame(StatutCompte::Actif, $cible->refresh()->statut, $cible->email);
+            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($responsable, $cible, true, 'un-mot-de-passe-solide'), AuthorizationException::class);
+            $this->assertSame(StatutCompte::Actif, $cible->refresh()->statut, $cible->name);
         }
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $coResponsable, [$magasin->id => null]), AuthorizationException::class);
 
-        $this->assertFalse(User::query()->where('email', 'chef@example.test')->exists());
+        $this->assertFalse(User::query()->where('name', 'Chef')->exists());
         $this->assertSame(RoleMagasin::Responsable, $affectationDuCoResponsable->fresh()->role);
         $this->assertSame(RoleMagasin::Vendeur, Affectation::query()->where('user_id', $vendeur->id)->sole()->role);
     }
@@ -139,13 +138,14 @@ class EquipeDuMagasinTest extends TestCase
         $this->dansLeMagasin($magasin, $responsable);
         Livewire::test(ListEquipeDuMagasin::class)->assertCanNotSeeTableRecords(Affectation::query()->where('user_id', $expert->id)->get());
         $this->assertFalse($responsable->can('creerLExpertComptable', User::class));
-        $this->assertThrows(fn () => app(CreerExpertComptableAction::class)->handle($responsable, $magasin->societe, ['name' => 'Cabinet', 'email' => 'cabinet@example.test'], self::MOT_DE_PASSE_PROVISOIRE), AuthorizationException::class);
+        $this->assertThrows(fn () => app(CreerExpertComptableAction::class)->handle($responsable, $magasin->societe, ['name' => 'Cabinet']), AuthorizationException::class);
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $expert), AuthorizationException::class);
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($responsable, $expert), AuthorizationException::class);
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $expert, [$magasin->id => ['role' => RoleMagasin::Vendeur]]), AuthorizationException::class);
+        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $expert, RoleMagasin::Vendeur), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($responsable, $expert, false), AuthorizationException::class);
 
         $this->assertSame([StatutCompte::Actif, true], [$expert->refresh()->statut, $expert->estExpertComptable()]);
-        $this->assertFalse(User::query()->where('email', 'cabinet@example.test')->exists());
+        $this->assertFalse(User::query()->where('name', 'Cabinet')->exists());
     }
 
     /**
@@ -167,10 +167,12 @@ class EquipeDuMagasinTest extends TestCase
         $liste = Livewire::test(ListEquipeDuMagasin::class);
         $this->forgerLActionDeLigne($liste, 'retirer_du_magasin', $affectationDeB);
         $this->forgerLActionDeLigne($liste, 'suspendre', $affectationDeB);
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $vendeurDeB, [$magasinB->id => null]), AuthorizationException::class);
+        $this->forgerLActionDeLigne($liste, 'redonner_l_acces', $affectationDeB, ['mode' => 'absent']);
+        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($responsable, $vendeurDeB), AuthorizationException::class);
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $vendeurDeB), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($responsable, $vendeurDeB, false), AuthorizationException::class);
 
-        $this->assertSame([StatutCompte::Actif, RoleMagasin::Vendeur], [$vendeurDeB->refresh()->statut, $affectationDeB->fresh()->role]);
+        $this->assertSame([StatutCompte::Actif, RoleMagasin::Vendeur, false], [$vendeurDeB->refresh()->statut, $affectationDeB->fresh()->role, $vendeurDeB->mot_de_passe_est_l_identifiant]);
     }
 
     public function test_deux_responsables_du_meme_magasin_ne_se_touchent_pas(): void
@@ -181,95 +183,52 @@ class EquipeDuMagasinTest extends TestCase
 
         foreach ([[$premier, $second], [$second, $premier]] as [$auteur, $cible]) {
             $this->assertFalse(app(PorteeDesDroits::class)->gereLeCompte($auteur, $cible));
-            $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($auteur, $cible, [$magasin->id => null]), AuthorizationException::class);
+            $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($auteur, $cible), AuthorizationException::class);
             $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($auteur, $cible), AuthorizationException::class);
+            $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($auteur, $cible, false), AuthorizationException::class);
             $this->assertSame(RoleMagasin::Responsable, Affectation::query()->where('user_id', $cible->id)->sole()->role);
         }
     }
 
     /**
-     * Un membre que le propriétaire a affecté à plusieurs magasins ne se
-     * gère que par le propriétaire : le responsable d'un seul de ses
-     * magasins le voit dans son équipe, mais ne coche ni ne retire rien,
-     * ne le suspend pas, ne renouvelle pas son accès, et ne voit pas ses
-     * autres magasins.
+     * Le responsable de son magasin gère tout le compte d'un vendeur :
+     * suspendre, réactiver, lui redonner l'accès, en sa présence (la
+     * personne tape son mot de passe) et en son absence (il redevient son
+     * identifiant), le retirer.
      */
-    public function test_le_responsable_d_un_seul_des_magasins_d_un_vendeur_ne_le_gere_pas(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
-        $responsable = $this->responsable($magasin);
-        $vendeur = $this->membreDeCesMagasins([$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [PermissionRegistry::FACTURE_VIEW]], $autre->id => ['role' => RoleMagasin::Vendeur]], $magasin);
-        $saLigneIci = Affectation::query()->where('user_id', $vendeur->id)->where('magasin_id', $magasin->id)->sole();
-
-        $this->dansLeMagasin($magasin, $responsable);
-        $liste = Livewire::test(ListEquipeDuMagasin::class)
-            ->assertCanSeeTableRecords([$saLigneIci])
-            ->assertSee('Aussi dans d\'autres magasins')
-            ->assertDontSee('Mon Autre Boutique');
-        foreach (['edit', 'retirer_du_magasin', 'suspendre', 'retirer_de_la_societe', 'renvoyer_un_lien'] as $geste) {
-            $liste->assertTableActionHidden($geste, $saLigneIci);
-        }
-        $this->get(EquipeDuMagasinResource::getUrl('edit', ['record' => $saLigneIci, 'tenant' => $magasin]))->assertForbidden();
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [PermissionRegistry::AVOIR_CREER]]]), AuthorizationException::class);
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $vendeur, [$magasin->id => null]), AuthorizationException::class);
-        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $vendeur), AuthorizationException::class);
-        $this->assertThrows(fn () => app(EnvoyerUnLienDeReinitialisationAction::class)->handle($responsable, $vendeur), AuthorizationException::class);
-
-        $this->assertSame([PermissionRegistry::FACTURE_VIEW], $saLigneIci->autorisations());
-        $this->assertSame(2, Affectation::query()->where('user_id', $vendeur->id)->count());
-        $this->assertSame(StatutCompte::Actif, $vendeur->refresh()->statut);
-    }
-
-    /**
-     * Le responsable de tous les magasins d'un vendeur gère tout son
-     * compte : suspendre, réactiver, renouveler son accès, le retirer.
-     */
-    public function test_le_responsable_de_tous_les_magasins_d_un_vendeur_suspend_reactive_retire_et_renouvelle_son_acces(): void
+    public function test_le_responsable_de_son_magasin_suspend_reactive_redonne_l_acces_et_retire_un_vendeur(): void
     {
         Notification::fake();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
-        $responsable = $this->responsable($magasin, $autre);
-        $vendeur = $this->membreDeCesMagasins([$magasin->id => ['role' => RoleMagasin::Vendeur], $autre->id => ['role' => RoleMagasin::Observateur]], $magasin);
-        $saLigne = Affectation::query()->where('user_id', $vendeur->id)->where('magasin_id', $magasin->id)->sole();
+        $responsable = $this->responsable($magasin);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
+        $saLigne = Affectation::query()->where('user_id', $vendeur->id)->sole();
 
         $this->dansLeMagasin($magasin, $responsable);
         Livewire::test(ListEquipeDuMagasin::class)->callTableAction('suspendre', $saLigne->fresh());
         $this->assertTrue($vendeur->refresh()->estSuspendu());
         Livewire::test(ListEquipeDuMagasin::class)->callTableAction('reactiver', $saLigne->fresh());
         $this->assertTrue($vendeur->refresh()->estActif());
-        Livewire::test(ListEquipeDuMagasin::class)->callTableAction('renvoyer_un_lien', $saLigne->fresh())->assertNotified('Le lien est parti.');
-        Livewire::test(ListEquipeDuMagasin::class)->callTableAction('retirer_de_la_societe', $saLigne->fresh());
+        Livewire::test(ListEquipeDuMagasin::class)
+            ->callTableAction('redonner_l_acces', $saLigne->fresh(), ['mode' => 'present', 'mot_de_passe' => 'nouveau-mot-de-passe-de-paul', 'mot_de_passe_confirmation' => 'nouveau-mot-de-passe-de-paul'])
+            ->assertHasNoTableActionErrors();
+        $this->assertTrue(Hash::check('nouveau-mot-de-passe-de-paul', $vendeur->refresh()->password));
+        $this->assertSame([false, true, (int) $responsable->id], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_en_presence, (int) $vendeur->acces_redonne_par]);
+        Livewire::test(ListEquipeDuMagasin::class)
+            ->callTableAction('redonner_l_acces', $saLigne->fresh(), ['mode' => 'absent'])
+            ->assertNotified("Accès redonné. Son identifiant, qui est de nouveau son mot de passe : {$vendeur->identifiantDeConnexion()}. Remettez-le-lui en main propre.");
+        $this->assertTrue(Hash::check((string) $vendeur->identifiantDeConnexion(), $vendeur->refresh()->password));
+        $this->assertSame([true, false], [$vendeur->mot_de_passe_est_l_identifiant, $vendeur->acces_redonne_en_presence]);
+        Livewire::test(ListEquipeDuMagasin::class)->callTableAction('retirer_du_magasin', $saLigne->fresh());
 
         $this->assertSame(StatutCompte::Retire, $vendeur->refresh()->statut);
         $this->assertSame(0, Affectation::query()->where('user_id', $vendeur->id)->count());
     }
 
     /**
-     * Un compte responsable dans un autre magasin et vendeur dans celui-ci
-     * travaille dans deux magasins : seul le propriétaire le gère, le
-     * responsable de ce magasin ne touche pas à son affectation de vendeur.
-     */
-    public function test_un_responsable_ne_gere_pas_un_compte_responsable_ailleurs(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
-        $responsable = $this->responsable($magasin);
-        $compte = $this->membreDeCesMagasins([$magasin->id => ['role' => RoleMagasin::Vendeur], $autre->id => ['role' => RoleMagasin::Responsable]], $magasin);
-
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $compte, [$magasin->id => ['role' => RoleMagasin::Observateur]]), AuthorizationException::class);
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $compte, [$magasin->id => null]), AuthorizationException::class);
-        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $compte), AuthorizationException::class);
-
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $compte, [$magasin->id => ['role' => RoleMagasin::Observateur]]);
-        $this->assertSame(RoleMagasin::Observateur, Affectation::query()->where('user_id', $compte->id)->where('magasin_id', $magasin->id)->sole()->role);
-        $this->assertSame(RoleMagasin::Responsable, Affectation::query()->where('user_id', $compte->id)->where('magasin_id', $autre->id)->sole()->role);
-    }
-
-    /**
-     * Un responsable ne change ni son affectation, ni son statut : sa
-     * ligne n'a aucun bouton, sa fiche ne s'ouvre pas, et l'action refuse.
+     * Un responsable ne change ni son affectation, ni son statut, ni son
+     * accès : sa ligne n'a aucun bouton, sa fiche ne s'ouvre pas, et
+     * l'action refuse.
      */
     public function test_un_responsable_ne_modifie_ni_son_affectation_ni_son_statut(): void
     {
@@ -279,12 +238,13 @@ class EquipeDuMagasinTest extends TestCase
 
         $this->dansLeMagasin($magasin, $responsable);
         $liste = Livewire::test(ListEquipeDuMagasin::class)->assertCanSeeTableRecords([$saLigne]);
-        foreach (['edit', 'retirer_du_magasin', 'suspendre', 'retirer_de_la_societe', 'renvoyer_un_lien', 'redonner_un_provisoire'] as $geste) {
+        foreach (['edit', 'retirer_du_magasin', 'suspendre', 'redonner_l_acces'] as $geste) {
             $liste->assertTableActionHidden($geste, $saLigne);
         }
         $this->get(EquipeDuMagasinResource::getUrl('edit', ['record' => $saLigne, 'tenant' => $magasin]))->assertForbidden();
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $responsable, [$magasin->id => null]), AuthorizationException::class);
+        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($responsable, $responsable), AuthorizationException::class);
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($responsable, $responsable), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($responsable, $responsable, false), AuthorizationException::class);
 
         $this->assertSame([StatutCompte::Actif, RoleMagasin::Responsable], [$responsable->refresh()->statut, $saLigne->fresh()->role]);
     }
@@ -303,28 +263,29 @@ class EquipeDuMagasinTest extends TestCase
         $this->get(EquipeDuMagasinResource::getUrl('index', ['tenant' => $magasin]))->assertForbidden();
         Livewire::test(ListEquipeDuMagasin::class)->assertForbidden();
         $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->suspendre($vendeur, $collegue), AuthorizationException::class);
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($vendeur, $collegue, [$magasin->id => null]), AuthorizationException::class);
-        $this->assertThrows(fn () => app(CreerMembreAction::class)->handle($vendeur, $magasin->societe, ['name' => 'Paul', 'email' => 'paul@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Observateur]]), AuthorizationException::class);
+        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->retirer($vendeur, $collegue), AuthorizationException::class);
+        $this->assertThrows(fn () => app(RedonnerLAccesAction::class)->handle($vendeur, $collegue, false), AuthorizationException::class);
+        $this->assertThrows(fn () => app(CreerMembreAction::class)->handle($vendeur, $magasin, ['name' => 'Paul'], RoleMagasin::Observateur), AuthorizationException::class);
 
         $this->assertSame(StatutCompte::Actif, $collegue->refresh()->statut);
-        $this->assertFalse(User::query()->where('email', 'paul@example.test')->exists());
+        $this->assertFalse(User::query()->where('name', 'Paul')->exists());
     }
 
     /**
-     * Retirer un vendeur de son dernier magasin le retire de la société :
-     * la confirmation le dit avant.
+     * Un compte de membre ne vaut que pour son magasin : le retirer de son
+     * magasin le retire de la société, et la confirmation le dit avant.
      */
-    public function test_retirer_un_vendeur_de_son_dernier_magasin_le_retire_de_la_societe_apres_confirmation(): void
+    public function test_retirer_un_vendeur_de_son_magasin_le_retire_de_la_societe_apres_confirmation(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul', 'email' => 'paul@example.test']);
+        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul']);
         $saLigne = Affectation::query()->where('user_id', $vendeur->id)->sole();
 
         $this->dansLeMagasin($magasin, $responsable);
         Livewire::test(ListEquipeDuMagasin::class)
             ->mountTableAction('retirer_du_magasin', $saLigne)
-            ->assertSee('C\'est le dernier magasin de Paul : Paul sera retiré de la société.')
+            ->assertSee('Un compte ne vaut que pour son magasin : Paul sera retiré de la société.')
             ->callMountedTableAction();
 
         $this->assertSame([StatutCompte::Retire, (int) $responsable->id], [$vendeur->refresh()->statut, (int) $vendeur->statut_change_par]);
@@ -332,77 +293,52 @@ class EquipeDuMagasinTest extends TestCase
     }
 
     /**
-     * Seul le propriétaire affecte une même personne à plusieurs magasins :
-     * un responsable n'ajoute pas à son magasin un compte d'un autre
-     * magasin, ni par son adresse (la réponse reste neutre), ni par
-     * l'action.
+     * La liste de l'équipe montre au responsable, pour les vendeurs et les
+     * observateurs de son magasin, leur identifiant, les badges « Mot de
+     * passe : l'identifiant » et « Jamais connecté », et filtre les mots de
+     * passe encore égaux à l'identifiant.
      */
-    public function test_un_responsable_n_ajoute_pas_a_son_magasin_un_compte_d_un_autre_magasin(): void
+    public function test_la_liste_de_l_equipe_signale_au_responsable_un_mot_de_passe_encore_egal_a_l_identifiant_et_un_compte_jamais_connecte(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
-        $responsable = $this->responsable($magasin, $autre);
-        $vendeurDeLAutre = $this->membre($autre, RoleMagasin::Vendeur, null, ['name' => 'Bruno', 'email' => 'bruno@example.test']);
-        $vendeurAilleurs = $this->membre($this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Troisième']), RoleMagasin::Vendeur, null, ['name' => 'Carla', 'email' => 'carla@example.test']);
+        $responsable = $this->responsable($magasin);
+        [$nouveau, $identifiant] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        $ancien = $this->membre($magasin, RoleMagasin::Observateur);
+        $ancien->forceFill(['premiere_connexion_le' => now()->subDay(), 'derniere_connexion_le' => now()->subDay()])->save();
+        $ligneDuNouveau = Affectation::query()->where('user_id', $nouveau->id)->sole();
+        $ligneDeLAncien = Affectation::query()->where('user_id', $ancien->id)->sole();
 
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $vendeurDeLAutre, [$magasin->id => ['role' => RoleMagasin::Vendeur]]), AuthorizationException::class, PorteeDesDroits::REFUS_PLUSIEURS_MAGASINS);
-        $this->assertThrows(fn () => app(ModifierMembreAction::class)->handle($responsable, $vendeurAilleurs, [$magasin->id => ['role' => RoleMagasin::Vendeur]]), AuthorizationException::class);
-        try {
-            app(CreerMembreAction::class)->handle($responsable, $magasin->societe, ['name' => 'Carla', 'email' => 'carla@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
-            $this->fail('L\'adresse d\'un compte existant ne sert pas à un nouveau compte.');
-        } catch (ValidationException $refus) {
-            $this->assertSame(['email' => [CreationDesComptes::MESSAGE_ADRESSE_INUTILISABLE]], $refus->errors());
-        }
-
-        $this->assertSame([$autre->id], Affectation::query()->where('user_id', $vendeurDeLAutre->id)->pluck('magasin_id')->map(fn ($id): int => (int) $id)->all());
-        $this->assertSame(1, Affectation::query()->where('user_id', $vendeurAilleurs->id)->count());
+        $this->dansLeMagasin($magasin, $responsable);
+        Livewire::test(ListEquipeDuMagasin::class)
+            ->assertTableColumnStateSet('identifiant', $identifiant, $ligneDuNouveau)
+            ->assertTableColumnStateSet('signaux', ['Mot de passe : l\'identifiant', 'Jamais connecté'], $ligneDuNouveau)
+            ->assertTableColumnStateSet('signaux', null, $ligneDeLAncien)
+            ->filterTable('mot_de_passe_identifiant')
+            ->assertCanSeeTableRecords([$ligneDuNouveau])
+            ->assertCanNotSeeTableRecords([$ligneDeLAncien]);
     }
 
     /**
-     * Le propriétaire affecte une même personne à deux magasins, depuis
-     * l'administration de la société, et coche ses cases dans chacun.
+     * Un responsable ne voit l'identifiant que d'un vendeur ou d'un
+     * observateur de son magasin, à qui il peut redonner l'accès : ni
+     * celui d'un autre responsable, ni ses badges, ni par le filtre.
      */
-    public function test_le_proprietaire_affecte_une_personne_a_deux_magasins_et_coche_ses_cases_dans_chacun(): void
+    public function test_un_responsable_ne_voit_jamais_l_identifiant_d_un_compte_auquel_il_ne_peut_pas_redonner_l_acces(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
-        $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
+        $responsable = $this->responsable($magasin);
+        [$coResponsable] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Responsable);
+        $ligne = Affectation::query()->where('user_id', $coResponsable->id)->sole();
 
-        $this->dansLEspaceDeLaSociete($magasin->societe, $this->proprietaireDe($magasin));
-        Livewire::test(FicheDuMembre::class, ['record' => $vendeur->getRouteKey()])
-            ->mountAction('modifierLesMagasins')
-            ->set('mountedActionsData.0.affectations', [
-                ['magasin_id' => $magasin->id, 'role' => RoleMagasin::Vendeur->value, 'autorisations' => [PermissionRegistry::FACTURE_VIEW, PermissionRegistry::AVOIR_CREER]],
-                ['magasin_id' => $autre->id, 'role' => RoleMagasin::Observateur->value, 'autorisations' => [PermissionRegistry::PRODUIT_VIEW]],
-            ])
-            ->callMountedAction()
-            ->assertHasNoActionErrors();
-
-        $vendeur->refresh();
-        $this->assertSame([PermissionRegistry::AVOIR_CREER, PermissionRegistry::FACTURE_VIEW], $vendeur->autorisationsDans($magasin));
-        $this->assertSame([PermissionRegistry::PRODUIT_VIEW], $vendeur->autorisationsDans($autre));
-        $this->assertSame(RoleMagasin::Observateur, Affectation::query()->where('user_id', $vendeur->id)->where('magasin_id', $autre->id)->sole()->role);
-    }
-
-    /**
-     * L'équipe d'un magasin dit qu'un membre travaille aussi ailleurs,
-     * jamais où.
-     */
-    public function test_l_equipe_d_un_magasin_ne_dit_jamais_dans_quels_autres_magasins_travaille_un_membre(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $secret = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Boutique Discrète']);
-        $vendeur = $this->membreDeCesMagasins([$magasin->id => ['role' => RoleMagasin::Vendeur], $secret->id => ['role' => RoleMagasin::Observateur]], $magasin, ['name' => 'Paul', 'email' => 'paul@example.test']);
-
-        foreach ([$this->proprietaireDe($magasin), $this->responsable($magasin)] as $compte) {
-            $this->dansLeMagasin($magasin, $compte);
-            Livewire::test(ListEquipeDuMagasin::class)
-                ->assertCanSeeTableRecords(Affectation::query()->where('user_id', $vendeur->id)->where('magasin_id', $magasin->id)->get())
-                ->assertSee('Paul')
-                ->assertSee('Aussi dans d\'autres magasins')
-                ->assertDontSee('Boutique Discrète');
-        }
-        $this->assertSame(2, Affectation::query()->where('user_id', $vendeur->id)->count());
+        $this->dansLeMagasin($magasin, $responsable);
+        Livewire::test(ListEquipeDuMagasin::class)
+            ->assertTableColumnStateNotSet('identifiant', (string) $coResponsable->identifiantDeConnexion(), $ligne)
+            ->assertTableColumnStateSet('signaux', null, $ligne)
+            ->assertDontSee((string) $coResponsable->identifiantDeConnexion())
+            ->filterTable('mot_de_passe_identifiant')
+            ->assertCanNotSeeTableRecords([$ligne]);
+        $this->dansLeMagasin($magasin, $this->proprietaireDe($magasin));
+        Livewire::test(ListEquipeDuMagasin::class)->assertTableColumnStateSet('identifiant', (string) $coResponsable->identifiantDeConnexion(), $ligne);
     }
 
     /**
@@ -437,24 +373,25 @@ class EquipeDuMagasinTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $responsable = $this->responsable($magasin);
-        $parLeProprietaire = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul', 'email' => 'paul@example.test']);
-        $parLeResponsable = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Jean', 'email' => 'jean@example.test']);
-        $dansLaSociete = $this->membre($magasin, RoleMagasin::Observateur, null, ['name' => 'Léa', 'email' => 'lea@example.test']);
+        $parLeProprietaire = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Paul']);
+        $parLeResponsable = $this->membre($magasin, RoleMagasin::Vendeur, null, ['name' => 'Jean']);
+        $dansLaSociete = $this->membre($magasin, RoleMagasin::Observateur, null, ['name' => 'Léa']);
         $this->passerEn($magasin, $situation);
 
         foreach ([[$proprietaire, $parLeProprietaire], [$responsable, $parLeResponsable]] as [$gestionnaire, $vendeur]) {
             $saLigne = Affectation::query()->where('user_id', $vendeur->id)->sole();
             $this->flushSession();
-            $this->actingAs($gestionnaire)->get(EquipeDuMagasinResource::getUrl('index', ['tenant' => $magasin]))->assertOk()->assertSee($vendeur->email);
-            $this->get(EquipeDuMagasinResource::getUrl('create', ['tenant' => $magasin]))->assertStatus($seGere ? 200 : 403);
+            $this->actingAs($gestionnaire)->get(EquipeDuMagasinResource::getUrl('index', ['tenant' => $magasin]))->assertOk()->assertSee($vendeur->name);
             $this->dansLeMagasin($magasin, $gestionnaire);
             $liste = Livewire::test(ListEquipeDuMagasin::class);
 
             if ($seGere) {
+                $liste->assertActionVisible('creerUnCompte');
                 $liste->callTableAction('retirer_du_magasin', $saLigne);
                 $this->assertModelMissing($saLigne);
                 $this->assertFalse($vendeur->refresh()->peutOuvrir($magasin));
             } else {
+                $liste->assertActionHidden('creerUnCompte');
                 $liste->assertTableActionHidden('retirer_du_magasin', $saLigne);
                 $this->forgerLActionDeLigne($liste, 'retirer_du_magasin', $saLigne);
                 $this->assertModelExists($saLigne);

@@ -9,8 +9,9 @@ use LogicException;
 /**
  * Le débit des e-mails que PILIQI envoie, depuis le domaine de l'éditeur,
  * à la demande d'une personne : au plus 60 par heure et par personne, tous
- * e-mails confondus (documents et relances d'un magasin, propositions de
- * rattachement, liens de confirmation d'une nouvelle adresse), et, pour
+ * e-mails confondus (documents et relances d'un magasin, liens de
+ * confirmation d'une nouvelle adresse, liens de la transmission de la
+ * propriété), et, pour
  * ceux d'un magasin, 200 par heure et par magasin (voir
  * EnvoyerDocumentAction). Personne n'en fait un relais d'envoi en masse,
  * ni d'une société vers les comptes d'une autre. Les envois du système

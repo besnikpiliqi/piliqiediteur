@@ -25,33 +25,24 @@ use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Stock\Services\ConfirmationVenteSansStock;
-use App\Domain\Tenancy\Actions\AccepterUnRattachementAction;
-use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
-use App\Domain\Tenancy\Actions\ProposerUnRattachementAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
-use App\Domain\Tenancy\Enums\RoleSociete;
-use App\Domain\Tenancy\Mail\PropositionDeRattachementMail;
 use App\Domain\Tenancy\Models\Affectation;
-use App\Domain\Tenancy\Models\DemandeRattachement;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\CreationDesComptes;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Services\VerificateurJournalAudit;
 use App\Models\User;
 use Closure;
-use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -84,13 +75,13 @@ class DroitsConcurrenceTest extends TestCase
         $premier = $this->responsable($magasin);
         $second = $this->responsable($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLIENT_VIEW]);
-        [$secondId, $vendeurId, $magasinId] = [$second->id, $vendeur->id, $magasin->id];
+        [$secondId, $vendeurId] = [$second->id, $vendeur->id];
         $concurrente = null;
-        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($secondId, $vendeurId, $magasinId): void {
-            app(ModifierMembreAction::class)->handle(User::query()->findOrFail($secondId), User::query()->findOrFail($vendeurId), [$magasinId => ['role' => RoleMagasin::Vendeur, 'autorisations' => [PermissionRegistry::PRODUIT_VIEW]]]);
+        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($secondId, $vendeurId): void {
+            app(ModifierMembreAction::class)->handle(User::query()->findOrFail($secondId), User::query()->findOrFail($vendeurId), RoleMagasin::Vendeur, [PermissionRegistry::PRODUIT_VIEW]);
         }, $concurrente);
 
-        app(ModifierMembreAction::class)->handle($premier, $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [PermissionRegistry::FACTURE_VIEW]]]);
+        app(ModifierMembreAction::class)->handle($premier, $vendeur, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_VIEW]);
 
         $this->attendreLaReussite($concurrente);
         $siens = array_values(array_filter($this->modificationsDesDroits($magasin), fn (array $details): bool => $details['membre']['id'] === $vendeur->id));
@@ -103,71 +94,29 @@ class DroitsConcurrenceTest extends TestCase
     }
 
     /**
-     * Deux créations au même instant avec la même adresse : la seconde
-     * attend la première, puis reçoit la réponse neutre ; un seul compte
-     * existe.
+     * Deux créations au même instant avec le même jeton d'écran, pour deux
+     * demandes différentes : la seconde attend la première sur le
+     * registre du magasin, relit le jeton qui a déjà servi pour une autre
+     * demande, et est refusée sans rien révéler ; un seul compte existe.
      */
-    public function test_deux_creations_simultanees_avec_la_meme_adresse_n_en_retiennent_qu_une(): void
+    public function test_deux_creations_simultanees_du_meme_jeton_pour_deux_demandes_n_en_retiennent_qu_une(): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        [$proprietaireId, $societeId, $magasinId] = [$proprietaire->id, $magasin->societe_id, $magasin->id];
+        $jeton = (string) Str::uuid();
+        [$proprietaireId, $magasinId] = [$proprietaire->id, $magasin->id];
         $concurrente = null;
-        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($proprietaireId, $societeId, $magasinId): void {
-            app(CreerMembreAction::class)->handle(User::query()->findOrFail($proprietaireId), Societe::query()->findOrFail($societeId), ['name' => 'Copie', 'email' => 'paul@example.test'], 'provisoire-des-tests', [$magasinId => ['role' => RoleMagasin::Observateur]]);
+        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($proprietaireId, $magasinId, $jeton): void {
+            $magasin = Magasin::query()->findOrFail($magasinId);
+            app(TenantContext::class)->runAs($magasin, fn () => app(CreerMembreAction::class)->handle(User::query()->findOrFail($proprietaireId), $magasin, ['name' => 'Copie'], RoleMagasin::Observateur, null, $jeton));
         }, $concurrente);
 
-        app(CreerMembreAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Paul', 'email' => 'paul@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
+        app(CreerMembreAction::class)->handle($proprietaire, $magasin, ['name' => 'Paul'], RoleMagasin::Vendeur, null, $jeton);
 
         $resultat = $this->attendreLEchec($concurrente);
-        $this->assertStringContainsString(CreationDesComptes::MESSAGE_ADRESSE_INUTILISABLE, $resultat);
-        $this->assertSame(['Paul'], User::query()->where('email', 'paul@example.test')->pluck('name')->all());
-    }
-
-    /**
-     * Deux sociétés ont proposé au même compte retiré de les rejoindre, et
-     * la personne accepte les deux au même instant : sous le verrou de la
-     * ligne du compte, la seconde acceptation relit un compte qui n'est
-     * plus libre, ou une proposition annulée, et est refusée. Le compte
-     * n'appartient qu'à une société, et n'est affecté que dans elle.
-     */
-    public function test_deux_rattachements_acceptes_en_meme_temps_n_en_retiennent_qu_un(): void
-    {
-        $this->exigerUnServeurDeBaseDeDonnees();
-        Mail::fake();
-        $ancien = $this->ouvrirUneSociete(['nom' => 'Ancienne']);
-        $compte = $this->membre($ancien, RoleMagasin::Vendeur, null, ['email' => 'paul@example.test']);
-        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($ancien), $compte);
-        $premiere = $this->ouvrirUneSociete(['nom' => 'Première']);
-        $seconde = $this->ouvrirUneSociete(['nom' => 'Seconde']);
-        $jetons = [];
-        foreach ([$premiere, $seconde] as $magasin) {
-            app(TenantContext::class)->clear();
-            app(ProposerUnRattachementAction::class)->handle($this->proprietaireDe($magasin), $magasin->societe, 'paul@example.test', RoleSociete::Membre, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
-            $jetons[] = Str::afterLast(Mail::sent(PropositionDeRattachementMail::class)->last()->lien, '/');
-        }
-        app(TenantContext::class)->clear();
-        [$jetonDeLaPremiere, $jetonDeLaSeconde] = $jetons;
-        $concurrente = null;
-        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($jetonDeLaSeconde): void {
-            app(AccepterUnRattachementAction::class)->handle($jetonDeLaSeconde, 'paul@example.test', 'mot-de-passe-sur');
-        }, $concurrente);
-
-        try {
-            app(AccepterUnRattachementAction::class)->handle($jetonDeLaPremiere, 'paul@example.test', self::MOT_DE_PASSE_CHOISI);
-            $principaleRetenue = true;
-        } catch (AuthorizationException) {
-            $principaleRetenue = false;
-        }
-
-        $this->assertInstanceOf(InvokedProcess::class, $concurrente);
-        $concurrenteRetenue = $concurrente->wait()->successful();
-        $this->assertNotSame($principaleRetenue, $concurrenteRetenue, 'Une seule des deux acceptations doit être retenue.');
-        $retenue = $principaleRetenue ? $premiere : $seconde;
-        $this->assertSame((int) $retenue->societe_id, (int) $compte->refresh()->societe_id);
-        $this->assertSame([(int) $retenue->id], Affectation::query()->where('user_id', $compte->id)->pluck('magasin_id')->map(fn ($id): int => (int) $id)->all());
-        $this->assertSame(1, DemandeRattachement::withoutGlobalScopes()->whereNotNull('acceptee_le')->count());
+        $this->assertStringContainsString(CreationDesComptes::MESSAGE_DEMANDE_DEJA_SERVIE, $resultat);
+        $this->assertSame(['Paul'], User::query()->where('societe_id', $magasin->societe_id)->whereIn('name', ['Paul', 'Copie'])->pluck('name')->all());
     }
 
     /**
@@ -181,13 +130,13 @@ class DroitsConcurrenceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $responsable = $this->responsable($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, [PermissionRegistry::CLIENT_VIEW]);
-        [$responsableId, $vendeurId, $magasinId] = [$responsable->id, $vendeur->id, $magasin->id];
+        [$responsableId, $vendeurId] = [$responsable->id, $vendeur->id];
         $concurrente = null;
-        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($responsableId, $vendeurId, $magasinId): void {
-            app(ModifierMembreAction::class)->handle(User::query()->findOrFail($responsableId), User::query()->findOrFail($vendeurId), [$magasinId => ['role' => RoleMagasin::Vendeur, 'autorisations' => PermissionRegistry::toutes()]]);
+        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($responsableId, $vendeurId): void {
+            app(ModifierMembreAction::class)->handle(User::query()->findOrFail($responsableId), User::query()->findOrFail($vendeurId), RoleMagasin::Vendeur, PermissionRegistry::toutes());
         }, $concurrente);
 
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $responsable, [$magasin->id => ['role' => RoleMagasin::Vendeur]]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $responsable, RoleMagasin::Vendeur);
 
         $this->assertStringContainsString(PorteeDesDroits::REFUS, $this->attendreLEchec($concurrente));
         $this->assertSame([PermissionRegistry::CLIENT_VIEW], Affectation::query()->where('user_id', $vendeur->id)->sole()->autorisations());
@@ -204,10 +153,10 @@ class DroitsConcurrenceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $administrateur = $this->administrateur($magasin, null, [AutorisationsSociete::RESPONSABLES_NOMMER]);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
-        [$administrateurId, $vendeurId, $magasinId] = [$administrateur->id, $vendeur->id, $magasin->id];
+        [$administrateurId, $vendeurId] = [$administrateur->id, $vendeur->id];
         $concurrente = null;
-        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($administrateurId, $vendeurId, $magasinId): void {
-            app(ModifierMembreAction::class)->handle(User::query()->findOrFail($administrateurId), User::query()->findOrFail($vendeurId), [$magasinId => ['role' => RoleMagasin::Responsable]]);
+        $this->concurrencerDesQueLeRegistreEstVerrouille(static function () use ($administrateurId, $vendeurId): void {
+            app(ModifierMembreAction::class)->handle(User::query()->findOrFail($administrateurId), User::query()->findOrFail($vendeurId), RoleMagasin::Responsable);
         }, $concurrente);
 
         app(ModifierAdministrateurAction::class)->modifier($this->proprietaireDe($magasin), $administrateur, null, PermissionRegistry::modeleDeLAdministrateur(), []);
@@ -256,7 +205,7 @@ class DroitsConcurrenceTest extends TestCase
             self::faireLeGeste($geste, User::query()->findOrFail($vendeurId), $documentId);
         }, $concurrente);
 
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => array_values(array_diff(PermissionRegistry::toutes(), [$autorisation]))]]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, array_values(array_diff(PermissionRegistry::toutes(), [$autorisation])));
 
         $this->assertStringContainsString(LecteurDesDroits::REFUS, $this->attendreLEchec($concurrente));
         $this->assertSame($avant, $compter());
@@ -282,7 +231,7 @@ class DroitsConcurrenceTest extends TestCase
             app(ValiderFactureAchatAction::class)->handle(User::query()->findOrFail($acheteurId), FactureAchat::query()->findOrFail($factureAchatId));
         }, $concurrente);
 
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $acheteur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER]]]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $acheteur, RoleMagasin::Vendeur, [PermissionRegistry::FACTURE_ACHAT_VIEW, PermissionRegistry::FACTURE_ACHAT_CREER]);
 
         $this->assertStringContainsString(LecteurDesDroits::REFUS, $this->attendreLEchec($concurrente));
         $this->assertSame([StatutFactureAchat::Brouillon, null, 0], [$factureAchat->fresh()->statut, $factureAchat->fresh()->numero, $produit->fresh()->stock_quantite]);

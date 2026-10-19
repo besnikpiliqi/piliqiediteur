@@ -23,9 +23,9 @@ use Illuminate\Auth\Access\AuthorizationException;
  *
  * Le rôle de responsable disparaît de ce magasin :
  * - une promotion rend à la personne son rôle et ses cases d'avant ;
- * - une affectation que la nomination avait créée disparaît ; si c'était le
- *   dernier magasin de la personne (son compte créé par la nomination,
- *   par exemple), elle est retirée de la société, ses sessions se ferment.
+ * - une affectation que la nomination avait créée disparaît, avec elle le
+ *   seul magasin du compte (créé par la nomination) : la personne est
+ *   retirée de la société, ses sessions se ferment.
  * Aucun document émis n'est touché. Sous les verrous des registres des
  * magasins du compte et des lignes de l'auteur et du compte relus, avec le
  * JET 130 de chaque magasin touché et l'entrée d'audit (voir
@@ -64,7 +64,7 @@ class AnnulerUneNominationAction
                     $relue->delete();
                     $compteRelu->effacerLesNotificationsDesMagasins([$magasinId]);
 
-                    if ($compteRelu->affectationsDeMembre()->isEmpty()) {
+                    if ($compteRelu->affectationDeMembre() === null) {
                         $compteRelu->forceFill($compteRelu->nouveauStatut(StatutCompte::Retire, $auteurRelu))->save();
                         $compteRelu->effacerToutesSesNotifications();
                         $this->sessions->fermer($compteRelu);

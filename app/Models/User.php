@@ -8,6 +8,7 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use Database\Factories\UserFactory;
@@ -40,9 +41,11 @@ use Illuminate\Support\Str;
  *   portent ses cases) ;
  * - un expert-comptable, sans affectation ni case, qui lit chaque magasin
  *   réel de la société (voir PermissionRegistry::consultations()) ;
- * - un membre, affecté à un ou plusieurs magasins avec un rôle de magasin
- *   dans chacun : responsable (toutes les autorisations de ce magasin,
- *   sans case), vendeur ou observateur (ses cases dans ce magasin).
+ * - un membre, affecté à un seul magasin, celui de son identifiant (voir
+ *   Identifiant), avec un rôle de magasin : responsable (toutes les
+ *   autorisations de ce magasin, sans case), vendeur ou observateur (ses
+ *   cases dans ce magasin) ; une personne qui travaille dans plusieurs
+ *   magasins y a un compte dans chacun.
  *
  * Ses droits se lisent selon son rôle, en échouant fermé : une affectation
  * ou une autorisation qui contredit son rôle (restée en base après la
@@ -53,17 +56,22 @@ use Illuminate\Support\Str;
  * société, qui les inscrivent au journal des événements de chaque magasin
  * touché (voir JournalDesDroits).
  *
- * Un compte créé par la société a un mot de passe provisoire, valable 72
- * heures, que la personne change avant toute autre page ; jusque-là,
- * comme un compte suspendu ou retiré, il n'a aucun droit (voir peutAgir()).
- * La personne peut le refuser tant que son adresse n'a jamais été
- * confirmée (voir peutRefuserSonCompte()).
+ * Chaque compte, propriétaire compris, a un identifiant de connexion de 8
+ * chiffres, tiré au hasard, qui ne change jamais, même quand le compte
+ * change de rôle (voir Identifiant). Un compte créé par la société a pour
+ * premier mot de passe son identifiant (mot_de_passe_est_l_identifiant),
+ * que la personne change quand elle le veut ; un responsable, un
+ * administrateur ou un expert-comptable le change à sa première connexion
+ * (voir doitChoisirSonMotDePasse()). Seul un compte actif agit (voir
+ * peutAgir()).
  *
- * Un compte ne s'efface pas : son adresse ne sert jamais à un autre
- * compte (index unique de users.email).
+ * Un compte ne s'efface pas : retiré, il garde son rôle, son identifiant
+ * et son historique. Son adresse e-mail est l'adresse de connexion du
+ * propriétaire, unique parmi les propriétaires, ou un simple contact pour
+ * tout autre compte.
  */
 #[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token', 'nouvelle_adresse_jeton_hache'])]
+#[Hidden(['password', 'remember_token', 'nouvelle_adresse_jeton_hache', 'jeton_acces_redonne'])]
 class User extends Authenticatable implements FilamentUser, HasTenants
 {
     /** @use HasFactory<UserFactory> */
@@ -79,7 +87,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     protected $attributes = [
         'role_societe' => 'membre',
         'statut' => 'actif',
-        'mot_de_passe_a_changer' => false,
+        'mot_de_passe_est_l_identifiant' => false,
+        'signaler_le_prochain_mot_de_passe' => false,
         'statut_decide_par_le_proprietaire' => false,
     ];
 
@@ -103,8 +112,12 @@ class User extends Authenticatable implements FilamentUser, HasTenants
             'role_societe' => RoleSociete::class,
             'statut' => StatutCompte::class,
             'statut_decide_par_le_proprietaire' => 'boolean',
-            'mot_de_passe_a_changer' => 'boolean',
-            'mot_de_passe_provisoire_expire_le' => 'datetime',
+            'mot_de_passe_est_l_identifiant' => 'boolean',
+            'signaler_le_prochain_mot_de_passe' => 'boolean',
+            'premiere_connexion_le' => 'datetime',
+            'derniere_connexion_le' => 'datetime',
+            'acces_redonne_le' => 'datetime',
+            'acces_redonne_en_presence' => 'boolean',
             'nouvelle_adresse_expire_le' => 'datetime',
         ];
     }
@@ -119,10 +132,10 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     /**
      * Une adresse e-mail de compte s'enregistre et se compare en
      * minuscules, sans espaces autour : « A@x.fr » et « a@x.fr » sont la
-     * même adresse, qui ne sert jamais à un second compte (index unique de
-     * users.email). La connexion et « Mot de passe oublié » la cherchent
-     * ainsi (voir FournisseurDesComptes), et les formulaires la valident
-     * déjà sous cette forme (voir la macro adresseDeConnexion()).
+     * même adresse. La connexion et « Mot de passe oublié » cherchent ainsi
+     * l'adresse de connexion d'un propriétaire (voir FournisseurDesComptes),
+     * et les formulaires la valident déjà sous cette forme (voir la macro
+     * adresseDeConnexion()).
      */
     public static function normaliserEmail(string $email): string
     {
@@ -167,15 +180,66 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Qui a créé ce compte pour la personne (voir RefuserSonCompteAction,
-     * qui le prévient, et PorteeDesDroits, qui lui réserve les nouveaux
-     * droits d'un compte au mot de passe provisoire).
+     * Qui a créé ce compte pour la personne (voir CreationDesComptes, qui
+     * compte ses créations du jour).
      *
      * @return BelongsTo<User, $this>
      */
     public function createur(): BelongsTo
     {
         return $this->belongsTo(self::class, 'cree_par');
+    }
+
+    /**
+     * Son identifiant de connexion, lu dans sa propre société, quelle que
+     * soit la société active : il ne se montre qu'à la personne, au
+     * propriétaire, au responsable de son magasin pour un vendeur ou un
+     * observateur, et à un administrateur par un geste tracé (voir
+     * PorteeDesDroits::voitLIdentifiant()). Null pour un compte qui n'en a
+     * pas encore, dans la transaction même de sa création.
+     */
+    public function identifiantDeConnexion(): ?string
+    {
+        $identifiant = $this->ligneDIdentifiant()?->identifiant;
+
+        return $identifiant === null ? null : (string) $identifiant;
+    }
+
+    /**
+     * Son magasin de rattachement : celui pour lequel son compte de membre
+     * a été créé, ou que le propriétaire lui a choisi une fois quand il est
+     * devenu membre (voir Identifiant) ; null pour un compte né
+     * propriétaire, administrateur ou expert-comptable qui n'a jamais été
+     * membre.
+     */
+    public function magasinDeSonIdentifiant(): ?Magasin
+    {
+        $magasinId = $this->ligneDIdentifiant()?->magasin_id;
+
+        return $magasinId === null ? null : Magasin::query()->where('societe_id', $this->societe_id)->find($magasinId);
+    }
+
+    /**
+     * Est-il un compte d'entraînement : un compte rattaché au magasin de
+     * démonstration de sa société, qui n'ouvre jamais un magasin réel et
+     * ne change jamais de rôle de société (voir GardesDesDroits) ?
+     */
+    public function estUnCompteDEntrainement(): bool
+    {
+        return $this->magasinDeSonIdentifiant()?->est_demonstration ?? false;
+    }
+
+    /**
+     * La ligne de son identifiant, filtrée par son compte et sa société :
+     * la seule lecture d'un identifiant hors de la société active, pour ce
+     * compte-ci (voir Identifiant).
+     */
+    private function ligneDIdentifiant(): ?Identifiant
+    {
+        return Identifiant::withoutGlobalScopes()
+            ->where('societe_id', $this->societe_id)
+            ->where('user_id', $this->getKey())
+            ->first();
     }
 
     public function estProprietaire(): bool
@@ -204,6 +268,15 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function estMembre(): bool
     {
         return $this->role_societe === RoleSociete::Membre;
+    }
+
+    /**
+     * Est-il responsable de son magasin : un membre dont l'affectation a le
+     * rôle de responsable ?
+     */
+    public function estResponsable(): bool
+    {
+        return $this->affectationDeMembre()?->role === RoleMagasin::Responsable;
     }
 
     /**
@@ -255,45 +328,34 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Son mot de passe est-il provisoire ? La personne le change avant
-     * toute autre page (voir ExigerUnMotDePasseDefinitif).
+     * Doit-il choisir son mot de passe avant toute autre page (voir
+     * ExigerSonPropreMotDePasse) ? Un responsable, un administrateur ou un
+     * expert-comptable dont le mot de passe est encore son identifiant : à
+     * sa première connexion, et dès sa page suivante quand il vient d'être
+     * promu à l'un de ces rôles. Un vendeur ou un observateur le garde tant
+     * qu'il le veut.
      */
-    public function doitChangerSonMotDePasse(): bool
+    public function doitChoisirSonMotDePasse(): bool
     {
-        return $this->mot_de_passe_a_changer;
-    }
-
-    /**
-     * Peut-il recevoir de cet auteur de nouveaux droits : un nouveau
-     * magasin, un rôle de responsable, une réintégration, un rôle
-     * d'administrateur ? Toujours s'il a choisi son mot de passe ; tant que
-     * son mot de passe est un provisoire, seulement de la personne qui a
-     * créé le compte, et seulement si c'est elle qui lui a donné ce
-     * provisoire (users.provisoire_donne_par) : qui connaît le provisoire
-     * ne profite jamais, par ce compte, de droits qu'il ne pourrait pas
-     * donner lui-même, même quand un autre que l'auteur du compte le lui a
-     * redonné (voir DonnerUnMotDePasseProvisoireAction).
-     */
-    public function recoitDeNouveauxDroitsDe(User $auteur): bool
-    {
-        return ! $this->doitChangerSonMotDePasse()
-            || ((int) $this->cree_par === (int) $auteur->getKey() && (int) $this->provisoire_donne_par === (int) $auteur->getKey());
+        return $this->mot_de_passe_est_l_identifiant
+            && ($this->estAdministrateur() || $this->estExpertComptable() || $this->estResponsable());
     }
 
     /**
      * Les colonnes d'un nouveau statut du compte, donné par cet auteur relu
-     * en base (le compte lui-même pour un refus ou la création de sa
-     * société) : qui l'a donné, et si c'était, à cet instant, le
-     * propriétaire (voir statutDecideParLeProprietaire()).
+     * en base, ou par le système (null, la fermeture définitive du magasin
+     * de démonstration pour un compte d'entraînement) : qui l'a donné, et
+     * si c'était, à cet instant, le propriétaire (voir
+     * statutDecideParLeProprietaire()).
      *
-     * @return array{statut: StatutCompte, statut_change_par: int, statut_decide_par_le_proprietaire: bool}
+     * @return array{statut: StatutCompte, statut_change_par: int|null, statut_decide_par_le_proprietaire: bool}
      */
-    public function nouveauStatut(StatutCompte $statut, User $auteur): array
+    public function nouveauStatut(StatutCompte $statut, ?User $auteur): array
     {
         return [
             'statut' => $statut,
-            'statut_change_par' => (int) $auteur->getKey(),
-            'statut_decide_par_le_proprietaire' => $auteur->estProprietaire(),
+            'statut_change_par' => $auteur === null ? null : (int) $auteur->getKey(),
+            'statut_decide_par_le_proprietaire' => $auteur?->estProprietaire() ?? false,
         ];
     }
 
@@ -312,68 +374,12 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Son statut actuel vient-il de son propre refus (voir
-     * RefuserSonCompteAction) ? Il ne revient alors que par un
-     * rattachement qu'il accepte.
-     */
-    public function estRetireParSonRefus(): bool
-    {
-        return $this->estRetire() && (int) $this->statut_change_par === (int) $this->getKey();
-    }
-
-    /**
-     * Son mot de passe provisoire a-t-il dépassé ses 72 heures ? Il n'ouvre
-     * plus le compte : la personne en demande un nouveau à qui l'a créé.
-     */
-    public function sonMotDePasseProvisoireAExpire(): bool
-    {
-        return $this->mot_de_passe_a_changer && $this->mot_de_passe_provisoire_expire_le?->isPast() === true;
-    }
-
-    /**
-     * Son adresse est-elle confirmée ? users.email_verified_at est la date
-     * à laquelle quelqu'un a suivi un lien envoyé à l'adresse actuelle du
-     * compte, et rien d'autre : le lien de l'inscription (voir
-     * CreerSocieteAction), la décision prise sur la page d'un lien « Mot de
-     * passe oublié » (voir PageDuLien), l'acceptation d'un rattachement
-     * (voir AccepterUnRattachementAction) ou la confirmation d'une nouvelle
-     * adresse (voir ConfirmerNouvelleAdresseAction). Aucune création par
-     * la société ne la pose, ni le changement d'un mot de passe provisoire.
-     */
-    public function aConfirmeSonAdresse(): bool
-    {
-        return $this->email_verified_at !== null;
-    }
-
-    /**
-     * La personne peut-elle refuser ce compte ? Jamais le propriétaire ;
-     * tout autre compte (membre, administrateur, expert-comptable) dont
-     * l'adresse n'a jamais été confirmée (voir aConfirmeSonAdresse()) et
-     * qui est actif, suspendu, ou retiré par la société (par une autre
-     * personne que lui) : un compte retiré par son propre refus ne se
-     * refuse pas une seconde fois. Les actions relisent la condition en
-     * base, sous le verrou de la ligne du compte (voir
-     * RefuserSonCompteAction).
-     */
-    public function peutRefuserSonCompte(): bool
-    {
-        if ($this->estProprietaire() || $this->aConfirmeSonAdresse()) {
-            return false;
-        }
-
-        return match ($this->statut) {
-            StatutCompte::Actif, StatutCompte::Suspendu => true,
-            StatutCompte::Retire => $this->statut_change_par !== null && (int) $this->statut_change_par !== (int) $this->getKey(),
-        };
-    }
-
-    /**
-     * Le compte peut-il agir ? Actif, avec un mot de passe définitif :
-     * sinon il n'a aucun droit, où que ce soit (voir ControleDesDroits).
+     * Le compte peut-il agir ? Actif : sinon il n'a aucun droit, où que ce
+     * soit (voir ControleDesDroits).
      */
     public function peutAgir(): bool
     {
-        return $this->estActif() && ! $this->doitChangerSonMotDePasse();
+        return $this->estActif();
     }
 
     /**
@@ -609,28 +615,29 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Ses affectations de membre (avec un rôle de magasin), lues en base ;
-     * aucune pour un compte qui n'est pas membre.
-     *
-     * @return Collection<int, Affectation>
+     * Son affectation de membre (avec un rôle de magasin), dans le magasin
+     * de son identifiant, lue en base ; aucune pour un compte qui n'est pas
+     * membre, ni pour un membre retiré de son magasin.
      */
-    public function affectationsDeMembre(): Collection
+    public function affectationDeMembre(): ?Affectation
     {
         if (! $this->estMembre()) {
-            return new Collection;
+            return null;
         }
 
-        return $this->affectations()->whereNotNull('role')->whereNotNull('magasin_id')->orderBy('magasin_id')->get();
+        return $this->affectations()->whereNotNull('role')->whereNotNull('magasin_id')->first();
     }
 
     /**
      * Les autorisations que son rôle lui donne dans ce magasin de sa
-     * société, quel que soit son statut ; null quand aucune n'y vaut :
+     * société, qu'il soit actif ou suspendu ; null quand aucune n'y vaut :
      * - le propriétaire : toutes sauf celles de la vente (voir
      *   PermissionRegistry::duProprietaire()), dans chaque magasin,
      *   démonstration comprise : il ne vend jamais ;
      * - un expert-comptable : les consultations, dans un magasin réel ;
-     *   rien dans le magasin de démonstration ;
+     *   rien dans le magasin de démonstration, ni une fois retiré de la
+     *   société (il garde son rôle, sans plus aucun droit, comme un membre
+     *   ou un administrateur retiré, dont les affectations ont disparu) ;
      * - un administrateur : les cases de son affectation à ce magasin, ou
      *   de son affectation à tous les magasins ; rien s'il a les deux
      *   sortes d'affectations ;
@@ -646,7 +653,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
         }
 
         if ($this->estExpertComptable()) {
-            if ($magasin->est_demonstration) {
+            if ($magasin->est_demonstration || $this->estRetire()) {
                 return null;
             }
 
@@ -730,9 +737,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     /**
      * Les magasins qu'il peut ouvrir, par nom, le magasin de démonstration
      * à part, après les autres (voir peutOuvrir()) ; aucun pour un compte
-     * qui n'est pas actif. Un compte au mot de passe provisoire les voit,
-     * pour que le panneau s'ouvre sur le changement de son mot de passe,
-     * mais n'en ouvre aucun avant.
+     * qui n'est pas actif ; pour un membre, son seul magasin.
      *
      * @return Collection<int, Magasin>
      */
@@ -756,8 +761,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Efface toutes ses notifications : le jour où il quitte sa société
-     * (retiré, rattaché à une autre), rien ne lui en reste dans sa cloche.
+     * Efface toutes ses notifications : le jour où il est suspendu ou
+     * retiré de sa société, rien ne lui en reste dans sa cloche.
      */
     public function effacerToutesSesNotifications(): void
     {
@@ -811,8 +816,8 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      * MenerUnCompteSansMagasin), et aucun magasin ne s'ouvre hors de ceux
      * que lui donne canAccessTenant(). Celui de l'administration de la
      * société s'ouvre à son propriétaire et à ses administrateurs actifs. Un
-     * compte au mot de passe provisoire n'y voit que le changement de son
-     * mot de passe (voir ExigerUnMotDePasseDefinitif). Tout autre panneau
+     * compte qui doit choisir son mot de passe n'y voit que ce choix (voir
+     * ExigerSonPropreMotDePasse). Tout autre panneau
      * reste fermé, jusqu'à ce que l'administration de l'éditeur (étape 13
      * de la feuille de route) définisse le sien.
      */

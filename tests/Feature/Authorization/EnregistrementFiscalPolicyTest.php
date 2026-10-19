@@ -43,9 +43,7 @@ class EnregistrementFiscalPolicyTest extends TestCase
         $this->assertFalse($vendeur->can('viewAny', EnregistrementFiscal::class));
         $this->assertFalse($vendeur->can('view', $evenement));
 
-        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, [
-            $magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CAISSE_SECURISEE_CONSULTER]],
-        ]);
+        app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CAISSE_SECURISEE_CONSULTER]);
 
         $this->assertTrue($vendeur->fresh()->can('viewAny', EnregistrementFiscal::class));
         $this->assertTrue($vendeur->fresh()->can('view', $evenement));

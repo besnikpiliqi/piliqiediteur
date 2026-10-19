@@ -19,7 +19,7 @@ use App\Domain\Facturation\Enums\NatureOperation;
 use App\Domain\Facturation\Enums\TypePreuve;
 use App\Domain\Facturation\Jobs\EnvoyerDocumentJob;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Tenancy\Actions\RefuserSonCompteAction;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\EntreeAudit;
@@ -82,22 +82,25 @@ class HistoriqueAuNomFigeTest extends TestCase
         'pieces_verification' => ['deposee_par' => 'deposee_par_nom'],
         'codes_confirmation' => ['demande_par' => 'demande_par_nom'],
         'demandes_accord_dirigeant' => ['demande_par' => 'demande_par_nom'],
-        'demandes_rattachement' => ['demande_par' => 'demande_par_nom'],
+        'postes_reconnus' => ['reconnu_par' => 'reconnu_par_nom', 'retire_par' => 'retire_par_nom'],
     ];
 
     /**
      * Les colonnes vers un compte qui ne sont pas de l'historique : des
-     * droits actuels, un panier en cours, le jeton d'une demande traitée,
-     * un lien interne jamais affiché,
-     * ou un nom déjà porté ailleurs (le contenu signé, le libellé de
-     * l'audit).
+     * droits actuels, un identifiant de connexion, un panier en cours, le
+     * jeton d'une demande traitée, une demande de transmission de la
+     * propriété, un lien interne jamais affiché, ou un nom déjà porté
+     * ailleurs (le contenu signé, le libellé de l'audit).
      *
      * @var list<string>
      */
     private const HORS_HISTORIQUE = [
         'users.cree_par',
-        'users.provisoire_donne_par',
+        'users.acces_redonne_par',
         'users.statut_change_par',
+        'identifiants.user_id',
+        'transmissions_propriete.demandee_par',
+        'transmissions_propriete.destinataire_id',
         'paniers_caisse.user_id',
         'actions_traitees.user_id',
         'affectations.user_id',
@@ -106,7 +109,6 @@ class HistoriqueAuNomFigeTest extends TestCase
         'journal_audit.auteur_id',
         'enregistrements_fiscaux.operateur_id',
         'mandats_pdp.accorde_par',
-        'demandes_rattachement.user_id',
     ];
 
     public function test_les_ecrans_de_l_historique_affichent_le_nom_tel_qu_il_etait_au_moment_de_l_operation(): void
@@ -148,17 +150,18 @@ class HistoriqueAuNomFigeTest extends TestCase
     }
 
     /**
-     * Le vendeur n'avait jamais confirmé son adresse : il refuse son compte
-     * après avoir vendu, puis, repris ailleurs, change de nom. L'historique
-     * de la société, son contenu signé et son journal d'audit gardent le
-     * nom de la vente.
+     * Le vendeur est retiré de la société après avoir vendu, puis
+     * réintégré, et change de nom dans son profil. L'historique de la
+     * société, son contenu signé et son journal d'audit gardent le nom de
+     * la vente.
      */
-    public function test_un_compte_refuse_ou_repris_ne_change_pas_le_nom_affiche_dans_l_historique_de_la_societe(): void
+    public function test_un_compte_retire_puis_reintegre_ne_change_pas_le_nom_affiche_dans_l_historique_de_la_societe(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->nomme($this->membre($magasin, RoleMagasin::Vendeur), 'Paul Martin');
         $ticket = $this->vendre($vendeur, Client::factory()->create(), []);
-        app(RefuserSonCompteAction::class)->handle($vendeur->fresh());
+        app(ChangerStatutCompteAction::class)->retirer($this->proprietaireDe($magasin), $vendeur->fresh());
+        app(ChangerStatutCompteAction::class)->reintegrer($this->proprietaireDe($magasin), $vendeur->fresh(), RoleMagasin::Vendeur);
         $auditAvant = $this->journalDAudit($magasin);
         $contenuAvant = $this->enregistrementDe($ticket)->contenu;
 

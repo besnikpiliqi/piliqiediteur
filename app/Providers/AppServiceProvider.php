@@ -25,6 +25,7 @@ use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tenancy\Models\PosteReconnu;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
 use App\Http\Responses\ReponseDeConnexion;
@@ -44,6 +45,7 @@ use App\Policies\InventaireOuverturePolicy;
 use App\Policies\MagasinDeLaSocietePolicy;
 use App\Policies\MembrePolicy;
 use App\Policies\PaiementPolicy;
+use App\Policies\PosteReconnuPolicy;
 use App\Policies\ProduitPolicy;
 use App\Policies\ServicePolicy;
 use App\Policies\SocietePolicy;
@@ -134,6 +136,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Magasin::class, MagasinDeLaSocietePolicy::class);
         Gate::policy(User::class, MembrePolicy::class);
         Gate::policy(Affectation::class, AffectationPolicy::class);
+        Gate::policy(PosteReconnu::class, PosteReconnuPolicy::class);
 
         Auth::provider('comptes', static fn (Application $app, array $config): FournisseurDesComptes => new FournisseurDesComptes($app['hash'], $config['model']));
 

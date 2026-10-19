@@ -11,17 +11,18 @@ use Filament\Pages\Auth\PasswordReset\RequestPasswordReset;
 use Illuminate\Support\Facades\Password;
 
 /**
- * « Mot de passe oublié » : un lien part vers l'adresse de tout compte qui
- * l'utilise, qu'il soit actif, suspendu ou retiré, et mène à la page du
- * lien (voir PageDuLien), où la personne choisit son mot de passe ou
- * refuse le compte s'il peut encore l'être. La réponse est toujours la
- * même, que l'adresse soit celle d'un compte ou non, qu'un lien vienne ou
- * non de partir : elle ne révèle rien de l'existence ni de l'état d'un
- * compte.
+ * « Mot de passe oublié », pour le seul propriétaire : un lien part vers
+ * son adresse de connexion, cherchée parmi les propriétaires seulement
+ * (voir FournisseurDesComptes), et mène à la page du lien (voir
+ * PageDuLien), où il choisit son mot de passe. L'adresse de contact d'un
+ * autre compte ne reçoit rien : un accès perdu s'y redonne par qui gère le
+ * compte (voir RedonnerLAccesAction). La réponse est toujours la même, que
+ * l'adresse soit celle d'un propriétaire ou non, qu'un lien vienne ou non
+ * de partir : elle ne révèle rien.
  */
 class DemandeDeLien extends RequestPasswordReset
 {
-    public const REPONSE = 'Si cette adresse est celle d\'un compte, un lien vient d\'y être envoyé.';
+    public const REPONSE = 'Si cette adresse est celle d\'un propriétaire, un lien vient d\'y être envoyé.';
 
     public function request(): void
     {
@@ -40,7 +41,6 @@ class DemandeDeLien extends RequestPasswordReset
             function (User $compte, string $jeton): void {
                 $compte->notify(new LienPourChoisirSonMotDePasse(
                     Filament::getPanel('app')->getResetPasswordUrl($jeton, $compte),
-                    null,
                     (int) config('auth.passwords.'.config('auth.defaults.passwords').'.expire'),
                 ));
             },

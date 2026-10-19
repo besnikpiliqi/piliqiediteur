@@ -6,6 +6,7 @@ use App\Domain\Authorization\AutorisationsSociete;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
+use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
@@ -13,13 +14,13 @@ use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
-use App\Domain\Tenancy\Actions\NommerAdministrateurAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
 use Database\Factories\MagasinFactory;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 use Throwable;
@@ -77,21 +78,24 @@ class DroitsDuResponsableTest extends TestCase
             'fiscalité' => fn () => app(ModifierParametresFiscauxSocieteAction::class)->handle($responsable, $societe, ['mois_fin_exercice' => 6]),
             'créer un magasin' => fn () => app(CreerEtablissementAction::class)->handle($responsable, $societe, ['nom' => 'Pris', 'nic' => MagasinFactory::nicLibre($societe)]),
             'modifier son magasin' => fn () => app(ModifierEtablissementAction::class)->handle($responsable, $magasin, ['nom' => 'Pris']),
-            'créer un administrateur' => fn () => app(CreerAdministrateurAction::class)->handle($responsable, $societe, ['name' => 'Admin', 'email' => 'admin@example.test'], self::MOT_DE_PASSE_PROVISOIRE, null, [], []),
-            'nommer administrateur' => fn () => app(NommerAdministrateurAction::class)->handle($responsable, $vendeur, null, [], []),
-            'créer l\'expert-comptable' => fn () => app(CreerExpertComptableAction::class)->handle($responsable, $societe, ['name' => 'Cabinet', 'email' => 'cabinet@example.test'], self::MOT_DE_PASSE_PROVISOIRE),
-            'nommer un responsable' => fn () => app(CreerMembreAction::class)->handle($responsable, $societe, ['name' => 'Chef', 'email' => 'chef@example.test'], self::MOT_DE_PASSE_PROVISOIRE, [$magasin->id => ['role' => RoleMagasin::Responsable]]),
+            'créer un administrateur' => fn () => app(CreerAdministrateurAction::class)->handle($responsable, $societe, ['name' => 'Admin'], null, [], []),
+            'nommer administrateur' => fn () => app(ChangerLeRoleDeSocieteAction::class)->versAdministrateur($responsable, $vendeur, null, [], []),
+            'créer l\'expert-comptable' => fn () => app(CreerExpertComptableAction::class)->handle($responsable, $societe, ['name' => 'Cabinet']),
+            'nommer un responsable' => fn () => app(CreerMembreAction::class)->handle($responsable, $magasin, ['name' => 'Chef'], RoleMagasin::Responsable),
         ];
 
         foreach ($gestes as $geste => $appel) {
             $this->assertThrows($appel, Throwable::class, null);
             $this->assertNotSame('Prise', $societe->fresh()->raison_sociale, $geste);
         }
+        foreach (['créer un administrateur', 'nommer administrateur', 'créer l\'expert-comptable', 'nommer un responsable'] as $geste) {
+            $this->assertThrows($gestes[$geste], AuthorizationException::class);
+        }
 
         $this->assertSame('Ma Boutique', $magasin->fresh()->nom);
         $this->assertSame(1, $societe->magasinsReels()->count());
         $this->assertSame(12, (int) $societe->fresh()->mois_fin_exercice);
-        $this->assertFalse(User::query()->whereIn('email', ['admin@example.test', 'cabinet@example.test', 'chef@example.test'])->exists());
+        $this->assertFalse(User::query()->where('societe_id', $societe->id)->whereIn('name', ['Admin', 'Cabinet', 'Chef'])->exists());
         $this->assertTrue($vendeur->refresh()->estMembre());
     }
 
@@ -121,18 +125,28 @@ class DroitsDuResponsableTest extends TestCase
         $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $second->autorisationsDans($magasin));
     }
 
+    /**
+     * Une personne responsable de deux magasins y a un compte dans chacun,
+     * avec tous les droits de ce magasin et aucun ailleurs.
+     */
     public function test_une_personne_responsable_de_deux_magasins_a_tous_les_droits_dans_les_deux(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $autre = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Mon Autre Boutique']);
         $troisieme = $this->ouvrirUnAutreMagasin($magasin, ['nom' => 'Troisième']);
-        $responsable = $this->responsable($magasin, $autre);
+        $comptes = [[$magasin, $this->responsable($magasin)], [$autre, $this->responsable($autre)]];
 
-        foreach ([$magasin, $autre] as $chacun) {
-            /** @var Magasin $chacun */
-            $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $responsable->autorisationsDans($chacun), $chacun->nom);
-            $this->assertTrue($responsable->estResponsableDe($chacun));
+        foreach ($comptes as [$sonMagasin, $responsable]) {
+            /** @var Magasin $sonMagasin */
+            /** @var User $responsable */
+            $this->assertEqualsCanonicalizing(PermissionRegistry::toutes(), $responsable->autorisationsDans($sonMagasin), $sonMagasin->nom);
+            $this->assertTrue($responsable->estResponsableDe($sonMagasin));
+
+            foreach ([$magasin, $autre, $troisieme] as $ailleurs) {
+                if (! $ailleurs->is($sonMagasin)) {
+                    $this->assertSame([], $responsable->autorisationsDans($ailleurs), $ailleurs->nom);
+                }
+            }
         }
-        $this->assertSame([], $responsable->autorisationsDans($troisieme));
     }
 }

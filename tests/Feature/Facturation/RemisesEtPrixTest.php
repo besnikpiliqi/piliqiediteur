@@ -280,7 +280,7 @@ class RemisesEtPrixTest extends TestCase
         $responsable = $this->responsable($magasin);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur);
         $cable = $this->produit('Câble USB', '12.00');
-        app(ModifierMembreAction::class)->handle($responsable, $vendeur, [$magasin->id => ['role' => RoleMagasin::Vendeur, 'autorisations' => [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::VENTE_REMISES_ET_PRIX]]]);
+        app(ModifierMembreAction::class)->handle($responsable, $vendeur, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::VENTE_REMISES_ET_PRIX]);
         app(TenantContext::class)->set(Magasin::query()->findOrFail($magasin->id));
 
         $facture = app(CreerFactureAction::class)->handle($vendeur, Client::factory()->create(), [['produit_id' => $cable->id, 'quantite' => 1, 'remise_pourcentage' => 10]]);

@@ -14,6 +14,7 @@ use App\Domain\Tenancy\Notifications\AvisDeLEquipe;
 use App\Domain\Tenancy\Services\JetonsDuLien;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PorteeDesAdministrateurs;
+use App\Domain\Tenancy\Services\PorteeDesDroits;
 use App\Domain\Tenancy\Services\SessionsDesComptes;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Models\User;
@@ -35,14 +36,16 @@ use SensitiveParameter;
  * Sous les verrous des registres de tous les magasins de la société, puis
  * des lignes des deux comptes (voir JournalDesDroits), puis de la ligne de
  * la demande (l'annulation verrouille les deux comptes, puis la demande,
- * dans le même ordre : aucun interblocage), tout se relit : la demande est valable ; le propriétaire
- * l'est toujours ; l'administrateur remplit toujours les conditions de la
- * demande (actif, qualité prouvée sans accès redonné depuis, mot de passe
- * qui n'est plus son identifiant, adresse renseignée par lui, différente
- * de celle du propriétaire) ; son adresse est celle de la demande et n'est
- * l'adresse de connexion d'aucun propriétaire. L'index unique des adresses
- * de connexion des propriétaires refuse en dernier lieu une adresse prise
- * entre-temps.
+ * dans le même ordre : aucun interblocage), tout se relit : la demande est
+ * valable ; le propriétaire l'est toujours et gère encore son équipe, dans
+ * une société qui n'est pas révoquée (voir PorteeDesDroits::gereSonEquipe(),
+ * comme la demande et l'annulation) ; l'administrateur remplit toujours les
+ * conditions de la demande (actif, qualité prouvée sans accès redonné
+ * depuis, mot de passe qui n'est plus son identifiant, adresse renseignée
+ * par lui, différente de celle du propriétaire) ; son adresse est celle de
+ * la demande et n'est l'adresse de connexion d'aucun propriétaire. L'index
+ * unique des adresses de connexion des propriétaires refuse en dernier lieu
+ * une adresse prise entre-temps.
  *
  * Dans cet ordre, à cause des gardes de la base et de l'index d'un seul
  * propriétaire par société (voir GardesDesDroits) : le nouveau propriétaire
@@ -107,7 +110,8 @@ class AccepterLaTransmissionDeLaProprieteAction
 
                     if ($demandeRelue === null || ! $demandeRelue->estValable() || $demandeRelue->jeton_hache !== $demande->jeton_hache
                         || (int) $demandeRelue->destinataire_id !== (int) $nouveauRelu->getKey()
-                        || ! $ancienRelu->estProprietaire() || (int) $demandeRelue->demandee_par !== (int) $ancienRelu->getKey()) {
+                        || ! $ancienRelu->estProprietaire() || (int) $demandeRelue->demandee_par !== (int) $ancienRelu->getKey()
+                        || ! app(PorteeDesDroits::class)->gereSonEquipe($ancienRelu)) {
                         throw new LogicException(self::MESSAGE_LIEN);
                     }
 

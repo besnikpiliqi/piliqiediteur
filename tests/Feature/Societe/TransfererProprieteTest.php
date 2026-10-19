@@ -31,6 +31,7 @@ use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
+use App\Domain\Tenancy\Enums\StatutSociete;
 use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
@@ -183,6 +184,27 @@ class TransfererProprieteTest extends TestCase
         $this->assertThrows(fn () => app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($administrateur->refresh(), $jeton, self::MOT_DE_PASSE_CHOISI), LogicException::class, AccepterLaTransmissionDeLaProprieteAction::MESSAGE_LIEN);
         $this->assertTrue($this->proprietaireDe($magasin)->is($administrateur));
         $this->assertCount(1, $this->entreesDAudit($magasin->societe, ActionAuditee::ProprieteTransferee));
+    }
+
+    /**
+     * Une demande faite, puis la société révoquée par l'éditeur : plus rien
+     * ne s'y gère, et l'administrateur qui suit le lien ne devient pas
+     * propriétaire ; rien ne change.
+     */
+    public function test_une_transmission_demandee_ne_s_accepte_plus_dans_une_societe_revoquee(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $proprietaire = $this->proprietaireDe($magasin);
+        $administrateur = $this->administrateurPretAReprendre($magasin);
+        $jeton = $this->demanderLaTransmission($proprietaire, $administrateur);
+
+        $magasin->societe->forceFill(['statut' => StatutSociete::Revoquee])->save();
+
+        $this->assertThrows(fn () => app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($administrateur, $jeton, self::MOT_DE_PASSE_CHOISI), LogicException::class, AccepterLaTransmissionDeLaProprieteAction::MESSAGE_LIEN);
+        $this->assertTrue($this->proprietaireDe($magasin)->is($proprietaire));
+        $this->assertSame([RoleSociete::Administrateur, RoleSociete::Proprietaire], [$administrateur->refresh()->role_societe, $proprietaire->refresh()->role_societe]);
+        $this->assertNull(TransmissionPropriete::query()->where('destinataire_id', $administrateur->id)->sole()->acceptee_le);
+        $this->assertSame([], $this->entreesDAudit($magasin->societe, ActionAuditee::ProprieteTransferee));
     }
 
     /**

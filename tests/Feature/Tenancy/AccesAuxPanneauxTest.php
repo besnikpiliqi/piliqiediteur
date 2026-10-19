@@ -7,18 +7,19 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
+use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Pages\AucunMagasin;
-use App\Filament\App\Pages\Auth\ChoisirSonMotDePasse;
 use App\Filament\App\Pages\Auth\Connexion;
 use App\Filament\Societe\Pages\TableauDeBord;
 use App\Models\User;
 use Filament\Facades\Filament;
 use Filament\Panel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -140,25 +141,35 @@ class AccesAuxPanneauxTest extends TestCase
     }
 
     /**
-     * Un administrateur d'une société qui n'a encore aucun magasin, qui
-     * choisit d'abord son mot de passe à la place de son identifiant, ouvre
+     * Un administrateur d'une société qui n'a encore aucun magasin, dont
+     * l'identifiant n'ouvre rien faute de poste reconnu d'un magasin, choisit
+     * son mot de passe devant le propriétaire, se connecte avec lui et ouvre
      * l'accueil du panneau des magasins sans erreur : il va à l'espace de
      * sa société.
      */
     public function test_un_administrateur_sans_magasin_ouvre_app_et_va_a_l_espace_de_sa_societe(): void
     {
         $societe = $this->inscrireUneSociete();
-        $administrateur = app(CreerAdministrateurAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe, ['name' => 'Alice Martin'], null, PermissionRegistry::modeleDeLAdministrateur(), [AutorisationsSociete::MAGASINS_GERER]);
+        $proprietaire = $societe->proprietaire()->firstOrFail();
+        $administrateur = app(CreerAdministrateurAction::class)->handle($proprietaire, $societe, ['name' => 'Alice Martin'], null, PermissionRegistry::modeleDeLAdministrateur(), [AutorisationsSociete::MAGASINS_GERER]);
+        $identifiant = (string) $administrateur->identifiantDeConnexion();
         app(TenantContext::class)->clear();
         Filament::setCurrentPanel(Filament::getPanel('app'));
-        $this->actingAs($administrateur);
 
-        $this->get('/app')->assertRedirect(route('filament.app.choisir-son-mot-de-passe'));
-        Livewire::test(ChoisirSonMotDePasse::class)
-            ->fillForm(['password' => self::MOT_DE_PASSE_CHOISI, 'passwordConfirmation' => self::MOT_DE_PASSE_CHOISI])
-            ->call('choisir')
+        Livewire::test(Connexion::class)
+            ->fillForm(['login' => $identifiant, 'password' => $identifiant])
+            ->call('authenticate')
+            ->assertHasFormErrors(['login']);
+        $this->assertGuest();
+
+        app(RedonnerLAccesAction::class)->handle($proprietaire, $administrateur, true, self::MOT_DE_PASSE_CHOISI, (string) Str::uuid());
+        Livewire::test(Connexion::class)
+            ->fillForm(['login' => $identifiant, 'password' => self::MOT_DE_PASSE_CHOISI])
+            ->call('authenticate')
+            ->assertHasNoFormErrors()
             ->assertRedirect(route('filament.app.tenant'));
 
+        $this->assertAuthenticatedAs($administrateur);
         $this->get('/app')->assertRedirect(TableauDeBord::getUrl(panel: 'societe', tenant: $societe));
     }
 

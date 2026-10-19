@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\PorteeDesDroits;
+use App\Filament\Concerns\MontreLeCompteCree;
 use App\Filament\Societe\Resources\MembreResource;
 use App\Models\User;
 use Filament\Actions\Action;
@@ -40,6 +41,8 @@ use Illuminate\Support\Str;
  */
 class ListMembres extends ListRecords
 {
+    use MontreLeCompteCree;
+
     protected static string $resource = MembreResource::class;
 
     public const AVERTISSEMENT_IDENTIFIANT = 'Son mot de passe est encore son identifiant : toute personne qui le connaît pourra agir avec ses nouveaux droits.';
@@ -52,15 +55,6 @@ class ListMembres extends ListRecords
             $this->creerUnAdministrateurAction(),
             $this->creerUnExpertComptableAction(),
         ];
-    }
-
-    /**
-     * La fenêtre qui suit chaque création (voir
-     * GereLesComptes::fenetreDuCompteCree()).
-     */
-    public function compteCreeAction(): Action
-    {
-        return MembreResource::fenetreDuCompteCree(Action::make('compteCree'));
     }
 
     /**
@@ -141,7 +135,7 @@ class ListMembres extends ListRecords
                 });
 
                 if ($cree instanceof User) {
-                    $this->replaceMountedAction('compteCree', ['compte' => $cree->getKey()]);
+                    $this->montrerLeCompteCree($cree);
                 }
             });
     }
@@ -161,7 +155,7 @@ class ListMembres extends ListRecords
             ->form([
                 Select::make('magasin_id')
                     ->label('Magasin')
-                    ->options(fn (): array => MembreResource::magasinsDeLaPortee())
+                    ->options(fn (): array => MembreResource::magasinsOuCreerUnCompte())
                     ->helperText('Un compte de membre ne vaut que pour ce magasin : une personne qui travaille dans plusieurs magasins a un compte dans chacun.')
                     ->required()
                     ->live(),
@@ -178,7 +172,7 @@ class ListMembres extends ListRecords
                 });
 
                 if ($cree instanceof User) {
-                    $this->replaceMountedAction('compteCree', ['compte' => $cree->getKey()]);
+                    $this->montrerLeCompteCree($cree);
                 }
             });
     }
@@ -195,7 +189,7 @@ class ListMembres extends ListRecords
                 TextInput::make('name')->label('Nom complet')->required()->maxLength(255),
                 ...MembreResource::champsDeLAdministrateur(),
             ])
-            ->modalDescription('Il choisira son propre mot de passe à sa première connexion.')
+            ->modalDescription('Il choisira son propre mot de passe à sa première connexion, depuis un poste reconnu d\'un magasin de sa portée, ou tout de suite, dans la fenêtre suivante, s\'il est là.')
             ->action(function (array $data): void {
                 $cree = null;
 
@@ -212,7 +206,7 @@ class ListMembres extends ListRecords
                 });
 
                 if ($cree instanceof User) {
-                    $this->replaceMountedAction('compteCree', ['compte' => $cree->getKey()]);
+                    $this->montrerLeCompteCree($cree);
                 }
             });
     }
@@ -223,7 +217,7 @@ class ListMembres extends ListRecords
             ->label('Créer un expert-comptable')
             ->icon('heroicon-o-calculator')
             ->visible(fn (): bool => $this->auteur()->can('creerLExpertComptable', User::class))
-            ->modalDescription('Un compte par collaborateur du cabinet : il lit tous les magasins réels de la société, présents et futurs, et n\'écrit rien. Il choisira son propre mot de passe à sa première connexion.')
+            ->modalDescription('Un compte par collaborateur du cabinet : il lit tous les magasins réels de la société, présents et futurs, et n\'écrit rien. Il choisira son propre mot de passe à sa première connexion, depuis un poste reconnu d\'un magasin réel de la société, ou tout de suite, dans la fenêtre suivante, s\'il est là.')
             ->fillForm(fn (): array => ['jeton' => (string) Str::uuid()])
             ->form([
                 Hidden::make('jeton'),
@@ -237,13 +231,14 @@ class ListMembres extends ListRecords
                 });
 
                 if ($cree instanceof User) {
-                    $this->replaceMountedAction('compteCree', ['compte' => $cree->getKey()]);
+                    $this->montrerLeCompteCree($cree);
                 }
             });
     }
 
     /**
-     * Le magasin choisi dans la fenêtre, s'il est de sa portée.
+     * Le magasin choisi dans la fenêtre, s'il est de sa portée et qu'un
+     * compte peut y être créé (voir MembreResource::magasinsOuCreerUnCompte()).
      *
      * @param  callable(string): mixed  $get
      */
@@ -251,7 +246,7 @@ class ListMembres extends ListRecords
     {
         $id = (int) $get('magasin_id');
 
-        return array_key_exists($id, MembreResource::magasinsDeLaPortee()) ? MembreResource::magasin($id) : null;
+        return array_key_exists($id, MembreResource::magasinsOuCreerUnCompte()) ? MembreResource::magasin($id) : null;
     }
 
     /**
@@ -275,7 +270,7 @@ class ListMembres extends ListRecords
      */
     private function magasinsOuNommerUnResponsable(): array
     {
-        return collect(MembreResource::magasinsDeLaPortee())
+        return collect(MembreResource::magasinsOuCreerUnCompte())
             ->filter(fn (string $nom, int $id): bool => app(PorteeDesDroits::class)->peutNommerUnResponsable($this->auteur(), MembreResource::magasin($id)))
             ->all();
     }

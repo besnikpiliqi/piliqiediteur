@@ -7,6 +7,7 @@ use App\Domain\Tenancy\Services\LimitationDesConnexions;
 use App\Domain\Tenancy\Services\PostesConnus;
 use App\Domain\Tenancy\Services\SuiviDesConnexions;
 use App\Domain\Tenancy\Support\IdentifiantDeConnexion;
+use App\Http\Middleware\ExigerSonPropreMotDePasse;
 use App\Http\Middleware\MenerUnCompteSansMagasin;
 use App\Models\User;
 use Filament\Facades\Filament;
@@ -34,10 +35,12 @@ use Illuminate\Validation\ValidationException;
  *   LimitationDesConnexions et PostesConnus) ;
  * - « Se souvenir de moi » pour le seul compte du propriétaire, sur un
  *   appareil personnel : sans effet pour tout autre compte.
- * Une connexion réussie régénère la session, efface le compteur de sa
- * saisie, retient ce poste pour le compte, puis note la première et la
- * dernière connexion (voir SuiviDesConnexions) ; elle seule, jamais une
- * connexion refusée, aucun écouteur de connexion ne s'en chargeant.
+ * Une connexion réussie régénère la session, y note si le compte doit
+ * choisir son mot de passe (voir ExigerSonPropreMotDePasse), efface le
+ * compteur de sa saisie, retient ce poste pour le compte, puis note la
+ * première et la dernière connexion (voir SuiviDesConnexions) ; elle seule,
+ * jamais une connexion refusée, aucun écouteur de connexion ne s'en
+ * chargeant.
  * Connectée, la personne va à la page qu'elle demandait, sinon à l'accueil
  * du panneau, même sans magasin (voir MenerUnCompteSansMagasin), ou au choix
  * de son mot de passe s'il le faut (voir ExigerSonPropreMotDePasse).
@@ -124,6 +127,7 @@ class Connexion extends Login
         }
 
         session()->regenerate();
+        session()->put(ExigerSonPropreMotDePasse::A_LA_CONNEXION, $connecte->doitChoisirSonMotDePasse());
         $limitation->reussite($normalisee, $adresseIp, $nonce);
         app(PostesConnus::class)->retenir($requete, $connecte);
         app(SuiviDesConnexions::class)->noterLaConnexion($connecte);

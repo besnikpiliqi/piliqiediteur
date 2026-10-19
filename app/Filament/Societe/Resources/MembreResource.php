@@ -293,6 +293,20 @@ class MembreResource extends RessourceDuPanneauSociete
     }
 
     /**
+     * Les magasins de sa portée où un compte peut se créer ou se nommer :
+     * tous, sauf le magasin de démonstration d'une société validée ou
+     * refusée (voir Magasin::estUneDemonstrationTerminee()).
+     *
+     * @return array<int, string>
+     */
+    public static function magasinsOuCreerUnCompte(): array
+    {
+        return collect(static::magasinsDeLaPortee())
+            ->reject(fn (string $nom, int $id): bool => static::magasin($id)->estUneDemonstrationTerminee())
+            ->all();
+    }
+
+    /**
      * Le rôle d'un membre dans son magasin et ses cases, précochées par son
      * rôle, celles de la vente à part (voir CocheLesAutorisationsDeMagasin) ;
      * aucune pour un responsable, qui a toutes les autorisations du

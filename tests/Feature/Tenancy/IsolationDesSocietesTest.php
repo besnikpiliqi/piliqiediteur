@@ -506,8 +506,9 @@ class IsolationDesSocietesTest extends TestCase
 
     /**
      * À la connexion, un identifiant ne lit que la ligne de son identifiant
-     * et le compte qu'elle désigne, dans quelque société qu'il soit : aucune
-     * requête sur les comptes ou les identifiants qui ne porte sur eux.
+     * et le compte qu'elle désigne, dans quelque société qu'il soit, en une
+     * seule requête (la même qu'il existe ou non) : aucune requête sur les
+     * comptes ou les identifiants qui ne porte sur eux.
      */
     public function test_la_connexion_ne_lit_d_un_identifiant_que_le_compte_qu_il_designe(): void
     {
@@ -526,9 +527,9 @@ class IsolationDesSocietesTest extends TestCase
 
         $this->assertTrue($vendeurDeB->is($compte));
         $surLesComptes = array_values(array_filter($requetes, fn (QueryExecuted $requete): bool => preg_match('/from "?(users|identifiants)"?/', $requete->sql) === 1));
-        $this->assertCount(2, $surLesComptes);
+        $this->assertCount(1, $surLesComptes);
         $this->assertSame([$identifiant], $surLesComptes[0]->bindings);
-        $this->assertSame([$vendeurDeB->id], $surLesComptes[1]->bindings);
+        $this->assertMatchesRegularExpression('/^select \* from "users" where "id" in \(select "user_id" from "identifiants" where "identifiant" = \?\) limit 1$/', $surLesComptes[0]->sql);
     }
 
     /**

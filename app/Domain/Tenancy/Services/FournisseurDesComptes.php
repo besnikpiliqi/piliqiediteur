@@ -8,7 +8,6 @@ use App\Domain\Tenancy\Support\IdentifiantDeConnexion;
 use App\Models\User;
 use Illuminate\Auth\EloquentUserProvider;
 use Illuminate\Contracts\Auth\Authenticatable;
-use Illuminate\Support\Str;
 use SensitiveParameter;
 
 /**
@@ -28,9 +27,12 @@ use SensitiveParameter;
  *
  * Même délai pour un compte introuvable : quand aucun compte ne répond à
  * la saisie d'un essai de connexion, le mot de passe tapé se vérifie contre
- * une empreinte factice de même coût, tirée une fois par processus (voir
- * retrieveByCredentials()), dans la « timebox » de l'essai (voir
- * config/auth.php, timebox_duration).
+ * une empreinte factice au coût de hachage de l'application, écrite d'avance
+ * et jamais calculée pendant la requête (voir empreinteFactice()), dans la
+ * « timebox » de l'essai (voir config/auth.php, timebox_duration) : un
+ * identifiant inconnu coûte une seule vérification, comme un compte existant
+ * au mauvais mot de passe. Le compte se résout, dans les deux cas, par une
+ * seule requête (voir compteDeLIdentifiant()).
  *
  * Un mot de passe exact n'ouvre le compte (voir validateCredentials()) que
  * pour un compte actif et, tant que son mot de passe est encore son
@@ -40,8 +42,6 @@ use SensitiveParameter;
  */
 class FournisseurDesComptes extends EloquentUserProvider
 {
-    private static ?string $empreinteFactice = null;
-
     /**
      * @param  array<string, mixed>  $credentials
      */
@@ -50,7 +50,7 @@ class FournisseurDesComptes extends EloquentUserProvider
         $compte = $this->compteDeLaSaisie($credentials);
 
         if ($compte === null && is_string($credentials['password'] ?? null)) {
-            $this->hasher->check($credentials['password'], self::empreinteFactice($this));
+            $this->hasher->check($credentials['password'], self::empreinteFactice());
         }
 
         return $compte;
@@ -117,8 +117,9 @@ class FournisseurDesComptes extends EloquentUserProvider
 
     /**
      * Le compte que désigne cet identifiant, écrit avec ou sans espaces,
-     * tirets ou points ; null pour une saisie qui n'a pas la forme d'un
-     * identifiant ou qui n'en désigne aucun.
+     * tirets ou points, en une seule requête, qu'il existe ou non ; null
+     * pour une saisie qui n'a pas la forme d'un identifiant ou qui n'en
+     * désigne aucun.
      */
     public static function compteDeLIdentifiant(string $saisie): ?User
     {
@@ -128,17 +129,21 @@ class FournisseurDesComptes extends EloquentUserProvider
             return null;
         }
 
-        $compteId = Identifiant::withoutGlobalScopes()->where('identifiant', $identifiant)->value('user_id');
-
-        return $compteId === null ? null : User::query()->find($compteId);
+        return User::query()
+            ->whereIn('id', Identifiant::withoutGlobalScopes()->where('identifiant', $identifiant)->select('user_id'))
+            ->first();
     }
 
     /**
-     * L'empreinte factice, au coût de hachage de l'application, tirée une
-     * fois par processus.
+     * L'empreinte factice : une empreinte bcrypt bien formée, au coût de
+     * hachage de l'application (hashing.bcrypt.rounds), dont le sel et le
+     * résultat sont fixes. La vérifier coûte exactement une vérification
+     * bcrypt de ce coût, sans jamais hacher pendant la requête, dans chaque
+     * processus et à chaque requête ; aucun mot de passe n'y répond, et un
+     * compte introuvable n'ouvre rien de toute façon.
      */
-    private static function empreinteFactice(self $fournisseur): string
+    private static function empreinteFactice(): string
     {
-        return self::$empreinteFactice ??= $fournisseur->hasher->make(Str::random(40));
+        return sprintf('$2y$%02d$%s', (int) config('hashing.bcrypt.rounds', 12), str_repeat('.', 53));
     }
 }

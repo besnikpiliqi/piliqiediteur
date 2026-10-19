@@ -29,6 +29,7 @@ use Illuminate\Contracts\Hashing\Hasher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Testing\TestResponse;
 use Livewire\Features\SupportTesting\Testable;
@@ -106,22 +107,37 @@ class ConnexionParIdentifiantTest extends TestCase
     /**
      * Un identifiant inconnu, ou une adresse qui n'est pas celle d'un
      * propriétaire, coûte la même vérification de hachage qu'un compte
-     * existant au mauvais mot de passe ; et le délai constant de la
-     * connexion vaut par défaut 500 ms, au-dessus du coût d'une
-     * vérification au réglage de production (de 230 à 260 ms mesurés, une
-     * mesure que le test ne refait pas : elle dépendrait de la machine).
+     * existant au mauvais mot de passe, contre une empreinte au coût de
+     * hachage de l'application, sans jamais hacher pendant la requête
+     * (aucun make(), dans aucun processus), et autant de requêtes à la
+     * base ; et le délai constant de la connexion vaut par défaut 500 ms,
+     * au-dessus du coût d'une vérification au réglage de production (de 230
+     * à 260 ms mesurés, une mesure que le test ne refait pas : elle
+     * dépendrait de la machine).
      */
     public function test_un_identifiant_inconnu_fait_la_meme_verification_de_hachage(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $vendeur = $this->membre($magasin, RoleMagasin::Vendeur, null, ['email' => 'paul@example.test']);
         $hachage = $this->compterLesVerifications();
+        $requetes = 0;
+        DB::listen(function () use (&$requetes): void {
+            $requetes++;
+        });
+        $requetesParCas = [];
 
         foreach (['inconnu' => $this->identifiantInconnu(), 'adresse de contact' => 'paul@example.test', 'adresse inconnue' => 'personne@example.test', 'mauvais mot de passe' => (string) $vendeur->identifiantDeConnexion()] as $cas => $saisie) {
             $hachage->verifications = 0;
+            $hachage->creations = 0;
+            $hachage->empreintes = [];
+            $requetes = 0;
             $this->seConnecter($saisie, 'pas-le-bon')->assertHasErrors(['data.login']);
-            $this->assertSame(1, $hachage->verifications, $cas);
+            $requetesParCas[$cas] = $requetes;
+            $this->assertSame([1, 0], [$hachage->verifications, $hachage->creations], $cas);
+            $this->assertSame(['bcrypt', (int) config('hashing.bcrypt.rounds')], [password_get_info($hachage->empreintes[0])['algoName'], password_get_info($hachage->empreintes[0])['options']['cost'] ?? null], $cas);
         }
+        $this->assertSame($requetesParCas['inconnu'], $requetesParCas['mauvais mot de passe']);
+        $this->assertSame($requetesParCas['adresse inconnue'], $requetesParCas['adresse de contact']);
 
         $config = file_get_contents(config_path('auth.php'));
         $this->assertStringContainsString("'timebox_duration' => (int) env('AUTH_DELAI_CONSTANT_US', 500000)", (string) $config);
@@ -253,6 +269,43 @@ class ConnexionParIdentifiantTest extends TestCase
         $suivi = $this->identifiantInconnu('5');
         foreach (range(1, LimitationDesConnexions::ECHECS_PAR_SAISIE_ET_ADRESSE + 1) as $rang) {
             $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreurDeConnexion($essayer($suivi, $rang)), "essai {$rang}");
+        }
+    }
+
+    /**
+     * Sans mandataire déclaré, aucun en-tête X-Forwarded-For n'est cru, même
+     * sur Laravel Cloud (LARAVEL_CLOUD=1) ou sur un hôte de Forge ou de
+     * Vapor, où Laravel croirait sinon tout mandataire ; « * », « ** » et
+     * « REMOTE_ADDR » déclarés ne valent rien : changer d'adresse forgée à
+     * chaque essai ne contourne pas l'attente.
+     */
+    public function test_sans_mandataire_declare_aucun_x_forwarded_for_n_est_cru_meme_sur_laravel_cloud_forge_ou_vapor(): void
+    {
+        $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $instantane = $this->instantaneLivewire($this->get('/app/login')->assertOk()->getContent(), 'connexion');
+        $essayer = fn (string $connexion, string $hote, string $saisie, int $rang): TestResponse => $this->withServerVariables(['REMOTE_ADDR' => $connexion])
+            ->withHeaders(['X-Livewire' => 'true', 'X-Forwarded-For' => "203.0.113.{$rang}"])
+            ->postJson("http://{$hote}/livewire/update", ['components' => [[
+                'snapshot' => $instantane,
+                'updates' => ['data.login' => $saisie, 'data.password' => 'pas-le-bon'],
+                'calls' => [['path' => '', 'method' => 'authenticate', 'params' => []]],
+            ]]]);
+        $_SERVER['LARAVEL_CLOUD'] = '1';
+
+        try {
+            foreach (['10.0.0.1' => [], '10.0.0.2' => ['*'], '10.0.0.3' => ['**', 'REMOTE_ADDR']] as $connexion => $declares) {
+                config(['piliqi.proxies_de_confiance' => $declares]);
+
+                foreach (['localhost', 'piliqi.on-forge.com', 'piliqi.on-vapor.com'] as $hote) {
+                    $saisie = $this->identifiantInconnu();
+                    foreach (range(1, LimitationDesConnexions::ECHECS_PAR_SAISIE_ET_ADRESSE) as $rang) {
+                        $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreurDeConnexion($essayer($connexion, $hote, $saisie, $rang)), "{$hote}, essai {$rang}");
+                    }
+                    $this->assertSame(LimitationDesConnexions::message(60), $this->erreurDeConnexion($essayer($connexion, $hote, $saisie, 99)), $hote);
+                }
+            }
+        } finally {
+            unset($_SERVER['LARAVEL_CLOUD']);
         }
     }
 
@@ -408,7 +461,9 @@ class ConnexionParIdentifiantTest extends TestCase
     /**
      * Un vendeur promu responsable de son magasin alors que son mot de
      * passe est encore son identifiant choisit le sien à sa connexion
-     * suivante : sa session déjà ouverte n'atteint plus aucune page, et une
+     * suivante : sa session déjà ouverte continue sans interruption, pages
+     * et requêtes Livewire comprises ; à sa connexion suivante, il n'atteint
+     * plus aucune page avant d'avoir choisi son mot de passe, et une
      * requête Livewire d'un écran resté ouvert est refusée.
      */
     public function test_un_compte_promu_choisit_son_mot_de_passe_a_sa_connexion_suivante(): void
@@ -421,11 +476,22 @@ class ConnexionParIdentifiantTest extends TestCase
 
         app(ModifierMembreAction::class)->handle($this->proprietaireDe($magasin), $vendeur, RoleMagasin::Responsable);
 
-        $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertRedirect(route('filament.app.choisir-son-mot-de-passe'));
-        $this->requeteLivewire($instantane, [], '$refresh')->assertForbidden();
+        $this->assertTrue($vendeur->refresh()->doitChoisirSonMotDePasse());
+        $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
+        $this->requeteLivewire($instantane, [], 'resetTableSearch')->assertOk();
         $this->flushHeaders();
+
         $this->seConnecter($identifiant, $identifiant, postes: $poste)->assertHasNoErrors();
+        $this->assertAuthenticatedAs($vendeur);
         $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertRedirect(route('filament.app.choisir-son-mot-de-passe'));
+        $this->requeteLivewire($instantane, [], 'resetTableSearch')->assertForbidden();
+        $this->flushHeaders();
+        Livewire::test(ChoisirSonMotDePasse::class)
+            ->fillForm(['password' => self::MOT_DE_PASSE_CHOISI, 'passwordConfirmation' => self::MOT_DE_PASSE_CHOISI])
+            ->call('choisir')
+            ->assertHasNoErrors()
+            ->assertRedirect();
+        $this->get(FactureResource::getUrl('index', tenant: $magasin))->assertOk();
     }
 
     /**
@@ -493,6 +559,13 @@ class ConnexionParIdentifiantTest extends TestCase
         {
             public int $verifications = 0;
 
+            public int $creations = 0;
+
+            /**
+             * @var list<string>
+             */
+            public array $empreintes = [];
+
             public function __construct(private readonly Hasher $vrai) {}
 
             public function info($hashedValue): array
@@ -502,12 +575,15 @@ class ConnexionParIdentifiantTest extends TestCase
 
             public function make($value, array $options = []): string
             {
+                $this->creations++;
+
                 return $this->vrai->make($value, $options);
             }
 
             public function check($value, $hashedValue, array $options = []): bool
             {
                 $this->verifications++;
+                $this->empreintes[] = (string) $hashedValue;
 
                 return $this->vrai->check($value, $hashedValue, $options);
             }

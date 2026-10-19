@@ -144,11 +144,13 @@ final class PorteeDesDroits
      * affectation, ou changer celle qu'il y a (son rôle, ses cases) ? Avec
      * un compte nul, pour un compte qu'il crée ou qu'il réintègre. Un
      * compte existant ne reçoit de rôle que dans le magasin de son
-     * identifiant.
+     * identifiant. Jamais dans le magasin de démonstration d'une société
+     * validée ou refusée, dont les comptes d'entraînement sont retirés pour
+     * de bon (voir Magasin::estUneDemonstrationTerminee()).
      */
     public function peutDonnerLeRole(User $auteur, ?User $compte, Magasin $magasin, RoleMagasin $role): bool
     {
-        if (! $this->gereSonEquipe($auteur) || (int) $magasin->societe_id !== (int) $auteur->societe_id) {
+        if (! $this->gereSonEquipe($auteur) || (int) $magasin->societe_id !== (int) $auteur->societe_id || $magasin->estUneDemonstrationTerminee()) {
             return false;
         }
 

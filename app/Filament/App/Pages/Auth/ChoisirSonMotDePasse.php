@@ -4,6 +4,7 @@ namespace App\Filament\App\Pages\Auth;
 
 use App\Domain\Tenancy\Actions\ChangerSonMotDePasseAction;
 use App\Domain\Tenancy\Support\RegleDuMotDePasse;
+use App\Http\Middleware\ExigerSonPropreMotDePasse;
 use App\Http\Middleware\MenerUnCompteSansMagasin;
 use App\Models\User;
 use Filament\Actions\Action;
@@ -20,10 +21,10 @@ use Illuminate\Support\Facades\Route;
  * La page où un responsable, un administrateur ou un expert-comptable dont
  * le mot de passe est encore son identifiant choisit le sien, avant toute
  * autre page des deux panneaux (voir ExigerSonPropreMotDePasse) : à sa
- * première connexion, ou à sa page suivante après avoir été promu à l'un de
- * ces rôles. Le mot de passe suit la règle du mot de passe choisi (voir
- * RegleDuMotDePasse) ; ses autres sessions se ferment, celle-ci reste (voir
- * ChangerSonMotDePasseAction).
+ * première connexion, ou à sa connexion suivante après avoir été promu à
+ * l'un de ces rôles. Le mot de passe suit la règle du mot de passe choisi
+ * (voir RegleDuMotDePasse) ; ses autres sessions se ferment, celle-ci reste
+ * (voir ChangerSonMotDePasseAction), et n'exige plus rien.
  *
  * @property Form $form
  */
@@ -83,6 +84,7 @@ class ChoisirSonMotDePasse extends SimplePage
         app(ChangerSonMotDePasseAction::class)->handle($compte, $donnees['password'], session()->getId(), 'data.password');
 
         session()->put(['password_hash_'.Filament::getAuthGuard() => $compte->refresh()->getAuthPassword()]);
+        session()->forget(ExigerSonPropreMotDePasse::A_LA_CONNEXION);
         Notification::make()->title('Votre mot de passe est enregistré.')->success()->send();
 
         $this->redirect(MenerUnCompteSansMagasin::accueil());

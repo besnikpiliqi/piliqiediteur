@@ -34,14 +34,18 @@ use SensitiveParameter;
  *
  * Sans témoin valable d'un poste connu du compte (voir PostesConnus) :
  * - par saisie et adresse IP : 5 échecs en 15 minutes, puis des attentes
- *   croissantes (1, 2, 4, 8, puis 15 minutes au plus) ;
+ *   croissantes (1, 2, 4, 8, puis 15 minutes au plus), une à chaque échec
+ *   suivant ; la progression se garde tant que les échecs se suivent (qui
+ *   respecte chaque attente et recommence ne repart jamais d'une minute)
+ *   et ne s'oublie que 15 minutes après la fin de la dernière attente sans
+ *   nouvel échec, ou à une connexion réussie ;
  * - par saisie, toutes adresses : 20 échecs par heure, puis 15 minutes ;
  * - par adresse IP, toutes saisies : 30 échecs par heure, puis 15
  *   minutes ; une rafale d'erreurs depuis l'adresse commune d'un magasin ne
  *   fait pas attendre ses postes connus.
  * Avec un témoin valable, aucune attente ; ses échecs se comptent sous la
- * clé de son nonce, et après 10 échecs de suite il ne compte plus comme
- * poste connu pendant une heure.
+ * clé de son nonce, et au 10e échec de suite il ne compte plus comme poste
+ * connu pendant l'heure qui suit ce 10e échec.
  *
  * Alertes : au propriétaire de la société d'un compte dont la saisie
  * dépasse 20 échecs en une heure, tous échecs comptés, poste connu compris,
@@ -59,7 +63,7 @@ final class LimitationDesConnexions
 
     /**
      * Les attentes, en secondes, au 5e échec par saisie et adresse IP, puis
-     * au 6e, au 7e, au 8e, et au-delà.
+     * à chaque échec qui suit : au 6e, au 7e, au 8e, et au-delà.
      */
     public const ATTENTES_CROISSANTES = [60, 120, 240, 480, 900];
 
@@ -108,12 +112,12 @@ final class LimitationDesConnexions
     }
 
     /**
-     * Le témoin de ce nonce ne compte-t-il plus comme poste connu, après
-     * 10 échecs de suite dans l'heure ?
+     * Le témoin de ce nonce ne compte-t-il plus comme poste connu : dans
+     * l'heure qui suit son 10e échec de suite ?
      */
     public function posteIgnore(string $nonce): bool
     {
-        return $this->compteDe($this->cle('poste', $nonce)) >= self::ECHECS_DE_SUITE_PAR_POSTE;
+        return $this->compteDe($this->cle('poste-ignore', $nonce)) > 0;
     }
 
     /**
@@ -141,15 +145,17 @@ final class LimitationDesConnexions
         }
 
         if ($nonceDuPoste !== null) {
-            $this->compter($this->cle('poste', $nonceDuPoste), self::UNE_HEURE);
+            if ($this->compter($this->cle('poste', $nonceDuPoste), self::UNE_HEURE) >= self::ECHECS_DE_SUITE_PAR_POSTE) {
+                $this->attendre($this->cle('poste-ignore', $nonceDuPoste), self::UNE_HEURE);
+            }
 
             return;
         }
 
-        $paire = $this->compter($this->cle('paire', $saisie, $adresse), self::FENETRE_PAR_SAISIE_ET_ADRESSE);
+        $attente = $this->attenteCroissante($saisie, $adresse);
 
-        if ($paire >= self::ECHECS_PAR_SAISIE_ET_ADRESSE) {
-            $this->attendre($this->cleDAttente('paire', $saisie, $adresse), self::ATTENTES_CROISSANTES[min($paire - self::ECHECS_PAR_SAISIE_ET_ADRESSE, count(self::ATTENTES_CROISSANTES) - 1)]);
+        if ($attente !== null) {
+            $this->attendre($this->cleDAttente('paire', $saisie, $adresse), $attente);
         }
 
         if ($this->compter($this->cle('saisie', $saisie), self::UNE_HEURE) >= self::ECHECS_PAR_SAISIE) {
@@ -163,11 +169,13 @@ final class LimitationDesConnexions
 
     /**
      * Une connexion réussie : le compteur de cette saisie et de cette
-     * adresse IP s'efface, et celui du poste connu.
+     * adresse IP s'efface, avec sa progression et son attente, et celui du
+     * poste connu.
      */
     public function reussite(#[SensitiveParameter] string $saisie, string $adresse, ?string $nonceDuPoste): void
     {
         $this->effacer($this->cle('paire', $saisie, $adresse));
+        $this->effacer($this->cle('progression', $saisie, $adresse));
         $this->effacer($this->cleDAttente('paire', $saisie, $adresse));
 
         if ($nonceDuPoste !== null) {
@@ -186,6 +194,30 @@ final class LimitationDesConnexions
     private function cleDAttente(string $compteur, string ...$valeurs): string
     {
         return $this->cle('attente-'.$compteur, ...$valeurs);
+    }
+
+    /**
+     * L'attente qu'impose cet échec de cette saisie depuis cette adresse
+     * IP ; null sans attente. Tant qu'aucune progression n'est en cours,
+     * l'échec compte parmi ceux des 15 dernières minutes, et le 5e lance la
+     * progression ; ensuite chaque échec la fait monter d'un cran (1, 2,
+     * 4, 8, puis 15 minutes au plus) et la garde jusqu'à 15 minutes après
+     * la fin de l'attente qu'il impose.
+     */
+    private function attenteCroissante(#[SensitiveParameter] string $saisie, string $adresse): ?int
+    {
+        $progression = $this->cle('progression', $saisie, $adresse);
+
+        if ($this->compteDe($progression) === 0
+            && $this->compter($this->cle('paire', $saisie, $adresse), self::FENETRE_PAR_SAISIE_ET_ADRESSE) < self::ECHECS_PAR_SAISIE_ET_ADRESSE) {
+            return null;
+        }
+
+        $cran = $this->compter($progression, self::FENETRE_PAR_SAISIE_ET_ADRESSE);
+        $attente = self::ATTENTES_CROISSANTES[min($cran, count(self::ATTENTES_CROISSANTES)) - 1];
+        $this->prolonger($progression, $attente + self::FENETRE_PAR_SAISIE_ET_ADRESSE);
+
+        return $attente;
     }
 
     /**
@@ -219,6 +251,16 @@ final class LimitationDesConnexions
     private function secondesRestantes(string $cle): int
     {
         return $this->compteDe($cle) > 0 ? max(0, (int) $this->cache()->get($cle.':fin', 0) - now()->getTimestamp()) : 0;
+    }
+
+    /**
+     * Fait vivre ce compteur encore ce nombre de secondes, à partir de
+     * maintenant, sans toucher à son compte.
+     */
+    private function prolonger(string $cle, int $secondes): void
+    {
+        $this->cache()->touch($cle, $secondes);
+        $this->cache()->put($cle.':fin', now()->addSeconds($secondes)->getTimestamp(), $secondes);
     }
 
     private function effacer(string $cle): void

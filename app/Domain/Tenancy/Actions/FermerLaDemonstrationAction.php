@@ -14,7 +14,6 @@ use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
-use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\JournalDesDroits;
 use App\Domain\Tenancy\Services\PeriodesDActivite;
@@ -125,14 +124,12 @@ class FermerLaDemonstrationAction
      */
     private function retirerLesComptesDEntrainementSiElleFinit(Magasin $demonstration): void
     {
-        $societe = Societe::query()->whereKey($demonstration->societe_id)->firstOrFail();
-
-        if (! $societe->estValidee() && ! $societe->estRefusee()) {
+        if (! $demonstration->estUneDemonstrationTerminee()) {
             return;
         }
 
         $comptes = User::query()
-            ->where('societe_id', $societe->getKey())
+            ->where('societe_id', $demonstration->societe_id)
             ->where('role_societe', RoleSociete::Membre->value)
             ->where('statut', '<>', StatutCompte::Retire->value)
             ->whereIn('id', Identifiant::query()->where('magasin_id', $demonstration->getKey())->select('user_id'))

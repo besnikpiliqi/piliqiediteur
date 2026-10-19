@@ -354,6 +354,23 @@ class Magasin extends Model implements HasName
     }
 
     /**
+     * Est-ce le magasin de démonstration d'une société validée ou refusée,
+     * fermé pour de bon : il ne se rouvre jamais, ses comptes d'entraînement
+     * sont retirés (voir FermerLaDemonstrationAction), et plus aucun compte
+     * n'y est créé, nommé ni réintégré (voir
+     * PorteeDesDroits::peutDonnerLeRole()). Lu en base à chaque appel, sous
+     * les verrous de qui l'appelle. Une démonstration fermée après trente
+     * jours sans opération, qui se rouvre, ne l'est pas.
+     */
+    public function estUneDemonstrationTerminee(): bool
+    {
+        return $this->est_demonstration && Societe::query()
+            ->whereKey($this->societe_id)
+            ->where(fn ($societe) => $societe->whereNotNull('validee_le')->orWhereNotNull('refusee_le'))
+            ->exists();
+    }
+
+    /**
      * Le magasin est-il en lecture seule ? Fermé par sa société, suspendu
      * par l'éditeur, ou parce que sa société n'est plus active ou a été
      * refusée (voir Societe::estEnLectureSeule()) : la consultation et les

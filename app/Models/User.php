@@ -328,12 +328,12 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Doit-il choisir son mot de passe avant toute autre page (voir
-     * ExigerSonPropreMotDePasse) ? Un responsable, un administrateur ou un
-     * expert-comptable dont le mot de passe est encore son identifiant : à
-     * sa première connexion, et dès sa page suivante quand il vient d'être
-     * promu à l'un de ces rôles. Un vendeur ou un observateur le garde tant
-     * qu'il le veut.
+     * Doit-il choisir son mot de passe à sa connexion, avant toute autre
+     * page (voir ExigerSonPropreMotDePasse) ? Un responsable, un
+     * administrateur ou un expert-comptable dont le mot de passe est encore
+     * son identifiant : à sa première connexion, et à sa connexion suivante
+     * quand il vient d'être promu à l'un de ces rôles. Un vendeur ou un
+     * observateur le garde tant qu'il le veut.
      */
     public function doitChoisirSonMotDePasse(): bool
     {

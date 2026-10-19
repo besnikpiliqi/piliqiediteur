@@ -61,6 +61,34 @@ class LimitationDesConnexionsTest extends TestCase
     }
 
     /**
+     * Qui respecte chaque attente et recommence voit l'attente monter
+     * jusqu'à 15 minutes et y rester : la progression se garde tant que les
+     * échecs se suivent, au-delà des 15 minutes du premier ; elle ne
+     * s'oublie que 15 minutes après la fin de la dernière attente sans
+     * nouvel échec.
+     */
+    public function test_l_attente_croissante_se_garde_tant_que_les_echecs_se_suivent_jusqu_a_quinze_minutes(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $vendeur = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
+        $identifiant = (string) $vendeur->identifiantDeConnexion();
+
+        $this->echouer($identifiant, LimitationDesConnexions::ECHECS_PAR_SAISIE_ET_ADRESSE);
+        $precedente = 60;
+        foreach ([120, 240, 480, 900, 900] as $attente) {
+            $this->travel($precedente + 1)->seconds();
+            $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreur($this->seConnecter($identifiant, 'pas-le-bon')));
+            $this->assertSame(LimitationDesConnexions::message($attente), $this->erreur($this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)), "après {$precedente} s");
+            $precedente = $attente;
+        }
+
+        $this->travel(900 + LimitationDesConnexions::FENETRE_PAR_SAISIE_ET_ADRESSE + 1)->seconds();
+        $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreur($this->seConnecter($identifiant, 'pas-le-bon')));
+        $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI)->assertHasNoErrors();
+        $this->assertAuthenticatedAs($vendeur);
+    }
+
+    /**
      * Vingt échecs en une heure pour un même identifiant, depuis vingt
      * adresses IP, font attendre cet identifiant depuis toute adresse.
      */
@@ -224,6 +252,37 @@ class LimitationDesConnexionsTest extends TestCase
 
         $this->travel(LimitationDesConnexions::UNE_HEURE + 1)->seconds();
 
+        $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI, $poste)->assertHasNoErrors();
+        $this->assertAuthenticatedAs($vendeur);
+    }
+
+    /**
+     * Le poste est ignoré pendant l'heure qui suit son 10e échec, même
+     * quand ses échecs sont étalés : 9 échecs à 10 h, le 10e à 10 h 50, il
+     * est encore ignoré à 11 h 05 (ses échecs comptent comme ailleurs et
+     * font attendre), et vaut de nouveau à 11 h 51.
+     */
+    public function test_un_poste_connu_reste_ignore_l_heure_qui_suit_son_dixieme_echec_meme_etale(): void
+    {
+        $this->travelTo('2026-10-09 09:55:00');
+        $vendeur = $this->membre($this->ouvrirUneSociete(['nom' => 'Ma Boutique']), RoleMagasin::Vendeur);
+        $identifiant = (string) $vendeur->identifiantDeConnexion();
+        $poste = $this->posteConnuDe($identifiant);
+
+        $this->travelTo('2026-10-09 10:00:00');
+        foreach (range(1, LimitationDesConnexions::ECHECS_DE_SUITE_PAR_POSTE - 1) as $rang) {
+            $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreur($this->seConnecter($identifiant, 'pas-le-bon', $poste)), "essai {$rang}");
+        }
+        $this->travelTo('2026-10-09 10:50:00');
+        $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreur($this->seConnecter($identifiant, 'pas-le-bon', $poste)));
+
+        $this->travelTo('2026-10-09 11:05:00');
+        foreach (range(1, LimitationDesConnexions::ECHECS_PAR_SAISIE_ET_ADRESSE) as $rang) {
+            $this->assertSame(Connexion::MESSAGE_ECHEC, $this->erreur($this->seConnecter($identifiant, 'pas-le-bon', $poste)), "essai ignoré {$rang}");
+        }
+        $this->assertSame(LimitationDesConnexions::message(60), $this->erreur($this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI, $poste)));
+
+        $this->travelTo('2026-10-09 11:51:00');
         $this->seConnecter($identifiant, self::MOT_DE_PASSE_CHOISI, $poste)->assertHasNoErrors();
         $this->assertAuthenticatedAs($vendeur);
     }

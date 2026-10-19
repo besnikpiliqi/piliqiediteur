@@ -25,6 +25,7 @@ use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\EReportingDesParticuliers;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
+use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerMandatPdpAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\FermerLaDemonstrationAction;
@@ -49,9 +50,12 @@ use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\App\Pages\Caisse;
+use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
 use App\Models\User;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\Select;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -507,6 +511,47 @@ class MagasinDeDemonstrationTest extends TestCase
         $compteDuRefus = $this->compteDEntrainement($autreDemonstration);
         app(RefuserLaSocieteAction::class)->handle($refusee, new InterventionDeLEditeur('Pièces falsifiées, signalement du vrai dirigeant.', 'DOSSIER-43', ['alice']));
         $this->assertSame(StatutCompte::Retire, $compteDuRefus->refresh()->statut);
+    }
+
+    /**
+     * La démonstration fermée pour de bon (société validée ou refusée), ses
+     * comptes d'entraînement retirés ne reviennent pas : le propriétaire n'y
+     * crée plus aucun compte et n'y réintègre aucun ancien, et ni l'espace
+     * de la société ni l'équipe de la démonstration ne le lui proposent ;
+     * fermée pour inactivité, elle en accepte toujours.
+     */
+    public function test_aucun_compte_ne_se_cree_ni_ne_se_reintegre_dans_une_demonstration_terminee(): void
+    {
+        $this->travelTo('2026-10-09 10:00:00');
+        $societe = $this->inscrireUneSociete();
+        $reel = $this->creerLeMagasinDuSiege($societe);
+        $proprietaire = $societe->proprietaire;
+        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe->fresh());
+        $ancien = $this->compteDEntrainement($demonstration);
+        $this->travel(31)->days();
+        $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
+        $this->assertFalse($demonstration->fresh()->estUneDemonstrationTerminee());
+        $this->assertTrue(app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($proprietaire, $demonstration->fresh(), ['name' => 'Pendant la pause'], RoleMagasin::Vendeur))->estActif());
+
+        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->assertSame(StatutCompte::Retire, $ancien->refresh()->statut);
+        $this->assertTrue($demonstration->fresh()->estUneDemonstrationTerminee());
+        $identifiants = Identifiant::withoutGlobalScopes()->where('magasin_id', $demonstration->id)->count();
+
+        foreach ([RoleMagasin::Vendeur, RoleMagasin::Responsable] as $role) {
+            $this->assertThrows(fn () => app(TenantContext::class)->runAs($demonstration, fn () => app(CreerMembreAction::class)->handle($proprietaire, $demonstration->fresh(), ['name' => 'Après la fin'], $role)), AuthorizationException::class);
+        }
+        $this->assertThrows(fn () => app(ChangerStatutCompteAction::class)->reintegrer($proprietaire, $ancien, RoleMagasin::Vendeur, RoleMagasin::Vendeur->permissionsParDefaut()), AuthorizationException::class);
+        $this->assertSame(StatutCompte::Retire, $ancien->refresh()->statut);
+        $this->assertFalse(User::query()->where('name', 'Après la fin')->exists());
+        $this->assertSame($identifiants, Identifiant::withoutGlobalScopes()->where('magasin_id', $demonstration->id)->count());
+
+        $this->dansLEspaceDeLaSociete($societe, $proprietaire);
+        Livewire::test(ListMembres::class)
+            ->mountAction('creerUnMembre')
+            ->assertFormFieldExists('magasin_id', 'mountedActionForm', fn (Select $champ): bool => array_keys($champ->getOptions()) === [(int) $reel->id]);
+        $this->dansLeMagasin($demonstration->fresh(), $proprietaire);
+        Livewire::test(ListEquipeDuMagasin::class)->assertActionHidden('creerUnCompte');
     }
 
     /**

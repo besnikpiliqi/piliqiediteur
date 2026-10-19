@@ -192,30 +192,43 @@ trait GereLesComptes
      * La fenêtre qui suit la création d'un compte, la seule à montrer son
      * identifiant à qui l'a créé : il est aussi son premier mot de passe, à
      * remettre en main propre ; ou la personne, présente, choisit le sien
-     * tout de suite (voir RedonnerLAccesAction, en sa présence). Elle reçoit
-     * le compte créé dans ses arguments, relu dans la société et contrôlé :
-     * seul qui peut redonner l'accès à ce compte la voit.
+     * tout de suite (voir RedonnerLAccesAction, en sa présence). Elle ne
+     * montre que le compte que la page vient de créer (voir
+     * MontreLeCompteCree), jamais un compte désigné par la requête : relu
+     * dans la société, créé par la personne connectée, qui doit pouvoir lui
+     * redonner l'accès ; sans lui, elle ne s'ouvre pas.
+     *
+     * L'identifiant n'ouvre le compte que depuis un poste reconnu d'un
+     * magasin que ce compte ouvre (voir PostesReconnus), et un responsable,
+     * un administrateur ou un expert-comptable y choisit son mot de passe à
+     * sa première connexion (voir ExigerSonPropreMotDePasse) : la fenêtre le
+     * dit. Un administrateur ou un expert-comptable qui travaille à
+     * distance, ou dont aucun magasin n'a de poste reconnu, ne peut pas se
+     * connecter avec son identifiant : pour lui, la fenêtre propose d'abord
+     * que la personne présente choisisse son mot de passe.
+     *
+     * @param  Closure(): ?int  $compteCree  l'identifiant technique du compte que la page vient de créer
      */
-    public static function fenetreDuCompteCree(Action $action): Action
+    public static function fenetreDuCompteCree(Action $action, Closure $compteCree): Action
     {
-        $compte = fn (array $arguments): User => User::query()
+        $compte = fn (): ?User => ($id = $compteCree()) === null ? null : User::query()
             ->where('societe_id', self::auteur()->societe_id)
-            ->whereKey($arguments['compte'] ?? 0)
-            ->firstOrFail();
+            ->where('cree_par', self::auteur()->getKey())
+            ->whereKey($id)
+            ->first();
 
         return $action
             ->label('Compte créé')
             ->modalHeading('Compte créé')
             ->modalSubmitActionLabel('Terminé')
             ->modalCancelAction(false)
-            ->fillForm(fn (): array => ['jeton' => (string) Str::uuid(), 'mode' => 'remettre'])
-            ->form(fn (array $arguments): array => [
+            ->visible(fn (): bool => ($cree = $compte()) !== null && self::peut('redonnerLAcces', $cree))
+            ->fillForm(fn (): array => ['jeton' => (string) Str::uuid(), 'mode' => $compte()?->estMembre() === false ? 'present' : 'remettre'])
+            ->form(fn (): array => [
                 Hidden::make('jeton'),
                 Placeholder::make('identifiant')
                     ->hiddenLabel()
-                    ->content(fn (): string => self::peut('redonnerLAcces', $compte($arguments))
-                        ? "Identifiant : {$compte($arguments)->identifiantDeConnexion()}. Mot de passe : le même que l'identifiant. Remettez-les en main propre ; la personne pourra changer son mot de passe et renseigner son adresse e-mail dans son profil."
-                        : 'Le compte est créé.'),
+                    ->content(fn (): string => ($cree = $compte()) === null ? '' : self::messageDuCompteCree($cree)),
                 Radio::make('mode')
                     ->label('Et maintenant ?')
                     ->options([
@@ -223,16 +236,16 @@ trait GereLesComptes
                         'present' => 'La personne est là : elle choisit son mot de passe maintenant',
                     ])
                     ->required()
-                    ->live()
-                    ->visible(fn (): bool => self::peut('redonnerLAcces', $compte($arguments))),
+                    ->live(),
                 ...self::champsDuMotDePasseChoisi(fn (Get $get): bool => $get('mode') === 'present'),
             ])
-            ->action(function (array $data, array $arguments, Form $form) use ($compte): void {
-                if (($data['mode'] ?? 'remettre') !== 'present') {
+            ->action(function (array $data, Form $form) use ($compte): void {
+                $cible = $compte();
+
+                if ($cible === null || ($data['mode'] ?? 'remettre') !== 'present') {
                     return;
                 }
 
-                $cible = $compte($arguments);
                 self::exigerLeMotDePasseChoisi((string) ($data['mot_de_passe'] ?? ''), $cible, $form);
 
                 static::executerLeGeste(function () use ($cible, $data): void {
@@ -240,6 +253,22 @@ trait GereLesComptes
                     Notification::make()->title('Son mot de passe est enregistré : la personne se connecte avec son identifiant et ce mot de passe.')->success()->send();
                 });
             });
+    }
+
+    /**
+     * Ce que la fenêtre « Compte créé » dit du compte : son identifiant, qui
+     * est aussi son premier mot de passe, où il ouvre le compte, et quand la
+     * personne choisit le sien.
+     */
+    public static function messageDuCompteCree(User $compte): string
+    {
+        $identifiant = "Identifiant : {$compte->identifiantDeConnexion()}. Mot de passe : le même que l'identifiant.";
+
+        return match (true) {
+            ! $compte->estMembre() => "{$identifiant} Il n'ouvre le compte que depuis un poste reconnu d'un magasin de sa portée, où la personne choisira son propre mot de passe à sa première connexion. À distance, ou si aucun magasin de sa portée n'a de poste reconnu, elle ne pourra pas se connecter avec son identifiant : si elle est là, qu'elle choisisse son mot de passe maintenant.",
+            $compte->estResponsable() => "{$identifiant} Il n'ouvre le compte que depuis un poste reconnu du magasin, où la personne choisira son propre mot de passe à sa première connexion. Remettez-les en main propre ; elle pourra renseigner son adresse e-mail dans son profil.",
+            default => "{$identifiant} Il n'ouvre le compte que depuis un poste reconnu du magasin. Remettez-les en main propre ; la personne pourra changer son mot de passe et renseigner son adresse e-mail dans son profil.",
+        };
     }
 
     /**

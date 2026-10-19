@@ -33,6 +33,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 use LogicException;
@@ -227,6 +228,48 @@ class RenouvellementDAccesTest extends TestCase
         Livewire::test(FicheDuMembre::class, ['record' => $prudent->getRouteKey()])->callAction('afficherLIdentifiant');
         Notification::assertSentToTimes($proprietaire, AvisDeLEquipe::class, 1);
         $this->assertCount(2, $this->entreesDAudit($magasin->societe, ActionAuditee::IdentifiantConsulte));
+    }
+
+    /**
+     * La fenêtre « Compte créé » ne montre que le compte que la page vient
+     * de créer : un administrateur autorisé à redonner l'accès et à nommer
+     * les responsables qui la demande, par une requête forgée, pour un
+     * vendeur ou un responsable de sa portée, ne la voit pas s'ouvrir et ne
+     * voit aucun identifiant, et le compte qu'elle retient ne s'écrit pas
+     * depuis le navigateur. Le compte de responsable qu'il crée lui-même,
+     * lui, s'y montre.
+     */
+    public function test_la_fenetre_du_compte_cree_ne_montre_que_le_compte_que_la_page_vient_de_creer(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $administrateur = $this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::ACCES_REDONNER, AutorisationsSociete::RESPONSABLES_NOMMER]);
+        [$vendeur, $identifiantDuVendeur] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Vendeur);
+        [$responsable, $identifiantDuResponsable] = $this->compteAuMotDePasseIdentifiant($magasin, RoleMagasin::Responsable);
+        Notification::fake();
+
+        $this->dansLEspaceDeLaSociete($magasin->societe, $administrateur);
+        foreach ([$vendeur, $responsable] as $compte) {
+            Livewire::test(ListMembres::class)
+                ->call('mountAction', 'compteCree', ['compte' => $compte->id])
+                ->assertActionNotMounted('compteCree')
+                ->assertDontSee($identifiantDuVendeur)
+                ->assertDontSee($identifiantDuResponsable);
+        }
+        $this->assertThrows(fn () => Livewire::test(ListMembres::class)->set('compteCreeId', $vendeur->id), CannotUpdateLockedPropertyException::class);
+        $this->assertCount(0, $this->entreesDAudit($magasin->societe, ActionAuditee::IdentifiantConsulte));
+        Notification::assertNothingSent();
+
+        $page = Livewire::test(ListMembres::class)
+            ->mountAction('nommerUnResponsable')
+            ->setActionData(['magasin_id' => $magasin->id, 'compte' => 'nouveau'])
+            ->setActionData(['name' => 'Chef Nouveau'])
+            ->callMountedAction()
+            ->assertHasNoActionErrors()
+            ->assertActionMounted('compteCree');
+        $chef = User::query()->where('name', 'Chef Nouveau')->sole();
+        $page->assertSee("Identifiant : {$chef->identifiantDeConnexion()}")
+            ->assertSee('poste reconnu du magasin, où la personne choisira son propre mot de passe à sa première connexion')
+            ->assertDontSee($identifiantDuVendeur);
     }
 
     public function test_un_administrateur_ne_nomme_aucun_responsable_dans_la_demonstration(): void

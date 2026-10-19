@@ -5,6 +5,7 @@ namespace App\Filament\App\Resources\EquipeDuMagasinResource\Pages;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Filament\App\Resources\EquipeDuMagasinResource;
+use App\Filament\Concerns\MontreLeCompteCree;
 use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -24,6 +25,8 @@ use Illuminate\Support\Str;
  */
 class ListEquipeDuMagasin extends ListRecords
 {
+    use MontreLeCompteCree;
+
     protected static string $resource = EquipeDuMagasinResource::class;
 
     protected function getHeaderActions(): array
@@ -60,18 +63,9 @@ class ListEquipeDuMagasin extends ListRecords
                 });
 
                 if ($cree instanceof User) {
-                    $this->replaceMountedAction('compteCree', ['compte' => $cree->getKey()]);
+                    $this->montrerLeCompteCree($cree);
                 }
             });
-    }
-
-    /**
-     * La fenêtre qui suit chaque création (voir
-     * GereLesComptes::fenetreDuCompteCree()).
-     */
-    public function compteCreeAction(): Action
-    {
-        return EquipeDuMagasinResource::fenetreDuCompteCree(Action::make('compteCree'));
     }
 
     private function magasin(): Magasin

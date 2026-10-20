@@ -3,8 +3,8 @@
 namespace App\Domain\Catalogue\Services;
 
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\SaisieDecimale;
+use App\Domain\Tva\Services\CalculateurLigne;
 
 /**
  * Ce que la fiche d'un produit dit de sa vente au magasin, tel que le

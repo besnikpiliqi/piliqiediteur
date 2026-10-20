@@ -3,6 +3,7 @@
 namespace App\Domain\Facturation\Services;
 
 use App\Domain\Facturation\Enums\ModePaiement;
+use App\Domain\Tva\Services\CalculateurLigne;
 use LogicException;
 
 /**

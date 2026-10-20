@@ -2,6 +2,7 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Tva\Services\CalculateurLigne;
 use InvalidArgumentException;
 
 /**

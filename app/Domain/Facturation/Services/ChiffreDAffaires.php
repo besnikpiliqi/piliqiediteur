@@ -6,6 +6,7 @@ use App\Domain\Facturation\Enums\StatutAvoir;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
+use App\Domain\Tva\Services\CalculateurLigne;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;

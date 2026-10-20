@@ -11,7 +11,7 @@
     @param \Carbon\CarbonInterface|null $dateEmission
 --}}
 @php
-    $calculateur = app(\App\Domain\Facturation\Services\CalculateurLigne::class);
+    $calculateur = app(\App\Domain\Tva\Services\CalculateurLigne::class);
 @endphp
 @if($reglements->existent())
     <table class="reglements">

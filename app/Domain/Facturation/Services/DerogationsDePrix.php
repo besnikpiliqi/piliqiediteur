@@ -5,6 +5,7 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Catalogue\Models\Service;
+use App\Domain\Tva\Services\CalculateurLigne;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Gate;

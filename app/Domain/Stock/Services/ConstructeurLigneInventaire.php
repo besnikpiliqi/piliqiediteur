@@ -4,12 +4,12 @@ namespace App\Domain\Stock\Services;
 
 use App\Domain\Achats\Services\ConstructeurLigneAchat;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\QuantiteEntiere;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Stock\Models\InventaireOuverture;
 use App\Domain\Stock\Models\LigneInventaireOuverture;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tva\Services\CalculateurLigne;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Arr;
 use InvalidArgumentException;

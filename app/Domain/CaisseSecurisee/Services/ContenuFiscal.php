@@ -13,9 +13,9 @@ use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PaiementAllocation;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Facturation\Services\MentionsFiscales;
+use App\Domain\Tva\Services\CalculateurLigne;
 use Illuminate\Support\Collection;
 
 /**

@@ -4,8 +4,8 @@ namespace App\Filament\App\Resources;
 
 use App\Domain\Contacts\Models\Fournisseur;
 use App\Domain\Contacts\Rules\HorsDeLEntrepriseDuMagasin;
-use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tva\Rules\NumeroTvaAuFormat;
 use App\Filament\App\Resources\FournisseurResource\Pages;
 use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\SupprimeEnMasseLigneParLigne;

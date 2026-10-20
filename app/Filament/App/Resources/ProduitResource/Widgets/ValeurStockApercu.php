@@ -4,7 +4,7 @@ namespace App\Filament\App\Resources\ProduitResource\Widgets;
 
 use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tva\Services\CalculateurLigne;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Support\Number;

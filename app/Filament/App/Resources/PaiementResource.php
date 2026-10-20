@@ -10,7 +10,7 @@ use App\Domain\Facturation\Enums\StatutFacture;
 use App\Domain\Facturation\Models\AvoirAllocation;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
-use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tva\Services\CalculateurLigne;
 use App\Filament\App\Pages\Caisse;
 use App\Filament\App\Resources\PaiementResource\Pages;
 use App\Filament\Concerns\GereLesExceptionsMetier;

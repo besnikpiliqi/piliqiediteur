@@ -6,7 +6,7 @@ use App\Domain\Authorization\PermissionRegistry;
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\ClotureCaisse;
 use App\Domain\Facturation\Models\Facture;
-use App\Domain\Facturation\Services\CalculateurLigne;
+use App\Domain\Tva\Services\CalculateurLigne;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages;
 use Carbon\CarbonImmutable;
 use Closure;

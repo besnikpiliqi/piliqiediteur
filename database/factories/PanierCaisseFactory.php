@@ -4,8 +4,8 @@ namespace Database\Factories;
 
 use App\Domain\Catalogue\Models\Produit;
 use App\Domain\Facturation\Models\PanierCaisse;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\LignesRetirees;
+use App\Domain\Tva\Services\CalculateurLigne;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Str;

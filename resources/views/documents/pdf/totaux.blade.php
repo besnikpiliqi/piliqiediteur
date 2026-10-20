@@ -13,7 +13,7 @@
 @php
     $signe ??= '';
     $ventilation = $document->ventilation_tva;
-    $estUnTauxZero = fn (array $taux): bool => app(\App\Domain\Facturation\Services\CalculateurLigne::class)->enCentiemes($taux['taux_tva']) === 0;
+    $estUnTauxZero = fn (array $taux): bool => app(\App\Domain\Tva\Services\CalculateurLigne::class)->enCentiemes($taux['taux_tva']) === 0;
     $motif = app(\App\Domain\Facturation\Services\MentionsFiscales::class)->motifDuTauxZero($document);
     $avecMotif = $motif !== null && collect($ventilation)->contains($estUnTauxZero);
 @endphp

@@ -7,6 +7,7 @@ use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\Devis;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Enums\RegimeTva;
+use App\Domain\Tva\Services\CalculateurLigne;
 
 /**
  * Les mentions fiscales qu'imprime un document, dans l'ordre, que les PDF

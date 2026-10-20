@@ -75,7 +75,7 @@
             <p>Aucun magasin pour le moment.</p>
         @else
             @php($aEncaisser = $this->facturesAEncaisser())
-            @php($calculateur = app(\App\Domain\Facturation\Services\CalculateurLigne::class))
+            @php($calculateur = app(\App\Domain\Tva\Services\CalculateurLigne::class))
             <table class="w-full text-start text-sm">
                 <thead>
                     <tr class="text-gray-500 dark:text-gray-400">

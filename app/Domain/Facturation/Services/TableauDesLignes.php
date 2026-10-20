@@ -8,6 +8,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneDevis;
 use App\Domain\Facturation\Models\LigneFacture;
+use App\Domain\Tva\Services\CalculateurLigne;
 use Dompdf\Dompdf;
 use Dompdf\FontMetrics;
 use Illuminate\Support\Number;

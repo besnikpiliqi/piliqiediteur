@@ -2,6 +2,8 @@
 
 namespace App\Domain\Facturation\Services;
 
+use App\Domain\Tva\Services\CalculateurLigne;
+
 /**
  * Un document calculé en une seule fois (voir CalculateurLigne) : ses
  * lignes, avec leurs montants, ses montants par taux et ses totaux, tous

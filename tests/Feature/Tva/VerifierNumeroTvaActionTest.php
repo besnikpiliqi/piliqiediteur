@@ -1,14 +1,14 @@
 <?php
 
-namespace Tests\Feature\Contacts;
+namespace Tests\Feature\Tva;
 
-use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Scopes\MagasinScope;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tva\Actions\VerifierNumeroTvaAction;
 use App\Integrations\Vies\ViesIndisponibleException;
 use App\Models\User;
 use Closure;

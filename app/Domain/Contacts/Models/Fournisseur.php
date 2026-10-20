@@ -3,8 +3,8 @@
 namespace App\Domain\Contacts\Models;
 
 use App\Domain\Contacts\Concerns\Proposable;
-use App\Domain\Facturation\Casts\NumeroTvaNormalise;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tva\Casts\NumeroTvaNormalise;
 use Database\Factories\FournisseurFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;

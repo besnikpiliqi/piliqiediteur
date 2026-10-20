@@ -2,10 +2,10 @@
 
 namespace App\Domain\Catalogue\Models;
 
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ContexteDeVente;
 use App\Domain\Facturation\Services\SaisieDecimale;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tva\Services\CalculateurLigne;
 use Database\Factories\ServiceFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;

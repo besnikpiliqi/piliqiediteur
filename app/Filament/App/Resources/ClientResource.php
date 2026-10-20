@@ -3,14 +3,14 @@
 namespace App\Filament\App\Resources;
 
 use App\Domain\Authorization\PermissionRegistry;
-use App\Domain\Contacts\Actions\VerifierNumeroTvaAction;
 use App\Domain\Contacts\Enums\TypeClient;
 use App\Domain\Contacts\Models\Client;
 use App\Domain\Contacts\Models\ConsultationVies;
 use App\Domain\Contacts\Rules\HorsDeLEntrepriseDuMagasin;
 use App\Domain\Facturation\Enums\ModePaiement;
-use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
-use App\Domain\Facturation\Services\TerritoireFiscal;
+use App\Domain\Tva\Actions\VerifierNumeroTvaAction;
+use App\Domain\Tva\Rules\NumeroTvaAuFormat;
+use App\Domain\Tva\Services\TerritoireFiscal;
 use App\Filament\App\Resources\ClientResource\Pages;
 use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\GereLesExceptionsMetier;

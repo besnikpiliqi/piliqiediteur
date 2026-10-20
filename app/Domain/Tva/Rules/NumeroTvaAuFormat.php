@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Domain\Facturation\Rules;
+namespace App\Domain\Tva\Rules;
 
-use App\Domain\Facturation\Services\NumeroTva;
+use App\Domain\Tva\Services\NumeroTva;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 

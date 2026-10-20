@@ -2,7 +2,7 @@
 
 namespace App\Domain\Facturation\Enums;
 
-use App\Domain\Facturation\Services\TerritoireFiscal;
+use App\Domain\Tva\Services\TerritoireFiscal;
 use Illuminate\Support\Str;
 
 /**

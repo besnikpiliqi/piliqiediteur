@@ -4,8 +4,8 @@ namespace App\Domain\Facturation\Actions;
 
 use App\Domain\Facturation\Models\Avoir;
 use App\Domain\Facturation\Models\AvoirAllocation;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Facturation\Services\ImputationDuCredit;
+use App\Domain\Tva\Services\CalculateurLigne;
 use Illuminate\Support\Facades\DB;
 
 /**

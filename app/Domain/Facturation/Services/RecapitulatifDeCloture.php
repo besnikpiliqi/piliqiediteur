@@ -15,6 +15,7 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\LigneAvoir;
 use App\Domain\Facturation\Models\LigneFacture;
 use App\Domain\Tenancy\Models\Magasin;
+use App\Domain\Tva\Services\CalculateurLigne;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;

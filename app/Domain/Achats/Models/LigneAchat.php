@@ -4,8 +4,8 @@ namespace App\Domain\Achats\Models;
 
 use App\Domain\Achats\Enums\StatutAvoirFournisseur;
 use App\Domain\Catalogue\Models\Produit;
-use App\Domain\Facturation\Services\CalculateurLigne;
 use App\Domain\Tenancy\Concerns\BelongsToMagasin;
+use App\Domain\Tva\Services\CalculateurLigne;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;

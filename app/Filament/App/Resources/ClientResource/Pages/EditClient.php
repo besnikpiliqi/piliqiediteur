@@ -2,7 +2,7 @@
 
 namespace App\Filament\App\Resources\ClientResource\Pages;
 
-use App\Domain\Facturation\Services\NumeroTva;
+use App\Domain\Tva\Services\NumeroTva;
 use App\Filament\App\Resources\ClientResource;
 use App\Filament\Concerns\ArchiveLaFiche;
 use App\Filament\Concerns\RevientALaListe;

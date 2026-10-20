@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use App\Domain\Facturation\Services\TerritoireFiscal;
+use App\Domain\Tva\Services\TerritoireFiscal;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

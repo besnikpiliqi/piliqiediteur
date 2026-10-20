@@ -5,6 +5,7 @@ namespace App\Domain\Facturation\Services;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tva\Services\CalculateurLigne;
 use Illuminate\Support\Str;
 
 /**

@@ -1,0 +1,51 @@
+<?php
+
+namespace Tests\Feature\Authorization;
+
+use App\Domain\Authorization\PermissionRegistry;
+use App\Domain\Facturation\Models\ClotureCaisse;
+use App\Domain\Tenancy\Enums\RoleMagasin;
+use App\Domain\Tenancy\Models\Magasin;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+/**
+ * Sans cloture_caisse.view_toutes, un membre à qui le propriétaire a
+ * ouvert les clôtures ne voit que celles qu'il a lui-même déclenchées
+ * (voir ClotureCaissePolicy::view()).
+ */
+class ClotureCaissePolicyTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_sans_vue_totale_un_membre_ne_voit_que_ses_propres_clotures(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeurA = $this->vendeurQuiVoitLesClotures($magasin, 'paul@example.test');
+        $vendeurB = $this->vendeurQuiVoitLesClotures($magasin, 'jean@example.test');
+        $clotureDeA = ClotureCaisse::factory()->create(['date_cloture' => '2026-10-07', 'cree_par' => $vendeurA->id]);
+        $clotureDeB = ClotureCaisse::factory()->create(['date_cloture' => '2026-10-08', 'cree_par' => $vendeurB->id]);
+
+        $this->assertTrue($vendeurB->can('view', $clotureDeB));
+        $this->assertFalse($vendeurB->can('view', $clotureDeA));
+    }
+
+    public function test_avec_la_vue_totale_un_membre_voit_les_clotures_de_toute_l_equipe(): void
+    {
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
+        $vendeur = $this->vendeurQuiVoitLesClotures($magasin, 'paul@example.test');
+        $comptable = $this->membre($magasin, RoleMagasin::Vendeur, self::casesDeLAncienComptable(), ['name' => 'Comptable', 'email' => 'comptable@example.test']);
+        $expert = $this->expertComptable($magasin);
+        $clotureDuVendeur = ClotureCaisse::factory()->create(['cree_par' => $vendeur->id]);
+
+        $this->assertTrue($comptable->can('view', $clotureDuVendeur));
+        $this->assertTrue($expert->can('view', $clotureDuVendeur));
+        $this->assertFalse($expert->can('cloturer', ClotureCaisse::class));
+    }
+
+    private function vendeurQuiVoitLesClotures(Magasin $magasin, string $email): User
+    {
+        return $this->membre($magasin, RoleMagasin::Vendeur, [...RoleMagasin::Vendeur->permissionsParDefaut(), PermissionRegistry::CLOTURE_CAISSE_VIEW], ['name' => $email, 'email' => $email]);
+    }
+}

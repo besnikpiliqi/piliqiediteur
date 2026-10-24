@@ -2,47 +2,36 @@
 
 namespace App\Domain\Tenancy\Actions;
 
-use App\Domain\Tenancy\Enums\CanalEnvoi;
-use App\Domain\Tenancy\Enums\ResultatVerification;
-use App\Domain\Tenancy\Enums\SignalDeRisque;
-use App\Domain\Tenancy\Enums\TypeVerification;
+use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Societe;
+use App\Domain\Tenancy\Notifications\AvisDeVerification;
 use App\Domain\Tenancy\Scopes\SocieteScope;
-use App\Domain\Tenancy\Services\RapprochementDesDirigeants;
-use App\Domain\Tenancy\Services\RegistreDesVerifications;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\EnvoiRecommande\SuiviDEnvoi;
-use App\Integrations\Rne\RepresentantRne;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Le suivi des plis à code (voir EnvoyerCodeDeConfirmationAction), par le
- * rappel signé du prestataire (voir RappelsDesPrestatairesController) ou
- * en l'interrogeant chaque heure (voir app:suivre-envois-recommandes) :
+ * Le suivi des courriers recommandés à code (voir
+ * EnvoyerCodeDeConfirmationAction), par le rappel signé du prestataire
+ * (voir RappelsDesPrestatairesController) ou en l'interrogeant chaque
+ * heure (voir app:suivre-envois-recommandes) :
  * - un courrier remis contre signature note sa remise ;
- * - une lettre électronique acceptée ne note sa remise que si le
- *   prestataire qualifié a établi l'identité de la personne qui l'a
- *   acceptée (statut concluant), et que cette personne est le dirigeant
- *   visé (voir RapprochementDesDirigeants::correspond()) : sinon son code
- *   s'annule ;
- * - un pli revenu à l'expéditeur annule son code et constate le signal
- *   adresse_contradictoire.
- * Idempotent : un pli déjà remis, revenu, utilisé ou annulé ne change
+ * - un courrier revenu à l'expéditeur, faute d'avoir été retiré, annule
+ *   son code, et le propriétaire d'une inscription qui l'attendait est
+ *   prévenu qu'un nouveau courrier peut être demandé.
+ * Idempotent : un courrier déjà remis, revenu, utilisé ou annulé ne change
  * plus.
  */
 class SuivreLesEnvoisAction
 {
-    public function __construct(
-        private readonly ServiceEnvoiRecommande $envoi,
-        private readonly RegistreDesVerifications $registre,
-    ) {}
+    public function __construct(private readonly ServiceEnvoiRecommande $envoi) {}
 
     /**
-     * Interroge le prestataire sur chaque pli encore en route.
+     * Interroge le prestataire sur chaque courrier encore en route.
      *
-     * @return int le nombre de plis dont le suivi a changé
+     * @return int le nombre de courriers dont le suivi a changé
      */
     public function suivreTout(): int
     {
@@ -60,8 +49,8 @@ class SuivreLesEnvoisAction
     }
 
     /**
-     * Note le suivi du pli de cette référence, retrouvé toutes sociétés
-     * confondues, puis dans sa société.
+     * Note le suivi du courrier de cette référence, retrouvé toutes
+     * sociétés confondues, puis dans sa société.
      *
      * @return bool le suivi a-t-il changé ?
      */
@@ -75,29 +64,26 @@ class SuivreLesEnvoisAction
 
         $societe = Societe::query()->findOrFail($code->societe_id);
 
-        return app(TenantContext::class)->runAsSociete($societe, fn (): bool => DB::transaction(function () use ($societe, $code, $suivi): bool {
+        $change = app(TenantContext::class)->runAsSociete($societe, fn (): bool => DB::transaction(function () use ($code, $suivi): bool {
             $verrouille = CodeConfirmation::query()->whereKey($code->getKey())->lockForUpdate()->firstOrFail();
 
             if ($verrouille->remis_le !== null || $verrouille->retourne_le !== null || $verrouille->utilise_le !== null || $verrouille->annule_le !== null) {
                 return false;
             }
 
-            if ($suivi->statut === SuiviDEnvoi::RETOURNE) {
-                $verrouille->forceFill(['retourne_le' => now(), 'annule_le' => now()])->save();
-                $this->registre->noter($societe, TypeVerification::Signal, ResultatVerification::AExaminer, ['constat' => 'courrier revenu à l\'expéditeur'], signal: SignalDeRisque::AdresseContradictoire, fournisseur: 'recommande', reference: $verrouille->reference_envoi);
-
-                return true;
-            }
-
-            $identite = $suivi->identiteDuDestinataire;
-            $accepteParLeDirigeant = $verrouille->canal !== CanalEnvoi::LreQualifiee
-                || ($identite !== null
-                    && $identite->statut === ResultatVerification::Concluante
-                    && RapprochementDesDirigeants::correspond($identite, RepresentantRne::depuisTableau($verrouille->destinataire['representant'])));
-
-            $verrouille->forceFill($accepteParLeDirigeant ? ['remis_le' => now()] : ['annule_le' => now()])->save();
+            $verrouille->forceFill($suivi->statut === SuiviDEnvoi::RETOURNE ? ['retourne_le' => now(), 'annule_le' => now()] : ['remis_le' => now()])->save();
 
             return true;
         }));
+
+        if ($change && $suivi->statut === SuiviDEnvoi::RETOURNE && $code->motif === MotifCode::Verification && $societe->attendSonCode()) {
+            app(TenantContext::class)->runAsSociete($societe, fn () => $societe->proprietaire?->notify(new AvisDeVerification(
+                $societe,
+                'Votre courrier recommandé est revenu',
+                'Le courrier recommandé n\'a pas été retiré au bureau de poste et son code ne vaut plus. Demandez un nouveau courrier depuis la page de la vérification ; s\'il ne vous parvient pas non plus, déposez des pièces pour l\'éditeur.',
+            )));
+        }
+
+        return $change;
     }
 }

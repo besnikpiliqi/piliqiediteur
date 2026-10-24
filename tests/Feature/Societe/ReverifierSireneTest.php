@@ -2,44 +2,29 @@
 
 namespace Tests\Feature\Societe;
 
-use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
-use App\Domain\CaisseSecurisee\Enums\CodeEvenement;
-use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Tenancy\Actions\ChangerSiretAction;
-use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
-use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
-use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
-use App\Domain\Tenancy\Enums\MotifCode;
-use App\Domain\Tenancy\Enums\ResultatVerification;
-use App\Domain\Tenancy\Enums\StatutMagasin;
-use App\Domain\Tenancy\Enums\TypePiece;
 use App\Domain\Tenancy\Mail\AlerteEditeurMail;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Societe;
-use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
-use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\ReverificationSirene;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
- * La reprise des contrôles Sirene (voir app:reverifier-sirene) : seule
- * une société jamais préremplie, pas encore validée, voit son identité
- * complétée depuis le répertoire factice ; la revérification d'une
- * société validée ne change rien de ce qu'elle a enregistré. Ce que la
- * commande écrit s'inscrit au journal d'audit, le système pour auteur.
+ * La reprise des contrôles Sirene (voir app:reverifier-sirene) : le
+ * contrôle d'un établissement resté impossible reprend ; la revérification
+ * d'une société validée ne change rien de ce qu'elle a enregistré, et
+ * signale ses écarts sans rien bloquer. Ce que la commande écrit
+ * s'inscrit au journal d'audit, le système pour auteur.
  */
 class ReverifierSireneTest extends TestCase
 {
@@ -69,100 +54,26 @@ class ReverifierSireneTest extends TestCase
     }
 
     /**
-     * Une société inscrite pendant une panne de l'INSEE, qui a saisi sa
-     * raison sociale entre-temps : la reprise du contrôle complète chaque
-     * champ encore vide de son identité, garde ce qu'elle a saisi, et
-     * inscrit ce complément au journal d'audit, le système pour auteur.
-     */
-    public function test_la_reprise_d_un_controle_impossible_complete_l_identite_vide_au_journal_d_audit(): void
-    {
-        $societe = $this->societeInscritePendantUnePanne(['raison_sociale' => 'Ma raison sociale']);
-
-        $this->artisan('app:reverifier-sirene')->assertSuccessful();
-
-        $completee = $societe->fresh();
-        $this->assertSame(
-            ['Ma raison sociale', '5710', FormeJuridique::Sas, '1 RUE DE LA REPUBLIQUE', '75001', 'PARIS'],
-            [$completee->raison_sociale, $completee->categorie_juridique_insee, $completee->forme_juridique, $completee->siege_adresse, $completee->siege_code_postal, $completee->siege_ville],
-        );
-        $entree = $this->entrees($societe)->where('action.value', 'identite_modifiee')->sole();
-        $this->assertSame(['systeme', null], [$entree->origine, $entree->auteur_id]);
-        $this->assertSame(
-            ['categorie_juridique_insee' => '5710', 'forme_juridique' => 'sas', 'numero_tva' => $completee->numero_tva, 'siege_adresse' => '1 RUE DE LA REPUBLIQUE', 'siege_code_postal' => '75001', 'siege_ville' => 'PARIS'],
-            $entree->nouvelles_valeurs,
-        );
-        $this->assertSame(array_fill_keys(array_keys($entree->nouvelles_valeurs), null), $entree->anciennes_valeurs);
-    }
-
-    /**
      * Le propriétaire connecté demande la reprise par le bouton
-     * « Revérifier » : le n° de TVA qu'elle complète s'inscrit au journal
-     * des événements de son magasin au nom du système, comme au journal
-     * d'audit, jamais au sien.
+     * « Revérifier » : le contrôle de l'établissement de son magasin, créé
+     * pendant une panne de l'INSEE, reprend et le vérifie, et s'inscrit au
+     * journal d'audit au nom du système, jamais au sien.
      */
     public function test_la_reprise_demandee_par_le_proprietaire_connecte_s_inscrit_au_nom_du_systeme(): void
     {
-        $societe = $this->societeInscritePendantUnePanne();
-        $this->actingAs($societe->proprietaire);
-        $magasin = $societe->magasinsReels()->sole();
+        app(RepertoireSirene::class)->rendreInjoignable();
+        $magasin = $this->ouvrirUneSociete(['a_verifier' => true]);
+        app(RepertoireSirene::class)->rendreInjoignable(false);
+        $societe = $magasin->societe;
+        app(TenantContext::class)->clear();
+        $this->actingAs($this->proprietaireDe($magasin));
+        $dejaInscrites = $this->entrees($societe)->count();
 
         app(ReverificationSirene::class)->reprendre($societe, false);
 
-        $evenement = app(TenantContext::class)->runAs($magasin, fn (): EnregistrementFiscal => EnregistrementFiscal::query()
-            ->where('chaine', ChaineFiscale::Evenement->value)
-            ->where('type', (string) CodeEvenement::ParametreDeConformite->value)
-            ->sole());
-        $this->assertSame(['numero_tva', $societe->fresh()->numero_tva], [$evenement->contenuSigne()['donnees']['details']['parametre'], $evenement->contenuSigne()['donnees']['details']['nouvelle_valeur']]);
-        $this->assertNull($evenement->operateur_id);
-        $this->assertNull($evenement->contenuSigne()['operateur']);
-    }
-
-    /**
-     * Une entreprise cessée avant la validation de sa société la fait
-     * refuser pour toujours à la reprise du contrôle : le refus s'inscrit
-     * au journal d'audit, avec son motif.
-     */
-    public function test_une_entreprise_cessee_avant_la_validation_fait_refuser_la_societe_au_journal_d_audit(): void
-    {
-        $societe = $this->societeInscritePendantUnePanne();
-        app(RepertoireSirene::class)->cesser($societe->siren);
-
-        $this->artisan('app:reverifier-sirene')->assertSuccessful();
-
-        $this->assertTrue($societe->fresh()->estRefusee());
-        $entree = $this->entrees($societe)->where('action.value', 'societe_refusee')->sole();
-        $this->assertSame(['systeme', ['motif' => ControleSirene::MOTIF_ENTREPRISE_CESSEE]], [$entree->origine, $entree->nouvelles_valeurs]);
-    }
-
-    /**
-     * Une entreprise cessée avant la validation fait refuser la société
-     * comme un refus de l'éditeur : la pièce déposée s'efface dès cette
-     * décision, le code encore actif s'annule, la démonstration se ferme,
-     * et le propriétaire est prévenu, avec le motif du répertoire.
-     */
-    public function test_un_refus_automatique_efface_les_pieces_annule_les_codes_ferme_la_demonstration_et_previent_le_proprietaire(): void
-    {
-        Storage::fake(PiecesDeVerification::DISQUE);
-        app(RepertoireSirene::class)->rendreInjoignable();
-        $societe = $this->inscrireUneSociete(null, 'Luc Bernard');
-        app(RepertoireSirene::class)->rendreInjoignable(false);
-        $proprietaire = $societe->proprietaire;
-        $piece = app(DeposerUnePieceAction::class)->handle($proprietaire, $societe, TypePiece::Identite, 'Carte d\'identité de Luc Bernard');
-        $code = app(EnvoyerCodeDeConfirmationAction::class)->handle($societe, MotifCode::Verification, editeur: new InterventionDeLEditeur('Courrier de vérification demandé par l\'éditeur', 'DOSSIER-2026-0003', ['alice']));
-        $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
-        app(TenantContext::class)->clear();
-        app(RepertoireSirene::class)->cesser($societe->siren);
-
-        $this->artisan('app:reverifier-sirene')->assertSuccessful();
-
-        $this->assertTrue($societe->fresh()->estRefusee());
-        Storage::disk(PiecesDeVerification::DISQUE)->assertMissing((string) $piece->chemin);
-        $this->assertSame(PiecesDeVerification::MOTIF_DECISION, $this->entrees($societe)->where('action.value', 'piece_effacee')->sole()->nouvelles_valeurs['motif']);
-        $this->assertNotNull($code->fresh()->annule_le);
-        $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
-        $avis = $proprietaire->notifications()->sole();
-        $this->assertSame('L\'inscription de votre société est refusée', $avis->data['title']);
-        $this->assertStringStartsWith(ControleSirene::MOTIF_ENTREPRISE_CESSEE, $avis->data['body']);
+        $this->assertNotNull($magasin->fresh()->etablissement_verifie_le);
+        $entree = $this->entrees($societe)->slice($dejaInscrites)->sole();
+        $this->assertSame(['verification_enregistree', 'systeme', null], [$entree->action->value, $entree->origine, $entree->auteur_id]);
     }
 
     /**
@@ -184,7 +95,7 @@ class ReverifierSireneTest extends TestCase
         $this->artisan('app:reverifier-sirene', ['--toutes' => true])->assertSuccessful();
 
         $this->assertNotNull($magasin->fresh()->etablissement_verifie_le);
-        $this->assertSame([true, false], [$societe->fresh()->estValidee(), $societe->fresh()->estRefusee()]);
+        $this->assertSame([true, false], [$societe->fresh()->estValidee(), $societe->fresh()->estClose()]);
         $avis = $proprietaire->notifications()->get()->filter(fn ($notification): bool => $notification->data['title'] === 'Écart au répertoire Sirene')->map(fn ($notification): string => $notification->data['body'])->values();
         $this->assertCount(2, $avis);
         $this->assertStringContainsString('Catégorie juridique lue avant : 5499 ; lue aujourd\'hui : 5710.', $avis->implode("\n"));
@@ -276,24 +187,6 @@ class ReverifierSireneTest extends TestCase
         $this->assertSame([['concluante', $ancienSiret], ['concluante', $nouveauSiret]], $this->controlesDeLEtablissement($magasin));
         $this->assertSame([], $proprietaire->notifications()->get()->filter(fn ($notification): bool => $notification->data['title'] === 'Écart au répertoire Sirene')->all());
         Mail::assertNotSent(AlerteEditeurMail::class);
-    }
-
-    /**
-     * Une société à vérifier, sans identité préremplie, dont le dernier
-     * contrôle de l'entreprise est resté impossible, comme après une
-     * inscription pendant une panne de l'INSEE ; avec ce que son
-     * propriétaire a saisi depuis.
-     *
-     * @param  array<string, mixed>  $saisie
-     */
-    private function societeInscritePendantUnePanne(array $saisie = []): Societe
-    {
-        $proprietaire = User::factory()->for(Societe::factory()->sansIdentiteLegale()->state(['categorie_juridique_insee' => null, ...$saisie]))->create();
-        $societe = $this->ouvrirUneSociete(['a_verifier' => true], $proprietaire)->societe;
-        app(TenantContext::class)->clear();
-        app(TenantContext::class)->runAsSociete($societe, fn () => app(ControleSirene::class)->noterUnite($societe, ['resultat' => ResultatVerification::Indisponible, 'unite' => null, 'motif' => null]));
-
-        return $societe;
     }
 
     /**

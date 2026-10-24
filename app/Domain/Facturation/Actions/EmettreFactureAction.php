@@ -65,7 +65,7 @@ use LogicException;
  *
  * Un magasin n'émet ni facture ni ticket tant qu'il ne peut pas vendre
  * (voir Magasin::verifierQuIlPeutVendre()) : société en cours de
- * vérification ou refusée, établissement pas encore confirmé par Sirene,
+ * vérification ou close, établissement pas encore confirmé par Sirene,
  * lecture seule. Le contrôle se fait après le verrou du registre, sur le
  * magasin et la société relus en base.
  *

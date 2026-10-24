@@ -2,10 +2,12 @@
 
 namespace App\Filament\App\Pages\Auth;
 
+use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Mail\CompteExistantMail;
 use App\Domain\Tenancy\Mail\DemandeInscriptionMail;
 use App\Domain\Tenancy\Models\DemandeInscription;
+use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Rules\SirenValide;
 use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\FournisseurDesComptes;
@@ -26,33 +28,36 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * L'inscription d'une société, en deux temps. Ici, la demande : le SIREN
- * de l'entreprise et le compte de son propriétaire (nom, adresse de
- * connexion, mot de passe), sans aucun magasin : tous les magasins se
- * créent ensuite dans l'espace de la société (voir CreerMagasin). Rien
- * n'est créé : un lien valable 24 heures part à l'adresse donnée, et c'est
- * sa confirmation qui crée la société (voir ConfirmerInscriptionController
- * et CreerSocieteAction).
+ * de l'entreprise, l'adresse e-mail et le mot de passe de son propriétaire,
+ * rien de plus ; aucun magasin : tous se créent ensuite dans l'espace de
+ * la société (voir CreerMagasin). Rien n'est créé : un lien valable 24
+ * heures part à l'adresse donnée, et c'est sa confirmation qui crée la
+ * société et fait partir le courrier recommandé à son représentant légal
+ * (voir ConfirmerInscriptionController et CreerSocieteAction).
  *
- * Le répertoire public Sirene de l'INSEE est consulté tout de suite (voir
- * ControleSirene) : une entreprise cessée ou un numéro inconnu sont
- * refusés avec leur motif ; quand l'INSEE ne répond pas, la demande est
- * acceptée et le contrôle reprend à la confirmation. Rien d'autre n'est
- * vérifié dans le logiciel : que le SIREN soit déjà celui d'une autre
- * société ou l'adresse déjà celle d'un propriétaire, l'écran répond
- * toujours la même chose (MESSAGE_NEUTRE). L'adresse de connexion d'un
- * propriétaire ne reçoit aucun lien d'inscription, mais un e-mail qui lui
- * dit qu'elle a déjà un compte (voir CompteExistantMail) ; l'adresse de
- * contact d'un autre compte n'empêche rien. Le mot de passe choisi suit la
- * règle du mot de passe choisi, sans l'identifiant, qui n'existe pas
- * encore (voir RegleDuMotDePasse) : le tirage de l'identifiant écartera la
- * valeur égale à ce mot de passe (voir GenerateurDIdentifiants).
+ * Un SIREN n'appartient qu'à une seule société : un SIREN déjà pris (une
+ * inscription qui attend son code, ou une société validée) est refusé par
+ * le seul message CreerSocieteAction::MESSAGE_SIREN_PRIS, qui dit où est
+ * le code s'il s'agit de l'entreprise de la personne, sans rien révéler
+ * d'autre. Le répertoire public Sirene de l'INSEE est consulté tout de
+ * suite (voir ControleSirene) : une entreprise cessée ou un numéro inconnu
+ * sont refusés avec leur motif ; quand l'INSEE ne répond pas, la demande
+ * est acceptée et la confirmation le reconsulte. Que l'adresse soit déjà
+ * celle d'un propriétaire ou non, l'écran répond toujours la même chose
+ * (MESSAGE_NEUTRE) : l'adresse de connexion d'un propriétaire ne reçoit
+ * aucun lien d'inscription, mais un e-mail qui lui dit qu'elle a déjà un
+ * compte (voir CompteExistantMail) ; l'adresse de contact d'un autre
+ * compte n'empêche rien. Le mot de passe choisi suit la règle du mot de
+ * passe choisi, sans l'identifiant, qui n'existe pas encore (voir
+ * RegleDuMotDePasse) : le tirage de l'identifiant écartera la valeur égale
+ * à ce mot de passe (voir GenerateurDIdentifiants).
  *
  * La page est ouverte à tous : deux demandes par minute et par adresse IP
  * (rateLimit() de Filament), vingt par heure et par adresse IP, trois par
  * heure pour un même SIREN avec une même adresse e-mail ; au-delà, le même
- * message neutre, sans rien envoyer. Aucune limite par SIREN seul : un
- * tiers ne sature pas le SIREN d'une entreprise. Aucun champ n'est validé
- * avant l'envoi du formulaire.
+ * message neutre, sans rien envoyer. Le courrier, lui, ne part qu'après la
+ * confirmation de l'adresse, dans la limite de courriers par adresse IP de
+ * la confirmation. Aucun champ n'est validé avant l'envoi du formulaire.
  */
 class InscriptionSociete extends Register
 {
@@ -86,7 +91,6 @@ class InscriptionSociete extends Register
                 $this->makeForm()
                     ->schema([
                         $this->getSirenFormComponent(),
-                        $this->getNameFormComponent(),
                         $this->getEmailFormComponent(),
                         $this->getPasswordFormComponent(),
                         $this->getPasswordConfirmationFormComponent(),
@@ -115,6 +119,10 @@ class InscriptionSociete extends Register
             return null;
         }
 
+        if (Societe::sirenPris($donnees['siren'])) {
+            throw ValidationException::withMessages(['data.siren' => CreerSocieteAction::MESSAGE_SIREN_PRIS]);
+        }
+
         $this->refuserCeQueSireneRefuse($donnees['siren']);
 
         if (FournisseurDesComptes::proprietaireDeLAdresse($email) !== null) {
@@ -134,7 +142,6 @@ class InscriptionSociete extends Register
             'jeton_hache' => DemandeInscription::empreinte($jeton),
             'donnees' => [
                 'siren' => $donnees['siren'],
-                'nom' => $donnees['name'],
                 'mot_de_passe' => $donnees['password'],
             ],
             'expire_le' => now()->addHours(DemandeInscription::DUREE_DE_VALIDITE_EN_HEURES),
@@ -208,11 +215,6 @@ class InscriptionSociete extends Register
             ->helperText('Au moins 8 caractères ; ni un seul caractère répété, ni une suite de chiffres.')
             ->dehydrateStateUsing(fn (string $state): string => Hash::make($state))
             ->same('passwordConfirmation');
-    }
-
-    protected function getNameFormComponent(): Component
-    {
-        return parent::getNameFormComponent()->label('Votre nom')->autofocus(false);
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
+use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
@@ -354,14 +355,14 @@ class EquipeDuMagasinTest extends TestCase
             'magasin fermé' => ['magasin fermé', true],
             'société suspendue' => ['société suspendue', true],
             'société résiliée' => ['société résiliée', true],
-            'inscription refusée' => ['inscription refusée', true],
+            'inscription close' => ['inscription close', true],
             'société révoquée' => ['société révoquée', false],
         ];
     }
 
     /**
      * Dans un magasin fermé ou suspendu, ou une société suspendue,
-     * résiliée ou à l'inscription refusée, l'équipe reste consultable et
+     * résiliée ou à l'inscription close, l'équipe reste consultable et
      * gérable, au magasin par le propriétaire et ses responsables, et dans
      * l'administration de la société par le propriétaire : un accès se
      * coupe toujours. Dans une société révoquée, elle reste consultable,
@@ -447,7 +448,7 @@ class EquipeDuMagasinTest extends TestCase
             'société suspendue' => $magasin->societe->forceFill(['statut' => StatutSociete::Suspendue])->save(),
             'société résiliée' => $magasin->societe->forceFill(['statut' => StatutSociete::Resiliee])->save(),
             'société révoquée' => $magasin->societe->forceFill(['statut' => StatutSociete::Revoquee])->save(),
-            'inscription refusée' => $magasin->societe->forceFill(['validee_le' => null, 'refusee_le' => now()])->save(),
+            'inscription close' => $magasin->societe->forceFill(['validee_le' => null, 'close_le' => now(), 'motif_cloture' => MotifCloture::Refus])->save(),
         };
     }
 }

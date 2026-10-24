@@ -25,10 +25,9 @@ use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\ChangerSiretAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\ChoisirEtablissementPrincipalAction;
-use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
+use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
-use App\Domain\Tenancy\Actions\RefuserLaSocieteAction;
 use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
@@ -56,7 +55,6 @@ use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Closure;
-use Database\Factories\SocieteFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
@@ -384,7 +382,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
         $this->fermer($boutique, MotifFermeture::Temporaire, $proprietaire, self::MOT_DE_PASSE_CHOISI);
         Event::assertNotDispatched(MagasinFerme::class);
 
-        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->saisirLeCodeDuCourrier($societe);
         $this->fermer($siege, MotifFermeture::Temporaire, $proprietaire, self::MOT_DE_PASSE_CHOISI);
         $this->rouvrir($siege, $proprietaire, self::MOT_DE_PASSE_CHOISI);
         $this->rouvrir($boutique, $proprietaire, self::MOT_DE_PASSE_CHOISI);
@@ -624,7 +622,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
         $this->rouvrir($siege, $proprietaire, self::MOT_DE_PASSE_CHOISI);
         $this->assertSame(0, PeriodeActivite::query()->where('magasin_id', $siege->id)->count());
 
-        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->saisirLeCodeDuCourrier($societe);
 
         $periode = PeriodeActivite::query()->where('magasin_id', $siege->id)->sole();
         $this->assertSame([(string) $siege->siret], SiretMagasin::query()->where('magasin_id', $siege->id)->whereNull('retire_le')->pluck('siret')->all());
@@ -644,19 +642,12 @@ class FermerEtRouvrirMagasinTest extends TestCase
 
                 return $siret;
             }],
-            'SIREN corrigé' => [static function (Magasin $magasin, User $proprietaire): string {
-                $siren = SocieteFactory::sirenFictif();
-                $siret = IdentifiantsInsee::avecSaCle($siren.'9001');
-                app(CorrigerSirenAvantValidationAction::class)->handle($proprietaire, $magasin->societe->fresh(), $siren, [$magasin->id => substr($siret, 9)]);
-
-                return $siret;
-            }],
         ];
     }
 
     /**
      * Avant la validation, le SIRET d'un magasin fermé change encore : son
-     * NIC, ou le SIREN de la société, se corrige pendant que la réouverture
+     * NIC se corrige pendant que la réouverture
      * attend le répertoire Sirene, l'INSEE ne répondant plus à la
      * correction, qui laisse l'établissement à vérifier. Le contrôle de la
      * réouverture, concluant pour l'ancien SIRET, ne vaut pas pour le
@@ -697,8 +688,8 @@ class FermerEtRouvrirMagasinTest extends TestCase
     public static function decisionsDeLEditeurPendantLeControle(): array
     {
         return [
-            'société refusée avant sa validation' => [true, static function (Societe $societe): void {
-                app(RefuserLaSocieteAction::class)->handle($societe, new InterventionDeLEditeur('Pièces falsifiées, signalement du vrai dirigeant.', 'DOSSIER-2026-0042', ['alice']));
+            'inscription refusée et close avant sa validation' => [true, static function (Societe $societe): void {
+                app(CloreLInscriptionAction::class)->refuser($societe, new InterventionDeLEditeur('Pièces falsifiées, signalement du vrai dirigeant.', 'DOSSIER-2026-0042', ['alice']));
             }],
             'société validée suspendue' => [false, static function (Societe $societe): void {
                 $societe->fresh()->forceFill(['statut' => StatutSociete::Suspendue])->save();
@@ -707,7 +698,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
     }
 
     /**
-     * L'éditeur refuse la société, ou la suspend, pendant que la
+     * L'éditeur refuse et clôt l'inscription, ou suspend la société, pendant que la
      * réouverture attend le répertoire Sirene : la société passe en lecture
      * seule, où aucun magasin ne se rouvre. La réouverture, qui relit la
      * société sous son verrou, est refusée comme par la policy, sans rien
@@ -843,7 +834,7 @@ class FermerEtRouvrirMagasinTest extends TestCase
         app(TenantContext::class)->set($siege);
         $carnet = $this->produitEnStock('CARNET', 'Carnet', 5, '2.00');
         $this->fermer($siege, MotifFermeture::Cessation, $proprietaire, self::MOT_DE_PASSE_CHOISI);
-        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->saisirLeCodeDuCourrier($societe);
         $this->assertTrue($societe->fresh()->estValidee());
 
         $this->fermer($siege, MotifFermeture::Cession, $proprietaire, self::MOT_DE_PASSE_CHOISI, 'Ma Boutique');

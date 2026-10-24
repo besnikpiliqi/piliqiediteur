@@ -9,7 +9,7 @@ use App\Domain\Tenancy\Enums\StatutCompte;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
-use App\Domain\Tenancy\Services\EvaluateurDeVerification;
+use App\Domain\Tenancy\Services\CourriersDeVerification;
 use App\Filament\Concerns\GereLesExceptionsMetier;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MembreResource;
@@ -43,7 +43,7 @@ class TableauDeBord extends Dashboard
 {
     use GereLesExceptionsMetier;
 
-    public const ETAPE_VERIFIER = 'Vérifier votre société';
+    public const ETAPE_CODE_DU_COURRIER = 'Saisir le code du courrier recommandé';
 
     public const ETAPE_PREMIER_MAGASIN = 'Créer votre premier magasin';
 
@@ -83,15 +83,16 @@ class TableauDeBord extends Dashboard
         $societe = $this->societe();
 
         return match (true) {
-            $societe->estRefusee() => 'L\'inscription de votre société a été refusée.',
+            $societe->estClose() => 'L\'inscription de votre société est close.',
             $societe->estValidee() => 'Votre société est validée depuis le '.$societe->validee_le->setTimezone(config('app.timezone'))->format('d/m/Y').'.',
-            default => 'Votre société est en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà créer vos magasins et les configurer : catalogue, équipe, paramètres et achats, et vous essayer dans le magasin de démonstration.',
+            default => 'Votre société attend le code de son courrier recommandé : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés jusqu\'à sa validation. Vous pouvez déjà créer vos magasins et les configurer : catalogue, équipe, paramètres et achats, et vous essayer dans le magasin de démonstration.',
         };
     }
 
     /**
      * Les premières étapes de la société, celles de son propriétaire, dans
-     * l'ordre : vérifier la société, créer son premier magasin, ajouter son
+     * l'ordre : saisir le code du courrier recommandé, qui valide la
+     * société, créer son premier magasin, ajouter son
      * équipe, essayer le magasin de démonstration. Chacune dit si elle est
      * faite, où elle en est, et mène à l'écran qui la fait quand il peut
      * l'ouvrir ; l'essai de la démonstration se fait par le bouton de
@@ -120,7 +121,7 @@ class TableauDeBord extends Dashboard
 
         return [
             [
-                'titre' => self::ETAPE_VERIFIER,
+                'titre' => self::ETAPE_CODE_DU_COURRIER,
                 'faite' => $societe->estValidee(),
                 'etat' => $this->prochaineEtapeDeLaVerification(),
                 'url' => VerificationSociete::getUrl(),
@@ -233,27 +234,18 @@ class TableauDeBord extends Dashboard
     }
 
     /**
-     * Où en est la vérification, et ce qu'il reste à faire, tel que la
-     * société le voit (voir EtatDeVerification::vuParLaSociete()).
+     * Où en est la vérification, et ce qu'il reste à faire : saisir le
+     * code du courrier, jusqu'à quand.
      */
     private function prochaineEtapeDeLaVerification(): string
     {
         $societe = $this->societe();
-
-        if ($societe->estValidee()) {
-            return 'Validée le '.$societe->validee_le->setTimezone(config('app.timezone'))->format('d/m/Y').'.';
-        }
-
-        $etat = app(EvaluateurDeVerification::class)->evaluer($societe)->vuParLaSociete();
+        $courriers = app(CourriersDeVerification::class);
 
         return match (true) {
-            $etat->refusee => 'Refusée.',
-            $etat->reclamationPossible() => 'En cours d\'examen par l\'éditeur.',
-            ! $etat->entrepriseEtEtablissements => 'En cours : le répertoire Sirene de l\'INSEE doit encore confirmer votre entreprise ou l\'établissement d\'un magasin.',
-            $etat->attendUnCourrier() => 'Prochaine étape : recevoir le code du courrier recommandé et le saisir.',
-            $etat->preuveDeQualite === null => 'Prochaine étape : prouver votre qualité de représentant de l\'entreprise.',
-            $etat->signauxActifs !== [] => 'Prochaine étape : lever les points signalés.',
-            default => 'En cours.',
+            $societe->estValidee() => 'Validée le '.$societe->validee_le->setTimezone(config('app.timezone'))->format('d/m/Y').'.',
+            $societe->estClose() => 'Inscription close.',
+            default => 'Le courrier recommandé est parti au représentant légal de votre entreprise, à l\'adresse de son siège : saisissez son code avant le '.$courriers->cloturePrevueLe($societe)->setTimezone(config('app.timezone'))->format('d/m/Y').'.',
         };
     }
 }

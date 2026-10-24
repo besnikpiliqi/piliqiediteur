@@ -153,8 +153,8 @@ class FournisseurResourceTest extends TestCase
      */
     public function test_le_numero_de_tva_de_l_entreprise_du_magasin_est_refuse(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'siren' => '100000009', 'numero_tva' => 'FR88100000009'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'siren' => '100000009', 'numero_tva' => 'FR88100000009']);
+        $proprietaire = $magasin->societe->proprietaire;
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -183,8 +183,8 @@ class FournisseurResourceTest extends TestCase
      */
     public function test_le_siret_d_un_etablissement_de_l_entreprise_du_magasin_est_refuse(): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'siren' => '100000009'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'siren' => '100000009']);
+        $proprietaire = $magasin->societe->proprietaire;
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 

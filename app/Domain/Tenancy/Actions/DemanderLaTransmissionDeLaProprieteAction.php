@@ -34,11 +34,11 @@ use SensitiveParameter;
  *
  * Les conditions, relues sous le verrou des lignes du propriétaire et de
  * l'administrateur, chacune avec son message à l'écran du propriétaire
- * (voir exigerLesConditions()) : l'administrateur est actif ; sa qualité de
- * représentant est prouvée et son accès n'a pas été redonné depuis (sinon
- * qui le lui a redonné pourrait accepter à sa place) ; son mot de passe
- * n'est plus son identifiant, que le propriétaire a connu à sa création ;
- * il a renseigné lui-même son adresse, jamais saisie par le propriétaire ;
+ * (voir exigerLesConditions()) : l'administrateur est actif, sans aucune
+ * preuve de qualité de représentant (décision de l'éditeur) ; son mot de
+ * passe n'est plus son identifiant, que le propriétaire a connu à sa
+ * création ; il a renseigné lui-même son adresse, jamais saisie par le
+ * propriétaire ;
  * cette adresse n'est pas celle du propriétaire, dont « Mot de passe
  * oublié » réinitialiserait ensuite le compte du nouveau propriétaire.
  *
@@ -66,8 +66,6 @@ class DemanderLaTransmissionDeLaProprieteAction
     public const MESSAGE_PROPRIETAIRE_SEUL = 'Seul le propriétaire transmet la propriété de sa société.';
 
     public const MESSAGE_ADMINISTRATEUR = 'La propriété ne se transmet qu\'à un administrateur actif de la société.';
-
-    public const MESSAGE_QUALITE = 'Cette personne doit d\'abord prouver sa qualité de représentant de la société.';
 
     public const MESSAGE_MOT_DE_PASSE = 'Cet administrateur doit d\'abord choisir son propre mot de passe dans son profil.';
 
@@ -200,10 +198,6 @@ class DemanderLaTransmissionDeLaProprieteAction
     {
         if ($administrateur->is($proprietaire) || ! $administrateur->estAdministrateur() || ! $administrateur->estActif() || (int) $administrateur->societe_id !== $societe->getKey()) {
             throw new AuthorizationException(self::MESSAGE_ADMINISTRATEUR);
-        }
-
-        if (! $administrateur->aSaQualiteVerifiee() || ($administrateur->acces_redonne_le !== null && ! $administrateur->acces_redonne_le->lt($administrateur->qualite_verifiee_le))) {
-            throw new LogicException(self::MESSAGE_QUALITE);
         }
 
         if ($administrateur->mot_de_passe_est_l_identifiant) {

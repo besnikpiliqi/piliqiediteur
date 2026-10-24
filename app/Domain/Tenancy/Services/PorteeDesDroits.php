@@ -77,7 +77,7 @@ final class PorteeDesDroits
      * Peut-il gérer l'équipe de sa société, dans la mesure de son rôle ? Un
      * compte qui peut agir, dans une société qui n'est pas révoquée : celle
      * d'un usurpateur garde son équipe consultable, mais plus rien ne s'y
-     * gère ; une société suspendue, résiliée ou refusée, ou un magasin
+     * gère ; une société suspendue, résiliée ou close, ou un magasin
      * fermé, la gère encore (un accès se coupe toujours).
      */
     public function gereSonEquipe(User $auteur): bool
@@ -145,7 +145,7 @@ final class PorteeDesDroits
      * un compte nul, pour un compte qu'il crée ou qu'il réintègre. Un
      * compte existant ne reçoit de rôle que dans le magasin de son
      * identifiant. Jamais dans le magasin de démonstration d'une société
-     * validée ou refusée, dont les comptes d'entraînement sont retirés pour
+     * validée ou close, dont les comptes d'entraînement sont retirés pour
      * de bon (voir Magasin::estUneDemonstrationTerminee()).
      */
     public function peutDonnerLeRole(User $auteur, ?User $compte, Magasin $magasin, RoleMagasin $role): bool

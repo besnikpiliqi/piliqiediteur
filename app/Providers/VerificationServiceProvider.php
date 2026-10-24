@@ -4,8 +4,6 @@ namespace App\Providers;
 
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\EnvoiRecommande\FauxServiceEnvoiRecommande;
-use App\Integrations\Identite\Contracts\VerificationIdentite;
-use App\Integrations\Identite\FausseVerificationIdentite;
 use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
 use App\Integrations\Rne\FauxRne;
 use App\Integrations\Rne\InpiRne;
@@ -19,12 +17,12 @@ use RuntimeException;
  * Le câblage des fournisseurs externes de la vérification des sociétés,
  * chacun selon son pilote (config/services.php) : le répertoire Sirene de
  * l'INSEE (SIRENE_PILOTE, « insee » ou « faux »), le registre national
- * des entreprises de l'INPI (RNE_PILOTE, « inpi » ou « faux »), la
- * vérification d'identité à distance (IDENTITE_PILOTE) et l'envoi
- * recommandé (RECOMMANDE_PILOTE), seulement « faux » tant que l'éditeur
- * n'a pas choisi ses prestataires. Le pilote « faux » sert au
- * développement et aux tests, sans aucune requête ; l'application refuse
- * de démarrer en production avec l'un d'eux.
+ * des entreprises de l'INPI (RNE_PILOTE, « inpi » ou « faux ») et l'envoi
+ * recommandé par l'API de La Poste (RECOMMANDE_PILOTE), seulement
+ * « faux » tant que le contrat de l'éditeur avec La Poste n'est pas
+ * branché. Le pilote « faux » sert au développement et aux tests, sans
+ * aucune requête ; l'application refuse de démarrer en production avec
+ * l'un d'eux.
  */
 class VerificationServiceProvider extends ServiceProvider
 {
@@ -36,7 +34,6 @@ class VerificationServiceProvider extends ServiceProvider
     private const PILOTES = [
         'sirene' => ['insee' => InseeSirene::class, 'faux' => FauxRepertoireSirene::class],
         'rne' => ['inpi' => InpiRne::class, 'faux' => FauxRne::class],
-        'identite' => ['faux' => FausseVerificationIdentite::class],
         'recommande' => ['faux' => FauxServiceEnvoiRecommande::class],
     ];
 
@@ -48,7 +45,6 @@ class VerificationServiceProvider extends ServiceProvider
     private const CONTRATS = [
         'sirene' => RepertoireSirene::class,
         'rne' => RegistreNationalDesEntreprises::class,
-        'identite' => VerificationIdentite::class,
         'recommande' => ServiceEnvoiRecommande::class,
     ];
 

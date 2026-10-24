@@ -3,6 +3,7 @@
 namespace Tests\Feature\Societe;
 
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
+use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\TypePiece;
 use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Scopes\SocieteScope;
@@ -28,16 +29,18 @@ class EffacerPiecesVerificationTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * Une pièce déposée le 2 novembre à 10 h est encore là au passage du
-     * 2 décembre à 8 h, et effacée à celui de 9 h, le dernier avant ses
-     * trente jours.
+     * Une pièce déposée le 2 novembre à 10 h, une fois le nouveau courrier
+     * parti, est encore là au passage du 2 décembre à 8 h, et effacée à
+     * celui de 9 h, le dernier avant ses trente jours.
      */
     public function test_une_piece_s_efface_au_dernier_passage_avant_ses_trente_jours(): void
     {
         Storage::fake(PiecesDeVerification::DISQUE);
-        $societe = $this->inscrireUneSociete(null, 'Luc Bernard');
+        $this->travelTo('2026-10-18 10:00:00');
+        $societe = $this->inscrireUneSociete();
         $this->travelTo('2026-11-02 10:00:00');
-        $piece = app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe, TypePiece::Identite, 'Carte d\'identité de Luc Bernard');
+        app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($societe->proprietaire, $societe);
+        $piece = app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe->fresh(), TypePiece::Identite, 'Carte d\'identité de Jeanne Dupont');
         $chemin = (string) $piece->chemin;
 
         $this->travelTo('2026-12-02 08:00:00');
@@ -59,7 +62,7 @@ class EffacerPiecesVerificationTest extends TestCase
     public function test_toutes_les_pieces_echues_s_effacent_en_un_passage_meme_au_dela_d_un_lot(): void
     {
         Storage::fake(PiecesDeVerification::DISQUE);
-        $societe = $this->inscrireUneSociete(null, 'Luc Bernard');
+        $societe = $this->inscrireUneSociete();
         $deposeeLe = now()->subDays(PieceVerification::CONSERVATION_EN_JOURS + 1);
         DB::table('pieces_verification')->insert(array_fill(0, 1001, [
             'societe_id' => $societe->id,

@@ -1,7 +1,8 @@
 {{--
     La confirmation d'une inscription (voir ConfirmerInscriptionController) :
-    l'ouverture du lien ne consomme rien, seul le bouton confirme. Un lien
-    expiré, déjà servi ou inconnu dit seulement qu'il n'est plus valable.
+    l'ouverture du lien ne consomme rien, seul le bouton confirme et fait
+    partir le courrier recommandé. Un lien expiré, déjà servi ou inconnu dit
+    seulement qu'il n'est plus valable.
 --}}
 <!DOCTYPE html>
 <html lang="fr">
@@ -23,7 +24,7 @@
     <h1>{{ config('app.name') }}</h1>
 
     @if ($valable)
-        <p>Confirmez l'inscription de votre société : votre société et votre compte seront créés, et vous serez connecté à l'espace de votre société, où vous créerez vos magasins.</p>
+        <p>Confirmez l'inscription de votre société : votre société et votre compte seront créés, et un courrier recommandé partira aussitôt au représentant légal de votre entreprise, à l'adresse officielle de son siège, avec le code qui valide l'inscription. Vous serez connecté à l'espace de votre société, où vous la configurerez en attendant le courrier.</p>
 
         @if ($refus !== null)
             <p class="refus">{{ $refus }}</p>

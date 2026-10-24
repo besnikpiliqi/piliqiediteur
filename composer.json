@@ -9,6 +9,7 @@
         "ext-openssl": "*",
         "ext-pdo_pgsql": "*",
         "ext-zip": "*",
+        "bacon/bacon-qr-code": "^3.1",
         "barryvdh/laravel-dompdf": "^3.1",
         "filament/filament": "^3.3",
         "laravel/framework": "^13.17",

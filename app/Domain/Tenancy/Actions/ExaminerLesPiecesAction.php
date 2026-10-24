@@ -2,7 +2,6 @@
 
 namespace App\Domain\Tenancy\Actions;
 
-use App\Domain\Tenancy\Enums\CanalEnvoi;
 use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\TypeVerification;
@@ -10,7 +9,6 @@ use App\Domain\Tenancy\Exceptions\VerificationRefuseeException;
 use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
-use App\Domain\Tenancy\Services\EvaluateurDeVerification;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\RegistreDesVerifications;
 use App\Domain\Tenancy\Services\TenantContext;
@@ -18,42 +16,41 @@ use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use Illuminate\Support\Facades\DB;
 
 /**
- * L'éditeur conclut l'examen des pièces déposées par le propriétaire
- * (B4, voir editeur:societe:valider) : la décision s'inscrit au registre
- * des vérifications, avec les seuls types des pièces examinées, jamais
- * leur contenu, sa justification et le SIREN que l'éditeur a confirmé,
- * pour lequel seul elle vaut ; les fichiers s'effacent aussitôt ; et,
- * s'il n'est pas déjà en route ou saisi pour ce SIREN, le code du
- * courrier recommandé part à l'adresse officielle (C), car des pièces,
- * publiques ou falsifiables, ne valent jamais seules. La société est
- * validée d'elle-même à la saisie du code, si son évaluation le permet.
- * Aucun signal n'est levé par cet examen. Tout se fait en une
+ * L'éditeur traite à la main le cas d'une société dont les courriers ne
+ * sont pas parvenus (voir editeur:societe:examiner), après avoir lu les
+ * pièces déposées (voir editeur:societe:pieces) : sa décision s'inscrit au
+ * registre des vérifications, avec les seuls types des pièces examinées,
+ * jamais leur contenu, sa justification et le SIREN de la société ; les
+ * fichiers s'effacent aussitôt ; et un nouveau courrier recommandé part,
+ * au nom du représentant légal, à l'adresse officielle du siège (voir
+ * EnvoyerCodeDeConfirmationAction::parLEditeur()) : seul son code valide
+ * la société, des pièces ne la valident jamais. Tout se fait en une
  * transaction : si le courrier ne peut pas partir, rien n'est inscrit et
- * les pièces restent, pour un nouvel examen.
+ * les pièces restent, pour un nouvel examen. Pour refuser, l'éditeur clôt
+ * l'inscription (voir editeur:societe:refuser).
  */
 class ExaminerLesPiecesAction
 {
     public const MESSAGE_AUCUNE_PIECE = 'Aucune pièce n\'attend d\'examen pour cette société.';
 
     public function __construct(
-        private readonly EvaluateurDeVerification $evaluateur,
         private readonly RegistreDesVerifications $registre,
         private readonly PiecesDeVerification $pieces,
         private readonly EnvoyerCodeDeConfirmationAction $envoyerCode,
-        private readonly ValiderLaSocieteAction $validerLaSociete,
     ) {}
 
     /**
-     * @param  bool  $remplacerLeCodeEnCours  annuler d'abord le code actif d'une autre inscription du même SIREN (voir EnvoyerCodeDeConfirmationAction)
-     * @return CodeConfirmation|null le code qui vient de partir, null s'il était déjà en route ou saisi
+     * @return CodeConfirmation le courrier qui vient de partir
      *
      * @throws VerificationRefuseeException
      */
-    public function handle(Societe $societe, InterventionDeLEditeur $editeur, bool $remplacerLeCodeEnCours = false): ?CodeConfirmation
+    public function handle(Societe $societe, InterventionDeLEditeur $editeur): CodeConfirmation
     {
-        $code = app(TenantContext::class)->runAsSociete($societe, fn (): ?CodeConfirmation => DB::transaction(function () use ($societe, $editeur, $remplacerLeCodeEnCours): ?CodeConfirmation {
-            if ($societe->estValidee() || $societe->estRefusee()) {
-                throw new VerificationRefuseeException(RefuserLaSocieteAction::MESSAGE_DEJA_DECIDEE);
+        return app(TenantContext::class)->runAsSociete($societe, fn (): CodeConfirmation => DB::transaction(function () use ($societe, $editeur): CodeConfirmation {
+            $verrouillee = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
+
+            if (! $verrouillee->attendSonCode()) {
+                throw new VerificationRefuseeException(CloreLInscriptionAction::MESSAGE_N_ATTEND_PLUS);
             }
 
             $examinees = PieceVerification::query()->whereNull('effacee_le')->orderBy('id')->lockForUpdate()->get();
@@ -62,28 +59,15 @@ class ExaminerLesPiecesAction
                 throw new VerificationRefuseeException(self::MESSAGE_AUCUNE_PIECE);
             }
 
-            $this->registre->noter($societe, TypeVerification::Manuelle, ResultatVerification::Concluante, [
-                'siren' => $societe->siren,
+            $this->registre->noter($verrouillee, TypeVerification::Manuelle, ResultatVerification::Concluante, [
+                'siren' => $verrouillee->siren,
                 'pieces' => $examinees->map(fn (PieceVerification $piece): string => $piece->type->value)->values()->all(),
-                'decision' => 'qualite_de_representant_examinee_sur_pieces',
+                'decision' => 'nouveau_courrier_apres_examen_des_pieces',
                 'justification' => $editeur->justification,
-            ], beneficiaire: $societe->proprietaire()->first(), editeur: $editeur);
-            $this->pieces->effacerToutes($societe, PiecesDeVerification::MOTIF_DECISION, $editeur);
+            ], editeur: $editeur);
+            $this->pieces->effacerToutes($verrouillee, PiecesDeVerification::MOTIF_DECISION, $editeur);
 
-            $courrierEnRoute = CodeConfirmation::query()
-                ->where('siren', $societe->siren)
-                ->where('motif', MotifCode::Verification->value)
-                ->whereNull('annule_le')
-                ->where(fn ($codes) => $codes->whereNotNull('utilise_le')->orWhere('expire_le', '>', now()))
-                ->exists();
-
-            return $courrierEnRoute || $this->evaluateur->evaluer($societe)->adresseControlee
-                ? null
-                : $this->envoyerCode->handle($societe, MotifCode::Verification, CanalEnvoi::RecommandeAr, editeur: $editeur, remplacerLeCodeEnCours: $remplacerLeCodeEnCours);
+            return $this->envoyerCode->parLEditeur($verrouillee, MotifCode::Verification, $editeur);
         }));
-
-        $this->validerLaSociete->siPossible($societe->fresh(), $editeur);
-
-        return $code;
     }
 }

@@ -281,7 +281,7 @@ class ChangementDeRoleTest extends TestCase
         $reel = $this->creerLeMagasinDuSiege($societe);
         $proprietaire = $societe->proprietaire;
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe->fresh());
-        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->saisirLeCodeDuCourrier($societe);
         $ferme = $this->ouvrirUnAutreMagasin($reel->fresh(), ['nom' => 'Boutique fermée']);
         $cede = $this->ouvrirUnAutreMagasin($reel->fresh(), ['nom' => 'Boutique cédée']);
         app(FermerMagasinAction::class)->handle($proprietaire, $ferme->fresh(), MotifFermeture::Temporaire, 'mot-de-passe-sur');

@@ -9,8 +9,10 @@ use Illuminate\Database\Eloquent\Model;
 use LogicException;
 
 /**
- * Une pièce déposée pour que l'éditeur examine la qualité de représentant
- * du propriétaire (voir DeposerUnePieceAction) : son fichier, chiffré sur
+ * Une pièce déposée pour que l'éditeur traite à la main une inscription
+ * dont les courriers recommandés ne sont pas parvenus (extrait du
+ * registre, pièce d'identité du représentant légal, voir
+ * DeposerUnePieceAction) : son fichier, chiffré sur
  * le disque privé « verification », s'efface dès la décision de
  * l'éditeur, au plus tard trente jours après le dépôt (voir
  * PiecesDeVerification::effacer()). La ligne reste : la trace qu'une pièce

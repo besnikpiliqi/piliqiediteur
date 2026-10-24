@@ -14,6 +14,7 @@ use App\Integrations\Sirene\EtablissementSirene;
 use App\Integrations\Sirene\SireneIndisponibleException;
 use App\Integrations\Sirene\UniteSirene;
 use App\Models\User;
+use Illuminate\Support\Str;
 
 /**
  * Les contrôles d'une société et de ses magasins au répertoire public
@@ -231,6 +232,19 @@ class ControleSirene
     public static function adresseEnUneLigne(EtablissementSirene $etablissement): string
     {
         return implode(', ', array_filter([$etablissement->adresse, $etablissement->complementAdresse, trim("{$etablissement->codePostal} {$etablissement->ville}")], filled(...)));
+    }
+
+    /**
+     * L'adresse du magasin n'est-elle plus celle que le répertoire donne de
+     * son établissement ? Comparées sans la casse, les accents, la
+     * ponctuation ni les espaces en trop.
+     */
+    public static function adresseDiffere(Magasin $magasin, EtablissementSirene $etablissement): bool
+    {
+        $enUneLigne = fn (string $adresse): string => trim((string) preg_replace('/\s+/', ' ', (string) preg_replace('/[^a-z0-9]+/', ' ', Str::lower(Str::ascii($adresse)))));
+        $adresseDuMagasin = implode(', ', array_filter([$magasin->adresse, $magasin->complement_adresse, trim("{$magasin->code_postal} {$magasin->ville}")], filled(...)));
+
+        return $enUneLigne($adresseDuMagasin) !== $enUneLigne(self::adresseEnUneLigne($etablissement));
     }
 
     /**

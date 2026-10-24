@@ -9,10 +9,9 @@ use App\Integrations\Rne\RneIndisponibleException;
 /**
  * Le registre national des entreprises (RNE) de l'INPI (voir InpiRne) : il
  * dit qui dirige une entreprise, personnes physiques ou morales, et donne
- * l'adresse de son siège, que le répertoire Sirene masque pour une
- * entreprise en diffusion partielle. Il ne dit pas que la personne qui
- * s'inscrit est l'un de ces dirigeants : seule une identité vérifiée,
- * rapprochée de l'un d'eux, le prouve (voir RapprochementDesDirigeants).
+ * l'adresse officielle de son siège. Le courrier recommandé de la
+ * vérification part au nom de son représentant légal, à cette adresse
+ * (voir DestinataireOfficiel).
  *
  * Une implémentation factice (FauxRne) sert au développement et aux tests,
  * jamais en production (voir VerificationServiceProvider).

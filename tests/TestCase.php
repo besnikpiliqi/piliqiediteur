@@ -26,13 +26,14 @@ use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
 use App\Domain\Tenancy\Actions\CreerSocieteAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
-use App\Domain\Tenancy\Actions\DemarrerVerificationIdentiteAction;
-use App\Domain\Tenancy\Actions\RecevoirResultatIdentiteAction;
+use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\FormeJuridique;
+use App\Domain\Tenancy\Enums\MotifCode;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Mail\TransmissionDeLaProprieteMail;
+use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
@@ -40,8 +41,7 @@ use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Domain\Tenancy\Support\GardesDesDroits;
-use App\Integrations\Identite\Contracts\VerificationIdentite;
-use App\Integrations\Identite\FausseVerificationIdentite;
+use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use App\Integrations\Sirene\Contracts\RepertoireSirene;
 use App\Integrations\Sirene\EtablissementSirene;
 use App\Integrations\Sirene\FauxRepertoireSirene;
@@ -180,20 +180,22 @@ abstract class TestCase extends BaseTestCase
      * les tests. Avec ['a_verifier' => true], la société reste en cours de
      * vérification. Le magasin devient le magasin actif.
      *
-     * Les options nom, code, nic et email sont celles du magasin ; toute
-     * autre, sauf a_verifier, se règle sur la société avant la création du
-     * magasin (regime_tva...). Avec $proprietaire, le propriétaire d'une
-     * société sans magasin (voir UserFactory), le magasin s'ouvre dans la
-     * société de ce compte.
+     * Les options nom, code, nic et email sont celles du magasin ; l'option
+     * siren est celui de la société, qu'elle a dès sa création (il ne change
+     * jamais) ; toute autre, sauf a_verifier, se règle sur la société avant
+     * la création du magasin (regime_tva...). Avec $proprietaire, le
+     * propriétaire d'une société sans magasin (voir UserFactory), le magasin
+     * s'ouvre dans la société de ce compte, sans option siren.
      *
      * @param  array<string, mixed>  $options
      */
     protected function ouvrirUneSociete(array $options = [], ?User $proprietaire = null): Magasin
     {
         app(TenantContext::class)->clear();
-        $proprietaire ??= User::factory()->create();
+        $this->assertFalse($proprietaire !== null && array_key_exists('siren', $options), 'Le SIREN d\'une société existante ne change jamais.');
+        $proprietaire ??= User::factory()->create(array_key_exists('siren', $options) ? ['societe_id' => Societe::factory()->state(['siren' => $options['siren']])->commeApresLInscription()] : []);
         $societe = $proprietaire->societe;
-        $reglages = Arr::except($options, ['nom', 'code', 'nic', 'email', 'a_verifier']);
+        $reglages = Arr::except($options, ['nom', 'code', 'nic', 'email', 'a_verifier', 'siren']);
 
         if ($reglages !== []) {
             app(TenantContext::class)->runAsSociete($societe, fn (): bool => $societe->forceFill($reglages)->save());
@@ -220,21 +222,52 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * Une société inscrite comme par la confirmation de son lien (voir
-     * CreerSocieteAction), en cours de vérification et sans magasin : son
-     * entreprise contrôlée au répertoire Sirene factice, son propriétaire
-     * Jeanne Dupont, la présidente que donnent le registre national factice
-     * et la vérification d'identité factice. Aucun magasin n'est le magasin
-     * actif.
+     * CreerSocieteAction), qui attend le code de son courrier recommandé,
+     * sans magasin : son entreprise contrôlée au répertoire Sirene factice,
+     * son propriétaire au nom de Jeanne DUPONT, la présidente que donne le
+     * registre national factice, son mot de passe MOT_DE_PASSE_CHOISI, et
+     * son premier courrier parti par le prestataire factice. Aucun magasin
+     * n'est le magasin actif.
      */
-    protected function inscrireUneSociete(?string $siren = null, string $nomDuProprietaire = 'Jeanne Dupont'): Societe
+    protected function inscrireUneSociete(?string $siren = null, ?string $email = null): Societe
     {
         app(TenantContext::class)->clear();
-        $siren ??= SocieteFactory::sirenFictif();
 
-        return app(CreerSocieteAction::class)->handle(
-            ['siren' => $siren],
-            ['name' => $nomDuProprietaire, 'email' => fake()->unique()->safeEmail(), 'password' => 'mot-de-passe-sur'],
-        );
+        return app(CreerSocieteAction::class)->handle($siren ?? SocieteFactory::sirenFictif(), $email ?? fake()->unique()->safeEmail(), self::MOT_DE_PASSE_CHOISI);
+    }
+
+    /**
+     * Le code que porte le dernier courrier de vérification de la société,
+     * tel que son destinataire le lit (XXXX-XXXX-XXXX) dans le PDF que le
+     * prestataire factice a reçu : le logiciel n'en garde que l'empreinte.
+     */
+    protected function codeDuCourrier(Societe $societe): string
+    {
+        $reference = (string) app(TenantContext::class)->runAsSociete($societe, fn () => CodeConfirmation::query()
+            ->where('motif', MotifCode::Verification->value)
+            ->orderByDesc('id')
+            ->value('reference_envoi'));
+        $pdf = app(ServiceEnvoiRecommande::class)->envois()[$reference]['pdf'];
+        $texte = implode(' ', array_merge(...array_map(fn (array $page): array => array_column($page['textes'], 'texte'), $this->pagesDuPdf($pdf))));
+
+        $this->assertMatchesRegularExpression('/\b[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}\b/', $texte);
+        preg_match('/\b([0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4})\b/', $texte, $code);
+
+        return $code[1];
+    }
+
+    /**
+     * Le propriétaire inscrit saisit le code de son courrier sur la page du
+     * code, avec l'adresse et le mot de passe de son inscription (voir
+     * SaisirCodeDeConfirmationAction) : la société est validée. Rend le
+     * propriétaire.
+     */
+    protected function saisirLeCodeDuCourrier(Societe $societe): User
+    {
+        $proprietaire = $societe->proprietaire()->firstOrFail();
+        app(TenantContext::class)->clear();
+
+        return app(SaisirCodeDeConfirmationAction::class)->handle((string) $societe->siren, $this->codeDuCourrier($societe), (string) $proprietaire->email, self::MOT_DE_PASSE_CHOISI, '', '127.0.0.1');
     }
 
     /**
@@ -251,26 +284,6 @@ abstract class TestCase extends BaseTestCase
             'nom' => $nom,
             'nic' => $nic ?? substr(FauxRepertoireSirene::siretDuSiege($societe->siren), 9),
         ]);
-    }
-
-    /**
-     * Le propriétaire de la société passe la vérification d'identité
-     * factice, avec la réponse par défaut du prestataire (Jeanne DUPONT,
-     * présidente au registre factice) ou celle donnée, de son démarrage à
-     * la réception de son résultat (voir DemarrerVerificationIdentiteAction
-     * et RecevoirResultatIdentiteAction) : la société est validée si elle
-     * peut l'être. Rend la ligne du résultat.
-     *
-     * @param  array<mixed>|null  $reponse  la réponse brute du prestataire factice
-     */
-    protected function verifierLIdentiteDuProprietaire(Societe $societe, ?array $reponse = null): ?VerificationSociete
-    {
-        $identite = app(VerificationIdentite::class);
-        $identite->repondreAvec($reponse ?? FausseVerificationIdentite::REPONSE_PAR_DEFAUT);
-
-        $demarree = app(DemarrerVerificationIdentiteAction::class)->handle($societe->proprietaire()->firstOrFail(), $societe, true, 'http://localhost/verification/identite/retour');
-
-        return app(RecevoirResultatIdentiteAction::class)->handle($demarree['session']->reference, $identite->resultat($demarree['session']->reference, $demarree['state']), retourVerifie: true);
     }
 
     /**
@@ -528,17 +541,14 @@ abstract class TestCase extends BaseTestCase
 
     /**
      * Un administrateur de tous les magasins qui remplit les conditions de
-     * la transmission de la propriété : sa qualité de représentant prouvée
-     * à son nom, son mot de passe choisi, son adresse renseignée par lui.
+     * la transmission de la propriété : son mot de passe choisi, son
+     * adresse renseignée par lui.
      *
      * @param  list<string>|null  $autorisationsMagasin
      */
     protected function administrateurPretAReprendre(Magasin $magasin, string $adresse = 'repreneur@example.test', ?array $autorisationsMagasin = null): User
     {
-        $administrateur = $this->renseignerSonAdresse($this->administrateur($magasin, null, AutorisationsSociete::toutes(), $autorisationsMagasin), $adresse);
-        $administrateur->forceFill(['qualite_verifiee_le' => now()])->save();
-
-        return $administrateur->refresh();
+        return $this->renseignerSonAdresse($this->administrateur($magasin, null, AutorisationsSociete::toutes(), $autorisationsMagasin), $adresse);
     }
 
     /**

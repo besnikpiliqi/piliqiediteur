@@ -26,12 +26,11 @@ use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\SequenceDocument;
 use App\Domain\Facturation\Services\DevisPdfGenerator;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
-use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
+use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Exceptions\VenteNonAutoriseeException;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
-use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -163,44 +162,34 @@ class PorteDeValidationTest extends TestCase
     }
 
     /**
-     * Le SIREN se corrige par le propriétaire tant que la société n'est
-     * pas validée (Q3), le SIRET de chaque magasin avec lui ; la validation
-     * le verrouille, même pour une écriture qui ne passerait pas par
-     * l'action.
+     * Le SIREN d'une société ne change jamais, avant comme après sa
+     * validation, même par une écriture qui ne passe par aucune action :
+     * une erreur se traite par la procédure de l'éditeur, ou par
+     * l'inscription close faute de code, qui libère le SIREN.
      */
-    public function test_le_siren_se_corrige_avant_le_verrou_et_plus_apres(): void
+    public function test_le_siren_ne_change_jamais_ni_avant_ni_apres_la_validation(): void
     {
         $magasin = $this->magasinDUneSocieteAVerifier();
         $societe = $magasin->societe;
-        $proprietaire = $this->proprietaireDe($magasin);
-        $nic = substr(IdentifiantsInsee::avecSaCle('2000000080001'), 9);
+        $siren = (string) $societe->siren;
+        $changer = fn () => app(TenantContext::class)->runAsSociete($societe, fn () => $societe->fresh()->forceFill(['siren' => '200000008'])->save());
         app(TenantContext::class)->clear();
 
-        app(CorrigerSirenAvantValidationAction::class)->handle($proprietaire, $societe, '200000008', [$magasin->id => $nic]);
-
-        $this->assertSame(['200000008', '200000008'.$nic], [$societe->fresh()->siren, $magasin->fresh()->siret]);
+        $this->assertThrows($changer, LogicException::class, 'Le SIREN d\'une société ne change jamais');
         $societe->fresh()->forceFill(['validee_le' => now()])->save();
-        $this->assertThrows(
-            fn () => app(CorrigerSirenAvantValidationAction::class)->handle($proprietaire, $societe->fresh(), '300000007', [$magasin->id => '00017']),
-            LogicException::class,
-            CorrigerSirenAvantValidationAction::MESSAGE_SANS_AUTORISATION,
-        );
-        $this->assertThrows(
-            fn () => app(TenantContext::class)->runAsSociete($societe, fn () => $societe->fresh()->forceFill(['siren' => '300000007'])->save()),
-            LogicException::class,
-            'Le SIREN d\'une société validée ne se corrige plus',
-        );
-        $this->assertSame('200000008', $societe->fresh()->siren);
+        $this->assertThrows($changer, LogicException::class, 'Le SIREN d\'une société ne change jamais');
+
+        $this->assertSame($siren, $societe->fresh()->siren);
     }
 
-    public function test_une_societe_n_est_jamais_a_la_fois_validee_et_refusee(): void
+    public function test_une_societe_n_est_jamais_a_la_fois_validee_et_close(): void
     {
         $societe = Societe::factory()->validee()->create();
 
-        $this->assertThrows(fn () => $societe->forceFill(['refusee_le' => now()])->save(), LogicException::class, 'Une société n\'est jamais à la fois validée et refusée.');
+        $this->assertThrows(fn () => $societe->forceFill(['close_le' => now(), 'motif_cloture' => MotifCloture::Refus])->save(), LogicException::class, 'Une société n\'est jamais à la fois validée et close.');
 
-        $this->assertNull($societe->fresh()->refusee_le);
-        $this->assertThrows(fn () => Societe::factory()->validee()->create(['refusee_le' => now()]), LogicException::class, 'Une société n\'est jamais à la fois validée et refusée.');
+        $this->assertNull($societe->fresh()->close_le);
+        $this->assertThrows(fn () => Societe::factory()->validee()->create(['close_le' => now(), 'motif_cloture' => MotifCloture::Refus]), LogicException::class, 'Une société n\'est jamais à la fois validée et close.');
     }
 
     /**

@@ -63,7 +63,9 @@ return new class extends Migration
             // La date à laquelle le propriétaire a suivi un lien envoyé à son
             // adresse de connexion actuelle : celui de l'inscription, de la
             // confirmation d'une nouvelle adresse ou de la transmission de la
-            // propriété.
+            // propriété ; nulle pour l'adresse choisie à la saisie du code du
+            // courrier par une autre personne que celle qui a inscrit la
+            // société (voir SaisirLeCodeDuCourrierAction).
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             // Le mot de passe est-il encore l'identifiant du compte ? Vrai à
@@ -73,15 +75,18 @@ return new class extends Migration
             // recalculer un hachage, et la base refuse un propriétaire dont
             // il est vrai.
             $table->boolean('mot_de_passe_est_l_identifiant')->default(false);
-            // La qualité de représentant légal ou de mandataire de la
-            // société, prouvée pour cette personne-ci (voir
-            // ValiderLaSocieteAction et User::aSaQualiteVerifiee()) ; la
-            // vérification qui l'a prouvée la nomme pour bénéficiaire.
-            $table->timestamp('qualite_verifiee_le')->nullable();
+            // Le jour où cette personne a validé sa société en saisissant le
+            // code du courrier recommandé envoyé au nom du représentant légal
+            // (voir ValiderLaSocieteAction) : propriétaire, elle signe les
+            // attestations de l'éditeur dans l'application (voir
+            // User::signeLesAttestationsDansLApplication()) ; effacé quand
+            // elle transmet la propriété.
+            $table->timestamp('code_du_courrier_saisi_le')->nullable();
             // Le compte qui a créé ce compte pour la personne (propriétaire,
             // responsable ou administrateur autorisé) : il compte ses
             // créations du jour (voir CreationDesComptes) ; nul pour le
-            // propriétaire inscrit par son lien ; il ne change plus ensuite.
+            // propriétaire inscrit par son lien ou devenu propriétaire par le
+            // code du courrier ; il ne change plus ensuite.
             $table->foreignId('cree_par')->nullable()->constrained('users')->restrictOnDelete();
             // Sa première et sa dernière connexion réussie (voir Connexion) :
             // la première prévient le propriétaire, la dernière s'affiche à

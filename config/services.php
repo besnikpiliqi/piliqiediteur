@@ -54,8 +54,9 @@ return [
     ],
 
     /*
-     | Le registre national des entreprises de l'INPI, qui donne les
-     | dirigeants d'une entreprise et l'adresse de son siège (voir InpiRne)
+     | Le registre national des entreprises de l'INPI, qui donne le
+     | représentant légal d'une entreprise et l'adresse de son siège, où
+     | part le courrier recommandé de la vérification (voir InpiRne)
      | : son pilote (inpi, ou faux pour le développement et les tests,
      | jamais en production), l'adresse de son API, les identifiants de
      | l'éditeur, et le délai en secondes au-delà duquel il est tenu pour
@@ -70,20 +71,12 @@ return [
     ],
 
     /*
-     | La vérification d'identité à distance (prestataire certifié PVID,
-     | voir VerificationIdentite) et l'envoi recommandé (voir
-     | ServiceEnvoiRecommande) : leur pilote, faux seulement tant que
-     | l'éditeur n'a pas choisi ses prestataires (jamais en production),
-     | l'adresse et la clé de leur API, et le secret qui signe leurs rappels
-     | (voir RappelsDesPrestatairesController).
+     | L'envoi recommandé, par l'API de La Poste (voir
+     | ServiceEnvoiRecommande) : son pilote, faux seulement tant que le
+     | contrat de l'éditeur avec La Poste n'est pas branché (jamais en
+     | production), l'adresse et la clé de son API, et le secret qui signe
+     | ses rappels (voir RappelsDesPrestatairesController).
      */
-    'identite' => [
-        'pilote' => env('IDENTITE_PILOTE'),
-        'url' => env('IDENTITE_URL'),
-        'cle' => env('IDENTITE_CLE'),
-        'secret_rappel' => env('IDENTITE_SECRET_RAPPEL'),
-    ],
-
     'recommande' => [
         'pilote' => env('RECOMMANDE_PILOTE'),
         'url' => env('RECOMMANDE_URL'),

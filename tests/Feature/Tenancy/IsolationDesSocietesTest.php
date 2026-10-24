@@ -14,15 +14,15 @@ use App\Domain\Facturation\Services\CaissesDeLaSociete;
 use App\Domain\Facturation\Services\FacturesAEncaisserDeLaSociete;
 use App\Domain\Stock\Models\MouvementStock;
 use App\Domain\Tenancy\Actions\AccepterLaTransmissionDeLaProprieteAction;
-use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
+use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
+use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Exceptions\TenantContextMissingException;
 use App\Domain\Tenancy\Models\CodeConfirmation;
-use App\Domain\Tenancy\Models\DemandeAccordDirigeant;
 use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Identifiant;
 use App\Domain\Tenancy\Models\Magasin;
@@ -32,13 +32,14 @@ use App\Domain\Tenancy\Models\TraceAudit;
 use App\Domain\Tenancy\Models\TransmissionPropriete;
 use App\Domain\Tenancy\Models\VerificationSociete;
 use App\Domain\Tenancy\Services\ControleSirene;
-use App\Domain\Tenancy\Services\EvaluateurDeVerification;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\JournalAudit;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Filament\App\Resources\FactureResource;
 use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
@@ -76,7 +77,6 @@ class IsolationDesSocietesTest extends TestCase
      */
     private const MODELES_DE_SOCIETE = [
         CodeConfirmation::class,
-        DemandeAccordDirigeant::class,
         EntreeAudit::class,
         Identifiant::class,
         PieceVerification::class,
@@ -217,7 +217,7 @@ class IsolationDesSocietesTest extends TestCase
 
     /**
      * Un magasin d'une autre société glissé dans une action de la société
-     * est refusé : il ne se modifie pas, et son NIC ne s'y corrige pas.
+     * est refusé : il ne se modifie pas.
      */
     public function test_un_identifiant_de_magasin_d_une_autre_societe_force_dans_un_formulaire_est_refuse(): void
     {
@@ -230,10 +230,6 @@ class IsolationDesSocietesTest extends TestCase
         $this->assertThrows(
             fn () => app(TenantContext::class)->runAsSociete($magasinA->societe, fn () => app(ModifierEtablissementAction::class)->handle($proprietaireA, $magasinB, ['nom' => 'Pris'])),
             LogicException::class,
-        );
-        $this->assertThrows(
-            fn () => app(CorrigerSirenAvantValidationAction::class)->handle($proprietaireA, $magasinA->societe, '200000008', [$magasinB->id => '00017']),
-            fn (ValidationException $refus): bool => array_keys($refus->errors()) === ["nics.{$magasinA->id}"],
         );
 
         $this->assertSame(['B', $siretDeB], [$magasinB->fresh()->nom, $magasinB->fresh()->siret]);
@@ -391,73 +387,104 @@ class IsolationDesSocietesTest extends TestCase
     }
 
     /**
-     * L'évaluation de la vérification d'une société ne lit, des autres
-     * sociétés du même SIREN, que trois réponses par oui ou non (une autre
-     * est-elle validée, a-t-elle prouvé sa qualité, une société de ce SIREN
-     * a-t-elle été révoquée ?) : chaque requête qui porte sur ce SIREN est
-     * un « exists », et toute autre ne lit que la société évaluée.
+     * La garde du SIREN ne lit, des autres sociétés de ce SIREN, qu'une
+     * réponse par oui ou non (une autre inscription le garde-t-elle ?) :
+     * chaque requête qui porte sur ce SIREN, à la demande d'inscription
+     * comme à sa confirmation, est un « exists » ou une écriture limitée à
+     * ce SIREN, jamais une lecture d'une autre société.
      */
-    public function test_l_evaluation_ne_lit_d_une_autre_societe_du_meme_siren_que_des_booleens(): void
+    public function test_la_garde_du_siren_ne_lit_d_une_autre_societe_qu_un_booleen(): void
     {
-        $validee = $this->inscrireUneSociete();
-        $this->verifierLIdentiteDuProprietaire($validee);
-        $societe = $this->inscrireUneSociete($validee->siren);
+        $gardien = $this->inscrireUneSociete();
+        $this->saisirLeCodeDuCourrier($gardien);
+        app(TenantContext::class)->clear();
         $requetes = [];
         DB::listen(function (QueryExecuted $requete) use (&$requetes): void {
             $requetes[] = $requete;
         });
 
-        $etat = app(EvaluateurDeVerification::class)->evaluer($societe);
+        $this->assertThrows(fn () => $this->inscrireUneSociete($gardien->siren), ValidationException::class);
 
-        $surLeSiren = array_filter($requetes, fn (QueryExecuted $requete): bool => in_array($societe->siren, $requete->bindings, true));
-        $this->assertCount(3, $surLeSiren);
-        foreach ($requetes as $requete) {
-            in_array($requete, $surLeSiren, true)
-                ? $this->assertStringStartsWith('select exists', $requete->sql)
-                : $this->assertContains($societe->id, $requete->bindings, $requete->sql);
+        $surLeSiren = array_values(array_filter($requetes, fn (QueryExecuted $requete): bool => in_array($gardien->siren, $requete->bindings, true)));
+        $this->assertNotSame([], $surLeSiren);
+        foreach ($surLeSiren as $requete) {
+            $this->assertStringStartsWith('select exists', $requete->sql);
         }
-        $this->assertTrue($validee->fresh()->estValidee());
-        $this->assertSame([true, false], [$etat->autreSocieteValidee, $etat->reclamationPossible()]);
     }
 
     /**
-     * Une société qui s'inscrit avec le SIREN d'une société déjà validée
+     * Un code ne vaut que pour la société de son courrier : saisi avec le
+     * SIREN d'une autre inscription, il est refusé, aucune des deux n'est
+     * validée, et l'essai faux ne se compte et ne s'inscrit que dans la
+     * société dont le SIREN a été saisi ; le code juste reste intact.
+     */
+    public function test_un_code_ne_valide_que_la_societe_de_son_courrier(): void
+    {
+        $premiere = $this->inscrireUneSociete();
+        $seconde = $this->inscrireUneSociete();
+        $codeDeLaPremiere = $this->codeDuCourrier($premiere);
+        app(TenantContext::class)->clear();
+
+        $this->assertThrows(
+            fn () => app(SaisirCodeDeConfirmationAction::class)->handle((string) $seconde->siren, $codeDeLaPremiere, 'tiers@ailleurs.fr', 'un-mot-de-passe-sur', 'un-mot-de-passe-sur', '127.0.0.1'),
+            fn (ValidationException $refus): bool => $refus->errors() === ['code' => [SaisirCodeDeConfirmationAction::MESSAGE_CODE_FAUX]],
+        );
+
+        $this->assertSame([false, false], [$premiere->fresh()->estValidee(), $seconde->fresh()->estValidee()]);
+        $etat = fn (Societe $societe): array => app(TenantContext::class)->runAsSociete($societe, fn (): array => [
+            CodeConfirmation::query()->sole()->tentatives,
+            EntreeAudit::query()->where('action', ActionAuditee::CodeSaisi->value)->count(),
+        ]);
+        $this->assertSame([[0, 0], [1, 1]], [$etat($premiere), $etat($seconde)]);
+        $this->assertSame((int) $premiere->proprietaire()->sole()->id, (int) $this->saisirLeCodeDuCourrier($premiere)->id);
+    }
+
+    /**
+     * La nouvelle inscription d'un SIREN libéré par la clôture d'une autre
      * ne lit rien de ses réglages : son identité vient du répertoire
      * Sirene, ses réglages sont les siens.
      */
-    public function test_aucun_reglage_d_une_autre_societe_n_est_lu_ni_revele(): void
+    public function test_aucun_reglage_d_une_inscription_close_du_meme_siren_n_est_lu_ni_revele(): void
     {
-        $validee = Magasin::factory()->avecLaSociete(['siren' => '100000009', 'raison_sociale' => 'Raison choisie par l\'autre', 'regime_tva' => 'franchise_en_base', 'immatriculation' => 'RCS Nantes'])->create(['siret' => '10000000900017'])->societe;
-        app(TenantContext::class)->clear();
-        $proprietaire = User::factory()->for(Societe::factory()->state(['siren' => '100000009'])->sansIdentiteLegale())->create();
+        $close = $this->inscrireUneSociete();
+        app(TenantContext::class)->runAsSociete($close, fn (): bool => $close->forceFill(['raison_sociale' => 'Raison choisie par l\'autre', 'regime_tva' => 'franchise_en_base', 'immatriculation' => 'RCS Nantes'])->save());
+        app(CloreLInscriptionAction::class)->refuser($close, new InterventionDeLEditeur('Inscription faite par erreur.', 'DOSSIER-2026-0060', ['alice']));
 
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true, 'nic' => '00025'], $proprietaire);
+        $nouvelle = $this->inscrireUneSociete($close->siren);
 
-        $this->assertSame([null, null, null], [$magasin->societe->raison_sociale, $magasin->societe->regime_tva, $magasin->societe->immatriculation]);
-        $this->assertSame('Raison choisie par l\'autre', $validee->fresh()->raison_sociale);
-        $this->assertNotSame($validee->id, $magasin->societe_id);
+        $this->assertSame(['SOCIETE FICTIVE '.$close->siren, null, null], [$nouvelle->raison_sociale, $nouvelle->regime_tva, $nouvelle->immatriculation]);
+        $this->assertSame('Raison choisie par l\'autre', $close->fresh()->raison_sociale);
+        $this->assertNotSame($close->id, $nouvelle->id);
     }
 
     /**
-     * Deux sociétés en attente du même SIREN restent isolées : chacune ne
-     * voit que ses magasins, son journal et ses vérifications.
+     * Une inscription close et la nouvelle inscription du même SIREN
+     * restent isolées : chacune ne voit que ses magasins, son journal et
+     * ses vérifications, et l'espace de l'une répond 404 au propriétaire de
+     * l'autre.
      */
-    public function test_deux_inscriptions_en_attente_du_meme_siren_ne_voient_rien_l_une_de_l_autre(): void
+    public function test_une_inscription_close_et_la_nouvelle_du_meme_siren_ne_voient_rien_l_une_de_l_autre(): void
     {
-        $premiere = $this->ouvrirUneSociete(['nom' => 'Première', 'a_verifier' => true], User::factory()->for(Societe::factory()->state(['siren' => '100000009']))->create());
-        $seconde = $this->ouvrirUneSociete(['nom' => 'Seconde', 'a_verifier' => true, 'nic' => '00025'], User::factory()->for(Societe::factory()->state(['siren' => '100000009']))->create());
+        $close = $this->inscrireUneSociete();
+        $premiere = $this->ouvrirUneSociete(['nom' => 'Première', 'a_verifier' => true], $close->proprietaire()->sole());
+        app(CloreLInscriptionAction::class)->refuser($close, new InterventionDeLEditeur('Inscription faite par erreur.', 'DOSSIER-2026-0061', ['alice']));
+        $nouvelle = $this->inscrireUneSociete($close->siren);
+        $seconde = $this->ouvrirUneSociete(['nom' => 'Seconde', 'a_verifier' => true, 'nic' => substr(FauxRepertoireSirene::siretDeLaBoutique((string) $close->siren), 9)], $nouvelle->proprietaire()->sole());
         app(TenantContext::class)->clear();
 
         $this->assertSame([[$premiere->id], [$seconde->id]], [$premiere->societe->magasins()->pluck('id')->all(), $seconde->societe->magasins()->pluck('id')->all()]);
         $this->assertSame(
-            [$premiere->societe_id],
-            app(TenantContext::class)->runAsSociete($premiere->societe, fn (): array => [...EntreeAudit::query()->pluck('societe_id')->unique()->values()->all()]),
+            [[$premiere->societe_id], [$premiere->societe_id]],
+            app(TenantContext::class)->runAsSociete($premiere->societe, fn (): array => [
+                EntreeAudit::query()->pluck('societe_id')->unique()->values()->all(),
+                VerificationSociete::query()->pluck('societe_id')->unique()->values()->all(),
+            ]),
         );
-        $this->actingAs($this->proprietaireDe($premiere))
-            ->get(TableauDeBord::getUrl(panel: 'societe', tenant: $premiere->societe))
-            ->assertSee('Première')
-            ->assertDontSee('Seconde');
-        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $seconde->societe))->assertNotFound();
+        $this->actingAs($this->proprietaireDe($seconde))
+            ->get(TableauDeBord::getUrl(panel: 'societe', tenant: $seconde->societe))
+            ->assertSee('Seconde')
+            ->assertDontSee('Première');
+        $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $premiere->societe))->assertNotFound();
     }
 
     /**

@@ -27,7 +27,6 @@ use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
-use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -61,10 +60,10 @@ use Tests\TestCase;
 
 /**
  * Le propriétaire, et lui seul, demande la transmission de la propriété de
- * sa société, en redonnant son mot de passe, à un administrateur actif dont
- * la qualité de représentant est prouvée à son nom, sans accès redonné
- * depuis, qui a choisi son propre mot de passe et renseigné lui-même son
- * adresse : un lien, valable 24 heures, part à cette adresse, et la
+ * sa société, en redonnant son mot de passe, à un administrateur actif qui
+ * a choisi son propre mot de passe et renseigné lui-même son adresse, sans
+ * aucune preuve de qualité de représentant : un lien, valable 24 heures,
+ * part à cette adresse, et la
  * propriété ne passe que quand l'administrateur le suit, connecté à son
  * compte. L'ancien propriétaire en devient administrateur de tous les
  * magasins, avec toutes les autorisations sauf celles de la vente, que le
@@ -80,7 +79,12 @@ class TransfererProprieteTest extends TestCase
      */
     private const MOT_DE_PASSE_DU_PROPRIETAIRE = 'password';
 
-    public function test_le_proprietaire_transmet_la_propriete_a_un_administrateur_dont_la_qualite_est_prouvee(): void
+    /**
+     * Le propriétaire transmet la propriété à un administrateur par un lien
+     * envoyé à l'adresse de celui-ci, sans aucune preuve de qualité de
+     * représentant.
+     */
+    public function test_le_proprietaire_transmet_la_propriete_a_un_administrateur_par_un_lien_sans_preuve_de_qualite(): void
     {
         Notification::fake();
         Mail::fake();
@@ -208,23 +212,21 @@ class TransfererProprieteTest extends TestCase
     }
 
     /**
-     * La transmission exige un administrateur actif, dont la qualité est
-     * prouvée, qui a renseigné lui-même son adresse : à la demande, chacun
-     * avec son message, et de nouveau à l'acceptation.
+     * La transmission exige un administrateur actif qui a renseigné
+     * lui-même son adresse : à la demande, chacun avec son message, et de
+     * nouveau à l'acceptation.
      */
-    public function test_la_transmission_exige_un_administrateur_actif_a_la_qualite_prouvee_qui_a_renseigne_lui_meme_son_adresse(): void
+    public function test_la_transmission_exige_un_administrateur_actif_qui_a_renseigne_lui_meme_son_adresse(): void
     {
         Mail::fake();
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $suspendu = $this->administrateurPretAReprendre($magasin, 'suspendu@example.test');
         app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $suspendu);
-        $sansQualite = $this->renseignerSonAdresse($this->administrateur($magasin, null, AutorisationsSociete::toutes()), 'sans-qualite@example.test');
-        $sansAdresse = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $sansAdresse = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
 
         foreach ([
             [$suspendu->refresh(), AuthorizationException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_ADMINISTRATEUR],
-            [$sansQualite, LogicException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_QUALITE],
             [$sansAdresse, LogicException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_ADRESSE],
         ] as [$cible, $refus, $message]) {
             $this->assertThrows(fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $cible, self::MOT_DE_PASSE_DU_PROPRIETAIRE), $refus, $message);
@@ -255,7 +257,7 @@ class TransfererProprieteTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $auMotDePasseIdentifiant = app(TenantContext::class)->runAs($magasin, fn (): User => app(CreerAdministrateurAction::class)->handle($proprietaire, $magasin->societe, ['name' => 'Alix'], null, PermissionRegistry::modeleDeLAdministrateur(), AutorisationsSociete::toutes()));
-        $this->renseignerSonAdresse($auMotDePasseIdentifiant, 'alix@example.test')->forceFill(['qualite_verifiee_le' => now()])->save();
+        $this->renseignerSonAdresse($auMotDePasseIdentifiant, 'alix@example.test');
 
         $this->assertThrows(fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $auMotDePasseIdentifiant->refresh(), self::MOT_DE_PASSE_DU_PROPRIETAIRE), LogicException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_MOT_DE_PASSE);
         Mail::assertNothingSent();
@@ -268,31 +270,6 @@ class TransfererProprieteTest extends TestCase
         $this->assertThrows(fn () => app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($administrateur->refresh(), $jeton, $identifiant), LogicException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_MOT_DE_PASSE);
         $this->assertTrue($this->proprietaireDe($magasin)->is($proprietaire));
         $this->assertSame(RoleSociete::Administrateur, $administrateur->refresh()->role_societe);
-    }
-
-    /**
-     * Un accès redonné après la preuve de qualité empêche la transmission
-     * (qui l'a redonné pourrait accepter à la place de l'administrateur) :
-     * la demande est refusée, et une demande déjà partie ne s'accepte plus.
-     */
-    public function test_un_acces_redonne_apres_la_preuve_de_qualite_empeche_la_transmission(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $proprietaire = $this->proprietaireDe($magasin);
-        $administrateur = $this->administrateurPretAReprendre($magasin);
-        $jeton = $this->demanderLaTransmission($proprietaire, $administrateur);
-        $this->travel(1)->minute();
-
-        app(RedonnerLAccesAction::class)->handle($proprietaire, $administrateur, true, 'un-nouveau-mot-de-passe');
-
-        $this->assertThrows(fn () => app(AccepterLaTransmissionDeLaProprieteAction::class)->handle($administrateur->refresh(), $jeton, 'un-nouveau-mot-de-passe'), LogicException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_QUALITE);
-        $this->assertThrows(fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $administrateur->refresh(), self::MOT_DE_PASSE_DU_PROPRIETAIRE), LogicException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_QUALITE);
-        $this->assertTrue($this->proprietaireDe($magasin)->is($proprietaire));
-
-        $this->travel(1)->minute();
-        $administrateur->forceFill(['qualite_verifiee_le' => now()])->save();
-        $this->demanderLaTransmission($proprietaire, $administrateur->refresh());
-        $this->assertSame(1, TransmissionPropriete::query()->whereNull('annulee_le')->whereNull('acceptee_le')->where('expire_le', '>', now())->count());
     }
 
     /**
@@ -466,21 +443,6 @@ class TransfererProprieteTest extends TestCase
         $this->assertSame(RoleSociete::Administrateur, $premier->refresh()->role_societe);
     }
 
-    public function test_le_transfert_a_un_administrateur_sans_qualite_prouvee_est_refuse(): void
-    {
-        Mail::fake();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $proprietaire = $this->proprietaireDe($magasin);
-        $administrateur = $this->renseignerSonAdresse($this->administrateur($magasin, null, AutorisationsSociete::toutes()), 'repreneur@example.test');
-
-        $this->assertThrows(fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $administrateur, self::MOT_DE_PASSE_DU_PROPRIETAIRE), LogicException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_QUALITE);
-
-        Mail::assertNothingSent();
-        $this->assertTrue($this->proprietaireDe($magasin)->is($proprietaire));
-        $this->assertSame(RoleSociete::Administrateur, $administrateur->refresh()->role_societe);
-        $this->assertSame([], $this->entreesDAudit($magasin->societe, ActionAuditee::TransmissionDemandee));
-    }
-
     /**
      * Le mot de passe du propriétaire se redonne à chaque demande : sans
      * lui, ou faux, aucun lien ne part.
@@ -513,16 +475,16 @@ class TransfererProprieteTest extends TestCase
     public function test_chaque_societe_a_exactement_un_proprietaire_actif_apres_chaque_action_et_procedure(): void
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
-        $proprietaire = tap($this->proprietaireDe($magasin)->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $proprietaire = $this->proprietaireDe($magasin);
         $premier = $this->administrateurPretAReprendre($magasin, 'premier@example.test');
-        $sansQualite = $this->renseignerSonAdresse($this->administrateur($magasin, null, AutorisationsSociete::toutes()), 'sans-qualite@example.test');
+        $sansAdresse = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
         $unSeulProprietaireActif = fn (): bool => User::query()->where('societe_id', $magasin->societe_id)->where('role_societe', RoleSociete::Proprietaire->value)->where('statut', 'actif')->count() === 1;
 
-        $this->assertThrows(fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $sansQualite, self::MOT_DE_PASSE_DU_PROPRIETAIRE), LogicException::class);
+        $this->assertThrows(fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $sansAdresse, self::MOT_DE_PASSE_DU_PROPRIETAIRE), LogicException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_ADRESSE);
         $this->assertTrue($unSeulProprietaireActif());
         $this->transmettre($proprietaire, $premier);
         $this->assertTrue($unSeulProprietaireActif());
-        $this->assertThrows(fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire->refresh(), $sansQualite, self::MOT_DE_PASSE_DU_PROPRIETAIRE), AuthorizationException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_PROPRIETAIRE_SEUL);
+        $this->assertThrows(fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire->refresh(), $sansAdresse, self::MOT_DE_PASSE_DU_PROPRIETAIRE), AuthorizationException::class, DemanderLaTransmissionDeLaProprieteAction::MESSAGE_PROPRIETAIRE_SEUL);
         $this->transmettre($premier->refresh(), $proprietaire->refresh(), self::MOT_DE_PASSE_CHOISI, self::MOT_DE_PASSE_DU_PROPRIETAIRE);
         $this->assertTrue($unSeulProprietaireActif());
         $this->assertTrue($this->proprietaireDe($magasin)->is($proprietaire));
@@ -563,7 +525,7 @@ class TransfererProprieteTest extends TestCase
         $proprietaire = $this->proprietaireDe($magasin);
         $suspendu = $this->administrateurPretAReprendre($magasin, 'suspendu@example.test');
         app(ChangerStatutCompteAction::class)->suspendre($proprietaire, $suspendu);
-        $responsable = tap($this->renseignerSonAdresse($this->responsable($magasin), 'responsable@example.test')->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $responsable = $this->renseignerSonAdresse($this->responsable($magasin), 'responsable@example.test');
 
         foreach ([$administrateurAilleurs, $suspendu->refresh(), $responsable, $proprietaire] as $cible) {
             $this->assertThrows(fn () => app(DemanderLaTransmissionDeLaProprieteAction::class)->handle($proprietaire, $cible, self::MOT_DE_PASSE_DU_PROPRIETAIRE), AuthorizationException::class);
@@ -586,7 +548,7 @@ class TransfererProprieteTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $administrateur = tap($this->renseignerSonAdresse($this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::RESPONSABLES_NOMMER], [PermissionRegistry::FACTURE_VIEW]), 'repreneur@example.test')->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $administrateur = $this->renseignerSonAdresse($this->administrateur($magasin, [$magasin->id], [AutorisationsSociete::RESPONSABLES_NOMMER], [PermissionRegistry::FACTURE_VIEW]), 'repreneur@example.test');
 
         $this->transmettre($proprietaire, $administrateur);
 
@@ -761,7 +723,7 @@ class TransfererProprieteTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
         $administrateur = $this->administrateurPretAReprendre($magasin);
-        $responsable = tap($this->renseignerSonAdresse($this->responsable($magasin), 'responsable@example.test')->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $responsable = $this->renseignerSonAdresse($this->responsable($magasin), 'responsable@example.test');
 
         $this->dansLEspaceDeLaSociete($magasin->societe, $administrateur);
         $this->forgerLAction(Livewire::test(FicheDuMembre::class, ['record' => $responsable->getRouteKey()])->assertActionHidden('transmettreLaPropriete'), 'transmettreLaPropriete', ['mot_de_passe' => self::MOT_DE_PASSE_CHOISI]);
@@ -776,7 +738,7 @@ class TransfererProprieteTest extends TestCase
     {
         $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique']);
         $proprietaire = $this->proprietaireDe($magasin);
-        $expert = tap($this->renseignerSonAdresse($this->expertComptable($magasin), 'cabinet@example.test')->forceFill(['qualite_verifiee_le' => now()]))->save();
+        $expert = $this->renseignerSonAdresse($this->expertComptable($magasin), 'cabinet@example.test');
 
         $this->dansLEspaceDeLaSociete($magasin->societe, $proprietaire);
         Livewire::test(FicheDuMembre::class, ['record' => $expert->getRouteKey()])->assertActionHidden('transmettreLaPropriete');

@@ -2,7 +2,7 @@
 <x-mail::message>
 # Confirmez l'inscription de votre société
 
-Vous avez demandé l'inscription de votre société. Pour la confirmer et créer votre compte, ouvrez ce lien puis cliquez sur « Confirmer l'inscription ».
+Vous avez demandé l'inscription de votre société. Pour la confirmer et créer votre compte, ouvrez ce lien puis cliquez sur « Confirmer l'inscription » : un courrier recommandé partira alors au représentant légal de votre entreprise, à l'adresse officielle de son siège, avec le code qui valide l'inscription.
 
 <x-mail::button :url="$lien">
 Confirmer l'inscription

@@ -26,12 +26,13 @@ use App\Domain\Facturation\Services\EReportingDesParticuliers;
 use App\Domain\Facturation\Services\FacturePdfGenerator;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
+use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\CreerMandatPdpAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
+use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\FermerLaDemonstrationAction;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
-use App\Domain\Tenancy\Actions\RefuserLaSocieteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
@@ -163,7 +164,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $reel = $this->creerLeMagasinDuSiege($societe);
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
 
-        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->saisirLeCodeDuCourrier($societe);
 
         $this->assertSame(['260', '100', '130', '105', '270'], $this->codesDuJournal($demonstration));
         $statut = app(TenantContext::class)->runAs($demonstration, fn () => EnregistrementFiscal::query()->where('type', '270')->sole()->contenuSigne()['donnees']['details']);
@@ -207,7 +208,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
         $this->vendre();
 
-        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->saisirLeCodeDuCourrier($societe);
 
         $evenement = EnregistrementFiscal::withoutGlobalScope(MagasinScope::class)
             ->where('magasin_id', $demonstration->id)
@@ -275,7 +276,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->assertSame(0, EnvoiDocument::query()->count());
         Mail::assertNothingSent();
 
-        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->saisirLeCodeDuCourrier($societe);
         $apercu = app(TenantContext::class)->runAs($demonstration, fn () => app(EReportingDesParticuliers::class)->apercu(ClotureCaisse::query()->sole()));
         $this->assertSame([true, false], [$apercu->demonstration, $apercu->aDeclarer()]);
         $this->assertSame(0, app(TenantContext::class)->runAs($demonstration, fn (): int => app(EReportingDesParticuliers::class)->journeesADeclarer($demonstration)->count()));
@@ -348,7 +349,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
         $ticket = $this->vendre();
 
-        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->saisirLeCodeDuCourrier($societe);
 
         $fermee = $demonstration->fresh();
         $this->assertSame([StatutMagasin::Ferme, false], [$fermee->statut, $fermee->peutVendre()]);
@@ -366,7 +367,7 @@ class MagasinDeDemonstrationTest extends TestCase
         $demonstration = $this->ouvrirLaDemonstrationEtYEntrer($societe);
         $this->mock(FermerLaDemonstrationAction::class, fn ($fermeture) => $fermeture->shouldReceive('handle')->andThrow(new RuntimeException('Registre indisponible.')));
 
-        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->saisirLeCodeDuCourrier($societe);
 
         $this->assertTrue($societe->fresh()->estValidee());
         $this->assertSame(StatutMagasin::Actif, $demonstration->fresh()->statut);
@@ -379,12 +380,17 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
     }
 
-    public function test_une_societe_refusee_ne_rouvre_pas_sa_demonstration(): void
+    /**
+     * Une inscription close, sans code au bout de trente jours ou par le
+     * refus de l'éditeur, ferme sa démonstration pour de bon : elle ne se
+     * rouvre plus.
+     */
+    public function test_une_inscription_close_ne_rouvre_pas_sa_demonstration(): void
     {
         $societe = $this->inscrireUneSociete();
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe);
 
-        app(RefuserLaSocieteAction::class)->handle($societe, new InterventionDeLEditeur('Pièces falsifiées, signalement du vrai dirigeant.', 'DOSSIER-42', ['alice']));
+        app(CloreLInscriptionAction::class)->refuser($societe, new InterventionDeLEditeur('Courrier revenu, pièces insuffisantes.', 'DOSSIER-42', ['alice']));
 
         $this->assertSame(StatutMagasin::Ferme, $demonstration->fresh()->statut);
         $this->assertThrows(fn () => app(OuvrirLaDemonstrationAction::class)->handle($societe->proprietaire, $societe->fresh()), VerificationRefuseeException::class, OuvrirLaDemonstrationAction::MESSAGE_SANS_AUTORISATION);
@@ -482,23 +488,27 @@ class MagasinDeDemonstrationTest extends TestCase
     /**
      * Les comptes d'entraînement sont retirés de la société, au nom du
      * système, quand la démonstration se ferme pour de bon, à la validation
-     * comme au refus de la société ; fermée pour trente jours d'inactivité,
-     * elle les garde, et ils la retrouvent à sa réouverture.
+     * comme à la clôture de l'inscription ; fermée pour trente jours
+     * d'inactivité, elle les garde, et ils la retrouvent à sa réouverture
+     * (le code du premier courrier ayant expiré entre-temps, la société est
+     * validée par celui du nouveau courrier demandé au quinzième jour).
      */
-    public function test_les_comptes_d_entrainement_sont_retires_a_la_validation_ou_au_refus_et_gardes_a_la_fermeture_pour_inactivite(): void
+    public function test_les_comptes_d_entrainement_sont_retires_a_la_validation_ou_a_la_cloture_et_gardes_a_la_fermeture_pour_inactivite(): void
     {
         $validee = $this->inscrireUneSociete();
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($validee->proprietaire, $validee);
         $compte = $this->compteDEntrainement($demonstration);
         $this->ouvrirUneSessionAilleurs($compte);
 
-        $this->travel(31)->days();
+        $this->travel(15)->days();
+        app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($validee->proprietaire, $validee->fresh());
+        $this->travel(16)->days();
         $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
         $this->assertSame([StatutMagasin::Ferme, StatutCompte::Actif], [$demonstration->fresh()->statut, $compte->refresh()->statut]);
         app(OuvrirLaDemonstrationAction::class)->handle($validee->proprietaire, $validee->fresh());
         $this->assertTrue($compte->refresh()->peutOuvrir($demonstration->fresh()));
 
-        $this->verifierLIdentiteDuProprietaire($validee);
+        $this->saisirLeCodeDuCourrier($validee);
 
         $compte->refresh();
         $this->assertSame([StatutCompte::Retire, null], [$compte->statut, $compte->statut_change_par]);
@@ -506,15 +516,17 @@ class MagasinDeDemonstrationTest extends TestCase
         $this->assertSessionsFermees($compte);
         $this->assertCount(1, $this->entreesDAudit($validee, ActionAuditee::CompteRetire));
 
-        $refusee = $this->inscrireUneSociete();
-        $autreDemonstration = app(OuvrirLaDemonstrationAction::class)->handle($refusee->proprietaire, $refusee);
-        $compteDuRefus = $this->compteDEntrainement($autreDemonstration);
-        app(RefuserLaSocieteAction::class)->handle($refusee, new InterventionDeLEditeur('Pièces falsifiées, signalement du vrai dirigeant.', 'DOSSIER-43', ['alice']));
-        $this->assertSame(StatutCompte::Retire, $compteDuRefus->refresh()->statut);
+        $close = $this->inscrireUneSociete();
+        $autreDemonstration = app(OuvrirLaDemonstrationAction::class)->handle($close->proprietaire, $close);
+        $compteDeLaCloture = $this->compteDEntrainement($autreDemonstration);
+        $this->travel(31)->days();
+        $this->artisan('app:clore-inscriptions-sans-code')->assertSuccessful();
+        $this->assertSame([true, StatutCompte::Retire], [$close->fresh()->estClose(), $compteDeLaCloture->refresh()->statut]);
     }
 
     /**
-     * La démonstration fermée pour de bon (société validée ou refusée), ses
+     * La démonstration fermée pour de bon (société validée ou inscription
+     * close), ses
      * comptes d'entraînement retirés ne reviennent pas : le propriétaire n'y
      * crée plus aucun compte et n'y réintègre aucun ancien, et ni l'espace
      * de la société ni l'équipe de la démonstration ne le lui proposent ;
@@ -528,12 +540,14 @@ class MagasinDeDemonstrationTest extends TestCase
         $proprietaire = $societe->proprietaire;
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe->fresh());
         $ancien = $this->compteDEntrainement($demonstration);
-        $this->travel(31)->days();
+        $this->travel(15)->days();
+        app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($proprietaire, $societe->fresh());
+        $this->travel(16)->days();
         $this->artisan('app:fermer-demonstrations-inactives')->assertSuccessful();
         $this->assertFalse($demonstration->fresh()->estUneDemonstrationTerminee());
         $this->assertTrue(app(TenantContext::class)->runAs($demonstration, fn (): User => app(CreerMembreAction::class)->handle($proprietaire, $demonstration->fresh(), ['name' => 'Pendant la pause'], RoleMagasin::Vendeur))->estActif());
 
-        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->saisirLeCodeDuCourrier($societe);
         $this->assertSame(StatutCompte::Retire, $ancien->refresh()->statut);
         $this->assertTrue($demonstration->fresh()->estUneDemonstrationTerminee());
         $identifiants = Identifiant::withoutGlobalScopes()->where('magasin_id', $demonstration->id)->count();

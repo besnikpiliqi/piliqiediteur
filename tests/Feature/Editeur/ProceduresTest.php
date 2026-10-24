@@ -3,20 +3,19 @@
 namespace Tests\Feature\Editeur;
 
 use App\Domain\CaisseSecurisee\ModuleFiscal;
+use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
-use App\Domain\Tenancy\Actions\LeverUnSignalAction;
+use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
-use App\Domain\Tenancy\Enums\SignalDeRisque;
 use App\Domain\Tenancy\Enums\TypePiece;
 use App\Domain\Tenancy\Enums\TypeVerification;
 use App\Domain\Tenancy\Models\EntreeAudit;
+use App\Domain\Tenancy\Models\PieceVerification;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Models\VerificationSociete;
-use App\Domain\Tenancy\Services\EvaluateurDeVerification;
 use App\Domain\Tenancy\Services\PiecesDeVerification;
 use App\Domain\Tenancy\Services\RegistreDesOperateurs;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -27,8 +26,9 @@ use Tests\TestCase;
 
 /**
  * Le cadre commun des procédures exceptionnelles de l'éditeur (voir
- * ProcedureDeLEditeur et RegistreDesOperateurs), essayé sur la levée d'un
- * signal et la validation sur pièces : une procédure exige sa
+ * ProcedureDeLEditeur et RegistreDesOperateurs), essayé sur l'envoi d'un
+ * courrier recommandé et sur l'examen des pièces d'un courrier non reçu,
+ * suivi d'un nouveau courrier : une procédure exige sa
  * justification et sa pièce, la confirmation retapée et un opérateur
  * authentifié par son secret, dans un terminal interactif ; refusée, elle
  * n'écrit rien ; faite, elle s'inscrit au journal d'audit avec son
@@ -39,7 +39,7 @@ class ProceduresTest extends TestCase
 {
     use RefreshDatabase;
 
-    private const JUSTIFICATION = 'Doute levé après l\'examen du dossier par l\'éditeur';
+    private const JUSTIFICATION = 'Courrier non reçu, pièces examinées par l\'éditeur';
 
     private const PIECE = 'DOSSIER-2026-0042';
 
@@ -55,18 +55,17 @@ class ProceduresTest extends TestCase
 
     public function test_une_procedure_sans_justification_ni_piece_est_refusee(): void
     {
-        $societe = $this->societeEnDoute();
+        $societe = $this->inscrireUneSociete();
         $avant = $this->ecritures();
 
-        $this->leverLeDoute($societe, ['--justification' => 'Trop court'])
+        $this->envoyerUnCourrier($societe, ['--justification' => 'Trop court'])
             ->expectsOutputToContain('Une procédure de l\'éditeur exige sa justification')
             ->assertFailed();
-        $this->leverLeDoute($societe, ['--piece' => ''])
+        $this->envoyerUnCourrier($societe, ['--piece' => ''])
             ->expectsOutputToContain('Une procédure de l\'éditeur exige sa justification')
             ->assertFailed();
 
         $this->assertSame($avant, $this->ecritures());
-        $this->assertSame([SignalDeRisque::DecisionEditeur], $this->signaux($societe));
     }
 
     /**
@@ -75,24 +74,23 @@ class ProceduresTest extends TestCase
      */
     public function test_une_procedure_sans_confirmation_est_refusee(): void
     {
-        $societe = $this->societeEnDoute();
+        $societe = $this->inscrireUneSociete();
         $avant = $this->ecritures();
 
-        $this->leverLeDoute($societe, ['--confirmer' => '000000018'])
+        $this->envoyerUnCourrier($societe, ['--confirmer' => '000000018'])
             ->expectsOutputToContain('Confirmation absente ou différente : rien n\'est fait.')
             ->assertFailed();
-        $this->leverLeDoute($societe, ['--confirmer' => null])
+        $this->envoyerUnCourrier($societe, ['--confirmer' => null])
             ->expectsQuestion("Retapez le SIREN {$societe->siren} pour confirmer", '000000018')
             ->assertFailed();
-        $this->leverLeDoute($societe, ['--confirmer' => null, '--no-interaction' => true])
+        $this->envoyerUnCourrier($societe, ['--confirmer' => null, '--no-interaction' => true])
             ->expectsOutputToContain('Confirmation absente ou différente : rien n\'est fait.')
             ->assertFailed();
-        $this->leverLeDoute($societe, ['--no-interaction' => true])
+        $this->envoyerUnCourrier($societe, ['--no-interaction' => true])
             ->expectsOutputToContain('ne se lance que dans un terminal interactif')
             ->assertFailed();
 
         $this->assertSame($avant, $this->ecritures());
-        $this->assertSame([SignalDeRisque::DecisionEditeur], $this->signaux($societe));
     }
 
     /**
@@ -101,48 +99,49 @@ class ProceduresTest extends TestCase
      */
     public function test_un_operateur_inconnu_ou_un_secret_faux_est_refuse(): void
     {
-        $societe = $this->societeEnDoute();
+        $societe = $this->inscrireUneSociete();
         $avant = $this->ecritures();
 
         foreach ([['mallory', 'secret-d-alice'], ['alice', 'secret-de-bruno'], ['alice', ''], ['bruno', 'secret-de-bruno']] as [$nom, $secret]) {
-            $this->leverLeDoute($societe, operateur: $nom, secret: $secret)
+            $this->envoyerUnCourrier($societe, operateur: $nom, secret: $secret)
                 ->expectsOutputToContain(RegistreDesOperateurs::MESSAGE_REFUS)
                 ->assertFailed();
         }
 
         $this->assertSame($avant, $this->ecritures());
-        $this->assertSame([SignalDeRisque::DecisionEditeur], $this->signaux($societe));
     }
 
     /**
      * Une procédure refusée après l'authentification de son opérateur
-     * n'écrit rien non plus : un signal inconnu, un courrier qui ne peut
-     * pas partir après l'examen des pièces (qui restent, pour un nouvel
-     * examen), une société déjà validée.
+     * n'écrit rien non plus : un motif de courrier inconnu, un courrier qui
+     * ne peut pas partir après l'examen des pièces (qui restent, pour un
+     * nouvel examen), une inscription déjà validée qui n'attend plus de
+     * code.
      */
     public function test_une_procedure_refusee_n_ecrit_rien(): void
     {
         Storage::fake(PiecesDeVerification::DISQUE);
-        $societe = $this->societeEnDoute();
-        $piece = app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe, TypePiece::Kbis, 'Extrait Kbis');
+        $societe = $this->societeAvecUnePiece();
+        $piece = app(TenantContext::class)->runAsSociete($societe, fn () => PieceVerification::query()->sole());
         $avant = $this->ecritures();
 
-        $this->procedure('editeur:societe:lever-signal', $societe, ['signal' => 'signal_invente'])
-            ->expectsOutputToContain('Signal inconnu')
+        $this->procedure('editeur:courrier:envoyer', $societe, ['--motif' => 'motif_invente'])
+            ->expectsOutputToContain('Motif inconnu.')
             ->assertFailed();
         app(ServiceEnvoiRecommande::class)->rendreInjoignable();
-        $this->procedure('editeur:societe:valider', $societe)->assertFailed();
+        $this->procedure('editeur:societe:examiner', $societe)->assertFailed();
 
         $this->assertSame($avant, $this->ecritures());
-        $this->assertNull($piece->fresh()->effacee_le);
+        $piece = app(TenantContext::class)->runAsSociete($societe, fn () => $piece->fresh());
+        $this->assertNull($piece->effacee_le);
         Storage::disk(PiecesDeVerification::DISQUE)->assertExists((string) $piece->chemin);
         app(ServiceEnvoiRecommande::class)->rendreInjoignable(false);
 
         $validee = $this->inscrireUneSociete();
-        $this->verifierLIdentiteDuProprietaire($validee);
+        $this->saisirLeCodeDuCourrier($validee);
         $avant = $this->ecritures();
-        $this->procedure('editeur:societe:signaler', $validee)
-            ->expectsOutputToContain('Cette société est déjà validée ou refusée.')
+        $this->procedure('editeur:societe:refuser', $validee)
+            ->expectsOutputToContain(CloreLInscriptionAction::MESSAGE_N_ATTEND_PLUS)
             ->assertFailed();
         $this->assertSame($avant, $this->ecritures());
     }
@@ -151,15 +150,18 @@ class ProceduresTest extends TestCase
      * La procédure faite s'inscrit au journal d'audit de la société,
      * origine « éditeur », avec sa justification, sa pièce, son opérateur,
      * l'utilisateur système, l'hôte et la version du module fiscal, comme
-     * la ligne qu'elle ajoute au registre des vérifications. La société se
-     * désigne aussi par son uuid.
+     * la ligne qu'elle ajoute au registre des vérifications. L'examen des
+     * pièces efface les pièces et fait partir un nouveau courrier, sans
+     * valider la société. La société se désigne aussi par son uuid.
      */
     public function test_une_procedure_faite_s_inscrit_au_journal_d_audit_avec_son_origine_et_son_operateur(): void
     {
-        $societe = $this->societeEnDoute();
+        Storage::fake(PiecesDeVerification::DISQUE);
+        $societe = $this->societeAvecUnePiece();
+        $courriers = count(app(ServiceEnvoiRecommande::class)->envois());
 
-        $this->procedure('editeur:societe:lever-signal', $societe, ['societe' => $societe->uuid, 'signal' => SignalDeRisque::DecisionEditeur->value])
-            ->expectsOutputToContain('Signal levé')
+        $this->procedure('editeur:societe:examiner', $societe, ['societe' => $societe->uuid])
+            ->expectsOutputToContain('Examen inscrit, pièces effacées ; le courrier recommandé est parti')
             ->assertSuccessful();
 
         $operateur = [
@@ -173,18 +175,19 @@ class ProceduresTest extends TestCase
             VerificationSociete::query()->where('type', TypeVerification::Manuelle->value)->sole(),
             EntreeAudit::query()->where('action', ActionAuditee::VerificationEnregistree->value)->orderByDesc('id')->first(),
         ]);
-        $this->assertSame([SignalDeRisque::DecisionEditeur, 'editeur', $operateur], [$ligne->signal, $ligne->fournisseur, $ligne->operateur]);
+        $this->assertSame(['nouveau_courrier_apres_examen_des_pieces', 'editeur', $operateur], [$ligne->details['decision'], $ligne->fournisseur, $ligne->operateur]);
         $this->assertSame(['editeur', self::JUSTIFICATION, $operateur], [$entree->origine, $entree->justification, $entree->operateur]);
-        $this->assertSame([], $this->signaux($societe));
+        $this->assertCount($courriers + 1, app(ServiceEnvoiRecommande::class)->envois());
+        $this->assertSame([0, true], [app(TenantContext::class)->runAsSociete($societe, fn (): int => PieceVerification::query()->whereNull('effacee_le')->count()), $societe->fresh()->attendSonCode()]);
     }
 
     public function test_une_societe_inconnue_est_refusee(): void
     {
-        $societe = $this->societeEnDoute();
+        $societe = $this->inscrireUneSociete();
         $avant = $this->ecritures();
 
         foreach ([(string) ($societe->id + 1000), (string) Str::uuid()] as $inconnue) {
-            $this->artisan('editeur:societe:lever-signal', ['societe' => $inconnue, 'signal' => SignalDeRisque::DecisionEditeur->value])
+            $this->artisan('editeur:courrier:envoyer', ['societe' => $inconnue])
                 ->expectsOutputToContain('Société inconnue : donnez son identifiant ou son uuid.')
                 ->assertFailed();
         }
@@ -194,11 +197,11 @@ class ProceduresTest extends TestCase
 
     public function test_un_texte_qui_n_est_ni_un_identifiant_ni_un_uuid_est_refuse(): void
     {
-        $societe = $this->societeEnDoute();
+        $societe = $this->inscrireUneSociete();
         $avant = $this->ecritures();
 
         foreach (['abc', "{$societe->id}abc", "{$societe->id} OR 1=1", (string) $societe->siren.'-'] as $texte) {
-            $this->artisan('editeur:societe:lever-signal', ['societe' => $texte, 'signal' => SignalDeRisque::DecisionEditeur->value])
+            $this->artisan('editeur:courrier:envoyer', ['societe' => $texte])
                 ->expectsOutputToContain('Société inconnue : donnez son identifiant ou son uuid.')
                 ->assertFailed();
         }
@@ -207,34 +210,39 @@ class ProceduresTest extends TestCase
     }
 
     /**
-     * Une société en cours de vérification, sur laquelle l'éditeur a
-     * constaté un doute.
+     * Une inscription dont les deux courriers ne sont pas parvenus : le
+     * premier, puis le nouveau courrier demandé au quinzième jour ; son
+     * propriétaire a déposé un extrait Kbis pour que l'éditeur traite son
+     * cas à la main.
      */
-    private function societeEnDoute(): Societe
+    private function societeAvecUnePiece(): Societe
     {
         $societe = $this->inscrireUneSociete();
-        app(LeverUnSignalAction::class)->signalerUnDoute($societe, new InterventionDeLEditeur('Doute sur l\'inscription de cette société', 'DOSSIER-2026-0041', ['alice']));
+        $this->travel(15)->days();
+        app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($societe->proprietaire, $societe);
+        app(DeposerUnePieceAction::class)->handle($societe->proprietaire, $societe->fresh(), TypePiece::Kbis, 'Extrait Kbis');
+        app(TenantContext::class)->clear();
 
-        return $societe;
+        return $societe->fresh();
     }
 
     /**
-     * La levée du doute de l'éditeur sur la société, avec les options
-     * données en plus de celles d'une procédure complète.
+     * L'envoi par l'éditeur d'un courrier de vérification à la société,
+     * avec les options données en plus de celles d'une procédure complète.
      *
      * @param  array<string, mixed>  $options
      */
-    private function leverLeDoute(Societe $societe, array $options = [], ?string $operateur = null, ?string $secret = null): PendingCommand
+    private function envoyerUnCourrier(Societe $societe, array $options = [], ?string $operateur = null, ?string $secret = null): PendingCommand
     {
         $parametres = array_filter([
             'societe' => (string) $societe->id,
-            'signal' => SignalDeRisque::DecisionEditeur->value,
+            '--motif' => 'verification',
             '--justification' => self::JUSTIFICATION,
             '--piece' => self::PIECE,
             '--confirmer' => $societe->siren,
             ...$options,
         ], fn (mixed $valeur): bool => $valeur !== null);
-        $commande = $this->artisan('editeur:societe:lever-signal', $parametres);
+        $commande = $this->artisan('editeur:courrier:envoyer', $parametres);
 
         return $operateur === null
             ? $commande
@@ -260,17 +268,9 @@ class ProceduresTest extends TestCase
     }
 
     /**
-     * @return list<SignalDeRisque>
-     */
-    private function signaux(Societe $societe): array
-    {
-        return app(EvaluateurDeVerification::class)->evaluer($societe->fresh())->signauxActifs;
-    }
-
-    /**
      * Ce qu'une procédure écrirait : lignes du registre des vérifications,
      * entrées du journal d'audit, codes envoyés, pièces effacées, sociétés
-     * validées ou refusées.
+     * validées ou closes.
      *
      * @return array<string, int>
      */
@@ -281,7 +281,7 @@ class ProceduresTest extends TestCase
             'audit' => DB::table('journal_audit')->count(),
             'codes' => DB::table('codes_confirmation')->count(),
             'pieces_effacees' => DB::table('pieces_verification')->whereNotNull('effacee_le')->count(),
-            'decisions' => DB::table('societes')->whereNotNull('validee_le')->orWhereNotNull('refusee_le')->count(),
+            'decisions' => DB::table('societes')->whereNotNull('validee_le')->orWhereNotNull('close_le')->count(),
         ];
     }
 

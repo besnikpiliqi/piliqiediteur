@@ -37,6 +37,7 @@ use App\Domain\Facturation\Models\EnvoiDocument;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Services\EReportingDesParticuliers;
+use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Enums\StatutSociete;
@@ -62,7 +63,7 @@ use Tests\TestCase;
  * Un magasin passe en lecture seule (voir Magasin::estEnLectureSeule(),
  * ControleDesDroits et Magasin::verifierQuIlEstOuvert()) quand il est
  * fermé ou suspendu, quand sa société est suspendue, résiliée ou
- * révoquée, ou quand l'inscription de sa société est refusée :
+ * révoquée, ou quand l'inscription de sa société est close :
  * consultation et téléchargements possibles, plus aucune vente ni aucun
  * e-mail aux clients ; ses clôtures, les statuts de ses factures et ses
  * déclarations continuent. Ses ventes ont toutes été faites avant ce
@@ -86,13 +87,13 @@ class MagasinEnLectureSeuleTest extends TestCase
             'société suspendue' => ['société suspendue', 'Ce magasin est en lecture seule, votre société étant suspendue'],
             'société résiliée' => ['société résiliée', 'Ce magasin est en lecture seule, votre société étant résiliée'],
             'société révoquée' => ['société révoquée', 'Ce magasin est en lecture seule, votre société étant révoquée'],
-            'inscription refusée' => ['inscription refusée', 'Ce magasin est en lecture seule, l\'inscription de votre société ayant été refusée'],
+            'inscription close' => ['inscription close', 'Ce magasin est en lecture seule, l\'inscription de votre société étant close'],
         ];
     }
 
     /**
      * Les situations d'une société qui a été validée : une société dont
-     * l'inscription est refusée ne l'a jamais été ; elle n'a donc rien
+     * l'inscription est close ne l'a jamais été ; elle n'a donc rien
      * vendu ni déclaré, et aucun de ses documents ne s'imprime (voir
      * Magasin::verifierQuIlPeutImprimer()).
      *
@@ -100,7 +101,7 @@ class MagasinEnLectureSeuleTest extends TestCase
      */
     public static function situationsApresLaValidation(): array
     {
-        return array_diff_key(self::situationsEnLectureSeule(), ['inscription refusée' => true]);
+        return array_diff_key(self::situationsEnLectureSeule(), ['inscription close' => true]);
     }
 
     #[DataProvider('situationsEnLectureSeule')]
@@ -476,7 +477,7 @@ class MagasinEnLectureSeuleTest extends TestCase
             'société suspendue' => $magasin->societe->forceFill(['statut' => StatutSociete::Suspendue])->save(),
             'société résiliée' => $magasin->societe->forceFill(['statut' => StatutSociete::Resiliee])->save(),
             'société révoquée' => $magasin->societe->forceFill(['statut' => StatutSociete::Revoquee])->save(),
-            'inscription refusée' => $magasin->societe->forceFill(['validee_le' => null, 'refusee_le' => now()])->save(),
+            'inscription close' => $magasin->societe->forceFill(['validee_le' => null, 'close_le' => now(), 'motif_cloture' => MotifCloture::Refus])->save(),
         };
 
         $this->assertSame($magasin, app(TenantContext::class)->magasin());

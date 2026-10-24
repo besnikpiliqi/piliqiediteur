@@ -41,7 +41,7 @@ use LogicException;
  * Un magasin qui ne peut pas vendre n'écrit pas à ses clients (voir
  * Magasin::verifierQuIlPeutEcrireAuxClients()) : ni envoi ni relance tant
  * que sa société est en cours de vérification, ni une fois le magasin
- * suspendu ou fermé, ou sa société suspendue, résiliée ou refusée ; le
+ * suspendu ou fermé, ou sa société suspendue, résiliée ou close ; le
  * magasin de démonstration, jamais.
  *
  * L'objet de l'e-mail nomme l'émetteur du document (voir

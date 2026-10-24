@@ -17,7 +17,7 @@ use Tests\TestCase;
  */
 class VerificationServiceProviderTest extends TestCase
 {
-    private const SERVICES = ['sirene', 'rne', 'identite', 'recommande'];
+    private const SERVICES = ['sirene', 'rne', 'recommande'];
 
     public function test_aucun_pilote_factice_n_est_accepte_en_production(): void
     {
@@ -27,7 +27,6 @@ class VerificationServiceProviderTest extends TestCase
             config([
                 'services.sirene.pilote' => 'insee',
                 'services.rne.pilote' => 'inpi',
-                'services.identite.pilote' => null,
                 'services.recommande.pilote' => null,
                 "services.{$service}.pilote" => 'faux',
             ]);
@@ -35,7 +34,7 @@ class VerificationServiceProviderTest extends TestCase
             $this->assertThrows(fn () => (new VerificationServiceProvider($this->app))->boot(), RuntimeException::class, "Le fournisseur factice de « {$service} » (pilote faux) ne sert jamais en production.");
         }
 
-        config(['services.sirene.pilote' => 'insee', 'services.rne.pilote' => 'inpi', 'services.identite.pilote' => null, 'services.recommande.pilote' => null]);
+        config(['services.sirene.pilote' => 'insee', 'services.rne.pilote' => 'inpi', 'services.recommande.pilote' => null]);
         (new VerificationServiceProvider($this->app))->boot();
         $this->app->detectEnvironment(fn (): string => 'testing');
         config(array_fill_keys(array_map(fn (string $service): string => "services.{$service}.pilote", self::SERVICES), 'faux'));

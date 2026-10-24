@@ -3,11 +3,10 @@
 namespace App\Integrations\EnvoiRecommande;
 
 /**
- * Une adresse où part un courrier : la dénomination du destinataire et
- * l'adresse officielle de son siège, avec sa source, le répertoire Sirene
- * de l'INSEE ou, quand il la masque (diffusion partielle), le registre
- * national des entreprises. Jamais une adresse saisie ni tirée d'une pièce
- * déposée (voir AdresseOfficielle).
+ * L'adresse officielle du siège d'une entreprise, avec sa dénomination et
+ * sa source : le registre national des entreprises ou, quand il n'en donne
+ * pas, le répertoire Sirene de l'INSEE. Jamais une adresse saisie dans le
+ * logiciel ni tirée d'une pièce déposée (voir DestinataireOfficiel).
  */
 final readonly class AdressePostale
 {
@@ -25,7 +24,8 @@ final readonly class AdressePostale
     ) {}
 
     /**
-     * Les lignes de l'adresse telles que le pli les imprime.
+     * Les lignes de l'adresse telles que le courrier les imprime, sous le
+     * nom du destinataire.
      *
      * @return list<string>
      */
@@ -47,5 +47,13 @@ final readonly class AdressePostale
             'ville' => $this->ville,
             'source' => $this->source,
         ];
+    }
+
+    /**
+     * @param  array{denomination: string|null, adresse: string, complement_adresse: string|null, code_postal: string, ville: string, source: string}  $donnees  ce qu'a écrit enTableau()
+     */
+    public static function depuisTableau(array $donnees): self
+    {
+        return new self($donnees['denomination'], $donnees['adresse'], $donnees['complement_adresse'], $donnees['code_postal'], $donnees['ville'], $donnees['source']);
     }
 }

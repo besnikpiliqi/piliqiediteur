@@ -406,7 +406,7 @@ class PanneauSocieteTest extends TestCase
         };
 
         $this->assertSame([
-            TableauDeBord::ETAPE_VERIFIER => [false, VerificationSociete::getUrl(panel: 'societe', tenant: $societe)],
+            TableauDeBord::ETAPE_CODE_DU_COURRIER => [false, VerificationSociete::getUrl(panel: 'societe', tenant: $societe)],
             TableauDeBord::ETAPE_PREMIER_MAGASIN => [false, MagasinResource::getUrl('create', panel: 'societe', tenant: $societe)],
             TableauDeBord::ETAPE_EQUIPE => [true, MembreResource::getUrl('index', panel: 'societe', tenant: $societe)],
             TableauDeBord::ETAPE_DEMONSTRATION => [false, null],
@@ -418,11 +418,11 @@ class PanneauSocieteTest extends TestCase
 
         $this->assertSame(
             [[false, VerificationSociete::getUrl(panel: 'societe', tenant: $societe)], [true, MagasinResource::getUrl('index', panel: 'societe', tenant: $societe)], [true, Dashboard::getUrl(panel: 'app', tenant: $demonstration)]],
-            array_values(array_intersect_key($etapes($proprietaire), array_flip([TableauDeBord::ETAPE_VERIFIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_DEMONSTRATION]))),
+            array_values(array_intersect_key($etapes($proprietaire), array_flip([TableauDeBord::ETAPE_CODE_DU_COURRIER, TableauDeBord::ETAPE_PREMIER_MAGASIN, TableauDeBord::ETAPE_DEMONSTRATION]))),
         );
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertSeeText('Vos premières étapes');
 
-        $this->verifierLIdentiteDuProprietaire($societe->fresh());
+        $this->saisirLeCodeDuCourrier($societe->fresh());
 
         $this->assertSame([true, true, true, true], array_column(array_values($etapes($proprietaire)), 0));
         $this->get(TableauDeBord::getUrl(panel: 'societe', tenant: $societe))->assertOk()->assertDontSeeText('Vos premières étapes')->assertSeeText($magasin->nom);

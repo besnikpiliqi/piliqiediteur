@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\CloreInscriptionsSansCode;
 use App\Console\Commands\ClotureAutomatiqueCaisse;
 use App\Console\Commands\EffacerPiecesVerification;
 use App\Console\Commands\ExpirerDevis;
@@ -43,9 +44,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Les rappels des prestataires arrivent sans session : ils se
         // prouvent par leur signature (voir RappelsDesPrestatairesController).
         $middleware->validateCsrfTokens(except: ['rappels/*']);
-        // Hors des panneaux, une page réservée aux comptes connectés (le
-        // retour de la vérification d'identité) mène à la connexion de
-        // l'administration de la société.
+        // Hors des panneaux, une page réservée aux comptes connectés mène à
+        // la connexion de l'administration de la société.
         $middleware->redirectGuestsTo(fn (): string => route('filament.societe.auth.login'));
     })
     ->withSchedule(function (Schedule $schedule): void {
@@ -80,7 +80,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // jours s'effacent (voir PurgerActionsTraitees).
         $schedule->command(PurgerActionsTraitees::class)->dailyAt('04:30');
         // À 4 h 45, les magasins de démonstration inactifs depuis trente
-        // jours, ou d'une société validée ou refusée, se ferment (voir
+        // jours, ou d'une société validée ou close, se ferment (voir
         // FermerDemonstrationsInactives).
         $schedule->command(FermerDemonstrationsInactives::class)->dailyAt('04:45');
         // Chaque heure : les pièces de vérification qui atteindraient leurs
@@ -89,11 +89,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // interrompu, s'effacent (voir EffacerPiecesVerification).
         $schedule->command(EffacerPiecesVerification::class)->hourly();
         // Chaque heure : les demandes d'inscription expirées depuis 48
-        // heures s'effacent (voir PurgerDemandesInscription), et les
-        // contrôles Sirene restés impossibles reprennent (voir
-        // ReverifierSirene) ; le premier du mois, à 5 h, les sociétés
-        // validées et leurs magasins sont revérifiés, sans rien bloquer.
+        // heures s'effacent (voir PurgerDemandesInscription), les
+        // inscriptions sans code saisi trente jours après leur dernier
+        // courrier se closent et libèrent leur SIREN (voir
+        // CloreInscriptionsSansCode), et les contrôles Sirene restés
+        // impossibles reprennent (voir ReverifierSirene) ; le premier du
+        // mois, à 5 h, les sociétés validées et leurs magasins sont
+        // revérifiés, sans rien bloquer.
         $schedule->command(PurgerDemandesInscription::class)->hourly();
+        $schedule->command(CloreInscriptionsSansCode::class)->hourly();
         $schedule->command(ReverifierSirene::class)->hourly();
         // Chaque heure aussi : le suivi des plis recommandés à code encore
         // en route, au cas où un rappel du prestataire se perdrait (voir

@@ -2,13 +2,10 @@
 
 namespace App\Filament\Societe\Pages;
 
-use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
-use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Filament\Concerns\GereLesExceptionsMetier;
-use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
@@ -29,9 +26,9 @@ use Illuminate\Validation\ValidationException;
  * L'identité légale de la société, celle que tous ses magasins impriment :
  * raison sociale, forme juridique, capital, immatriculation, n° de TVA et
  * siège (voir ModifierIdentiteSocieteAction, qui la valide et
- * l'enregistre). Le SIREN s'y lit sans se saisir ; le propriétaire le
- * corrige, tant que la société n'est pas validée, par « Corriger le SIREN »
- * (voir CorrigerSirenAvantValidationAction). Un encadré dit les mentions
+ * l'enregistre). Le SIREN s'y lit sans se saisir : c'est celui de
+ * l'inscription, que vérifie le courrier recommandé, et il ne change pas.
+ * Un encadré dit les mentions
  * qui manquent pour facturer un professionnel, et la raison sociale
  * rappelle la dénomination que donne le répertoire Sirene quand elle en
  * diffère.
@@ -163,50 +160,6 @@ class IdentiteSociete extends Page implements HasForms
 
             Notification::make()->title('Identité de la société enregistrée')->success()->send();
         });
-    }
-
-    /**
-     * « Corriger le SIREN », pour le propriétaire tant que la société n'est
-     * pas validée : le nouveau SIREN, et le NIC de chaque magasin, dont le
-     * SIRET change avec lui.
-     */
-    public function corrigerLeSirenAction(): Action
-    {
-        return Action::make('corrigerLeSiren')
-            ->label('Corriger le SIREN')
-            ->icon('heroicon-o-pencil-square')
-            ->visible(fn (): bool => auth()->user()?->can('corrigerLeSiren', $this->societe()) ?? false)
-            ->modalDescription('Le SIREN se corrige tant que votre société n\'est pas validée. Le SIRET de chaque magasin commence par le SIREN : ressaisissez le NIC de chacun.')
-            ->form(fn (): array => [
-                TextInput::make('siren')->label('SIREN corrigé')->required()->maxLength(9),
-                ...$this->societe()->magasinsReels()->orderBy('id')->get()->map(fn (Magasin $magasin): TextInput => TextInput::make("nics.{$magasin->getKey()}")
-                    ->label("NIC de {$magasin->nom}")
-                    ->required()
-                    ->maxLength(5))->all(),
-            ])
-            ->action(function (array $data): void {
-                static::executerSansCasser(function () use ($data): void {
-                    try {
-                        app(CorrigerSirenAvantValidationAction::class)->handle(auth()->user(), $this->societe(), (string) $data['siren'], $data['nics'] ?? []);
-                    } catch (ValidationException $refus) {
-                        Notification::make()->title(collect($refus->errors())->flatten()->first())->danger()->send();
-
-                        return;
-                    }
-
-                    $this->remplir();
-
-                    Notification::make()->title('SIREN corrigé')->success()->send();
-                });
-            });
-    }
-
-    /**
-     * @return array<Action>
-     */
-    protected function getHeaderActions(): array
-    {
-        return [$this->corrigerLeSirenAction()];
     }
 
     private function peutModifier(): bool

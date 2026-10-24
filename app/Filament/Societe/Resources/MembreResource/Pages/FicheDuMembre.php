@@ -225,7 +225,7 @@ class FicheDuMembre extends ViewRecord
             ->icon('heroicon-o-key')
             ->color('danger')
             ->visible(fn (): bool => $this->auteur()->can('transmettreLaPropriete', $this->compte()) && $this->transmissionEnAttente() === null)
-            ->modalDescription(fn (): string => "Un lien, valable 24 heures, part à l'adresse que {$this->compte()->name} a renseignée dans son profil : la propriété ne passera que quand il l'aura suivi, connecté à son compte, et vous pourrez annuler d'ici là. Il deviendra alors le propriétaire de la société, avec tous les droits sauf celui de vendre ; vous en deviendrez administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, et toutes celles de la société. Sa qualité de représentant doit être prouvée à son nom, et il doit avoir choisi son propre mot de passe.")
+            ->modalDescription(fn (): string => "Un lien, valable 24 heures, part à l'adresse que {$this->compte()->name} a renseignée dans son profil : la propriété ne passera que quand il l'aura suivi, connecté à son compte, et vous pourrez annuler d'ici là. Il deviendra alors le propriétaire de la société, avec tous les droits sauf celui de vendre ; vous en deviendrez administrateur de tous les magasins, avec toutes les autorisations de magasin sauf celles de la vente, et toutes celles de la société. Il doit avoir choisi son propre mot de passe et renseigné lui-même son adresse.")
             ->form([
                 TextInput::make('mot_de_passe')->label('Votre mot de passe')->password()->autocomplete('current-password')->required(),
             ])

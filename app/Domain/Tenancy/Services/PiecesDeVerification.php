@@ -11,8 +11,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Les fichiers des pièces déposées pour l'examen de l'éditeur (voir
- * PieceVerification) : chiffrés sur le disque privé « verification »
+ * Les fichiers des pièces déposées pour le traitement à la main, par
+ * l'éditeur, d'un courrier recommandé non reçu (voir PieceVerification) :
+ * chiffrés sur le disque privé « verification »
  * (Crypt::encryptString, avec la clé de l'application), déchiffrés pour la
  * seule consultation de l'éditeur (voir editeur:societe:pieces), effacés
  * dès sa décision ou au plus tard trente jours après leur dépôt (voir
@@ -26,13 +27,6 @@ class PiecesDeVerification
     public const MOTIF_DECISION = 'decision';
 
     public const MOTIF_DELAI = 'delai';
-
-    /**
-     * Le SIREN de la société a été corrigé avant la validation : les pièces
-     * déposées pour l'ancienne entreprise ne prouvent rien de la nouvelle
-     * (voir CorrigerSirenAvantValidationAction).
-     */
-    public const MOTIF_SIREN_CORRIGE = 'siren_corrige';
 
     /**
      * Le début du nom des dossiers temporaires, à la racine du disque

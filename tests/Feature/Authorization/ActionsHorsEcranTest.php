@@ -45,24 +45,20 @@ use App\Domain\Facturation\Models\Facture;
 use App\Domain\Tenancy\Actions\AnnulerUneNominationAction;
 use App\Domain\Tenancy\Actions\ChangerLeRoleDeSocieteAction;
 use App\Domain\Tenancy\Actions\ChangerStatutCompteAction;
-use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
 use App\Domain\Tenancy\Actions\CreerAdministrateurAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\CreerExpertComptableAction;
 use App\Domain\Tenancy\Actions\CreerMembreAction;
-use App\Domain\Tenancy\Actions\DemanderAccordDUnDirigeantAction;
 use App\Domain\Tenancy\Actions\DemanderLaTransmissionDeLaProprieteAction;
-use App\Domain\Tenancy\Actions\DemarrerVerificationIdentiteAction;
 use App\Domain\Tenancy\Actions\DeposerUnePieceAction;
+use App\Domain\Tenancy\Actions\EnvoyerCodeDeConfirmationAction;
 use App\Domain\Tenancy\Actions\ModifierAdministrateurAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Actions\ModifierMembreAction;
 use App\Domain\Tenancy\Actions\ModifierParametresFiscauxSocieteAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
-use App\Domain\Tenancy\Actions\RecevoirResultatIdentiteAction;
 use App\Domain\Tenancy\Actions\RedonnerLAccesAction;
-use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\TypePiece;
 use App\Domain\Tenancy\Models\Affectation;
@@ -108,9 +104,9 @@ class ActionsHorsEcranTest extends TestCase
         CreerEtablissementAction::MESSAGE_SANS_AUTORISATION,
         ModifierEtablissementAction::MESSAGE_SANS_AUTORISATION,
         ModifierIdentiteSocieteAction::MESSAGE_SANS_AUTORISATION,
-        CorrigerSirenAvantValidationAction::MESSAGE_SANS_AUTORISATION,
         OuvrirLaDemonstrationAction::MESSAGE_SANS_AUTORISATION,
-        DemarrerVerificationIdentiteAction::MESSAGE_SANS_AUTORISATION,
+        EnvoyerCodeDeConfirmationAction::MESSAGE_SANS_AUTORISATION,
+        DeposerUnePieceAction::MESSAGE_SANS_AUTORISATION,
         DemanderLaTransmissionDeLaProprieteAction::MESSAGE_PROPRIETAIRE_SEUL,
     ];
 
@@ -147,8 +143,7 @@ class ActionsHorsEcranTest extends TestCase
             'créer un magasin', 'modifier un magasin', 'modifier l\'identité de la société', 'modifier les réglages fiscaux',
         ];
         $verification = [
-            'corriger le SIREN', 'ouvrir la démonstration', 'démarrer la vérification d\'identité', 'déposer une pièce',
-            'demander l\'accord d\'un dirigeant', 'saisir le code du courrier', 'rapprocher de nouveau les dirigeants',
+            'ouvrir la démonstration', 'demander un nouveau courrier', 'déposer une pièce',
         ];
 
         return [
@@ -317,13 +312,9 @@ class ActionsHorsEcranTest extends TestCase
             'modifier un magasin' => fn (User $auteur) => app(ModifierEtablissementAction::class)->handle($auteur, $magasin, ['nom' => 'Nouveau nom']),
             'modifier l\'identité de la société' => fn (User $auteur) => app(ModifierIdentiteSocieteAction::class)->handle($auteur, $societe, ['capital_social' => '5000']),
             'modifier les réglages fiscaux' => fn (User $auteur) => app(ModifierParametresFiscauxSocieteAction::class)->handle($auteur, $societe, ['mois_fin_exercice' => 6]),
-            'corriger le SIREN' => fn (User $auteur) => app(CorrigerSirenAvantValidationAction::class)->handle($auteur, $societe, (string) $societe->siren, [$magasin->id => substr((string) $magasin->siret, 9)]),
             'ouvrir la démonstration' => fn (User $auteur) => app(OuvrirLaDemonstrationAction::class)->handle($auteur, $societe),
-            'démarrer la vérification d\'identité' => fn (User $auteur) => app(DemarrerVerificationIdentiteAction::class)->handle($auteur, $societe, true, 'http://localhost/verification/identite/retour'),
+            'demander un nouveau courrier' => fn (User $auteur) => app(EnvoyerCodeDeConfirmationAction::class)->nouvelEnvoi($auteur, $societe),
             'déposer une pièce' => fn (User $auteur) => app(DeposerUnePieceAction::class)->handle($auteur, $societe, TypePiece::Kbis, 'Extrait Kbis'),
-            'demander l\'accord d\'un dirigeant' => fn (User $auteur) => app(DemanderAccordDUnDirigeantAction::class)->handle($auteur, $societe, 0, 'dirigeant@example.test'),
-            'saisir le code du courrier' => fn (User $auteur) => app(SaisirCodeDeConfirmationAction::class)->handle($auteur, $societe, 'ABCD-EFGH'),
-            'rapprocher de nouveau les dirigeants' => fn (User $auteur) => app(RecevoirResultatIdentiteAction::class)->rapprocherDeNouveau($auteur, $societe),
         };
     }
 

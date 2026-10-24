@@ -77,7 +77,7 @@ use LogicException;
  * OuvrirLaDemonstrationAction) est un magasin à part entière, avec son
  * registre, ses séries (code DEMO) et ses clôtures, sans SIRET ni identité
  * réelle (voir Emetteur::deDemonstration()) : il vend tant que sa société
- * n'est ni validée ni refusée, n'écrit à aucun client et ne transmet rien
+ * n'est ni validée ni close, n'écrit à aucun client et ne transmet rien
  * (voir peutEcrireAuxClients()), et rien n'en passe aux magasins réels.
  */
 class Magasin extends Model implements HasName
@@ -297,7 +297,7 @@ class Magasin extends Model implements HasName
      * l'écrire ici (voir SiretsDesMagasins) : tout autre changement est
      * refusé. Avant la validation, rien n'est réservé, et le SIRET se
      * corrige avec le contrôle du répertoire Sirene (voir
-     * ModifierEtablissementAction et CorrigerSirenAvantValidationAction).
+     * ModifierEtablissementAction).
      *
      * @throws LogicException
      */
@@ -354,7 +354,7 @@ class Magasin extends Model implements HasName
     }
 
     /**
-     * Est-ce le magasin de démonstration d'une société validée ou refusée,
+     * Est-ce le magasin de démonstration d'une société validée ou close,
      * fermé pour de bon : il ne se rouvre jamais, ses comptes d'entraînement
      * sont retirés (voir FermerLaDemonstrationAction), et plus aucun compte
      * n'y est créé, nommé ni réintégré (voir
@@ -366,14 +366,15 @@ class Magasin extends Model implements HasName
     {
         return $this->est_demonstration && Societe::query()
             ->whereKey($this->societe_id)
-            ->where(fn ($societe) => $societe->whereNotNull('validee_le')->orWhereNotNull('refusee_le'))
+            ->where(fn ($societe) => $societe->whereNotNull('validee_le')->orWhereNotNull('close_le'))
             ->exists();
     }
 
     /**
      * Le magasin est-il en lecture seule ? Fermé par sa société, suspendu
-     * par l'éditeur, ou parce que sa société n'est plus active ou a été
-     * refusée (voir Societe::estEnLectureSeule()) : la consultation et les
+     * par l'éditeur, ou parce que sa société n'est plus active ou que son
+     * inscription est close (voir Societe::estEnLectureSeule()) : la
+     * consultation et les
      * téléchargements restent possibles, plus aucune vente ni aucun e-mail
      * aux clients ; ses clôtures, les statuts de ses factures et ses
      * déclarations continuent. Seul endroit où ces états se lisent (voir
@@ -397,7 +398,7 @@ class Magasin extends Model implements HasName
         return match (true) {
             $this->estFerme() => "{$designation} est fermé",
             $this->suspendu_le !== null => "{$designation} est suspendu",
-            $societe->estRefusee() => "{$designation} est en lecture seule, l'inscription de votre société ayant été refusée",
+            $societe->estClose() => "{$designation} est en lecture seule, l'inscription de votre société étant close",
             $societe->statut->estEnLectureSeule() => "{$designation} est en lecture seule, votre société étant ".mb_strtolower($societe->statut->getLabel()),
             default => null,
         };
@@ -427,7 +428,7 @@ class Magasin extends Model implements HasName
      * fois sa société validée (voir Societe::estValidee()) et son
      * établissement confirmé par le répertoire Sirene
      * (etablissement_verifie_le), le magasin de démonstration tant que sa
-     * société n'est ni validée ni refusée : ticket, facture, avoir,
+     * société n'est ni validée ni close : ticket, facture, avoir,
      * paiement, devis numéroté, e-mail à un client et transmission en
      * dépendent (voir verifierQuIlPeutVendre() et peutEcrireAuxClients()).
      * Une revérification négative après la validation n'y change rien.

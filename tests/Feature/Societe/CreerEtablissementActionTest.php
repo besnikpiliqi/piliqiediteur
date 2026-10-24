@@ -529,7 +529,7 @@ class CreerEtablissementActionTest extends TestCase
     {
         $societe = $this->inscrireUneSociete();
         $chargeeAvant = Societe::query()->findOrFail($societe->id);
-        $this->verifierLIdentiteDuProprietaire($societe);
+        $this->saisirLeCodeDuCourrier($societe);
         $this->assertTrue($societe->fresh()->estValidee());
         app(TenantContext::class)->clear();
 

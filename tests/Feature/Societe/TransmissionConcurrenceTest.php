@@ -101,10 +101,11 @@ class TransmissionConcurrenceTest extends TestCase
     }
 
     /**
-     * Le propriétaire redonne l'accès de l'administrateur pendant que
-     * celui-ci accepte la transmission : l'acceptation attend sur le
-     * verrou des comptes, relit un accès redonné après la preuve de sa
-     * qualité, et ne transmet rien.
+     * Le propriétaire redonne l'accès de l'administrateur, absent, pendant
+     * que celui-ci accepte la transmission : son mot de passe redevient son
+     * identifiant ; l'acceptation attend sur le verrou des comptes, relit
+     * ce mot de passe et ne transmet rien (personne ne devient propriétaire
+     * avec un mot de passe égal à son identifiant).
      */
     #[Group('concurrence')]
     public function test_un_acces_redonne_pendant_l_acceptation_d_une_transmission_la_fait_refuser(): void
@@ -122,18 +123,17 @@ class TransmissionConcurrenceTest extends TestCase
             }
         });
 
-        app(RedonnerLAccesAction::class)->handle(User::query()->findOrFail($proprietaireId), User::query()->findOrFail($administrateurId), true, 'un-mot-de-passe-redonne', (string) Str::uuid());
+        app(RedonnerLAccesAction::class)->handle(User::query()->findOrFail($proprietaireId), User::query()->findOrFail($administrateurId), false, null, (string) Str::uuid());
 
-        $this->assertStringContainsString(DemanderLaTransmissionDeLaProprieteAction::MESSAGE_QUALITE, $this->attendreLEchec($acceptation));
+        $this->assertStringContainsString(DemanderLaTransmissionDeLaProprieteAction::MESSAGE_MOT_DE_PASSE, $this->attendreLEchec($acceptation));
         $this->assertSame([RoleSociete::Administrateur, RoleSociete::Proprietaire], [User::query()->findOrFail($administrateurId)->role_societe, User::query()->findOrFail($proprietaireId)->role_societe]);
         $this->assertNull(TransmissionPropriete::withoutGlobalScopes()->where('destinataire_id', $administrateurId)->sole()->acceptee_le);
     }
 
     /**
      * Une société, son propriétaire et un administrateur qui remplit les
-     * conditions de la transmission (qualité prouvée la veille), à qui le
-     * propriétaire vient de la demander : leurs identifiants et le jeton
-     * du lien.
+     * conditions de la transmission, à qui le propriétaire vient de la
+     * demander : leurs identifiants et le jeton du lien.
      *
      * @return array{0: int, 1: int, 2: string}
      */
@@ -142,8 +142,7 @@ class TransmissionConcurrenceTest extends TestCase
         $magasin = $this->ouvrirUneSociete(['nom' => $nomDuMagasin]);
         $proprietaire = $this->proprietaireDe($magasin);
         $administrateur = $this->administrateurPretAReprendre($magasin, Str::slug($nomDuMagasin).'@example.test');
-        $administrateur->forceFill(['qualite_verifiee_le' => now()->subDay()])->save();
-        $jeton = $this->demanderLaTransmission($proprietaire, $administrateur->refresh());
+        $jeton = $this->demanderLaTransmission($proprietaire, $administrateur);
 
         return [(int) $proprietaire->id, (int) $administrateur->id, $jeton];
     }

@@ -7,6 +7,7 @@ use App\Domain\CaisseSecurisee\Enums\ChaineFiscale;
 use App\Domain\CaisseSecurisee\Models\EnregistrementFiscal;
 use App\Domain\Facturation\Casts\NumeroTvaNormalise;
 use App\Domain\Tenancy\Enums\FormeJuridique;
+use App\Domain\Tenancy\Enums\MotifCloture;
 use App\Domain\Tenancy\Enums\RegimeTva;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\RoleSociete;
@@ -42,11 +43,17 @@ use LogicException;
  * magasins, fermés compris, sous le verrou de tous leurs registres (JET
  * 270, voir JournaliseSesParametresDeConformite).
  *
+ * Un SIREN n'appartient qu'à une seule société dans tout le logiciel :
+ * celle dont l'inscription attend le code de son courrier recommandé, ou
+ * qui est validée (index unique partiel societes_siren_unique) ; une
+ * inscription close (voir estClose()) ou une société révoquée le libère.
+ *
  * Ses gardes, quel que soit l'écran ou la commande qui l'enregistre :
- * - jamais validée et refusée à la fois ;
- * - son SIREN ne change plus une fois validée (Q3), et son mois de fin
- *   d'exercice plus après la première vente de l'un de ses magasins (voir
- *   aVenduUneFois()) ;
+ * - jamais validée et close à la fois ;
+ * - son SIREN, celui que vérifie le courrier, ne change jamais (une
+ *   erreur se traite par la procédure exceptionnelle de l'éditeur), et son
+ *   mois de fin d'exercice plus après la première vente de l'un de ses
+ *   magasins (voir aVenduUneFois()) ;
  * - ce que sa forme juridique exclut ne s'enregistre pas (voir
  *   retirerCeQueSaFormeExclut()) ;
  * - elle ne s'efface jamais (voir forceDelete() et le déclencheur de la
@@ -115,9 +122,8 @@ class Societe extends Model implements HasName
         'mois_fin_exercice' => 'integer',
         'statut' => StatutSociete::class,
         'validee_le' => 'datetime',
-        'refusee_le' => 'datetime',
-        'reclamation_signalee_le' => 'datetime',
-        'reclamation_ouverte_le' => 'datetime',
+        'close_le' => 'datetime',
+        'motif_cloture' => MotifCloture::class,
     ];
 
     protected static function booted(): void
@@ -128,16 +134,16 @@ class Societe extends Model implements HasName
         });
 
         static::saving(function (Societe $societe): void {
-            if ($societe->validee_le !== null && $societe->refusee_le !== null) {
-                throw new LogicException('Une société n\'est jamais à la fois validée et refusée.');
+            if ($societe->validee_le !== null && $societe->close_le !== null) {
+                throw new LogicException('Une société n\'est jamais à la fois validée et close.');
             }
 
             $societe->retirerCeQueSaFormeExclut();
         });
 
         static::updating(function (Societe $societe): void {
-            if ($societe->isDirty('siren') && $societe->getOriginal('validee_le') !== null) {
-                throw new LogicException('Le SIREN d\'une société validée ne se corrige plus : une erreur se traite par la procédure exceptionnelle de l\'éditeur.');
+            if ($societe->isDirty('siren')) {
+                throw new LogicException('Le SIREN d\'une société ne change jamais : une erreur se traite par la procédure exceptionnelle de l\'éditeur.');
             }
 
             if ($societe->isDirty('mois_fin_exercice') && $societe->aVenduUneFois()) {
@@ -243,27 +249,56 @@ class Societe extends Model implements HasName
 
     /**
      * La société est-elle validée ? Posée par la seule validation de la
-     * société : avant elle, aucune opération commerciale réelle (voir
-     * Magasin::peutVendre()).
+     * société, à la saisie du code de son courrier recommandé (voir
+     * ValiderLaSocieteAction) : avant elle, aucune opération commerciale
+     * réelle (voir Magasin::peutVendre()).
      */
     public function estValidee(): bool
     {
         return $this->validee_le !== null;
     }
 
-    public function estRefusee(): bool
+    /**
+     * Son inscription est-elle close sans avoir été validée (voir
+     * CloreLInscriptionAction) ? Pour toujours : son SIREN est libéré.
+     */
+    public function estClose(): bool
     {
-        return $this->refusee_le !== null;
+        return $this->close_le !== null;
+    }
+
+    /**
+     * Son inscription attend-elle encore le code de son courrier : ni
+     * validée, ni close, ni révoquée ?
+     */
+    public function attendSonCode(): bool
+    {
+        return ! $this->estValidee() && ! $this->estClose() && $this->statut !== StatutSociete::Revoquee;
     }
 
     /**
      * Ses magasins sont-ils tous en lecture seule ? Suspendue, résiliée ou
-     * révoquée par l'éditeur, ou refusée pour toujours : consultation et
+     * révoquée par l'éditeur, ou son inscription close : consultation et
      * téléchargements seulement, et aucun réglage ne se modifie.
      */
     public function estEnLectureSeule(): bool
     {
-        return $this->statut->estEnLectureSeule() || $this->estRefusee();
+        return $this->statut->estEnLectureSeule() || $this->estClose();
+    }
+
+    /**
+     * Ce SIREN est-il déjà celui d'une société qui le garde : une
+     * inscription qui attend son code, ou une société validée, ni close ni
+     * révoquée ? La seule lecture d'une autre société permise à
+     * l'inscription : un booléen, jamais son identité ni son état.
+     */
+    public static function sirenPris(string $siren): bool
+    {
+        return static::query()
+            ->where('siren', $siren)
+            ->whereNull('close_le')
+            ->where('statut', '<>', StatutSociete::Revoquee->value)
+            ->exists();
     }
 
     /**
@@ -302,8 +337,8 @@ class Societe extends Model implements HasName
      * commerciale ? », qui n'a de sens que pour une autre forme ; le
      * capital, le capital variable et le libellé de forme d'un entrepreneur
      * individuel, qui n'en a pas. Appelé à chaque enregistrement : une
-     * forme changée par le propriétaire, par la correction du SIREN ou par
-     * le répertoire Sirene ne laisse rien de la précédente.
+     * forme changée par le propriétaire ou par le répertoire Sirene ne
+     * laisse rien de la précédente.
      */
     public function retirerCeQueSaFormeExclut(): void
     {
@@ -328,12 +363,11 @@ class Societe extends Model implements HasName
     }
 
     /**
-     * La dénomination que le répertoire Sirene donne de l'entreprise de son
-     * SIREN actuel, à son dernier contrôle concluant (voir
-     * ControleSirene::noterUnite()) ; null quand aucun ne la donne
-     * (diffusion partielle, INSEE injoignable depuis la correction du
-     * SIREN). Lue dans le registre des vérifications de la société active,
-     * et de cette société seulement.
+     * La dénomination que le répertoire Sirene donne de son entreprise, à
+     * son dernier contrôle concluant (voir ControleSirene::noterUnite()) ;
+     * null quand aucun ne la donne (diffusion partielle). Lue dans le
+     * registre des vérifications de la société active, et de cette société
+     * seulement.
      */
     public function denominationSirene(): ?string
     {
@@ -346,7 +380,7 @@ class Societe extends Model implements HasName
             ->first()
             ?->details;
 
-        return ($details['siren'] ?? null) === $this->siren ? ($details['denomination'] ?? null) : null;
+        return $details['denomination'] ?? null;
     }
 
     /**
@@ -421,7 +455,7 @@ class Societe extends Model implements HasName
 
     public static function parametresDeConformite(): array
     {
-        return ['regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'siren', 'numero_tva'];
+        return ['regime_tva', 'option_debits_tva', 'mois_fin_exercice', 'numero_tva'];
     }
 
     /**

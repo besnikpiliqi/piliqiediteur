@@ -55,12 +55,11 @@ use SensitiveParameter;
  * création d'un magasin : elle attend la validation de la société, qui la
  * verrouille FOR UPDATE, et la fait attendre, comme son refus ou toute
  * autre écriture de sa ligne), relue pour refuser, comme la policy, une
- * société passée en lecture seule (refusée, suspendue...) pendant que le
+ * société passée en lecture seule (close, suspendue...) pendant que le
  * répertoire répondait, puis la ligne du magasin, relue pour refuser un
  * magasin rouvert ou cédé entre-temps, ou dont le SIRET a changé depuis la
- * consultation du répertoire (son NIC, ou le SIREN de la société, corrigé
- * avant la validation pendant qu'il répondait, voir
- * ModifierEtablissementAction et CorrigerSirenAvantValidationAction) : le
+ * consultation du répertoire (son NIC corrigé avant la validation pendant
+ * qu'il répondait, voir ModifierEtablissementAction) : le
  * contrôle de l'ancien SIRET ne vaut jamais pour le nouveau, et la
  * réouverture recommencée contrôle celui-ci. Rien ne s'écrit avant ces
  * refus. Puis son statut repasse à actif et son motif de fermeture
@@ -123,8 +122,7 @@ class RouvrirMagasinAction
             self::verifierQuIlSeRouvre($magasin);
 
             $siret = (string) $magasin->siret;
-            $siren = (string) $societe->siren;
-            $consultation = $this->controleSirene->etablissement($siret, $siren);
+            $consultation = $this->controleSirene->etablissement($siret, (string) $societe->siren);
             $etablissement = $consultation['etablissement'];
 
             if ($consultation['resultat'] === ResultatVerification::Negative) {
@@ -136,7 +134,7 @@ class RouvrirMagasinAction
             }
 
             try {
-                return $contexte->runAs($magasin, fn (): Magasin => $this->operateur->pendant($auteur, fn (): Magasin => $this->registre->sousVerrou($magasin, fn (): Magasin => $this->rouvrir($auteur, $magasin, $siret, $siren, $consultation))));
+                return $contexte->runAs($magasin, fn (): Magasin => $this->operateur->pendant($auteur, fn (): Magasin => $this->registre->sousVerrou($magasin, fn (): Magasin => $this->rouvrir($auteur, $magasin, $siret, $consultation))));
             } catch (SiretDejaReserveException) {
                 throw new LogicException(SiretsDesMagasins::MESSAGE_SIRET_RESERVE);
             }
@@ -154,7 +152,7 @@ class RouvrirMagasinAction
      * @throws LogicException
      * @throws SiretDejaReserveException quand le SIRET d'un magasin fermé avant la validation a été réservé entre-temps par un autre
      */
-    private function rouvrir(User $auteur, Magasin $magasin, string $siret, string $siren, array $consultation): Magasin
+    private function rouvrir(User $auteur, Magasin $magasin, string $siret, array $consultation): Magasin
     {
         $societe = Societe::query()->whereKey($magasin->societe_id)->lock('for no key update')->firstOrFail();
 
@@ -165,7 +163,7 @@ class RouvrirMagasinAction
         $verrouille = Magasin::query()->whereKey($magasin->getKey())->lockForUpdate()->firstOrFail();
         self::verifierQuIlSeRouvre($verrouille);
 
-        if ($verrouille->siret !== $siret || $societe->siren !== $siren) {
+        if ($verrouille->siret !== $siret) {
             throw new LogicException(self::MESSAGE_CONTROLE_PERIME);
         }
 

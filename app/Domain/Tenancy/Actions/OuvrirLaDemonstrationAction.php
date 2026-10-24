@@ -37,7 +37,7 @@ use Illuminate\Support\Facades\DB;
  *
  * Déjà ouvert, il est rendu tel quel ; fermé après 30 jours sans opération
  * (voir app:fermer-demonstrations-inactives), il se rouvre, avec ses
- * données, tant que la société n'est ni validée ni refusée (nouvelle
+ * données, tant que la société n'est ni validée ni close (nouvelle
  * période, JET 270 sur son statut et JET 100). Une fois la société
  * validée, il ne se rouvre jamais.
  */

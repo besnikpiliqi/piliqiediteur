@@ -14,11 +14,12 @@ use Illuminate\Support\Facades\Schema;
  * (régime de TVA, option pour les débits, mois de fin d'exercice) ; chacun
  * de ses magasins est un de ses établissements, un SIRET.
  *
- * Plusieurs sociétés du même SIREN coexistent tant qu'aucune n'est validée
- * : seule une société validée le réserve (index unique partiel
- * societes_siren_valide_unique), et une société révoquée le libère. Une
- * société ne s'efface jamais : la base refuse sa suppression et le vidage
- * de la table.
+ * Un SIREN n'appartient qu'à une seule société dans tout le logiciel :
+ * une inscription qui attend le code de son courrier recommandé, ou une
+ * société validée, le garde (index unique partiel societes_siren_unique) ;
+ * une inscription close ou une société révoquée le libère. Une société ne
+ * s'efface jamais : la base refuse sa suppression et le vidage de la
+ * table.
  */
 return new class extends Migration
 {
@@ -68,26 +69,26 @@ return new class extends Migration
             // StatutSociete) : hors active, ses magasins sont en lecture
             // seule.
             $table->string('statut', 20)->default('active');
-            // Posée par la seule validation de la société ; jamais avec
-            // refusee_le.
+            // Posée par la seule validation de la société, à la saisie du
+            // code de son courrier recommandé (voir ValiderLaSocieteAction) ;
+            // jamais avec close_le.
             $table->timestamp('validee_le')->nullable();
-            // Refus définitif : lecture seule pour toujours.
-            $table->timestamp('refusee_le')->nullable();
-            // Réclamation d'un SIREN validé par une autre société : signalée
-            // une fois à l'éditeur quand elle devient possible, puis
-            // ouverte par lui.
-            $table->timestamp('reclamation_signalee_le')->nullable();
-            $table->timestamp('reclamation_ouverte_le')->nullable();
+            // L'inscription close sans avoir été validée, pour toujours, et
+            // pourquoi (voir MotifCloture) : aucun code saisi dans les 30
+            // jours de son dernier courrier, ou refus de l'éditeur. Lecture
+            // seule ; son SIREN est libéré.
+            $table->timestamp('close_le')->nullable();
+            $table->string('motif_cloture', 30)->nullable();
             $table->timestamps();
 
             $table->index('siren');
             $table->index('statut');
         });
 
-        // Un SIREN n'est réservé qu'à une société validée et non
-        // révoquée : les inscriptions en attente du même SIREN
-        // coexistent, isolées.
-        DB::statement("CREATE UNIQUE INDEX societes_siren_valide_unique ON societes (siren) WHERE validee_le IS NOT NULL AND statut <> 'revoquee'");
+        // Un SIREN n'appartient qu'à une seule société : celle qui attend
+        // son code ou qui est validée, tant qu'elle n'est ni close ni
+        // révoquée.
+        DB::statement("CREATE UNIQUE INDEX societes_siren_unique ON societes (siren) WHERE close_le IS NULL AND statut <> 'revoquee'");
 
         DeclencheursDeProtection::sansSuppression('societes');
     }

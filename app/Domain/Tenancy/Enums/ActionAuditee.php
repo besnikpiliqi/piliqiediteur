@@ -16,19 +16,15 @@ enum ActionAuditee: string implements HasLabel
     case SocieteInscrite = 'societe_inscrite';
     case IdentiteModifiee = 'identite_modifiee';
     case ParametresFiscauxModifies = 'parametres_fiscaux_modifies';
-    case SirenCorrigeAvantValidation = 'siren_corrige_avant_validation';
     case VerificationEnregistree = 'verification_enregistree';
     case PieceDeposee = 'piece_deposee';
     case PieceEffacee = 'piece_effacee';
     case PiecesConsultees = 'pieces_consultees';
-    case AccordDirigeantDemande = 'accord_dirigeant_demande';
-    case AccordDirigeantAnnule = 'accord_dirigeant_annule';
     case CodeEnvoye = 'code_envoye';
     case CodeSaisi = 'code_saisi';
     case CodeAnnule = 'code_annule';
     case SocieteValidee = 'societe_validee';
-    case SocieteRefusee = 'societe_refusee';
-    case ReclamationOuverte = 'reclamation_ouverte';
+    case InscriptionClose = 'inscription_close';
     case MagasinCree = 'magasin_cree';
     case MagasinModifie = 'magasin_modifie';
     case SiretChange = 'siret_change';
@@ -57,6 +53,7 @@ enum ActionAuditee: string implements HasLabel
     case TransmissionDemandee = 'transmission_demandee';
     case TransmissionAnnulee = 'transmission_annulee';
     case ProprieteTransferee = 'propriete_transferee';
+    case ProprieteReprise = 'propriete_reprise';
     case AdresseDeConnexionChangee = 'adresse_de_connexion_changee';
     case VenteSansStock = 'vente_sans_stock';
     case AvoirFournisseurEmis = 'avoir_fournisseur_emis';
@@ -75,19 +72,15 @@ enum ActionAuditee: string implements HasLabel
             self::SocieteInscrite => 'Société inscrite',
             self::IdentiteModifiee => 'Identité de la société modifiée',
             self::ParametresFiscauxModifies => 'Paramètres fiscaux modifiés',
-            self::SirenCorrigeAvantValidation => 'SIREN corrigé avant la validation',
             self::VerificationEnregistree => 'Vérification enregistrée',
             self::PieceDeposee => 'Pièce déposée pour l\'éditeur',
             self::PieceEffacee => 'Pièce effacée',
             self::PiecesConsultees => 'Pièces consultées par l\'éditeur',
-            self::AccordDirigeantDemande => 'Accord d\'un dirigeant demandé',
-            self::AccordDirigeantAnnule => 'Demande d\'accord d\'un dirigeant annulée',
             self::CodeEnvoye => 'Code de confirmation envoyé',
             self::CodeSaisi => 'Code de confirmation saisi',
             self::CodeAnnule => 'Code de confirmation annulé',
             self::SocieteValidee => 'Société validée',
-            self::SocieteRefusee => 'Société refusée',
-            self::ReclamationOuverte => 'Réclamation ouverte',
+            self::InscriptionClose => 'Inscription close',
             self::MagasinCree => 'Magasin créé',
             self::MagasinModifie => 'Magasin modifié',
             self::SiretChange => 'SIRET du magasin changé',
@@ -116,6 +109,7 @@ enum ActionAuditee: string implements HasLabel
             self::TransmissionDemandee => 'Transmission de la propriété demandée',
             self::TransmissionAnnulee => 'Transmission de la propriété annulée',
             self::ProprieteTransferee => 'Propriété transférée',
+            self::ProprieteReprise => 'Propriété reprise par le code du courrier',
             self::AdresseDeConnexionChangee => 'Adresse de connexion changée',
             self::VenteSansStock => 'Vente au-delà du stock',
             self::AvoirFournisseurEmis => 'Avoir fournisseur émis',
@@ -126,12 +120,12 @@ enum ActionAuditee: string implements HasLabel
     public function categorie(): CategorieAudit
     {
         return match ($this) {
-            self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees, self::AccordDirigeantDemande, self::AccordDirigeantAnnule,
-            self::CodeEnvoye, self::CodeSaisi, self::CodeAnnule, self::SocieteValidee, self::SocieteRefusee, self::ReclamationOuverte => CategorieAudit::Verification,
+            self::VerificationEnregistree, self::PieceDeposee, self::PieceEffacee, self::PiecesConsultees,
+            self::CodeEnvoye, self::CodeSaisi, self::CodeAnnule, self::SocieteValidee, self::InscriptionClose => CategorieAudit::Verification,
             self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::ExpertComptableCree, self::DroitsModifies,
             self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
             self::CompteReintegre, self::AccesRedonne, self::PremiereConnexion, self::IdentifiantConsulte, self::TransmissionDemandee,
-            self::TransmissionAnnulee, self::ProprieteTransferee, self::AdresseDeConnexionChangee => CategorieAudit::Acces,
+            self::TransmissionAnnulee, self::ProprieteTransferee, self::ProprieteReprise, self::AdresseDeConnexionChangee => CategorieAudit::Acces,
             default => CategorieAudit::Operations,
         };
     }
@@ -149,18 +143,18 @@ enum ActionAuditee: string implements HasLabel
             self::SocieteInscrite => ['siren', 'raison_sociale', 'forme_juridique', 'proprietaire'],
             self::IdentiteModifiee => Societe::CHAMPS_DE_L_IDENTITE,
             self::ParametresFiscauxModifies => ['regime_tva', 'option_debits_tva', 'mois_fin_exercice'],
-            self::SirenCorrigeAvantValidation => ['siren', 'sirets', ...Societe::CHAMPS_DE_L_IDENTITE],
-            self::VerificationEnregistree => ['type', 'resultat', 'fournisseur', 'siret', 'signal', 'beneficiaire'],
+            self::VerificationEnregistree => ['type', 'resultat', 'fournisseur', 'siret'],
             self::PieceDeposee => ['type_piece', 'empreinte'],
             self::PieceEffacee => ['type_piece', 'motif'],
             self::PiecesConsultees => ['pieces'],
-            self::AccordDirigeantDemande => ['dirigeant', 'role'],
-            self::AccordDirigeantAnnule => ['dirigeant', 'raison'],
-            self::CodeEnvoye => ['motif', 'canal', 'source_adresse', 'reference_envoi'],
+            self::CodeEnvoye => ['motif', 'source_adresse', 'reference_envoi'],
             self::CodeSaisi => ['motif', 'resultat', 'tentatives'],
             self::CodeAnnule => ['motif', 'raison'],
-            self::SocieteValidee => ['preuve', 'beneficiaire', 'personne_verifiee', 'qualite_du_titulaire', 'sirets'],
-            self::SocieteRefusee, self::ReclamationOuverte, self::DemonstrationOuverte, self::DemonstrationFermee => ['motif'],
+            // La preuve qui valide la société (voir PreuveDeValidation), le
+            // propriétaire qui l'a donnée et les SIRET de ses magasins mis
+            // en activité.
+            self::SocieteValidee => ['preuve', 'proprietaire', 'sirets'],
+            self::InscriptionClose, self::DemonstrationOuverte, self::DemonstrationFermee => ['motif'],
             self::MagasinCree, self::MagasinModifie => ['nom', 'code_magasin', 'siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'pays', 'etablissement_verifie'],
             self::SiretChange => ['siret', 'adresse', 'complement_adresse', 'code_postal', 'ville', 'etablissement_verifie'],
             // Pour une cession, l'indication d'établissement principal
@@ -178,7 +172,7 @@ enum ActionAuditee: string implements HasLabel
             // de magasin (voir JournalDesDroits).
             self::MembreCree, self::AdministrateurCree, self::AdministrateurModifie, self::RoleDeSocieteChange, self::ExpertComptableCree, self::DroitsModifies,
             self::ResponsableNomme, self::ResponsableRetire, self::NominationAnnulee, self::CompteSuspendu, self::CompteReactive, self::CompteRetire,
-            self::CompteReintegre, self::ProprieteTransferee => ['droits'],
+            self::CompteReintegre, self::ProprieteTransferee, self::ProprieteReprise => ['droits'],
             // Le compte (son identifiant technique et son nom au moment de
             // l'opération), jamais son identifiant de connexion, qui serait
             // son mot de passe tant qu'il ne l'a pas changé ; pour un accès

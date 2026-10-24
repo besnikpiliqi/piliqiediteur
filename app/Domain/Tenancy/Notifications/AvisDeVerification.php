@@ -11,8 +11,8 @@ use Illuminate\Notifications\Notification;
 /**
  * Une notification en base, dans la cloche de l'espace d'administration
  * de la société (voir SocietePanelProvider), sur la vérification de la
- * société : validée, refusée, un écart relevé par une revérification au
- * répertoire Sirene, une décision de l'éditeur. Elle porte la société
+ * société : validée, close, un courrier revenu, un écart relevé par une
+ * revérification au répertoire Sirene. Elle porte la société
  * (`societe_id`) et mène à la page de la vérification.
  */
 class AvisDeVerification extends Notification

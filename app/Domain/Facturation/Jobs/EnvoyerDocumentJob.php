@@ -53,7 +53,7 @@ use Throwable;
  * écrit pour une version que le client ne recevrait pas. Un magasin qui
  * ne peut plus vendre au moment de l'envoi n'écrit pas à ses clients
  * (voir Magasin::peutEcrireAuxClients()) : suspendu ou fermé entre-temps,
- * ou sa société suspendue, résiliée ou refusée ; le magasin de
+ * ou sa société suspendue, résiliée ou close ; le magasin de
  * démonstration, jamais. Dans ces cas, l'envoi échoue sans partir, et le
  * magasin sait pourquoi.
  *

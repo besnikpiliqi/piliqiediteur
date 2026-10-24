@@ -107,7 +107,7 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     {
         return [
             'email_verified_at' => 'datetime',
-            'qualite_verifiee_le' => 'datetime',
+            'code_du_courrier_saisi_le' => 'datetime',
             'password' => 'hashed',
             'role_societe' => RoleSociete::class,
             'statut' => StatutCompte::class,
@@ -383,13 +383,18 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     }
 
     /**
-     * Sa qualité de représentant légal ou de mandataire de sa société
-     * est-elle prouvée, pour lui-même (voir ValiderLaSocieteAction) ? Elle
-     * ne passe jamais d'un compte à un autre.
+     * Signe-t-il dans l'application le volet 2 des attestations de
+     * l'éditeur (étape 3) ? Seulement le propriétaire qui a validé la
+     * société en saisissant le code du courrier recommandé envoyé au nom de
+     * son représentant légal (voir ValiderLaSocieteAction) ; un
+     * propriétaire devenu propriétaire par une transmission de la
+     * propriété signe à la main, même s'il l'avait été avant, sa saisie du
+     * code s'effaçant à la transmission (voir
+     * AccepterLaTransmissionDeLaProprieteAction).
      */
-    public function aSaQualiteVerifiee(): bool
+    public function signeLesAttestationsDansLApplication(): bool
     {
-        return $this->qualite_verifiee_le !== null;
+        return $this->estProprietaire() && $this->code_du_courrier_saisi_le !== null;
     }
 
     /**

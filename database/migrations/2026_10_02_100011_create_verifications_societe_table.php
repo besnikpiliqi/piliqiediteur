@@ -7,10 +7,10 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Le registre des vérifications d'une société (voir VerificationSociete) :
- * chaque contrôle (répertoire Sirene, registre national des entreprises,
- * identité, mandat d'un dirigeant, code d'un courrier), chaque décision de
- * l'éditeur et chaque signal de risque, concluant, négatif, impossible, en
- * attente ou à examiner, avec ce qu'il a lu (liste blanche par type, voir
+ * chaque contrôle du répertoire Sirene (l'entreprise, l'établissement d'un
+ * magasin), chaque code de courrier recommandé saisi et chaque décision de
+ * l'éditeur sur des pièces, concluant, négatif ou impossible, avec ce
+ * qu'il a lu (liste blanche par type, voir
  * TypeVerification::detailsRetenus()). Une ligne ne se modifie jamais et
  * ne s'efface qu'une fois sa durée de conservation fixée et passée
  * (expire_le, nulle jusqu'à la fin de la relation) ; la base refuse tout
@@ -30,7 +30,6 @@ return new class extends Migration
             $table->string('resultat', 20);
             $table->string('fournisseur', 30)->nullable();
             $table->string('reference', 100)->nullable();
-            $table->string('signal', 40)->nullable();
             $table->json('details')->nullable();
             $table->foreignId('auteur_id')->nullable()->constrained('users')->restrictOnDelete();
             // Le nom de cette personne au moment de l'opération (voir
@@ -38,22 +37,11 @@ return new class extends Migration
             // son compte.
             $table->string('auteur_nom')->nullable();
             $table->json('operateur')->nullable();
-            // La personne dont la ligne prouve l'identité ou la qualité de
-            // représentant (voir EvaluateurDeVerification) ; nulle pour un
-            // contrôle de l'entreprise, ou l'identité d'un dirigeant sans
-            // compte qui approuve un mandat.
-            $table->foreignId('beneficiaire_id')->nullable()->constrained('users')->restrictOnDelete();
-            // Le nom de cette personne au moment de l'opération (voir
-            // FigeLeNomDeSesAuteurs) : l'historique ne le relit jamais sur
-            // son compte.
-            $table->string('beneficiaire_nom')->nullable();
             $table->dateTime('expire_le')->nullable();
             $table->timestamp('created_at')->useCurrent();
 
             $table->foreign(['societe_id', 'magasin_id'])->references(['societe_id', 'id'])->on('magasins')->restrictOnDelete();
             $table->index(['societe_id', 'type']);
-            // Le rappel d'un prestataire retrouve sa ligne par sa référence.
-            $table->index(['fournisseur', 'reference']);
         });
 
         DeclencheursDeProtection::effacementApresExpiration('verifications_societe');

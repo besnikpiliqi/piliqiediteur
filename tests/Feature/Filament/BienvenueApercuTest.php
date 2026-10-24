@@ -94,14 +94,14 @@ class BienvenueApercuTest extends TestCase
 
     public function test_le_magasin_de_demonstration_le_dit(): void
     {
-        $societe = $this->inscrireUneSociete(nomDuProprietaire: 'Jeanne Dupont');
+        $societe = $this->inscrireUneSociete();
         $proprietaire = $societe->proprietaire()->firstOrFail();
         $demonstration = app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe);
         $this->dansLeMagasin($demonstration, $proprietaire);
 
         $bienvenue = Livewire::test(BienvenueApercu::class);
 
-        $bienvenue->assertSeeInOrder(['Bonjour Jeanne Dupont', "Propriétaire de {$societe->raison_sociale} (démonstration)"]);
+        $bienvenue->assertSeeInOrder(['Bonjour Jeanne DUPONT', "Propriétaire de {$societe->raison_sociale} (démonstration)"]);
     }
 
     /**

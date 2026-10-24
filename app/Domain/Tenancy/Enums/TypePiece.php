@@ -5,17 +5,16 @@ namespace App\Domain\Tenancy\Enums;
 use Filament\Support\Contracts\HasLabel;
 
 /**
- * Une pièce déposée pour l'examen de la qualité de représentant par
- * l'éditeur (voir PieceVerification) : extrait Kbis ou extrait du registre
- * national des entreprises de moins de trois mois, pièce d'identité,
- * mandat, ou autre justificatif.
+ * Une pièce déposée pour le traitement à la main, par l'éditeur, d'un
+ * courrier recommandé non reçu (voir PieceVerification) : extrait Kbis ou
+ * extrait du registre national des entreprises de moins de trois mois,
+ * pièce d'identité du représentant légal, ou autre justificatif.
  */
 enum TypePiece: string implements HasLabel
 {
     case Kbis = 'kbis';
     case ExtraitRne = 'extrait_rne';
     case Identite = 'identite';
-    case Mandat = 'mandat';
     case Autre = 'autre';
 
     public function getLabel(): string
@@ -23,8 +22,7 @@ enum TypePiece: string implements HasLabel
         return match ($this) {
             self::Kbis => 'Extrait Kbis de moins de trois mois',
             self::ExtraitRne => 'Extrait du registre national des entreprises de moins de trois mois',
-            self::Identite => 'Pièce d\'identité',
-            self::Mandat => 'Mandat signé par un dirigeant',
+            self::Identite => 'Pièce d\'identité du représentant légal',
             self::Autre => 'Autre justificatif',
         };
     }

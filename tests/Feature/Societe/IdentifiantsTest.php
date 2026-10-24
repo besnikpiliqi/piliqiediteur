@@ -84,7 +84,7 @@ class IdentifiantsTest extends TestCase
     {
         $source = $this->sourceQuiRend([48210937, 59321048]);
 
-        $societe = app(CreerSocieteAction::class)->handle(['siren' => SocieteFactory::sirenFictif()], ['name' => 'Jeanne Dupont', 'email' => 'jeanne@example.test', 'password' => '48210937']);
+        $societe = app(CreerSocieteAction::class)->handle(SocieteFactory::sirenFictif(), 'jeanne@example.test', '48210937');
 
         $proprietaire = $societe->proprietaire()->firstOrFail();
         $this->assertSame('59321048', $proprietaire->identifiantDeConnexion());

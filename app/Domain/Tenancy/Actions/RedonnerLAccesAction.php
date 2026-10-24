@@ -41,9 +41,10 @@ use SensitiveParameter;
  * identifiant ni mot de passe ; le propriétaire est prévenu, dans sa cloche
  * et par e-mail, de chaque accès redonné par un autre, puis du premier mot
  * de passe que la personne choisit ensuite (voir
- * ChangerSonMotDePasseAction). Un accès redonné à un administrateur fait
- * tomber, pour la transmission de la propriété, la qualité de représentant
- * qu'il avait prouvée avant (voir AccepterLaTransmissionDeLaProprieteAction).
+ * ChangerSonMotDePasseAction). Un accès redonné en l'absence d'un
+ * administrateur, son mot de passe redevenu son identifiant, lui interdit
+ * de recevoir la propriété tant qu'il n'a pas choisi le sien (voir
+ * DemanderLaTransmissionDeLaProprieteAction::exigerLesConditions()).
  */
 class RedonnerLAccesAction
 {

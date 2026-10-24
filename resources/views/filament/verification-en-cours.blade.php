@@ -17,10 +17,10 @@
             Ses ventes, ses numéros et ses clôtures lui sont propres : rien n'en passe à vos magasins réels.
         </x-slot>
     </x-filament::section>
-@elseif ($societe !== null && ! $societe->estValidee() && ! $societe->estRefusee())
+@elseif ($societe !== null && $societe->attendSonCode())
     <x-filament::section icon="heroicon-o-shield-exclamation" icon-color="warning" compact>
         <x-slot name="heading">
-            Société en cours de vérification : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés.
+            Société en attente du code de son courrier recommandé : la vente, les e-mails aux clients, les PDF et les transmissions sont désactivés.
         </x-slot>
 
         <x-slot name="description">

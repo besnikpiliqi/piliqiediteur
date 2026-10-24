@@ -4,8 +4,6 @@ namespace App\Domain\Tenancy\Services;
 
 use App\Domain\Authorization\OperateurCourant;
 use App\Domain\CaisseSecurisee\Services\RegistreFiscal;
-use App\Domain\Tenancy\Actions\RefuserLaSocieteAction;
-use App\Domain\Tenancy\Actions\ValiderLaSocieteAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\ResultatVerification;
 use App\Domain\Tenancy\Enums\StatutMagasin;
@@ -22,39 +20,32 @@ use Illuminate\Support\Facades\Log;
  * (voir ControleSirene), sous la société, pour app:reverifier-sirene et
  * pour le bouton « Revérifier » de la page de la vérification :
  *
- * - les contrôles restés impossibles, l'INSEE n'ayant pas répondu.
- *   L'entreprise d'une société pas encore validée, inscrite ou dont le
- *   SIREN a été corrigé pendant la panne, et dont l'identité n'a donc
- *   jamais été préremplie : le contrôle concluant la complète depuis le
- *   répertoire, chaque champ encore vide seulement (voir
- *   ControleSirene::identiteDepuisSirene()), et une entreprise cessée fait
- *   refuser la société pour toujours (lecture seule définitive), comme un
- *   refus de l'éditeur (voir RefuserLaSocieteAction : pièces effacées,
- *   codes annulés, démonstration fermée, propriétaire prévenu).
- *   L'établissement d'un magasin réel actif « à vérifier » : il devient
- *   vérifié, et peut vendre, quand le répertoire le confirme, son adresse
- *   reprise de Sirene s'il n'avait jamais été confirmé sous ce SIRET (créé
- *   ou corrigé pendant la panne) ; rouvert pendant une panne après une
- *   confirmation, il garde l'adresse que la société a enregistrée (voir
+ * - les contrôles d'établissement restés impossibles, l'INSEE n'ayant pas
+ *   répondu : l'établissement d'un magasin réel actif « à vérifier »
+ *   devient vérifié, et peut vendre (une fois la société validée), quand
+ *   le répertoire le confirme, son adresse reprise de Sirene s'il n'avait
+ *   jamais été confirmé sous ce SIRET (créé ou corrigé pendant la panne) ;
+ *   rouvert pendant une panne après une confirmation, il garde l'adresse
+ *   que la société a enregistrée (voir
  *   ControleSirene::etablissementDejaConfirme()). Un contrôle négatif
- *   s'inscrit, et le magasin reste à vérifier. Une société que ces
- *   contrôles rendent validable est validée (voir ValiderLaSocieteAction) ;
+ *   s'inscrit, et le magasin reste à vérifier. L'entreprise d'une
+ *   inscription n'a pas de contrôle à reprendre : l'inscription n'existe
+ *   qu'une fois son entreprise confirmée active (voir CreerSocieteAction) ;
  * - avec $toutes, une société validée et ses magasins réels actifs. Rien
  *   de ce que la société a enregistré ne change : son identité reste celle
- *   qu'elle a saisie, même vidée (un n° de TVA retiré ne revient pas), et
- *   l'établissement reste vérifié ; seule la catégorie juridique lue au
- *   répertoire suit sa dernière lecture. Un écart (entreprise cessée,
- *   catégorie juridique différente, établissement fermé ou inconnu,
- *   adresse d'un magasin qui n'est plus celle de son établissement)
- *   s'inscrit au registre des vérifications et se signale au propriétaire
- *   et à l'éditeur, sans rien bloquer : ni les ventes ni les paiements ne
- *   s'arrêtent ; l'éditeur décide (section 7.10 de la conception).
+ *   qu'elle a saisie, et l'établissement reste vérifié ; seule la
+ *   catégorie juridique lue au répertoire suit sa dernière lecture. Un
+ *   écart (entreprise cessée, catégorie juridique différente,
+ *   établissement fermé ou inconnu, adresse d'un magasin qui n'est plus
+ *   celle de son établissement) s'inscrit au registre des vérifications et
+ *   se signale au propriétaire et à l'éditeur, sans rien bloquer : ni les
+ *   ventes ni les paiements ne s'arrêtent ; l'éditeur décide.
  *
- * Ce qui s'écrit sur la société (identité complétée, catégorie lue, refus)
- * s'inscrit à son journal d'audit, le système pour auteur, avec les
- * anciennes et les nouvelles valeurs ; les journaux des événements de ses
- * magasins l'inscrivent aussi au nom du système (voir OperateurCourant),
- * même quand le propriétaire l'a demandé par le bouton « Revérifier ».
+ * Ce qui s'écrit sur la société (catégorie lue) s'inscrit à son journal
+ * d'audit, le système pour auteur, avec les anciennes et les nouvelles
+ * valeurs ; les journaux des événements de ses magasins l'inscrivent aussi
+ * au nom du système (voir OperateurCourant), même quand le propriétaire
+ * l'a demandé par le bouton « Revérifier ».
  */
 class ReverificationSirene
 {
@@ -63,8 +54,6 @@ class ReverificationSirene
         private readonly RegistreFiscal $registre,
         private readonly JournalAudit $journalAudit,
         private readonly AlerteEditeur $alerteEditeur,
-        private readonly ValiderLaSocieteAction $validerLaSociete,
-        private readonly RefuserLaSocieteAction $refuserLaSociete,
         private readonly OperateurCourant $operateur,
     ) {}
 
@@ -74,7 +63,7 @@ class ReverificationSirene
             app(TenantContext::class)->runAsSociete($societe, function () use ($societe, $toutes): void {
                 $toutes = $toutes && $societe->estValidee();
 
-                if ($toutes || self::dernierResultat($societe, null) === ResultatVerification::Indisponible) {
+                if ($toutes) {
                     $this->reverifierLEntreprise($societe);
                 }
 
@@ -87,78 +76,50 @@ class ReverificationSirene
                         }
                     });
             });
-
-            $societe = $societe->fresh();
-
-            if (! $societe->estValidee() && ! $societe->estRefusee()) {
-                $this->validerLaSociete->siPossible($societe);
-            }
         });
     }
 
     /**
-     * Le contrôle de l'entreprise, sous les verrous des registres de ses
-     * magasins, que le n° de TVA d'une identité complétée s'inscrit à leurs
-     * journaux des événements. Seule une société ni validée ni refusée voit
-     * son identité complétée, ou se fait refuser ; une société validée n'en
-     * reçoit que la catégorie juridique lue, et ses écarts se signalent.
+     * Le contrôle de l'entreprise d'une société validée, sous les verrous
+     * des registres de ses magasins, que la catégorie juridique lue
+     * s'inscrive à leurs journaux des événements : seule cette catégorie
+     * suit le répertoire, et ses écarts se signalent.
      */
     private function reverifierLEntreprise(Societe $societe): void
     {
         $consultation = $this->controle->unite((string) $societe->siren);
         $unite = $consultation['unite'];
-        $identite = $consultation['resultat'] === ResultatVerification::Concluante && $unite !== null ? $this->controle->identiteDepuisSirene($unite) : null;
+        $categorieLue = $consultation['resultat'] === ResultatVerification::Concluante && $unite !== null ? $unite->categorieJuridique : null;
 
-        [$categorieLueAvant, $refusee] = $this->registre->sousVerrouDesMagasins($societe->magasinsReels()->orderBy('id')->get(), function () use ($societe, $consultation, $unite, $identite): array {
+        $categorieLueAvant = $this->registre->sousVerrouDesMagasins($societe->magasinsReels()->orderBy('id')->get(), function () use ($societe, $consultation, $unite, $categorieLue): ?string {
             $this->controle->noterUnite($societe, $consultation);
             $enregistree = Societe::query()->whereKey($societe->getKey())->lockForUpdate()->firstOrFail();
             $avant = $enregistree->identiteAuditee();
-            $aCompleter = ! $enregistree->estValidee() && ! $enregistree->estRefusee();
 
-            if ($identite !== null) {
-                $enregistree->forceFill([
-                    ...($aCompleter ? array_filter($identite, fn (mixed $valeur, string $champ): bool => $valeur !== null && $enregistree->getAttribute($champ) === null, ARRAY_FILTER_USE_BOTH) : []),
-                    'categorie_juridique_insee' => $identite['categorie_juridique_insee'],
-                ])->save();
-
+            if ($consultation['resultat'] === ResultatVerification::Concluante && $unite !== null) {
+                $enregistree->forceFill(['categorie_juridique_insee' => $categorieLue])->save();
                 $this->journalAudit->inscrireLesChangements(ActionAuditee::IdentiteModifiee, null, null, $avant, $enregistree->identiteAuditee(), $enregistree);
             }
 
-            $refusee = $aCompleter && $unite !== null && ! $unite->active;
-
-            if ($refusee) {
-                $this->refuserLaSociete->refuserSousVerrou($enregistree, $consultation['motif']);
-            }
-
-            return [$avant['categorie_juridique_insee'], $refusee];
+            return $avant['categorie_juridique_insee'];
         });
-
-        if ($refusee) {
-            $this->refuserLaSociete->apresLeRefus($societe->fresh(), $consultation['motif']);
-
-            return;
-        }
-
-        if (! $societe->estValidee()) {
-            return;
-        }
 
         if ($consultation['resultat'] === ResultatVerification::Negative) {
             Log::warning('Revérification Sirene : écart sur une société validée.', ['societe_id' => $societe->getKey(), 'motif' => $consultation['motif']]);
             $this->signalerLEcart($societe, $consultation['motif'], negative: true);
         }
 
-        if ($identite !== null && $categorieLueAvant !== null && $categorieLueAvant !== $identite['categorie_juridique_insee']) {
-            Log::warning('Revérification Sirene : catégorie juridique différente pour une société validée.', ['societe_id' => $societe->getKey(), 'avant' => $categorieLueAvant, 'apres' => $identite['categorie_juridique_insee']]);
-            $this->signalerLEcart($societe, "Catégorie juridique lue avant : {$categorieLueAvant} ; lue aujourd'hui : {$identite['categorie_juridique_insee']}. La forme choisie par la société ne change pas.");
+        if ($categorieLue !== null && $categorieLueAvant !== null && $categorieLueAvant !== $categorieLue) {
+            Log::warning('Revérification Sirene : catégorie juridique différente pour une société validée.', ['societe_id' => $societe->getKey(), 'avant' => $categorieLueAvant, 'apres' => $categorieLue]);
+            $this->signalerLEcart($societe, "Catégorie juridique lue avant : {$categorieLueAvant} ; lue aujourd'hui : {$categorieLue}. La forme choisie par la société ne change pas.");
         }
     }
 
     /**
      * Le contrôle de l'établissement du magasin, consulté sur son SIRET du
      * moment, puis appliqué à la ligne du magasin relue sous verrou : si
-     * son SIRET a changé pendant la consultation (NIC ou SIREN corrigé
-     * avant la validation, déménagement après), ce contrôle ne vaut pas
+     * son SIRET a changé pendant la consultation (NIC corrigé avant la
+     * validation, déménagement après), ce contrôle ne vaut pas
      * pour lui, et rien ne s'écrit ni ne se signale ; son nouveau SIRET a
      * son propre contrôle, inscrit par le geste qui l'a changé, que la
      * reprise suivante reprend s'il est resté impossible et que la
@@ -198,7 +159,7 @@ class ReverificationSirene
 
         $ecart = match (true) {
             $consultation['resultat'] === ResultatVerification::Negative => $consultation['motif'],
-            $consultation['resultat'] === ResultatVerification::Concluante && $etablissement !== null && SignauxDeRisque::adresseDiffere($verifie, ControleSirene::adresseEnUneLigne($etablissement)) => 'L\'adresse du magasin n\'est plus celle que le répertoire donne de son établissement : '.ControleSirene::adresseEnUneLigne($etablissement).'.',
+            $consultation['resultat'] === ResultatVerification::Concluante && $etablissement !== null && ControleSirene::adresseDiffere($verifie, $etablissement) => 'L\'adresse du magasin n\'est plus celle que le répertoire donne de son établissement : '.ControleSirene::adresseEnUneLigne($etablissement).'.',
             default => null,
         };
 

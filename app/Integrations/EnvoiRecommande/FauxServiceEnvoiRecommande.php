@@ -5,102 +5,103 @@ namespace App\Integrations\EnvoiRecommande;
 use App\Integrations\EnvoiRecommande\Contracts\ServiceEnvoiRecommande;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
  * Le prestataire d'envoi factice du développement et des tests, sans
- * aucune requête (voir VerificationServiceProvider) : chaque pli est noté,
- * déposé, avec son corps (voir envois()), et reste déposé tant qu'un test
- * ne le remet pas ou ne le retourne pas (voir remettre(), retourner()).
+ * aucune requête (voir VerificationServiceProvider) : chaque courrier est
+ * noté, déposé, avec son PDF (voir envois()), et reste déposé tant qu'un
+ * test ne le remet pas ou ne le retourne pas (voir remettre(),
+ * retourner()).
  *
- * Les plis se gardent dans le cache de l'application, en tableaux simples
- * (le cache ne désérialise aucun objet), comme un prestataire les
- * garderait chez lui : le suivi et la saisie du code, qui
- * arrivent dans d'autres requêtes (d'autres processus en développement),
- * les retrouvent. En développement (environnement local seulement), chaque
- * pli s'écrit aussi au journal de l'application, code compris, pour qu'on
- * puisse le saisir : ce prestataire ne sert jamais en production (voir
+ * Les courriers se gardent dans le cache de l'application, en tableaux
+ * simples (le cache ne désérialise aucun objet), comme un prestataire les
+ * garderait chez lui : le suivi, qui arrive dans d'autres requêtes
+ * (d'autres processus en développement), les retrouve. En développement
+ * (environnement local seulement), chaque courrier s'écrit aussi en PDF
+ * sur le disque privé, dans DOSSIER_DES_COURRIERS, pour qu'on puisse le
+ * lire et saisir son code ; le journal de l'application n'en note que le
+ * chemin : ce prestataire ne sert jamais en production (voir
  * VerificationServiceProvider::boot()). Le cache des tests ne vit que le
  * temps d'un test.
  */
 class FauxServiceEnvoiRecommande implements ServiceEnvoiRecommande
 {
-    public const COURRIER = 'courrier';
-
-    public const LRE = 'lre';
-
-    public const LETTRE_SIMPLE = 'lettre_simple';
-
     /**
-     * La clé du cache où se gardent les plis.
+     * La clé du cache où se gardent les courriers.
      */
     public const CLE_DU_CACHE = 'faux_service_envoi_recommande.envois';
 
+    /**
+     * Le dossier du disque privé où s'écrivent les courriers en
+     * développement.
+     */
+    public const DOSSIER_DES_COURRIERS = 'courriers-factices';
+
     private bool $injoignable = false;
 
-    public function envoyerCourrier(AdressePostale $destinataire, string $objet, array $corps): string
+    public function envoyerCourrier(DestinataireDuCourrier $destinataire, string $pdf, bool $remiseEnPersonne): string
     {
-        return $this->noter(self::COURRIER, $destinataire, $objet, $corps);
-    }
+        if ($this->injoignable) {
+            throw new EnvoiRecommandeIndisponibleException;
+        }
 
-    public function envoyerLre(string $nomDuDestinataire, string $email, string $objet, array $corps): string
-    {
-        return $this->noter(self::LRE, ['nom' => $nomDuDestinataire, 'email' => $email], $objet, $corps);
-    }
+        $reference = 'faux-'.Str::lower(Str::random(16));
+        Cache::forever(self::CLE_DU_CACHE, [...Cache::get(self::CLE_DU_CACHE, []), $reference => [
+            'destinataire' => $destinataire->enTableau(),
+            'pdf' => base64_encode($pdf),
+            'remise_en_personne' => $remiseEnPersonne,
+            'suivi' => ['statut' => SuiviDEnvoi::DEPOSE],
+        ]]);
 
-    public function envoyerLettreSimple(AdressePostale $destinataire, string $objet, array $corps): string
-    {
-        return $this->noter(self::LETTRE_SIMPLE, $destinataire, $objet, $corps);
+        if (app()->isLocal()) {
+            $chemin = self::DOSSIER_DES_COURRIERS."/{$reference}.pdf";
+            Storage::disk('local')->put($chemin, $pdf);
+            Log::info("Courrier recommandé factice {$reference} : ".Storage::disk('local')->path($chemin), ['destinataire' => $destinataire->lignes()]);
+        }
+
+        return $reference;
     }
 
     public function suivre(string $reference): SuiviDEnvoi
     {
-        $this->repondre();
+        if ($this->injoignable) {
+            throw new EnvoiRecommandeIndisponibleException;
+        }
 
-        return $this->envois()[$reference]['suivi'] ?? new SuiviDEnvoi(SuiviDEnvoi::DEPOSE);
+        return SuiviDEnvoi::depuisLeRappel(Cache::get(self::CLE_DU_CACHE, [])[$reference]['suivi'] ?? []);
     }
 
     /**
-     * Les plis envoyés, par référence, dans l'ordre.
+     * Les courriers envoyés, par référence, dans l'ordre.
      *
-     * @return array<string, array{genre: string, destinataire: AdressePostale|array{nom: string, email: string}, objet: string, corps: list<string>, suivi: SuiviDEnvoi}>
+     * @return array<string, array{destinataire: DestinataireDuCourrier, pdf: string, remise_en_personne: bool, suivi: SuiviDEnvoi}>
      */
     public function envois(): array
     {
         return array_map(fn (array $envoi): array => [
-            'genre' => $envoi['genre'],
-            'destinataire' => $envoi['adresse'] === null ? $envoi['destinataire'] : new AdressePostale(...$envoi['adresse']),
-            'objet' => $envoi['objet'],
-            'corps' => $envoi['corps'],
+            'destinataire' => DestinataireDuCourrier::depuisTableau($envoi['destinataire']),
+            'pdf' => (string) base64_decode($envoi['pdf'], true),
+            'remise_en_personne' => $envoi['remise_en_personne'],
             'suivi' => SuiviDEnvoi::depuisLeRappel($envoi['suivi']),
         ], Cache::get(self::CLE_DU_CACHE, []));
     }
 
     /**
-     * Le code de confirmation que porte le dernier pli recommandé, tel que
-     * son destinataire le lit (XXXX-XXXX-XXXX), null s'il n'en porte pas.
+     * Le courrier est remis contre signature.
      */
-    public function codeDuDernierPli(): ?string
+    public function remettre(string $reference): void
     {
-        $dernier = collect($this->envois())->last(fn (array $envoi): bool => $envoi['genre'] !== self::LETTRE_SIMPLE);
-
-        return $dernier === null ? null : (preg_match('/\b([0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4})\b/', implode("\n", $dernier['corps']), $code) === 1 ? $code[1] : null);
+        $this->suivreLePli($reference, SuiviDEnvoi::REMIS);
     }
 
     /**
-     * Le pli est remis contre signature ; une lettre électronique, acceptée
-     * par la personne que le prestataire a identifiée.
-     *
-     * @param  array<mixed>|null  $identite  la réponse brute du prestataire sur l'identité du destinataire
+     * Le courrier revient à l'expéditeur, faute d'avoir été retiré.
      */
-    public function remettre(string $reference, ?array $identite = null): void
-    {
-        $this->suivreLePli($reference, ['statut' => SuiviDEnvoi::REMIS, 'identite' => $identite]);
-    }
-
     public function retourner(string $reference): void
     {
-        $this->suivreLePli($reference, ['statut' => SuiviDEnvoi::RETOURNE]);
+        $this->suivreLePli($reference, SuiviDEnvoi::RETOURNE);
     }
 
     public function rendreInjoignable(bool $injoignable = true): void
@@ -108,49 +109,10 @@ class FauxServiceEnvoiRecommande implements ServiceEnvoiRecommande
         $this->injoignable = $injoignable;
     }
 
-    /**
-     * @param  AdressePostale|array{nom: string, email: string}  $destinataire
-     * @param  list<string>  $corps
-     *
-     * @throws EnvoiRecommandeIndisponibleException
-     */
-    private function noter(string $genre, AdressePostale|array $destinataire, string $objet, array $corps): string
-    {
-        $this->repondre();
-        $reference = 'faux-'.Str::lower(Str::random(16));
-        Cache::forever(self::CLE_DU_CACHE, [...Cache::get(self::CLE_DU_CACHE, []), $reference => [
-            'genre' => $genre,
-            'adresse' => $destinataire instanceof AdressePostale ? [$destinataire->denomination, $destinataire->adresse, $destinataire->complementAdresse, $destinataire->codePostal, $destinataire->ville, $destinataire->source] : null,
-            'destinataire' => $destinataire instanceof AdressePostale ? null : $destinataire,
-            'objet' => $objet,
-            'corps' => $corps,
-            'suivi' => ['statut' => SuiviDEnvoi::DEPOSE],
-        ]]);
-
-        if (app()->isLocal()) {
-            Log::info("Pli factice {$genre} {$reference} : {$objet}", ['destinataire' => $destinataire instanceof AdressePostale ? $destinataire->lignes() : $destinataire, 'corps' => $corps]);
-        }
-
-        return $reference;
-    }
-
-    /**
-     * @param  array<mixed>  $suivi  le suivi tel qu'un rappel du prestataire le donnerait (voir SuiviDEnvoi::depuisLeRappel())
-     */
-    private function suivreLePli(string $reference, array $suivi): void
+    private function suivreLePli(string $reference, string $statut): void
     {
         $envois = Cache::get(self::CLE_DU_CACHE, []);
-        $envois[$reference]['suivi'] = $suivi;
+        $envois[$reference]['suivi'] = ['statut' => $statut];
         Cache::forever(self::CLE_DU_CACHE, $envois);
-    }
-
-    /**
-     * @throws EnvoiRecommandeIndisponibleException
-     */
-    private function repondre(): void
-    {
-        if ($this->injoignable) {
-            throw new EnvoiRecommandeIndisponibleException;
-        }
     }
 }

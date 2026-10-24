@@ -447,15 +447,12 @@ class PorteeDesDroitsTest extends TestCase
 
     /**
      * Un expert-comptable qui remplirait les conditions de la transmission
-     * de la propriété s'il était administrateur : sa qualité prouvée, son
-     * mot de passe choisi, son adresse renseignée par lui.
+     * de la propriété s'il était administrateur : son mot de passe choisi,
+     * son adresse renseignée par lui.
      */
     private function expertComptablePretAReprendre(): User
     {
-        $expert = $this->renseignerSonAdresse($this->expertComptable($this->m), 'cabinet@example.test');
-        $expert->forceFill(['qualite_verifiee_le' => now()])->save();
-
-        return $expert;
+        return $this->renseignerSonAdresse($this->expertComptable($this->m), 'cabinet@example.test');
     }
 
     private function exiger(bool $permis): void

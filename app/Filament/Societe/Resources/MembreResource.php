@@ -295,7 +295,7 @@ class MembreResource extends RessourceDuPanneauSociete
     /**
      * Les magasins de sa portée où un compte peut se créer ou se nommer :
      * tous, sauf le magasin de démonstration d'une société validée ou
-     * refusée (voir Magasin::estUneDemonstrationTerminee()).
+     * close (voir Magasin::estUneDemonstrationTerminee()).
      *
      * @return array<int, string>
      */

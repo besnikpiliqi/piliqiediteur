@@ -17,7 +17,8 @@ use LogicException;
 use function Laravel\Prompts\pause;
 
 /**
- * La consultation par l'éditeur des pièces déposées par une société (voir
+ * La consultation par l'éditeur des pièces déposées par une société dont
+ * les courriers recommandés ne sont pas parvenus (voir
  * DeposerUnePieceAction) : déchiffrées dans un dossier temporaire privé,
  * le temps de l'examen, effacé à la fin de la commande, sur une erreur, à
  * l'arrêt du processus (exit, erreur fatale), quand l'opérateur
@@ -27,7 +28,8 @@ use function Laravel\Prompts\pause;
  * (processus tué sans pouvoir réagir) s'efface au plus tard une heure
  * après (voir app:effacer-pieces-verification). La consultation s'inscrit
  * au journal d'audit. La décision se prend ensuite par
- * editeur:societe:valider ou editeur:societe:refuser.
+ * editeur:societe:examiner (un nouveau courrier) ou editeur:societe:refuser
+ * (la clôture de l'inscription).
  */
 #[Signature('editeur:societe:pieces {societe : Identifiant ou uuid de la société} '.ProcedureDeLEditeur::OPTIONS_COMMUNES)]
 #[Description('Déchiffre le temps de l\'examen les pièces déposées par une société, et journalise la consultation')]

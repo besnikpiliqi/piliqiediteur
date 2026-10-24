@@ -9,9 +9,8 @@ use App\Integrations\Rne\Contracts\RegistreNationalDesEntreprises;
  * Le registre national des entreprises factice du développement et des
  * tests, sans aucune requête (voir VerificationServiceProvider) : toute
  * entreprise y est présidée par Jeanne DUPONT, née en janvier 1980, en
- * fonction depuis le 1er janvier 2020 (celle que la vérification
- * d'identité factice vérifie par défaut, voir FausseVerificationIdentite),
- * avec son siège au 1 rue de la République, 75001 Paris.
+ * fonction depuis le 1er janvier 2020, avec son siège au 1 rue de la
+ * République, 75001 Paris.
  *
  * Un test règle ses propres réponses (voir dirigeants(), domicilier(),
  * rendreInjoignable()) sur l'instance du conteneur.

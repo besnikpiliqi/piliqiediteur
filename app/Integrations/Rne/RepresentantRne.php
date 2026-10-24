@@ -38,12 +38,13 @@ final readonly class RepresentantRne
     }
 
     /**
-     * Le dirigeant tel que l'écran et la chaîne d'un rapprochement le
-     * nomment : « DUPONT Jeanne (Présidente) », « HOLDING SAS (Président) ».
+     * Le dirigeant tel que le courrier recommandé le nomme : « Jeanne
+     * DUPONT », son premier prénom et son nom d'usage, ou de naissance ;
+     * une personne morale, par sa dénomination.
      */
-    public function libelle(): string
+    public function nomPourLeCourrier(): string
     {
-        return trim($this->nom.' '.($this->prenoms[0] ?? ''))." ({$this->role})";
+        return $this->estUnePersonneMorale() ? $this->nom : trim(($this->prenoms[0] ?? '').' '.($this->nomUsage ?? $this->nom));
     }
 
     /**

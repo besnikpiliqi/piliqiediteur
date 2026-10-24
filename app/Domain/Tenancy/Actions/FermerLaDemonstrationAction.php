@@ -27,7 +27,8 @@ use Throwable;
 
 /**
  * Ferme le magasin de démonstration d'une société : à sa validation (voir
- * ValiderLaSocieteAction) ou à son refus, ou après trente jours sans
+ * ValiderLaSocieteAction) ou à la clôture de son inscription (voir
+ * CloreLInscriptionAction), ou après trente jours sans
  * opération (voir app:fermer-demonstrations-inactives). Sous le verrou de
  * son registre, en une transaction : ses journées en attente se clôturent
  * jusqu'au jour même, sa sortie du mode démonstration s'inscrit à son
@@ -38,7 +39,7 @@ use Throwable;
  * les journées se clôturent et les caisses se ferment au nom du système.
  *
  * Quand elle se ferme pour de bon, c'est-à-dire quand la société est
- * validée ou refusée, ses comptes d'entraînement (les comptes de membre
+ * validée ou close, ses comptes d'entraînement (les comptes de membre
  * rattachés à la démonstration, voir User::estUnCompteDEntrainement()) sont
  * retirés de la société, dans la même transaction, au nom du système et
  * sans décision du propriétaire (voir JournalDesDroits) : ils n'ouvrent
@@ -118,7 +119,7 @@ class FermerLaDemonstrationAction
 
     /**
      * Retire les comptes d'entraînement de cette démonstration quand sa
-     * société est validée ou refusée, au nom du système, sous le verrou du
+     * société est validée ou close, au nom du système, sous le verrou du
      * registre de la démonstration (déjà pris) puis de leurs lignes (voir
      * JournalDesDroits) ; rien sinon.
      */

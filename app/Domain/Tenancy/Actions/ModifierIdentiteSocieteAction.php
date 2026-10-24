@@ -24,8 +24,8 @@ use LogicException;
  * une autre forme, si la société est commerciale), capital social,
  * immatriculation, n° de TVA intracommunautaire, siège (ou adresse de
  * l'entreprise d'un entrepreneur individuel). Le SIREN ne s'y saisit
- * jamais : il se corrige à part, tant que la société n'est pas validée
- * (voir CorrigerSirenAvantValidationAction).
+ * jamais : c'est celui de l'inscription, que vérifie le courrier
+ * recommandé, et il ne change pas (voir Societe).
  *
  * Toute société commerciale indique son capital (art. R123-238 du Code de
  * commerce, voir FormeJuridique::exigeUnCapital()) ; un entrepreneur

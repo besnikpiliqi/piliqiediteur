@@ -10,18 +10,13 @@ use App\Domain\Facturation\Actions\FermerSaCaisseAction;
 use App\Domain\Facturation\Exceptions\IdentiteDeLaSocieteIncompleteException;
 use App\Domain\Facturation\Rules\NumeroTvaAuFormat;
 use App\Domain\Facturation\Services\Emetteur;
-use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
 use App\Domain\Tenancy\Enums\FormeJuridique;
-use App\Domain\Tenancy\Models\EntreeAudit;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\Societe;
 use App\Domain\Tenancy\Services\ControleSirene;
-use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\Societe\Pages\IdentiteSociete;
-use App\Integrations\Sirene\Contracts\RepertoireSirene;
-use App\Integrations\Sirene\FauxRepertoireSirene;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
@@ -246,65 +241,6 @@ class IdentiteSocieteTest extends TestCase
             ->assertHasNoFormErrors();
 
         $this->assertSame([FormeJuridique::EntrepreneurIndividuel, null, false], [$societe->fresh()->forme_juridique, $societe->fresh()->capital_social, $societe->fresh()->capital_variable]);
-    }
-
-    /**
-     * Le SIREN corrigé avant la validation : l'identité que le répertoire
-     * donnait de l'entreprise de l'ancien SIREN fait place à celle du
-     * nouveau (dénomination, catégorie juridique, forme, siège, n° de TVA
-     * proposé) ; le capital, qu'un entrepreneur individuel n'a pas,
-     * s'efface ; l'immatriculation saisie reste. La correction s'inscrit
-     * au journal d'audit avec ces changements, son auteur pour auteur.
-     */
-    public function test_la_correction_du_siren_reprend_l_identite_que_le_repertoire_donne_du_nouveau_siren(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
-        $societe = $magasin->societe;
-        $proprietaire = $this->proprietaireDe($magasin);
-        app(TenantContext::class)->clear();
-        app(ModifierIdentiteSocieteAction::class)->handle($proprietaire, $societe, ['capital_social' => '1000', 'immatriculation' => 'RM 13']);
-        $sirenEi = FauxRepertoireSirene::SIREN_ENTREPRENEUR_INDIVIDUEL;
-
-        app(CorrigerSirenAvantValidationAction::class)->handle($proprietaire, $societe->fresh(), $sirenEi, [$magasin->id => substr(IdentifiantsInsee::avecSaCle($sirenEi.'0001'), 9)]);
-
-        $corrigee = $societe->fresh();
-        $this->assertSame(
-            ['JEANNE DUPONT', '1000', FormeJuridique::EntrepreneurIndividuel, null, IdentifiantsInsee::numeroTvaPropose($sirenEi), 'RM 13', '1 RUE DE LA REPUBLIQUE'],
-            [$corrigee->raison_sociale, $corrigee->categorie_juridique_insee, $corrigee->forme_juridique, $corrigee->capital_social, $corrigee->numero_tva, $corrigee->immatriculation, $corrigee->siege_adresse],
-        );
-        $entree = app(TenantContext::class)->runAsSociete($societe, fn (): EntreeAudit => EntreeAudit::query()->where('action', 'siren_corrige_avant_validation')->sole());
-        $this->assertSame(['membre', $proprietaire->id], [$entree->origine, (int) $entree->auteur_id]);
-        $this->assertSame(
-            ['capital_social' => null, 'categorie_juridique_insee' => '1000', 'forme_juridique' => 'entrepreneur_individuel', 'numero_tva' => IdentifiantsInsee::numeroTvaPropose($sirenEi), 'raison_sociale' => 'JEANNE DUPONT'],
-            array_intersect_key($entree->nouvelles_valeurs, array_flip(['raison_sociale', 'categorie_juridique_insee', 'forme_juridique', 'capital_social', 'numero_tva'])),
-        );
-        $this->assertSame(['capital_social' => '1000.00', 'categorie_juridique_insee' => '5710', 'siren' => $societe->siren], array_intersect_key($entree->anciennes_valeurs, array_flip(['siren', 'categorie_juridique_insee', 'capital_social'])));
-    }
-
-    /**
-     * Le SIREN corrigé pendant une panne de l'INSEE : l'identité de
-     * l'entreprise de l'ancien SIREN ne reste pas ; la reprise du contrôle
-     * la complète ensuite depuis le nouveau SIREN.
-     */
-    public function test_une_correction_pendant_une_panne_vide_l_identite_de_l_ancien_siren_que_la_reprise_complete(): void
-    {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => true]);
-        $societe = $magasin->societe;
-        $repertoire = app(RepertoireSirene::class);
-        $repertoire->rendreInjoignable();
-        app(TenantContext::class)->clear();
-
-        app(CorrigerSirenAvantValidationAction::class)->handle($this->proprietaireDe($magasin), $societe, '200000008', [$magasin->id => '00017']);
-
-        $this->assertSame([null, null, null, null], [$societe->fresh()->raison_sociale, $societe->fresh()->categorie_juridique_insee, $societe->fresh()->forme_juridique, $societe->fresh()->siege_adresse]);
-        $repertoire->rendreInjoignable(false);
-
-        $this->artisan('app:reverifier-sirene')->assertSuccessful();
-
-        $this->assertSame(
-            ['SOCIETE FICTIVE 200000008', '5710', FormeJuridique::Sas, '1 RUE DE LA REPUBLIQUE'],
-            [$societe->fresh()->raison_sociale, $societe->fresh()->categorie_juridique_insee, $societe->fresh()->forme_juridique, $societe->fresh()->siege_adresse],
-        );
     }
 
     /**

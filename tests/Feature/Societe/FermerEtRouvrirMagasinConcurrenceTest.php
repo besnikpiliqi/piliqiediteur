@@ -20,15 +20,13 @@ use App\Domain\Stock\Services\StockLedgerService;
 use App\Domain\Tenancy\Actions\ChoisirEtablissementPrincipalAction;
 use App\Domain\Tenancy\Actions\FermerMagasinAction;
 use App\Domain\Tenancy\Actions\RouvrirMagasinAction;
-use App\Domain\Tenancy\Actions\ValiderLaSocieteAction;
+use App\Domain\Tenancy\Actions\SaisirCodeDeConfirmationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
 use App\Domain\Tenancy\Enums\MotifFermeture;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Models\SiretMagasin;
-use App\Domain\Tenancy\Models\Societe;
-use App\Domain\Tenancy\Services\EvaluateurDeVerification;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
@@ -37,7 +35,6 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Process\InvokedProcess;
 use Illuminate\Support\Facades\DB;
-use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 use Tests\TestCase;
@@ -51,8 +48,8 @@ use Tests\TestCase;
  * la dernière clôture de la fermeture ; une vente ou un achat qui attendait
  * la fermeture est refusé, le magasin étant fermé. De même, une réouverture
  * qui attendait la cession du magasin fermé est refusée, et une réouverture
- * avant la validation de la société passe tout entière avant ou après la
- * validation, qui met alors le magasin en activité.
+ * avant la validation de la société passe tout entière avant la saisie du
+ * code du courrier, dont la validation met alors le magasin en activité.
  *
  * DatabaseMigrations, pas RefreshDatabase : l'autre processus ne voit que
  * ce que le test a validé.
@@ -174,17 +171,18 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
     }
 
     /**
-     * La validation de la société arrive pendant que la boutique, fermée
-     * avant elle, se rouvre : la réouverture tient la ligne de la société,
-     * que la validation attend ; la boutique rouverte, sans période
-     * d'activité, compte ensuite parmi les magasins actifs que la validation
-     * met en activité (SIRET réservé, première période). Sans ce verrou, la
-     * validation passerait sans la voir, et la boutique rouvrirait sans
-     * période d'activité dans une société validée, où elle vendrait sans
-     * ticket Z.
+     * Le code du courrier est saisi, et la société validée, pendant que la
+     * boutique, fermée avant la validation, se rouvre : la réouverture
+     * tient le registre de la boutique, que la saisie du code attend avant
+     * de verrouiller la ligne de la société ; la boutique rouverte, sans
+     * période d'activité, compte ensuite parmi les magasins actifs que la
+     * validation met en activité (SIRET réservé, première période). Sans ce
+     * verrou, la validation passerait sans la voir, et la boutique
+     * rouvrirait sans période d'activité dans une société validée, où elle
+     * vendrait sans ticket Z.
      */
     #[Group('concurrence')]
-    public function test_une_reouverture_avant_la_validation_simultanee_a_la_validation_met_le_magasin_en_activite(): void
+    public function test_une_reouverture_avant_la_validation_simultanee_a_la_saisie_du_code_met_le_magasin_en_activite(): void
     {
         $this->exigerUnServeurDeBaseDeDonnees();
         $societe = $this->inscrireUneSociete();
@@ -192,16 +190,12 @@ class FermerEtRouvrirMagasinConcurrenceTest extends TestCase
         $boutique = $this->creerLeMagasinDuSiege($societe, 'Boutique', substr(FauxRepertoireSirene::siretDeLaBoutique($societe->siren), 9));
         $proprietaire = $societe->proprietaire;
         app(FermerMagasinAction::class)->handle($proprietaire, $boutique, MotifFermeture::Temporaire, self::MOT_DE_PASSE_CHOISI);
-        $this->mock(ValiderLaSocieteAction::class, fn (MockInterface $validation) => $validation->shouldReceive('siPossible')->andReturnFalse());
-        $this->verifierLIdentiteDuProprietaire($societe);
-        $this->app->forgetInstance(ValiderLaSocieteAction::class);
-        $this->assertTrue(app(EvaluateurDeVerification::class)->evaluer($societe->fresh())->estValidable());
-        $societeId = $societe->id;
-        $valider = static function () use ($societeId): void {
-            app(ValiderLaSocieteAction::class)->siPossible(Societe::query()->findOrFail($societeId));
+        [$siren, $code, $email] = [(string) $societe->siren, $this->codeDuCourrier($societe), (string) $proprietaire->email];
+        $saisir = static function () use ($siren, $code, $email): void {
+            app(SaisirCodeDeConfirmationAction::class)->handle($siren, $code, $email, self::MOT_DE_PASSE_CHOISI, '', '127.0.0.1');
         };
         $concurrente = null;
-        $this->concurrencerDesQueLaSocieteEstLue($valider, $concurrente);
+        $this->concurrencerDesQueLaSocieteEstLue($saisir, $concurrente);
 
         app(RouvrirMagasinAction::class)->handle($proprietaire, $boutique->fresh(), self::MOT_DE_PASSE_CHOISI);
 

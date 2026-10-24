@@ -42,7 +42,7 @@ use App\Models\User;
  *
  * Dans l'espace d'administration d'une société (une société posée sans
  * magasin), il refuse tout au compte d'une autre société ; quand la
- * société est en lecture seule (suspendue, résiliée, révoquée ou refusée,
+ * société est en lecture seule (suspendue, résiliée, révoquée ou close,
  * voir Societe::estEnLectureSeule()), tout ce qui n'est ni une
  * consultation ni un geste sur l'équipe (un compte, voir MembrePolicy), et,
  * dans une société révoquée, tout ce qui n'est pas une consultation ; sinon

@@ -22,17 +22,19 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Enums\RoleSociete;
 use App\Domain\Tenancy\Enums\StatutMagasin;
 use App\Domain\Tenancy\Models\Affectation;
+use App\Domain\Tenancy\Models\CodeConfirmation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Models\PeriodeActivite;
 use App\Domain\Tenancy\Scopes\MagasinScope;
+use App\Domain\Tenancy\Scopes\SocieteScope;
 use App\Domain\Tenancy\Services\TenantContext;
 use App\Filament\App\Resources\ClotureCaisseResource\Pages\ListClotureCaisses;
 use App\Filament\App\Resources\DevisResource\Pages\ListDevis;
 use App\Filament\App\Resources\EquipeDuMagasinResource\Pages\ListEquipeDuMagasin;
 use App\Filament\App\Resources\FactureResource\Pages\ListFactures;
 use App\Filament\App\Resources\FactureResource\Pages\ViewFacture;
-use App\Filament\Societe\Pages\IdentiteSociete;
 use App\Filament\Societe\Pages\TableauDeBord;
+use App\Filament\Societe\Pages\VerificationSociete;
 use App\Filament\Societe\Resources\MagasinResource\Pages\ModifierMagasin;
 use App\Filament\Societe\Resources\MembreResource\Pages\FicheDuMembre;
 use App\Filament\Societe\Resources\MembreResource\Pages\ListMembres;
@@ -113,7 +115,7 @@ class ActionsForgeesTest extends TestCase
             'émettre une facture',
             'envoyer un document',
             'clôturer la journée',
-            'corriger le SIREN',
+            'demander un nouveau courrier',
             'ouvrir la démonstration',
             'transférer la propriété',
             'créer un vendeur',
@@ -127,7 +129,7 @@ class ActionsForgeesTest extends TestCase
     #[DataProvider('actionsMasquees')]
     public function test_une_action_d_en_tete_masquee_appelee_directement_ne_fait_rien(string $nom): void
     {
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => in_array($nom, ['corriger le SIREN', 'ouvrir la démonstration'], true)]);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'a_verifier' => in_array($nom, ['demander un nouveau courrier', 'ouvrir la démonstration'], true)]);
         $societe = $magasin->societe;
 
         $rienNAEteFait = match ($nom) {
@@ -155,13 +157,12 @@ class ActionsForgeesTest extends TestCase
 
                 return fn (): bool => ClotureCaisse::query()->doesntExist();
             })(),
-            'corriger le SIREN' => (function () use ($magasin, $societe): Closure {
+            'demander un nouveau courrier' => (function () use ($magasin, $societe): Closure {
                 $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
-                $siren = $societe->siren;
                 $this->dansLEspaceDeLaSociete($societe, $administrateur);
-                $this->forgerLAction(Livewire::test(IdentiteSociete::class)->assertActionHidden('corrigerLeSiren'), 'corrigerLeSiren', ['siren' => '732829320']);
+                $this->forgerLAction(Livewire::test(VerificationSociete::class)->assertActionHidden('demanderUnNouveauCourrier'), 'demanderUnNouveauCourrier');
 
-                return fn (): bool => $societe->fresh()->siren === $siren;
+                return fn (): bool => CodeConfirmation::withoutGlobalScope(SocieteScope::class)->where('societe_id', $societe->id)->doesntExist();
             })(),
             'ouvrir la démonstration' => (function () use ($magasin, $societe): Closure {
                 $administrateur = $this->administrateur($magasin);
@@ -172,7 +173,7 @@ class ActionsForgeesTest extends TestCase
             })(),
             'transférer la propriété' => (function () use ($magasin, $societe): Closure {
                 $proprietaire = $this->proprietaireDe($magasin);
-                $administrateur = tap($this->administrateur($magasin, null, AutorisationsSociete::toutes())->forceFill(['qualite_verifiee_le' => now()]))->save();
+                $administrateur = $this->administrateur($magasin, null, AutorisationsSociete::toutes());
                 $responsable = $this->responsable($magasin);
                 $this->dansLEspaceDeLaSociete($societe, $administrateur);
                 $this->forgerLAction(Livewire::test(FicheDuMembre::class, ['record' => $responsable->getRouteKey()])->assertActionHidden('transmettreLaPropriete'), 'transmettreLaPropriete', ['mot_de_passe' => self::MOT_DE_PASSE_CHOISI]);

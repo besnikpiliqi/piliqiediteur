@@ -19,14 +19,14 @@ use App\Models\User;
  *   MagasinDeLaSocietePolicy, qui y ajoute la portée et réserve la
  *   cession au propriétaire) ; en créer, seulement avec tous les magasins
  *   (voir creerUnMagasin()) ;
- * - réservés au propriétaire (voir les gestes ci-dessous) : corriger le
- *   SIREN tant que la société n'est pas validée, prouver sa qualité de
- *   représentant, transmettre la propriété ; ouvrir le magasin de
+ * - réservés au propriétaire (voir les gestes ci-dessous) : faire
+ *   avancer la vérification de la société (un nouveau courrier, des
+ *   pièces pour l'éditeur), transmettre la propriété ; ouvrir le magasin de
  *   démonstration, aussi pour un administrateur de tous les magasins
  *   autorisé à les gérer. Les gestes sur les comptes, administrateurs
  *   compris, sont dans MembrePolicy.
  *
- * Une société en lecture seule (suspendue, résiliée, révoquée ou refusée,
+ * Une société en lecture seule (suspendue, résiliée, révoquée ou close,
  * voir Societe::estEnLectureSeule()) reste consultable, mais aucun de ses
  * réglages ne se modifie et aucun magasin ne s'y crée ni ne s'y modifie ;
  * ControleDesDroits refuse en amont tout autre geste qu'une consultation ou
@@ -37,7 +37,7 @@ use App\Models\User;
  * ChangerSiretAction, FermerMagasinAction, RouvrirMagasinAction,
  * ChoisirEtablissementPrincipalAction,
  * ModifierIdentiteSocieteAction, ModifierParametresFiscauxSocieteAction,
- * CorrigerSirenAvantValidationAction, les actions de la vérification,
+ * les actions de la vérification,
  * OuvrirLaDemonstrationAction et
  * DemanderLaTransmissionDeLaProprieteAction), en plus des écrans.
  */
@@ -87,17 +87,12 @@ class SocietePolicy
         return $this->gererLesMagasins($user, $societe) && $user->administreTousLesMagasins();
     }
 
-    public function corrigerLeSiren(User $user, Societe $societe): bool
-    {
-        return $this->modifierLesParametres($user, $societe) && $user->estProprietaire() && ! $societe->estValidee();
-    }
-
     /**
-     * Prouver la qualité de représentant de la société (vérifier son
-     * identité, demander l'accord d'un dirigeant, déposer des pièces,
-     * demander et saisir le code d'un courrier, celui d'une réclamation
-     * compris) : son propriétaire seul, tant qu'elle n'est ni validée ni
-     * refusée, ni en lecture seule.
+     * Faire avancer la vérification de la société (demander un nouveau
+     * courrier, déposer des pièces pour l'éditeur) : son propriétaire seul,
+     * tant qu'elle n'est ni validée, ni close, ni en lecture seule. Le code
+     * du courrier, lui, se saisit sur sa page publique, sans être connecté
+     * (voir SaisirCodeDeConfirmationAction).
      */
     public function verifierLaSociete(User $user, Societe $societe): bool
     {
@@ -107,7 +102,7 @@ class SocietePolicy
     /**
      * Ouvrir, ou rouvrir, le magasin de démonstration : son propriétaire, ou
      * un administrateur de tous les magasins autorisé à les gérer, tant que
-     * la société n'est ni validée ni refusée, ni en lecture seule.
+     * la société n'est ni validée ni close, ni en lecture seule.
      */
     public function ouvrirLaDemonstration(User $user, Societe $societe): bool
     {

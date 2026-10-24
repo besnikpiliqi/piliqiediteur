@@ -5,19 +5,17 @@ namespace App\Domain\Tenancy\Models;
 use App\Domain\CaisseSecurisee\Casts\HorodatageUtc;
 use App\Domain\Tenancy\Concerns\BelongsToSociete;
 use App\Domain\Tenancy\Concerns\FigeLeNomDeSesAuteurs;
-use App\Domain\Tenancy\Enums\CanalEnvoi;
 use App\Domain\Tenancy\Enums\MotifCode;
 use Illuminate\Database\Eloquent\Model;
 use LogicException;
 
 /**
- * Un code de confirmation envoyé par courrier recommandé à l'adresse
- * officielle d'une entreprise, ou par lettre recommandée électronique
- * qualifiée à l'un de ses dirigeants (voir EnvoyerCodeDeConfirmationAction
- * et SaisirCodeDeConfirmationAction) : seule son empreinte (Hash::make) se
- * garde, jamais le code. Il est actif tant qu'il n'est ni utilisé, ni
- * annulé, ni expiré ; un seul l'est par SIREN et par motif dans tout le
- * logiciel.
+ * Un code de confirmation envoyé par courrier recommandé au représentant
+ * légal d'une entreprise, à l'adresse officielle de son siège (voir
+ * EnvoyerCodeDeConfirmationAction et SaisirCodeDeConfirmationAction) :
+ * seule son empreinte (Hash::make) se garde, jamais le code. Il est actif
+ * tant qu'il n'est ni utilisé, ni annulé, ni expiré ; un seul l'est par
+ * SIREN et par motif dans tout le logiciel.
  *
  * Seuls son suivi (référence, remise, retour), ses essais, son usage, son
  * annulation et la fin de sa conservation se posent ; ses autres colonnes
@@ -43,8 +41,6 @@ class CodeConfirmation extends Model
 
     public const DUREE_DE_VALIDITE_EN_JOURS = 30;
 
-    public const ESSAIS_PERMIS = 5;
-
     protected $table = 'codes_confirmation';
 
     protected $fillable = [];
@@ -53,7 +49,6 @@ class CodeConfirmation extends Model
 
     protected $casts = [
         'motif' => MotifCode::class,
-        'canal' => CanalEnvoi::class,
         'destinataire' => 'array',
         'envoye_le' => 'datetime',
         'remis_le' => 'datetime',

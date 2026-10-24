@@ -141,10 +141,10 @@ class MembrePolicy
     /**
      * Demander, renvoyer ou annuler la transmission de la propriété à cet
      * administrateur actif de sa société (voir
-     * DemanderLaTransmissionDeLaProprieteAction, qui exige en plus sa
-     * qualité de représentant prouvée sans accès redonné depuis, son propre
-     * mot de passe, son adresse renseignée par lui et le mot de passe du
-     * propriétaire) : le propriétaire seul, jamais à un expert-comptable ni
+     * DemanderLaTransmissionDeLaProprieteAction, qui exige en plus son
+     * propre mot de passe, son adresse renseignée par lui et le mot de
+     * passe du propriétaire, sans aucune preuve de qualité de
+     * représentant) : le propriétaire seul, jamais à un expert-comptable ni
      * à un membre. Un geste sur l'équipe : permis dans une société
      * suspendue, jamais dans une société révoquée (voir ControleDesDroits).
      */

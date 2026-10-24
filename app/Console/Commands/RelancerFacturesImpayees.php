@@ -48,8 +48,7 @@ class RelancerFacturesImpayees extends Command
             ->whereNotNull('etablissement_verifie_le')
             ->whereHas('societe', fn (Builder $societes) => $societes
                 ->where('statut', StatutSociete::Active)
-                ->whereNotNull('validee_le')
-                ->whereNull('refusee_le'))
+                ->whereNotNull('validee_le'))
             ->where('relances_automatiques', true)
             ->orderBy('id')
             ->each(function (Magasin $magasin) use ($tenantContext, $envoyer, &$totalRelancees) {

@@ -7,10 +7,11 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 
 /**
- * Une alerte pour l'éditeur (voir AlerteEditeur) : une réclamation
- * possible, des inscriptions concurrentes d'un même SIREN, une
- * revérification Sirene négative... Elle ne nomme la société que par son
- * identifiant et son SIREN, et dit ce que l'éditeur peut faire.
+ * Une alerte pour l'éditeur (voir AlerteEditeur) : des pièces déposées
+ * pour un courrier non reçu, une validation impossible à la saisie du
+ * code, une revérification Sirene négative... Elle ne nomme la société
+ * que par son identifiant et son SIREN, et dit ce que l'éditeur peut
+ * faire.
  */
 class AlerteEditeurMail extends Mailable
 {

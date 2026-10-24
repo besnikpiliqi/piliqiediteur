@@ -14,6 +14,7 @@ use App\Domain\Facturation\Enums\ModePaiement;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Services\Emetteur;
 use App\Domain\Tenancy\Actions\ChangerSiretAction;
+use App\Domain\Tenancy\Actions\CloreLInscriptionAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\OuvrirLaDemonstrationAction;
 use App\Domain\Tenancy\Enums\ActionAuditee;
@@ -31,6 +32,7 @@ use App\Domain\Tenancy\Services\ControleSirene;
 use App\Domain\Tenancy\Services\IdentifiantsInsee;
 use App\Domain\Tenancy\Services\SiretsDesMagasins;
 use App\Domain\Tenancy\Services\TenantContext;
+use App\Domain\Tenancy\Support\InterventionDeLEditeur;
 use App\Domain\Tenancy\Support\MotDePasseRedemande;
 use App\Filament\Societe\Resources\MagasinResource;
 use App\Filament\Societe\Resources\MagasinResource\Pages\CreerMagasin;
@@ -313,8 +315,8 @@ class MagasinResourceTest extends TestCase
 
     /**
      * La liste lue au répertoire se garde pour la société : rouvrir la page,
-     * même par un autre compte, ne la relit pas ; une autre société du même
-     * SIREN lit la sienne, sans rien recevoir de la première.
+     * même par un autre compte, ne la relit pas ; une autre société lit la
+     * sienne, sans rien recevoir de la première.
      */
     public function test_rouvrir_la_creation_ne_relit_pas_la_liste_qui_se_garde_pour_la_societe(): void
     {
@@ -328,7 +330,7 @@ class MagasinResourceTest extends TestCase
         $this->ouvrirLaCreation($societe, $administrateur)->assertSeeText($this->boutique($societe).' · '.FauxRepertoireSirene::ENSEIGNE_DE_LA_BOUTIQUE);
         $this->assertSame(1, $repertoire->listes);
 
-        $this->ouvrirLaCreation($this->inscrireUneSociete($societe->siren))->assertSet('listeDisponible', true);
+        $this->ouvrirLaCreation($this->inscrireUneSociete())->assertSet('listeDisponible', true);
         $this->assertSame(2, $repertoire->listes);
     }
 
@@ -375,15 +377,18 @@ class MagasinResourceTest extends TestCase
     }
 
     /**
-     * Une autre société du même SIREN, validée, a fait de la boutique son
-     * magasin : ni la liste ni les messages n'en disent rien, et la société
-     * en cours de vérification crée son magasin à cet établissement comme à
-     * un autre (rien n'est réservé pour elle avant sa validation).
+     * Une inscription close du même SIREN avait fait de la boutique son
+     * magasin : ni la liste ni les messages n'en disent rien, et la
+     * nouvelle inscription crée son magasin à cet établissement comme à un
+     * autre (rien n'était réservé pour la société close, jamais validée).
      */
     public function test_aucune_information_sur_une_autre_societe_n_apparait_dans_la_liste_ni_dans_les_messages(): void
     {
         $siren = SocieteFactory::sirenFictif();
-        Magasin::factory()->avecLaSociete(['siren' => $siren, 'raison_sociale' => 'Concurrente SAS'])->create(['nom' => 'Boutique concurrente', 'code' => 'CONCUR', 'siret' => FauxRepertoireSirene::siretDeLaBoutique($siren)]);
+        $close = $this->inscrireUneSociete($siren);
+        app(TenantContext::class)->runAsSociete($close, fn (): bool => $close->forceFill(['raison_sociale' => 'Concurrente SAS'])->save());
+        $this->ouvrirUneSociete(['nom' => 'Boutique concurrente', 'code' => 'CONCUR', 'nic' => substr(FauxRepertoireSirene::siretDeLaBoutique($siren), 9), 'a_verifier' => true], $close->proprietaire()->sole());
+        app(CloreLInscriptionAction::class)->refuser($close, new InterventionDeLEditeur('Inscription faite par erreur.', 'DOSSIER-2026-0062', ['alice']));
         $societe = $this->inscrireUneSociete($siren);
 
         $this->ouvrirLaCreation($societe)

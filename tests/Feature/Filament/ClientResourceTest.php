@@ -741,8 +741,8 @@ class ClientResourceTest extends TestCase
     #[DataProvider('identifiantsDeLEntrepriseDuMagasin')]
     public function test_un_client_de_l_entreprise_du_magasin_est_refuse(array $identifiant, string $champ): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'siren' => '100000009'], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'siren' => '100000009']);
+        $proprietaire = $magasin->societe->proprietaire;
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 
@@ -773,8 +773,8 @@ class ClientResourceTest extends TestCase
     #[DataProvider('numerosDeTvaDeLEntrepriseDuMagasin')]
     public function test_un_client_qui_porte_le_numero_de_tva_de_l_entreprise_du_magasin_est_refuse(?string $numeroTvaDuMagasin, string $numeroTva): void
     {
-        $proprietaire = User::factory()->create();
-        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'siren' => '100000009', 'numero_tva' => $numeroTvaDuMagasin], $proprietaire);
+        $magasin = $this->ouvrirUneSociete(['nom' => 'Ma Boutique', 'siren' => '100000009', 'numero_tva' => $numeroTvaDuMagasin]);
+        $proprietaire = $magasin->societe->proprietaire;
         $this->actingAs($proprietaire);
         Filament::setTenant($magasin);
 

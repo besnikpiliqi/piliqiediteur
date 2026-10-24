@@ -18,11 +18,11 @@ use Throwable;
 /**
  * Chaque jour (voir bootstrap/app.php), ferme les magasins de
  * démonstration qui ne servent plus (voir FermerLaDemonstrationAction) :
- * celui d'une société validée ou refusée dont la fermeture a échoué (il ne
+ * celui d'une société validée ou close dont la fermeture a échoué (il ne
  * vend déjà plus, voir Magasin::peutVendre()), et celui qui n'a fait
  * aucune vente ni aucun encaissement depuis trente jours, ni depuis sa
  * dernière ouverture : il ne produit plus de ticket Z sans fin, et se
- * rouvre à la demande tant que la société n'est ni validée ni refusée
+ * rouvre à la demande tant que la société n'est ni validée ni close
  * (voir OuvrirLaDemonstrationAction). Les magasins se parcourent par
  * identifiant croissant : chaque démonstration fermée sort du filtre, et
  * un parcours par pages en sauterait. La panne d'un magasin n'arrête pas
@@ -46,7 +46,7 @@ class FermerDemonstrationsInactives extends Command
             ->where('statut', StatutMagasin::Actif->value)
             ->lazyById()
             ->each(function (Magasin $demonstration) use ($fermer, $limite, &$fermees, &$enEchec): void {
-                if (! $demonstration->societe->estValidee() && ! $demonstration->societe->estRefusee() && ! self::estInactiveDepuis($demonstration, $limite)) {
+                if (! $demonstration->societe->estValidee() && ! $demonstration->societe->estClose() && ! self::estInactiveDepuis($demonstration, $limite)) {
                     return;
                 }
 

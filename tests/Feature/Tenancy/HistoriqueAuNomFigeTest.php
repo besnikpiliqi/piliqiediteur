@@ -78,10 +78,9 @@ class HistoriqueAuNomFigeTest extends TestCase
         'bordereaux_detaxe' => ['note_par' => 'note_par_nom'],
         'consultations_vies' => ['consultee_par' => 'consultee_par_nom'],
         'periodes_activite' => ['ouverte_par' => 'ouverte_par_nom', 'fermee_par' => 'fermee_par_nom'],
-        'verifications_societe' => ['auteur_id' => 'auteur_nom', 'beneficiaire_id' => 'beneficiaire_nom'],
+        'verifications_societe' => ['auteur_id' => 'auteur_nom'],
         'pieces_verification' => ['deposee_par' => 'deposee_par_nom'],
         'codes_confirmation' => ['demande_par' => 'demande_par_nom'],
-        'demandes_accord_dirigeant' => ['demande_par' => 'demande_par_nom'],
         'postes_reconnus' => ['reconnu_par' => 'reconnu_par_nom', 'retire_par' => 'retire_par_nom'],
     ];
 

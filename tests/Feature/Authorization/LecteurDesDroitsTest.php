@@ -36,7 +36,6 @@ use App\Domain\Facturation\Models\ClotureCaissePersonnelle;
 use App\Domain\Facturation\Models\Facture;
 use App\Domain\Facturation\Models\Paiement;
 use App\Domain\Facturation\Models\PanierCaisse;
-use App\Domain\Tenancy\Actions\CorrigerSirenAvantValidationAction;
 use App\Domain\Tenancy\Actions\CreerEtablissementAction;
 use App\Domain\Tenancy\Actions\ModifierEtablissementAction;
 use App\Domain\Tenancy\Actions\ModifierIdentiteSocieteAction;
@@ -46,11 +45,9 @@ use App\Domain\Tenancy\Enums\RoleMagasin;
 use App\Domain\Tenancy\Models\Affectation;
 use App\Domain\Tenancy\Models\Magasin;
 use App\Domain\Tenancy\Services\TenantContext;
-use App\Integrations\Sirene\FauxRepertoireSirene;
 use App\Models\User;
 use Closure;
 use Database\Factories\MagasinFactory;
-use Database\Factories\SocieteFactory;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -295,7 +292,6 @@ class LecteurDesDroitsTest extends TestCase
             'effacer le n° de TVA' => ['n° de TVA', CodeEvenement::ParametreDeConformite],
             'créer un magasin dans une société validée' => ['nouveau magasin', CodeEvenement::ModificationDesDroits],
             'changer le SIRET d\'un magasin avant la validation' => ['SIRET', CodeEvenement::ParametreDeConformite],
-            'corriger le SIREN avant la validation' => ['SIREN', CodeEvenement::ParametreDeConformite],
             'ouvrir la démonstration' => ['démonstration', CodeEvenement::EntreeEnModeDemonstration],
         ];
     }
@@ -309,8 +305,8 @@ class LecteurDesDroitsTest extends TestCase
     #[DataProvider('actionsDeLaSociete')]
     public function test_les_actions_de_la_societe_inscrivent_leurs_evenements_au_nom_de_l_auteur_passe_a_l_action(string $action, CodeEvenement $attendu): void
     {
-        $societe = in_array($action, ['SIRET', 'SIREN', 'démonstration'], true) ? $this->inscrireUneSociete() : $this->ouvrirUneSociete(['nom' => 'Lyon'])->societe;
-        $magasinAVerifier = in_array($action, ['SIRET', 'SIREN'], true) ? $this->creerLeMagasinDuSiege($societe) : null;
+        $societe = in_array($action, ['SIRET', 'démonstration'], true) ? $this->inscrireUneSociete() : $this->ouvrirUneSociete(['nom' => 'Lyon'])->societe;
+        $magasinAVerifier = $action === 'SIRET' ? $this->creerLeMagasinDuSiege($societe) : null;
         $proprietaire = $societe->proprietaire()->firstOrFail();
         $this->actingAs(User::factory()->create());
         app(TenantContext::class)->clear();
@@ -321,7 +317,6 @@ class LecteurDesDroitsTest extends TestCase
             'n° de TVA' => app(ModifierIdentiteSocieteAction::class)->handle($proprietaire, $societe, ['numero_tva' => '', 'capital_social' => '1000']),
             'nouveau magasin' => app(CreerEtablissementAction::class)->handle($proprietaire, $societe, ['nom' => 'Villeurbanne', 'nic' => MagasinFactory::nicLibre($societe)]),
             'SIRET' => app(ModifierEtablissementAction::class)->handle($proprietaire, $magasinAVerifier, ['nic' => MagasinFactory::nicLibre($societe)]),
-            'SIREN' => app(CorrigerSirenAvantValidationAction::class)->handle($proprietaire, $societe, $siren = SocieteFactory::sirenFictif(), [$magasinAVerifier->id => substr(FauxRepertoireSirene::siretDuSiege($siren), 9)]),
             'démonstration' => app(OuvrirLaDemonstrationAction::class)->handle($proprietaire, $societe),
         };
 
